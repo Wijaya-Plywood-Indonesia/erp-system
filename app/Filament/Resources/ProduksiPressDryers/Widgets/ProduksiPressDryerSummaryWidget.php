@@ -6,6 +6,7 @@ use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use App\Models\ProduksiPressDryer;
 use App\Models\DetailHasil;
+use App\Models\DetailPegawai;
 
 class ProduksiPressDryerSummaryWidget extends Widget
 {
@@ -25,17 +26,31 @@ class ProduksiPressDryerSummaryWidget extends Widget
 
         $produksiId = $record->id;
 
-        // ======================
-        // TOTAL KESELURUHAN
-        // ======================
+        /**
+         * ======================
+         * 1. TOTAL PRODUKSI
+         * ======================
+         */
         $totalAll = DetailHasil::where('id_produksi_dryer', $produksiId)
             ->sum(DB::raw('CAST(isi AS UNSIGNED)'));
 
-        // ======================
-        // GLOBAL UKURAN + KW
-        // ======================
+        /**
+         * ======================
+         * 2. TOTAL PEGAWAI (UNIK)
+         * ======================
+         * Ambil dari tabel detail_pegawais
+         */
+        $totalPegawai = DetailPegawai::where('id_produksi_dryer', $produksiId)
+            ->distinct('id_pegawai')
+            ->count('id_pegawai');
+
+        /**
+         * ======================
+         * 3. GLOBAL UKURAN + KW
+         * ======================
+         */
         $globalUkuranKw = DetailHasil::query()
-            ->where('id_produksi_dryer', $produksiId)
+            ->where('detail_hasils.id_produksi_dryer', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'detail_hasils.id_ukuran')
             ->selectRaw('
                 CONCAT(
@@ -51,11 +66,13 @@ class ProduksiPressDryerSummaryWidget extends Widget
             ->orderBy('detail_hasils.kw')
             ->get();
 
-        // ======================
-        // GLOBAL UKURAN (SEMUA KW)
-        // ======================
+        /**
+         * ======================
+         * 4. GLOBAL UKURAN
+         * ======================
+         */
         $globalUkuran = DetailHasil::query()
-            ->where('id_produksi_dryer', $produksiId)
+            ->where('detail_hasils.id_produksi_dryer', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'detail_hasils.id_ukuran')
             ->selectRaw('
                 CONCAT(
@@ -71,6 +88,7 @@ class ProduksiPressDryerSummaryWidget extends Widget
 
         $this->summary = [
             'totalAll'       => $totalAll,
+            'totalPegawai'   => $totalPegawai,
             'globalUkuranKw' => $globalUkuranKw,
             'globalUkuran'   => $globalUkuran,
         ];

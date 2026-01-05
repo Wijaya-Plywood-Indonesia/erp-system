@@ -6,6 +6,7 @@ use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use App\Models\ProduksiStik;
 use App\Models\DetailHasilStik;
+use App\Models\DetailPegawaiStik;
 
 class ProduksiStikSummaryWidget extends Widget
 {
@@ -26,13 +27,21 @@ class ProduksiStikSummaryWidget extends Widget
         $produksiId = $record->id;
 
         // ======================
-        // TOTAL KESELURUHAN
+        // 1. TOTAL PRODUKSI (LEMBAR)
         // ======================
         $totalAll = DetailHasilStik::where('id_produksi_stik', $produksiId)
             ->sum(DB::raw('CAST(total_lembar AS UNSIGNED)'));
 
         // ======================
-        // GLOBAL UKURAN + KW
+        // 2. TOTAL PEGAWAI (UNIK)
+        // ======================
+        $totalPegawai = DetailPegawaiStik::where('id_produksi_stik', $produksiId)
+            ->whereNotNull('id_pegawai')
+            ->distinct('id_pegawai')
+            ->count('id_pegawai');
+
+        // ======================
+        // 3. GLOBAL UKURAN + KW
         // ======================
         $globalUkuranKw = DetailHasilStik::query()
             ->where('id_produksi_stik', $produksiId)
@@ -52,7 +61,7 @@ class ProduksiStikSummaryWidget extends Widget
             ->get();
 
         // ======================
-        // GLOBAL UKURAN (SEMUA KW)
+        // 4. GLOBAL UKURAN (SEMUA KW)
         // ======================
         $globalUkuran = DetailHasilStik::query()
             ->where('id_produksi_stik', $produksiId)
@@ -71,6 +80,7 @@ class ProduksiStikSummaryWidget extends Widget
 
         $this->summary = [
             'totalAll'       => $totalAll,
+            'totalPegawai'   => $totalPegawai,
             'globalUkuranKw' => $globalUkuranKw,
             'globalUkuran'   => $globalUkuran,
         ];
