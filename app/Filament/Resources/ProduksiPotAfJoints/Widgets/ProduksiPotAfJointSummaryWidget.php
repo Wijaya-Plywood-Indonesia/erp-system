@@ -6,6 +6,7 @@ use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use App\Models\ProduksiPotAfJoint;
 use App\Models\HasilPotAfJoint;
+use App\Models\PegawaiPotAfJoint;
 
 class ProduksiPotAfJointSummaryWidget extends Widget
 {
@@ -19,17 +20,25 @@ class ProduksiPotAfJointSummaryWidget extends Widget
 
     public function mount(?ProduksiPotAfJoint $record = null): void
     {
-        if (!$record) {
+        if (! $record) {
             return;
         }
 
         $produksiId = $record->id;
 
         // ======================
-        // TOTAL KESELURUHAN
+        // TOTAL PRODUKSI
         // ======================
         $totalAll = HasilPotAfJoint::where('id_produksi_pot_af_joint', $produksiId)
             ->sum(DB::raw('CAST(jumlah AS UNSIGNED)'));
+
+        // ======================
+        // TOTAL PEGAWAI
+        // ======================
+        $totalPegawai = PegawaiPotAfJoint::where('id_produksi_pot_af_joint', $produksiId)
+            ->whereNotNull('id_pegawai')
+            ->distinct('id_pegawai')
+            ->count('id_pegawai');
 
         // ======================
         // GLOBAL UKURAN + KW
@@ -71,8 +80,9 @@ class ProduksiPotAfJointSummaryWidget extends Widget
 
         $this->summary = [
             'totalAll'       => $totalAll,
-            'globalUkuranKw' => $globalUkuranKw,
-            'globalUkuran'   => $globalUkuran,
+            'totalPegawai'  => $totalPegawai,
+            'globalUkuranKw'=> $globalUkuranKw,
+            'globalUkuran'  => $globalUkuran,
         ];
     }
 }

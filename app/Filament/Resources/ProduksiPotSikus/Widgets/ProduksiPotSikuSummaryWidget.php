@@ -6,6 +6,7 @@ use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use App\Models\ProduksiPotSiku;
 use App\Models\DetailBarangDikerjakanPotSiku;
+use App\Models\PegawaiPotSiku;
 
 class ProduksiPotSikuSummaryWidget extends Widget
 {
@@ -26,10 +27,18 @@ class ProduksiPotSikuSummaryWidget extends Widget
         $produksiId = $record->id;
 
         // ======================
-        // TOTAL KESELURUHAN
+        // TOTAL PRODUKSI
         // ======================
         $totalAll = DetailBarangDikerjakanPotSiku::where('id_produksi_pot_siku', $produksiId)
             ->sum(DB::raw('CAST(jumlah AS UNSIGNED)'));
+
+        // ======================
+        // TOTAL PEGAWAI
+        // ======================
+        $totalPegawai = PegawaiPotSiku::where('id_produksi_pot_siku', $produksiId)
+            ->whereNotNull('id_pegawai')
+            ->distinct('id_pegawai')
+            ->count('id_pegawai');
 
         // ======================
         // GLOBAL UKURAN + KW
@@ -51,6 +60,9 @@ class ProduksiPotSikuSummaryWidget extends Widget
             ->orderBy('detail_barang_dikerjakan_pot_siku.kw')
             ->get();
 
+        // ======================
+        // GLOBAL UKURAN (SEMUA KW)
+        // ======================
         $globalUkuran = DetailBarangDikerjakanPotSiku::query()
             ->where('id_produksi_pot_siku', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'detail_barang_dikerjakan_pot_siku.id_ukuran')
@@ -68,8 +80,9 @@ class ProduksiPotSikuSummaryWidget extends Widget
 
         $this->summary = [
             'totalAll'       => $totalAll,
-            'globalUkuranKw' => $globalUkuranKw,
-            'globalUkuran'   => $globalUkuran,
+            'totalPegawai'  => $totalPegawai,
+            'globalUkuranKw'=> $globalUkuranKw,
+            'globalUkuran'  => $globalUkuran,
         ];
     }
 }

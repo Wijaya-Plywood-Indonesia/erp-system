@@ -6,6 +6,7 @@ use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use App\Models\ProduksiNyusup;
 use App\Models\DetailBarangDikerjakan;
+use App\Models\PegawaiNyusup;
 
 class ProduksiNyusupSummaryWidget extends Widget
 {
@@ -25,15 +26,29 @@ class ProduksiNyusupSummaryWidget extends Widget
 
         $produksiId = $record->id;
 
-        // ======================
-        // TOTAL KESELURUHAN
-        // ======================
+        /**
+         * ======================
+         * 1. TOTAL PRODUKSI
+         * ======================
+         */
         $totalAll = DetailBarangDikerjakan::where('id_produksi_nyusup', $produksiId)
             ->sum(DB::raw('CAST(hasil AS UNSIGNED)'));
 
-        // ======================
-        // GLOBAL UKURAN + GRADE (KW)
-        // ======================
+        /**
+         * ======================
+         * 2. TOTAL PEGAWAI (UNIK)
+         * ======================
+         */
+        $totalPegawai = PegawaiNyusup::where('id_produksi_nyusup', $produksiId)
+            ->whereNotNull('id_pegawai')
+            ->distinct('id_pegawai')
+            ->count('id_pegawai');
+
+        /**
+         * ======================
+         * 3. GLOBAL UKURAN + GRADE
+         * ======================
+         */
         $globalUkuranGrade = DetailBarangDikerjakan::query()
             ->where('detail_barang_dikerjakan.id_produksi_nyusup', $produksiId)
             ->join('barang_setengah_jadi_hp as bsj', 'bsj.id', '=', 'detail_barang_dikerjakan.id_barang_setengah_jadi_hp')
@@ -41,9 +56,9 @@ class ProduksiNyusupSummaryWidget extends Widget
             ->join('grades', 'grades.id', '=', 'bsj.id_grade')
             ->selectRaw('
     CONCAT(
-        TRIM(TRAILING ".00" FROM FORMAT(ukurans.panjang, 2)), " x ",
-        TRIM(TRAILING ".00" FROM FORMAT(ukurans.lebar, 2)), " x ",
-        TRIM(TRAILING ".00" FROM FORMAT(ukurans.tebal, 2))
+        TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.panjang AS CHAR))), " x ",
+        TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.lebar AS CHAR))), " x ",
+        TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
     ) AS ukuran,
     grades.nama_grade AS kw,
     SUM(CAST(detail_barang_dikerjakan.hasil AS UNSIGNED)) AS total
@@ -54,19 +69,20 @@ class ProduksiNyusupSummaryWidget extends Widget
             ->orderBy('grades.nama_grade')
             ->get();
 
-
-        // ======================
-        // GLOBAL UKURAN (SEMUA GRADE)
-        // ======================
+        /**
+         * ======================
+         * 4. GLOBAL UKURAN (SEMUA GRADE)
+         * ======================
+         */
         $globalUkuran = DetailBarangDikerjakan::query()
             ->where('detail_barang_dikerjakan.id_produksi_nyusup', $produksiId)
             ->join('barang_setengah_jadi_hp as bsj', 'bsj.id', '=', 'detail_barang_dikerjakan.id_barang_setengah_jadi_hp')
             ->join('ukurans', 'ukurans.id', '=', 'bsj.id_ukuran')
             ->selectRaw('
     CONCAT(
-        TRIM(TRAILING ".00" FROM FORMAT(ukurans.panjang, 2)), " x ",
-        TRIM(TRAILING ".00" FROM FORMAT(ukurans.lebar, 2)), " x ",
-        TRIM(TRAILING ".00" FROM FORMAT(ukurans.tebal, 2))
+        TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.panjang AS CHAR))), " x ",
+        TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.lebar AS CHAR))), " x ",
+        TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
     ) AS ukuran,
     SUM(CAST(detail_barang_dikerjakan.hasil AS UNSIGNED)) AS total
 ')
@@ -75,11 +91,11 @@ class ProduksiNyusupSummaryWidget extends Widget
             ->orderBy('ukuran')
             ->get();
 
-
         $this->summary = [
-            'totalAll'           => $totalAll,
-            'globalUkuranGrade'  => $globalUkuranGrade,
-            'globalUkuran'       => $globalUkuran,
+            'totalAll'          => $totalAll,
+            'totalPegawai'     => $totalPegawai,
+            'globalUkuranGrade' => $globalUkuranGrade,
+            'globalUkuran'     => $globalUkuran,
         ];
     }
 }

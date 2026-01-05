@@ -6,6 +6,7 @@ use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use App\Models\ProduksiPotJelek;
 use App\Models\DetailBarangDikerjakanPotJelek;
+use App\Models\PegawaiPotJelek;
 
 class ProduksiPotJelekSummaryWidget extends Widget
 {
@@ -26,10 +27,18 @@ class ProduksiPotJelekSummaryWidget extends Widget
         $produksiId = $record->id;
 
         // ======================
-        // TOTAL KESELURUHAN
+        // TOTAL PRODUKSI
         // ======================
         $totalAll = DetailBarangDikerjakanPotJelek::where('id_produksi_pot_jelek', $produksiId)
             ->sum(DB::raw('CAST(jumlah AS UNSIGNED)'));
+
+        // ======================
+        // TOTAL PEGAWAI
+        // ======================
+        $totalPegawai = PegawaiPotJelek::where('id_produksi_pot_jelek', $produksiId)
+            ->whereNotNull('id_pegawai')
+            ->distinct('id_pegawai')
+            ->count('id_pegawai');
 
         // ======================
         // GLOBAL UKURAN + KW
@@ -70,7 +79,8 @@ class ProduksiPotJelekSummaryWidget extends Widget
             ->get();
 
         $this->summary = [
-            'totalAll'       => $totalAll,
+            'totalAll'        => $totalAll,
+            'totalPegawai'   => $totalPegawai,
             'globalUkuranKw' => $globalUkuranKw,
             'globalUkuran'   => $globalUkuran,
         ];

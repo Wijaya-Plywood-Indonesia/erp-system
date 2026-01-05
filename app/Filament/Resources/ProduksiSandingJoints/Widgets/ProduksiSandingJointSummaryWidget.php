@@ -6,6 +6,7 @@ use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use App\Models\ProduksiSandingJoint;
 use App\Models\HasilSandingJoint;
+use App\Models\PegawaiSandingJoint;
 
 class ProduksiSandingJointSummaryWidget extends Widget
 {
@@ -26,22 +27,30 @@ class ProduksiSandingJointSummaryWidget extends Widget
         $produksiId = $record->id;
 
         // ======================
-        // TOTAL KESELURUHAN
+        // 1. TOTAL PRODUKSI (LEMBAR)
         // ======================
         $totalAll = HasilSandingJoint::where('id_produksi_sanding_joint', $produksiId)
             ->sum(DB::raw('CAST(jumlah AS UNSIGNED)'));
 
         // ======================
-        // GLOBAL UKURAN + KW
+        // 2. TOTAL PEGAWAI (UNIK)
+        // ======================
+        $totalPegawai = PegawaiSandingJoint::where('id_produksi_sanding_joint', $produksiId)
+            ->whereNotNull('id_pegawai')
+            ->distinct('id_pegawai')
+            ->count('id_pegawai');
+
+        // ======================
+        // 3. GLOBAL UKURAN + KW
         // ======================
         $globalUkuranKw = HasilSandingJoint::query()
             ->where('id_produksi_sanding_joint', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'hasil_sanding_joint.id_ukuran')
             ->selectRaw('
                 CONCAT(
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
-                    TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
+                    TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.panjang AS CHAR))), " x ",
+                    TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.lebar AS CHAR))), " x ",
+                    TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
                 ) AS ukuran,
                 hasil_sanding_joint.kw,
                 SUM(CAST(hasil_sanding_joint.jumlah AS UNSIGNED)) AS total
@@ -52,16 +61,16 @@ class ProduksiSandingJointSummaryWidget extends Widget
             ->get();
 
         // ======================
-        // GLOBAL UKURAN (SEMUA KW)
+        // 4. GLOBAL UKURAN (SEMUA KW)
         // ======================
         $globalUkuran = HasilSandingJoint::query()
             ->where('id_produksi_sanding_joint', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'hasil_sanding_joint.id_ukuran')
             ->selectRaw('
                 CONCAT(
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
-                    TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
+                    TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.panjang AS CHAR))), " x ",
+                    TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.lebar AS CHAR))), " x ",
+                    TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
                 ) AS ukuran,
                 SUM(CAST(hasil_sanding_joint.jumlah AS UNSIGNED)) AS total
             ')
@@ -71,6 +80,7 @@ class ProduksiSandingJointSummaryWidget extends Widget
 
         $this->summary = [
             'totalAll'       => $totalAll,
+            'totalPegawai'   => $totalPegawai,
             'globalUkuranKw' => $globalUkuranKw,
             'globalUkuran'   => $globalUkuran,
         ];
