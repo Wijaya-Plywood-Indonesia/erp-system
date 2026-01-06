@@ -1,0 +1,70 @@
+@startuml
+' === KONFIGURASI TAMPILAN ===
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam usecase {
+    BackgroundColor White
+    BorderColor DarkSlateGray
+    ArrowColor Black
+}
+
+actor Satpam
+actor Admin
+
+package "Sistem Kayu Masuk" {
+
+  ' --- GROUP 1: AUTHENTIKASI (Shared) ---
+  rectangle "Akses & Dashboard" {
+      usecase "Login" as UC_Login
+      usecase "Dashboard" as UC_Dash
+  }
+
+  ' --- GROUP 2: MASTER DATA (Area Admin) ---
+  ' Ini adalah data yang harus diisi DULUAN oleh Admin
+  rectangle "Manajemen Master Data" {
+      usecase "Kelola Data Supplier Kayu" as UC_M_Supp
+      usecase "Kelola Data Kendaraan Supplier" as UC_M_Kend
+      usecase "Kelola Dokumen Kayu" as UC_M_Dok
+  }
+  
+  ' --- GROUP 3: OPERASIONAL HARIAN (Area Satpam) ---
+  ' Satpam hanya 'Memilih' data yang sudah dibuat Admin
+  rectangle "Input Kayu Masuk" {
+        usecase "Input Kayu Masuk" as UC_InputUtama
+        
+        ' Langkah-langkah (Include)
+        usecase "Upload Foto Dokumen Kayu" as UC_Upload
+        usecase "Pilih Supplier Kayu" as UC_Pilih_Supp
+        usecase "Pilih Kendaraan Supplier" as UC_Pilih_Kend
+        usecase "Pilih Pemilik Dokumen" as UC_Pilih_Dok
+  }
+  
+  ' === RELASI ADMIN (Pembuat Data) ===
+  Admin --> UC_Login
+  Admin --> UC_M_Supp
+  Admin --> UC_M_Kend
+  Admin --> UC_M_Dok
+
+  ' === RELASI SATPAM (Pengguna Data) ===
+  Satpam --> UC_Login
+  Satpam --> UC_InputUtama
+
+  ' === ATURAN SISTEM (Login & Include) ===
+  UC_Login --> UC_Dash
+  
+  ' Satpam WAJIB melakukan langkah ini saat input
+  UC_InputUtama ..> UC_Upload : <<include>>
+  UC_InputUtama ..> UC_Pilih_Supp : <<include>>
+  UC_InputUtama ..> UC_Pilih_Kend : <<include>>
+  UC_InputUtama ..> UC_Pilih_Dok : <<include>>
+
+  ' === VISUALISASI KETERGANTUNGAN DATA (Opsional) ===
+  ' Garis putus-putus abu-abu ini hanya untuk membantu visualisasi
+  ' Bahwa "Pilih Supplier" mengambil data dari "Kelola Supplier"
+  UC_Pilih_Supp .[#Gray].> UC_M_Supp : <<read data>>
+  UC_Pilih_Kend .[#Gray].> UC_M_Kend : <<read data>>
+  UC_Pilih_Dok  .[#Gray].> UC_M_Dok  : <<read data>>
+}
+
+@enduml
