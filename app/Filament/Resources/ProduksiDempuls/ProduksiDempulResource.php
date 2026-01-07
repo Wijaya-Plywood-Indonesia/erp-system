@@ -49,8 +49,8 @@ class ProduksiDempulResource extends Resource
     {
         return [
             // RencanaPegawaiDempulRelationManager::class,
-            DetailDempulRelationManager::class,
             BahanDempulRelationManager::class,
+            DetailDempulRelationManager::class,
             ValidasiDempulRelationManager::class,
         ];
     }

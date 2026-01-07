@@ -51,7 +51,7 @@
         <div class="space-y-3">
             <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">Rekap per Grade</div>
 
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="grid grid-cols-1 gap-4">
                 @foreach ($rekapGrade as $row)
                 <div class="rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm dark:bg-gray-800 dark:border-gray-700">
                     <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
