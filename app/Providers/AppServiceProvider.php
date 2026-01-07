@@ -39,7 +39,9 @@ class AppServiceProvider extends ServiceProvider
 
                 <script>
                     /**
-                     * 1. LOGIC UNTUK DETAIL KAYU MASUK (Lama)
+                     * ==========================================
+                     * 1. LOGIC UNTUK DETAIL KAYU MASUK (LAMA)
+                     * ==========================================
                      */
                     window.offlineDetailLogic = function(config) {
                         return {
@@ -68,6 +70,13 @@ class AppServiceProvider extends ServiceProvider
 
                             async loadStorage() {
                                 this.pendingItems = await localforage.getItem(this.storageKey) || [];
+                            },
+
+                            async removeItem(index) {
+                                if(!confirm('Hapus data ini dari draft?')) return;
+                                this.pendingItems.splice(index, 1);
+                                await localforage.setItem(this.storageKey, JSON.parse(JSON.stringify(this.pendingItems)));
+                                new FilamentNotification().title('Data dihapus').success().send();
                             },
 
                             async create(closeAfter = true) {
@@ -101,7 +110,7 @@ class AppServiceProvider extends ServiceProvider
                                     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
                                     const payloadItems = JSON.parse(JSON.stringify(this.pendingItems));
 
-                                    // URL INI UNTUK KAYU MASUK
+                                    // URL: KAYU MASUK
                                     const res = await fetch('/api/offline/sync-detail-kayu-masuk', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
@@ -113,7 +122,7 @@ class AppServiceProvider extends ServiceProvider
                                         this.pendingItems = [];
                                         await localforage.removeItem(this.storageKey);
                                         Livewire.dispatch('refreshDatatable'); 
-                                        new FilamentNotification().title('Sinkronisasi Berhasil').success().send();
+                                        new FilamentNotification().title('Berhasil Sinkronisasi Kayu Masuk').success().send();
                                     } else { throw new Error(data.message || 'Gagal Sync'); }
                                 } catch (e) {
                                     new FilamentNotification().title('Gagal Upload: ' + e.message).danger().send();
@@ -123,7 +132,9 @@ class AppServiceProvider extends ServiceProvider
                     };
 
                     /**
+                     * ==========================================
                      * 2. LOGIC UNTUK TURUSAN KAYU (BARU & DIPERBAIKI)
+                     * ==========================================
                      */
                     window.offlineTurusanLogic = function(config) {
                         return {
@@ -153,6 +164,13 @@ class AppServiceProvider extends ServiceProvider
 
                             async loadStorage() {
                                 this.pendingItems = await localforage.getItem(this.storageKey) || [];
+                            },
+
+                            async removeItem(index) {
+                                if(!confirm('Hapus data ini dari draft?')) return;
+                                this.pendingItems.splice(index, 1);
+                                await localforage.setItem(this.storageKey, JSON.parse(JSON.stringify(this.pendingItems)));
+                                new FilamentNotification().title('Data dihapus').success().send();
                             },
 
                             async create(closeAfter = true) {
@@ -186,8 +204,7 @@ class AppServiceProvider extends ServiceProvider
                                     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
                                     const payloadItems = JSON.parse(JSON.stringify(this.pendingItems));
 
-                                    // === [PERBAIKAN UTAMA ADA DISINI] ===
-                                    // URL Mengarah ke endpoint TURUSAN, bukan kayu masuk
+                                    // URL: TURUSAN (Sudah Diperbaiki)
                                     const res = await fetch('/api/offline/sync-detail-turusan-kayu', {
                                         method: 'POST',
                                         headers: { 
