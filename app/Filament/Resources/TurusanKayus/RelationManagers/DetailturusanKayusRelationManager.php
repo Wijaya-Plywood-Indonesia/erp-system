@@ -5,6 +5,7 @@ namespace App\Filament\Resources\TurusanKayus\RelationManagers;
 use App\Models\DetailTurusanKayu;
 use App\Models\JenisKayu;
 use App\Models\Lahan;
+use App\Models\DetailTurunKayu;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -21,13 +22,17 @@ use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
+use Filament\Actions\Action; // Tambahan Import Action Custom
+use Illuminate\Contracts\View\View; // Tambahan Import View
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
-use App\Models\DetailTurunKayu;
 
 class DetailturusanKayusRelationManager extends RelationManager
 {
     protected static string $relationship = 'DetailturusanKayus';
+
+    // Listener agar tabel refresh otomatis setelah sync dari offline mode
+    protected $listeners = ['refreshDatatable' => '$refresh'];
 
     public static function canViewForRecord($ownerRecord, $pageClass): bool
     {
@@ -45,10 +50,8 @@ class DetailturusanKayusRelationManager extends RelationManager
         }
 
         // Jika status "selesai" → tidak boleh isi lagi
-        return false;
+        return true;
     }
-
-
 
     public function form(Schema $schema): Schema
     {
@@ -373,11 +376,40 @@ class DetailturusanKayusRelationManager extends RelationManager
                             ->title("Batang D : {$diameter} cm | No {$nomerUrut} ditambahkan")
                             ->success()
                             ->send();
-
-                        // kirim event ke browser dengan id Livewire component saat ini
-                        // Inilah bagian kuncinya 👇
-                        // Jangan tutup modal, tapi reset form dan fokus lagi
                     }),
+
+                // ==========================================
+                // TOMBOL OFFLINE MODE (TURUSAN)
+                // ==========================================
+                Action::make('offlineInput')
+                    ->label('Mode Offline')
+                    ->icon('heroicon-m-signal-slash')
+                    ->color('warning')
+                    ->modalHeading('Input Turusan (Tanpa Sinyal)')
+                    ->modalWidth('2xl')
+                    ->modalContent(function ($livewire): View {
+                        $owner = $livewire->getOwnerRecord();
+
+                        // Persiapan data untuk dropdown modal offline
+                        // Kita gabungkan Kode - Nama agar user mudah memilih
+                        $lahanOptions = Lahan::get()->mapWithKeys(fn($l) => [
+                            $l->id => "{$l->kode_lahan} - {$l->nama_lahan}"
+                        ]);
+
+                        $jenisOptions = JenisKayu::get()->mapWithKeys(fn($j) => [
+                            $j->id => "{$j->kode_kayu} - {$j->nama_kayu}"
+                        ]);
+
+                        // Panggil View khusus turusan (offline-turusan-modal.blade.php)
+                        return view('filament.components.offline-turusan-modal', [
+                            'parentId'     => $owner->id,
+                            'optionsLahan' => $lahanOptions,
+                            'optionsJenis' => $jenisOptions,
+                        ]);
+                    })
+                    ->modalSubmitAction(false) // Matikan tombol default
+                    ->modalCancelAction(false) // Matikan tombol default
+                    ->extraAttributes(['id' => 'modal-offline-turusan']),
 
             ])
             ->groups([
@@ -465,7 +497,5 @@ class DetailturusanKayusRelationManager extends RelationManager
                         ->successNotificationTitle(fn($count) => "{$count} data berhasil diupdate"),
                 ]),
             ]);
-
     }
-
 }

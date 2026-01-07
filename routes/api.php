@@ -98,4 +98,55 @@ Route::middleware(['web', 'auth'])->group(function () {
             ], 500);
         }
     });
+
+    Route::post('/offline/sync-detail-turusan-kayu', function (Illuminate\Http\Request $request) {
+
+        $validator = Illuminate\Support\Facades\Validator::make($request->all(), [
+            'parent_id'             => 'required|exists:kayu_masuks,id', // Parentnya tetap Kayu Masuk kan? Sesuaikan jika beda
+            'items'                 => 'required|array',
+            'items.*.lahan_id'      => 'required|exists:lahans,id',
+            'items.*.jenis_kayu_id' => 'required|exists:jenis_kayus,id',
+            'items.*.panjang'       => 'required|numeric',
+            'items.*.grade'         => 'required',
+            'items.*.diameter'      => 'required|numeric', // Sesuai validasi form Anda
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
+        }
+
+        Illuminate\Support\Facades\DB::beginTransaction();
+
+        try {
+            $parentId = $request->parent_id;
+            $items = $request->items;
+            $count = 0;
+
+            foreach ($items as $item) {
+                // LOGIKA NOMOR URUT OTOMATIS (Server Side)
+                // Kita ambil max nomor urut terakhir untuk parent & lahan ini
+                $lastNo = \App\Models\DetailTurusanKayu::where('id_kayu_masuk', $parentId)
+                    ->max('nomer_urut') ?? 0;
+
+                \App\Models\DetailTurusanKayu::create([
+                    'id_kayu_masuk' => $parentId,
+                    'nomer_urut'    => $lastNo + 1, // Auto Increment
+                    'lahan_id'      => $item['lahan_id'],
+                    'jenis_kayu_id' => $item['jenis_kayu_id'],
+                    'panjang'       => $item['panjang'],
+                    'grade'         => $item['grade'],
+                    'diameter'      => $item['diameter'],
+                    'kuantitas'     => 1, // Default 1 batang per inputan turus
+                    'keterangan'    => 'Offline Input',
+                ]);
+                $count++;
+            }
+
+            Illuminate\Support\Facades\DB::commit();
+            return response()->json(['status' => 'success', 'message' => "Berhasil simpan {$count} data turusan."]);
+        } catch (\Exception $e) {
+            Illuminate\Support\Facades\DB::rollBack();
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    });
 });

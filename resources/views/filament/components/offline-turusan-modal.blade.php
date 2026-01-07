@@ -1,10 +1,14 @@
 <div
     wire:ignore
-    x-data="offlineDetailLogic({ 
+
+    {{-- PERUBAHAN PENTING ADA DISINI: --}}
+    {{-- Gunakan 'offlineTurusanLogic', BUKAN 'offlineDetailLogic' --}}
+    x-data="offlineTurusanLogic({ 
         parentId: '{{ $parentId }}',
-        lahanDefault: '{{ \App\Models\DetailKayuMasuk::latest('id')->value('id_lahan') ?? array_key_first($optionsLahan->toArray()) }}',
+        lahanDefault: '{{ \App\Models\DetailTurusanKayu::where("id_kayu_masuk", $parentId)->latest("id")->value("lahan_id") ?? array_key_first($optionsLahan->toArray()) }}',
         jenisDefault: '{{ array_key_first($optionsJenis->toArray()) }}'
     })"
+
     class="flex flex-col gap-y-6">
 
     <div x-show="pendingItems.length > 0" class="rounded-lg bg-gray-50 p-4 ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-white/10">
@@ -16,7 +20,7 @@
             </div>
             <div class="flex-1 min-w-[220px]">
                 <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
-                    <span x-text="pendingItems.length"></span> Data Tersimpan (Offline)
+                    <span x-text="pendingItems.length"></span> Data Turusan Tersimpan
                 </h4>
                 <p x-show="!online" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     Koneksi terputus. Data aman di perangkat ini.
@@ -30,9 +34,10 @@
 
     <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:gap-6">
 
+        <!-- Perhatikan modelnya menggunakan 'lahan_id' (sesuai tabel turusan), bukan 'id_lahan' -->
         <div class="space-y-1.5">
             <label class="text-sm font-medium text-gray-900 dark:text-white">Lahan <span class="text-danger-600">*</span></label>
-            <select x-model="form.id_lahan" class="w-full rounded-lg bg-white px-3 py-2 text-sm border border-gray-300 dark:bg-gray-900 dark:border-white/10">
+            <select x-model="form.lahan_id" class="w-full rounded-lg bg-white px-3 py-2 text-sm border border-gray-300 dark:bg-gray-900 dark:border-white/10">
                 @foreach($optionsLahan as $id => $label)
                 <option value="{{ $id }}">{{ $label }}</option>
                 @endforeach
@@ -41,7 +46,7 @@
 
         <div class="space-y-1.5">
             <label class="text-sm font-medium text-gray-900 dark:text-white">Jenis Kayu <span class="text-danger-600">*</span></label>
-            <select x-model="form.id_jenis_kayu" class="w-full rounded-lg bg-white px-3 py-2 text-sm border border-gray-300 dark:bg-gray-900 dark:border-white/10">
+            <select x-model="form.jenis_kayu_id" class="w-full rounded-lg bg-white px-3 py-2 text-sm border border-gray-300 dark:bg-gray-900 dark:border-white/10">
                 @foreach($optionsJenis as $id => $label)
                 <option value="{{ $id }}">{{ $label }}</option>
                 @endforeach
@@ -65,9 +70,10 @@
             </select>
         </div>
 
+        <!-- Tambahan input kuantitas jika diperlukan (atau default 1 di JS) -->
         <div class="space-y-1.5">
             <label class="text-sm font-medium text-gray-900 dark:text-white">Jumlah Batang <span class="text-danger-600">*</span></label>
-            <input type="number" x-model="form.jumlah_batang" min="1" value="1"
+            <input type="number" x-model="form.kuantitas" min="1" value="1"
                 class="w-full rounded-lg bg-white px-3 py-2 text-sm border border-gray-300 dark:bg-gray-900 dark:border-white/10">
         </div>
 
@@ -85,7 +91,7 @@
 
     <div class="mt-8 pt-6 border-t border-gray-200 dark:border-white/10">
         <div class="flex flex-col gap-3 sm:flex-row-reverse">
-            <!-- Tambahkan type="button" untuk mencegah submit form default -->
+            <!-- Tambahkan type="button" agar tidak submit form default -->
             <button type="button" @click="create(true)" class="w-full sm:w-auto rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500">
                 Simpan
             </button>
@@ -94,7 +100,7 @@
                 Simpan & Buat Lagi
             </button>
 
-            <button type="button" @click="$dispatch('close-modal', { id: 'modal-offline-input' })" class="w-full sm:w-auto text-sm font-semibold text-gray-900 hover:underline sm:mr-auto dark:text-white">
+            <button type="button" @click="$dispatch('close-modal', { id: 'modal-offline-turusan' })" class="w-full sm:w-auto text-sm font-semibold text-gray-900 hover:underline sm:mr-auto dark:text-white">
                 Batal
             </button>
         </div>
