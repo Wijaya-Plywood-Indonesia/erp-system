@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\MasukGrajiTripleks\Tables;
+namespace App\Filament\Resources\BahanPilihPlywoods\Tables;
 
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -10,12 +10,15 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 
-class MasukGrajiTripleksTable
+class BahanPilihPlywoodsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
             ->columns([
+                TextColumn::make('no_palet')
+                    ->label('No Palet'),
+
                 TextColumn::make('barangSetengahJadiHp.jenisBarang.nama_jenis_barang')
                     ->label('Jenis Barang')
                     ->searchable()
@@ -34,40 +37,40 @@ class MasukGrajiTripleksTable
                     ->label('Ukuran')
                     ->sortable(),
 
-                TextColumn::make('isi')
+                TextColumn::make('jumlah')
                     ->label('Jumlah')
                     ->alignCenter(),
             ])
-
+            ->filters([
+                //
+            ])
             ->headerActions([
                 CreateAction::make()
-                    ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    // ->hidden(
+                    //     fn($livewire) =>
+                    //     $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    // ),
             ])
-
             ->recordActions([
-                EditAction::make()
-                    ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                EditAction::make(),
+                    // ->hidden(
+                    //     fn($livewire) =>
+                    //     $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    // ),
 
                 DeleteAction::make()
-                    ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    // ->hidden(
+                    //     fn($livewire) =>
+                    //     $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    // ),
             ])
-
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(
-                            fn($livewire) =>
-                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                        ),
+                        // ->hidden(
+                        //     fn($livewire) =>
+                        //     $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        // ),
                 ]),
             ]);
     }
