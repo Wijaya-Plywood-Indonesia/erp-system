@@ -36,6 +36,6 @@ class CreateProduksiPressDryer extends CreateRecord
     {
         // Arahkan ke halaman 'edit' milik record yang baru saja dibuat ($this->record)
         // Karena Relation Manager hanya muncul di halaman Edit/View.
-        return $this->getResource()::getUrl('edit', ['record' => $this->record]);
+        return $this->getResource()::getUrl('view', ['record' => $this->record]);
     }
 }
