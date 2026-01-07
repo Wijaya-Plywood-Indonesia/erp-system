@@ -1,0 +1,89 @@
+@startuml
+' Panggil file style yang sudah dibuat
+!include style.puml
+
+' === DEFINISI AKTOR ===
+actor "Pengawas Kedi" as Pengawas
+actor "SuperAdmin" as Admin
+
+package "Sistem Produksi Kedi" {
+
+  ' --- GROUP 1: AUTHENTIKASI ---
+  rectangle "Akses & Dashboard" {
+      usecase "Login Aplikasi" as UC_Login
+      usecase "Dashboard Utama" as UC_Dash
+  }
+
+  ' --- GROUP 2: MASTER DATA & VALIDASI (Admin) ---
+  rectangle "Manajemen Master & Validasi" {
+      usecase "Kelola Data Pegawai" as UC_M_Pegawai
+      
+      ' Ini menjadi MASTER UTAMA untuk Modal & Hasil
+      usecase "Kelola Ukuran Kayu" as UC_M_Ukuran 
+      
+      usecase "Validasi Laporan Produksi" as UC_Validasi
+  }
+  
+  ' --- GROUP 3: OPERASIONAL HARIAN (Pengawas) ---
+  rectangle "Manajemen Produksi Kedi"{
+        usecase "Input Produksi Kedi Baru" as UC_InputUtama
+        usecase "Hapus Data Produksi Kedi" as UC_DeleteData
+        usecase "Bongkar" as UC_DetailBongkar
+        usecase "Masuk" as UC_DetailMasuk
+
+        usecase "Input Masuk Kedi"
+
+        ' Langkah-langkah (Include)
+        usecase "Input Pegawai Kedi" as UC_In_Pegawai
+        usecase "Input Bongkar Kedi" as UC_In_Modal
+  }
+  
+  ' =========================================================
+  ' RELASI AKTOR KE SYSTEM
+  ' =========================================================
+  Admin --> UC_Login
+  Admin --> UC_Dash
+  
+  Pengawas --> UC_Login
+  Pengawas --> UC_Dash
+
+  ' =========================================================
+  ' RELASI ADMIN
+  ' =========================================================
+  Admin --> UC_M_Pegawai
+  Admin --> UC_M_Ukuran
+  Admin --> UC_Validasi
+
+  ' =========================================================
+  ' RELASI PENGAWAS
+  ' =========================================================
+  Pengawas --> UC_InputUtama
+  Pengawas --> UC_DeleteData
+
+  ' =========================================================
+  ' ATURAN SISTEM (INCLUDE LOGIC)
+  ' =========================================================
+  UC_Login --> UC_Dash
+  
+  UC_InputUtama ..> UC_In_Pegawai : <<include>>
+  UC_InputUtama ..> UC_In_Modal : <<include>>
+  UC_InputUtama ..> UC_In_Hasil : <<include>>
+
+  ' =========================================================
+  ' VISUALISASI READ DATA
+  ' =========================================================
+  
+  ' 1. Input Pegawai -> Baca Master Pegawai
+  UC_In_Pegawai .[#Gray].> UC_M_Pegawai : <<read data>>
+  
+  ' 2. Input MODAL -> Baca Master UKURAN
+  UC_In_Modal   .[#Gray].> UC_M_Ukuran  : <<read data>>
+  
+  ' 3. Input HASIL -> Baca Master UKURAN
+  UC_In_Hasil   .[#Gray].> UC_M_Ukuran  : <<read data>>
+  
+  ' 4. Validasi Admin -> Cek Inputan Pengawas
+  UC_Validasi   .[#Gray].> UC_InputUtama : <<validate data>>
+}
+
+@enduml

@@ -1,0 +1,28 @@
+@startuml
+' === FILE: style.puml ===
+' File ini khusus menyimpan konfigurasi tampilan global
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam shadowing false
+
+' Konfigurasi Warna Aktor
+skinparam actor {
+    BackgroundColor White
+    BorderColor DarkSlateGray
+}
+
+' Konfigurasi Warna Use Case & Garis
+skinparam usecase {
+    BackgroundColor White
+    BorderColor DarkSlateGray
+    ArrowColor Black
+}
+
+' Konfigurasi Catatan (Note)
+skinparam note {
+    BackgroundColor #FFF9C4
+    BorderColor #FBC02D
+}
+@enduml

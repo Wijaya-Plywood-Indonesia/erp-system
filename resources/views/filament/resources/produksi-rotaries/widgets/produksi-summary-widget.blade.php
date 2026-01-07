@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-<x-filament::widget>
-=======
 `<x-filament::widget>
->>>>>>> faris
     <x-filament::card class="w-full space-y-10 dark:bg-gray-900 dark:border-gray-800">
         {{-- ================= TOTAL PRODUKSI ================= --}}
         <div class="text-center py-4">
@@ -32,17 +28,17 @@
         <div class="space-y-3">
             <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">Rekap per Jenis Kayu</div>
 
-            @php 
-                $jenisGrouped = []; 
-                foreach ($summary['perJenisKayuKw'] ?? [] as $row) { 
-                    $jenisGrouped[$row->jenis_kayu][] = $row; 
-                } 
+            @php
+            $jenisGrouped = [];
+            foreach ($summary['perJenisKayuKw'] ?? [] as $row) {
+            $jenisGrouped[$row->jenis_kayu][] = $row;
+            }
             @endphp
 
             <div class="grid grid-cols-1 gap-5">
-                @foreach ($jenisGrouped as $jenisKayu => $items) 
+                @foreach ($jenisGrouped as $jenisKayu => $items)
                 @php
-                    $totalJenis = collect($items)->sum('total');
+                $totalJenis = collect($items)->sum('total');
                 @endphp
                 <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:bg-gray-800 dark:border-gray-700">
                     <div class="flex justify-between items-center mb-4">
@@ -77,19 +73,19 @@
                 Rekap Produksi per Lahan
             </div>
 
-            @php 
-                $lahanGrouped = []; 
-                foreach ($summary['perLahanJenisKayuKw'] ?? [] as $row) { 
-                    $lahanGrouped[$row->lahan_id][] = $row; 
-                } 
+            @php
+            $lahanGrouped = [];
+            foreach ($summary['perLahanJenisKayuKw'] ?? [] as $row) {
+            $lahanGrouped[$row->lahan_id][] = $row;
+            }
             @endphp
 
             <div class="grid grid-cols-1 gap-6">
-                @foreach ($lahanGrouped as $itemsLahan) 
-                @php 
-                    $first = $itemsLahan[0]; 
-                    $totalLahan = collect($itemsLahan)->sum('total');
-                    $jenisInLahan = collect($itemsLahan)->groupBy('jenis_kayu');
+                @foreach ($lahanGrouped as $itemsLahan)
+                @php
+                $first = $itemsLahan[0];
+                $totalLahan = collect($itemsLahan)->sum('total');
+                $jenisInLahan = collect($itemsLahan)->groupBy('jenis_kayu');
                 @endphp
 
                 <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
