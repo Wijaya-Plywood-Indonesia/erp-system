@@ -82,34 +82,31 @@ class AdminPanelProvider extends PanelProvider
             ->sidebarCollapsibleOnDesktop()
 
             ->navigationGroups([
-
                 //Kategori Menu Produksi
-                NavigationGroup::make('Lain Lain')
-                    ->icon('heroicon-o-ellipsis-horizontal-circle'),
-
-                NavigationGroup::make('Finishing')
-                    ->icon('heroicon-o-check-badge'),
-
-                NavigationGroup::make("Sanding Joint")
-                    ->icon('heroicon-o-divide'),
 
                 NavigationGroup::make('BK-BM')
                     ->icon('heroicon-o-adjustments-horizontal'),
 
+                NavigationGroup::make('Kayu')
+                    ->icon('heroicon-o-circle-stack'),
+
                 NavigationGroup::make('Rotary')
                     ->icon('heroicon-o-cog'),
-
-                NavigationGroup::make('Repair')
-                    ->icon('heroicon-o-pencil'),
 
                 NavigationGroup::make('Dryer')
                     ->icon('heroicon-o-fire'),
 
+                NavigationGroup::make('Repair')
+                    ->icon('heroicon-o-pencil'),
+
                 NavigationGroup::make('Hot Press')
                     ->icon('heroicon-o-cpu-chip'),
 
-                NavigationGroup::make('Kayu')
-                    ->icon('heroicon-o-circle-stack'),
+                NavigationGroup::make('Finishing')
+                    ->icon('heroicon-o-check-badge'),
+
+                NavigationGroup::make('Lain Lain')
+                    ->icon('heroicon-o-ellipsis-horizontal-circle'),
                 //Laporan 
                 NavigationGroup::make('Laporan')
                     ->icon('heroicon-o-clipboard-document-list'),
