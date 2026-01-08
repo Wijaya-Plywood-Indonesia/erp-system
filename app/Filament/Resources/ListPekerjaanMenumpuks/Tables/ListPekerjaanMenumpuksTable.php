@@ -7,7 +7,10 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Actions\CreateAction;
+
+
 
 class ListPekerjaanMenumpuksTable
 {
@@ -15,27 +18,65 @@ class ListPekerjaanMenumpuksTable
     {
         return $table
             ->columns([
-                TextColumn::make('barangSetengahJadiHp.id')
+                // Menampilkan detail barang lengkap: Jenis | Ukuran | Grade
+                TextColumn::make('hasilPilihPlywood.barangSetengahJadiHp.id')
                     ->label('Detail Barang')
-                    ->formatStateUsing(fn ($record) => 
-                        ($record->barangSetengahJadiHp->jenisBarang->nama_jenis_barang ?? '-') . ' | ' .
-                        ($record->barangSetengahJadiHp->ukuran->nama_ukuran ?? '-') . ' | ' .
-                        ($record->barangSetengahJadiHp->grade->nama_grade ?? '-')
-                    ),
-                TextColumn::make('jumlah')
-                    ->label('Jumlah')
+                    ->formatStateUsing(function ($record) {
+                        $barang = $record->hasilPilihPlywood->barangSetengahJadiHp;
+                        return ($barang->jenisBarang->nama_jenis_barang ?? '-') . ' | ' .
+                               ($barang->ukuran->nama_ukuran ?? '-') . ' | ' .
+                               ($barang->grade->nama_grade ?? '-');
+                    })
+                    ->description(function ($record) {
+                        // REVISI: Menggunakan 'tanggal_produksi' sesuai Model ProduksiPilihPlywood
+                        $tanggal = $record->hasilPilihPlywood->produksiPilihPlywood->tanggal_produksi ?? null;
+                        
+                        return $tanggal 
+                            ? "Sumber: Hasil Pilih Plywood (" . \Carbon\Carbon::parse($tanggal)->format('d M Y') . ")"
+                            : "Sumber: Tanggal tidak ditemukan";
+                    })
+                    ->searchable(),
 
+                TextColumn::make('hasilPilihPlywood.jenis_cacat')
+                    ->label('Jenis Cacat')
+                    ->badge()
+                    ->color('danger'),
+
+                TextColumn::make('jumlah_asal')
+                    ->label('Jumlah Barang')
+                    ->alignCenter(),
+
+                TextColumn::make('jumlah_selesai')
+                    ->label('Selesai')
+                    ->alignCenter(),
+
+                TextColumn::make('jumlah_belum_selesai')
+                    ->label('Sisa')
+                    ->color('warning')
+                    ->weight('bold')
+                    ->alignCenter(),
+
+                TextColumn::make('status')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'selesai' => 'success',
+                        'belum selesai' => 'danger',
+                        default => 'gray',
+                    }),
             ])
             ->filters([
-                //
+                SelectFilter::make('status')->options([
+                    'belum selesai' => 'Belum Selesai',
+                    'selesai' => 'Selesai',
+                ])
             ])
             ->headerActions([
-                CreateAction::make(),
+                CreateAction::make()->label('Tambah Pekerjaan'),
             ])
-            ->recordActions([
+            ->actions([
                 EditAction::make(),
             ])
-            ->toolbarActions([
+            ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

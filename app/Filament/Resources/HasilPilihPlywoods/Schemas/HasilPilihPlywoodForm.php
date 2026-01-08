@@ -6,12 +6,23 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use App\Models\BahanPilihPlywood;
+use App\Models\HasilPilihPlywood;
 
 class HasilPilihPlywoodForm
 {
     public static function configure(): array
     {
         return [
+            Select::make('pegawais')
+                ->label('Pegawai')
+                ->relationship('pegawais', 'nama_pegawai')
+                ->multiple()
+                ->maxItems(2)
+                ->preload()
+                ->searchable()
+                ->required()
+                ->columnSpanFull(),
+
             Select::make('id_barang_setengah_jadi_hp')
                 ->label('Pilih Barang (Dari Bahan)')
                 ->required()
@@ -61,7 +72,6 @@ class HasilPilihPlywoodForm
                 ->options([
                     'reject' => 'Reject',
                     'reparasi' => 'Reparasi (Perlu Diperbaiki)',
-                    'selesai' => 'Selesai ',
                 ]),
 
             TextInput::make('jumlah')
@@ -96,6 +106,7 @@ class HasilPilihPlywoodForm
 
             Textarea::make('ket')
                 ->label('Keterangan Tambahan')
+                ->placeholder('contoh: Tidak bisa diperbaiki, perbaikan tidak bisa selesai hari itu juga, dll')
                 ->columnSpanFull(),
         ];
     }

@@ -13,17 +13,12 @@ return new class extends Migration
     {
         Schema::create('list_pekerjaan_menumpuk', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('id_produksi_pilih_plywood')
-                ->constrained('produksi_pilih_plywood')
-                ->cascadeOnUpdate()
-                ->restrictOnDelete();
-            $table->date('tanggal');
-            $table->foreignId('id_barang_setengah_jadi_hp')
-                ->nullable()
-                ->constrained('barang_setengah_jadi_hp')
-                ->cascadeOnUpdate()
-                ->restrictOnDelete();
-            $table->integer('jumlah');
+            $table->foreignId('id_hasil_pilih_plywood')->constrained('hasil_pilih_plywood')->onDelete('cascade');
+            $table->integer('jumlah_asal'); // Jumlah awal yang harus direparasi
+            $table->integer('jumlah_selesai')->default(0);
+            $table->integer('jumlah_belum_selesai');
+            $table->enum('status', ['selesai', 'belum selesai'])->default('belum selesai');
+            $table->text('keterangan')->nullable();
             $table->timestamps();
         });
     }

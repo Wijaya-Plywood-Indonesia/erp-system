@@ -51,10 +51,8 @@ class ProduksiPilihPlywoodResource extends Resource
     public static function getRelations(): array
     {
         return [
-            PegawaiPilihPlywoodRelationManager::class,
             BahanPilihPlywoodRelationManager::class,
             HasilPilihPlywoodRelationManager::class,
-            ListPekerjaanMenumpukRelationManager::class,
         ];
     }
 
