@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class HasilPilihPlywood extends Model
 {
@@ -25,5 +26,15 @@ class HasilPilihPlywood extends Model
     public function barangSetengahJadiHp()
     {
         return $this->belongsTo(BarangSetengahJadiHp::class, 'id_barang_setengah_jadi_hp');
+    }
+
+    public function pegawais(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Pegawai::class, 
+            'hasil_pilih_plywood_pegawai', // Nama tabel pivot
+            'id_hasil_pilih_plywood',      // Foreign key model ini
+            'id_pegawai'                   // Foreign key model Pegawai
+        );
     }
 }

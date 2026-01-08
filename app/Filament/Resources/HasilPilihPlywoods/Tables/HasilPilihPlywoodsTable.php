@@ -8,35 +8,34 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\DeleteAction;
 use Filament\Tables\Columns\Summarizers\Sum;
-use Filament\Tables\Grouping\Group; // Tambahkan ini
+use Filament\Tables\Grouping\Group;
 
 class HasilPilihPlywoodsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
-            // Tambahkan Grouping di sini
             ->groups([
                 Group::make('id_barang_setengah_jadi_hp')
                     ->label('Barang')
                     ->collapsible()
-                    ->getTitleFromRecordUsing(fn () => '')
-                    ->getTitleFromRecordUsing(fn ($record) => 
-                        ($record->barangSetengahJadiHp->jenisBarang->nama_jenis_barang ?? '-') . ' | ' .
-                        ($record->barangSetengahJadiHp->ukuran->nama_ukuran ?? '-') . ' | ' .
-                        ($record->barangSetengahJadiHp->grade->nama_grade ?? '-')
-                    )
+                    ->getTitleFromRecordUsing(function ($record) {
+                        // Judul Barang Utama
+                        $barang = ($record->barangSetengahJadiHp->jenisBarang->nama_jenis_barang ?? '-') . ' | ' .
+                                 ($record->barangSetengahJadiHp->ukuran->nama_ukuran ?? '-') . ' | ' .
+                                 ($record->barangSetengahJadiHp->grade->nama_grade ?? '-');
+                        
+                        // Nama Pegawai (hanya muncul di header group)
+                        $pegawais = $record->pegawais->pluck('nama_pegawai')->unique()->implode(', ');
+                        
+                        // Menampilkan: Barang [Pemeriksa: Nama Pegawai]
+                        return $barang . ($pegawais ? " — [Pegawai: {$pegawais}]" : "");
+                    })
             ])
-            ->defaultGroup('id_barang_setengah_jadi_hp') // Otomatis ter-group saat dibuka
+            ->defaultGroup('id_barang_setengah_jadi_hp')
             ->columns([
-                // Ubah kolom barang agar menampilkan detail lengkap seperti di Select
-                TextColumn::make('barangSetengahJadiHp.id')
-                    ->label('Detail Barang')
-                    ->formatStateUsing(fn ($record) => 
-                        ($record->barangSetengahJadiHp->jenisBarang->nama_jenis_barang ?? '-') . ' | ' .
-                        ($record->barangSetengahJadiHp->ukuran->nama_ukuran ?? '-') . ' | ' .
-                        ($record->barangSetengahJadiHp->grade->nama_grade ?? '-')
-                    ),
+                // Kolom Pegawai DIHAPUS agar tabel lebih lebar dan bersih
+                // Karena nama mereka sudah ada di judul Group di atas
 
                 TextColumn::make('jenis_cacat')
                     ->label('Jenis Cacat')
@@ -56,13 +55,15 @@ class HasilPilihPlywoodsTable
                 TextColumn::make('jumlah')
                     ->label('Jumlah')
                     ->alignCenter()
+                    ->weight('bold')
                     ->summarize(
-                        Sum::make()->label('Total Cacat')
+                        Sum::make()->label('Total')
                     ),
 
                 TextColumn::make('ket')
                     ->label('Keterangan')
-                    ->wrap(),
+                    ->wrap()
+                    ->placeholder('-'),
             ])
             ->headerActions([
                 CreateAction::make()->label('Tambah Cacat'),
