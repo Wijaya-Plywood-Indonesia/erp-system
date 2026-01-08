@@ -1,0 +1,68 @@
+    @startuml
+    ' Panggil file style yang sudah dibuat
+    !include style.puml
+
+    left to right direction
+    skinparam packageStyle rectangle
+
+    ' === DEFINISI AKTOR ===
+    actor "SuperAdmin" as Admin
+    actor "Pengawas Join" as Pengawas
+
+    package "Sistem Produksi Join" {
+
+        ' --- AREA MASTER DATA (Oleh Admin) ---
+        rectangle "Master Data" {
+            usecase "Kelola Data Pegawai" as UC_M_Pegawai
+            usecase "Kelola Ukuran" as UC_M_Ukuran
+            usecase "Validasi Join" as UC_M_Validasi
+        }
+
+        ' --- AREA OPERASIONAL (Oleh Pengawas) ---
+        rectangle "Menu Produksi Join" {
+            usecase "Hapus Produksi Join" as UC_Hapus
+            
+            ' Use Case Utama (Abstract)
+            usecase "Input Produksi Join" as UC_Input_Utama   
+
+            ' Sub-Proses (Langkah Detail)
+            usecase "Detail Pegawai Join" as UC_In_Join
+            usecase "Detail Modal Join" as UC_In_Detail
+            usecase "Detail Hasil Join" as UC_In_HasilJoin
+            usecase "Bahan Join" as UC_In_BahanJoin
+        }
+
+        ' =========================================
+        ' RELASI AKTOR KE USE CASE
+        ' =========================================
+        
+        ' Admin mengelola master
+        Admin --> UC_M_Pegawai
+        Admin --> UC_M_Ukuran
+        Admin --> UC_M_Validasi
+
+        ' Pengawas melakukan input dan hapus
+        Pengawas --> UC_Input_Utama
+        Pengawas --> UC_Hapus
+
+        ' =========================================
+        ' LOGIKA ALUR (RELATIONSHIPS)
+        ' =========================================
+
+        ' 1. Generalisasi (Pilihan Menu)
+        ' "Input Produksi Kedi" bisa berupa Bongkar ATAU Masuk
+        UC_Input_Utama --> UC_In_Join : <<include>>
+        UC_Input_Utama --> UC_In_Detail : <<include>>
+        UC_Input_Utama --> UC_In_HasilJoin : <<include>>
+        UC_Input_Utama --> UC_In_BahanJoin : <<include>>
+
+        ' 3. Dependency / Read Data (Koneksi ke Master)
+        ' Saat input detail bongkar, perlu baca data ukuran dari admin
+        UC_In_Join .[#gray].> UC_M_Ukuran : <<read data>>
+        UC_In_Detail .[#gray].> UC_M_Pegawai : <<read data>>
+        
+        UC_M_Validasi .[#gray].> UC_Input_Utama : <<validate data>>
+
+    }
+
+    @enduml

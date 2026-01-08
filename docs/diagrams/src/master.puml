@@ -1,0 +1,65 @@
+@startuml Master Data Diagram
+' Panggil file style yang sudah dibuat (pastikan file ini ada)
+!include style.puml
+
+left to right direction
+skinparam packageStyle rectangle
+
+' === DEFINISI AKTOR ===
+actor "SuperAdmin" as Admin
+
+package "Menu Master" {
+    ' -- Group SDM --
+    usecase "Kelola Data Pegawai" as UC_M_Pegawai
+
+    ' -- Group Mesin & Aset --
+    usecase "Kelola Data Mesin" as UC_M_Mesin
+    usecase "Kelola Kategori Mesin" as UC_M_KatergoriMesin
+    usecase "Kelola Data Lahan" as UC_M_Lahan
+
+    ' -- Group Produk & Material --
+    usecase "Kelola Jenis Kayu" as UC_M_JenisKayu
+    usecase "Kelola Data Ukuran" as UC_M_Ukuran
+    usecase "Kelola Jenis Barang" as UC_M_JenisBarang
+    usecase "Kelola Data Grade" as UC_M_Grades
+    usecase "Kelola Barang Setengah Jadi" as UC_M_BarangSetengahJadi
+    
+    ' -- Group Produksi & Target --
+    usecase "Kelola Kategori Bisnis" as UC_M_Kategori_Bisnis
+    usecase "Kelola Target Produksi" as UC_M_Target
+    usecase "Kelola Komposisi" as UC_M_Komposisi
+    usecase "Kelola Detail Komposisi" as UC_M_DetailKomposisi
+}
+
+' === HUBUNGAN AKTOR KE USE CASE ===
+' SuperAdmin memiliki akses penuh ke semua master data
+Admin --> UC_M_Pegawai
+Admin --> UC_M_Mesin
+Admin --> UC_M_KatergoriMesin
+Admin --> UC_M_Lahan
+Admin --> UC_M_JenisKayu
+Admin --> UC_M_Ukuran
+Admin --> UC_M_JenisBarang
+Admin --> UC_M_Grades
+Admin --> UC_M_BarangSetengahJadi
+Admin --> UC_M_Kategori_Bisnis
+Admin --> UC_M_Target
+Admin --> UC_M_Komposisi
+Admin --> UC_M_DetailKomposisi
+
+' 2. Relasi Data (Dependency)
+' Saat input Mesin, sistem butuh data Kategori Mesin
+UC_M_Mesin ..> UC_M_KatergoriMesin : <<include>>
+
+' Saat input Barang Setengah Jadi, butuh data Jenis Barang & Ukuran & Grade
+UC_M_BarangSetengahJadi ..> UC_M_JenisBarang : <<include>>
+UC_M_BarangSetengahJadi ..> UC_M_Ukuran : <<include>>
+UC_M_BarangSetengahJadi ..> UC_M_Grades : <<include>>
+
+' Saat input Komposisi, pasti mengisi Detail Komposisi
+UC_M_Komposisi ..> UC_M_DetailKomposisi : <<include>>
+
+' Target produksi mungkin membutuhkan data Kategori Bisnis
+UC_M_Target ..> UC_M_Kategori_Bisnis : <<include>>
+
+@enduml
