@@ -3,71 +3,62 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\File;
 
 class GenerateDbml extends Command
 {
+    /**
+     * Nama perintah yang akan diketik di terminal
+     */
     protected $signature = 'dbml:generate {--force : Paksa render ulang semua file meskipun sudah ada}';
-    protected $description = 'Render semua file .dbml di folder relations/input menjadi PNG';
+
+    /**
+     * Deskripsi perintah
+     */
+    protected $description = 'Render DBML ke PNG menggunakan script worker Node.js (Sharp)';
 
     public function handle()
     {
-        // 1. Tentukan Direktori
-        $inputDir = base_path('relations/input');
-        $outputDir = base_path('relations/output');
+        // 1. Tentukan Lokasi Script Worker
+        $workerScript = base_path('resources/js/render-worker.js');
 
-        // Pastikan folder output ada
-        if (!File::exists($outputDir)) {
-            File::makeDirectory($outputDir, 0755, true);
-        }
-
-        // 2. Ambil semua file .dbml
-        $files = File::glob($inputDir . '/*.dbml');
-
-        if (empty($files)) {
-            $this->error("Tidak ada file .dbml ditemukan di: $inputDir");
+        // Cek apakah script worker ada (Safety check)
+        if (!File::exists($workerScript)) {
+            $this->error("Script worker tidak ditemukan!");
+            $this->line("Pastikan file ada di: <comment>$workerScript</comment>");
+            $this->line("Silakan buat file tersebut sesuai panduan sebelumnya.");
             return;
         }
 
-        $this->info("Ditemukan " . count($files) . " file DBML. Memulai proses...");
+        $this->info("🚀 Memulai proses render via Node.js...");
 
-        foreach ($files as $file) {
-            // Dapatkan nama file (misal: 'master')
-            $filename = pathinfo($file, PATHINFO_FILENAME);
+        // 2. Siapkan Perintah
+        // Kita menyusun array perintah agar aman dari spasi/karakter aneh
+        $command = ['node', $workerScript];
 
-            // --- KONFIGURASI EKSTENSI ---
-            // Kita set ke PNG sesuai permintaan
-            $extension = 'png';
-
-            $inputPath = $file;
-            // Output path disesuaikan dengan ekstensi
-            $outputPath = "$outputDir/$filename.$extension";
-
-            // 3. LOGIKA CEK FILE (SKIP JIKA ADA)
-            // Cek apakah file .png sudah ada
-            if (File::exists($outputPath) && !$this->option('force')) {
-                $this->line("<comment>SKIP</comment>   : $filename.$extension (Sudah ada)");
-                continue;
-            }
-
-            $this->line("<info>RENDER</info> : $filename.$extension ...");
-
-            // 4. Jalankan Perintah Render
-            // Pastikan renderer mendukung output png lewat ekstensi file
-            $command = "npx dbml-renderer -i \"$inputPath\" -o \"$outputPath\"";
-
-            $result = Process::run($command);
-
-            if ($result->successful()) {
-                $this->info("       ✓ Berhasil");
-            } else {
-                // Tampilkan error jika gagal
-                $this->error("       ✗ Gagal: " . $result->errorOutput());
-            }
+        // Teruskan flag --force jika user mengetiknya di artisan
+        if ($this->option('force')) {
+            $command[] = '--force';
         }
 
-        $this->newLine();
-        $this->info("Selesai.");
+        // 3. Jalankan Proses (Panggil Node.js)
+        // Kita set timeout 120 detik jaga-jaga jika file banyak
+        $result = Process::timeout(120)->run($command);
+
+        // 4. Tampilkan Output
+        if ($result->successful()) {
+            // Tampilkan log yang dikirim dari console.log() di Node.js
+            $this->info($result->output());
+            $this->newLine();
+            $this->info("✅ Semua proses selesai.");
+        } else {
+            // Jika Node.js error (misal library sharp belum diinstall)
+            $this->error("❌ Terjadi kesalahan saat menjalankan worker:");
+            $this->error($result->errorOutput());
+
+            // Kadang error Node.js muncul di standard output juga
+            $this->line($result->output());
+        }
     }
 }
