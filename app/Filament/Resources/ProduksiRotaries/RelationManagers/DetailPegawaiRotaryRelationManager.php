@@ -43,6 +43,23 @@ class DetailPegawaiRotaryRelationManager extends RelationManager
     {
         return $schema
             ->components([
+                Select::make('jam_masuk')
+                    ->label('Jam Masuk')
+                    ->options(self::timeOptions())
+                    ->default('06:00') // Default: 06:00 (sore)
+                    ->required()
+                    ->searchable()
+                    ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null), // Tampilkan hanya HH:MM,
+                Select::make('jam_pulang')
+                    ->label('Jam Pulang')
+                    ->options(self::timeOptions())
+                    ->default('17:00') // Default: 17:00 (sore)
+                    ->required()
+                    ->searchable()
+                    ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null), // Tampilkan hanya HH:MM,
+                //sampai sini
 
                 Select::make('id_pegawai')
                     ->label('Pegawai')
@@ -69,24 +86,6 @@ class DetailPegawaiRotaryRelationManager extends RelationManager
                     ])
                     ->required()
                     ->native(false),
-
-                Select::make('jam_masuk')
-                    ->label('Jam Masuk')
-                    ->options(self::timeOptions())
-                    ->default('06:00') // Default: 06:00 (sore)
-                    ->required()
-                    ->searchable()
-                    ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
-                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null), // Tampilkan hanya HH:MM,
-                Select::make('jam_pulang')
-                    ->label('Jam Pulang')
-                    ->options(self::timeOptions())
-                    ->default('17:00') // Default: 17:00 (sore)
-                    ->required()
-                    ->searchable()
-                    ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
-                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null), // Tampilkan hanya HH:MM,
-                //sampai sini
             ]);
     }
     protected function mutateFormDataBeforeCreate(array $data): array

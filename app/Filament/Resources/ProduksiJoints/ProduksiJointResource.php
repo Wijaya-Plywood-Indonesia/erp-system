@@ -47,8 +47,8 @@ class ProduksiJointResource extends Resource
         return [
             RelationManagers\PegawaiJointRelationManager::class,
             RelationManagers\ModalJointRelationManager::class,
-            RelationManagers\HasilJointRelationManager::class,
             RelationManagers\BahanProduksiRelationManager::class,
+            RelationManagers\HasilJointRelationManager::class,
             RelationManagers\ValidasiJointRelationManager::class,
         ];
     }
