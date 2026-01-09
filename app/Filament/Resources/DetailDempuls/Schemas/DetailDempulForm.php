@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\DetailDempuls\Schemas;
 
 use App\Models\BarangSetengahJadiHp;
-use App\Models\Pegawai;
+use Illuminate\Database\Eloquent\Builder;
 use App\Models\Grade;
 use App\Models\JenisBarang;
 use Filament\Forms\Components\Select;
@@ -15,20 +15,6 @@ class DetailDempulForm
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
-
-            // =========================
-            // 👷 PEGAWAI (MAX 2)
-            // =========================
-            Select::make('pegawais')
-                ->label('Pegawai Dempul')
-                ->relationship('pegawais', 'nama_pegawai')
-                ->multiple()
-                ->required()
-                ->maxItems(2)
-                ->preload()
-                ->searchable()
-                ->columnSpanFull(),
-
             // =========================
             // BARANG
             // =========================
@@ -118,6 +104,27 @@ class DetailDempulForm
 
             TextInput::make('nomor_palet')
                 ->numeric(),
+
+            // =========================
+            // 👷 PEGAWAI (MAX 2)
+            // =========================
+            Select::make('pegawais')
+                ->label('Pegawai Dempul')
+                ->relationship(
+                    name: 'pegawais',
+                    titleAttribute: 'nama_pegawai',
+                    modifyQueryUsing: function (Builder $query) {
+                        // Filter agar yang tampil hanya yang namanya BUKAN '-'
+                        return $query->where('nama_pegawai', '!=', '-')
+                            ->where('nama_pegawai', '!=', '') // Jaga-jaga jika ada string kosong
+                            ->whereNotNull('nama_pegawai');
+                    }
+                )
+                ->multiple()
+                ->required()
+                ->maxItems(2)
+                ->preload()
+                ->searchable(),
         ]);
     }
 }

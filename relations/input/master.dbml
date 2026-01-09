@@ -1,0 +1,128 @@
+// Main Master
+Table Mesin{
+  id bigint [pk]
+  id_kategori_mesin bigint [ref : > KategoriMesin.id]
+  nama_mesin varchar
+  ongkos_mesin int 
+  nomor_akun int 
+  detail_mesin varchar
+  create_at datetime
+  update_at datetime
+}
+
+Table KategoriMesin{
+  id bigint [pk]
+  kode_kategori varchar
+  nama_kategori_mesin varchar
+  create_at datetime
+  update_at datetime
+}
+
+Table Pegawai{
+  id bigint [pk]
+  kode_pegawai int 
+  nama_pegawai varchar
+  alamat text
+  nomor_telepon int
+  jenis_kelamin bool
+  tanggal_masuk date 
+  foto blob
+  create_at datetime
+  update_at datetime
+}
+
+Table Ukuran{
+  id bigint [pk]
+  panjang int 
+  lebar int 
+  tebal int 
+  create_at datetime
+  update_at datetime
+}
+
+Table Lahan{
+  id bigint [pk]
+  kode_lahan varchar
+  nama_lahan varchar
+  detail varchar
+  create_at datetime
+  update_at datetime
+}
+
+Table JenisKayu{
+  id bigint [pk]
+  kode_kayu varchar
+  nama_kayu varchar
+  keterangan text
+  create_at datetime
+  update_at datetime
+}
+
+Table Target{
+  id bigint [pk]
+  id_mesin bigint [ref : > Mesin.id]
+  id_ukuran bigint [ref: > Ukuran.id]
+  id_jenis_kayu bigint [ref: > JenisKayu.id]
+  kode_ukuran varchar 
+  target int
+  jumlah_orang int
+  jam_kerja time
+  gaji int
+  create_at datetime
+  update_at datetime
+}
+
+Table KategoriBarang{
+  id bigint [pk]
+  nama_kategori varchar
+  create_at datetime
+  update_at datetime
+}
+
+Table JenisBarang{
+  id bigint [pk]
+  kode_jenis_barang varchar 
+  nama_jenis_barang varchar
+  create_at datetime
+  update_at datetime
+}
+
+Table Grades{ 
+  id bigint [pk]
+  id_kategori_barang bigint [ref: > KategoriBarang.id]
+  nama_grade varchar
+  create_at datetime
+  update_at datetime
+}
+
+Table BarangSetengahJadiHotPress{
+  id bigint [pk]
+  id_ukuran bigint [ref: > Ukuran.id]
+  id_jenis_barang bigint [ref: > JenisBarang.id]
+  id_kategori_barang bigint [ref: > KategoriBarang.id]
+  id_grade bigint [ref: > Grades.id]
+  keterangan varchar
+  create_at datetime
+  update_at datetime
+}
+
+Table Komposisi{
+  id bigint [pk]
+  id_grades bigint [ref: > Grades.id]
+  id_jenis_barang bigint [ref: > JenisBarang.id]
+  id_barang_setengah_jadi bigint [ref: > BarangSetengahJadiHotPress.id]
+  create_at datetime
+  update_at datetime
+}
+
+Table DetailKomposisi{
+  id bigint [pk]
+  id_komposisi bigint [ref: > Komposisi.id]
+  id_grade bigint [ref: > Grades.id]
+  id_jenis_kayu bigint [ref: > JenisKayu.id]
+  id_barang_setengah_jadi bigint [ref: > BarangSetengahJadiHotPress.id]
+  lapisan int
+  keterangan varchar
+  create_at datetime
+  update_at datetime
+}
