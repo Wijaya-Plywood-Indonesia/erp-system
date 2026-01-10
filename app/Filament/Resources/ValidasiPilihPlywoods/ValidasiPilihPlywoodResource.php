@@ -20,6 +20,11 @@ class ValidasiPilihPlywoodResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     protected static ?string $recordTitleAttribute = 'no';
 
     public static function form(Schema $schema): Schema

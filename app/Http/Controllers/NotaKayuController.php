@@ -4,34 +4,26 @@ namespace App\Http\Controllers;
 
 use App\Models\HargaKayu;
 use App\Models\NotaKayu;
-use Illuminate\Support\Collection;
 
 class NotaKayuController extends Controller
 {
     public function show(NotaKayu $record)
     {
-        // 1. LOAD RELASI
         $record->load([
-            'kayuMasuk.detailTurusanKayus.jenisKayu', // Load jenis kayu di detail agar aman
+            'kayuMasuk.detailTurusanKayus',
             'kayuMasuk.penggunaanSupplier',
         ]);
 
         $details = $record->kayuMasuk->detailTurusanKayus ?? collect();
 
-        // Ambil atribut umum dari item pertama (Asumsi 1 nota = 1 jenis/grade/panjang)
-        $firstItem = $details->first();
-
-        $jenisKayuId = $firstItem->jenis_kayu_id
-            ?? optional($firstItem->jenisKayu)->id
+        $jenisKayuId = optional($details->first())->jenis_kayu_id
+            ?? optional(optional($details->first())->jenisKayu)->id
             ?? 1;
 
-        $grade = $firstItem->grade ?? 1;
-        $panjang = $firstItem->panjang ?? 130;
+        $grade = optional($details->first())->grade ?? 1;
+        $panjang = optional($details->first())->panjang ?? 130;
 
-        // ============================================================
-        // 2. GROUPING BERDASARKAN DIAMETER SPESIFIK (LOGIKA BARU)
-        // ============================================================
-        $groupedByDiameter = $this->groupByDiameterSpesifik(
+        $groupedByDiameter = $this->groupByRentangDiameter(
             $details,
             $jenisKayuId,
             $grade,
@@ -39,62 +31,86 @@ class NotaKayuController extends Controller
         );
 
         // =========================
-        // 3. HITUNG TOTAL & GRAND TOTAL
+        // TOTAL BATANG & KUBIKASI
         // =========================
-        // (Bagian ini tetap sama agar perhitungan uang tidak berubah)
 
         $totalBatang = $details->sum('kuantitas');
 
+        // ✅ Kubikasi dipaksa 4 digit
         $totalKubikasi = $details->sum(function ($item) {
             return round($item->kubikasi, 4);
         });
 
+        // =========================
+        // HITUNG GRAND TOTAL
+        // =========================
+
         $grandTotal = 0;
 
-        // Hitung Grand Total baris per baris (Original Logic)
         foreach ($details as $item) {
-            // Cari harga untuk item ini
-            $harga = $this->getHargaSatuan(
-                $item->id_jenis_kayu ?? optional($item->jenisKayu)->id,
-                $item->grade,
-                $item->panjang,
-                $item->diameter
-            );
+
+            $idJenisKayu = $item->id_jenis_kayu
+                ?? optional($item->jenisKayu)->id;
+
+            $harga = HargaKayu::where('id_jenis_kayu', $idJenisKayu)
+                ->where('grade', $item->grade)
+                ->where('panjang', $item->panjang)
+                ->where('diameter_terkecil', '<=', $item->diameter)
+                ->where('diameter_terbesar', '>=', $item->diameter)
+                ->orderBy('diameter_terkecil', 'desc')
+                ->value('harga_beli');
 
             $kubikasi = round($item->kubikasi, 4);
+
+            // ✅ Poin per record -> rupiah (dibulatkan)
             $grandTotal += round(($harga ?? 0) * $kubikasi * 1000);
         }
 
+        // ✅ PAKSA INTEGER TOTAL
         $grandTotal = (int) round($grandTotal);
 
         // =========================
-        // 4. BIAYA LAIN-LAIN (COPY PASTE LOGIKA ASLI)
+        // BIAYA TURUN KAYU
         // =========================
 
         $pembulatanManual = (int) ($record->adjustment ?? 0);
+
         $biayaTurunPerM3 = 5000;
 
         $hasilDasar = round($totalKubikasi * $biayaTurunPerM3);
         $biayaFloor = floor($hasilDasar / 1000) * 1000;
+
+        // ✅ % harus integer
         $sisaRibuan = $grandTotal % 1000;
 
         $biayaTurunKayu = (int) ($biayaFloor + $sisaRibuan + 10000);
 
+        // =========================
+        // HARGA AKHIR
+        // =========================
+
         $hargaBeliAkhir = (int) round($grandTotal - $biayaTurunKayu);
 
-        // Bulatkan ke 5000
+        // ✅ Bulatkan ke 5000
         $mod = $hargaBeliAkhir % 5000;
+
         $hargaBeliAkhirBulat = $mod >= 2500
             ? $hargaBeliAkhir + (5000 - $mod)
             : $hargaBeliAkhir - $mod;
 
+        // ✅ Tambah pembulatan manual
         $totalAkhir = (int) ($hargaBeliAkhirBulat + $pembulatanManual);
 
-        // Final round
+        // ✅ Final tetap kelipatan 5000
         $mod = $totalAkhir % 5000;
+
         $totalAkhir = $mod >= 2500
             ? $totalAkhir + (5000 - $mod)
             : $totalAkhir - $mod;
+
+        // =========================
+        // SELISIH
+        // =========================
 
         $selisih = (int) ($grandTotal - $totalAkhir);
 
@@ -108,65 +124,74 @@ class NotaKayuController extends Controller
             'totalAkhir' => $hargaBeliAkhir,
             'hargaFinal' => $totalAkhir,
             'selisih' => $selisih,
-            // Kirim data yang sudah di-group by diameter spesifik
             'groupedByDiameter' => $groupedByDiameter,
         ]);
     }
 
-    /**
-     * LOGIKA BARU: Mengelompokkan data berdasarkan diameter spesifik (13, 14, 15...)
-     * Hanya diameter yang ada datanya yang akan muncul.
-     */
-    private function groupByDiameterSpesifik(Collection $details, $idJenisKayu, $grade, $panjang)
+    // ==================================================
+    // GROUP RENTANG DIAMETER (M³ 4 digit konsisten)
+    // ==================================================
+    public function groupByRentangDiameter($details, $idJenisKayu, $grade, $panjang)
     {
-        // 1. Grouping collection laravel berdasarkan kolom 'diameter'
-        // Hasil: [ 13 => [item1, item2], 19 => [item3] ]
-        $groups = $details->groupBy('diameter');
+        $rentangList = HargaKayu::where('id_jenis_kayu', $idJenisKayu)
+            ->where('grade', $grade)
+            ->where('panjang', $panjang)
+            ->orderBy('diameter_terkecil')
+            ->get();
 
         $hasil = collect();
+        $terpakaiIds = collect();
 
-        foreach ($groups as $diameter => $items) {
+        foreach ($rentangList as $rentang) {
 
-            // 2. Hitung Agregat per Diameter
-            $batang = $items->sum('kuantitas');
-
-            $kubikasi = $items->sum(function ($item) {
-                return round($item->kubikasi, 4);
+            $kelompok = $details->filter(function ($item) use ($rentang) {
+                return $item->diameter >= $rentang->diameter_terkecil
+                    && $item->diameter <= $rentang->diameter_terbesar;
             });
 
-            // 3. Cari Harga untuk Diameter spesifik ini
-            // Kita cari di tabel harga dimana diameter ini masuk dalam range-nya
-            $hargaSatuan = $this->getHargaSatuan($idJenisKayu, $grade, $panjang, $diameter);
+            if ($kelompok->isNotEmpty()) {
 
-            // 4. Hitung Total Rupiah
-            $totalHarga = round($hargaSatuan * $kubikasi * 1000);
+                $totalBatang = $kelompok->sum('kuantitas');
 
-            // 5. Masukkan ke Collection hasil
+                // ✅ Kubikasi paksa 4 digit
+                $totalKubikasi = $kelompok->sum(function ($item) {
+                    return round($item->kubikasi, 4);
+                });
+
+                $harga = $rentang->harga_beli;
+
+                // ✅ Harga rupiah bulat
+                $totalHarga = round($harga * $totalKubikasi * 1000);
+
+                $hasil->push([
+                    'rentang' => "{$rentang->diameter_terkecil} - {$rentang->diameter_terbesar}",
+                    'batang' => $totalBatang,
+                    'kubikasi' => round($totalKubikasi, 4),
+                    'harga_satuan' => $harga,
+                    'total_harga' => $totalHarga,
+                ]);
+
+                $terpakaiIds = $terpakaiIds->merge(
+                    $kelompok->pluck('id')
+                );
+            }
+        }
+
+        // Data yang tidak punya harga
+        $sisa = $details->whereNotIn('id', $terpakaiIds);
+
+        foreach ($sisa as $item) {
             $hasil->push([
-                'diameter' => $diameter, // Angka tunggal (misal: 13)
-                'batang' => $batang,   // Jumlah batang (untuk Tally Mark)
-                'kubikasi' => $kubikasi,
-                'harga_satuan' => $hargaSatuan,
-                'total_harga' => $totalHarga,
+                'rentang' => "{$item->diameter} - {$item->diameter}",
+                'batang' => $item->kuantitas,
+                'kubikasi' => round($item->kubikasi, 4),
+                'harga_satuan' => 0,
+                'total_harga' => 0,
             ]);
         }
 
-        // 6. Urutkan berdasarkan diameter dari kecil ke besar (13, 15, 19...)
-        return $hasil->sortBy('diameter')->values();
-    }
-
-    /**
-     * Helper untuk mencari harga berdasarkan diameter spesifik
-     */
-    private function getHargaSatuan($idJenisKayu, $grade, $panjang, $diameter)
-    {
-        return HargaKayu::where('id_jenis_kayu', $idJenisKayu)
-            ->where('grade', $grade)
-            ->where('panjang', $panjang)
-            // Logika: Diameter Log harus berada di antara Min dan Max di tabel Harga
-            ->where('diameter_terkecil', '<=', $diameter)
-            ->where('diameter_terbesar', '>=', $diameter)
-            ->orderBy('diameter_terkecil', 'desc') // Ambil range paling ketat jika ada tumpang tindih
-            ->value('harga_beli') ?? 0;
+        return $hasil->sortBy(function ($i) {
+            return (float) explode(' ', $i['rentang'])[0];
+        })->values();
     }
 }

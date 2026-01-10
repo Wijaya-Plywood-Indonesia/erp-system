@@ -41,11 +41,6 @@ class ListPekerjaanMenumpukResource extends Resource
             ]);
     }
 
-    public static function shouldRegisterNavigation(): bool
-    {
-        return false;
-    }
-
     public static function form(Schema $schema): Schema
     {
         return ListPekerjaanMenumpukForm::configure($schema);

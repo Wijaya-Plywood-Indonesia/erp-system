@@ -96,7 +96,7 @@
                 Simpan
             </button>
 
-            <button type="button" @click="create(false)" class="w-full sm:w-auto rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 dark:bg-white/5 dark:text-white dark:border-white/10">
+            <button type="button" @click="create(false)" class="w-full sm:w-auto rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 dark:bg-white/5 dark:text-white dark:border-white/10 dark:hover:bg-white/10">
                 Simpan & Buat Lagi
             </button>
 
