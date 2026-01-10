@@ -5,28 +5,21 @@ namespace App\Filament\Resources\ProduksiStiks\Schemas;
 use App\Models\ProduksiStik;
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\DatePicker;
-use Filament\Notifications\Notification;
-use Illuminate\Validation\Rules\Unique;
-use Carbon\Carbon;
 
 class ProduksiStikForm
 {
-    public static function configure(Schema $schema, $record = null): Schema
+    public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
                 DatePicker::make('tanggal_produksi')
-                    ->label('Pilih Tanggal Laporan')
-                    ->native(false)
-                    ->displayFormat('d/m/Y')
-                    ->format('Y-m-d')
-                    ->maxDate(now()->addDays(30))
-                    ->default(now()->addDay())
-                    ->live()
-                    ->closeOnDateSelection()
-                    ->suffixIcon('heroicon-o-calendar')
-                    ->suffixIconColor('primary')
+                    ->label('Tanggal Produksi')
+                    ->default(fn () => now()->addDay())
+                    ->displayFormat('d F Y')
                     ->required()
+                    ->reactive() // ⬅️ PENTING (biar error langsung muncul)
+
+                    // ✅ VALIDASI TANGGAL TIDAK BOLEH SAMA
                     ->rules([
                         function () {
                             return function (string $attribute, $value, $fail) {
@@ -37,8 +30,7 @@ class ProduksiStikForm
                                 }
                             };
                         },
-                    ])
-
+                    ]),
             ]);
     }
 }
