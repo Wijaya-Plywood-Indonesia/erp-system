@@ -1,5 +1,45 @@
 Table produksi_kedi {
     id bigint
-    tanggal_produksi date
-    
+    tanggal date
+    kendala varchar
+    status enum ('masuk', 'bongkar')
+    created_at datetime
+    updated_at datetime
+}
+
+Table detail_masuk_kedi {
+    id bigint
+    id_produksi_kedi bigint [ref: > produksi_kedi.id]
+    id_jenis_kayu bigint
+    id_ukuran bigint
+    id_mesin bigint
+    no_palet int
+    kw int
+    jumlah int
+    rencana_bongkar date
+    created_at datetime
+    updated_at datetime
+}
+
+Table detail_bongkar_kedi {
+    id bigint
+    id_produksi_kedi bigint [ref: > produksi_kedi.id]
+    id_jenis_kayu bigint
+    id_ukuran bigint
+    id_mesin bigint
+    no_palet int
+    kw int
+    jumlah int
+    kode_kedi string
+    created_at datetime
+    updated_at datetime
+}
+
+Table validasi_kedi {
+    id bigint
+    id_produksi_kedi bigint [ref: > produksi_kedi.id]
+    role varchar
+    status varchar
+    created_at datetime
+    updated_at datetime
 }
