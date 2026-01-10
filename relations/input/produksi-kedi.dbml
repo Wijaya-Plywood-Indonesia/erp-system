@@ -1,0 +1,5 @@
+Table produksi_kedi {
+    id bigint
+    tanggal_produksi date
+    
+}
