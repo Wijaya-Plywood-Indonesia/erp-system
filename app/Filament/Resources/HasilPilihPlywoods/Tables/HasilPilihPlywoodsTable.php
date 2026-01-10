@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\HasilPilihPlywoods\Tables;
 
+use Filament\Actions\BulkActionGroup;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Actions\CreateAction;
@@ -34,8 +35,6 @@ class HasilPilihPlywoodsTable
             ])
             ->defaultGroup('id_barang_setengah_jadi_hp')
             ->columns([
-                // Kolom Pegawai DIHAPUS agar tabel lebih lebar dan bersih
-                // Karena nama mereka sudah ada di judul Group di atas
 
                 TextColumn::make('jenis_cacat')
                     ->label('Jenis Cacat')
@@ -66,11 +65,30 @@ class HasilPilihPlywoodsTable
                     ->placeholder('-'),
             ])
             ->headerActions([
-                CreateAction::make()->label('Tambah Cacat'),
+                CreateAction::make()
+                    ->hidden(fn ($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
             ])
             ->recordActions([
-                EditAction::make(),
-                DeleteAction::make(),
+                EditAction::make()
+                    ->hidden(fn ($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
+
+                DeleteAction::make()
+                    ->hidden(fn ($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
+            ])
+
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteAction::make()
+                        ->hidden(fn ($livewire) =>
+                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        ),
+                ]),
             ]);
     }
 }

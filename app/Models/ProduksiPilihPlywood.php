@@ -33,13 +33,13 @@ class ProduksiPilihPlywood extends Model
         return $this->hasMany(ListPekerjaanMenumpuk::class, 'id_produksi_pilih_plywood');
     }
 
-    // public function validasiNyusup()
-    // {
-    //     return $this->hasMany(ValidasiNyusup::class, 'id_produksi_nyusup');
-    // }
+    public function validasiPilihPlywood()
+    {
+        return $this->hasMany(ValidasiPilihPlywood::class, 'id_produksi_pilih_plywood');
+    }
 
-    // public function validasiTerakhir()
-    // {
-    //     return $this->hasOne(ValidasiNyusup::class, 'id_produksi_nyusup')->latestOfMany();
-    // }
+    public function validasiTerakhir()
+    {
+        return $this->hasOne(ValidasiPilihPlywood::class, 'id_produksi_pilih_plywood')->latestOfMany();
+    }
 }

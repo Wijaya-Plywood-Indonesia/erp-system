@@ -1,50 +1,39 @@
 <?php
 
-namespace App\Filament\Resources\BahanPilihPlywoods\Tables;
+namespace App\Filament\Resources\ValidasiPilihPlywoods\Tables;
 
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
 
-class BahanPilihPlywoodsTable
+class ValidasiPilihPlywoodsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
             ->columns([
-                TextColumn::make('no_palet')
-                    ->label('No Palet'),
-
-                TextColumn::make('barangSetengahJadiHp.jenisBarang.nama_jenis_barang')
-                    ->label('Jenis Barang')
-                    ->searchable()
-                    ->sortable(),
-
-                TextColumn::make('grade_display')
-                    ->label('Grade')
-                    ->getStateUsing(
-                        fn($record) => ($record->barangSetengahJadiHp?->grade?->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
-                            . ' | ' .
-                            ($record->barangSetengahJadiHp?->grade?->nama_grade ?? '-')
-                    )
-                    ->sortable(),
-
-                TextColumn::make('barangSetengahJadiHp.ukuran.nama_ukuran')
-                    ->label('Ukuran')
-                    ->sortable(),
-
-                TextColumn::make('jumlah')
-                    ->label('Jumlah')
-                    ->alignCenter(),
+                TextColumn::make('role')
+                    ->searchable(),
+                TextColumn::make('status')
+                    ->searchable(),
+                TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('updated_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 //
             ])
             ->headerActions([
+                // Create Action — HILANG jika status sudah divalidasi
                 CreateAction::make()
                     ->hidden(
                         fn($livewire) =>
@@ -52,12 +41,14 @@ class BahanPilihPlywoodsTable
                     ),
             ])
             ->recordActions([
+                // Edit Action — HILANG jika status sudah divalidasi
                 EditAction::make()
                     ->hidden(
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
 
+                // Delete Action — HILANG jika status sudah divalidasi
                 DeleteAction::make()
                     ->hidden(
                         fn($livewire) =>

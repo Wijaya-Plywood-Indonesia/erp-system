@@ -50,24 +50,25 @@ class PegawaiPilihPlywoodsTable
             ->headerActions([
                 // Create Action — HILANG jika status sudah divalidasi
                 CreateAction::make()
-                    // ->hidden(
-                    //     fn($livewire) =>
-                    //     $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    // ),
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
             ])
             ->recordActions([
-                EditAction::make(),
-                    // ->hidden(
-                    //     fn($livewire) =>
-                    //     $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    // ),
+                // Edit Action — HILANG jika status sudah divalidasi
+                EditAction::make()
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
 
                 // Delete Action — HILANG jika status sudah divalidasi
-                DeleteAction::make(),
-                    // ->hidden(
-                    //     fn($livewire) =>
-                    //     $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    // ),
+                DeleteAction::make()
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
 
                 // ➕ Tambah / Edit Ijin & Keterangan
                 Action::make('aturIjin')
@@ -83,14 +84,18 @@ class PegawaiPilihPlywoodsTable
                             'ket'  => $data['ket'],
                         ]);
                     })
-                    // ->hidden(
-                    //     fn($livewire) =>
-                    //     $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    // ),
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->hidden(
+                            fn($livewire) =>
+                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        ),
                 ]),
             ]);
     }

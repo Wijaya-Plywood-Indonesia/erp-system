@@ -11,6 +11,7 @@ use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\BahanPilihPlyw
 use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\HasilPilihPlywoodRelationManager;
 use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\ListPekerjaanMenumpukRelationManager;
 use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\PegawaiPilihPlywoodRelationManager;
+use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\ValidasiPilihPlywoodRelationManager;
 use App\Filament\Resources\ProduksiPilihPlywoods\Schemas\ProduksiPilihPlywoodForm;
 use App\Filament\Resources\ProduksiPilihPlywoods\Schemas\ProduksiPilihPlywoodInfolist;
 use App\Filament\Resources\ProduksiPilihPlywoods\Tables\ProduksiPilihPlywoodsTable;
@@ -53,6 +54,7 @@ class ProduksiPilihPlywoodResource extends Resource
         return [
             BahanPilihPlywoodRelationManager::class,
             HasilPilihPlywoodRelationManager::class,
+            ValidasiPilihPlywoodRelationManager::class,
         ];
     }
 
