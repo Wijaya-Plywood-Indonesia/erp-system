@@ -40,7 +40,7 @@ class ProduksiNyusup extends Model
 
             if ($exists) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'tanggal' => 'Data produksi repair untuk tanggal ini sudah ada.',
+                    'tanggal' => 'Data produksi nyusup untuk tanggal ini sudah ada.',
                 ]);
             }
         });

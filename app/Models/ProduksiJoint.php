@@ -37,4 +37,9 @@ class ProduksiJoint extends Model
     {
         return $this->hasMany(ValidasiJoint::class, 'id_produksi_joint');
     }
+
+    public function validasiTerakhir()
+    {
+        return $this->hasOne(ValidasiJoint::class, 'id_produksi_joint')->latestOfMany();
+    }
 }
