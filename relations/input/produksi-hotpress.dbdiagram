@@ -1,0 +1,186 @@
+{
+  "version": "1.0.0",
+  "darkMode": true,
+  "gridEnabling": false,
+  "detailLevel": "All",
+  "tablePositions": [
+    {
+      "name": "produksi_hp",
+      "schemaName": "public",
+      "x": 576,
+      "y": 584
+    },
+    {
+      "name": "rencana_kerja_hp",
+      "schemaName": "public",
+      "x": 216,
+      "y": 48
+    },
+    {
+      "name": "detail_pegawai_hp",
+      "schemaName": "public",
+      "x": 992,
+      "y": 208
+    },
+    {
+      "name": "veener_bahan_hp",
+      "schemaName": "public",
+      "x": 1024,
+      "y": 784
+    },
+    {
+      "name": "platform_bahan_hp",
+      "schemaName": "public",
+      "x": 696,
+      "y": 952
+    },
+    {
+      "name": "triplek_hasil_hp",
+      "schemaName": "public",
+      "x": 200,
+      "y": 416
+    },
+    {
+      "name": "platform_hasil_hp",
+      "schemaName": "public",
+      "x": 48,
+      "y": 800
+    },
+    {
+      "name": "bahan_penolong_hp",
+      "schemaName": "public",
+      "x": 400,
+      "y": 1032
+    },
+    {
+      "name": "validasi_hp",
+      "schemaName": "public",
+      "x": 648,
+      "y": 232
+    }
+  ],
+  "tableGroupCollapseStates": [],
+  "stickyNoteLayouts": [],
+  "referencePaths": [
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_hp",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_hp"
+      ],
+      "secondTableName": "rencana_kerja_hp",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_hp",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_hp"
+      ],
+      "secondTableName": "detail_pegawai_hp",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_hp",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_hp"
+      ],
+      "secondTableName": "veener_bahan_hp",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_hp",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_hp"
+      ],
+      "secondTableName": "platform_bahan_hp",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_hp",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_hp"
+      ],
+      "secondTableName": "triplek_hasil_hp",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_hp",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_hp"
+      ],
+      "secondTableName": "platform_hasil_hp",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_hp",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_hp"
+      ],
+      "secondTableName": "bahan_penolong_hp",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_hp",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_hp"
+      ],
+      "secondTableName": "validasi_hp",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    }
+  ]
+}
