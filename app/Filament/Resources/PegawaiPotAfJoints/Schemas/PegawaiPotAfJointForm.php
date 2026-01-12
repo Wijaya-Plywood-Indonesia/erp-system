@@ -50,35 +50,43 @@ class PegawaiPotAfJointForm
 
                 // 👷 PEGAWAI (DENGAN VALIDASI DUPLIKAT)
                 Select::make('id_pegawai')
-                    ->label('Pegawai')
-                    ->searchable()
-                    ->required()
-                    ->options(
-                    Pegawai::query()
-                        ->get()
-                        ->mapWithKeys(fn($pegawai) => [
-                            $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
-                        ])
-                )
-                    ->rule(function ($livewire) {
-                        return function (string $attribute, $value, $fail) use ($livewire) {
+    ->label('Pegawai')
+    ->searchable()
+    ->required()
+    ->options(
+        Pegawai::query()
+            ->get()
+            ->mapWithKeys(fn ($pegawai) => [
+                $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
+            ])
+    )
+    ->rule(function ($livewire) {
+        return function (string $attribute, $value, $fail) use ($livewire) {
 
-                            $produksiId = $livewire->ownerRecord->id ?? null;
+            $produksiId = $livewire->ownerRecord->id ?? null;
+            $currentRecord = method_exists($livewire, 'getMountedTableActionRecord')
+                ? $livewire->getMountedTableActionRecord()
+                : null;
 
-                            if (! $produksiId) {
-                                return;
-                            }
+            if (! $produksiId) {
+                return;
+            }
 
-                            $exists = PegawaiPotAfJoint::query()
-                                ->where('id_produksi_pot_af_joint', $produksiId)
-                                ->where('id_pegawai', $value)
-                                ->exists();
+            $query = PegawaiPotAfJoint::query()
+                ->where('id_produksi_pot_af_joint', $produksiId)
+                ->where('id_pegawai', $value);
 
-                            if ($exists) {
-                                $fail('Pegawai ini sudah terdaftar pada produksi pot af joint ini.');
-                            }
-                        };
-                    }),
+            // 🔥 INI KUNCINYA — ABAIKAN DATA YANG SEDANG DIEDIT
+            if ($currentRecord) {
+                $query->where('id', '!=', $currentRecord->id);
+            }
+
+            if ($query->exists()) {
+                $fail('Pegawai ini sudah terdaftar pada produksi pot af joint ini.');
+            }
+        };
+    }),
+
             ]);
     }
 }
