@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\HasilPilihPlywoods\Tables;
 
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Actions\CreateAction;
@@ -84,7 +85,7 @@ class HasilPilihPlywoodsTable
 
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteAction::make()
+                    DeleteBulkAction::make()
                         ->hidden(fn ($livewire) =>
                             $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                         ),

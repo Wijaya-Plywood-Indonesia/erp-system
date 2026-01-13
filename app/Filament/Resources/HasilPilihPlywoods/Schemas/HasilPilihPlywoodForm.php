@@ -15,11 +15,15 @@ class HasilPilihPlywoodForm
         return [
             Select::make('pegawais')
                 ->label('Pegawai')
-                ->relationship('pegawais', 'nama_pegawai')
+                ->relationship(
+                    name: 'pegawais',
+                    titleAttribute: 'nama_pegawai',
+                    modifyQueryUsing: fn($query) => $query->orderBy('nama_pegawai'), // Opsional: urutkan abjad
+                )
+                ->getOptionLabelFromRecordUsing(fn($record) => "{$record->kode_pegawai} - {$record->nama_pegawai}")
+                ->searchable(['nama_pegawai', 'kode_pegawai']) // 🔥 User bisa cari pakai Nama atau Kode
                 ->multiple()
-                ->maxItems(2)
                 ->preload()
-                ->searchable()
                 ->required()
                 ->columnSpanFull(),
 
@@ -37,16 +41,16 @@ class HasilPilihPlywoodForm
                         ->get()
                         ->mapWithKeys(function ($bahan) {
                             $barang = $bahan->barangSetengahJadiHp;
-                            
+
                             // Hitung berapa banyak barang ini yang sudah dicatat sebagai cacat
                             $sudahDiinput = \App\Models\HasilPilihPlywood::where('id_produksi_pilih_plywood', $bahan->id_produksi_pilih_plywood)
                                 ->where('id_barang_setengah_jadi_hp', $barang->id)
                                 ->sum('jumlah');
-                            
+
                             $sisa = $bahan->jumlah - $sudahDiinput;
 
                             return [
-                                $barang->id => "[Sisa: {$sisa}] " . 
+                                $barang->id => "[Sisa: {$sisa}] " .
                                     ($barang->jenisBarang->nama_jenis_barang ?? '-') . ' | ' .
                                     ($barang->ukuran->nama_ukuran ?? '-') . ' | ' .
                                     ($barang->grade->nama_grade ?? '-')
