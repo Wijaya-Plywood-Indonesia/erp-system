@@ -27,4 +27,9 @@ class ProduksiPotAfJoint extends Model
     {
         return $this->hasMany(ValidasiPotAfJoint::class, 'id_produksi_pot_af_joint');
     }
+
+    public function validasiTerakhir()
+    {
+        return $this->hasOne(ValidasiPotAfJoint::class, 'id_produksi_pot_af_joint')->latestOfMany();
+    }
 }

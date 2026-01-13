@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Filament\Resources\ProduksiGrajiTripleks\Schemas;
+namespace App\Filament\Resources\ProduksiPressDryers\Schemas;
 
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Illuminate\Validation\Rule;
-use App\Models\ProduksiGrajitriplek;
+use App\Models\ProduksiPressDryer;
 
-class ProduksiGrajiTriplekForm
+class ProduksiPressDryerForm
 {
     public static function configure(Schema $schema): Schema
     {
@@ -25,29 +25,29 @@ class ProduksiGrajiTriplekForm
                 ->displayFormat('d F Y')
                 ->required()
                 ->reactive()
-                ->rule(function (callable $get, ?ProduksiGrajitriplek $record) {
-                    return Rule::unique('produksi_graji_triplek', 'tanggal_produksi')
+                ->rule(function (callable $get, ?ProduksiPressDryer $record) {
+                    return Rule::unique('produksi_press_dryers', 'tanggal_produksi')
                         ->where(fn ($query) =>
-                            $query->where('status', $get('status'))
+                            $query->where('shift', $get('shift'))
                         )
                         ->ignore($record?->id);
                 }),
 
             /**
              * ==========================
-             * ⚙️ STATUS PRODUKSI
+             * ⚙️ SHIFT
              * ==========================
              */
-            Select::make('status')
-                ->label('Status Produksi')
+            Select::make('shift')
+                ->label('Shift')
                 ->options([
-                    'graji manual'   => 'Graji Manual',
-                    'graji otomatis' => 'Graji Otomatis',
+                    'PAGI'  => 'Pagi',
+                    'MALAM' => 'Malam',
                 ])
                 ->required()
                 ->reactive()
-                ->rule(function (callable $get, ?ProduksiGrajitriplek $record) {
-                    return Rule::unique('produksi_graji_triplek', 'status')
+                ->rule(function (callable $get, ?ProduksiPressDryer $record) {
+                    return Rule::unique('produksi_press_dryers', 'shift')
                         ->where(fn ($query) =>
                             $query->whereDate('tanggal_produksi', $get('tanggal_produksi'))
                         )

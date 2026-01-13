@@ -23,7 +23,7 @@ class ProduksiGrajiTriplekResource extends Resource
     protected static ?string $model = ProduksiGrajiTriplek::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-    protected static string|UnitEnum|null $navigationGroup = 'Graji Triplek';
+    protected static string|UnitEnum|null $navigationGroup = 'Finishing';
     protected static ?int $navigationSort = 1;
 
     protected static ?string $modelLabel = 'Produksi Graji Triplek';

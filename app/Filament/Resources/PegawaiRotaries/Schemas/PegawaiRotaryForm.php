@@ -23,25 +23,6 @@ class PegawaiRotaryForm
                     ->relationship('produksi_rotary', 'id') // nama relasi di model + kolom yang ditampilkan
                     ->required(),
 
-                //ini akan bisa direpeater
-                Select::make('id_pegawai')
-                    ->label('Pegawai')
-                    ->relationship('pegawai', 'nama_pegawai')
-                    ->searchable()
-                    ->required(),
-
-
-                Select::make('role')
-                    ->label('Peran Di Produksi')
-                    ->options([
-                        'operator_mesin' => 'Operator Mesin',
-                        'petugas_pilih' => 'Petugas Pilih',
-                        'operator_lain' => 'Operator Produksi Lain',
-                    ])
-                    ->required()
-                    ->native(false),
-
-
                 Select::make('jam_masuk')
                     ->label('Jam Masuk')
                     ->options(self::timeOptions())
@@ -59,6 +40,23 @@ class PegawaiRotaryForm
                     ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
                     ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null), // Tampilkan hanya HH:MM,
                 //sampai sini 
+                //ini akan bisa direpeater
+                Select::make('id_pegawai')
+                    ->label('Pegawai')
+                    ->relationship('pegawai', 'nama_pegawai')
+                    ->searchable()
+                    ->required(),
+
+
+                Select::make('role')
+                    ->label('Peran Di Produksi')
+                    ->options([
+                        'operator_mesin' => 'Operator Mesin',
+                        'petugas_pilih' => 'Petugas Pilih',
+                        'operator_lain' => 'Operator Produksi Lain',
+                    ])
+                    ->required()
+                    ->native(false),
             ]);
     }
     public static function timeOptions(): array

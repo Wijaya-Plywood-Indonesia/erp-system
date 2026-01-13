@@ -11,6 +11,7 @@ use App\Filament\Resources\DetailLainLains\Schemas\DetailLainLainInfolist;
 use App\Filament\Resources\DetailLainLains\Tables\DetailLainLainsTable;
 use App\Models\DetailLainLain;
 use BackedEnum;
+use UnitEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -22,6 +23,13 @@ class DetailLainLainResource extends Resource
     protected static ?string $model = DetailLainLain::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
+    protected static string|UnitEnum|null $navigationGroup = 'Lain Lain';
+
+    protected static ?int $navigationSort = 1;
+
+    protected static ?string $recordTitleAttribute = 'Detail Lain Lain';
+
 
     public static function form(Schema $schema): Schema
     {

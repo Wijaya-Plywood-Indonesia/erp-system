@@ -18,9 +18,6 @@ class TurusanKayuForm
     {
         return $schema
             ->components([
-
-
-
                 DatePicker::make('tgl_kayu_masuk')
                     ->label('Tanggal Kayu Masuk')
                     ->default(now()) // otomatis isi dengan waktu sekarang

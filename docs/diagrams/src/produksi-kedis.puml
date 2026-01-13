@@ -1,0 +1,78 @@
+@startuml
+' Panggil file style yang sudah dibuat
+!include style.puml
+
+left to right direction
+skinparam packageStyle rectangle
+
+' === DEFINISI AKTOR ===
+actor "SuperAdmin" as Admin
+actor "Pengawas Kedi" as Pengawas
+
+package "Sistem Produksi Kedi" {
+
+    ' --- AREA MASTER DATA (Oleh Admin) ---
+    rectangle "Master Data" {
+        usecase "Kelola Data Pegawai" as UC_M_Pegawai
+        usecase "Kelola Ukuran Kayu" as UC_M_Ukuran
+    }
+
+    ' --- AREA OPERASIONAL (Oleh Pengawas) ---
+    rectangle "Menu Produksi Kedi" {
+        usecase "Hapus Data Produksi" as UC_Hapus
+        
+        ' Use Case Utama (Abstract)
+        usecase "Input Produksi Kedi" as UC_Input_Utama
+
+        ' Pilihan Tipe Input (Generalization)
+        usecase "Bongkar" as UC_Bongkar
+        usecase "Masuk" as UC_Masuk
+
+        ' Sub-Proses (Langkah Detail)
+        usecase "Input Detail Bongkar" as UC_In_DetailBongkar
+        usecase "Input/Pilih Pegawai" as UC_In_Pegawai
+
+        usecase "Input Masuk Kedi" as UC_In_MasukKedi
+    }
+
+    ' =========================================
+    ' RELASI AKTOR KE USE CASE
+    ' =========================================
+    
+    ' Admin mengelola master
+    Admin --> UC_M_Pegawai
+    Admin --> UC_M_Ukuran
+
+    ' Pengawas melakukan input dan hapus
+    Pengawas --> UC_Input_Utama
+    Pengawas --> UC_Hapus
+
+    ' =========================================
+    ' LOGIKA ALUR (RELATIONSHIPS)
+    ' =========================================
+
+    ' 1. Generalisasi (Pilihan Menu)
+    ' "Input Produksi Kedi" bisa berupa Bongkar ATAU Masuk
+    UC_Input_Utama --> UC_Bongkar
+    UC_Input_Utama --> UC_Masuk
+
+    ' 2. Include (Langkah Wajib)
+    ' Skenario BONGKAR: Wajib input detail bongkar DAN pegawai
+    UC_Bongkar ..> UC_In_DetailBongkar : <<include>>
+    UC_Bongkar ..> UC_In_Pegawai : <<include>>
+
+    ' Skenario MASUK: Hanya wajib input pegawai (sesuai request)
+    UC_Masuk ..> UC_In_MasukKedi : <<include>>
+
+    ' 3. Dependency / Read Data (Koneksi ke Master)
+    ' Saat input detail bongkar, perlu baca data ukuran dari admin
+    UC_In_MasukKedi .[#gray].> UC_M_Ukuran : <<read data>>
+
+    UC_In_DetailBongkar .[#gray].> UC_M_Ukuran : <<read data>>
+
+    ' Saat input pegawai, perlu baca data pegawai dari admin
+    UC_In_Pegawai .[#gray].> UC_M_Pegawai : <<read data>>
+
+}
+
+@enduml

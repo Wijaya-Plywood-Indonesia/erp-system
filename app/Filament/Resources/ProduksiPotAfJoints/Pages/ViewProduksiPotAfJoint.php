@@ -4,12 +4,19 @@ namespace App\Filament\Resources\ProduksiPotAfJoints\Pages;
 
 use App\Filament\Resources\ProduksiPotAfJoints\ProduksiPotAfJointResource as ProduksiPotAfJointsProduksiPotAfJointResource;
 use App\Filament\Resources\ProduksiPotAfJoints\ProduksiPotAfJointResource;
+use App\Filament\Resources\ProduksiPotAfJoints\Widgets\ProduksiPotAfJointSummaryWidget;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 
 class ViewProduksiPotAfJoint extends ViewRecord
 {
     protected static string $resource = ProduksiPotAfJointResource::class;
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            ProduksiPotAfJointSummaryWidget::class,
+        ];
+    }
 
     protected function getHeaderActions(): array
     {

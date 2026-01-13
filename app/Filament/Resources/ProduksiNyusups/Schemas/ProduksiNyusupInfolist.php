@@ -5,7 +5,7 @@ namespace App\Filament\Resources\ProduksiNyusups\Schemas;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 
-class ProduksiKediInfolist
+class ProduksiNyusupInfolist
 {
     public static function configure(Schema $schema): Schema
     {

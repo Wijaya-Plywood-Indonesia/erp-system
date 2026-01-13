@@ -1,0 +1,66 @@
+@startuml
+' Panggil file style yang sudah dibuat
+!include style.puml
+
+left to right direction
+skinparam packageStyle rectangle
+
+' === DEFINISI AKTOR ===
+actor "SuperAdmin" as Admin
+actor "Pengawas Sanding" as Pengawas
+
+package "Sistem Produksi Sanding" {
+
+    ' --- AREA MASTER DATA (Oleh Admin) ---
+    rectangle "Master Data" {
+        usecase "Kelola Data Pegawai" as UC_M_Pegawai
+        usecase "Kelola Barang Setengah Jadi" as UC_M_Ukuran
+        usecase "Validasi Sanding" as UC_M_Validasi
+    }
+
+    ' --- AREA OPERASIONAL (Oleh Pengawas) ---
+    rectangle "Menu Produksi Sanding" {
+        usecase "Hapus Produksi Sanding" as UC_Hapus
+        
+        ' Use Case Utama (Abstract)
+        usecase "Input Produksi Sanding" as UC_Input_Utama
+
+        ' Sub-Proses (Langkah Detail)
+        usecase "Modal Sanding" as UC_In_Sanding
+        usecase "Input Pegawai" as UC_In_Pegawai
+        usecase "Input Hasil Sanding" as UC_In_HasilSanding
+    }
+
+    ' =========================================
+    ' RELASI AKTOR KE USE CASE
+    ' =========================================
+    
+    ' Admin mengelola master
+    Admin --> UC_M_Pegawai
+    Admin --> UC_M_Ukuran
+    Admin --> UC_M_Validasi
+
+    ' Pengawas melakukan input dan hapus
+    Pengawas --> UC_Input_Utama
+    Pengawas --> UC_Hapus
+
+    ' =========================================
+    ' LOGIKA ALUR (RELATIONSHIPS)
+    ' =========================================
+
+    ' 1. Generalisasi (Pilihan Menu)
+    ' "Input Produksi Kedi" bisa berupa Bongkar ATAU Masuk
+    UC_Input_Utama --> UC_In_Sanding : <<include>>
+    UC_Input_Utama --> UC_In_Pegawai : <<include>>
+    UC_Input_Utama --> UC_In_HasilSanding : <<include>>
+
+    ' 3. Dependency / Read Data (Koneksi ke Master)
+    ' Saat input detail bongkar, perlu baca data ukuran dari admin
+    UC_In_Sanding .[#gray].> UC_M_Ukuran : <<read data>>
+    UC_In_Pegawai .[#gray].> UC_M_Pegawai : <<read data>>
+
+    UC_M_Validasi .[#gray].> UC_Input_Utama : <<validate data>>
+
+}
+
+@enduml

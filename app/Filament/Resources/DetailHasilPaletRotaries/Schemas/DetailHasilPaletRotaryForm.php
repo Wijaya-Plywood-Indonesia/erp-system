@@ -4,7 +4,7 @@ namespace App\Filament\Resources\DetailHasilPaletRotaries\Schemas;
 
 use App\Models\PenggunaanLahanRotary;
 use App\Models\Ukuran;
-use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Hidden; // <--- Ubah import ini
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -16,20 +16,21 @@ class DetailHasilPaletRotaryForm
     {
         return $schema->components([
 
-            DateTimePicker::make('timestamp_laporan')
+            // Ubah DateTimePicker menjadi Hidden
+            Hidden::make('timestamp_laporan')
                 ->default(
                     fn(RelationManager $livewire) =>
                     optional(
                         $livewire->getOwnerRecord()
-                            ->detailPaletRotary()   // ← relasi benar
+                            ->detailPaletRotary()
                             ->latest()
                             ->first()
                     )->timestamp_laporan ?? now()
-                )
-                ->required(),
+                ),
 
             Select::make('id_ukuran')
                 ->label('Ukuran')
+                // ... (kode lainnya tetap sama)
                 ->options(
                     Ukuran::get()->mapWithKeys(fn($u) => [
                         $u->id => $u->dimensi

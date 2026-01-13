@@ -32,4 +32,17 @@ class ProduksiNyusup extends Model
     {
         return $this->hasOne(ValidasiNyusup::class, 'id_produksi_nyusup')->latestOfMany();
     }
+
+    protected static function booted()
+    {
+        static::creating(function ($model) {
+            $exists = static::whereDate('tanggal', $model->tanggal)->exists();
+
+            if ($exists) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'tanggal' => 'Data produksi nyusup untuk tanggal ini sudah ada.',
+                ]);
+            }
+        });
+    }
 }

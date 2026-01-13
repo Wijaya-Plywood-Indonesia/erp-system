@@ -1,0 +1,81 @@
+{
+  "version": "1.0.0",
+  "darkMode": true,
+  "gridEnabling": false,
+  "detailLevel": "All",
+  "tablePositions": [
+    {
+      "name": "produksi_kedi",
+      "schemaName": "public",
+      "x": 0,
+      "y": 50
+    },
+    {
+      "name": "detail_masuk_kedi",
+      "schemaName": "public",
+      "x": 0,
+      "y": 260
+    },
+    {
+      "name": "detail_bongkar_kedi",
+      "schemaName": "public",
+      "x": 0,
+      "y": 630
+    },
+    {
+      "name": "validasi_kedi",
+      "schemaName": "public",
+      "x": 0,
+      "y": 1064
+    }
+  ],
+  "tableGroupCollapseStates": [],
+  "stickyNoteLayouts": [],
+  "referencePaths": [
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_kedi",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_kedi"
+      ],
+      "secondTableName": "detail_masuk_kedi",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_kedi",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_kedi"
+      ],
+      "secondTableName": "detail_bongkar_kedi",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_kedi",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_kedi"
+      ],
+      "secondTableName": "validasi_kedi",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    }
+  ]
+}

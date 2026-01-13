@@ -11,6 +11,7 @@ use App\Filament\Resources\ProduksiNyusups\RelationManagers\PegawaiNyusupRelatio
 use App\Filament\Resources\ProduksiNyusups\RelationManagers\ValidasiNyusupRelationManager;
 use App\Filament\Resources\ProduksiNyusups\RelationManagers\DetailBarangDikerjakanRelationManager;
 use App\Filament\Resources\ProduksiNyusups\Schemas\ProduksiNyusupForm;
+use App\Filament\Resources\ProduksiNyusups\Schemas\ProduksiNyusupInfolist;
 use App\Filament\Resources\ProduksiNyusups\Tables\ProduksiNyusupsTable;
 use App\Models\ProduksiNyusup;
 use BackedEnum;
@@ -25,7 +26,7 @@ class ProduksiNyusupResource extends Resource
     protected static ?string $model = ProduksiNyusup::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-    protected static string|UnitEnum|null $navigationGroup = 'Nyusup';
+    protected static string|UnitEnum|null $navigationGroup = 'Finishing';
     protected static ?int $navigationSort = 1;
 
     protected static ?string $recordTitleAttribute = 'no';
@@ -38,6 +39,11 @@ class ProduksiNyusupResource extends Resource
     public static function table(Table $table): Table
     {
         return ProduksiNyusupsTable::configure($table);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return ProduksiNyusupInfolist::configure($schema);
     }
 
     public static function getRelations(): array

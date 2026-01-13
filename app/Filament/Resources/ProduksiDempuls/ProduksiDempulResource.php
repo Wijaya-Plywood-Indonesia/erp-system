@@ -27,7 +27,7 @@ class ProduksiDempulResource extends Resource
     protected static ?string $model = ProduksiDempul::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-    protected static string|UnitEnum|null $navigationGroup = 'Dempul';
+    protected static string|UnitEnum|null $navigationGroup = 'Finishing';
     protected static ?int $navigationSort = 1;
 
     public static function form(Schema $schema): Schema
@@ -49,8 +49,8 @@ class ProduksiDempulResource extends Resource
     {
         return [
             // RencanaPegawaiDempulRelationManager::class,
-            DetailDempulRelationManager::class,
             BahanDempulRelationManager::class,
+            DetailDempulRelationManager::class,
             ValidasiDempulRelationManager::class,
         ];
     }

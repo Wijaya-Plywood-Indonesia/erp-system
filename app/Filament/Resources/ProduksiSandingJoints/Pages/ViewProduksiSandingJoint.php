@@ -3,12 +3,19 @@
 namespace App\Filament\Resources\ProduksiSandingJoints\Pages;
 
 use App\Filament\Resources\ProduksiSandingJoints\ProduksiSandingJointResource;
+use App\Filament\Resources\ProduksiSandingJoints\Widgets\ProduksiSandingJointSummaryWidget;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 
 class ViewProduksiSandingJoint extends ViewRecord
 {
     protected static string $resource = ProduksiSandingJointResource::class;
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            ProduksiSandingJointSummaryWidget::class,
+        ];
+    }
 
     protected function getHeaderActions(): array
     {

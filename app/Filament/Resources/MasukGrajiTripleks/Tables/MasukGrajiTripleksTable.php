@@ -16,17 +16,17 @@ class MasukGrajiTripleksTable
     {
         return $table
             ->columns([
-TextColumn::make('barangSetengahJadiHp.jenisBarang.nama_jenis_barang')
+                TextColumn::make('barangSetengahJadiHp.jenisBarang.nama_jenis_barang')
                     ->label('Jenis Barang')
                     ->searchable()
                     ->sortable(),
 
                 TextColumn::make('grade_display')
                     ->label('Grade')
-                    ->getStateUsing(fn ($record) =>
-                        ($record->barangSetengahJadiHp?->grade?->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
-                        . ' | ' .
-                        ($record->barangSetengahJadiHp?->grade?->nama_grade ?? '-')
+                    ->getStateUsing(
+                        fn($record) => ($record->barangSetengahJadiHp?->grade?->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
+                            . ' | ' .
+                            ($record->barangSetengahJadiHp?->grade?->nama_grade ?? '-')
                     )
                     ->sortable(),
 
@@ -41,19 +41,22 @@ TextColumn::make('barangSetengahJadiHp.jenisBarang.nama_jenis_barang')
 
             ->headerActions([
                 CreateAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
 
             ->recordActions([
                 EditAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
 
                 DeleteAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
@@ -61,11 +64,11 @@ TextColumn::make('barangSetengahJadiHp.jenisBarang.nama_jenis_barang')
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(fn ($livewire) =>
+                        ->hidden(
+                            fn($livewire) =>
                             $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                         ),
                 ]),
             ]);
     }
 }
-

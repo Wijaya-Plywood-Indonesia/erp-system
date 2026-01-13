@@ -29,8 +29,13 @@ class CreateProduksiPressDryer extends CreateRecord
         }
     }
 
+    // =================================================================
+    // PERBAIKAN DISINI
+    // =================================================================
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('index');
+        // Arahkan ke halaman 'edit' milik record yang baru saja dibuat ($this->record)
+        // Karena Relation Manager hanya muncul di halaman Edit/View.
+        return $this->getResource()::getUrl('view', ['record' => $this->record]);
     }
 }

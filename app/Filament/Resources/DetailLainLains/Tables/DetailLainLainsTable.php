@@ -14,6 +14,7 @@ class DetailLainLainsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('tanggal', 'desc')
             ->columns([
                 TextColumn::make('tanggal')
                     ->label('Tanggal Repair')

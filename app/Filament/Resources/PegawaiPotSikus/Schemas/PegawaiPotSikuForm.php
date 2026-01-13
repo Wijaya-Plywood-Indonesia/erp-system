@@ -49,18 +49,15 @@ class PegawaiPotSikuForm
 
                 // 👷 PEGAWAI (DENGAN VALIDASI DUPLIKAT)
                 Select::make('id_pegawai')
-                    ->label('Pegawai')
-                    ->searchable()
-                    ->required()
-                    ->options(
-                        Pegawai::query()
-                            ->orderBy('nama_pegawai')
-                            ->get()
-                            ->mapWithKeys(fn ($pegawai) => [
-                                $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
-                            ])
-                    )
-                    ->rule(function ($livewire) {
+                ->label('Pegawai')
+                ->options(
+                    Pegawai::query()
+                        ->get()
+                        ->mapWithKeys(fn($pegawai) => [
+                            $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
+                        ])
+                )
+                ->rule(function ($livewire) {
                         return function (string $attribute, $value, $fail) use ($livewire) {
 
                             $produksiId = $livewire->ownerRecord->id ?? null;
@@ -75,10 +72,12 @@ class PegawaiPotSikuForm
                                 ->exists();
 
                             if ($exists) {
-                                $fail('Pegawai ini sudah terdaftar pada produksi pot siku.');
+                                $fail('Pegawai ini sudah terdaftar pada produksi pot siku ini.');
                             }
                         };
-                    }),
+                    })
+                ->searchable()
+                ->required(),
             ]);
     }
 }

@@ -2,15 +2,12 @@
 
 namespace App\Filament\Resources\DetailHasilPaletRotaries\Tables;
 
-use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Placeholder;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 
 class DetailHasilPaletRotariesTable
@@ -18,27 +15,22 @@ class DetailHasilPaletRotariesTable
     public static function configure(Table $table): Table
     {
         return $table
-
-            /*
-            |--------------------------------------------------------------------------
-            | COLUMNS
-            |--------------------------------------------------------------------------
-            */
             ->columns([
 
                 TextColumn::make('timestamp_laporan')
                     ->label('Waktu Laporan')
                     ->dateTime()
                     ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true), // <--- Hidden by default
 
                 TextColumn::make('lahan_display')
                     ->label('Lahan')
                     ->getStateUsing(
                         fn($record) =>
                         $record->penggunaanLahan?->lahan
-                        ? "{$record->penggunaanLahan->lahan->kode_lahan} - {$record->penggunaanLahan->lahan->nama_lahan}"
-                        : '-'
+                            ? "{$record->penggunaanLahan->lahan->kode_lahan} - {$record->penggunaanLahan->lahan->nama_lahan}"
+                            : '-'
                     )
                     ->sortable()
                     ->searchable(),
@@ -77,27 +69,13 @@ class DetailHasilPaletRotariesTable
                     ->toggleable(isToggledHiddenByDefault: true),
 
             ])
-
-
             ->headerActions([
                 CreateAction::make(),
             ])
-
-            /*
-            |--------------------------------------------------------------------------
-            | ROW ACTIONS
-            |--------------------------------------------------------------------------
-            */
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make(),
             ])
-
-            /*
-            |--------------------------------------------------------------------------
-            | BULK ACTIONS
-            |--------------------------------------------------------------------------
-            */
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),

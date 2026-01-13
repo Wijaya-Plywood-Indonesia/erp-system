@@ -27,5 +27,4 @@ class RencanaPegawaiDempul extends Model
     {
         return $this->belongsTo(ProduksiDempul::class, 'id_produksi_dempul');
     }
-
 }

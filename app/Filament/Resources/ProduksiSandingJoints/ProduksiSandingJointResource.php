@@ -22,7 +22,7 @@ class ProduksiSandingJointResource extends Resource
     protected static ?string $model = ProduksiSandingJoint::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-    protected static string|UnitEnum|null $navigationGroup = 'Sanding Joint';
+    protected static string|UnitEnum|null $navigationGroup = 'Finishing';
     protected static ?int $navigationSort = 1;
 
     protected static ?string $recordTitleAttribute = 'no';

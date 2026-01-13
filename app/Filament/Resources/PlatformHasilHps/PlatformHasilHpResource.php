@@ -20,6 +20,7 @@ class PlatformHasilHpResource extends Resource
     protected static ?string $model = PlatformHasilHp::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
     public static function shouldRegisterNavigation(): bool
     {
         return false;

@@ -12,36 +12,50 @@ class ProduksiKediForm
 {
     public static function configure(Schema $schema): Schema
     {
-        return $schema
-            ->components([
+        return $schema->components([
 
-                DatePicker::make('tanggal')
-                    ->label('Tanggal Produksi')
+            /**
+             * ==========================
+             * 📅 TANGGAL PRODUKSI
+             * ==========================
+             */
+            DatePicker::make('tanggal')
+                ->label('Tanggal Produksi')
+                ->default(fn () => now()->addDay())
+                ->displayFormat('d F Y')
+                ->required()
+                ->reactive()
+                ->rule(function (callable $get, ?ProduksiKedi $record) {
+                    return Rule::unique('produksi_kedi', 'tanggal')
+                        ->where(fn ($query) =>
+                            $query->where('status', $get('status'))
+                        )
+                        ->ignore($record?->id);
+                }),
 
-                    ->default(fn () => now()->addDay())
-                    ->displayFormat('d F Y')
-                    ->required()
-                    ->rules([
-                        fn ($get, $record) =>
-                            Rule::unique('produksi_kedi', 'tanggal')
-                                ->where('status', $get('status'))
-                                ->ignore($record?->id),
-                    ])
-                    ->validationMessages([
-                        'unique' => 'Produksi dengan tanggal dan status ini sudah ada!',
-                        'required' => 'Tanggal produksi wajib diisi.',
-                    ]),
-
-                Select::make('status')
-                    ->label('Status Produksi')
-                    ->options([
-                        'masuk'   => 'Masuk',
-                        'bongkar' => 'Bongkar',
-                    ])
-                    ->required()
-                    ->validationMessages([
-                        'required' => 'Status produksi wajib dipilih.',
-                    ]),
-            ]);
+            /**
+             * ==========================
+             * ⚙️ STATUS PRODUKSI
+             * ==========================
+             */
+            Select::make('status')
+                ->label('Status Produksi')
+                ->options([
+                    'masuk'   => 'Masuk',
+                    'bongkar' => 'Bongkar',
+                ])
+                ->required()
+                ->reactive()
+                ->rule(function (callable $get, ?ProduksiKedi $record) {
+                    return Rule::unique('produksi_kedi', 'status')
+                        ->where(fn ($query) =>
+                            $query->whereDate('tanggal', $get('tanggal'))
+                        )
+                        ->ignore($record?->id);
+                })
+                ->validationMessages([
+                    'required' => 'Status produksi wajib dipilih.',
+                ]),
+        ]);
     }
 }

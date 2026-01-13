@@ -1,65 +1,14 @@
-# 🚀 Laravel CI/CD — GitHub Actions → Jagoan Hosting
+## Panduan penulisa versi untuk aplikasi (Semactic Version / SemVer)
 
-Pipeline ini terdiri dari dua proses utama: **CI (Continuous Integration)** dan **CD (Continuous Deployment)**.  
-Semua proses berjalan otomatis setiap kali kamu melakukan **push ke branch `main`**.
+### Format standar: Semantic Versioning (SemVer)
 
----
+Format dasarnya adalah tiga angka yang dipisahkan dengan titik seperti v1.0.0 dimana memiliki arti Major.Minor.Patch.
 
-# 🧩 1. Continuous Integration (CI)
+- Major (Angka Pertama): Ganti angka ini jika terdapat perubahan dengan skala besar, seperti merilis versi 2 dimana memiliki arti bahwa versi 1 sudah tidak kompatibel.
+  <b>Contoh</b>: Perubahan total UI/UX, perubahan struktur database yang fundamental atau teknologi diganti total.
 
-CI bertanggung jawab untuk memastikan bahwa kode yang dikirim aman, tidak rusak, dan siap untuk diproduksi.
+- Minor (Angka Kedua): Ganti angka ini jika terdapat penambahan fitur baru, tetapi aplikasi masih kompatibel dengan versi sebelumnya.
+  <b>Contoh</b>: Menambahkan fitur seperti "Dark Mode" atau fitur baru di navigasi dan masih banyak lagi.
 
-### ✔ Yang dilakukan CI:
-- **Checkout source code**
-- **Setup PHP (8.x)**
-- **Copy `.env` untuk environment testing**
-- **Install Composer dependencies**
-- **Generate aplikasi key**
-- **Set permission storage**
-- **Setup MariaDB untuk pengujian**
-- **Menjalankan migration untuk testing**
-- **Menjalankan Unit Test (`php artisan test`)**
-
-### 🎯 Tujuan CI:
-Menjamin aplikasi selalu **stabil**, **bebas error**, dan **siap dideploy**.  
-Jika CI gagal → deploy **dibatalkan otomatis**.
-
----
-
-# 🚚 2. Continuous Deployment (CD)
-
-Jika CI lulus, tahap deployment berjalan otomatis ke hosting.
-
-### ✔ Yang dilakukan CD:
-
-#### **A. Build Aplikasi**
-- Install Composer (mode production, no-dev)
-- Setup Node.js
-- Install NPM dependencies
-- Build frontend (Vite)
-- Generate ZIP build yang bersih:
-  - Menghapus `.git`, `.github`, `node_modules`, `tests`, `storage`, `.env`
-
-#### **B. Koneksi ke Server (SSH Key)**
-- Menggunakan **private key dari GitHub Secrets**
-- Server menggunakan **public key** yang disimpan di panel hosting
-
-#### **C. Upload & Deploy**
-- Upload file `deploy.zip` via SCP
-- Backup file penting:
-  - **Tidak menghapus `.env`**
-  - **Tidak menghapus `storage/`**
-- Replace file kode dengan build terbaru
-- Extract ZIP
-- Jalankan optimisasi Laravel:
-  - `php artisan optimize:clear`
-  - `php artisan config:cache`
-  - `php artisan route:cache`
-  - `php artisan view:cache`
-- Jalankan `php artisan migrate --force`
-- Keluarkan dari maintenance mode
-
-### 🎯 Tujuan CD:
-Membuat proses deploy menjadi **otomatis**, **aman**, dan **cepat** (tanpa perlu unggah manual ke File Manager).
-
----
+- Patch (Angka Ketiga): Ganti angka ini jika hanya melakukan perbaikan bug (Bug Fixes) atau perbaikan kecil tanpa menambahkan fitur baru.
+  <b>Contoh</b>: Memperbaiki tombol yang tidak bisa diklik, typo pada teks, atau bahkan optimalisasi pada loading.

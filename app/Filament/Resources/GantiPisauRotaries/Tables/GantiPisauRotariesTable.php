@@ -48,9 +48,11 @@ class GantiPisauRotariesTable
                         if (empty($state) || $state === '-') return '-';
                         try {
                             return Carbon::parse($state)->format('H:i');
-                        } catch (\Exception $e) { return '-'; }
+                        } catch (\Exception $e) {
+                            return '-';
+                        }
                     })
-                    ->color(fn ($state) => ($state && $state !== '-') ? 'success' : 'danger'),
+                    ->color(fn($state) => ($state && $state !== '-') ? 'success' : 'danger'),
 
                 // 4. DURASI & TOTAL
                 TextColumn::make('durasi')
@@ -62,28 +64,33 @@ class GantiPisauRotariesTable
                             $mulai = Carbon::parse($record->jam_mulai_ganti_pisau);
                             $selesai = Carbon::parse($jamSelesai);
                             return $mulai->diffInMinutes($selesai) . ' Menit';
-                        } catch (\Exception $e) { return '-'; }
+                        } catch (\Exception $e) {
+                            return '-';
+                        }
                     })
-                    ->summarize(Summarizer::make()
-                        ->label('Total Downtime')
-                        ->using(function ($query) {
-                            $records = $query->get();
-                            $totalMenit = 0;
-                            foreach ($records as $record) {
-                                if (empty($record->jam_selesai_ganti) || $record->jam_selesai_ganti === '-') continue;
-                                try {
-                                    $mulai = Carbon::parse($record->jam_mulai_ganti_pisau);
-                                    $selesai = Carbon::parse($record->jam_selesai_ganti);
-                                    $totalMenit += $mulai->diffInMinutes($selesai);
-                                } catch (\Exception $e) { continue; }
-                            }
-                            if ($totalMenit >= 60) {
-                                $jam = floor($totalMenit / 60);
-                                $menit = $totalMenit % 60;
-                                return "{$jam} Jam {$menit} Menit";
-                            }
-                            return "{$totalMenit} Menit";
-                        })
+                    ->summarize(
+                        Summarizer::make()
+                            ->label('Total Downtime')
+                            ->using(function ($query) {
+                                $records = $query->get();
+                                $totalMenit = 0;
+                                foreach ($records as $record) {
+                                    if (empty($record->jam_selesai_ganti) || $record->jam_selesai_ganti === '-') continue;
+                                    try {
+                                        $mulai = Carbon::parse($record->jam_mulai_ganti_pisau);
+                                        $selesai = Carbon::parse($record->jam_selesai_ganti);
+                                        $totalMenit += $mulai->diffInMinutes($selesai);
+                                    } catch (\Exception $e) {
+                                        continue;
+                                    }
+                                }
+                                if ($totalMenit >= 60) {
+                                    $jam = floor($totalMenit / 60);
+                                    $menit = $totalMenit % 60;
+                                    return "{$jam} Jam {$menit} Menit";
+                                }
+                                return "{$totalMenit} Menit";
+                            })
                     ),
 
                 TextColumn::make('created_at')
@@ -91,7 +98,7 @@ class GantiPisauRotariesTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-            
+
             // --- INPUT DATA VIA TABLE HEADER ---
             ->headerActions([
                 CreateAction::make()
@@ -113,7 +120,7 @@ class GantiPisauRotariesTable
                                     ->default(now()->format('H:i')),
                             ])
                     ]),
-                    // MutateFormDataUsing dihapus karena sudah tidak ada logika reset keterangan
+                // MutateFormDataUsing dihapus karena sudah tidak ada logika reset keterangan
             ])
 
             ->actions([
@@ -123,7 +130,7 @@ class GantiPisauRotariesTable
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
                     ->button()
-                    ->visible(fn (GantiPisauRotary $record) => empty($record->jam_selesai_ganti) || $record->jam_selesai_ganti === '-')
+                    ->visible(fn(GantiPisauRotary $record) => empty($record->jam_selesai_ganti) || $record->jam_selesai_ganti === '-')
                     ->requiresConfirmation()
                     ->action(function (GantiPisauRotary $record) {
                         $record->update(['jam_selesai_ganti' => now()->format('H:i')]);
@@ -142,7 +149,7 @@ class GantiPisauRotariesTable
                                     ->placeholder('Deskripsikan kendala...'),
                             ])
                     ]),
-                    
+
                 DeleteAction::make(),
             ])
             ->toolbarActions([

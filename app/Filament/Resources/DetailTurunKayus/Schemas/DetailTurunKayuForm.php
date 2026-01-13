@@ -1,130 +1,108 @@
 <?php
 
-namespace App\Filament\Resources\DetailTurusanKayus\Schemas;
+namespace App\Filament\Resources\DetailTurunKayus\Schemas;
 
-use App\Models\DetailTurusanKayu;
-use App\Models\JenisKayu;
-use App\Models\Lahan;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
+use App\Models\Pegawai;
+use App\Models\KayuMasuk;
 use Filament\Schemas\Schema;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\TextInput;
+use Illuminate\Support\Facades\Log;
+use App\Services\WatermarkService;
 
-class DetailTurusanKayuForm
+class DetailTurunKayuForm
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
-                // ...
-                TextInput::make('nomer_urut')
-                    ->label('Nomor Urut')
-                    ->numeric()
-                    ->required()
-                    // ->disabled()
-                    ->default(function (callable $get, $livewire) {
-                        // Ambil id_kayu_masuk dari parent relation
-                        $parentRecord = $livewire->ownerRecord;
 
-                        if (!$parentRecord) {
-                            return 1;
+                Select::make('id_kayu_masuk')
+                    ->label('Kayu Masuk')
+                    ->options(
+                        KayuMasuk::query()
+                            ->with(['penggunaanSupplier', 'penggunaanKendaraanSupplier'])
+                            ->get()
+                            ->mapWithKeys(function ($kayu) {
+                                $supplier = $kayu->penggunaanSupplier?->nama_supplier ?? '—';
+                                $nopol = $kayu->penggunaanKendaraanSupplier?->nopol_kendaraan ?? '—';
+                                $jenis = $kayu->penggunaanKendaraanSupplier?->jenis_kendaraan ?? '—';
+                                $seri = $kayu->seri ?? '—';
+
+                                return [
+                                    $kayu->id => "$supplier | $nopol ($jenis) | Seri: $seri"
+                                ];
+                            })
+                            ->toArray()
+                    )
+                    ->searchable()
+                    ->preload()
+                    ->required()
+                    ->placeholder('Pilih kayu masuk'),
+
+                // STATUS
+                Select::make('status')
+                    ->label('Status')
+                    ->options(function (callable $get) {
+                        $kayuMasukId = $get('id_kayu_masuk');
+
+                        if (!$kayuMasukId) {
+                            return [
+                                'menunggu' => 'Menunggu',
+                                'selesai' => 'Selesai',
+                            ];
                         }
 
-                        // Cek nomor terakhir untuk id_kayu_masuk ini
-                        $lastNumber = DetailTurusanKayu::where('id_kayu_masuk', $parentRecord->id)
-                            ->max('nomer_urut');
+                        $kayuMasuk = KayuMasuk::with('penggunaanKendaraanSupplier')
+                            ->find($kayuMasukId);
 
-                        return $lastNumber ? $lastNumber + 1 : 1;
-                    }),
-                Select::make('lahan_id')
-                    ->label('Lahan')
-                    ->options(
-                        Lahan::query()
-                            ->get()
-                            ->mapWithKeys(fn($lahan) => [
-                                $lahan->id => "{$lahan->kode_lahan} - {$lahan->nama_lahan}",
-                            ])
-                    )
-                    ->default(function () {
-                        // Ambil lahan terakhir yang pernah diinputkan di detail_turusan_kayus
-                        $lastLahan = DetailTurusanKayu::latest('id')->value('lahan_id');
+                        $jenis = $kayuMasuk?->penggunaanKendaraanSupplier?->jenis_kendaraan;
 
-                        // Jika tidak ada data sama sekali, gunakan id = 1
-                        return $lastLahan ?? 1;
+                        // Jika kendaraan Fuso → dua status
+                        if ($jenis === 'Fuso') {
+                            return [
+                                'menunggu' => 'Menunggu',
+                                'selesai' => 'Selesai',
+                            ];
+                        }
+
+                        // Selain Fuso → hanya selesai
+                        return [
+                            'selesai' => 'Selesai',
+                        ];
                     })
-                    ->searchable()
-                    ->required(),
-
-                Select::make('jenis_kayu_id')
-                    ->label('Jenis Kayu')
-                    ->options(
-                        JenisKayu::query()
-                            ->get()
-                            ->mapWithKeys(fn($JenisKayu) => [
-                                $JenisKayu->id => "{$JenisKayu->kode_kayu} - {$JenisKayu->nama_kayu}",
-                            ])
-                    )
-                    ->default(function () {
-                        // Ambil lahan terakhir yang pernah diinputkan di detail_turusan_kayus
-                        $lastLahan = DetailTurusanKayu::latest('id')->value('jenis_kayu_id');
-
-                        // Jika tidak ada data sama sekali, gunakan id = 1
-                        return $lastLahan ?? 1;
-                    })
-                    ->searchable()
-                    ->required(),
-                Select::make('panjang')
-                    ->label('Panjang')
-                    ->options([
-                        130 => '130 cm',
-                        260 => '260 cm',
-                    ])
-                    ->required()
-                    ->default(function () {
-                        // Ambil lahan terakhir yang pernah diinputkan di detail_turusan_kayus
-                        $lastLahan = DetailTurusanKayu::latest('id')->value('panjang');
-
-                        // Jika tidak ada data sama sekali, gunakan id = 1
-                        return $lastLahan ?? 1;
-                    })
-                    ->searchable()
-                    ->native(false),
-
-                Select::make('grade')
-                    ->label('Grade')
-                    ->options([
-                        1 => 'Grade A',
-                        2 => 'Grade B',
-                    ])
-                    ->required()
-                    ->default(function () {
-                        // Ambil lahan terakhir yang pernah diinputkan di detail_turusan_kayus
-                        $lastLahan = DetailTurusanKayu::latest('id')->value('grade');
-
-                        // Jika tidak ada data sama sekali, gunakan id = 1
-                        return $lastLahan ?? 1;
-                    })
-                    ->native(false)
-                    ->searchable()
                     ->reactive()
-                    ->afterStateHydrated(function ($state, $set) {
-                        $saved = request()->cookie('filament_local_storage_detail_kayu_masuk.grade')
-                            ?? optional(json_decode(request()->header('X-Filament-Local-Storage'), true))['detail_kayu_masuk.grade']
-                            ?? null;
+                    ->native(false)
+                    ->required(),
 
-                        if ($saved && in_array($saved, [1, 2])) {
-                            $set('grade', (int) $saved);
-                        }
-                    })
-                    ->afterStateUpdated(function ($state) {
-                        cookie()->queue('filament_local_storage_detail_kayu_masuk.grade', $state, 60 * 24 * 30); // 30 hari
-                    }),
-                TextInput::make('diameter')
+
+
+                TextInput::make('nama_supir')
+                    ->label('Nama Supir')
+                    ->required(),
+
+                TextInput::make('jumlah_kayu')
+                    ->label('Jumlah Kayu')
                     ->required()
                     ->numeric(),
-                TextInput::make('kuantitas')
-                    ->required()
-                    ->numeric(),
+
+                // TANDA TANGAN (FOTO)
+                FileUpload::make('foto')
+                    ->label('Foto Bukti')
+                    ->image()
+                    ->imageEditor()
+                    ->imageEditorAspectRatios([
+                        '16:9',
+                        '4:3',
+                        '1:1',
+                    ])
+                    ->disk('public')
+                    ->directory('turun-kayu/foto-bukti')
+                    ->visibility('public')
+                    ->downloadable()
+                    ->openable()
+                    ->required(),
             ]);
     }
-
 }

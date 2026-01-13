@@ -3,12 +3,19 @@
 namespace App\Filament\Resources\ProduksiNyusups\Pages;
 
 use App\Filament\Resources\ProduksiNyusups\ProduksiNyusupResource;
+use App\Filament\Resources\ProduksiNyusups\Widgets\ProduksiNyusupSummaryWidget;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 
 class ViewProduksiNyusup extends ViewRecord
 {
     protected static string $resource = ProduksiNyusupResource::class;
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            ProduksiNyusupSummaryWidget::class,
+        ];
+    }
 
     protected function getHeaderActions(): array
     {

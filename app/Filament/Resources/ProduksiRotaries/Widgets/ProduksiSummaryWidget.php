@@ -69,14 +69,76 @@ class ProduksiSummaryWidget extends Widget
             ->groupBy('lahans.kode_lahan', 'lahans.nama_lahan')
             ->orderBy('lahans.kode_lahan')
             ->get();
-
+        $perJenisKayuKw = DetailHasilPaletRotary::query()
+            ->where('detail_hasil_palet_rotaries.id_produksi', $produksiId)
+            ->join(
+                'penggunaan_lahan_rotaries',
+                'penggunaan_lahan_rotaries.id',
+                '=',
+                'detail_hasil_palet_rotaries.id_penggunaan_lahan'
+            )
+            ->join(
+                'jenis_kayus',
+                'jenis_kayus.id',
+                '=',
+                'penggunaan_lahan_rotaries.id_jenis_kayu'
+            )
+            ->selectRaw('
+        jenis_kayus.nama_kayu AS jenis_kayu,
+        detail_hasil_palet_rotaries.kw,
+        SUM(CAST(detail_hasil_palet_rotaries.total_lembar AS UNSIGNED)) AS total
+    ')
+            ->groupBy('jenis_kayus.nama_kayu', 'detail_hasil_palet_rotaries.kw')
+            ->orderBy('jenis_kayus.nama_kayu')
+            ->orderBy('detail_hasil_palet_rotaries.kw')
+            ->get();
+        $perLahanJenisKayuKw = DetailHasilPaletRotary::query()
+            ->where('detail_hasil_palet_rotaries.id_produksi', $produksiId)
+            ->join(
+                'penggunaan_lahan_rotaries',
+                'penggunaan_lahan_rotaries.id',
+                '=',
+                'detail_hasil_palet_rotaries.id_penggunaan_lahan'
+            )
+            ->join(
+                'lahans',
+                'lahans.id',
+                '=',
+                'penggunaan_lahan_rotaries.id_lahan'
+            )
+            ->leftJoin(
+                'jenis_kayus',
+                'jenis_kayus.id',
+                '=',
+                'penggunaan_lahan_rotaries.id_jenis_kayu'
+            )
+            ->selectRaw('
+        lahans.id AS lahan_id,
+        lahans.kode_lahan,
+        lahans.nama_lahan,
+        COALESCE(jenis_kayus.nama_kayu, "Tidak Diketahui") AS jenis_kayu,
+        detail_hasil_palet_rotaries.kw,
+        SUM(CAST(detail_hasil_palet_rotaries.total_lembar AS UNSIGNED)) AS total
+    ')
+            ->groupBy(
+                'lahans.id',
+                'lahans.kode_lahan',
+                'lahans.nama_lahan',
+                'jenis_kayu',
+                'detail_hasil_palet_rotaries.kw'
+            )
+            ->orderBy('lahans.kode_lahan')
+            ->orderBy('jenis_kayu')
+            ->orderBy('detail_hasil_palet_rotaries.kw')
+            ->get();
         // ======================
         // SET HASIL KE VIEW
         // ======================
         $this->summary = [
             'totalAll' => $totalAll,
             'perKw' => $perKw,
-            'perLahan' => $perLahan,
+            'perJenisKayuKw' => $perJenisKayuKw,
+            'perLahanJenisKayuKw' => $perLahanJenisKayuKw,
         ];
     }
 }

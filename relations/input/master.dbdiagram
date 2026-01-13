@@ -1,0 +1,330 @@
+{
+  "version": "1.0.0",
+  "darkMode": true,
+  "gridEnabling": true,
+  "detailLevel": "All",
+  "tablePositions": [
+    {
+      "name": "Mesin",
+      "schemaName": "public",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "name": "KategoriMesin",
+      "schemaName": "public",
+      "x": 320,
+      "y": 0
+    },
+    {
+      "name": "Pegawai",
+      "schemaName": "public",
+      "x": 624,
+      "y": 0
+    },
+    {
+      "name": "Ukuran",
+      "schemaName": "public",
+      "x": 936,
+      "y": 0
+    },
+    {
+      "name": "Lahan",
+      "schemaName": "public",
+      "x": 0,
+      "y": 336
+    },
+    {
+      "name": "JenisKayu",
+      "schemaName": "public",
+      "x": 320,
+      "y": 240
+    },
+    {
+      "name": "Target",
+      "schemaName": "public",
+      "x": 624,
+      "y": 400
+    },
+    {
+      "name": "KategoriBarang",
+      "schemaName": "public",
+      "x": 936,
+      "y": 272
+    },
+    {
+      "name": "JenisBarang",
+      "schemaName": "public",
+      "x": 0,
+      "y": 616
+    },
+    {
+      "name": "Grades",
+      "schemaName": "public",
+      "x": 320,
+      "y": 520
+    },
+    {
+      "name": "BarangSetengahJadiHotPress",
+      "schemaName": "public",
+      "x": 624,
+      "y": 840
+    },
+    {
+      "name": "Komposisi",
+      "schemaName": "public",
+      "x": 936,
+      "y": 488
+    },
+    {
+      "name": "DetailKomposisi",
+      "schemaName": "public",
+      "x": 0,
+      "y": 856
+    }
+  ],
+  "tableGroupCollapseStates": [],
+  "stickyNoteLayouts": [],
+  "referencePaths": [
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "KategoriMesin",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_kategori_mesin"
+      ],
+      "secondTableName": "Mesin",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "Mesin",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_mesin"
+      ],
+      "secondTableName": "Target",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "Ukuran",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_ukuran"
+      ],
+      "secondTableName": "Target",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "JenisKayu",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_jenis_kayu"
+      ],
+      "secondTableName": "Target",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "KategoriBarang",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_kategori_barang"
+      ],
+      "secondTableName": "Grades",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "Ukuran",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_ukuran"
+      ],
+      "secondTableName": "BarangSetengahJadiHotPress",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "JenisBarang",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_jenis_barang"
+      ],
+      "secondTableName": "BarangSetengahJadiHotPress",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "KategoriBarang",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_kategori_barang"
+      ],
+      "secondTableName": "BarangSetengahJadiHotPress",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "Grades",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_grade"
+      ],
+      "secondTableName": "BarangSetengahJadiHotPress",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "Grades",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_grades"
+      ],
+      "secondTableName": "Komposisi",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "JenisBarang",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_jenis_barang"
+      ],
+      "secondTableName": "Komposisi",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "BarangSetengahJadiHotPress",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_barang_setengah_jadi"
+      ],
+      "secondTableName": "Komposisi",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "Komposisi",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_komposisi"
+      ],
+      "secondTableName": "DetailKomposisi",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "Grades",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_grade"
+      ],
+      "secondTableName": "DetailKomposisi",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "JenisKayu",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_jenis_kayu"
+      ],
+      "secondTableName": "DetailKomposisi",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "BarangSetengahJadiHotPress",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_barang_setengah_jadi"
+      ],
+      "secondTableName": "DetailKomposisi",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    }
+  ]
+}

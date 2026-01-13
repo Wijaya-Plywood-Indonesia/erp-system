@@ -30,7 +30,7 @@ class KayuPecahRotaryForm
                     ->options(function (RelationManager $livewire) {
                         $parent = $livewire->getOwnerRecord(); // ← ambil parent record (ProduksiRotary)
                         $idProduksi = $parent->id; // gunakan id produksinya
-            
+
                         return PenggunaanLahanRotary::with('lahan')
                             ->where('id_produksi', $idProduksi)
                             ->get()

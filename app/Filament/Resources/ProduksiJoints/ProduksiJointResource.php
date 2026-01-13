@@ -22,7 +22,7 @@ class ProduksiJointResource extends Resource
     protected static ?string $model = ProduksiJoint::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-    protected static string|UnitEnum|null $navigationGroup = 'Sanding Joint';
+    protected static string|UnitEnum|null $navigationGroup = 'Finishing';
     protected static ?int $navigationSort = 1;
 
     protected static ?string $recordTitleAttribute = 'no';
@@ -47,8 +47,8 @@ class ProduksiJointResource extends Resource
         return [
             RelationManagers\PegawaiJointRelationManager::class,
             RelationManagers\ModalJointRelationManager::class,
-            RelationManagers\HasilJointRelationManager::class,
             RelationManagers\BahanProduksiRelationManager::class,
+            RelationManagers\HasilJointRelationManager::class,
             RelationManagers\ValidasiJointRelationManager::class,
         ];
     }

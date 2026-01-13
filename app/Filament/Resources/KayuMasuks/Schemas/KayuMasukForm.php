@@ -37,14 +37,35 @@ class KayuMasukForm
                     ->directory('kayu_masuk/dokumen')
                     ->preserveFilenames()
                     ->required()
-                    // --- FITUR KOMPRESI BAWAAN FILAMENT ---
-                    ->image() // Wajib ada agar fitur resize jalan
-                    ->imageResizeMode('contain') // Mode aman agar dokumen tidak terpotong
-                    ->imageResizeTargetWidth('1280') // Resize lebar maks ke 1280px
-                    ->imageResizeTargetHeight('1280') // Resize tinggi maks ke 1280px
-                    ->imageQuality(70) // (Opsional) Turunkan kualitas JPEG/WebP ke 70%
-                    // ->optimize('webp') <--- HAPUS BARIS INI KARENA MENYEBABKAN ERROR
-                    ->imagePreviewHeight('250'),
+
+                    // --- FITUR IMAGE & SMART COMPRESSION (V3) ---
+                    ->image()
+
+                    // 1. Izinkan format WebP (Format google yang sangat kecil & tajam)
+                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+
+                    // 2. RESIZE AGRESIF (Rahasia ukuran kecil)
+                    //    Mengubah resolusi kamera HP (4000px) menjadi 1024px.
+                    //    Ini akan mengurangi ukuran file dari ~5MB menjadi ~200KB.
+                    ->imageResizeMode('contain') // Menjaga aspek rasio (tidak gepeng/terpotong)
+                    ->imageResizeTargetWidth('1024') // Cukup untuk dokumen terbaca jelas di layar laptop
+                    ->imageResizeTargetHeight('1024') // Batas tinggi maksimal
+
+                    // 3. IMAGE EDITOR (Fitur Cerdas)
+                    //    Memungkinkan user memotong (crop) bagian pinggir meja/lantai yang tidak perlu.
+                    //    Membuang area tidak penting = Ukuran file lebih kecil.
+                    ->imageEditor()
+                    ->imageEditorAspectRatios([
+                        null, // Bebas
+                        '16:9',
+                        '4:3',
+                        '1:1',
+                    ])
+
+                    // 4. Konfigurasi Preview
+                    ->imagePreviewHeight('250')
+                    ->downloadable() // Agar admin bisa download dokumen aslinya
+                    ->openable(), // Agar bisa dibuka di tab baru
 
                 DatePicker::make('tgl_kayu_masuk')
                     ->label('Tanggal Kayu Masuk')
