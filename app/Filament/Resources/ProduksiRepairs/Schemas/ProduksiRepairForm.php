@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiRepairs\Schemas;
 
+use App\Models\ProduksiRepair;
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\DatePicker;
 
@@ -13,14 +14,23 @@ class ProduksiRepairForm
             ->components([
                 DatePicker::make('tanggal')
                     ->label('Tanggal')
-                    ->native(false)                    // modern, responsive
-                    ->format('Y-m-d')                     // format penyimpanan
-                    ->displayFormat('d/m/Y')             // tampil di UI
-                    ->live()
-                    ->closeOnDateSelection()
+                    ->default(fn () => now()->addDay())
+                    ->displayFormat('d F Y')
                     ->required()
-                    ->maxDate(now()->addDays(30))
-                    ->default(now()->addDay())
+                    ->reactive() // ⬅️ Menggunakan reactive() sesuai contoh ProduksiStik Anda
+
+                    // ✅ VALIDASI TANGGAL TIDAK BOLEH SAMA
+                    ->rules([
+                        function () {
+                            return function (string $attribute, $value, $fail) {
+                                $exists = ProduksiRepair::whereDate('tanggal', $value)->exists();
+
+                                if ($exists) {
+                                    $fail('Tanggal ini sudah digunakan. Pilih tanggal lain.');
+                                }
+                            };
+                        },
+                    ]),
             ]);
     }
 }
