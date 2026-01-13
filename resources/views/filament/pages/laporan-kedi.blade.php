@@ -9,169 +9,107 @@
     </div>
 
     <div wire:loading.remove>
-        @forelse($dataStik as $data) @php $selisih = $data['selisih'] ??
-        0;$selisihTampil = $selisih * -1; $warnaSelisih = $selisih <= 0 ?
-        'text-green-400' : 'text-red-400'; @endphp
+        @forelse($dataKedi as $data)
 
-        <div
-            class="mb-8 border border-gray-700 rounded-lg overflow-hidden bg-gray-900 text-white shadow-lg"
-        >
-            {{-- Header Section Report --}}
-            <div
-                class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center"
-            >
-                <h3 class="text-lg font-bold text-white">
-                    LAPORAN PRODUKSI STIK - {{ $data["tanggal"] ?? "-" }}
+        <div class="mb-8 border border-gray-700 rounded-lg overflow-hidden bg-gray-900 text-white shadow-lg">
+
+            {{-- HEADER --}}
+            <div class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="text-lg font-bold">
+                    LAPORAN PRODUKSI KEDI - {{ $data['tanggal'] }}
                 </h3>
-                <span
-                    class="px-3 py-1 text-xs font-semibold rounded bg-blue-600 text-white"
-                >
-                    Target:
-                    {{
-                        number_format($data["target_harian"] ?? 0, 0, ",", ".")
-                    }}
+                <span class="px-3 py-1 text-xs font-semibold rounded bg-blue-600">
+                    Status: {{ $data['status'] }}
                 </span>
             </div>
 
-            {{-- Kendala (Dipindahkan ke atas tabel, di bawah header) --}}
+            {{-- VALIDASI --}}
             <div class="p-4 bg-gray-800/50 text-sm border-b border-gray-700">
-                <span class="text-gray-400 font-semibold">Kendala:</span>
-                <span class="font-bold text-yellow-500 text-xs">{{
-                    $data["kendala"] ?? "Tidak ada kendala."
-                }}</span>
+                <span class="text-gray-400 font-semibold">Validasi:</span>
+                <span class="text-green-400 font-bold">
+                    {{ $data['validasi_terakhir'] }}
+                </span>
+                <span class="text-gray-400">
+                    ({{ $data['validasi_oleh'] }})
+                </span>
             </div>
 
-            {{-- Table Data Pekerja --}}
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm text-left text-gray-300">
-                    <thead class="text-xs text-gray-400 uppercase bg-gray-800">
-                        <tr>
-                            <th scope="col" class="px-6 py-3">ID</th>
-                            <th scope="col" class="px-6 py-3">Nama</th>
-                            <th scope="col" class="px-6 py-3">Masuk</th>
-                            <th scope="col" class="px-6 py-3">Pulang</th>
-                            <th scope="col" class="px-6 py-3">Ijin</th>
-                            <th scope="col" class="px-6 py-3">Keterangan</th>
-                            <th scope="col" class="px-6 py-3 text-red-400">
-                                Potongan Target
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($data['pekerja'] as $pekerja)
-                        <tr
-                            class="bg-gray-900 border-b border-gray-800 hover:bg-gray-800"
-                        >
-                            <td class="px-6 py-4">
-                                {{ $pekerja["id"] ?? "-" }}
-                            </td>
-                            <td class="px-6 py-4 font-medium text-white">
-                                {{ $pekerja["nama"] ?? "-" }}
-                            </td>
-                            <td class="px-6 py-4">
-                                {{ $pekerja["jam_masuk"] ?? "-" }}
-                            </td>
-                            <td class="px-6 py-4">
-                                {{ $pekerja["jam_pulang"] ?? "-" }}
-                            </td>
-                            <td class="px-6 py-4">
-                                {{ $pekerja["ijin"] ?? "-" }}
-                            </td>
-                            <td class="px-6 py-4">
-                                {{ $pekerja["keterangan"] ?? "-" }}
-                            </td>
-                            <td class="px-6 py-4 text-red-400 font-bold">
-                                {{
-                                    $pekerja["pot_target"] !== "-"
-                                        ? "Rp ".$pekerja["pot_target"]
-                                        : "-"
-                                }}
-                            </td>
-                        </tr>
-                        @endforeach @if(empty($data['pekerja']))
-                        <tr>
-                            <td
-                                colspan="7"
-                                class="px-6 py-4 text-center text-gray-500"
-                            >
-                                Tidak ada data pekerja
-                            </td>
-                        </tr>
-                        @endif
-                    </tbody>
+            {{-- ================= DETAIL MASUK ================= --}}
+            @if(!empty($data['detail_masuk']))
+            <div class="p-4">
+                <h4 class="font-semibold mb-3 text-yellow-400">Detail Masuk</h4>
 
-                    {{-- FOOTER: Ringkasan data dipindahkan ke bawah tabel --}}
-                    <tfoot
-                        class="bg-gray-800 text-xs font-semibold border-t border-gray-700"
-                    >
-                        <tr>
-                            <td colspan="7" class="px-6 py-3 text-right">
-                                <span class="mr-4"
-                                    >Pekerja:
-                                    <strong class="text-yellow-400">{{
-                                        $data["summary"]["jumlah_pekerja"] ?? 0
-                                    }}</strong>
-                                    |</span
-                                >
-                                <span class="mr-4"
-                                    >Target:
-                                    <strong>{{
-                                        number_format(
-                                            $data["target_harian"] ?? 0,
-                                            0,
-                                            ",",
-                                            "."
-                                        )
-                                    }}</strong>
-                                    |</span
-                                >
-                                <span class="mr-4"
-                                    >Jam Produksi:
-                                    <strong>{{
-                                        $data["jam_kerja"] ?? 0
-                                    }}</strong>
-                                    |</span
-                                >
-                                <span class="mr-4"
-                                    >Hasil:
-                                    <strong class="text-green-400">{{
-                                        number_format(
-                                            $data["hasil_harian"] ?? 0,
-                                            0,
-                                            ",",
-                                            "."
-                                        )
-                                    }}</strong>
-                                    |</span
-                                >
-                                <span class="mr-4"
-                                    >Selisih:
-                                    <strong class="{{ $warnaSelisih }}">{{
-                                        number_format(
-                                            $selisihTampil,
-                                            0,
-                                            ",",
-                                            "."
-                                        )
-                                    }}</strong>
-                                    |</span
-                                >
-                                <span
-                                    >Tanggal:
-                                    <strong>{{
-                                        $data["tanggal"] ?? "-"
-                                    }}</strong></span
-                                >
-                            </td>
-                        </tr>
-                    </tfoot>
-                </table>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-gray-300">
+                        <thead class="text-xs uppercase bg-gray-800 text-gray-400">
+                            <tr>
+                                <th class="px-4 py-2">No Palet</th>
+                                <th class="px-4 py-2">Mesin</th>
+                                <th class="px-4 py-2">Ukuran</th>
+                                <th class="px-4 py-2">Jenis Kayu</th>
+                                <th class="px-4 py-2">KW</th>
+                                <th class="px-4 py-2">Jumlah</th>
+                                <th class="px-4 py-2">Rencana Bongkar</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($data['detail_masuk'] as $row)
+                            <tr class="border-b border-gray-800 hover:bg-gray-800">
+                                <td class="px-4 py-2">{{ $row['no_palet'] }}</td>
+                                <td class="px-4 py-2">{{ $row['mesin'] }}</td>
+                                <td class="px-4 py-2">{{ $row['ukuran'] }}</td>
+                                <td class="px-4 py-2">{{ $row['jenis_kayu'] }}</td>
+                                <td class="px-4 py-2">{{ $row['kw'] }}</td>
+                                <td class="px-4 py-2 font-bold text-green-400">{{ $row['jumlah'] }}</td>
+                                <td class="px-4 py-2">{{ $row['rencana_bongkar'] }}</td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
             </div>
+            @endif
+
+            {{-- ================= DETAIL BONGKAR ================= --}}
+            @if(!empty($data['detail_bongkar']))
+            <div class="p-4 border-t border-gray-700">
+                <h4 class="font-semibold mb-3 text-blue-400">Detail Bongkar</h4>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-gray-300">
+                        <thead class="text-xs uppercase bg-gray-800 text-gray-400">
+                            <tr>
+                                <th class="px-4 py-2">No Palet</th>
+                                <th class="px-4 py-2">Mesin</th>
+                                <th class="px-4 py-2">Ukuran</th>
+                                <th class="px-4 py-2">Jenis Kayu</th>
+                                <th class="px-4 py-2">KW</th>
+                                <th class="px-4 py-2">Jumlah</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($data['detail_bongkar'] as $row)
+                            <tr class="border-b border-gray-800 hover:bg-gray-800">
+                                <td class="px-4 py-2">{{ $row['no_palet'] }}</td>
+                                <td class="px-4 py-2">{{ $row['mesin'] }}</td>
+                                <td class="px-4 py-2">{{ $row['ukuran'] }}</td>
+                                <td class="px-4 py-2">{{ $row['jenis_kayu'] }}</td>
+                                <td class="px-4 py-2">{{ $row['kw'] }}</td>
+                                <td class="px-4 py-2 font-bold text-green-400">{{ $row['jumlah'] }}</td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            @endif
+
         </div>
+
         @empty
         <div class="p-6 text-center bg-gray-800 rounded-lg">
             <p class="text-gray-400">
-                Belum ada data produksi stik untuk tanggal ini.
+                Belum ada data Produksi Kedi untuk tanggal ini.
             </p>
         </div>
         @endforelse
