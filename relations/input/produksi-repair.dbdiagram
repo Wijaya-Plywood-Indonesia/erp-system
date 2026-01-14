@@ -1,0 +1,168 @@
+{
+  "version": "1.0.0",
+  "darkMode": true,
+  "gridEnabling": false,
+  "detailLevel": "All",
+  "tablePositions": [
+    {
+      "name": "produksi_repair",
+      "schemaName": "public",
+      "x": 0,
+      "y": 50
+    },
+    {
+      "name": "modal_repairs",
+      "schemaName": "public",
+      "x": 0,
+      "y": 292
+    },
+    {
+      "name": "rencana_pegawais",
+      "schemaName": "public",
+      "x": 0,
+      "y": 662
+    },
+    {
+      "name": "rencana_repairs",
+      "schemaName": "public",
+      "x": 0,
+      "y": 1064
+    },
+    {
+      "name": "hasil_repairs",
+      "schemaName": "public",
+      "x": 0,
+      "y": 1370
+    },
+    {
+      "name": "validasi_repairs",
+      "schemaName": "public",
+      "x": 0,
+      "y": 1644
+    }
+  ],
+  "tableGroupCollapseStates": [],
+  "stickyNoteLayouts": [],
+  "referencePaths": [
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_repair",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_repair"
+      ],
+      "secondTableName": "modal_repairs",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_repair",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_repair"
+      ],
+      "secondTableName": "rencana_pegawais",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_repair",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_repair"
+      ],
+      "secondTableName": "rencana_repairs",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "rencana_pegawais",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_rencana_pegawai"
+      ],
+      "secondTableName": "rencana_repairs",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "modal_repairs",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_modal_repair"
+      ],
+      "secondTableName": "rencana_repairs",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_repair",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_repair"
+      ],
+      "secondTableName": "hasil_repairs",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "rencana_repairs",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_rencana_repair"
+      ],
+      "secondTableName": "hasil_repairs",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_repair",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_repair"
+      ],
+      "secondTableName": "validasi_repairs",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    }
+  ]
+}
