@@ -112,14 +112,20 @@ class ProduksiSandingsTable
                     ->tooltip('Lihat Data'),
                 EditAction::make()
                     ->label('')
-                    ->tooltip('Edit Data'),
+                    ->tooltip('Edit Data')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
                 DeleteAction::make()
                     ->label('')
-                    ->tooltip('Hapus Data'),
+                    ->tooltip('Hapus Data')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->visible(
+                            fn($records) =>
+                            $records->every(fn($r) => $r->validasiTerakhir?->status !== 'divalidasi')
+                        ),
                 ]),
             ]);
     }

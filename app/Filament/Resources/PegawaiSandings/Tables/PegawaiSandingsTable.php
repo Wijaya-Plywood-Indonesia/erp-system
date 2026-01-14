@@ -43,9 +43,6 @@ class PegawaiSandingsTable
                     ->placeholder('Tidak Ada Ket')
                     ->searchable(),
 
-
-
-
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -56,7 +53,11 @@ class PegawaiSandingsTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->headerActions([
-                CreateAction::make(),
+                CreateAction::make()
+                ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
             ])
             ->filters([
                 //
@@ -84,12 +85,24 @@ class PegawaiSandingsTable
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
-                EditAction::make(),
-                DeleteAction::make(),
+                EditAction::make()
+                ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
+                DeleteAction::make()
+                ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->visible(
+                            fn($records) =>
+                            $records->every(fn($r) => $r->validasiTerakhir?->status !== 'divalidasi')
+                        ),
                 ]),
             ]);
     }

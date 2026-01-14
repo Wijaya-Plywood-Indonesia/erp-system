@@ -36,6 +36,12 @@ class ProduksiSanding extends Model
     {
         return $this->hasMany(ValidasiSanding::class, 'id_produksi_sanding');
     }
+
+    public function validasiTerakhir()
+    {
+        return $this->hasOne(ValidasiSanding::class, 'id_produksi_sanding')->latestOfMany();
+    }
+
     public function mesin()
     {
         return $this->belongsTo(Mesin::class, 'id_mesin');
