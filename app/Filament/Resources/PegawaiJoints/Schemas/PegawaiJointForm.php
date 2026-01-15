@@ -19,65 +19,78 @@ class PegawaiJointForm
             $time->format('H:i') => $time->format('H.i'),
         ])->toArray();
     }
+
     public static function configure(Schema $schema): Schema
     {
-        return $schema
-            ->components([
-                Select::make('masuk')
-                    ->label('Jam Masuk')
-                    ->options(self::timeOptions())
-                    ->default('06:00')
-                    ->required()
-                    ->searchable()
-                    ->dehydrateStateUsing(fn ($state) => $state ? $state . ':00' : null)
-                    ->formatStateUsing(fn ($state) => $state ? substr($state, 0, 5) : null),
+        return $schema->components([
 
-                // --- JAM PULANG ---
-                Select::make('pulang')
-                    ->label('Jam Pulang')
-                    ->options(self::timeOptions())
-                    ->default('17:00')
-                    ->required()
-                    ->searchable()
-                    ->dehydrateStateUsing(fn ($state) => $state ? $state . ':00' : null)
-                    ->formatStateUsing(fn ($state) => $state ? substr($state, 0, 5) : null),
+            // --- JAM MASUK ---
+            Select::make('masuk')
+                ->label('Jam Masuk')
+                ->options(self::timeOptions())
+                ->default('06:00')
+                ->required()
+                ->searchable()
+                ->dehydrateStateUsing(fn ($state) => $state ? $state . ':00' : null)
+                ->formatStateUsing(fn ($state) => $state ? substr($state, 0, 5) : null),
 
-                TextInput::make('tugas')
-                    ->label('Tugas')
-                    ->default('Pegawai Joint')
-                    ->readOnly(),
+            // --- JAM PULANG ---
+            Select::make('pulang')
+                ->label('Jam Pulang')
+                ->options(self::timeOptions())
+                ->default('17:00')
+                ->required()
+                ->searchable()
+                ->dehydrateStateUsing(fn ($state) => $state ? $state . ':00' : null)
+                ->formatStateUsing(fn ($state) => $state ? substr($state, 0, 5) : null),
 
-                // 👷 PEGAWAI (DENGAN VALIDASI DUPLIKAT)
-                Select::make('id_pegawai')
-                    ->label('Pegawai')
-                    ->searchable()
-                    ->required()
-                    ->options(
+            TextInput::make('tugas')
+                ->label('Tugas')
+                ->default('Pegawai Joint')
+                ->readOnly(),
+
+            // 👷 PEGAWAI — VALIDASI DUPLIKAT (FIX TOTAL)
+            Select::make('id_pegawai')
+                ->label('Pegawai')
+                ->searchable()
+                ->required()
+                ->options(
                     Pegawai::query()
                         ->get()
-                        ->mapWithKeys(fn($pegawai) => [
+                        ->mapWithKeys(fn ($pegawai) => [
                             $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
                         ])
                 )
-                    ->rule(function ($livewire) {
-                        return function (string $attribute, $value, $fail) use ($livewire) {
+                ->rule(function ($livewire) {
+                    return function (string $attribute, $value, $fail) use ($livewire) {
 
-                            $produksiId = $livewire->ownerRecord->id ?? null;
+                        // PRODUKSI JOINT (OWNER RECORD)
+                        $produksiId = $livewire->ownerRecord->id ?? null;
 
-                            if (! $produksiId) {
-                                return;
-                            }
+                        // 🔑 RECORD YANG SEDANG DIEDIT (AMAN)
+                        $currentRecord = method_exists($livewire, 'getMountedTableActionRecord')
+                            ? $livewire->getMountedTableActionRecord()
+                            : null;
 
-                            $exists = PegawaiJoint::query()
-                                ->where('id_produksi_joint', $produksiId)
-                                ->where('id_pegawai', $value)
-                                ->exists();
+                        if (! $produksiId) {
+                            return;
+                        }
 
-                            if ($exists) {
-                                $fail('Pegawai ini sudah terdaftar pada produksi joint ini.');
-                            }
-                        };
-                    }),
-            ]);
+                        $query = PegawaiJoint::query()
+                            ->where('id_produksi_joint', $produksiId)
+                            ->where('id_pegawai', $value);
+
+                        // 🔥 ABAIKAN RECORD YANG SEDANG DIEDIT
+                        if ($currentRecord) {
+                            $query->where('id', '!=', $currentRecord->id);
+                        }
+
+                        if ($query->exists()) {
+                            $fail('Pegawai ini sudah terdaftar pada produksi joint ini.');
+                        }
+                    };
+                }),
+
+        ]);
     }
 }
