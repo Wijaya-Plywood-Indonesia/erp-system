@@ -54,7 +54,7 @@ class DetailPegawaiRotaryRelationManager extends RelationManager
                 Select::make('jam_pulang')
                     ->label('Jam Pulang')
                     ->options(self::timeOptions())
-                    ->default('17:00') // Default: 17:00 (sore)
+                    ->default('16:00') // Default: 17:00 (sore)
                     ->required()
                     ->searchable()
                     ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
@@ -122,6 +122,23 @@ class DetailPegawaiRotaryRelationManager extends RelationManager
                     ->label('Jam Masuk'),
                 TextColumn::make('jam_pulang')
                     ->label('Jam Pulang'),
+                TextColumn::make('izin_keterangan')
+                    ->label('Izin & Keterangan')
+                    ->getStateUsing(function ($record) {
+                        $html = '';
+
+                        if (!empty($record->izin)) {
+                            $html .= "<div><strong>Izin:</strong> {$record->izin}</div>";
+                        }
+
+                        if (!empty($record->keterangan)) {
+                            $html .= "<div><strong>Keterangan:</strong> {$record->keterangan}</div>";
+                        }
+
+                        return $html;
+                    })
+                    ->html()
+                    ->wrap(),
             ])
             ->filters([
                 //
@@ -135,13 +152,13 @@ class DetailPegawaiRotaryRelationManager extends RelationManager
                     ->label(fn($record) => $record->ijin ? 'Edit Ijin' : 'Tambah Ijin')
                     ->icon('heroicon-o-pencil-square')
                     ->form([
-                        TextInput::make('ijin')->label('Ijin'),
+                        TextInput::make('izin')->label('Izin'),
                         Textarea::make('ket')->label('Keterangan'),
                     ])
                     ->action(function ($record, array $data) {
                         $record->update([
                             'izin' => $data['izin'],
-                            'keterangan' => $data['keterangan'],
+                            'keterangan' => $data['ket'],
                         ]);
                     }),
                 EditAction::make(),
@@ -154,37 +171,3 @@ class DetailPegawaiRotaryRelationManager extends RelationManager
             ]);
     }
 }
-
-// TextInput::make('id_pegawai')
-//     ->required()
-//     ->maxLength(255),
-// Select::make('id_pegawai')
-//     ->label('Pegawai')
-//     ->options(
-//         \App\Models\Pegawai::query()
-//             ->get()
-//             ->mapWithKeys(fn($pegawai) => [
-//                 $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
-//             ])
-//     )
-//     ->searchable()
-//     ->required()
-//     ->afterStateUpdated(function ($state, callable $get) {
-//         // Ambil ID produksi dari parent
-//         $idProduksi = $get('../../id');
-
-//         if (!$idProduksi) {
-//             return;
-//         }
-
-//         // Cek apakah kombinasi pegawai dan produksi sudah ada
-//         $exists = PegawaiRotary::where('id_produksi', $idProduksi)
-//             ->where('id_pegawai', $state)
-//             ->exists();
-
-//         if ($exists) {
-//             throw ValidationException::withMessages([
-//                 'id_pegawai' => 'Pegawai ini sudah tercatat pada produksi yang sama.',
-//             ]);
-//         }
-//     }),
