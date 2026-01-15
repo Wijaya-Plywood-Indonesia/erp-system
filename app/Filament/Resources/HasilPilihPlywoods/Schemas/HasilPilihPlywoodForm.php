@@ -14,18 +14,25 @@ class HasilPilihPlywoodForm
     {
         return [
             Select::make('pegawais')
-                ->label('Pegawai')
-                ->relationship(
-                    name: 'pegawais',
-                    titleAttribute: 'nama_pegawai',
-                    modifyQueryUsing: fn($query) => $query->orderBy('nama_pegawai'), // Opsional: urutkan abjad
-                )
-                ->getOptionLabelFromRecordUsing(fn($record) => "{$record->kode_pegawai} - {$record->nama_pegawai}")
-                ->searchable(['nama_pegawai', 'kode_pegawai']) // 🔥 User bisa cari pakai Nama atau Kode
-                ->multiple()
-                ->preload()
-                ->required()
-                ->columnSpanFull(),
+    ->label('Pegawai')
+    ->relationship(
+        name: 'pegawais',
+        modifyQueryUsing: fn ($query) =>
+            $query
+                ->whereNotNull('nama_pegawai')
+                ->where('nama_pegawai', '!=', '')
+                ->whereNotNull('kode_pegawai')
+                ->orderBy('kode_pegawai')
+    )
+    ->getOptionLabelFromRecordUsing(
+        fn ($record) => "{$record->kode_pegawai} - {$record->nama_pegawai}"
+    )
+    ->searchable(['nama_pegawai', 'kode_pegawai'])
+    ->multiple()
+    ->preload()
+    ->required()
+    ->columnSpanFull(),
+
 
             Select::make('id_barang_setengah_jadi_hp')
                 ->label('Pilih Barang (Dari Bahan)')
