@@ -1,0 +1,14 @@
+Table list_pekerjaan_menumpuk {
+  id bigint
+  id_hasil_pilih_plywood bigint
+  jumlah_asal int
+  jumlah_selesai int
+  jumlah_belum_selesai int
+  status enum [note: '''
+    selesai,
+    belum selesai
+  ''']
+  keterangan text
+  created_at timestamp
+  updated_at timestamp
+}
