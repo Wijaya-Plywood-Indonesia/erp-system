@@ -124,6 +124,7 @@ class DetailPegawaiRotaryRelationManager extends RelationManager
                     ->label('Jam Pulang'),
                 TextColumn::make('izin_keterangan')
                     ->label('Izin & Keterangan')
+                    ->placeholder('Pegawai Masuk')
                     ->getStateUsing(function ($record) {
                         $html = '';
 
