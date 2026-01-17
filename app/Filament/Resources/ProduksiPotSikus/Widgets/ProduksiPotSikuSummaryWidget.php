@@ -27,10 +27,10 @@ class ProduksiPotSikuSummaryWidget extends Widget
         $produksiId = $record->id;
 
         // ======================
-        // TOTAL PRODUKSI
+        // TOTAL PRODUKSI (TINGGI)
         // ======================
         $totalAll = DetailBarangDikerjakanPotSiku::where('id_produksi_pot_siku', $produksiId)
-            ->sum(DB::raw('CAST(jumlah AS UNSIGNED)'));
+            ->sum(DB::raw('CAST(tinggi AS UNSIGNED)'));
 
         // ======================
         // TOTAL PEGAWAI
@@ -41,7 +41,7 @@ class ProduksiPotSikuSummaryWidget extends Widget
             ->count('id_pegawai');
 
         // ======================
-        // GLOBAL UKURAN + KW
+        // GLOBAL UKURAN + KW (TINGGI)
         // ======================
         $globalUkuranKw = DetailBarangDikerjakanPotSiku::query()
             ->where('id_produksi_pot_siku', $produksiId)
@@ -53,7 +53,7 @@ class ProduksiPotSikuSummaryWidget extends Widget
                     TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
                 ) AS ukuran,
                 detail_barang_dikerjakan_pot_siku.kw,
-                SUM(CAST(detail_barang_dikerjakan_pot_siku.jumlah AS UNSIGNED)) AS total
+                SUM(CAST(detail_barang_dikerjakan_pot_siku.tinggi AS UNSIGNED)) AS total
             ')
             ->groupBy('ukuran', 'detail_barang_dikerjakan_pot_siku.kw')
             ->orderBy('ukuran')
@@ -61,7 +61,7 @@ class ProduksiPotSikuSummaryWidget extends Widget
             ->get();
 
         // ======================
-        // GLOBAL UKURAN (SEMUA KW)
+        // GLOBAL UKURAN (SEMUA KW) - TINGGI
         // ======================
         $globalUkuran = DetailBarangDikerjakanPotSiku::query()
             ->where('id_produksi_pot_siku', $produksiId)
@@ -72,17 +72,17 @@ class ProduksiPotSikuSummaryWidget extends Widget
                     TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
                     TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
                 ) AS ukuran,
-                SUM(CAST(detail_barang_dikerjakan_pot_siku.jumlah AS UNSIGNED)) AS total
+                SUM(CAST(detail_barang_dikerjakan_pot_siku.tinggi AS UNSIGNED)) AS total
             ')
             ->groupBy('ukuran')
             ->orderBy('ukuran')
             ->get();
 
         $this->summary = [
-            'totalAll'       => $totalAll,
-            'totalPegawai'  => $totalPegawai,
-            'globalUkuranKw'=> $globalUkuranKw,
-            'globalUkuran'  => $globalUkuran,
+            'totalAll'        => $totalAll,
+            'totalPegawai'   => $totalPegawai,
+            'globalUkuranKw' => $globalUkuranKw,
+            'globalUkuran'   => $globalUkuran,
         ];
     }
 }

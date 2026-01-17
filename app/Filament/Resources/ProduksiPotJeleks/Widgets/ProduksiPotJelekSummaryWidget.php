@@ -27,10 +27,10 @@ class ProduksiPotJelekSummaryWidget extends Widget
         $produksiId = $record->id;
 
         // ======================
-        // TOTAL PRODUKSI
+        // TOTAL PRODUKSI (TINGGI)
         // ======================
         $totalAll = DetailBarangDikerjakanPotJelek::where('id_produksi_pot_jelek', $produksiId)
-            ->sum(DB::raw('CAST(jumlah AS UNSIGNED)'));
+            ->sum(DB::raw('CAST(tinggi AS UNSIGNED)'));
 
         // ======================
         // TOTAL PEGAWAI
@@ -41,7 +41,7 @@ class ProduksiPotJelekSummaryWidget extends Widget
             ->count('id_pegawai');
 
         // ======================
-        // GLOBAL UKURAN + KW
+        // GLOBAL UKURAN + KW (TINGGI)
         // ======================
         $globalUkuranKw = DetailBarangDikerjakanPotJelek::query()
             ->where('id_produksi_pot_jelek', $produksiId)
@@ -53,7 +53,7 @@ class ProduksiPotJelekSummaryWidget extends Widget
                     TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
                 ) AS ukuran,
                 detail_barang_dikerjakan_pot_jelek.kw,
-                SUM(CAST(detail_barang_dikerjakan_pot_jelek.jumlah AS UNSIGNED)) AS total
+                SUM(CAST(detail_barang_dikerjakan_pot_jelek.tinggi AS UNSIGNED)) AS total
             ')
             ->groupBy('ukuran', 'detail_barang_dikerjakan_pot_jelek.kw')
             ->orderBy('ukuran')
@@ -61,7 +61,7 @@ class ProduksiPotJelekSummaryWidget extends Widget
             ->get();
 
         // ======================
-        // GLOBAL UKURAN (SEMUA KW)
+        // GLOBAL UKURAN (SEMUA KW) (TINGGI)
         // ======================
         $globalUkuran = DetailBarangDikerjakanPotJelek::query()
             ->where('id_produksi_pot_jelek', $produksiId)
@@ -72,7 +72,7 @@ class ProduksiPotJelekSummaryWidget extends Widget
                     TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
                     TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
                 ) AS ukuran,
-                SUM(CAST(detail_barang_dikerjakan_pot_jelek.jumlah AS UNSIGNED)) AS total
+                SUM(CAST(detail_barang_dikerjakan_pot_jelek.tinggi AS UNSIGNED)) AS total
             ')
             ->groupBy('ukuran')
             ->orderBy('ukuran')

@@ -44,11 +44,6 @@ class DetailBarangDikerjakanPotJeleksTable
 
                 TextColumn::make('tinggi')
                     ->label('Tinggi'),
-
-                TextColumn::make('jumlah')
-                    ->label('Jumlah')
-                    ->numeric()
-                    ->alignCenter(),
             ])
             ->filters([
                 //
