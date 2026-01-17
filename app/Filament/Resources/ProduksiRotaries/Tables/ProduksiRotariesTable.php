@@ -66,7 +66,7 @@ class ProduksiRotariesTable
                         if ($hasDetail) {
                             Notification::make()
                                 ->title('Data tidak dapat dihapus')
-                                ->body('Produksi Rotary ini masih memiliki data detail yang terkait.')
+                                ->body('Produksi Rotary ini masih memiliki data didalamnya yang terkait.')
                                 ->danger()
                                 ->send();
 
