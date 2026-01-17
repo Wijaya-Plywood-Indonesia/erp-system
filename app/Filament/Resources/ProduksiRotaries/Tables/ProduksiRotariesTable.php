@@ -2,25 +2,17 @@
 
 namespace App\Filament\Resources\ProduksiRotaries\Tables;
 
-use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Grid;
-use Filament\Forms\Components\Hidden; // Import Hidden
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TimePicker;
-use Filament\Forms\Get;
 use Filament\Notifications\Notification;
-use Filament\Tables\Columns\Summarizers\Summarizer;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
-use Carbon\Carbon;
+use Filament\Support\Exceptions\Halt;
 
 class ProduksiRotariesTable
 {
@@ -51,14 +43,37 @@ class ProduksiRotariesTable
                     ])
                     ->query(function ($query, array $data): void {
                         $query
-                            ->when($data['from'], fn($q, $d) => $q->whereDate('tgl_produksi', '>=', $d))
-                            ->when($data['until'], fn($q, $d) => $q->whereDate('tgl_produksi', '<=', $d));
+                            ->when($data['from'], fn ($q, $d) => $q->whereDate('tgl_produksi', '>=', $d))
+                            ->when($data['until'], fn ($q, $d) => $q->whereDate('tgl_produksi', '<=', $d));
                     }),
             ])
             ->recordActions([
                 EditAction::make(),
                 ViewAction::make(),
-                DeleteAction::make(),
+
+                DeleteAction::make()
+                    ->before(function ($record) {
+
+                        $hasDetail =
+                            $record->detailPegawaiRotary()->exists()
+                            || $record->detailLahanRotary()->exists()
+                            || $record->detailValidasiHasilRotary()->exists()
+                            || $record->detailGantiPisauRotary()->exists()
+                            || $record->detailPaletRotary()->exists()
+                            || $record->detailKayuPecah()->exists()
+                            || $record->riwayatKayu()->exists();
+
+                        if ($hasDetail) {
+                            Notification::make()
+                                ->title('Data tidak dapat dihapus')
+                                ->body('Produksi Rotary ini masih memiliki data detail yang terkait.')
+                                ->danger()
+                                ->send();
+
+                            // ⛔ WAJIB: hentikan delete
+                            throw new Halt();
+                        }
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
