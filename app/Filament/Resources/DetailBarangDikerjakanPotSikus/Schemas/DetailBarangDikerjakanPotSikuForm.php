@@ -68,6 +68,7 @@ class DetailBarangDikerjakanPotSikuForm
 
                 TextInput::make('kw')
                     ->label('KW (Kualitas)')
+                    ->default('AF')
                     ->required()
                     ->maxLength(255)
                     ->placeholder('Cth: 1, 2, 3, af, dll.'),
@@ -76,12 +77,6 @@ class DetailBarangDikerjakanPotSikuForm
                     ->label('Nomor Palet')
                     ->numeric()
                     ->required(),
-
-                TextInput::make('jumlah')
-                    ->label('Jumlah')
-                    ->required()
-                    ->numeric()
-                    ->placeholder('Cth: 1.5 atau 100'),
             ]);
     }
 }
