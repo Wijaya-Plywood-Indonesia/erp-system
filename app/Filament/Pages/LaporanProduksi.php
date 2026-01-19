@@ -28,6 +28,7 @@ class LaporanProduksi extends Page implements HasForms
     protected string $view = 'filament.pages.laporan-produksi';
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static ?string $title = 'Laporan Produksi Rotary';
+    protected static ?int $navigationSort = 2;
 
     // Form state container (statePath => 'data')
     public array $data = [
@@ -97,7 +98,6 @@ class LaporanProduksi extends Page implements HasForms
             $this->data['tanggal'] = $tanggal;
 
             $this->loadData();
-
         } catch (Exception $e) {
             Notification::make()
                 ->danger()
@@ -148,7 +148,6 @@ class LaporanProduksi extends Page implements HasForms
             Log::error('Error loading produksi data: ' . $e->getMessage());
 
             $this->dataProduksi = [];
-
         } finally {
             $this->isLoading = false;
         }

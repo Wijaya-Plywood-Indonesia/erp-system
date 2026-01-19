@@ -27,6 +27,7 @@ class LaporanRepairs extends Page
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static ?string $title = 'Laporan Repairs';
     protected string $view = 'filament.pages.laporan-repairs';
+    protected static ?int $navigationSort = 6;
 
     public array $data = [
         'tanggal' => null,
@@ -103,7 +104,6 @@ class LaporanRepairs extends Page
 
             $this->data['tanggal'] = $tanggal;
             $this->loadData();
-
         } catch (Exception $e) {
             Log::error('Error parsing date: ' . $e->getMessage());
 
@@ -127,11 +127,6 @@ class LaporanRepairs extends Page
             $this->isLoading = true;
 
             $tanggal = $this->data['tanggal'] ?? now()->format('Y-m-d');
-
-            Log::info('Loading repair data', [
-                'tanggal' => $tanggal,
-                'user' => auth()->id()
-            ]);
 
             // Reset data
             $this->dataProduksi = [];
@@ -160,7 +155,6 @@ class LaporanRepairs extends Page
                     ->body('Tidak ditemukan data repair untuk tanggal ' . Carbon::parse($tanggal)->format('d/m/Y'))
                     ->send();
             }
-
         } catch (Exception $e) {
             Log::error('Error loading repair data', [
                 'message' => $e->getMessage(),
@@ -176,7 +170,6 @@ class LaporanRepairs extends Page
 
             $this->dataProduksi = [];
             $this->laporan = [];
-
         } finally {
             $this->isLoading = false;
         }
@@ -208,7 +201,6 @@ class LaporanRepairs extends Page
                 new LaporanRepairExport($this->laporan),
                 "laporan-repair-{$tanggal}.xlsx"
             );
-
         } catch (Exception $e) {
             Log::error('Export Excel gagal', [
                 'message' => $e->getMessage(),

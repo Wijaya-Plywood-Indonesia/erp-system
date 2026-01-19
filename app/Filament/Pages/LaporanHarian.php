@@ -42,6 +42,7 @@ class LaporanHarian extends Page implements HasForms
     protected static ?string $title = 'Laporan Harian';
 
     protected string $view = 'filament.pages.laporan-harian';
+    protected static ?int $navigationSort = 1;
 
     public ?array $data = [
         'tanggal' => null,
@@ -237,7 +238,6 @@ class LaporanHarian extends Page implements HasForms
             } else {
                 Notification::make()->success()->title('Data Dimuat')->body("Total {$this->statistics['total']} pegawai (Termasuk yang libur).")->send();
             }
-
         } catch (Exception $e) {
             Notification::make()->danger()->title('Error')->body($e->getMessage())->send();
             Log::error('LaporanHarian Critical Error: ' . $e->getMessage());
