@@ -2,16 +2,17 @@
 
 namespace App\Filament\Resources\ProduksiRepairs\Tables;
 
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\ViewAction;
-use Filament\Actions\DeleteAction;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Actions\Action;
-use Filament\Notifications\Notification;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
+use Filament\Support\Exceptions\Halt;
 
 class ProduksiRepairsTable
 {
@@ -19,64 +20,105 @@ class ProduksiRepairsTable
     {
         return $table
             ->defaultSort('tanggal', 'desc')
+
             ->columns([
                 TextColumn::make('tanggal')
                     ->label('Tanggal Repair')
                     ->date('d/m/Y')
                     ->sortable()
                     ->searchable(),
+
                 TextColumn::make('kendala')
                     ->label('Kendala')
-                    ->wrap()
-                    ->limit(50)
-                    ->sortable()
-                    ->searchable(),
+                    ->limit(40)
+                    ->placeholder('Tidak ada kendala')
+                    ->tooltip(fn ($record) => $record->kendala),
             ])
-            ->filters([
-                //
-            ])
-            ->recordActions([
-                Action::make('kendala')
-                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
 
-                    // ✅ Form style baru di Filament 4
+            ->recordActions([
+                /* ================= KENDALA ================= */
+                Action::make('kelola_kendala')
+                    ->label(fn ($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
+                    ->icon('heroicon-m-chat-bubble-left-right')
+                    ->color(fn ($record) => $record->kendala ? 'info' : 'gray')
+                    ->visible(fn ($record) => ! $record->validasiRepairs()->exists())
                     ->schema([
                         Textarea::make('kendala')
-                            ->label('Kendala')
+                            ->label('Catatan Kendala')
                             ->required()
                             ->rows(4),
                     ])
-
-                    // ✅ Saat modal dibuka — isi form dengan data kendala lama jika ada
-                    ->mountUsing(function ($form, $record) {
-                        $form->fill([
-                            'kendala' => $record->kendala ?? '',
-                        ]);
-                    })
-
-                    // ✅ Saat tombol Simpan ditekan
+                    ->mountUsing(fn ($form, $record) =>
+                        $form->fill(['kendala' => $record->kendala])
+                    )
                     ->action(function (array $data, $record): void {
                         $record->update([
                             'kendala' => trim($data['kendala']),
                         ]);
 
                         Notification::make()
-                            ->title($record->kendala ? 'Kendala diperbarui' : 'Kendala ditambahkan')
+                            ->title('Kendala berhasil disimpan')
                             ->success()
                             ->send();
                     })
+                    ->modalHeading('Manajemen Kendala')
+                    ->modalWidth('lg'),
 
-                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->modalSubmitActionLabel('Simpan'),
+                EditAction::make()
+                    ->visible(fn ($record) => ! $record->validasiRepairs()->exists()),
+
                 ViewAction::make(),
-                EditAction::make(),
+
+                /* ================= DELETE ================= */
                 DeleteAction::make()
+                    ->visible(fn ($record) => ! $record->validasiRepairs()->exists())
+                    ->before(function ($record) {
+
+                        $hasRelation =
+                            $record->rencanaPegawais()->exists()
+                            || $record->rencanaRepair()->exists()
+                            || $record->hasilRepairs()->exists()
+                            || $record->modalRepairs()->exists()
+                            || $record->validasiRepairs()->exists();
+
+                        if ($hasRelation) {
+                            Notification::make()
+                                ->title('Data tidak dapat dihapus')
+                                ->body('Produksi Repair ini masih memiliki data terkait.')
+                                ->danger()
+                                ->send();
+
+                            // ⛔ WAJIB
+                            throw new Halt();
+                        }
+                    }),
             ])
+
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->before(function ($records) {
+
+                            foreach ($records as $record) {
+                                $hasRelation =
+                                    $record->rencanaPegawais()->exists()
+                                    || $record->rencanaRepair()->exists()
+                                    || $record->hasilRepairs()->exists()
+                                    || $record->modalRepairs()->exists()
+                                    || $record->validasiRepairs()->exists();
+
+                                if ($hasRelation) {
+                                    Notification::make()
+                                        ->title('Gagal menghapus data terpilih')
+                                        ->body('Salah satu Produksi Repair masih memiliki relasi.')
+                                        ->danger()
+                                        ->send();
+
+                                    // ⛔ WAJIB
+                                    throw new Halt();
+                                }
+                            }
+                        }),
                 ]),
             ]);
     }

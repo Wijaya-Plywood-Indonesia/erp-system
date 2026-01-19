@@ -15,7 +15,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\DatePicker;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder;
-use Filament\Tables;
+use Filament\Support\Exceptions\Halt;
 
 class ProduksiStiksTable
 {
@@ -25,25 +25,24 @@ class ProduksiStiksTable
             ->columns([
                 TextColumn::make('tanggal_produksi')
                     ->label('Tanggal Produksi')
-                    ->date('d/m/Y') // Format lebih manusiawi
+                    ->date('d/m/Y')
                     ->sortable()
                     ->searchable(),
 
-                // ✅ Perbaikan Badge Status: Menggunakan TextColumn + badge()
                 TextColumn::make('validasiTerakhir.status')
                     ->label('Status Validasi')
-                    ->badge() // Menggantikan BadgeColumn
+                    ->badge()
                     ->color(fn (string $state): string => match ($state) {
-                        'divalidasi' => 'success',
+                        'divalidasi'   => 'success',
                         'ditangguhkan' => 'warning',
-                        'ditolak' => 'danger',
-                        default => 'gray',
+                        'ditolak'      => 'danger',
+                        default        => 'gray',
                     })
                     ->icon(fn (string $state): string => match ($state) {
-                        'divalidasi' => 'heroicon-m-check-circle',
-                        'ditolak' => 'heroicon-m-x-circle',
+                        'divalidasi'   => 'heroicon-m-check-circle',
+                        'ditolak'      => 'heroicon-m-x-circle',
                         'ditangguhkan' => 'heroicon-m-exclamation-circle',
-                        default => 'heroicon-m-clock',
+                        default        => 'heroicon-m-clock',
                     })
                     ->sortable()
                     ->searchable(),
@@ -52,8 +51,8 @@ class ProduksiStiksTable
                     ->label('Kendala')
                     ->limit(30)
                     ->placeholder('Tidak ada kendala')
-                    ->tooltip(fn($record): ?string => $record->kendala)
-                    ->toggleable(isToggledHiddenByDefault: false),
+                    ->tooltip(fn ($record): ?string => $record->kendala)
+                    ->toggleable(),
 
                 TextColumn::make('created_at')
                     ->label('Dibuat Pada')
@@ -62,6 +61,7 @@ class ProduksiStiksTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('tanggal_produksi', 'desc')
+
             ->filters([
                 Filter::make('tanggal_produksi')
                     ->form([
@@ -70,50 +70,102 @@ class ProduksiStiksTable
                     ])
                     ->query(function (Builder $query, array $data): Builder {
                         return $query
-                            ->when($data['from'], fn ($q, $date) => $q->whereDate('tanggal_produksi', '>=', $date))
-                            ->when($data['until'], fn ($q, $date) => $q->whereDate('tanggal_produksi', '<=', $date));
+                            ->when(
+                                $data['from'],
+                                fn ($q, $date) =>
+                                    $q->whereDate('tanggal_produksi', '>=', $date)
+                            )
+                            ->when(
+                                $data['until'],
+                                fn ($q, $date) =>
+                                    $q->whereDate('tanggal_produksi', '<=', $date)
+                            );
                     }),
             ])
+
             ->recordActions([
-                // ✅ Kelola Kendala
                 Action::make('kelola_kendala')
-                    ->label(fn($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
+                    ->label(fn ($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
                     ->icon('heroicon-m-chat-bubble-left-right')
-                    ->color(fn($record) => $record->kendala ? 'info' : 'gray')
-                    // Sembunyikan jika sudah divalidasi
-                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
-                    ->form([
+                    ->color(fn ($record) => $record->kendala ? 'info' : 'gray')
+                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->schema([
                         Textarea::make('kendala')
                             ->label('Catatan Kendala Lapangan')
                             ->required()
                             ->rows(4),
                     ])
-                    ->mountUsing(fn($form, $record) => $form->fill(['kendala' => $record->kendala]))
+                    ->mountUsing(fn ($form, $record) =>
+                        $form->fill(['kendala' => $record->kendala])
+                    )
                     ->action(function (array $data, $record): void {
-                        $record->update(['kendala' => trim($data['kendala'])]);
-                        Notification::make()->title('Kendala berhasil disimpan')->success()->send();
+                        $record->update([
+                            'kendala' => trim($data['kendala']),
+                        ]);
+
+                        Notification::make()
+                            ->title('Kendala berhasil disimpan')
+                            ->success()
+                            ->send();
                     })
                     ->modalHeading('Manajemen Kendala')
                     ->modalWidth('lg'),
 
                 EditAction::make()
-                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
-
-                DeleteAction::make()
-                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
                 ViewAction::make(),
+
+                DeleteAction::make()
+                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->before(function ($record) {
+
+                        $hasRelation =
+                            $record->detailPegawaiStik()->exists()
+                            || $record->detailMasukStik()->exists()
+                            || $record->detailHasilStik()->exists()
+                            || $record->validasiStik()->exists();
+
+                        if ($hasRelation) {
+                            Notification::make()
+                                ->title('Data tidak dapat dihapus')
+                                ->body('Produksi Stik ini masih memiliki data didalamnya yang terkait.')
+                                ->danger()
+                                ->send();
+
+                            // ⛔ HENTIKAN PROSES DELETE
+                            throw new Halt();
+                        }
+                    }),
             ])
-            ->bulkActions([
+
+            ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->label('Hapus Terpilih (Hanya yang belum divalidasi)')
-                        ->action(function (DeleteBulkAction $action) {
-                            $action->getRecords()->each(function ($record) {
-                                if ($record->validasiTerakhir?->status !== 'divalidasi') {
-                                    $record->delete();
+                        ->visible(fn ($records) =>
+                            $records->every(
+                                fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi'
+                            )
+                        )
+                        ->before(function ($records) {
+
+                            foreach ($records as $record) {
+                                $hasRelation =
+                                    $record->detailPegawaiStik()->exists()
+                                    || $record->detailMasukStik()->exists()
+                                    || $record->detailHasilStik()->exists()
+                                    || $record->validasiStik()->exists();
+
+                                if ($hasRelation) {
+                                    Notification::make()
+                                        ->title('Gagal menghapus data terpilih')
+                                        ->body('Salah satu data Produksi Stik masih memiliki relasi.')
+                                        ->danger()
+                                        ->send();
+
+                                    throw new Halt();
                                 }
-                            });
+                            }
                         }),
                 ]),
             ]);
