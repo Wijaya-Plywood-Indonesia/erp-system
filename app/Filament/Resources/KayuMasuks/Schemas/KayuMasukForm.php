@@ -7,11 +7,12 @@ use App\Models\KayuMasuk;
 use App\Models\KendaraanSupplierKayu;
 use App\Models\SupplierKayu;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\FileUpload;
+use App\Forms\Components\CompressedFileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Carbon\Carbon;           // Import Library Tanggal
+use Filament\Schemas\Components\Utilities\Get; // Import Get
 
 class KayuMasukForm
 {
@@ -31,42 +32,47 @@ class KayuMasukForm
                     ->default('SAKR')
                     ->searchable()
                     ->preload(),
-                FileUpload::make('upload_dokumen_angkut')
+
+                CompressedFileUpload::make('upload_dokumen_angkut')
                     ->label('Upload Dokumen Angkut')
                     ->disk('public')
                     ->directory('kayu_masuk/dokumen')
-                    ->preserveFilenames()
                     ->required()
                     ->visibility('public')
-
-                    // --- FITUR IMAGE & SMART COMPRESSION (V3) ---
-                    ->image()
-
-                    // 1. Izinkan format WebP (Format google yang sangat kecil & tajam)
-                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-
-                    // 2. RESIZE AGRESIF (Rahasia ukuran kecil)
-                    //    Mengubah resolusi kamera HP (4000px) menjadi 1024px.
-                    //    Ini akan mengurangi ukuran file dari ~5MB menjadi ~200KB.
-                    ->imageResizeMode('contain') // Menjaga aspek rasio (tidak gepeng/terpotong)
-                    ->imageResizeTargetWidth('1024') // Cukup untuk dokumen terbaca jelas di layar laptop
-                    ->imageResizeTargetHeight('1024') // Batas tinggi maksimal
-
-                    // 3. IMAGE EDITOR (Fitur Cerdas)
-                    //    Memungkinkan user memotong (crop) bagian pinggir meja/lantai yang tidak perlu.
-                    //    Membuang area tidak penting = Ukuran file lebih kecil.
                     ->imageEditor()
-                    ->imageEditorAspectRatios([
-                        null, // Bebas
-                        '16:9',
-                        '4:3',
-                        '1:1',
-                    ])
+                    // Hapus preserveFilenames() karena kita akan membuat nama baru
 
-                    // 4. Konfigurasi Preview
-                    ->imagePreviewHeight('250')
-                    ->downloadable() // Agar admin bisa download dokumen aslinya
-                    ->openable(), // Agar bisa dibuka di tab baru
+                    // =========================================================
+                    // 🪄 LOGIKA PENAMAAN OTOMATIS
+                    // =========================================================
+                    ->fileName(function (Get $get) {
+                        // 1. Ambil Nilai dari Form
+                        $tgl = $get('tgl_kayu_masuk');
+                        $seri = $get('seri');
+                        $supplierId = $get('id_supplier_kayus');
+
+                        // 2. Format Tanggal (YYYY-MM-DD)
+                        // Jika kosong, pakai tanggal hari ini sebagai default
+                        $tglFormatted = $tgl ? Carbon::parse($tgl)->format('Y-m-d') : now()->format('Y-m-d');
+
+                        // 3. Cari Nama Supplier
+                        $namaSupplier = 'Tanpa-Supplier';
+                        if ($supplierId) {
+                            $supplier = SupplierKayu::find($supplierId);
+                            if ($supplier) {
+                                // Ambil nama, sistem di CompressedFileUpload nanti otomatis
+                                // akan mengubah spasi menjadi tanda hubung (slug)
+                                $namaSupplier = $supplier->nama_supplier;
+                            }
+                        }
+
+                        // 4. Pastikan Seri Ada
+                        $noSeri = $seri ? "Seri-{$seri}" : 'Tanpa-Seri';
+
+                        // 5. Gabungkan Menjadi Nama File
+                        // Hasil: 2026-01-19_CV-Maju-Jaya_Seri-105
+                        return "{$tglFormatted}_{$namaSupplier}_{$noSeri}";
+                    }),
 
                 DatePicker::make('tgl_kayu_masuk')
                     ->label('Tanggal Kayu Masuk')

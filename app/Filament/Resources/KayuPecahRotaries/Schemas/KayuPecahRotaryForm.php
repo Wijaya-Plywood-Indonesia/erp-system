@@ -3,20 +3,13 @@
 namespace App\Filament\Resources\KayuPecahRotaries\Schemas;
 
 use App\Models\PenggunaanLahanRotary;
-use Filament\Forms\Components\FileUpload;
+use App\Forms\Components\CompressedFileUpload; // Gunakan Komponen Custom
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Slider;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
-use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
-
+use Filament\Schemas\Components\Utilities\Get; // Import Get
 use Illuminate\Support\Str;
-
-use Spatie\Image\Image;
-use Spatie\Image\Manipulations; // ⬅️ ini yang penting
-use Illuminate\Support\Facades\Storage;
-use PhpParser\Node\Stmt\Label;
 
 class KayuPecahRotaryForm
 {
@@ -28,8 +21,8 @@ class KayuPecahRotaryForm
                 Select::make('id_penggunaan_lahan')
                     ->label('Kode Lahan')
                     ->options(function (RelationManager $livewire) {
-                        $parent = $livewire->getOwnerRecord(); // ← ambil parent record (ProduksiRotary)
-                        $idProduksi = $parent->id; // gunakan id produksinya
+                        $parent = $livewire->getOwnerRecord();
+                        $idProduksi = $parent->id;
 
                         return PenggunaanLahanRotary::with('lahan')
                             ->where('id_produksi', $idProduksi)
@@ -38,30 +31,47 @@ class KayuPecahRotaryForm
                                 return [$item->id => $item->lahan->kode_lahan ?? 'Tanpa Kode'];
                             });
                     })
-                    ->required(),
+                    ->searchable()
+                    ->preload()
+                    ->required()
+                    ->live(), // 🔥 WAJIB: Agar perubahan terdeteksi oleh FileUpload
+
                 TextInput::make('ukuran')
                     ->label('Diameter')
                     ->required()
-                    ->numeric(),
+                    ->numeric()
+                    ->live(onBlur: true), // 🔥 WAJIB: Agar data terbaca setelah mengetik
 
-                FileUpload::make('foto')
+                // ==========================================
+                // FOTO (AUTO RENAME & COMPRESS)
+                // ==========================================
+                CompressedFileUpload::make('foto')
                     ->label('Foto Kayu Pecah Dengan Meteran')
-                    ->image()
                     ->disk('public')
                     ->directory('kayu_pecah')
-                    //->maxSize(4096)
                     ->required()
                     ->imageEditor()
-                    ->getUploadedFileNameForStorageUsing(function (TemporaryUploadedFile $file, $get) {
-                        $nama = $get('id_produksi') ?? 'produksi_rotaries';
-                        $nama_slug = Str::slug($nama);
-                        return $nama_slug . '.' . $file->getClientOriginalExtension();
+
+                    // 🪄 LOGIKA PENAMAAN FILE
+                    ->fileName(function (Get $get) {
+                        // 1. Ambil Data Ukuran
+                        $ukuran = $get('ukuran') ?: '0';
+
+                        // 2. Ambil Kode Lahan (Query DB berdasarkan ID yang dipilih)
+                        $kodeLahan = 'Tanpa-Lahan';
+                        $idPenggunaan = $get('id_penggunaan_lahan');
+
+                        if ($idPenggunaan) {
+                            $lahanRotary = PenggunaanLahanRotary::with('lahan')->find($idPenggunaan);
+                            if ($lahanRotary && $lahanRotary->lahan) {
+                                $kodeLahan = $lahanRotary->lahan->kode_lahan;
+                            }
+                        }
+
+                        // 3. Gabungkan: "Lahan-A1_Diameter-50"
+                        // Helper Str::slug otomatis mengubah spasi/"/" menjadi "-"
+                        return "{$kodeLahan}_Diameter-{$ukuran}";
                     }),
-                // Slider::make('diameter')
-                //     ->label('Diameter (cm)')
-                //     ->range(minValue: 0, maxValue: 100)
-                //     ->step(1) // ⬅️ Membatasi ke angka bulat saja
-                //     ->tooltips()
             ]);
     }
 }
