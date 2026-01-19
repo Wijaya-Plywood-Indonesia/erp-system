@@ -87,15 +87,34 @@ class HasilSandingsTable
                 //
             ])
             ->headerActions([
-                CreateAction::make(),
+                CreateAction::make()
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
             ])
             ->recordActions([
-                EditAction::make(),
-                DeleteAction::make(),
+                // Edit Action — HILANG jika status sudah divalidasi
+                EditAction::make()
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
+
+                // Delete Action — HILANG jika status sudah divalidasi
+                DeleteAction::make()
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->hidden(
+                            fn($livewire) =>
+                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        ),
                 ]),
             ]);
     }

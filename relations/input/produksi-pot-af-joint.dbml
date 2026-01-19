@@ -1,0 +1,41 @@
+Table produksi_pot_af_joint {
+  id bigint
+  tanggal_produksi date
+  kendala varchar [null]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table pegawai_pot_af_joint {
+  id bigint
+  id_produksi_pot_af_joint bigint [ref: > produksi_pot_af_joint.id]
+  id_pegawai bigint
+  masuk time
+  pulang time
+  tugas text
+  ijin varchar
+  ket varchar
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table hasil_pot_af_joint {
+  id bigint
+  id_produksi_pot_af_joint bigint [ref: > produksi_pot_af_joint.id]
+  id_ukuran bigint
+  id_jenis_kayu bigint
+  kw varchar
+  no_palet int
+  jumlah int
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table validasi_pot_af_joint {
+  id bigint
+  id_produksi_pot_af_joint bigint [ref: > produksi_pot_af_joint.id]
+  role varchar
+  status varchar
+  created_at timestamp
+  updated_at timestamp
+}

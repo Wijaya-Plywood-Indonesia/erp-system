@@ -1,0 +1,52 @@
+Table produksi_stik {
+    id bigint
+    tanggal_produksi date
+    kendala varchar
+    created_at datetime
+    updated_at datetime
+}
+
+Table detail_pegawai_stik {
+    id bigint
+    id_produksi_stik bigint [ref : > produksi_stik.id]
+    id_pegawai bigint
+    masuk time
+    pulang time
+    ijin varchar
+    ket varchar
+    created_at datetime
+    updated_at datetime
+}
+
+Table detail_masuk_stik {
+    id bigint
+    id_produksi_stik bigint [ref : > produksi_stik.id]
+    id_ukuran bigint
+    id_jenis_kayu bigint
+    no_palet int
+    kw int
+    isi int
+    created_at datetime
+    updated_at datetime
+}
+
+Table detail_hasil_stik {
+    id bigint
+    id_produksi_stik bigint [ref : > produksi_stik.id]
+    id_ukuran bigint
+    id_jenis_kayu bigint
+    no_palet int
+    kw int
+    total_lembar int
+    created_at datetime
+    updated_at datetime
+}
+
+Table validasi_stik {
+    id bigint
+    id_produksi_stik bigint [ref : > produksi_stik.id]
+    role varchar
+    status varchar
+    created_at datetime
+    updated_at datetime
+}

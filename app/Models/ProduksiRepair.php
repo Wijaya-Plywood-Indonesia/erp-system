@@ -14,6 +14,10 @@ class ProduksiRepair extends Model
         'kendala'
     ];
 
+    protected $casts = [
+        'tanggal' => 'date',
+    ];
+
 
     public function rencanaPegawais(): HasMany
     {

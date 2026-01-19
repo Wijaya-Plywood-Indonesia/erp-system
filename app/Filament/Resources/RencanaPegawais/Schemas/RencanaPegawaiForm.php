@@ -44,47 +44,56 @@ class RencanaPegawaiForm
 
             Select::make('id_pegawai')
                 ->label('Pegawai')
-                ->options(function () use ($usedPegawaiIds) {
-                    return Pegawai::whereNotIn('id', $usedPegawaiIds)
-                        ->orderBy('kode_pegawai')
-                        ->get()
-                        ->mapWithKeys(fn($p) => [
-                            $p->id => "{$p->kode_pegawai} - {$p->nama_pegawai}"
-                        ])
+                ->options(function ($livewire) {
+                    $produksiId = $livewire->ownerRecord?->id;
+                    
+                    // Ambil record yang sedang diedit dari Livewire
+                    $editingRecord = method_exists($livewire, 'getMountedTableActionRecord') 
+                        ? $livewire->getMountedTableActionRecord() 
+                        : null;
+
+                    $usedPegawaiIds = RencanaPegawai::where('id_produksi_repair', $produksiId)
+                        ->when($editingRecord, fn($q) => $q->where('id', '!=', $editingRecord->id))
+                        ->pluck('id_pegawai')
                         ->toArray();
+
+                    return Pegawai::whereNotIn('id', $usedPegawaiIds)
+                        ->get()
+                        ->mapWithKeys(fn($p) => [$p->id => "{$p->kode_pegawai} - {$p->nama_pegawai}"]);
                 })
                 ->searchable()
-                ->preload()
                 ->required()
-                ->placeholder('Pilih pegawai...')
-                ->reactive()
                 ->rules([
-                    fn() => function ($attribute, $value, $fail) use ($usedPegawaiIds) {
-                        if (in_array($value, $usedPegawaiIds)) {
-                            $fail('Pegawai ini sudah ditugaskan hari ini!');
-                        }
+                    fn ($livewire) => function ($attribute, $value, $fail) use ($livewire) {
+                        $editingRecord = method_exists($livewire, 'getMountedTableActionRecord') 
+                            ? $livewire->getMountedTableActionRecord() 
+                            : null;
+
+                        $exists = RencanaPegawai::where('id_produksi_repair', $livewire->ownerRecord?->id)
+                            ->where('id_pegawai', $value)
+                            ->when($editingRecord, fn($q) => $q->where('id', '!=', $editingRecord->id))
+                            ->exists();
+
+                        if ($exists) $fail('Pegawai sudah ditugaskan.');
                     }
                 ]),
 
             TextInput::make('nomor_meja')
                 ->label('Nomor Meja')
                 ->numeric()
-                ->minValue(1)
-                ->default($lastMeja)
                 ->required()
-                ->reactive()
                 ->rules([
-                    fn() => function ($attribute, $value, $fail) use ($produksiId, $record) {
+                    fn ($livewire) => function ($attribute, $value, $fail) use ($livewire) {
+                        $editingRecord = method_exists($livewire, 'getMountedTableActionRecord') 
+                            ? $livewire->getMountedTableActionRecord() 
+                            : null;
 
-                        // Ambil jumlah pekerja di meja itu
-                        $count = RencanaPegawai::where('id_produksi_repair', $produksiId)
+                        $count = RencanaPegawai::where('id_produksi_repair', $livewire->ownerRecord?->id)
                             ->where('nomor_meja', $value)
-                            ->when($record, fn($q) => $q->where('id', '!=', $record->id)) // kecualikan record saat edit
+                            ->when($editingRecord, fn($q) => $q->where('id', '!=', $editingRecord->id))
                             ->count();
 
-                        if ($count >= 2) {
-                            $fail("Meja nomor {$value} sudah penuh (maksimal 2 orang).");
-                        }
+                        if ($count >= 2) $fail("Meja nomor {$value} sudah penuh (maksimal 2 orang).");
                     }
                 ])
         ]);

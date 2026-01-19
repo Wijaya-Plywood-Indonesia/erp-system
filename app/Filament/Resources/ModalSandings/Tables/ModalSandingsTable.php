@@ -92,15 +92,33 @@ class ModalSandingsTable
             ])
             ->headerActions([
                 CreateAction::make()
-                    ->label('+ Tambah Modal'),
+                    ->label('+ Tambah Modal')
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
             ])
             ->recordActions([
-                EditAction::make()->label(''),
-                DeleteAction::make()->label(''),
+                EditAction::make()
+                ->label('')
+                ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
+                DeleteAction::make()
+                ->label('')
+                ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->hidden(
+                            fn($livewire) =>
+                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        ),
                 ]),
             ]);
     }

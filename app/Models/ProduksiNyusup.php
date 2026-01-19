@@ -36,11 +36,11 @@ class ProduksiNyusup extends Model
     protected static function booted()
     {
         static::creating(function ($model) {
-            $exists = static::whereDate('tanggal', $model->tanggal)->exists();
+            $exists = static::whereDate('tanggal_produksi', $model->tanggal)->exists();
 
             if ($exists) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'tanggal' => 'Data produksi repair untuk tanggal ini sudah ada.',
+                    'tanggal_produksi' => 'Data produksi nyusup untuk tanggal ini sudah ada.',
                 ]);
             }
         });

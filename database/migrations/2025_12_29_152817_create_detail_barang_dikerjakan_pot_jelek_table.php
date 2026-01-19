@@ -34,7 +34,6 @@ return new class extends Migration
             $table->string('kw');
             $table->integer('tinggi');
             $table->integer('no_palet');
-            $table->integer('jumlah');
             $table->timestamps();
         });
     }

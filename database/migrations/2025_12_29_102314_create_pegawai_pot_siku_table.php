@@ -24,7 +24,7 @@ return new class extends Migration
             $table->time('masuk');
             $table->time('pulang');
             $table->string('tugas');
-            $table->string('ijin');
+            $table->string('ijin')->nullable();
             $table->string('ket')->nullable();
             $table->timestamps();
         });

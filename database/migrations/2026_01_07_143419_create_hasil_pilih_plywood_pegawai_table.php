@@ -16,11 +16,11 @@ return new class extends Migration
             $table->foreignId('id_hasil_pilih_plywood')
                 ->constrained('hasil_pilih_plywood')
                 ->cascadeOnUpdate()
-                ->restrictOnDelete();
+                ->cascadeOnDelete();
             $table->foreignId('id_pegawai')
                 ->constrained('pegawais')
                 ->cascadeOnUpdate()
-                ->restrictOnDelete();
+                ->cascadeOnDelete();
             $table->timestamps();
         });
     }

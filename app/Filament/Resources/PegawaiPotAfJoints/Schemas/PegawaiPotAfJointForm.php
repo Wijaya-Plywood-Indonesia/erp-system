@@ -15,7 +15,7 @@ class PegawaiPotAfJointForm
     {
         return collect(
             CarbonPeriod::create('00:00', '1 hour', '23:00')->toArray()
-        )->mapWithKeys(fn ($time) => [
+        )->mapWithKeys(fn($time) => [
             $time->format('H:i') => $time->format('H.i'),
         ])->toArray();
     }
@@ -23,15 +23,15 @@ class PegawaiPotAfJointForm
     {
         return $schema
             ->components([
-               // --- JAM MASUK ---
+                // --- JAM MASUK ---
                 Select::make('masuk')
                     ->label('Jam Masuk')
                     ->options(self::timeOptions())
                     ->default('06:00')
                     ->required()
                     ->searchable()
-                    ->dehydrateStateUsing(fn ($state) => $state ? $state . ':00' : null)
-                    ->formatStateUsing(fn ($state) => $state ? substr($state, 0, 5) : null),
+                    ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
                 // --- JAM PULANG ---
                 Select::make('pulang')
@@ -40,8 +40,8 @@ class PegawaiPotAfJointForm
                     ->default('17:00')
                     ->required()
                     ->searchable()
-                    ->dehydrateStateUsing(fn ($state) => $state ? $state . ':00' : null)
-                    ->formatStateUsing(fn ($state) => $state ? substr($state, 0, 5) : null),
+                    ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
                 TextInput::make('tugas')
                     ->label('Tugas')
@@ -54,31 +54,39 @@ class PegawaiPotAfJointForm
                     ->searchable()
                     ->required()
                     ->options(
-                    Pegawai::query()
-                        ->get()
-                        ->mapWithKeys(fn($pegawai) => [
-                            $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
-                        ])
-                )
+                        Pegawai::query()
+                            ->get()
+                            ->mapWithKeys(fn($pegawai) => [
+                                $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
+                            ])
+                    )
                     ->rule(function ($livewire) {
                         return function (string $attribute, $value, $fail) use ($livewire) {
 
                             $produksiId = $livewire->ownerRecord->id ?? null;
+                            $currentRecord = method_exists($livewire, 'getMountedTableActionRecord')
+                                ? $livewire->getMountedTableActionRecord()
+                                : null;
 
                             if (! $produksiId) {
                                 return;
                             }
 
-                            $exists = PegawaiPotAfJoint::query()
+                            $query = PegawaiPotAfJoint::query()
                                 ->where('id_produksi_pot_af_joint', $produksiId)
-                                ->where('id_pegawai', $value)
-                                ->exists();
+                                ->where('id_pegawai', $value);
 
-                            if ($exists) {
+                            // 🔥 INI KUNCINYA — ABAIKAN DATA YANG SEDANG DIEDIT
+                            if ($currentRecord) {
+                                $query->where('id', '!=', $currentRecord->id);
+                            }
+
+                            if ($query->exists()) {
                                 $fail('Pegawai ini sudah terdaftar pada produksi pot af joint ini.');
                             }
                         };
                     }),
+
             ]);
     }
 }

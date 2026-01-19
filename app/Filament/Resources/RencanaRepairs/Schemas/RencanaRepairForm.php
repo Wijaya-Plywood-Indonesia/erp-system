@@ -51,12 +51,28 @@ class RencanaRepairForm
 
             Select::make('id_rencana_pegawai')
                 ->label('Penempatan Meja & Pegawai')
-                ->options(function () use ($produksiId) {
+                ->options(function ($livewire) use ($produksiId) {
+
+                    // Record RencanaRepair yang sedang diedit (jika edit)
+                    $editingRecord = method_exists($livewire, 'getMountedTableActionRecord')
+                        ? $livewire->getMountedTableActionRecord()
+                        : null;
+
+                    /**
+                     * Ambil ID RencanaPegawai yang SUDAH dipakai
+                     * di RencanaRepair lain (pegawai tidak boleh dobel)
+                     */
+                    $usedRencanaPegawaiIds = RencanaRepair::where('id_produksi_repair', $produksiId)
+                        ->when($editingRecord, fn ($q) => $q->where('id', '!=', $editingRecord->id))
+                        ->pluck('id_rencana_pegawai')
+                        ->toArray();
+
                     return RencanaPegawai::where('id_produksi_repair', $produksiId)
+                        ->whereNotIn('id', $usedRencanaPegawaiIds)
                         ->with('pegawai')
                         ->orderBy('nomor_meja')
                         ->get()
-                        ->mapWithKeys(fn($rp) => [
+                        ->mapWithKeys(fn ($rp) => [
                             $rp->id => sprintf(
                                 'Meja %s - %s (%s)',
                                 $rp->nomor_meja,
@@ -69,7 +85,6 @@ class RencanaRepairForm
                 ->preload()
                 ->required()
                 ->placeholder('Pilih meja & pegawai...'),
-
 
             TextInput::make('kw')
                 ->label('KW')

@@ -9,8 +9,7 @@ use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Actions\CreateAction;
-
-
+use Filament\Actions\DeleteAction;
 
 class ListPekerjaanMenumpuksTable
 {
@@ -75,6 +74,7 @@ class ListPekerjaanMenumpuksTable
             ])
             ->actions([
                 EditAction::make(),
+                DeleteAction::make(),
             ])
             ->bulkActions([
                 BulkActionGroup::make([

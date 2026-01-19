@@ -8,6 +8,7 @@ use Filament\Actions\EditAction;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
 
 class ValidasiPotAfJointsTable
 {
@@ -40,11 +41,26 @@ class ValidasiPotAfJointsTable
                     ),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
+
+                // Delete Action — HILANG jika status sudah divalidasi
+                DeleteAction::make()
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->hidden(
+                            fn($livewire) =>
+                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        ),
                 ]),
             ]);
     }
