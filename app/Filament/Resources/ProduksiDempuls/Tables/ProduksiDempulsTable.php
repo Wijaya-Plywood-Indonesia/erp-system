@@ -24,6 +24,7 @@ class ProduksiDempulsTable
                     ->date('d/m/Y')
                     ->sortable()
                     ->searchable(),
+
                 TextColumn::make('kendala')
                     ->label('Kendala')
                     ->wrap()
@@ -36,11 +37,9 @@ class ProduksiDempulsTable
             ])
             ->recordActions([
                 Action::make('kendala')
-                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
-
-                    // ✅ Form style baru di Filament 4
+                    ->label(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->icon(fn ($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
+                    ->color(fn ($record) => $record->kendala ? 'info' : 'warning')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Kendala')
@@ -52,7 +51,6 @@ class ProduksiDempulsTable
                             'kendala' => $record->kendala ?? '',
                         ]);
                     })
-
                     ->action(function (array $data, $record): void {
                         $record->update([
                             'kendala' => trim($data['kendala']),
@@ -63,12 +61,39 @@ class ProduksiDempulsTable
                             ->success()
                             ->send();
                     })
-
-                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->modalHeading(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
                     ->modalSubmitActionLabel('Simpan'),
+
                 ViewAction::make(),
+
                 EditAction::make(),
+
                 DeleteAction::make()
+                    ->before(function ($record, DeleteAction $action) {
+
+                        // 🔒 cek relasi sebelum delete
+                        $hasRelation =
+                            $record->rencanaPegawaiDempuls()->exists() ||
+                            $record->detailDempuls()->exists() ||
+                            $record->validasiDempuls()->exists() ||
+                            $record->bahanDempuls()->exists();
+
+                        if ($hasRelation) {
+                            Notification::make()
+                                ->title('Gagal menghapus data')
+                                ->body('Data produksi tidak dapat dihapus karena masih memiliki data terkait.')
+                                ->danger()
+                                ->send();
+
+                            // ⛔ batalkan delete
+                            $action->cancel();
+                        }
+                    })
+                    ->successNotification(
+                        Notification::make()
+                            ->title('Data produksi berhasil dihapus')
+                            ->success()
+                    ),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
