@@ -37,6 +37,7 @@ class KayuMasukForm
                     ->directory('kayu_masuk/dokumen')
                     ->preserveFilenames()
                     ->required()
+                    ->visibility('public')
 
                     // --- FITUR IMAGE & SMART COMPRESSION (V3) ---
                     ->image()
