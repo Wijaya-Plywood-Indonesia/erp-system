@@ -12,6 +12,7 @@ use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
+use Filament\Support\Exceptions\Halt;
 use Filament\Tables;
 
 class ProduksiNyusupsTable
@@ -21,13 +22,16 @@ class ProduksiNyusupsTable
         return $table
             ->columns([
                 TextColumn::make('tanggal_produksi')
-                    ->date()
-                    ->sortable(),
+                    ->label('Tanggal Produksi')
+                    ->date('d/m/Y')
+                    ->sortable()
+                    ->searchable(),
 
                 TextColumn::make('kendala')
                     ->label('Kendala')
                     ->limit(50)
-                    ->tooltip(fn(string $state): string => $state)
+                    ->placeholder('Tidak ada kendala')
+                    ->tooltip(fn ($record) => $record->kendala)
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\BadgeColumn::make('validasiTerakhir.status')
@@ -35,11 +39,11 @@ class ProduksiNyusupsTable
                     ->colors([
                         'success' => 'divalidasi',
                         'warning' => 'ditangguhkan',
-                        'danger' => 'ditolak',
+                        'danger'  => 'ditolak',
                     ])
                     ->icons([
-                        'heroicon-o-check-circle' => 'divalidasi',
-                        'heroicon-o-x-circle' => 'ditolak',
+                        'heroicon-o-check-circle'       => 'divalidasi',
+                        'heroicon-o-x-circle'           => 'ditolak',
                         'heroicon-o-exclamation-circle' => 'ditangguhkan',
                     ])
                     ->sortable()
@@ -51,61 +55,89 @@ class ProduksiNyusupsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->filters([
-                //
-            ])
+
             ->recordActions([
                 Action::make('kelola_kendala')
-                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
-
-                    // ✅ Form style baru di Filament 4
+                    ->label(fn ($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
+                    ->icon('heroicon-m-chat-bubble-left-right')
+                    ->color(fn ($record) => $record->kendala ? 'info' : 'gray')
+                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->schema([
                         Textarea::make('kendala')
-                            ->label('Kendala')
+                            ->label('Catatan Kendala Produksi')
                             ->required()
                             ->rows(4),
                     ])
-
-                    // ✅ Saat modal dibuka — isi form dengan data kendala lama jika ada
-                    ->mountUsing(function ($form, $record) {
-                        $form->fill([
-                            'kendala' => $record->kendala ?? '',
-                        ]);
-                    })
-
-                    // ✅ Saat tombol Simpan ditekan
+                    ->mountUsing(fn ($form, $record) =>
+                        $form->fill(['kendala' => $record->kendala])
+                    )
                     ->action(function (array $data, $record): void {
                         $record->update([
                             'kendala' => trim($data['kendala']),
                         ]);
 
                         Notification::make()
-                            ->title($record->kendala ? 'Kendala diperbarui' : 'Kendala ditambahkan')
+                            ->title('Kendala berhasil disimpan')
                             ->success()
                             ->send();
                     })
+                    ->modalHeading('Manajemen Kendala')
+                    ->modalWidth('lg'),
 
-                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->modalSubmitActionLabel('Simpan'),
-                // Hilang jika sudah divalidasi
                 EditAction::make()
-                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+
+                ViewAction::make(),
 
                 DeleteAction::make()
-                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->before(function ($record) {
 
-                // View boleh tetap tampil
-                ViewAction::make(),
+                        $hasRelation =
+                            $record->pegawaiNyusup()->exists()
+                            || $record->detailBarangDikerjakan()->exists()
+                            || $record->validasiNyusup()->exists();
+
+                        if ($hasRelation) {
+                            Notification::make()
+                                ->title('Data tidak dapat dihapus')
+                                ->body('Produksi Nyusup ini masih memiliki data terkait di dalamnya.')
+                                ->danger()
+                                ->send();
+
+                            // ⛔ HENTIKAN DELETE
+                            throw new Halt();
+                        }
+                    }),
             ])
+
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->visible(
-                            fn($records) =>
-                            $records->every(fn($r) => $r->validasiTerakhir?->status !== 'divalidasi')
-                        ),
+                        ->visible(fn ($records) =>
+                            $records->every(
+                                fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi'
+                            )
+                        )
+                        ->before(function ($records) {
+
+                            foreach ($records as $record) {
+                                $hasRelation =
+                                    $record->pegawaiNyusup()->exists()
+                                    || $record->detailBarangDikerjakan()->exists()
+                                    || $record->validasiNyusup()->exists();
+
+                                if ($hasRelation) {
+                                    Notification::make()
+                                        ->title('Gagal menghapus data terpilih')
+                                        ->body('Salah satu Produksi Nyusup masih memiliki relasi.')
+                                        ->danger()
+                                        ->send();
+
+                                    throw new Halt();
+                                }
+                            }
+                        }),
                 ]),
             ]);
     }
