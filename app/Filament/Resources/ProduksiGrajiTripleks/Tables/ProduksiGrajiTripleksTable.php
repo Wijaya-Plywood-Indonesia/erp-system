@@ -9,14 +9,15 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\DatePicker;
 use Illuminate\Database\Eloquent\Builder;
 use Filament\Notifications\Notification;
 use Filament\Tables\Table;
-use Filament\Tables\Filters\SelectFilter;
-use Filament\Forms\Components\DatePicker;
-use Filament\Tables\Columns\BadgeColumn;
+use Filament\Support\Exceptions\Halt;
 
 class ProduksiGrajiTripleksTable
 {
@@ -25,24 +26,19 @@ class ProduksiGrajiTripleksTable
         return $table
             ->columns([
                 TextColumn::make('tanggal_produksi')
-                    ->date()
+                    ->label('Tanggal Produksi')
+                    ->date('d/m/Y')
                     ->sortable(),
+
                 TextColumn::make('status')
                     ->label('Status Produksi')
-                    ->formatStateUsing(fn($state) => ucfirst($state)),
+                    ->formatStateUsing(fn ($state) => ucfirst($state)),
+
                 TextColumn::make('kendala')
                     ->label('Kendala Produksi')
-                    ->getStateUsing(
-                        fn($record) =>
-                        ($record->getRawOriginal('kendala') === null || $record->getRawOriginal('kendala') === '')
-                        ? 'Tidak ada kendala'
-                        : $record->getRawOriginal('kendala')
+                    ->getStateUsing(fn ($record) =>
+                        blank($record->kendala) ? 'Tidak ada kendala' : $record->kendala
                     )
-                    ->toggleable(isToggledHiddenByDefault: true),
-
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 BadgeColumn::make('validasiTerakhir.status')
@@ -50,15 +46,14 @@ class ProduksiGrajiTripleksTable
                     ->colors([
                         'success' => 'divalidasi',
                         'warning' => 'ditangguhkan',
-                        'danger' => 'ditolak',
+                        'danger'  => 'ditolak',
                     ])
                     ->icons([
-                        'heroicon-o-check-circle' => 'divalidasi',
-                        'heroicon-o-x-circle' => 'ditolak',
+                        'heroicon-o-check-circle'       => 'divalidasi',
+                        'heroicon-o-x-circle'           => 'ditolak',
                         'heroicon-o-exclamation-circle' => 'ditangguhkan',
                     ])
-                    ->sortable()
-                    ->searchable(),
+                    ->sortable(),
 
                 TextColumn::make('created_at')
                     ->label('Dibuat Pada')
@@ -66,90 +61,112 @@ class ProduksiGrajiTripleksTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+
             ->defaultSort('tanggal_produksi', 'desc')
+
             ->filters([
+                Filter::make('tanggal_produksi')
+                    ->label('Tanggal Produksi')
+                    ->form([
+                        DatePicker::make('from')->label('Dari Tanggal')->native(false),
+                        DatePicker::make('until')->label('Sampai Tanggal')->native(false),
+                    ])
+                    ->query(fn (Builder $query, array $data) =>
+                        $query
+                            ->when($data['from'] ?? null, fn ($q, $d) => $q->whereDate('tanggal_produksi', '>=', $d))
+                            ->when($data['until'] ?? null, fn ($q, $d) => $q->whereDate('tanggal_produksi', '<=', $d))
+                    ),
 
-    // 📅 FILTER TANGGAL
-    Filter::make('tanggal_produksi')
-        ->label('Tanggal Produksi')
-        ->form([
-            DatePicker::make('from')
-                ->label('Dari Tanggal')
-                ->native(false),
-
-            DatePicker::make('until')
-                ->label('Sampai Tanggal')
-                ->native(false),
-        ])
-        ->query(function (Builder $query, array $data): Builder {
-            return $query
-                ->when(
-                    filled($data['from'] ?? null),
-                    fn (Builder $query) =>
-                        $query->whereDate('tanggal_produksi', '>=', $data['from'])
-                )
-                ->when(
-                    filled($data['until'] ?? null),
-                    fn (Builder $query) =>
-                        $query->whereDate('tanggal_produksi', '<=', $data['until'])
-                );
-        }),
-
-    // ⚙️ FILTER STATUS
-    SelectFilter::make('status')
-        ->label('Status Produksi')
-        ->options([
-            'graji manual'   => 'Graji Manual',
-            'graji otomatis' => 'Graji Otomatis',
-        ]),
-])
+                SelectFilter::make('status')
+                    ->label('Status Produksi')
+                    ->options([
+                        'graji manual'   => 'Graji Manual',
+                        'graji otomatis' => 'Graji Otomatis',
+                    ]),
+            ])
 
             ->recordActions([
                 Action::make('kelola_kendala')
-                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
-
+                    ->label(fn ($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
+                    ->icon('heroicon-m-chat-bubble-left-right')
+                    ->color(fn ($record) => $record->kendala ? 'info' : 'gray')
+                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->schema([
                         Textarea::make('kendala')
-                            ->label('Kendala')
+                            ->label('Kendala Produksi')
                             ->required()
                             ->rows(4),
                     ])
-
-                    ->mountUsing(function ($form, $record) {
-                        $form->fill([
-                            'kendala' => $record->kendala ?? '',
-                        ]);
-                    })
-
-                    ->action(function (array $data, $record): void {
+                    ->mountUsing(fn ($form, $record) =>
+                        $form->fill(['kendala' => $record->kendala])
+                    )
+                    ->action(function (array $data, $record) {
                         $record->update([
                             'kendala' => trim($data['kendala']),
                         ]);
 
                         Notification::make()
-                            ->title($record->kendala ? 'Kendala diperbarui' : 'Kendala ditambahkan')
+                            ->title('Kendala berhasil disimpan')
                             ->success()
                             ->send();
-                    })
+                    }),
 
-                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->modalSubmitActionLabel('Simpan'),
-
-                // Hilang jika sudah divalidasi
                 EditAction::make()
-                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
-                DeleteAction::make()
-                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
-
-                // View boleh tetap tampil
                 ViewAction::make(),
+
+                // 🗑️ DELETE — SAMA DENGAN PRODUKSI STIK
+                DeleteAction::make()
+                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->before(function ($record) {
+
+                        $hasRelation =
+                            $record->pegawaiGrajiTriplek()->exists()
+                            || $record->masukGrajiTriplek()->exists()
+                            || $record->hasilGrajiTriplek()->exists()
+                            || $record->validasiGrajiTriplek()->exists();
+
+                        if ($hasRelation) {
+                            Notification::make()
+                                ->title('Data tidak dapat dihapus')
+                                ->body('Produksi Graji Triplek ini masih memiliki data yang terkait.')
+                                ->danger()
+                                ->send();
+
+                            // ⛔ HENTIKAN DELETE
+                            throw new Halt();
+                        }
+                    }),
             ])
+
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->visible(fn ($records) =>
+                            $records->every(
+                                fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi'
+                            )
+                        )
+                        ->before(function ($records) {
+                            foreach ($records as $record) {
+                                $hasRelation =
+                                    $record->pegawaiGrajiTriplek()->exists()
+                                    || $record->masukGrajiTriplek()->exists()
+                                    || $record->hasilGrajiTriplek()->exists()
+                                    || $record->validasiGrajiTriplek()->exists();
+
+                                if ($hasRelation) {
+                                    Notification::make()
+                                        ->title('Gagal menghapus data terpilih')
+                                        ->body('Salah satu Produksi Graji Triplek masih memiliki relasi.')
+                                        ->danger()
+                                        ->send();
+
+                                    throw new Halt();
+                                }
+                            }
+                        }),
                 ]),
             ]);
     }
