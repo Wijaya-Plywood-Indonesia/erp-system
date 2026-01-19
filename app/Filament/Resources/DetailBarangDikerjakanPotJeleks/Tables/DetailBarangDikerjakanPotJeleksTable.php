@@ -17,10 +17,11 @@ class DetailBarangDikerjakanPotJeleksTable
     public static function configure(Table $table): Table
     {
         return $table
-        ->groups([
+            ->groups([
                 Group::make('id_pegawai_pot_jelek')
                     ->label('Pegawai')
-                    ->getTitleFromRecordUsing(fn ($record) =>
+                    ->getTitleFromRecordUsing(
+                        fn($record) =>
                         $record->pegawaiPotJelek?->pegawai?->nama_pegawai
                         ?? 'Pegawai Tidak Diketahui'
                     )
@@ -43,6 +44,7 @@ class DetailBarangDikerjakanPotJeleksTable
                     ->label('Kualitas (KW)'),
 
                 TextColumn::make('tinggi')
+                    ->suffix(" cm")
                     ->label('Tinggi'),
 
                 TextColumn::make('jumlah')
@@ -55,25 +57,29 @@ class DetailBarangDikerjakanPotJeleksTable
             ])
             ->headerActions([
                 CreateAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
             ->recordActions([
                 EditAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
 
                 DeleteAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
             ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(fn ($livewire) =>
+                        ->hidden(
+                            fn($livewire) =>
                             $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                         ),
                 ]),
