@@ -6,7 +6,7 @@ use App\Models\BarangSetengahJadiHp;
 use App\Models\Grade;
 use App\Models\JenisBarang;
 use App\Models\RencanaPegawaiDempul;
-use App\Models\DetailDempul; // Pastikan model ini di-import
+use App\Models\DetailDempul;
 use Illuminate\Database\Eloquent\Builder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -101,7 +101,7 @@ class DetailDempulForm
                 ->numeric(),
 
             // =========================
-            // 👷 PEGAWAI (AUTO HIDE)
+            // 👷 PEGAWAI (MULTI SELECT)
             // =========================
             Select::make('pegawais')
                 ->label('Pegawai Dempul')
@@ -111,31 +111,16 @@ class DetailDempulForm
                     modifyQueryUsing: function (Builder $query, $livewire) {
                         $produksiId = $livewire->ownerRecord?->id ?? null;
 
-                        $currentRecordId = null;
-                        if (method_exists($livewire, 'getMountedTableActionRecord')) {
-                            $currentRecordId = $livewire->getMountedTableActionRecord()?->id;
-                        }
-
                         if ($produksiId) {
-                            // A. Ambil Pegawai yang TERDAFTAR di Rencana
+                            // HANYA ambil Pegawai yang TERDAFTAR di Rencana
+                            // Tidak ada filter "usedIds" lagi, jadi pegawai bisa dipilih berkali-kali
                             $rencanaIds = RencanaPegawaiDempul::query()
                                 ->where('id_produksi_dempul', $produksiId)
                                 ->pluck('id_pegawai')
                                 ->toArray();
 
-                            // B. Ambil Pegawai yang SUDAH DIPAKAI
-                            $usedIds = DetailDempul::query()
-                                ->where('id_produksi_dempul', $produksiId)
-                                ->when($currentRecordId, fn($q) => $q->where('id', '!=', $currentRecordId))
-                                ->with('pegawais:id')
-                                ->get()
-                                ->flatMap(fn($detail) => $detail->pegawais->pluck('id'))
-                                ->toArray();
-
-                            // C. Terapkan Filter dengan NAMA TABEL EKSPLISIT
-                            return $query
-                                ->whereIn('pegawais.id', $rencanaIds)    // UBAH DARI 'id' KE 'pegawais.id'
-                                ->whereNotIn('pegawais.id', $usedIds);   // UBAH DARI 'id' KE 'pegawais.id'
+                            // Terapkan Filter (Hanya tampilkan yg ada di rencana)
+                            return $query->whereIn('pegawais.id', $rencanaIds);
                         }
 
                         return $query;
@@ -145,7 +130,7 @@ class DetailDempulForm
                 ->required()
                 ->maxItems(2)
                 ->preload()
-                ->searchable()
+                ->searchable(),
         ]);
     }
 }
