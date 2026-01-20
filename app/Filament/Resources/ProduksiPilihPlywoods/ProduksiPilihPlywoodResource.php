@@ -53,6 +53,7 @@ class ProduksiPilihPlywoodResource extends Resource
     {
         return [
             BahanPilihPlywoodRelationManager::class,
+            PegawaiPilihPlywoodRelationManager::class,
             HasilPilihPlywoodRelationManager::class,
             ValidasiPilihPlywoodRelationManager::class,
         ];

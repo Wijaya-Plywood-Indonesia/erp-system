@@ -20,67 +20,91 @@ class PegawaiPilihPlywoodForm
             ])
             ->toArray();
     }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
                 Select::make('masuk')
-                ->label('Jam Masuk')
-                ->options(self::timeOptions())
-                ->default('06:00')
-                ->required()
-                ->searchable()
-                // Menyimpan ke DB sebagai 'HH:MM:00'
-                ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
-                // Menampilkan di form hanya 'HH:MM'
-                ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
+                    ->label('Jam Masuk')
+                    ->options(self::timeOptions())
+                    ->default('06:00')
+                    ->required()
+                    ->searchable()
+                    ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
-            // --- JAM PULANG (Select dengan Options khusus) ---
-            Select::make('pulang')
-                ->label('Jam Pulang')
-                ->options(self::timeOptions())
-                ->default('17:00')
-                ->required()
-                ->searchable()
-                ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
-                ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
+                Select::make('pulang')
+                    ->label('Jam Pulang')
+                    ->options(self::timeOptions())
+                    ->default('17:00')
+                    ->required()
+                    ->searchable()
+                    ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
-            TextInput::make('tugas')
-                ->label('Tugas')
-                ->default('Pegawai Pilih Plywood')
-                ->readOnly(),
+                TextInput::make('tugas')
+                    ->label('Tugas')
+                    ->default('Pegawai Pilih Plywood')
+                    ->readOnly(),
 
-            // --- ID PEGAWAI (Relation: pegawai) ---
-            Select::make('id_pegawai')
-                ->label('Pegawai')
-                ->options(
-                    Pegawai::query()
-                        ->get()
-                        ->mapWithKeys(fn($pegawai) => [
-                            $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
-                        ])
-                )
-                ->rule(function ($livewire) {
+                // --- ID PEGAWAI (AUTO HIDE) ---
+                Select::make('id_pegawai')
+                    ->label('Pegawai')
+                    ->options(function ($livewire) {
+                        // 1. Ambil ID Produksi Parent
+                        $produksiId = $livewire->ownerRecord->id ?? null;
+
+                        // 2. Ambil ID Record yang sedang diedit (jika ada)
+                        // Agar saat edit, pegawai yang sedang dipilih tidak hilang dari list
+                        $currentRecordId = null;
+                        if (method_exists($livewire, 'getMountedTableActionRecord')) {
+                            $currentRecordId = $livewire->getMountedTableActionRecord()?->id;
+                        }
+
+                        // 3. Ambil daftar pegawai yang SUDAH ADA di produksi ini
+                        $usedPegawaiIds = [];
+                        if ($produksiId) {
+                            $usedPegawaiIds = PegawaiPilihPlywood::query()
+                                ->where('id_produksi_pilih_plywood', $produksiId)
+                                ->when($currentRecordId, fn($q) => $q->where('id', '!=', $currentRecordId)) // Kecualikan diri sendiri saat edit
+                                ->pluck('id_pegawai')
+                                ->toArray();
+                        }
+
+                        // 4. Return pegawai yang BELUM terdaftar
+                        return Pegawai::query()
+                            ->whereNotIn('id', $usedPegawaiIds) // Filter exclude
+                            ->get()
+                            ->mapWithKeys(fn($pegawai) => [
+                                $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
+                            ]);
+                    })
+                    ->searchable()
+                    ->required()
+                    ->rule(function ($livewire) {
                         return function (string $attribute, $value, $fail) use ($livewire) {
-
+                            // Validasi backend (double check)
                             $produksiId = $livewire->ownerRecord->id ?? null;
+                            $currentRecordId = null;
 
-                            if (! $produksiId) {
-                                return;
+                            if (method_exists($livewire, 'getMountedTableActionRecord')) {
+                                $currentRecordId = $livewire->getMountedTableActionRecord()?->id;
                             }
+
+                            if (! $produksiId) return;
 
                             $exists = PegawaiPilihPlywood::query()
                                 ->where('id_produksi_pilih_plywood', $produksiId)
                                 ->where('id_pegawai', $value)
+                                ->when($currentRecordId, fn($q) => $q->where('id', '!=', $currentRecordId))
                                 ->exists();
 
                             if ($exists) {
-                                $fail('Pegawai ini sudah terdaftar pada produksi nyusup ini.');
+                                $fail('Pegawai ini sudah terdaftar.');
                             }
                         };
-                    })
-                ->searchable()
-                ->required(),
+                    }),
             ]);
     }
 }

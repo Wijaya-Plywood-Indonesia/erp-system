@@ -15,6 +15,10 @@ class DetailDempul extends Model
         'modal',
         'hasil',
         'nomor_palet',
+        'jam_masuk',
+        'jam_pulang',
+        'ijin',
+        'keterangan'
     ];
 
     public function produksiDempul(): BelongsTo

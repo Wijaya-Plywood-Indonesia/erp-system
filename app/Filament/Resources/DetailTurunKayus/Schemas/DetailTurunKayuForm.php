@@ -10,6 +10,9 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Illuminate\Support\Facades\Log;
 use App\Services\WatermarkService;
+use Filament\Schemas\Components\Utilities\Get; // Import Get
+use App\Forms\Components\CompressedFileUpload;
+use Carbon\Carbon;
 
 class DetailTurunKayuForm
 {
@@ -87,22 +90,40 @@ class DetailTurunKayuForm
                     ->required()
                     ->numeric(),
 
-                // TANDA TANGAN (FOTO)
-                FileUpload::make('foto')
+                CompressedFileUpload::make('foto')
                     ->label('Foto Bukti')
-                    ->image()
                     ->imageEditor()
-                    ->imageEditorAspectRatios([
-                        '16:9',
-                        '4:3',
-                        '1:1',
-                    ])
                     ->disk('public')
                     ->directory('turun-kayu/foto-bukti')
                     ->visibility('public')
-                    ->downloadable()
-                    ->openable()
-                    ->required(),
+                    ->required()
+                    ->fileName(function (Get $get) {
+                        // 1. Ambil Nama Supir
+                        $namaSupir = $get('nama_supir') ?: 'Tanpa-Nama';
+
+                        // 2. Ambil Data dari Kayu Masuk (Seri & Tanggal)
+                        $kayuMasukId = $get('id_kayu_masuk');
+
+                        // Default value
+                        $noSeri = 'Tanpa-Seri';
+                        $tanggalTurun = now()->format('Y-m-d'); // Default hari ini jika data tidak ketemu
+
+                        if ($kayuMasukId) {
+                            $kayu = KayuMasuk::find($kayuMasukId);
+                            if ($kayu) {
+                                // Ambil Seri
+                                $noSeri = "Seri-{$kayu->seri}";
+
+                                // Ambil Tanggal Kayu Masuk (Produksi)
+                                if (!empty($kayu->tgl_kayu_masuk)) {
+                                    $tanggalTurun = Carbon::parse($kayu->tgl_kayu_masuk)->format('Y-m-d');
+                                }
+                            }
+                        }
+
+                        // 3. Gabungkan: "2026-01-19_Supir-Budi_Seri-105.webp"
+                        return "{$tanggalTurun}_Supir-{$namaSupir}_{$noSeri}";
+                    }),
             ]);
     }
 }

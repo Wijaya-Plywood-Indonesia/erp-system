@@ -7,33 +7,56 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use App\Models\BahanPilihPlywood;
 use App\Models\HasilPilihPlywood;
+use App\Models\PegawaiPilihPlywood;
+use Illuminate\Database\Eloquent\Builder;
 
 class HasilPilihPlywoodForm
 {
     public static function configure(): array
     {
         return [
+            // =========================
+            // 👷 PEGAWAI (MULTI SELECT - BISA DIPILIH ULANG)
+            // =========================
             Select::make('pegawais')
-    ->label('Pegawai')
-    ->relationship(
-        name: 'pegawais',
-        modifyQueryUsing: fn ($query) =>
-            $query
-                ->whereNotNull('nama_pegawai')
-                ->where('nama_pegawai', '!=', '')
-                ->whereNotNull('kode_pegawai')
-                ->orderBy('kode_pegawai')
-    )
-    ->getOptionLabelFromRecordUsing(
-        fn ($record) => "{$record->kode_pegawai} - {$record->nama_pegawai}"
-    )
-    ->searchable(['nama_pegawai', 'kode_pegawai'])
-    ->multiple()
-    ->preload()
-    ->required()
-    ->columnSpanFull(),
+                ->label('Pegawai')
+                ->relationship(
+                    name: 'pegawais',
+                    titleAttribute: 'nama_pegawai',
+                    modifyQueryUsing: function (Builder $query, $livewire) {
+                        // 1. Ambil ID Produksi Parent
+                        $produksiId = $livewire->ownerRecord->id ?? null;
 
+                        if ($produksiId) {
+                            // A. Ambil Pegawai yang TERDAFTAR di Absen/Tugas (Allow List)
+                            $absenIds = PegawaiPilihPlywood::query()
+                                ->where('id_produksi_pilih_plywood', $produksiId)
+                                ->pluck('id_pegawai')
+                                ->toArray();
 
+                            // B. Terapkan Filter
+                            // Kita HANYA memfilter agar yang muncul adalah pegawai yang absen.
+                            // Kita TIDAK mengecualikan pegawai yang sudah ada datanya.
+                            return $query
+                                ->whereIn('pegawais.id', $absenIds) // Gunakan pegawais.id untuk hindari ambigu
+                                ->orderBy('nama_pegawai');
+                        }
+
+                        return $query;
+                    }
+                )
+                ->getOptionLabelFromRecordUsing(
+                    fn($record) => "{$record->kode_pegawai} - {$record->nama_pegawai}"
+                )
+                ->searchable(['nama_pegawai', 'kode_pegawai'])
+                ->multiple()
+                ->preload()
+                ->required()
+                ->columnSpanFull(),
+
+            // =========================
+            // PILIH BARANG (DARI BAHAN)
+            // =========================
             Select::make('id_barang_setengah_jadi_hp')
                 ->label('Pilih Barang (Dari Bahan)')
                 ->required()
@@ -50,7 +73,7 @@ class HasilPilihPlywoodForm
                             $barang = $bahan->barangSetengahJadiHp;
 
                             // Hitung berapa banyak barang ini yang sudah dicatat sebagai cacat
-                            $sudahDiinput = \App\Models\HasilPilihPlywood::where('id_produksi_pilih_plywood', $bahan->id_produksi_pilih_plywood)
+                            $sudahDiinput = HasilPilihPlywood::where('id_produksi_pilih_plywood', $bahan->id_produksi_pilih_plywood)
                                 ->where('id_barang_setengah_jadi_hp', $barang->id)
                                 ->sum('jumlah');
 
@@ -98,18 +121,25 @@ class HasilPilihPlywoodForm
 
                             if (!$barangId) return;
 
-                            // Total bahan untuk barang spesifik ini
+                            // Ambil data record yang sedang diedit (jika ada)
+                            $currentRecordId = null;
+                            if (method_exists($livewire, 'getMountedTableActionRecord')) {
+                                $currentRecordId = $livewire->getMountedTableActionRecord()?->id;
+                            }
+
+                            // Total bahan tersedia
                             $totalBahanBarang = $produksi->bahanPilihPlywood()
                                 ->where('id_barang_setengah_jadi_hp', $barangId)
                                 ->sum('jumlah');
 
-                            // Total yang sudah diinput sebelumnya (exclude data yang sedang diedit jika perlu)
+                            // Total yang sudah dipakai (exclude record ini saat edit)
                             $totalCacatBarang = $produksi->hasilPilihPlywood()
                                 ->where('id_barang_setengah_jadi_hp', $barangId)
+                                ->when($currentRecordId, fn($q) => $q->where('id', '!=', $currentRecordId))
                                 ->sum('jumlah');
 
                             if (($totalCacatBarang + $value) > $totalBahanBarang) {
-                                $fail("Jumlah melebihi stok bahan untuk barang ini. Sisa tersedia: " . ($totalBahanBarang - $totalCacatBarang));
+                                $fail("Jumlah melebihi stok bahan. Sisa tersedia: " . ($totalBahanBarang - $totalCacatBarang));
                             }
                         };
                     },
@@ -117,7 +147,7 @@ class HasilPilihPlywoodForm
 
             Textarea::make('ket')
                 ->label('Keterangan Tambahan')
-                ->placeholder('contoh: Tidak bisa diperbaiki, perbaikan tidak bisa selesai hari itu juga, dll')
+                ->placeholder('contoh: Tidak bisa diperbaiki, dll')
                 ->columnSpanFull(),
         ];
     }

@@ -21,11 +21,12 @@ class LaporanKedi extends Page
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static ?string $title = 'Laporan Produksi Kedi';
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 4;
     protected string $view = 'filament.pages.laporan-kedi';
 
     public array $dataKedi = [];
     public ?string $tanggal = null;
+
     public bool $isLoading = false;
 
     public function mount(): void
@@ -47,6 +48,7 @@ class LaporanKedi extends Page
                 ->required()
                 ->maxDate(now())
                 ->default(now())
+
                 ->afterStateUpdated(function ($state) {
                     $this->tanggal = $state;
                     $this->loadAllData();
@@ -93,7 +95,7 @@ class LaporanKedi extends Page
             'validasiTerakhir',
         ])
             ->whereDate('tanggal', $this->tanggal)
-            ->whereHas('validasiTerakhir', fn ($q) => $q->where('status', 'divalidasi'))
+            ->whereHas('validasiTerakhir', fn($q) => $q->where('status', 'divalidasi'))
             ->get();
 
         $this->dataKedi = [];
@@ -107,10 +109,9 @@ class LaporanKedi extends Page
         }
 
         foreach ($produksiList as $produksi) {
-
             $status = strtolower($produksi->status);
 
-            $detailMasuk = $produksi->detailMasukKedi->map(fn ($d) => [
+            $detailMasuk = $produksi->detailMasukKedi->map(fn($d) => [
                 'no_palet' => $d->no_palet,
                 'mesin' => $d->mesin?->nama_mesin ?? '-',
                 'ukuran' => $d->ukuran?->nama_ukuran ?? '-',
@@ -122,7 +123,7 @@ class LaporanKedi extends Page
                     : '-',
             ])->toArray();
 
-            $detailBongkar = $produksi->detailBongkarKedi->map(fn ($d) => [
+            $detailBongkar = $produksi->detailBongkarKedi->map(fn($d) => [
                 'no_palet' => $d->no_palet,
                 'mesin' => $d->mesin?->nama_mesin ?? '-',
                 'ukuran' => $d->ukuran?->nama_ukuran ?? '-',

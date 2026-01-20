@@ -28,7 +28,7 @@ class ProduksiSandingResource extends Resource
     protected static ?string $modelLabel = 'Produksi Sanding';
     protected static ?string $pluralModelLabel = 'Produksi Sanding';
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDivide;
-    protected static string|UnitEnum|null $navigationGroup = "Finishing";
+    protected static string|UnitEnum|null $navigationGroup = "Repair";
 
     public static function form(Schema $schema): Schema
     {

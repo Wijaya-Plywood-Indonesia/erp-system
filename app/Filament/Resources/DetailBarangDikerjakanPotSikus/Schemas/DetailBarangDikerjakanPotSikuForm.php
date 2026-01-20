@@ -69,6 +69,7 @@ class DetailBarangDikerjakanPotSikuForm
 
                 TextInput::make('kw')
                     ->label('KW (Kualitas)')
+                    ->default('AF')
                     ->required()
                     ->maxLength(255)
                     ->placeholder('Cth: 1, 2, 3, af, dll.'),

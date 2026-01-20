@@ -56,20 +56,6 @@ class PegawaiPilihPlywoodsTable
                     ),
             ])
             ->recordActions([
-                // Edit Action — HILANG jika status sudah divalidasi
-                EditAction::make()
-                    ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
-
-                // Delete Action — HILANG jika status sudah divalidasi
-                DeleteAction::make()
-                    ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
-
                 // ➕ Tambah / Edit Ijin & Keterangan
                 Action::make('aturIjin')
                     ->label(fn($record) => $record->ijin ? 'Edit Ijin' : 'Tambah Ijin')
@@ -84,6 +70,18 @@ class PegawaiPilihPlywoodsTable
                             'ket'  => $data['ket'],
                         ]);
                     })
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
+                EditAction::make()
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
+
+                // Delete Action — HILANG jika status sudah divalidasi
+                DeleteAction::make()
                     ->hidden(
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'

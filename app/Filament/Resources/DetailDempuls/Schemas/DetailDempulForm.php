@@ -3,12 +3,15 @@
 namespace App\Filament\Resources\DetailDempuls\Schemas;
 
 use App\Models\BarangSetengahJadiHp;
-use Illuminate\Database\Eloquent\Builder;
 use App\Models\Grade;
 use App\Models\JenisBarang;
+use App\Models\RencanaPegawaiDempul;
+use App\Models\DetailDempul;
+use Illuminate\Database\Eloquent\Builder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Filament\Forms\Components\Grid;
 
 class DetailDempulForm
 {
@@ -52,35 +55,27 @@ class DetailDempulForm
                 ->required()
                 ->searchable()
                 ->options(function (callable $get) {
-
                     $query = BarangSetengahJadiHp::query()
                         ->with([
                             'ukuran',
                             'jenisBarang',
                             'grade.kategoriBarang',
                         ])
-                        // 🔒 WAJIB PLYWOOD
                         ->whereHas('grade.kategoriBarang', function ($q) {
                             $q->whereIn('nama_kategori', ['PLYWOOD', 'PLATFORM']);
                         })
                         ->joinRelationship('jenisBarang')
                         ->joinRelationship('ukuran');
 
-                    // ✅ FILTER GRADE
                     if ($get('grade_id')) {
                         $query->where('barang_setengah_jadi_hp.id_grade', $get('grade_id'));
                     }
 
-                    // ✅ FILTER JENIS BARANG (INI YANG KURANG!)
                     if ($get('jenis_barang_id_filter')) {
-                        $query->where(
-                            'barang_setengah_jadi_hp.id_jenis_barang',
-                            $get('jenis_barang_id_filter')
-                        );
+                        $query->where('barang_setengah_jadi_hp.id_jenis_barang', $get('jenis_barang_id_filter'));
                     }
 
-                    $query
-                        ->orderBy('ukurans.tebal', 'asc')
+                    $query->orderBy('ukurans.tebal', 'asc')
                         ->orderBy('barang_setengah_jadi_hp.id', 'asc');
 
                     return $query->get()->mapWithKeys(function ($b) {
@@ -106,18 +101,29 @@ class DetailDempulForm
                 ->numeric(),
 
             // =========================
-            // 👷 PEGAWAI (MAX 2)
+            // 👷 PEGAWAI (MULTI SELECT)
             // =========================
             Select::make('pegawais')
                 ->label('Pegawai Dempul')
                 ->relationship(
                     name: 'pegawais',
                     titleAttribute: 'nama_pegawai',
-                    modifyQueryUsing: function (Builder $query) {
-                        // Filter agar yang tampil hanya yang namanya BUKAN '-'
-                        return $query->where('nama_pegawai', '!=', '-')
-                            ->where('nama_pegawai', '!=', '') // Jaga-jaga jika ada string kosong
-                            ->whereNotNull('nama_pegawai');
+                    modifyQueryUsing: function (Builder $query, $livewire) {
+                        $produksiId = $livewire->ownerRecord?->id ?? null;
+
+                        if ($produksiId) {
+                            // HANYA ambil Pegawai yang TERDAFTAR di Rencana
+                            // Tidak ada filter "usedIds" lagi, jadi pegawai bisa dipilih berkali-kali
+                            $rencanaIds = RencanaPegawaiDempul::query()
+                                ->where('id_produksi_dempul', $produksiId)
+                                ->pluck('id_pegawai')
+                                ->toArray();
+
+                            // Terapkan Filter (Hanya tampilkan yg ada di rencana)
+                            return $query->whereIn('pegawais.id', $rencanaIds);
+                        }
+
+                        return $query;
                     }
                 )
                 ->multiple()

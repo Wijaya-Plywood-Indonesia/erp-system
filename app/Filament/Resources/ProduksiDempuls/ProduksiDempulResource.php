@@ -48,8 +48,8 @@ class ProduksiDempulResource extends Resource
     public static function getRelations(): array
     {
         return [
-            // RencanaPegawaiDempulRelationManager::class,
             BahanDempulRelationManager::class,
+            RencanaPegawaiDempulRelationManager::class,
             DetailDempulRelationManager::class,
             ValidasiDempulRelationManager::class,
         ];

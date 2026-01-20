@@ -1,0 +1,55 @@
+Table produksi_graji_triplek {
+  id bigint
+  tanggal_produksi date
+  status enum [note: '''
+    graji manual,
+    graji otomatis
+  ''']
+  kendala text [null]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table pegawai_graji_triplek {
+  id bigint
+  id_produksi_graji_triplek bigint [ref: > produksi_graji_triplek.id]
+  id_pegawai bigint
+  tugas text
+  masuk time
+  pulang time
+  ijin varchar
+  ket varchar
+  created_at timestamp
+  updated_at timestamp
+}
+
+
+Table masuk_graji_triplek {
+  id bigint
+  id_produksi_graji_triplek bigint [ref: > produksi_graji_triplek.id]
+  no_palet int
+  id_barang_setengah_jadi_hp bigint
+  isi int
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table hasil_graji_triplek {
+  id bigint
+  id_produksi_graji_triplek bigint [ref: > produksi_graji_triplek.id]
+  no_palet int
+  id_barang_setengah_jadi_hp bigint
+  isi int
+  created_at timestamp
+  updated_at timestamp
+}
+
+
+Table validasi_graji_triplek {
+  id bigint
+  id_produksi_graji_triplek bigint [ref: > produksi_graji_triplek.id]
+  role varchar
+  status varchar
+  created_at timestamp
+  updated_at timestamp
+}

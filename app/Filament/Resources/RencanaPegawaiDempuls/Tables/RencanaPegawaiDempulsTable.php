@@ -24,8 +24,8 @@ class RencanaPegawaiDempulsTable
                     ->label('Pekerja')
                     ->formatStateUsing(
                         fn($record) => $record->pegawai
-                        ? $record->pegawai->kode_pegawai . ' - ' . $record->pegawai->nama_pegawai
-                        : '—'
+                            ? $record->pegawai->kode_pegawai . ' - ' . $record->pegawai->nama_pegawai
+                            : '—'
                     )
                     ->badge()
                     ->searchable(
@@ -107,28 +107,6 @@ class RencanaPegawaiDempulsTable
                     ->modalWidth('lg'),
                 EditAction::make(),
                 DeleteAction::make(),
-                Action::make('delete_rencana')
-                    ->label('Hapus')
-                    ->icon('heroicon-o-trash')
-                    ->color('danger')
-                    ->requiresConfirmation()
-                    ->action(function ($record) {
-                        if ($record->rencanaRepairs()->exists()) {
-                            Notification::make()
-                                ->title('Tidak bisa dihapus!')
-                                ->body('Rencana Pegawai ini masih memiliki data repair yang terkait. Hapus data repair terlebih dahulu.')
-                                ->warning()
-                                ->send();
-                            return; // Hentikan delete
-                        }
-
-                        $record->delete();
-
-                        Notification::make()
-                            ->success()
-                            ->title('Data berhasil dihapus')
-                            ->send();
-                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

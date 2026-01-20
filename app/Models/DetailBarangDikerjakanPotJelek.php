@@ -16,7 +16,6 @@ class DetailBarangDikerjakanPotJelek extends Model
         'tinggi',
         'kw',
         'no_palet',
-        'jumlah',
     ];
 
     public function produksiPotJelek()

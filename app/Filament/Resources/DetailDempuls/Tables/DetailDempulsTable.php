@@ -7,9 +7,14 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Grouping\Group;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
-use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\BulkActionGroup;
 use Illuminate\Database\Eloquent\Builder;
+use Filament\Actions\Action; // Custom Action
+use Filament\Notifications\Notification;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Select;
 
 class DetailDempulsTable
 {
@@ -18,10 +23,11 @@ class DetailDempulsTable
         return $table
             /**
              * =====================================
-             * OPTIMASI QUERY (WAJIB)
+             * OPTIMASI QUERY
              * =====================================
              */
-            ->modifyQueryUsing(fn (Builder $query) =>
+            ->modifyQueryUsing(
+                fn(Builder $query) =>
                 $query->with([
                     'pegawais',
                     'barangSetengahJadi.ukuran',
@@ -32,11 +38,11 @@ class DetailDempulsTable
 
             /**
              * =====================================
-             * DEFAULT GROUP BY PEGAWAI
+             * GROUP BY PEGAWAI
              * =====================================
              */
             ->groups([
-                Group::make('id') // ⚠️ HARUS KOLOM ASLI
+                Group::make('id')
                     ->label('Pegawai')
                     ->getTitleFromRecordUsing(function ($record) {
                         if ($record->pegawais->isEmpty()) {
@@ -45,13 +51,11 @@ class DetailDempulsTable
 
                         return 'Pegawai: ' .
                             $record->pegawais
-                                ->pluck('nama_pegawai')
-                                ->implode(' & ');
+                            ->pluck('nama_pegawai')
+                            ->implode(' & ');
                     })
                     ->collapsible(),
             ])
-
-            // ⬇️ INI YANG MEMBUAT DEFAULT LANGSUNG KELOMPOK
             ->defaultGroup('id')
 
             /**
@@ -66,8 +70,7 @@ class DetailDempulsTable
                         $b = $record->barangSetengahJadi;
                         if (!$b) return '-';
 
-                        return
-                            ($b->grade?->kategoriBarang?->nama_kategori ?? '-') . ' | ' .
+                        return ($b->grade?->kategoriBarang?->nama_kategori ?? '-') . ' | ' .
                             ($b->ukuran?->nama_ukuran ?? '-') . ' | ' .
                             ($b->grade?->nama_grade ?? '-') . ' | ' .
                             ($b->jenisBarang?->nama_jenis_barang ?? '-');
@@ -75,16 +78,18 @@ class DetailDempulsTable
                     ->wrap(),
 
                 TextColumn::make('modal')
-                    ->numeric(),
+                    ->numeric()
+                    ->sortable(),
 
                 TextColumn::make('hasil')
                     ->numeric()
-                    ->color(fn ($record) =>
-                        $record->hasil < $record->modal ? 'danger' : 'success'
-                    ),
+                    ->sortable()
+                    ->color(fn($record) => $record->hasil < $record->modal ? 'danger' : 'success'),
 
                 TextColumn::make('nomor_palet')
-                    ->numeric(),
+                    ->label('No. Palet')
+                    ->numeric()
+                    ->sortable(),
             ])
 
             /**
@@ -97,8 +102,9 @@ class DetailDempulsTable
             ])
             ->recordActions([
                 EditAction::make(),
+                DeleteAction::make()
             ])
-            ->toolbarActions([
+            ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

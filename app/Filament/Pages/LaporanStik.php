@@ -26,7 +26,7 @@ class LaporanStik extends Page
     protected string $view = 'filament.pages.laporan-stik';
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static ?string $title = 'Laporan Produksi Stik';
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 5;
 
     public $dataStik = [];
     public $tanggal = null;
@@ -97,7 +97,7 @@ class LaporanStik extends Page
         // Kueri hanya berdasarkan tanggal untuk menampilkan tabel berkala
         // Menambahkan relasi 'detailHasilStik' untuk menghitung hasil
         $produksiList = ProduksiStik::with(['detailPegawaiStik.pegawai', 'detailHasilStik'])
-            ->whereDate('tanggal_produksi', $tanggal) 
+            ->whereDate('tanggal_produksi', $tanggal)
             ->get();
 
         // Ambil Data Target dari Database (Kode Ukuran: STIK)

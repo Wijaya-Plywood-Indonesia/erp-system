@@ -8,28 +8,33 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
+use Filament\Support\Exceptions\Halt;
+use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Illuminate\Database\Eloquent\Builder;
-use Filament\Forms\Components\Textarea;
-use Filament\Notifications\Notification;
-use Filament\Tables;
 
 class ProduksiHotPressesTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('tanggal_produksi', 'desc')
+
             ->columns([
                 TextColumn::make('tanggal_produksi')
-                    ->date()
+                    ->label('Tanggal Produksi')
+                    ->date('d/m/Y')
                     ->sortable(),
 
                 TextColumn::make('kendala')
                     ->label('Kendala')
-                    ->limit(50)
-                    ->tooltip(fn(string $state): string => $state)
+                    ->limit(40)
+                    ->placeholder('Tidak ada kendala')
+                    ->tooltip(fn ($record) => $record->kendala)
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\BadgeColumn::make('validasiTerakhir.status')
@@ -37,15 +42,14 @@ class ProduksiHotPressesTable
                     ->colors([
                         'success' => 'divalidasi',
                         'warning' => 'ditangguhkan',
-                        'danger' => 'ditolak',
+                        'danger'  => 'ditolak',
                     ])
                     ->icons([
-                        'heroicon-o-check-circle' => 'divalidasi',
-                        'heroicon-o-x-circle' => 'ditolak',
+                        'heroicon-o-check-circle'       => 'divalidasi',
+                        'heroicon-o-x-circle'           => 'ditolak',
                         'heroicon-o-exclamation-circle' => 'ditangguhkan',
                     ])
-                    ->sortable()
-                    ->searchable(),
+                    ->sortable(),
 
                 TextColumn::make('created_at')
                     ->label('Dibuat Pada')
@@ -54,81 +58,117 @@ class ProduksiHotPressesTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
 
-            ->defaultSort('tanggal_produksi', 'desc')
             ->filters([
                 Filter::make('tanggal_produksi')
                     ->form([
                         \Filament\Forms\Components\DatePicker::make('from')
-                            ->placeholder('Dari Tanggal'),
+                            ->label('Dari Tanggal'),
                         \Filament\Forms\Components\DatePicker::make('until')
-                            ->placeholder('Sampai Tanggal'),
+                            ->label('Sampai Tanggal'),
                     ])
                     ->query(function (Builder $query, array $data): Builder {
                         return $query
                             ->when(
                                 $data['from'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('tanggal_produksi', '>=', $date),
+                                fn ($q, $date) => $q->whereDate('tanggal_produksi', '>=', $date)
                             )
                             ->when(
                                 $data['until'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('tanggal_produksi', '<=', $date),
+                                fn ($q, $date) => $q->whereDate('tanggal_produksi', '<=', $date)
                             );
                     }),
             ])
-            ->recordActions([
-                //  ViewAction::make(),
-                //   EditAction::make(),
-                Action::make('kelola_kendala')
-                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
 
-                    // ✅ Form style baru di Filament 4
+            ->recordActions([
+                /* ================= KENDALA ================= */
+                Action::make('kelola_kendala')
+                    ->label(fn ($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
+                    ->icon('heroicon-m-chat-bubble-left-right')
+                    ->color(fn ($record) => $record->kendala ? 'info' : 'gray')
+                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->schema([
                         Textarea::make('kendala')
-                            ->label('Kendala')
+                            ->label('Catatan Kendala')
                             ->required()
                             ->rows(4),
                     ])
-
-                    // ✅ Saat modal dibuka — isi form dengan data kendala lama jika ada
-                    ->mountUsing(function ($form, $record) {
-                        $form->fill([
-                            'kendala' => $record->kendala ?? '',
-                        ]);
-                    })
-
-                    // ✅ Saat tombol Simpan ditekan
+                    ->mountUsing(fn ($form, $record) =>
+                        $form->fill(['kendala' => $record->kendala])
+                    )
                     ->action(function (array $data, $record): void {
                         $record->update([
                             'kendala' => trim($data['kendala']),
                         ]);
 
                         Notification::make()
-                            ->title($record->kendala ? 'Kendala diperbarui' : 'Kendala ditambahkan')
+                            ->title('Kendala berhasil disimpan')
                             ->success()
                             ->send();
                     })
+                    ->modalHeading('Manajemen Kendala')
+                    ->modalWidth('lg'),
 
-                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->modalSubmitActionLabel('Simpan'),
-                // Hilang jika sudah divalidasi
                 EditAction::make()
-                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
-                DeleteAction::make()
-                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
-
-                // View boleh tetap tampil
                 ViewAction::make(),
+
+                /* ================= DELETE ================= */
+                DeleteAction::make()
+                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->before(function ($record) {
+
+                        $hasRelation =
+                            $record->detailPegawaiHp()->exists()
+                            || $record->veneerBahanHp()->exists()
+                            || $record->platformBahanHp()->exists()
+                            || $record->platformHasilHp()->exists()
+                            || $record->triplekHasilHp()->exists()
+                            || $record->bahanPenolongHp()->exists()
+                            || $record->rencanaKerjaHp()->exists()
+                            || $record->validasiHp()->exists();
+
+                        if ($hasRelation) {
+                            Notification::make()
+                                ->title('Data tidak dapat dihapus')
+                                ->body('Produksi HotPress ini masih memiliki data terkait.')
+                                ->danger()
+                                ->send();
+
+                            // ⛔ HENTIKAN DELETE TOTAL
+                            throw new Halt();
+                        }
+                    }),
             ])
+
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->visible(
-                            fn($records) =>
-                            $records->every(fn($r) => $r->validasiTerakhir?->status !== 'divalidasi')
-                        ),
+                        ->before(function ($records) {
+
+                            foreach ($records as $record) {
+                                $hasRelation =
+                                    $record->detailPegawaiHp()->exists()
+                                    || $record->veneerBahanHp()->exists()
+                                    || $record->platformBahanHp()->exists()
+                                    || $record->platformHasilHp()->exists()
+                                    || $record->triplekHasilHp()->exists()
+                                    || $record->bahanPenolongHp()->exists()
+                                    || $record->rencanaKerjaHp()->exists()
+                                    || $record->validasiHp()->exists();
+
+                                if ($hasRelation) {
+                                    Notification::make()
+                                        ->title('Gagal menghapus data terpilih')
+                                        ->body('Salah satu Produksi HotPress masih memiliki relasi.')
+                                        ->danger()
+                                        ->send();
+
+                                    // ⛔ HENTIKAN BULK DELETE
+                                    throw new Halt();
+                                }
+                            }
+                        }),
                 ]),
             ]);
     }

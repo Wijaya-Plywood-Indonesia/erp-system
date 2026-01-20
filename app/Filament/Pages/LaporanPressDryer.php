@@ -37,6 +37,7 @@ class LaporanPressDryer extends Page implements HasForms
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static ?string $title = 'Laporan Press Dryer';
+    protected static ?int $navigationSort = 3;
 
     // Form state container (statePath => 'data')
     public array $data = [
@@ -100,7 +101,6 @@ class LaporanPressDryer extends Page implements HasForms
             $this->data['tanggal'] = $tanggal;
 
             $this->loadData();
-
         } catch (Exception $e) {
             Notification::make()
                 ->danger()
@@ -153,7 +153,6 @@ class LaporanPressDryer extends Page implements HasForms
             Log::error('Error loading produksi data: ' . $e->getMessage());
 
             $this->dataProduksi = [];
-
         } finally {
             $this->isLoading = false;
         }

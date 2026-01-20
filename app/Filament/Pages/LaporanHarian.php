@@ -42,6 +42,7 @@ class LaporanHarian extends Page implements HasForms
     protected static ?string $title = 'Laporan Harian';
 
     protected string $view = 'filament.pages.laporan-harian';
+    protected static ?int $navigationSort = 1;
 
     public ?array $data = [
         'tanggal' => null,
@@ -80,7 +81,7 @@ class LaporanHarian extends Page implements HasForms
                     ->default(now())
                     ->live()
                     ->closeOnDateSelection()
-                    ->afterStateUpdated(fn () => $this->loadData())
+                    ->afterStateUpdated(fn() => $this->loadData())
                     ->suffixIcon('heroicon-o-calendar')
                     ->suffixIconColor('primary')
                     ->helperText('Menampilkan status seluruh pegawai (Bekerja & Tidak).'),
@@ -96,14 +97,14 @@ class LaporanHarian extends Page implements HasForms
                 ->label('Refresh')
                 ->icon('heroicon-o-arrow-path')
                 ->color('gray')
-                ->action(fn () => $this->loadData()),
+                ->action(fn() => $this->loadData()),
 
             Action::make('export')
                 ->label('Download Excel')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
-                ->action(fn () => $this->exportExcel())
-                ->visible(fn () => ! empty($this->laporanGabungan)),
+                ->action(fn() => $this->exportExcel())
+                ->visible(fn() => ! empty($this->laporanGabungan)),
         ];
     }
 
@@ -176,7 +177,7 @@ class LaporanHarian extends Page implements HasForms
 
             $kodePegawaiKerja = array_filter(
                 array_column($pegawaiBekerja, 'kodep'),
-                fn ($v) => $v !== '-' && $v !== null
+                fn($v) => $v !== '-' && $v !== null
             );
 
             $pegawaiLibur = Pegawai::whereNotIn('kode_pegawai', $kodePegawaiKerja)->get();
@@ -245,7 +246,6 @@ class LaporanHarian extends Page implements HasForms
                 ->title('Data Dimuat')
                 ->body("Total {$this->statistics['total']} pegawai")
                 ->send();
-
         } catch (Exception $e) {
             Notification::make()
                 ->danger()

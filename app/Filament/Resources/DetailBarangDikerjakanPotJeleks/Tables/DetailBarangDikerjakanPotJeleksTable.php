@@ -46,11 +46,6 @@ class DetailBarangDikerjakanPotJeleksTable
                 TextColumn::make('tinggi')
                     ->suffix(" cm")
                     ->label('Tinggi'),
-
-                TextColumn::make('jumlah')
-                    ->label('Jumlah')
-                    ->numeric()
-                    ->alignCenter(),
             ])
             ->filters([
                 //
