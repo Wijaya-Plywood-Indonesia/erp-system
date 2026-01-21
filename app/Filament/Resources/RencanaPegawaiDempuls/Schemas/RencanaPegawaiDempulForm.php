@@ -37,7 +37,7 @@ class RencanaPegawaiDempulForm
                 Select::make('jam_pulang')
                     ->label('Jam Pulang')
                     ->options(self::timeOptions())
-                    ->default('17:00') // Default: 17:00 (sore)
+                    ->default('16:00') // Default: 17:00 (sore)
                     ->required()
                     ->searchable()
                     ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)

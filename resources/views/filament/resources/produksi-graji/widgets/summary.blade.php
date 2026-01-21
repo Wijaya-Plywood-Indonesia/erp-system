@@ -6,7 +6,6 @@
         {{-- ================================================================= --}}
         @php
         // 1. Ambil data mentah dari Widget PHP
-        // Data ini sekarang berisi kolom 'kw' yang sudah digabung (Jenis + Grade)
         $dataRaw = collect($summary['globalUkuranKw'] ?? []);
 
         // 2. Hitung Rekap per Grade/Jenis untuk Section Tengah
@@ -32,7 +31,7 @@
                     {{ number_format($summary['totalAll'] ?? 0) }}
                 </div>
                 <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Total Hasil Graji (Pcs)
+                    Total Dempul (Pcs)
                 </div>
             </div>
 
@@ -50,13 +49,12 @@
 
         {{-- ================= SECTION 2: REKAP JENIS & GRADE ================= --}}
         <div class="space-y-3">
-            <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">Rekap Jenis & Grade</div>
+            <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">Rekap Grade</div>
 
             <div class="grid grid-cols-1 gap-4">
                 @foreach ($rekapGrade as $row)
                 <div class="rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm dark:bg-gray-800 dark:border-gray-700">
                     <div class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                        {{-- Ini akan menampilkan misal: "PLYWOOD KW A" --}}
                         {{ $row->kw }}
                     </div>
                     <div class="text-xl font-bold text-gray-900 dark:text-white mt-1">
@@ -67,7 +65,7 @@
 
                 {{-- Handle jika kosong --}}
                 @if($rekapGrade->isEmpty())
-                <div class="col-span-full text-center text-gray-400 text-sm italic">Belum ada data graji.</div>
+                <div class="col-span-full text-center text-gray-400 text-sm italic">Belum ada data dempul.</div>
                 @endif
             </div>
         </div>
@@ -118,7 +116,7 @@
 
                 {{-- Pesan jika data kosong --}}
                 @if($ukuranGrouped->isEmpty())
-                <div class="text-center text-gray-400 py-4 italic">Belum ada hasil graji.</div>
+                <div class="text-center text-gray-400 py-4 italic">Belum ada hasil dempul.</div>
                 @endif
             </div>
         </div>
