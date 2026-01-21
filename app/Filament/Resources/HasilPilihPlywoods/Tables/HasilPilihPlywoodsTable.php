@@ -2,40 +2,77 @@
 
 namespace App\Filament\Resources\HasilPilihPlywoods\Tables;
 
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Grouping\Group;
+use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
-use Filament\Actions\DeleteAction;
-use Filament\Tables\Columns\Summarizers\Sum;
-use Filament\Tables\Grouping\Group;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Illuminate\Database\Eloquent\Builder;
 
 class HasilPilihPlywoodsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            /**
+             * =====================================
+             * OPTIMASI QUERY (WAJIB, SAMA DEMPUL)
+             * =====================================
+             */
+            ->modifyQueryUsing(fn (Builder $query) =>
+                $query->with([
+                    'pegawais',
+                    'barangSetengahJadiHp.ukuran',
+                    'barangSetengahJadiHp.jenisBarang',
+                    'barangSetengahJadiHp.grade',
+                ])
+            )
+
+            /**
+             * =====================================
+             * DEFAULT GROUP BY PEGAWAI
+             * =====================================
+             */
             ->groups([
-                Group::make('id_barang_setengah_jadi_hp')
-                    ->label('Barang')
-                    ->collapsible()
+                Group::make('id') // ⚠️ kolom asli (AMAN)
+                    ->label('Pegawai')
                     ->getTitleFromRecordUsing(function ($record) {
-                        // Judul Barang Utama
-                        $barang = ($record->barangSetengahJadiHp->jenisBarang->nama_jenis_barang ?? '-') . ' | ' .
-                                 ($record->barangSetengahJadiHp->ukuran->nama_ukuran ?? '-') . ' | ' .
-                                 ($record->barangSetengahJadiHp->grade->nama_grade ?? '-');
-                        
-                        // Nama Pegawai (hanya muncul di header group)
-                        $pegawais = $record->pegawais->pluck('nama_pegawai')->unique()->implode(', ');
-                        
-                        // Menampilkan: Barang [Pemeriksa: Nama Pegawai]
-                        return $barang . ($pegawais ? " — [Pegawai: {$pegawais}]" : "");
+                        if ($record->pegawais->isEmpty()) {
+                            return 'Pegawai: -';
+                        }
+
+                        return 'Pegawai: ' .
+                            $record->pegawais
+                                ->pluck('nama_pegawai')
+                                ->implode(' & ');
                     })
+                    ->collapsible(),
             ])
-            ->defaultGroup('id_barang_setengah_jadi_hp')
+
+            // ⬇️ PENTING: langsung ter-group seperti dempul
+            ->defaultGroup('id')
+
+            /**
+             * =====================================
+             * COLUMNS
+             * =====================================
+             */
             ->columns([
+                TextColumn::make('barang')
+                    ->label('Barang')
+                    ->getStateUsing(function ($record) {
+                        $b = $record->barangSetengahJadiHp;
+                        if (!$b) return '-';
+
+                        return
+                            ($b->jenisBarang?->nama_jenis_barang ?? '-') . ' | ' .
+                            ($b->ukuran?->nama_ukuran ?? '-') . ' | ' .
+                            ($b->grade?->nama_grade ?? '-');
+                    })
+                    ->wrap(),
 
                 TextColumn::make('jenis_cacat')
                     ->label('Jenis Cacat')
@@ -45,15 +82,15 @@ class HasilPilihPlywoodsTable
                 TextColumn::make('kondisi')
                     ->label('Kondisi')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'reject' => 'danger',
+                    ->color(fn ($state) => match ($state) {
+                        'reject'   => 'danger',
                         'reparasi' => 'warning',
-                        'selesai' => 'success',
-                        default => 'gray',
+                        'selesai'  => 'success',
+                        default    => 'gray',
                     }),
 
                 TextColumn::make('jumlah')
-                    ->label('Jumlah')
+                    ->numeric()
                     ->alignCenter()
                     ->weight('bold')
                     ->summarize(
@@ -62,33 +99,24 @@ class HasilPilihPlywoodsTable
 
                 TextColumn::make('ket')
                     ->label('Keterangan')
-                    ->wrap()
-                    ->placeholder('-'),
+                    ->placeholder('-')
+                    ->wrap(),
             ])
+
+            /**
+             * =====================================
+             * ACTIONS
+             * =====================================
+             */
             ->headerActions([
-                CreateAction::make()
-                    ->hidden(fn ($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                CreateAction::make(),
             ])
             ->recordActions([
-                EditAction::make()
-                    ->hidden(fn ($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
-
-                DeleteAction::make()
-                    ->hidden(fn ($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                EditAction::make(),
             ])
-
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make()
-                        ->hidden(fn ($livewire) =>
-                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                        ),
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }
