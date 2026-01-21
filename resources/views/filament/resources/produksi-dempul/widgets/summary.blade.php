@@ -1,119 +1,115 @@
 <x-filament::widget>
-    <x-filament::card class="w-full space-y-10 dark:bg-gray-900 dark:border-gray-800">
+    <x-filament::card class="w-full space-y-8 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm">
 
-        {{-- ================================================================= --}}
-        {{-- ⚠️ BAGIAN PENTING: LOGIKA HITUNG DATA (JANGAN DIHAPUS) ⚠️ --}}
-        {{-- ================================================================= --}}
+        {{-- ========================================================== --}}
+        {{-- LOGIC PENGOLAHAN DATA (Otomatis) --}}
+        {{-- ========================================================== --}}
         @php
-        // 1. Ambil data mentah dari Widget PHP
+        // Ambil data mentah (Ukuran + KW)
         $dataRaw = collect($summary['globalUkuranKw'] ?? []);
 
-        // 2. Hitung Rekap per Grade (KW)
-        $rekapGrade = $dataRaw->groupBy('kw')->map(function ($rows) {
+        // Grouping untuk 'Global Ukuran (Semua KW)'
+        $globalUkuran = $dataRaw->groupBy('ukuran')->map(function ($rows) {
         return (object) [
-        'kw' => $rows->first()->kw,
+        'ukuran' => $rows->first()->ukuran,
         'total' => $rows->sum('total')
         ];
-        })->sortKeys();
-
-        // 3. Hitung Rekap per Ukuran
-        $ukuranGrouped = $dataRaw->groupBy('ukuran');
+        })->values();
         @endphp
-        {{-- ================================================================= --}}
 
+        {{-- ========================================================== --}}
+        {{-- [SECTION 1] STATISTIK UTAMA --}}
+        {{-- ========================================================== --}}
+        <div class="space-y-6 text-center py-2">
 
-        {{-- ================= SECTION 1: HEADER STATISTIK (PRODUKSI & PEGAWAI) ================= --}}
-        <div class="grid grid-cols-2 gap-4 divide-x divide-gray-200 dark:divide-gray-700">
-
-            {{-- KIRI: TOTAL PRODUKSI --}}
-            <div class="text-center py-2">
-                <div class="text-4xl font-extrabold text-primary-600 dark:text-primary-500">
+            {{-- TOTAL DEMPUL --}}
+            <div>
+                <div class="text-5xl font-extrabold text-primary-600 dark:text-primary-500 tracking-tight drop-shadow-sm">
                     {{ number_format($summary['totalAll'] ?? 0) }}
                 </div>
-                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                <div class="mt-2 text-sm font-bold text-gray-500 dark:text-gray-400">
                     Total Dempul (Pcs)
                 </div>
             </div>
 
-            {{-- KANAN: TOTAL PEGAWAI (HEADCOUNT) --}}
-            <div class="text-center py-2">
-                <div class="text-4xl font-extrabold text-green-600 dark:text-green-500">
+            <hr class="w-1/3 mx-auto border-gray-200 dark:border-gray-700/50">
+
+            {{-- TOTAL PEGAWAI --}}
+            <div>
+                <div class="text-3xl font-bold text-success-600 dark:text-success-500">
                     {{ number_format($summary['totalPegawai'] ?? 0) }}
                 </div>
-                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Total Tenaga Kerja (Org)
+                <div class="mt-1 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                    Total Tenaga Kerja (Orang)
                 </div>
             </div>
-
         </div>
 
-        {{-- ================= SECTION 2: RINGKASAN PER GRADE (KW) ================= --}}
-        <div class="space-y-3">
-            <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">Rekap per Grade</div>
+        <hr class="border-gray-100 dark:border-gray-800">
 
-            <div class="grid grid-cols-1 gap-4">
-                @foreach ($rekapGrade as $row)
-                <div class="rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm dark:bg-gray-800 dark:border-gray-700">
-                    <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        {{ $row->kw }}
+        {{-- ========================================================== --}}
+        {{-- [SECTION 2] GLOBAL UKURAN + KW (DETAIL) --}}
+        {{-- ========================================================== --}}
+        <div class="space-y-4">
+            <div class="flex items-center gap-2 font-bold text-lg text-gray-800 dark:text-gray-100">
+                <x-heroicon-m-clipboard-document-list class="w-5 h-5 text-gray-400 dark:text-gray-500" />
+                Global Ukuran + KW
+            </div>
+
+            <div class="grid grid-cols-1 gap-3">
+                @forelse ($dataRaw as $row)
+                {{-- Card Item --}}
+                <div class="group flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm transition duration-200 ease-in-out dark:bg-gray-800 dark:border-gray-700 dark:hover:border-primary-500">
+
+                    {{-- KIRI: Ukuran & KW --}}
+                    <div class="flex flex-col">
+                        <span class="text-sm font-bold text-gray-700 group-hover:text-primary-700 dark:text-gray-200 dark:group-hover:text-primary-400 transition-colors">
+                            {{ $row->ukuran }} + {{ $row->kw }}
+                        </span>
+                        <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-0.5">
+                            <span class="inline-block w-1.5 h-1.5 rounded-full bg-primary-500"></span>
+
+                        </span>
                     </div>
-                    <div class="text-xl font-bold text-gray-900 dark:text-white">
+
+                    {{-- KANAN: Total --}}
+                    <div class="text-lg font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">
+                        {{ number_format($row->total) }}
+                    </div>
+                </div>
+                @empty
+                <div class="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 p-6 text-center">
+                    <div class="text-sm text-gray-500 dark:text-gray-400 italic">Belum ada data dempul.</div>
+                </div>
+                @endforelse
+            </div>
+        </div>
+
+        {{-- ========================================================== --}}
+        {{-- [SECTION 3] GLOBAL UKURAN (REKAP SEMUA KW) --}}
+        {{-- ========================================================== --}}
+        <div class="space-y-4 pt-6 border-t border-gray-100 dark:border-gray-800">
+            <div class="flex items-center gap-2 font-bold text-lg text-gray-800 dark:text-gray-100">
+                <x-heroicon-m-square-2-stack class="w-5 h-5 text-gray-400 dark:text-gray-500" />
+                Global Ukuran (Semua KW)
+            </div>
+
+            <div class="grid grid-cols-1 gap-3">
+                @foreach ($globalUkuran as $row)
+                {{-- Card Item (Rekap) --}}
+                <div class="flex items-center justify-between rounded-xl  bg-primary-50/40 px-4 py-3 shadow-sm dark:bg-gray-800 dark:border-gray-700 transition duration-200 hover:bg-primary-50 dark:hover:bg-gray-700">
+
+                    {{-- KIRI: Ukuran Saja --}}
+                    <div class="text-sm font-bold text-gray-800 dark:text-gray-200">
+                        {{ $row->ukuran }}
+                    </div>
+
+                    {{-- KANAN: Total Akumulasi --}}
+                    <div class="text-lg font-extrabold text-primary-600 dark:text-primary-400">
                         {{ number_format($row->total) }}
                     </div>
                 </div>
                 @endforeach
-
-                {{-- Handle jika kosong --}}
-                @if($rekapGrade->isEmpty())
-                <div class="col-span-full text-center text-gray-400 text-sm italic">Belum ada data grade.</div>
-                @endif
-            </div>
-        </div>
-
-        {{-- ================= SECTION 3: REKAP PER UKURAN (DETAIL) ================= --}}
-        <div class="space-y-3">
-            <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                Rincian per Ukuran
-            </div>
-
-            <div class="grid grid-cols-1 gap-5">
-                @foreach ($ukuranGrouped as $namaUkuran => $items)
-                @php
-                // Hitung total gabungan untuk ukuran ini
-                $totalPerUkuran = collect($items)->sum('total');
-                @endphp
-
-                <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:bg-gray-800 dark:border-gray-700">
-                    {{-- Header Kartu: Nama Ukuran & Total --}}
-                    <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-2 dark:border-gray-700">
-                        <div class="font-bold text-gray-800 dark:text-gray-200 text-md">
-                            {{ $namaUkuran }}
-                        </div>
-                        <div class="font-bold text-primary-600 dark:text-primary-400 text-lg">
-                            {{ number_format($totalPerUkuran) }}
-                        </div>
-                    </div>
-
-                    {{-- Body Kartu: Daftar Grade/KW --}}
-                    <div class="flex flex-wrap gap-2">
-                        @foreach ($items as $row)
-                        <div class="flex-1 min-w-[80px] rounded-lg bg-gray-50 px-3 py-2 text-center dark:bg-gray-900/50">
-                            <div class="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase truncate">
-                                {{ $row->kw }}
-                            </div>
-                            <div class="font-semibold text-gray-900 dark:text-gray-100">
-                                {{ number_format($row->total) }}
-                            </div>
-                        </div>
-                        @endforeach
-                    </div>
-                </div>
-                @endforeach
-
-                {{-- Pesan jika data kosong --}}
-                @if($ukuranGrouped->isEmpty())
-                <div class="text-center text-gray-400 py-4 italic">Belum ada data dempul.</div>
-                @endif
             </div>
         </div>
 
