@@ -17,11 +17,7 @@ class HasilPilihPlywoodsTable
     public static function configure(Table $table): Table
     {
         return $table
-            /**
-             * =====================================
-             * OPTIMASI QUERY (WAJIB, SAMA DEMPUL)
-             * =====================================
-             */
+
             ->modifyQueryUsing(fn (Builder $query) =>
                 $query->with([
                     'pegawais',
