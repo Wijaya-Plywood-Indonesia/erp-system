@@ -52,6 +52,7 @@ class HasilPilihPlywoodForm
                 ->multiple()
                 ->preload()
                 ->required()
+                ->maxItems(2)
                 ->columnSpanFull(),
 
             // =========================
