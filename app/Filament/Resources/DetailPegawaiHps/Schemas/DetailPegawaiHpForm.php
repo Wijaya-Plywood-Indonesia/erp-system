@@ -39,7 +39,7 @@ class DetailPegawaiHpForm
             Select::make('pulang')
                 ->label('Jam Pulang')
                 ->options(self::timeOptions())
-                ->default('17:00')
+                ->default('16:00')
                 ->required()
                 ->searchable()
                 ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)

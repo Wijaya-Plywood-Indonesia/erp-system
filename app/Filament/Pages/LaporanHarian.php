@@ -23,6 +23,9 @@ use App\Models\ProduksiRepair;
 use App\Models\ProduksiPressDryer;
 use App\Models\ProduksiStik;
 use App\Models\ProduksiKedi;
+use App\Models\ProduksiJoint;
+use App\Models\ProduksiSandingJoint;
+use App\Models\ProduksiPotAfJoint;
 
 // --- 2. IMPORT TRANSFORMER CLASSES ---
 use App\Filament\Pages\LaporanHarian\Transformers\RotaryWorkerMap;
@@ -30,6 +33,9 @@ use App\Filament\Pages\LaporanHarian\Transformers\RepairWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\PressDryerWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\StikWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\KediWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\JointWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\SandingJoinWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\PotAfalanJoinWorkerMap;
 
 use App\Exports\LaporanHarianExport;
 
@@ -163,12 +169,37 @@ class LaporanHarian extends Page implements HasForms
             );
             $this->statistics['kedi'] = count($listKedi);
 
+            $listJoint = JointWorkerMap::make(
+                ProduksiJoint::with(['pegawaiJoint.pegawai:id,kode_pegawai,nama_pegawai'])
+                    ->whereDate('tanggal_produksi', $tgl)
+                    ->get()
+            );
+            $this->statistics['joint'] = count($listJoint);
+
+            $listSandingJoin = SandingJoinWorkerMap::make(
+                ProduksiSandingJoint::with(['pegawaiSandingJoint.pegawai:id,kode_pegawai,nama_pegawai'])
+                    ->whereDate('tanggal_produksi', $tgl)
+                    ->get()
+            );
+            $this->statistics['sanding'] = count($listSandingJoin);
+
+            $listPotAfJoin = PotAfalanJoinWorkerMap::make(
+                ProduksiPotAfJoint::with(['pegawaiPotAfJoint.pegawai:id,kode_pegawai,nama_pegawai'])
+                    ->whereDate('tanggal_produksi', $tgl)
+                    ->get()
+            );
+            $this->statistics['pot_afalan'] = count($listPotAfJoin);
+
+
             $pegawaiBekerja = array_merge(
                 $listRotary,
                 $listRepair,
                 $listDryer,
                 $listStik,
-                $listKedi
+                $listKedi,
+                $listJoint,
+                $listSandingJoin,
+                $listPotAfJoin
             );
 
             // =====================

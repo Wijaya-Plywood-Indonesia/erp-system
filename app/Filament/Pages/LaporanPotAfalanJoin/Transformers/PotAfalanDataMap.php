@@ -1,12 +1,11 @@
 <?php
 
-namespace App\Filament\Pages\LaporanSandingJoin\Transformers;
+namespace App\Filament\Pages\LaporanPotAfalanJoin\Transformers;
 
 use Carbon\Carbon;
 use App\Models\Target;
-use Illuminate\Support\Facades\Log;
 
-class SandingJoinDataMap
+class PotAfalanDataMap
 {
     public static function make($collection): array
     {
@@ -15,36 +14,27 @@ class SandingJoinDataMap
         foreach ($collection as $produksi) {
             $tanggal = Carbon::parse($produksi->tanggal_produksi)->format('d/m/Y');
 
-            foreach ($produksi->hasilSandingJoint as $hasil) {
+            foreach ($produksi->hasilPotAfJoint as $hasil) {
                 $ukuranModel = $hasil->ukuran;
                 $jenisKayuModel = $hasil->jenisKayu;
-                $kwRaw = $hasil->kw ?? '';
+                $kwRaw = $hasil->kw ?? '1';
 
-                // Normalisasi KW ke huruf kecil untuk pengecekan
-                $kwLower = strtolower($kwRaw);
-
-                // 1. Build Kode Ukuran (Prefix SANDING JOINT)
+                // 1. Build Kode Ukuran
                 if ($ukuranModel && $jenisKayuModel) {
-                    // Cek kondisi: Hanya afs atau afm yang dimasukkan ke kode ukuran
-                    $kwSuffix = in_array($kwLower, ['afs', 'afm']) ? $kwRaw : '';
-
-                    $kodeUkuran = 'SANDING JOINT' .
+                    $kodeUkuran = 'POT AFALAN JOINT' .
                         $ukuranModel->panjang .
-                        $ukuranModel->lebar .
-                        str_replace('.', ',', $ukuranModel->tebal) .
-                        $kwSuffix;
+                        $ukuranModel->lebar;
                 } else {
-                    $kodeUkuran = 'SANDING-JOINT-NOT-FOUND';
+                    $kodeUkuran = 'POT-AFALAN-NOT-FOUND';
                 }
 
-                // 2. Ambil Target & Jam Standar dari Database Target
+                // 2. Ambil Target & Jam Standar dari DB Target
                 $targetModel = Target::where('kode_ukuran', $kodeUkuran)->first();
                 $targetHarian = (int) ($targetModel->target ?? 0);
-                $jamStandarTarget = (float) ($targetModel->jam ?? 0); // Ambil jam standar
+                $jamStandarTarget = (float) ($targetModel->jam ?? 0); // AMBIL DARI DB
                 $nilaiPotonganPerLembar = (float) ($targetModel->potongan ?? 0);
 
-                // 3. Loop Pegawai Sanding Joint
-                foreach ($produksi->pegawaiSandingJoint as $pj) {
+                foreach ($produksi->pegawaiPotAfJoint as $pj) {
                     if (!$pj->pegawai) continue;
 
                     $nomorMeja = $pj->tugas ?? $pj->nomor_meja ?? '-';
@@ -56,37 +46,28 @@ class SandingJoinDataMap
                             'kode_ukuran' => $kodeUkuran,
                             'ukuran' => $ukuranModel->nama_ukuran ?? '-',
                             'jenis_kayu' => $jenisKayuModel->nama_kayu ?? '-',
-                            'kw' => $kwRaw ?: '1',
+                            'kw' => $kwRaw,
                             'pekerja' => [],
                             'hasil' => 0,
                             'target' => $targetHarian,
-                            'jam_standar' => $jamStandarTarget, // Masukkan jam standar ke grup data
+                            'jam_standar' => $jamStandarTarget, // MASUKKAN KE GRUP
                             'selisih' => 0,
                             'tanggal' => $tanggal,
                         ];
                     }
 
-                    // Hasil per grup ukuran
-                    $totalHasilGrup = $produksi->hasilSandingJoint
+                    $totalHasilGrup = $produksi->hasilPotAfJoint
                         ->where('id_ukuran', $hasil->id_ukuran)
                         ->where('kw', $kwRaw)
                         ->sum('jumlah');
 
                     $result[$key]['hasil'] = $totalHasilGrup;
 
-                    // 4. Logika Potongan Hasil
+                    // 3. Logika Potongan
                     $kekurangan = $targetHarian - $totalHasilGrup;
                     $potTargetIndividu = 0;
-
                     if ($kekurangan > 0 && $nilaiPotonganPerLembar > 0) {
-                        $rawPotongan = $kekurangan * $nilaiPotonganPerLembar;
-                        $potTargetIndividu = self::roundToNearest500($rawPotongan);
-                    }
-
-                    // Hitung durasi kerja realita (opsional untuk audit)
-                    $durasiRealita = 0;
-                    if ($pj->masuk && $pj->pulang) {
-                        $durasiRealita = round(Carbon::parse($pj->masuk)->diffInMinutes(Carbon::parse($pj->pulang)) / 60, 1);
+                        $potTargetIndividu = self::roundToNearest500($kekurangan * $nilaiPotonganPerLembar);
                     }
 
                     $result[$key]['pekerja'][] = [
@@ -94,7 +75,6 @@ class SandingJoinDataMap
                         'nama' => $pj->pegawai->nama_pegawai ?? '-',
                         'jam_masuk' => $pj->masuk ? Carbon::parse($pj->masuk)->format('H:i') : '-',
                         'jam_pulang' => $pj->pulang ? Carbon::parse($pj->pulang)->format('H:i') : '-',
-                        'total_jam' => $durasiRealita,
                         'ijin' => $pj->ijin ?? '-',
                         'keterangan' => $pj->ket ?? '-',
                         'hasil' => $totalHasilGrup,
@@ -107,7 +87,6 @@ class SandingJoinDataMap
         foreach ($result as &$row) {
             $row['selisih'] = $row['hasil'] - $row['target'];
         }
-
         return array_values($result);
     }
 

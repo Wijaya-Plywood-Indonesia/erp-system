@@ -16,19 +16,20 @@ use UnitEnum;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
-// Pastikan mengarah ke namespace Join yang baru
-use App\Filament\Pages\LaporanJoin\Queries\LoadLaporanJoin;
-use App\Filament\Pages\LaporanJoin\Transformers\JoinDataMap;
+// Pastikan mengarah ke namespace Pot Afalan yang baru
+use App\Filament\Pages\LaporanPotAfalanJoin\Queries\LoadLaporanPotAfalan;
+use App\Filament\Pages\LaporanPotAfalanJoin\Transformers\PotAfalanDataMap;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\LaporanJoinExport; // Opsional: Jika sudah membuat exportnya
+use App\Exports\LaporanPotAfalanJoinExport;
 
-class LaporanJoin extends Page
+class LaporanPotAfalanJoin extends Page
 {
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
-    protected static ?string $title = 'Laporan Produksi Join';
-    protected string $view = 'filament.pages.laporan-join';
-    protected static ?int $navigationSort = 7;
+    protected static ?string $title = 'Laporan Produksi Potong Afalan Join';
+    protected static ?string $navigationLabel = 'Laporan Potong Afalan Join';
+    protected string $view = 'filament.pages.laporan-pot-afalan';
+    protected static ?int $navigationSort = 9;
 
     public array $data = [
         'tanggal' => null,
@@ -50,7 +51,7 @@ class LaporanJoin extends Page
         return $schema
             ->schema([
                 DatePicker::make('tanggal')
-                    ->label('Pilih Tanggal Laporan Joint')
+                    ->label('Pilih Tanggal Laporan Potong Afalan')
                     ->native(false)
                     ->format('Y-m-d')
                     ->displayFormat('d/m/Y')
@@ -62,7 +63,7 @@ class LaporanJoin extends Page
                     ->default(now())
                     ->suffixIcon('heroicon-o-calendar')
                     ->suffixIconColor('primary')
-                    ->helperText('Pilih tanggal untuk melihat laporan hasil produksi joint'),
+                    ->helperText('Pilih tanggal untuk melihat laporan hasil produksi potong afalan'),
             ])
             ->statePath('data')
             ->columns(1);
@@ -100,12 +101,11 @@ class LaporanJoin extends Page
             $this->data['tanggal'] = $tanggal;
             $this->loadData();
         } catch (Exception $e) {
-            Log::error('Error parsing date Joint: ' . $e->getMessage());
+            Log::error('Error parsing date Potong Afalan: ' . $e->getMessage());
 
             Notification::make()
                 ->danger()
                 ->title('Format Tanggal Tidak Valid')
-                ->body('Silakan pilih tanggal yang benar.')
                 ->send();
 
             $this->data['tanggal'] = now()->format('Y-m-d');
@@ -122,43 +122,33 @@ class LaporanJoin extends Page
             $this->dataProduksi = [];
             $this->laporan = [];
 
-            // Memanggil Query Class Join yang sudah kita sesuaikan
-            $raw = LoadLaporanJoin::run($tanggal);
+            // Memanggil Query Class Potong Afalan
+            $raw = LoadLaporanPotAfalan::run($tanggal);
 
-            Log::info('Join Query executed', [
+            Log::info('Potong Afalan Query executed', [
                 'records_found' => $raw->count(),
                 'tanggal' => $tanggal
             ]);
 
             if ($raw->isNotEmpty()) {
-                // Memanggil Transformer JoinDataMap
-                $this->dataProduksi = JoinDataMap::make($raw);
+                // Memanggil Transformer PotAfalanDataMap
+                $this->dataProduksi = PotAfalanDataMap::make($raw);
                 $this->laporan = $this->dataProduksi;
-
-                Log::info('Join Data transformed successfully', [
-                    'items_count' => count($this->dataProduksi)
-                ]);
             } else {
                 Notification::make()
                     ->warning()
-                    ->title('Tidak Ada Data Joint')
-                    ->body('Tidak ditemukan data produksi joint untuk tanggal ' . Carbon::parse($tanggal)->format('d/m/Y'))
+                    ->title('Tidak Ada Data Potong Afalan')
+                    ->body('Tidak ditemukan data produksi potong afalan untuk tanggal ' . Carbon::parse($tanggal)->format('d/m/Y'))
                     ->send();
             }
         } catch (Exception $e) {
-            Log::error('Error loading joint data', [
-                'message' => $e->getMessage(),
-                'tanggal' => $tanggal ?? 'unknown'
-            ]);
+            Log::error('Error loading potong afalan data: ' . $e->getMessage());
 
             Notification::make()
                 ->danger()
-                ->title('Error Memuat Data Joint')
+                ->title('Error Memuat Data Potong Afalan')
                 ->body('Terjadi kesalahan: ' . $e->getMessage())
                 ->send();
-
-            $this->dataProduksi = [];
-            $this->laporan = [];
         } finally {
             $this->isLoading = false;
         }
@@ -167,12 +157,7 @@ class LaporanJoin extends Page
     public function refresh(): void
     {
         $this->loadData();
-
-        Notification::make()
-            ->success()
-            ->title('Data Diperbarui')
-            ->body('Data joint berhasil dimuat ulang.')
-            ->send();
+        Notification::make()->success()->title('Data Diperbarui')->send();
     }
 
     public function exportExcel()
@@ -180,11 +165,10 @@ class LaporanJoin extends Page
         try {
             $tanggal = Carbon::parse($this->data['tanggal'])->format('d-m-Y');
 
-            // Pastikan Anda sudah membuat class LaporanJoinExport jika ingin menggunakan fitur ini
-            if (class_exists('App\Exports\LaporanJoinExport')) {
+            if (class_exists('App\Exports\LaporanPotAfalanJoinExport')) {
                 return Excel::download(
-                    new LaporanJoinExport($this->laporan),
-                    "laporan-joint-{$tanggal}.xlsx"
+                    new LaporanPotAfalanJoinExport($this->laporan),
+                    "laporan-pot-afalan-{$tanggal}.xlsx"
                 );
             }
 
@@ -204,13 +188,10 @@ class LaporanJoin extends Page
             'laporan' => $this->laporan,
             'dataProduksi' => $this->dataProduksi,
             'isLoading' => $this->isLoading,
-            'summary' => $this->calculateSummary(), // Tambahan untuk mempermudah widget
+            'summary' => $this->calculateSummary(),
         ];
     }
 
-    /**
-     * Helper untuk menghitung summary data yang akan dikirim ke widget blade
-     */
     private function calculateSummary(): array
     {
         $totalAll = 0;
@@ -220,12 +201,10 @@ class LaporanJoin extends Page
         foreach ($this->laporan as $row) {
             $totalAll += $row['hasil'];
 
-            // Hitung total unik pegawai
             foreach ($row['pekerja'] as $p) {
                 $uniquePegawai[$p['nama']] = true;
             }
 
-            // Mapping untuk widget blade (ukuran + kw)
             $key = $row['ukuran'] . '|' . $row['kw'];
             if (!isset($globalUkuranKw[$key])) {
                 $globalUkuranKw[$key] = (object)[
