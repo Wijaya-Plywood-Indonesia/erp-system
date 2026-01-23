@@ -62,7 +62,7 @@ class LaporanSandingJoinExport implements FromCollection, WithHeadings, WithTitl
                 '',
                 'Target Harian',
                 'Hasil Produksi',
-                'Selisih (Diff)',
+                'Selisih',
             ]);
 
             // =============================

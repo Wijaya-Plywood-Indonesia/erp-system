@@ -38,7 +38,7 @@ class RencanaPegawaiForm
 
             TimePicker::make('jam_pulang')
                 ->label('Jam Pulang')
-                ->default('17:00')
+                ->default('16:00')
                 ->seconds(false)
                 ->required(),
 
@@ -46,10 +46,10 @@ class RencanaPegawaiForm
                 ->label('Pegawai')
                 ->options(function ($livewire) {
                     $produksiId = $livewire->ownerRecord?->id;
-                    
+
                     // Ambil record yang sedang diedit dari Livewire
-                    $editingRecord = method_exists($livewire, 'getMountedTableActionRecord') 
-                        ? $livewire->getMountedTableActionRecord() 
+                    $editingRecord = method_exists($livewire, 'getMountedTableActionRecord')
+                        ? $livewire->getMountedTableActionRecord()
                         : null;
 
                     $usedPegawaiIds = RencanaPegawai::where('id_produksi_repair', $produksiId)
@@ -64,9 +64,9 @@ class RencanaPegawaiForm
                 ->searchable()
                 ->required()
                 ->rules([
-                    fn ($livewire) => function ($attribute, $value, $fail) use ($livewire) {
-                        $editingRecord = method_exists($livewire, 'getMountedTableActionRecord') 
-                            ? $livewire->getMountedTableActionRecord() 
+                    fn($livewire) => function ($attribute, $value, $fail) use ($livewire) {
+                        $editingRecord = method_exists($livewire, 'getMountedTableActionRecord')
+                            ? $livewire->getMountedTableActionRecord()
                             : null;
 
                         $exists = RencanaPegawai::where('id_produksi_repair', $livewire->ownerRecord?->id)
@@ -83,9 +83,9 @@ class RencanaPegawaiForm
                 ->numeric()
                 ->required()
                 ->rules([
-                    fn ($livewire) => function ($attribute, $value, $fail) use ($livewire) {
-                        $editingRecord = method_exists($livewire, 'getMountedTableActionRecord') 
-                            ? $livewire->getMountedTableActionRecord() 
+                    fn($livewire) => function ($attribute, $value, $fail) use ($livewire) {
+                        $editingRecord = method_exists($livewire, 'getMountedTableActionRecord')
+                            ? $livewire->getMountedTableActionRecord()
                             : null;
 
                         $count = RencanaPegawai::where('id_produksi_repair', $livewire->ownerRecord?->id)

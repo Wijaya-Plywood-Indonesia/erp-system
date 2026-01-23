@@ -61,7 +61,7 @@ class LaporanJoinExport implements FromCollection, WithHeadings, WithTitle
                 '',
                 'Target Harian',
                 'Hasil Produksi',
-                'Selisih (Diff)',
+                'Selisih',
             ]);
 
             // =============================

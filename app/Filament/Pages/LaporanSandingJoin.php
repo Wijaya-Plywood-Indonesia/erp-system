@@ -26,8 +26,8 @@ class LaporanSandingJoin extends Page
 {
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
-    protected static ?string $title = 'Laporan Produksi Sanding Joint';
-    protected static ?string $navigationLabel = 'Laporan Sanding Joint';
+    protected static ?string $title = 'Laporan Produksi Sanding Join';
+    protected static ?string $navigationLabel = 'Laporan Sanding Join';
     protected string $view = 'filament.pages.laporan-sanding-join';
     protected static ?int $navigationSort = 8; // Disesuaikan agar di bawah Joint
 
