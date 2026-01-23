@@ -88,20 +88,6 @@ class DokumenKayuForm
                             ->disk('public')
                             ->directory('sumber-kayu/foto-lokasi')
                             ->imageEditor()
-                            // Tidak pakai ->fileName() agar kembali ke default (UUID atau nama asli jika dipreserve)
-                            // Namun karena CompressedFileUpload DEFAULT-nya menggunakan UUID jika fileName kosong,
-                            // Kita bisa memaksa menggunakan nama asli file yang diupload.
-                            ->storeFileUsing(function ($file) {
-                                // Kita override sedikit logic di sini KHUSUS untuk field ini
-                                // Atau biarkan default (UUID) jika "nama_file" maksudnya nama acak.
-
-                                // JIKA MAKSUD ANDA NAMA ASLI DARI KOMPUTER USER:
-                                // Itu agak sulit karena livewire merename file jadi temporary hash.
-                                // Saran terbaik: Gunakan UUID (default) atau nama tempat.
-
-                                // Opsi: Gunakan Nama Tempat
-                                // return "Lokasi_BlaBla";
-                            })
                             // KITA GUNAKAN NAMA TEMPAT SEBAGAI NAMA FILE
                             ->fileName(function (Get $get) {
                                 $tempat = $get('nama_tempat');
