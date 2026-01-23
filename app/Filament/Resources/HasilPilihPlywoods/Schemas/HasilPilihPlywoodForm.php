@@ -16,7 +16,7 @@ class HasilPilihPlywoodForm
     {
         return [
             // =========================
-            // 👷 PEGAWAI (MULTI SELECT - BISA DIPILIH ULANG)
+            // 👷 PEGAWAI
             // =========================
             Select::make('pegawais')
                 ->label('Pegawai')
@@ -24,39 +24,35 @@ class HasilPilihPlywoodForm
                     name: 'pegawais',
                     titleAttribute: 'nama_pegawai',
                     modifyQueryUsing: function (Builder $query, $livewire) {
-                        // 1. Ambil ID Produksi Parent
                         $produksiId = $livewire->ownerRecord->id ?? null;
-
                         if ($produksiId) {
-                            // A. Ambil Pegawai yang TERDAFTAR di Absen/Tugas (Allow List)
                             $absenIds = PegawaiPilihPlywood::query()
                                 ->where('id_produksi_pilih_plywood', $produksiId)
                                 ->pluck('id_pegawai')
                                 ->toArray();
 
-                            // B. Terapkan Filter
-                            // Kita HANYA memfilter agar yang muncul adalah pegawai yang absen.
-                            // Kita TIDAK mengecualikan pegawai yang sudah ada datanya.
-                            return $query
-                                ->whereIn('pegawais.id', $absenIds) // Gunakan pegawais.id untuk hindari ambigu
-                                ->orderBy('nama_pegawai');
+                            // Pastikan daftar pilihan pegawai diurutkan berdasarkan Nama
+                            return $query->whereIn('pegawais.id', $absenIds)->orderBy('nama_pegawai');
                         }
-
                         return $query;
                     }
                 )
-                ->getOptionLabelFromRecordUsing(
-                    fn($record) => "{$record->kode_pegawai} - {$record->nama_pegawai}"
-                )
-                ->searchable(['nama_pegawai', 'kode_pegawai'])
+                ->getOptionLabelFromRecordUsing(fn($record) => "{$record->kode_pegawai} - {$record->nama_pegawai}")
                 ->multiple()
                 ->preload()
                 ->required()
                 ->maxItems(2)
-                ->columnSpanFull(),
+                ->columnSpanFull()
+                // PENTING: Mengurutkan ID pegawai sebelum disimpan ke database
+                ->dehydrateStateUsing(function ($state) {
+                    if (is_array($state)) {
+                        sort($state);
+                    }
+                    return $state;
+                }),
 
             // =========================
-            // PILIH BARANG (DARI BAHAN)
+            // 📦 PILIH BARANG
             // =========================
             Select::make('id_barang_setengah_jadi_hp')
                 ->label('Pilih Barang (Dari Bahan)')
@@ -65,7 +61,6 @@ class HasilPilihPlywoodForm
                 ->options(function ($livewire) {
                     $produksiId = $livewire->ownerRecord->id;
 
-                    // Ambil barang yang hanya ada di tabel Bahan untuk produksi ini
                     return BahanPilihPlywood::query()
                         ->where('id_produksi_pilih_plywood', $produksiId)
                         ->with(['barangSetengahJadiHp.ukuran', 'barangSetengahJadiHp.grade', 'barangSetengahJadiHp.jenisBarang'])
@@ -73,12 +68,13 @@ class HasilPilihPlywoodForm
                         ->mapWithKeys(function ($bahan) {
                             $barang = $bahan->barangSetengahJadiHp;
 
-                            // Hitung berapa banyak barang ini yang sudah dicatat sebagai cacat
-                            $sudahDiinput = HasilPilihPlywood::where('id_produksi_pilih_plywood', $bahan->id_produksi_pilih_plywood)
+                            // Hitung TOTAL (Bagus + Cacat) yang sudah masuk DB
+                            $sudahDikerjakan = HasilPilihPlywood::where('id_produksi_pilih_plywood', $bahan->id_produksi_pilih_plywood)
                                 ->where('id_barang_setengah_jadi_hp', $barang->id)
-                                ->sum('jumlah');
+                                ->selectRaw('SUM(jumlah + jumlah_bagus) as total')
+                                ->value('total') ?? 0;
 
-                            $sisa = $bahan->jumlah - $sudahDiinput;
+                            $sisa = $bahan->jumlah - $sudahDikerjakan;
 
                             return [
                                 $barang->id => "[Sisa: {$sisa}] " .
@@ -88,7 +84,8 @@ class HasilPilihPlywoodForm
                             ];
                         });
                 })
-                ->reactive(),
+                ->reactive()
+                ->afterStateUpdated(fn($set) => $set('jumlah', 0)),
 
             Select::make('jenis_cacat')
                 ->label('Jenis Cacat')
@@ -109,46 +106,42 @@ class HasilPilihPlywoodForm
                     'reparasi' => 'Reparasi (Perlu Diperbaiki)',
                 ]),
 
+            // =========================
+            // 🔢 INPUT JUMLAH
+            // =========================
             TextInput::make('jumlah')
                 ->label('Jumlah Lembar Cacat')
                 ->numeric()
-                ->minValue(1)
                 ->required()
-                ->rules([
-                    function ($livewire, $get) {
-                        return function ($attribute, $value, $fail) use ($livewire, $get) {
-                            $produksi = $livewire->ownerRecord;
-                            $barangId = $get('id_barang_setengah_jadi_hp');
+                ->reactive()
+                ->afterStateUpdated(function ($state, $get, $set, $livewire) {
+                    // Ambil stok awal
+                    $stokAwal = \App\Models\BahanPilihPlywood::where('id_produksi_pilih_plywood', $livewire->ownerRecord->id)
+                        ->where('id_barang_setengah_jadi_hp', $get('id_barang_setengah_jadi_hp'))
+                        ->sum('jumlah');
 
-                            if (!$barangId) return;
+                    // Ambil yang sudah terpakai di DB
+                    $terpakai = \App\Models\HasilPilihPlywood::where('id_produksi_pilih_plywood', $livewire->ownerRecord->id)
+                        ->where('id_barang_setengah_jadi_hp', $get('id_barang_setengah_jadi_hp'))
+                        ->selectRaw('SUM(jumlah + jumlah_bagus) as total')
+                        ->value('total') ?? 0;
 
-                            // Ambil data record yang sedang diedit (jika ada)
-                            $currentRecordId = null;
-                            if (method_exists($livewire, 'getMountedTableActionRecord')) {
-                                $currentRecordId = $livewire->getMountedTableActionRecord()?->id;
-                            }
+                    $sisaSekarang = $stokAwal - $terpakai;
 
-                            // Total bahan tersedia
-                            $totalBahanBarang = $produksi->bahanPilihPlywood()
-                                ->where('id_barang_setengah_jadi_hp', $barangId)
-                                ->sum('jumlah');
+                    // Otomatis isi hasil bagus dengan sisa yang ada dikurangi cacat saat ini
+                    $saranBagus = max(0, $sisaSekarang - (int)$state);
+                    $set('jumlah_bagus', $saranBagus);
+                }),
 
-                            // Total yang sudah dipakai (exclude record ini saat edit)
-                            $totalCacatBarang = $produksi->hasilPilihPlywood()
-                                ->where('id_barang_setengah_jadi_hp', $barangId)
-                                ->when($currentRecordId, fn($q) => $q->where('id', '!=', $currentRecordId))
-                                ->sum('jumlah');
-
-                            if (($totalCacatBarang + $value) > $totalBahanBarang) {
-                                $fail("Jumlah melebihi stok bahan. Sisa tersedia: " . ($totalBahanBarang - $totalCacatBarang));
-                            }
-                        };
-                    },
-                ]),
+            TextInput::make('jumlah_bagus')
+                ->label('Hasil Bagus (Lembar)')
+                ->numeric()
+                ->required()
+                ->helperText('Isi 0 jika masih ada jenis cacat lain yang ingin diinput.')
+                ->reactive(),
 
             Textarea::make('ket')
                 ->label('Keterangan Tambahan')
-                ->placeholder('contoh: Tidak bisa diperbaiki, dll')
                 ->columnSpanFull(),
         ];
     }

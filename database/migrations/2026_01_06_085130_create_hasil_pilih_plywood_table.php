@@ -24,6 +24,7 @@ return new class extends Migration
                 ->restrictOnDelete();
             $table->enum('jenis_cacat',['mengelupas','pecah','delaminasi/melembung','kropos','dll']);
             $table->integer('jumlah');
+            $table->integer('jumlah_bagus');
             $table->enum('kondisi',['reject','reparasi','selesai']);
             $table->string('ket')->nullable();
             $table->timestamps();

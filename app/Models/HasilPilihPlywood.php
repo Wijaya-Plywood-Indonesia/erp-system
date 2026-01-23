@@ -15,6 +15,7 @@ class HasilPilihPlywood extends Model
         'id_produksi_pilih_plywood',
         'jenis_cacat',
         'jumlah',
+        'jumlah_bagus',
         'kondisi',
         'ket',
     ];
