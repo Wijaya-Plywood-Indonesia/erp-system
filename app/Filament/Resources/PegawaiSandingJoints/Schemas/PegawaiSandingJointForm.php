@@ -15,7 +15,7 @@ class PegawaiSandingJointForm
     {
         return collect(
             CarbonPeriod::create('00:00', '1 hour', '23:00')->toArray()
-        )->mapWithKeys(fn ($time) => [
+        )->mapWithKeys(fn($time) => [
             $time->format('H:i') => $time->format('H.i'),
         ])->toArray();
     }
@@ -31,18 +31,18 @@ class PegawaiSandingJointForm
                     ->default('06:00')
                     ->required()
                     ->searchable()
-                    ->dehydrateStateUsing(fn ($state) => $state ? $state . ':00' : null)
-                    ->formatStateUsing(fn ($state) => $state ? substr($state, 0, 5) : null),
+                    ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
                 // --- JAM PULANG ---
                 Select::make('pulang')
                     ->label('Jam Pulang')
                     ->options(self::timeOptions())
-                    ->default('17:00')
+                    ->default('16:00')
                     ->required()
                     ->searchable()
-                    ->dehydrateStateUsing(fn ($state) => $state ? $state . ':00' : null)
-                    ->formatStateUsing(fn ($state) => $state ? substr($state, 0, 5) : null),
+                    ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
                 TextInput::make('tugas')
                     ->label('Tugas')
@@ -55,25 +55,33 @@ class PegawaiSandingJointForm
                     ->searchable()
                     ->required()
                     ->options(
-                    Pegawai::query()
-                        ->get()
-                        ->mapWithKeys(fn($pegawai) => [
-                            $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
-                        ])
-                )
-                    ->rule(function ($livewire) {
-                        return function (string $attribute, $value, $fail) use ($livewire) {
-
+                        Pegawai::query()
+                            ->get()
+                            ->mapWithKeys(fn($pegawai) => [
+                                $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
+                            ])
+                    )
+                    ->rule(function ($livewire, $component) { // Tambahkan $component di sini
+                        return function (string $attribute, $value, $fail) use ($livewire, $component) {
                             $produksiId = $livewire->ownerRecord->id ?? null;
 
                             if (! $produksiId) {
                                 return;
                             }
 
-                            $exists = PegawaiSandingJoint::query()
+                            // Ambil ID record saat ini (akan null jika sedang 'Create')
+                            $currentRecordId = $component->getRecord()?->id;
+
+                            $query = PegawaiSandingJoint::query()
                                 ->where('id_produksi_sanding_joint', $produksiId)
-                                ->where('id_pegawai', $value)
-                                ->exists();
+                                ->where('id_pegawai', $value);
+
+                            // JIKA SEDANG EDIT: Jangan cek diri sendiri
+                            if ($currentRecordId) {
+                                $query->where('id', '!=', $currentRecordId);
+                            }
+
+                            $exists = $query->exists();
 
                             if ($exists) {
                                 $fail('Pegawai ini sudah terdaftar pada produksi sanding joint ini.');
