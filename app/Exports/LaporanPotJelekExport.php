@@ -6,99 +6,73 @@ use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithTitle;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 
-class LaporanPotJelekExport implements FromCollection, WithHeadings, WithTitle
+class LaporanPotJelekExport implements FromCollection, WithHeadings, WithTitle, ShouldAutoSize
 {
     protected Collection $data;
 
     public function __construct(array $dataProduksi)
     {
-        // GROUPING: NOMOR MEJA + KODE UKURAN (POT JELEK)
-        $this->data = collect($dataProduksi)
-            ->groupBy(fn($item) => $item['nomor_meja'] . '|' . $item['kode_ukuran']);
+        // Data sudah dikelompokkan per individu oleh PotJelekDataMap
+        $this->data = collect($dataProduksi);
     }
 
     public function collection()
     {
         $rows = collect();
 
-        foreach ($this->data as $groupKey => $items) {
-
-            $first = $items->first();
-
-            $nomorMeja = $first['nomor_meja'];
-            $kodeUkuran = $first['kode_ukuran']; // Akan berisi "POT JELEK"
-            $tanggal = $first['tanggal'];
-
-            $target = (int) $first['target'];
-            $hasil = (int) $first['hasil'];
-            $selisih = (int) $first['selisih'];
-
-            $pekerja = $first['pekerja'] ?? [];
-
-            // ==========================================
-            // HEADER INFORMASI (BLOK ATAS POT JELEK)
-            // ==========================================
-            $rows->push(['AREA KERJA', $nomorMeja]);
-            $rows->push(['KATEGORI LAPORAN', $kodeUkuran]);
-            $rows->push(['TANGGAL PRODUKSI', $tanggal]);
-            $rows->push([]); // Spasi kosong
+        foreach ($this->data as $item) {
+            // =============================
+            // HEADER INFORMASI (IDENTITAS PEGAWAI)
+            // =============================
+            $rows->push(['PEGAWAI', $item['kode_nama']]);
+            $rows->push(['TANGGAL PRODUKSI', $item['tanggal']]);
+            $rows->push([]); // Baris kosong pemisah
 
             // =============================
-            // HEADER TABEL
+            // HEADER TABEL PENGERJAAN
             // =============================
             $rows->push([
-                'ID PEGAWAI',
-                'Nama Lengkap',
-                'Jam Masuk',
-                'Jam Pulang',
-                'Potongan Target',
-                'Keterangan',
-                '',
-                'Target Harian',
-                'Hasil Produksi',
-                'Selisih',
+                'KODE UKURAN',
+                'HASIL',
+                'JAM MASUK',
+                'JAM PULANG',
+                'POTONGAN TARGET',
+                'IJIN',
+                'KETERANGAN / KENDALA',
             ]);
 
             // =============================
-            // DATA PEKERJA (ISI TABEL)
+            // DATA PENGERJAAN (RINCIAN UKURAN)
             // =============================
-            foreach ($pekerja as $p) {
-                $potongan = (int) ($p['pot_target'] ?? 0);
-
+            foreach ($item['rincian'] as $index => $detail) {
                 $rows->push([
-                    $p['id'] ?? '-',
-                    $p['nama'] ?? '-',
-                    $p['jam_masuk'] ?? '-',
-                    $p['jam_pulang'] ?? '-',
-                    $potongan > 0 ? $potongan : '-',
-                    $p['keterangan'] ?? '-',
-                    '',
-                    $target,
-                    $hasil,
-                    $selisih >= 0 ? '+' . $selisih : $selisih,
+                    $detail['ukuran_lengkap'],
+                    $detail['jumlah'],
+                    // Data profil pegawai hanya muncul di baris pertama rincian
+                    $index === 0 ? $item['jam_masuk'] : '',
+                    $index === 0 ? $item['jam_pulang'] : '',
+                    $index === 0 ? ($item['pot_target'] > 0 ? 'Rp ' . number_format($item['pot_target']) : '-') : '',
+                    $index === 0 ? $item['ijin'] : '',
+                    $index === 0 ? $item['keterangan'] : '',
                 ]);
             }
 
             // =============================
-            // FOOTER BLOK (TOTAL)
+            // FOOTER BLOK (RINGKASAN PERFORMA)
             // =============================
-            $totalPotonganGrup = collect($pekerja)->sum('pot_target');
-
             $rows->push([
                 'TOTAL',
-                count($pekerja) . ' Orang',
+                $item['hasil'], // Total akumulasi hasil individu
+                'TARGET: ' . number_format($item['target']),
+                'SELISIH: ' . ($item['selisih'] >= 0 ? '+' : '') . number_format($item['selisih']),
+                'DIPOTONG: ' . ($item['pot_target'] > 0 ? 'Rp ' . number_format($item['pot_target']) : '0'),
                 '',
                 '',
-                $totalPotonganGrup > 0 ? $totalPotonganGrup : '-',
-                '',
-                '',
-                $target,
-                $hasil,
-                $selisih >= 0 ? '+' . $selisih : $selisih,
             ]);
 
-            // SPASI ANTAR BLOK PRODUKSI AGAR RAPI DI EXCEL
+            // SPASI ANTAR BLOK PEGAWAI AGAR MUDAH DIBACA
             $rows->push([]);
             $rows->push([]);
         }
@@ -108,7 +82,7 @@ class LaporanPotJelekExport implements FromCollection, WithHeadings, WithTitle
 
     public function headings(): array
     {
-        // Menggunakan push manual di collection agar bisa kustom per blok
+        // Headings dikelola manual di dalam collection() untuk fleksibilitas blok
         return [];
     }
 

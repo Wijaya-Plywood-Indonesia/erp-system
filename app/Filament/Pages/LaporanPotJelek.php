@@ -197,22 +197,15 @@ class LaporanPotJelek extends Page
     {
         $totalAll = 0;
         $uniquePegawai = [];
-        $summaryGlobal = [
-            'total' => 0
-        ];
 
         foreach ($this->laporan as $row) {
-            $totalAll += $row['hasil'];
-
-            foreach ($row['pekerja'] as $p) {
-                $uniquePegawai[$p['nama']] = true;
-            }
+            $totalAll += ($row['hasil'] ?? 0); // Mengambil total_hasil per orang
+            $uniquePegawai[$row['kode_nama']] = true;
         }
 
         return [
             'totalAll' => $totalAll,
             'totalPegawai' => count($uniquePegawai),
-            'globalUkuranKw' => [], // Pot Jelek biasanya tidak memecah per ukuran di summary
         ];
     }
 }
