@@ -31,16 +31,15 @@ class JoinDataMap
 
                 // 2. Ambil Target & Nilai Potongan Per Lembar
                 $targetModel = Target::where('kode_ukuran', $kodeUkuran)->first();
-                if (!$targetModel) {
-                    $targetModel = Target::where(['id_ukuran' => $ukuranModel->id ?? 0])->first();
+                if (!$targetModel && $ukuranModel) {
+                    $targetModel = Target::where(['id_ukuran' => $ukuranModel->id])->first();
                 }
 
                 $targetHarian = (int) ($targetModel->target ?? 0);
-                // Ini adalah nilai rupiah atau poin potongan per lembar dari tabel target
                 $nilaiPotonganPerLembar = (float) ($targetModel->potongan ?? 0);
 
-                Log::info("=== LOGIKA POTONGAN HASIL: {$kodeUkuran} ===");
-                Log::info("Target: {$targetHarian}, Nilai Potongan/Lembar: {$nilaiPotonganPerLembar}");
+                // Hitung total pegawai dalam satu produksi ini untuk pembagi beban
+                $jumlahPekerja = $produksi->pegawaiJoint->count();
 
                 foreach ($produksi->pegawaiJoint as $pj) {
                     if (!$pj->pegawai) continue;
@@ -63,22 +62,28 @@ class JoinDataMap
                         ];
                     }
 
-                    // 3. Hitung Hasil & Selisih
+                    // 3. Hitung Hasil Grup
                     $hasilGrup = $produksi->hasilJoint->where('id_ukuran', $modal->id_ukuran)->sum('jumlah');
                     $result[$key]['hasil'] = $hasilGrup;
 
                     $kekurangan = $targetHarian - $hasilGrup;
                     $potTargetIndividu = 0;
 
-                    // 4. Logika: Jika hasil kurang dari target, hitung potongan
-                    if ($kekurangan > 0 && $nilaiPotonganPerLembar > 0) {
-                        // Rumus: Kekurangan x Nilai Potongan Per Lembar
-                        $rawPotongan = $kekurangan * $nilaiPotonganPerLembar;
+                    // 4. LOGIKA BARU: Potongan dibagi jumlah pekerja sebelum dibulatkan
+                    if ($kekurangan > 0 && $targetHarian > 0 && $nilaiPotonganPerLembar > 0) {
 
-                        // Gunakan pembulatan 500 terdekat
-                        $potTargetIndividu = self::roundToNearest500($rawPotongan);
+                        // Total denda satu meja/grup
+                        $totalDendaMeja = $kekurangan * $nilaiPotonganPerLembar;
 
-                        Log::info("Pegawai: {$pj->pegawai->nama_pegawai} | Kurang: {$kekurangan} pcs | Potongan: {$potTargetIndividu}");
+                        if ($jumlahPekerja > 0) {
+                            // Denda dibagi rata ke tiap orang
+                            $potPerOrangRaw = $totalDendaMeja / $jumlahPekerja;
+
+                            // Gunakan pembulatan 3 tingkat (0-299, 300-799, 800-999)
+                            $potTargetIndividu = self::roundToNearest500($potPerOrangRaw);
+                        }
+
+                        Log::info("🧩 [JOIN MAP] Meja: {$nomorMeja} | Kurang: {$kekurangan} | Total Denda Meja: {$totalDendaMeja} | Pekerja: {$jumlahPekerja} | Final Pot: {$potTargetIndividu}");
                     }
 
                     $result[$key]['pekerja'][] = [
@@ -102,12 +107,20 @@ class JoinDataMap
         return array_values($result);
     }
 
+    /**
+     * Logic Pembulatan 3 Tingkat sesuai standar payroll Anda
+     */
     private static function roundToNearest500(float $value): int
     {
-        $base = floor($value / 1000) * 1000;
-        $rest = $value - $base;
-        if ($rest < 300) return (int) $base;
-        if ($rest < 800) return (int) ($base + 500);
-        return (int) ($base + 1000);
+        $ribuan = floor($value / 1000);
+        $ratusan = $value % 1000;
+
+        if ($ratusan < 300) {
+            return (int) ($ribuan * 1000);
+        } elseif ($ratusan >= 300 && $ratusan < 800) {
+            return (int) (($ribuan * 1000) + 500);
+        } else {
+            return (int) (($ribuan + 1) * 1000);
+        }
     }
 }

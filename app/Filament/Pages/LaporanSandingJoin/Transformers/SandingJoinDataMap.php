@@ -15,19 +15,20 @@ class SandingJoinDataMap
         foreach ($collection as $produksi) {
             $tanggal = Carbon::parse($produksi->tanggal_produksi)->format('d/m/Y');
 
+            // Hitung jumlah pekerja di baris produksi ini (sebagai pembagi beban denda)
+            $jumlahPekerja = $produksi->pegawaiSandingJoint->count();
+
             foreach ($produksi->hasilSandingJoint as $hasil) {
                 $ukuranModel = $hasil->ukuran;
                 $jenisKayuModel = $hasil->jenisKayu;
                 $kwRaw = $hasil->kw ?? '';
-
-                // Normalisasi KW ke huruf kecil untuk pengecekan
                 $kwLower = strtolower($kwRaw);
 
-                // 1. Build Kode Ukuran (Prefix SANDING JOINT)
+                // 1. Build Kode Ukuran (Format: SANDING JOINT + P + L + T + Suffix)
                 if ($ukuranModel && $jenisKayuModel) {
-                    // Cek kondisi: Hanya afs atau afm yang dimasukkan ke kode ukuran
                     $kwSuffix = in_array($kwLower, ['afs', 'afm']) ? $kwRaw : '';
 
+                    // Menjaga spasi hanya setelah kata SANDING
                     $kodeUkuran = 'SANDING JOINT' .
                         $ukuranModel->panjang .
                         $ukuranModel->lebar .
@@ -37,13 +38,13 @@ class SandingJoinDataMap
                     $kodeUkuran = 'SANDING-JOINT-NOT-FOUND';
                 }
 
-                // 2. Ambil Target & Jam Standar dari Database Target
+                // 2. Ambil Target & Jam Standar
                 $targetModel = Target::where('kode_ukuran', $kodeUkuran)->first();
                 $targetHarian = (int) ($targetModel->target ?? 0);
-                $jamStandarTarget = (float) ($targetModel->jam ?? 0); // Ambil jam standar
+                $jamStandarTarget = (float) ($targetModel->jam ?? 0);
                 $nilaiPotonganPerLembar = (float) ($targetModel->potongan ?? 0);
 
-                // 3. Loop Pegawai Sanding Joint
+                // 3. Loop Pegawai
                 foreach ($produksi->pegawaiSandingJoint as $pj) {
                     if (!$pj->pegawai) continue;
 
@@ -60,13 +61,13 @@ class SandingJoinDataMap
                             'pekerja' => [],
                             'hasil' => 0,
                             'target' => $targetHarian,
-                            'jam_standar' => $jamStandarTarget, // Masukkan jam standar ke grup data
+                            'jam_standar' => $jamStandarTarget,
                             'selisih' => 0,
                             'tanggal' => $tanggal,
                         ];
                     }
 
-                    // Hasil per grup ukuran
+                    // Hasil grup (berdasarkan ukuran dan kw yang sama)
                     $totalHasilGrup = $produksi->hasilSandingJoint
                         ->where('id_ukuran', $hasil->id_ukuran)
                         ->where('kw', $kwRaw)
@@ -74,16 +75,21 @@ class SandingJoinDataMap
 
                     $result[$key]['hasil'] = $totalHasilGrup;
 
-                    // 4. Logika Potongan Hasil
+                    // 4. LOGIKA POTONGAN HASIL (DIBAGI JUMLAH PEKERJA)
                     $kekurangan = $targetHarian - $totalHasilGrup;
                     $potTargetIndividu = 0;
 
-                    if ($kekurangan > 0 && $nilaiPotonganPerLembar > 0) {
-                        $rawPotongan = $kekurangan * $nilaiPotonganPerLembar;
-                        $potTargetIndividu = self::roundToNearest500($rawPotongan);
+                    if ($kekurangan > 0 && $targetHarian > 0 && $nilaiPotonganPerLembar > 0) {
+                        // Rumus: (Kekurangan x Nilai) / Jumlah Orang di Meja tersebut
+                        $totalDendaMeja = $kekurangan * $nilaiPotonganPerLembar;
+
+                        if ($jumlahPekerja > 0) {
+                            $rawPotonganIndividu = $totalDendaMeja / $jumlahPekerja;
+                            $potTargetIndividu = self::roundToNearest500($rawPotonganIndividu);
+                        }
                     }
 
-                    // Hitung durasi kerja realita (opsional untuk audit)
+                    // Durasi kerja realita
                     $durasiRealita = 0;
                     if ($pj->masuk && $pj->pulang) {
                         $durasiRealita = round(Carbon::parse($pj->masuk)->diffInMinutes(Carbon::parse($pj->pulang)) / 60, 1);
@@ -113,10 +119,15 @@ class SandingJoinDataMap
 
     private static function roundToNearest500(float $value): int
     {
-        $base = floor($value / 1000) * 1000;
-        $rest = $value - $base;
-        if ($rest < 300) return (int) $base;
-        if ($rest < 800) return (int) ($base + 500);
-        return (int) ($base + 1000);
+        $ribuan = floor($value / 1000);
+        $ratusan = $value % 1000;
+
+        if ($ratusan < 300) {
+            return (int) ($ribuan * 1000);
+        } elseif ($ratusan >= 300 && $ratusan < 800) {
+            return (int) (($ribuan * 1000) + 500);
+        } else {
+            return (int) (($ribuan + 1) * 1000);
+        }
     }
 }

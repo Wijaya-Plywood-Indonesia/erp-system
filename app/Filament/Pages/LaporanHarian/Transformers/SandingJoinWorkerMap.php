@@ -13,53 +13,35 @@ class SandingJoinWorkerMap
         $results = [];
 
         foreach ($collection as $produksi) {
-            foreach ($produksi->hasilSandingJoint as $hasil) {
-                $ukuranModel = $hasil->ukuran;
-                $jenisKayuModel = $hasil->jenisKayu;
+            $daftarHasil = $produksi->hasilSandingJoint ?? [];
+            $daftarPegawai = $produksi->pegawaiSandingJoint ?? [];
+            $jumlahPekerja = count($daftarPegawai);
 
+            foreach ($daftarHasil as $hasil) {
+                $ukuranModel = $hasil->ukuran;
                 $kwRaw = trim($hasil->kw ?? '');
                 $kwLower = strtolower($kwRaw);
 
-                $labelPekerjaan = 'SANDING JOINT';
-
-                $kodeUkuran = 'SANDING-JOINT-NOT-FOUND';
-                if ($ukuranModel && $jenisKayuModel) {
-
-                    // Logic: Suffix hanya untuk afs/afm. Angka & Kayu dibuang.
-                    $suffix = in_array($kwLower, ['afs', 'afm']) ? $kwRaw : '';
-
-                    // FORMAT: SANDING (spasi) JOINT + P + L + T(koma) + Suffix
-                    // Contoh hasil: "SANDING JOINT130661,8afm"
-                    $kodeUkuran = 'SANDING JOINT' .
-                        $ukuranModel->panjang .
-                        $ukuranModel->lebar .
-                        str_replace('.', ',', $ukuranModel->tebal) .
-                        $suffix;
-
-                    // Kita pastikan bagian setelah "SANDING " tidak ada spasi yang terselip
-                    // Namun tetap menjaga spasi pertama antara SANDING dan JOINT
-                }
-
-                // --- LOG DEBUG UNTUK VALIDASI FORMAT ---
-                Log::info("🔍 [DEBUG SANDING] String Kode: '{$kodeUkuran}'");
+                // Format Kode: SANDING JOINT (spasi) PanjangLebarTebalSuffix
+                $suffix = in_array($kwLower, ['afs', 'afm']) ? $kwRaw : '';
+                $kodeUkuran = 'SANDING JOINT' .
+                    $ukuranModel->panjang .
+                    $ukuranModel->lebar .
+                    str_replace('.', ',', $ukuranModel->tebal) .
+                    $suffix;
+                $kodeUkuran = trim($kodeUkuran);
 
                 $targetModel = Target::where('kode_ukuran', $kodeUkuran)
                     ->where('id_mesin', $produksi->id_mesin ?? null)
                     ->first() ?? Target::where('kode_ukuran', $kodeUkuran)->first();
 
-                if ($targetModel) {
-                    Log::info("✅ [DEBUG SANDING] Target Ditemukan: {$targetModel->target}");
-                } else {
-                    Log::error("❌ [DEBUG SANDING] Target TIDAK ADA di DB: '{$kodeUkuran}'");
-                }
-
                 $targetWajib = (int) ($targetModel->target ?? 0);
-                $potonganPerLembar = (int) ($targetModel->potongan ?? 0);
+                $potonganPerLembar = (float) ($targetModel->potongan ?? 0);
 
-                foreach ($produksi->pegawaiSandingJoint as $psj) {
+                foreach ($daftarPegawai as $psj) {
                     if (!$psj->pegawai) continue;
 
-                    $hasilGrup = $produksi->hasilSandingJoint
+                    $hasilGrup = collect($daftarHasil)
                         ->where('id_ukuran', $hasil->id_ukuran)
                         ->where('kw', $kwRaw)
                         ->sum('jumlah');
@@ -67,15 +49,14 @@ class SandingJoinWorkerMap
                     $selisih = $hasilGrup - $targetWajib;
                     $potonganPerOrang = 0;
 
-                    if ($selisih < 0 && $targetWajib > 0 && $potonganPerLembar > 0) {
-                        $nominalPotongan = abs($selisih) * $potonganPerLembar;
+                    // Logika Pembagian Beban
+                    if ($targetWajib > 0 && $selisih < 0 && $potonganPerLembar > 0) {
+                        $totalDendaMeja = abs($selisih) * $potonganPerLembar;
 
-                        $ribuan = floor($nominalPotongan / 1000);
-                        $ratusan = $nominalPotongan % 1000;
-
-                        if ($ratusan < 300) $potonganPerOrang = $ribuan * 1000;
-                        elseif ($ratusan < 800) $potonganPerOrang = ($ribuan * 1000) + 500;
-                        else $potonganPerOrang = ($ribuan + 1) * 1000;
+                        if ($jumlahPekerja > 0) {
+                            $rawPotongan = $totalDendaMeja / $jumlahPekerja;
+                            $potonganPerOrang = self::pembulatanTigaTingkat($rawPotongan);
+                        }
                     }
 
                     $results[] = [
@@ -83,7 +64,7 @@ class SandingJoinWorkerMap
                         'nama' => $psj->pegawai->nama_pegawai ?? 'TANPA NAMA',
                         'masuk' => $psj->masuk ? Carbon::parse($psj->masuk)->format('H:i') : '',
                         'pulang' => $psj->pulang ? Carbon::parse($psj->pulang)->format('H:i') : '',
-                        'hasil' => $labelPekerjaan,
+                        'hasil' => 'SANDING JOINT',
                         'ijin' => $psj->ijin ?? '',
                         'potongan_targ' => (int) ($psj->potongan ?? $potonganPerOrang),
                         'keterangan' => $psj->ket ?? '',
@@ -92,5 +73,14 @@ class SandingJoinWorkerMap
             }
         }
         return $results;
+    }
+
+    private static function pembulatanTigaTingkat($value): int
+    {
+        $ribuan = floor($value / 1000);
+        $ratusan = $value % 1000;
+        if ($ratusan < 300) return (int) ($ribuan * 1000);
+        if ($ratusan < 800) return (int) ($ribuan * 1000 + 500);
+        return (int) (($ribuan + 1) * 1000);
     }
 }
