@@ -1,6 +1,10 @@
 {
   "resources/css/app.css": {
+<<<<<<< HEAD
+    "file": "assets/app-DZgZklfq.css",
+=======
     "file": "assets/app-D6cPzy-i.css",
+>>>>>>> dian
     "src": "resources/css/app.css",
     "isEntry": true,
     "names": [

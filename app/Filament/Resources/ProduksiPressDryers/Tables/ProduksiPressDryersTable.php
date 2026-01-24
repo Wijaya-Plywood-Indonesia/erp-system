@@ -15,6 +15,7 @@ use Filament\Tables\Filters\Filter;
 use Illuminate\Database\Eloquent\Builder;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
+use Filament\Support\Exceptions\Halt;
 use Filament\Tables;
 
 class ProduksiPressDryersTable
@@ -30,17 +31,17 @@ class ProduksiPressDryersTable
                 TextColumn::make('shift')
                     ->label('Shift')
                     ->badge()
-                    ->color(fn(string $state): string => match (strtoupper($state)) { // Dipaksa jadi HURUF BESAR saat pengecekan
+                    ->color(fn (string $state): string => match (strtoupper($state)) {
                         'PAGI'  => 'success',
                         'MALAM' => 'gray',
-                        default => 'primary', // WAJIB: Penyelamat jika ada data yang tidak cocok (misal: 'Siang')
+                        default => 'primary',
                     })
                     ->searchable(),
 
                 TextColumn::make('kendala')
                     ->label('Kendala')
                     ->limit(50)
-                    ->tooltip(fn(string $state): string => $state)
+                    ->tooltip(fn (string $state): string => $state)
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\BadgeColumn::make('validasiTerakhir.status')
@@ -48,7 +49,7 @@ class ProduksiPressDryersTable
                     ->colors([
                         'success' => 'divalidasi',
                         'warning' => 'ditangguhkan',
-                        'danger' => 'ditolak',
+                        'danger'  => 'ditolak',
                     ])
                     ->icons([
                         'heroicon-o-check-circle' => 'divalidasi',
@@ -57,7 +58,6 @@ class ProduksiPressDryersTable
                     ])
                     ->sortable()
                     ->searchable(),
-
 
                 TextColumn::make('created_at')
                     ->label('Dibuat Pada')
@@ -86,67 +86,81 @@ class ProduksiPressDryersTable
                         return $query
                             ->when(
                                 $data['from'],
-                                fn(Builder $query, $date): Builder => $query->whereDate('tanggal_produksi', '>=', $date),
+                                fn (Builder $query, $date) =>
+                                    $query->whereDate('tanggal_produksi', '>=', $date),
                             )
                             ->when(
                                 $data['until'],
-                                fn(Builder $query, $date): Builder => $query->whereDate('tanggal_produksi', '<=', $date),
+                                fn (Builder $query, $date) =>
+                                    $query->whereDate('tanggal_produksi', '<=', $date),
                             );
                     }),
             ])
             ->recordActions([
-                //  ViewAction::make(),
-                //   EditAction::make(),
                 Action::make('kelola_kendala')
-                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
-
-                    // ✅ Form style baru di Filament 4
+                    ->label(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->icon(fn ($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
+                    ->color(fn ($record) => $record->kendala ? 'info' : 'warning')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Kendala')
                             ->required()
                             ->rows(4),
                     ])
-
-                    // ✅ Saat modal dibuka — isi form dengan data kendala lama jika ada
                     ->mountUsing(function ($form, $record) {
                         $form->fill([
                             'kendala' => $record->kendala ?? '',
                         ]);
                     })
-
-                    // ✅ Saat tombol Simpan ditekan
                     ->action(function (array $data, $record): void {
                         $record->update([
                             'kendala' => trim($data['kendala']),
                         ]);
 
                         Notification::make()
-                            ->title($record->kendala ? 'Kendala diperbarui' : 'Kendala ditambahkan')
+                            ->title('Kendala disimpan')
                             ->success()
                             ->send();
                     })
-
-                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->modalHeading(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
                     ->modalSubmitActionLabel('Simpan'),
-                // Hilang jika sudah divalidasi
+
                 EditAction::make()
-                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+
+                ViewAction::make(),
 
                 DeleteAction::make()
-                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->before(function ($record) {
 
-                // View boleh tetap tampil
-                ViewAction::make(),
+                        $hasRelation =
+                            $record->detailMasuks()->exists()
+                            || $record->detailHasils()->exists()
+                            || $record->detailMesins()->exists()
+                            || $record->detailPegawais()->exists()
+                            || $record->validasiPressDryers()->exists();
+
+                        if ($hasRelation) {
+                            Notification::make()
+                                ->title('Data tidak dapat dihapus')
+                                ->body('Produksi Press Dryer ini masih memiliki data didalamnya yang terkait.')
+                                ->danger()
+                                ->send();
+
+                            // ⛔ STOP DELETE
+                            throw new Halt();
+                        }
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->visible(
-                            fn($records) =>
-                            $records->every(fn($r) => $r->validasiTerakhir?->status !== 'divalidasi')
+                            fn ($records) =>
+                                $records->every(
+                                    fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi'
+                                )
                         ),
                 ]),
             ]);
