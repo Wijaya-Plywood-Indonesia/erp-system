@@ -15,7 +15,7 @@ class PegawaiPotJelekForm
     {
         return collect(
             CarbonPeriod::create('00:00', '1 hour', '23:00')->toArray()
-        )->mapWithKeys(fn ($time) => [
+        )->mapWithKeys(fn($time) => [
             $time->format('H:i') => $time->format('H.i'),
         ])->toArray();
     }
@@ -29,18 +29,18 @@ class PegawaiPotJelekForm
                     ->default('06:00')
                     ->required()
                     ->searchable()
-                    ->dehydrateStateUsing(fn ($state) => $state ? $state . ':00' : null)
-                    ->formatStateUsing(fn ($state) => $state ? substr($state, 0, 5) : null),
+                    ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
                 // --- JAM PULANG ---
                 Select::make('pulang')
                     ->label('Jam Pulang')
                     ->options(self::timeOptions())
-                    ->default('17:00')
+                    ->default('16:00')
                     ->required()
                     ->searchable()
-                    ->dehydrateStateUsing(fn ($state) => $state ? $state . ':00' : null)
-                    ->formatStateUsing(fn ($state) => $state ? substr($state, 0, 5) : null),
+                    ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
                 TextInput::make('tugas')
                     ->label('Tugas')
@@ -53,12 +53,12 @@ class PegawaiPotJelekForm
                     ->searchable()
                     ->required()
                     ->options(
-                    Pegawai::query()
-                        ->get()
-                        ->mapWithKeys(fn($pegawai) => [
-                            $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
-                        ])
-                )
+                        Pegawai::query()
+                            ->get()
+                            ->mapWithKeys(fn($pegawai) => [
+                                $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
+                            ])
+                    )
                     ->rule(function ($livewire) {
                         return function (string $attribute, $value, $fail) use ($livewire) {
 

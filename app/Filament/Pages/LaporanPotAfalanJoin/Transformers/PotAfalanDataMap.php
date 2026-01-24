@@ -4,6 +4,7 @@ namespace App\Filament\Pages\LaporanPotAfalanJoin\Transformers;
 
 use Carbon\Carbon;
 use App\Models\Target;
+use Illuminate\Support\Facades\Log;
 
 class PotAfalanDataMap
 {
@@ -14,12 +15,15 @@ class PotAfalanDataMap
         foreach ($collection as $produksi) {
             $tanggal = Carbon::parse($produksi->tanggal_produksi)->format('d/m/Y');
 
+            // Hitung jumlah pekerja untuk pembagi denda
+            $jumlahPekerja = $produksi->pegawaiPotAfJoint->count();
+
             foreach ($produksi->hasilPotAfJoint as $hasil) {
                 $ukuranModel = $hasil->ukuran;
                 $jenisKayuModel = $hasil->jenisKayu;
                 $kwRaw = $hasil->kw ?? '1';
 
-                // 1. Build Kode Ukuran
+                // 1. Build Kode Ukuran (Format: POT AFALAN JOINT + P + L)
                 if ($ukuranModel && $jenisKayuModel) {
                     $kodeUkuran = 'POT AFALAN JOINT' .
                         $ukuranModel->panjang .
@@ -28,10 +32,10 @@ class PotAfalanDataMap
                     $kodeUkuran = 'POT-AFALAN-NOT-FOUND';
                 }
 
-                // 2. Ambil Target & Jam Standar dari DB Target
+                // 2. Ambil Target & Jam Standar
                 $targetModel = Target::where('kode_ukuran', $kodeUkuran)->first();
                 $targetHarian = (int) ($targetModel->target ?? 0);
-                $jamStandarTarget = (float) ($targetModel->jam ?? 0); // AMBIL DARI DB
+                $jamStandarTarget = (float) ($targetModel->jam ?? 0);
                 $nilaiPotonganPerLembar = (float) ($targetModel->potongan ?? 0);
 
                 foreach ($produksi->pegawaiPotAfJoint as $pj) {
@@ -50,7 +54,7 @@ class PotAfalanDataMap
                             'pekerja' => [],
                             'hasil' => 0,
                             'target' => $targetHarian,
-                            'jam_standar' => $jamStandarTarget, // MASUKKAN KE GRUP
+                            'jam_standar' => $jamStandarTarget,
                             'selisih' => 0,
                             'tanggal' => $tanggal,
                         ];
@@ -63,11 +67,17 @@ class PotAfalanDataMap
 
                     $result[$key]['hasil'] = $totalHasilGrup;
 
-                    // 3. Logika Potongan
+                    // 3. Logika Potongan (DIBAGI JUMLAH PEKERJA)
                     $kekurangan = $targetHarian - $totalHasilGrup;
                     $potTargetIndividu = 0;
-                    if ($kekurangan > 0 && $nilaiPotonganPerLembar > 0) {
-                        $potTargetIndividu = self::roundToNearest500($kekurangan * $nilaiPotonganPerLembar);
+
+                    if ($kekurangan > 0 && $targetHarian > 0 && $nilaiPotonganPerLembar > 0) {
+                        $totalDendaMeja = $kekurangan * $nilaiPotonganPerLembar;
+
+                        if ($jumlahPekerja > 0) {
+                            $rawPotonganIndividu = $totalDendaMeja / $jumlahPekerja;
+                            $potTargetIndividu = self::roundToNearest500($rawPotonganIndividu);
+                        }
                     }
 
                     $result[$key]['pekerja'][] = [
@@ -92,10 +102,10 @@ class PotAfalanDataMap
 
     private static function roundToNearest500(float $value): int
     {
-        $base = floor($value / 1000) * 1000;
-        $rest = $value - $base;
-        if ($rest < 300) return (int) $base;
-        if ($rest < 800) return (int) ($base + 500);
-        return (int) ($base + 1000);
+        $ribuan = floor($value / 1000);
+        $ratusan = $value % 1000;
+        if ($ratusan < 300) return (int) ($ribuan * 1000);
+        if ($ratusan < 800) return (int) ($ribuan * 1000 + 500);
+        return (int) (($ribuan + 1) * 1000);
     }
 }

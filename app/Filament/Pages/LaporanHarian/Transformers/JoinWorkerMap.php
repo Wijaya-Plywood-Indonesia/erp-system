@@ -13,7 +13,11 @@ class JointWorkerMap
         $results = [];
 
         foreach ($collection as $produksi) {
-            foreach ($produksi->hasilJoint as $hasil) {
+            $daftarHasil = $produksi->hasilJoint ?? [];
+            $daftarPegawai = $produksi->pegawaiJoint ?? [];
+            $jumlahPekerja = count($daftarPegawai); // Mendapatkan jumlah pekerja di grup ini
+
+            foreach ($daftarHasil as $hasil) {
                 $ukuranModel = $hasil->ukuran;
                 $jenisKayuModel = $hasil->jenisKayu;
 
@@ -22,46 +26,32 @@ class JointWorkerMap
 
                 $labelPekerjaan = 'JOINT';
 
+                // --- KONSTRUKSI KODE ---
                 $kodeUkuran = 'JOINT-NOT-FOUND';
                 if ($ukuranModel && $jenisKayuModel) {
-
-                    // --- LOGIKA FINAL ---
-                    // Jika Kayu adalah 'S', gunakan 'S'. Jika bukan 'S', kosongkan (hapus dari daftar).
                     $suffixKayu = ($kodeKayu === 'S') ? 'S' : '';
-
-                    // Konstruksi: JOINT + P + L + T(koma) + KW + S (jika ada)
                     $kodeUkuran = 'JOINT' .
                         $ukuranModel->panjang .
                         $ukuranModel->lebar .
                         str_replace('.', ',', $ukuranModel->tebal) .
                         $kwRaw .
                         $suffixKayu;
-
-                    // Pastikan tidak ada spasi agar cocok dengan database
                     $kodeUkuran = str_replace(' ', '', $kodeUkuran);
                 }
 
-                // --- LOG DEBUG ---
-                Log::info("🧩 [JOINT WORKER] Mencari Target: '{$kodeUkuran}' (Kayu: '{$kodeKayu}', KW: '{$kwRaw}')");
-
+                // --- PENCARIAN TARGET ---
                 $targetModel = Target::where('kode_ukuran', $kodeUkuran)
                     ->where('id_mesin', $produksi->id_mesin ?? null)
                     ->first() ?? Target::where('kode_ukuran', $kodeUkuran)->first();
 
-                if ($targetModel) {
-                    Log::info("✅ [JOINT WORKER] Target Ditemukan: {$targetModel->target}");
-                } else {
-                    Log::error("❌ [JOINT WORKER] Target TIDAK ADA di DB untuk kode: '{$kodeUkuran}'");
-                }
-
                 $targetWajib = (int) ($targetModel->target ?? 0);
                 $potonganPerLembar = (int) ($targetModel->potongan ?? 0);
 
-                foreach ($produksi->pegawaiJoint as $pj) {
+                foreach ($daftarPegawai as $pj) {
                     if (!$pj->pegawai) continue;
 
                     // Hitung Hasil Grup
-                    $hasilGrup = $produksi->hasilJoint
+                    $hasilGrup = collect($daftarHasil)
                         ->where('id_ukuran', $hasil->id_ukuran)
                         ->where('kw', $kwRaw)
                         ->sum('jumlah');
@@ -69,16 +59,25 @@ class JointWorkerMap
                     $selisih = $hasilGrup - $targetWajib;
                     $potonganPerOrang = 0;
 
-                    if ($selisih < 0 && $targetWajib > 0 && $potonganPerLembar > 0) {
-                        $nominalPotongan = abs($selisih) * $potonganPerLembar;
+                    // --- RUMUS BARU: PEMBAGIAN RATA ---
+                    if ($targetWajib > 0 && $selisih < 0 && $potonganPerLembar > 0) {
+                        $potonganTotalMeja = abs($selisih) * $potonganPerLembar;
 
-                        // Pembulatan standar 500
-                        $ribuan = floor($nominalPotongan / 1000);
-                        $ratusan = $nominalPotongan % 1000;
+                        if ($jumlahPekerja > 0) {
+                            $potonganPerOrangRaw = $potonganTotalMeja / $jumlahPekerja;
 
-                        if ($ratusan < 300) $potonganPerOrang = $ribuan * 1000;
-                        elseif ($ratusan < 800) $potonganPerOrang = ($ribuan * 1000) + 500;
-                        else $potonganPerOrang = ($ribuan + 1) * 1000;
+                            // Pembulatan 3 Tingkat
+                            $ribuan = floor($potonganPerOrangRaw / 1000);
+                            $ratusan = (int)$potonganPerOrangRaw % 1000;
+
+                            if ($ratusan < 300) {
+                                $potonganPerOrang = $ribuan * 1000;
+                            } elseif ($ratusan >= 300 && $ratusan < 800) {
+                                $potonganPerOrang = ($ribuan * 1000) + 500;
+                            } else {
+                                $potonganPerOrang = ($ribuan + 1) * 1000;
+                            }
+                        }
                     }
 
                     $results[] = [
