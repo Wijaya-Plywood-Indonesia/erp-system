@@ -9,15 +9,11 @@ class LoadLaporanPotJelek
     public static function run(string $tgl)
     {
         return ProduksiPotJelek::with([
-            // Load detail pegawai (Sesuai relasi di Model ProduksiPotJelek)
-            'pegawaiPotJelek.pegawai',
-
-            // Load hasil pengerjaan (Sesuai relasi di Model ProduksiPotJelek)
+            // Load detail barang pengerjaan sebagai sumber utama
             'detailBarangDikerjakanPotJelek.ukuran',
             'detailBarangDikerjakanPotJelek.jenisKayu',
-
-            // Load validasi (Opsional, jika ingin menampilkan status validasi)
-            'validasiTerakhir'
+            // Dari detail pengerjaan, kita ambil data pegawai-nya
+            'detailBarangDikerjakanPotJelek.PegawaiPotJelek.pegawai',
         ])
             ->whereDate('tanggal_produksi', $tgl)
             ->get();

@@ -10,65 +10,62 @@ class PotJelekDataMap
     public static function make($collection): array
     {
         $result = [];
+        $kodeTargetGlobal = 'POT JELEK';
+
+        $targetModel = Target::where('kode_ukuran', $kodeTargetGlobal)->first();
+        $targetPerOrang = (int) ($targetModel->target ?? 0);
+        $jamStandarTarget = (float) ($targetModel->jam ?? 0);
+        $nilaiPotonganPerLembar = (float) ($targetModel->potongan ?? 0);
 
         foreach ($collection as $produksi) {
             $tanggal = Carbon::parse($produksi->tanggal_produksi)->format('d/m/Y');
-            $jumlahPekerja = $produksi->pegawaiPotJelek->count();
 
-            $kodeUkuranTarget = 'POT JELEK';
+            foreach ($produksi->detailBarangDikerjakanPotJelek as $detail) {
+                $pj = $detail->PegawaiPotJelek;
+                if (!$pj || !$pj->pegawai) continue;
 
-            $targetModel = Target::where('kode_ukuran', $kodeUkuranTarget)->first();
-            $targetHarian = (int) ($targetModel->target ?? 0);
-            $jamStandarTarget = (float) ($targetModel->jam ?? 0); // Ambil jam standar
-            $nilaiPotonganPerLembar = (float) ($targetModel->potongan ?? 0);
-
-            $totalHasilSemuaUkuran = $produksi->detailBarangDikerjakanPotJelek->sum('jumlah');
-
-            foreach ($produksi->pegawaiPotJelek as $pj) {
-                if (!$pj->pegawai) continue;
-
-                $nomorMeja = $pj->nomor_meja ?? '-';
-                $key = $nomorMeja . '|' . $kodeUkuranTarget;
+                $key = $pj->pegawai->id . '|' . $produksi->id;
 
                 if (!isset($result[$key])) {
                     $result[$key] = [
-                        'nomor_meja' => $nomorMeja,
-                        'kode_ukuran' => $kodeUkuranTarget,
-                        'pekerja' => [],
-                        'hasil' => $totalHasilSemuaUkuran,
-                        'target' => $targetHarian,
-                        'jam_standar' => $jamStandarTarget, // INI YANG TADI KURANG
-                        'selisih' => 0,
+                        'kode_nama' => ($pj->pegawai->kode_pegawai ?? '-') . ' - ' . ($pj->pegawai->nama_pegawai ?? 'TANPA NAMA'),
+                        'jam_masuk' => $pj->masuk ? Carbon::parse($pj->masuk)->format('H:i') : '-',
+                        'jam_pulang' => $pj->pulang ? Carbon::parse($pj->pulang)->format('H:i') : '-',
+                        'ijin' => $pj->ijin ?? '-',
+                        'keterangan' => $pj->keterangan ?? $produksi->kendala ?? '-',
                         'tanggal' => $tanggal,
+                        'target' => $targetPerOrang,
+                        'jam_standar' => $jamStandarTarget,
+                        'rincian' => [],
+                        'hasil' => 0,
+                        'selisih' => 0,
+                        'pot_target' => 0,
                     ];
                 }
 
-                // ... sisa logika potongan sama seperti sebelumnya ...
-                $kekurangan = $targetHarian - $totalHasilSemuaUkuran;
-                $potTargetIndividu = 0;
+                // Format Ukuran: Ukuran . KW . Jenis Kayu
+                $namaUkuran = $detail->ukuran->nama_ukuran ?? '-';
+                $kw = $detail->kw ?? '-';
+                $namaKayu = $detail->jenisKayu->nama_kayu ?? '-';
+                $formatUkuran = "{$namaUkuran} . {$kw} . {$namaKayu}";
 
-                if ($kekurangan > 0 && $targetHarian > 0 && $nilaiPotonganPerLembar > 0) {
-                    $totalDendaMeja = $kekurangan * $nilaiPotonganPerLembar;
-                    if ($jumlahPekerja > 0) {
-                        $rawPotonganIndividu = $totalDendaMeja / $jumlahPekerja;
-                        $potTargetIndividu = self::roundToNearest500($rawPotonganIndividu);
-                    }
-                }
-
-                $result[$key]['pekerja'][] = [
-                    'id' => $pj->pegawai->kode_pegawai ?? '-',
-                    'nama' => $pj->pegawai->nama_pegawai ?? '-',
-                    'jam_masuk' => $pj->masuk ? Carbon::parse($pj->masuk)->format('H:i') : '-',
-                    'jam_pulang' => $pj->pulang ? Carbon::parse($pj->pulang)->format('H:i') : '-',
-                    'hasil' => $totalHasilSemuaUkuran,
-                    'pot_target' => $potTargetIndividu,
-                    'keterangan' => $produksi->kendala ?? '-',
+                $result[$key]['rincian'][] = [
+                    'ukuran_lengkap' => $formatUkuran,
+                    'jumlah' => $detail->jumlah ?? 1,
                 ];
+
+                $result[$key]['hasil'] += $detail->jumlah ?? 1;
             }
         }
 
-        foreach ($result as &$row) {
-            $row['selisih'] = $row['hasil'] - $row['target'];
+        foreach ($result as $k => $data) {
+            $selisih = $data['hasil'] - $targetPerOrang;
+            $result[$k]['selisih'] = $selisih;
+
+            if ($selisih < 0 && $targetPerOrang > 0) {
+                $denda = abs($selisih) * $nilaiPotonganPerLembar;
+                $result[$k]['pot_target'] = self::roundToNearest500($denda);
+            }
         }
 
         return array_values($result);
