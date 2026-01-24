@@ -6,6 +6,19 @@ Table produksi_pilih_plywood {
   updated_at timestamp
 }
 
+Table pegawai_pilih_plywood {
+  id bigint
+  id_produksi_pilih_plywood bigint [ref: > produksi_pilih_plywood.id]
+  id_pegawai bigint
+  masuk time
+  pulang time
+  tugas text
+  ijin varchar
+  ket varchar
+  created_at timestamp
+  updated_at timestamp
+}
+
 Table bahan_pilih_plywood {
   id bigint
   id_produksi_pilih_plywood bigint [ref: > produksi_pilih_plywood.id]
@@ -28,6 +41,7 @@ Table hasil_pilih_plywood {
     dll
   ''']
   jumlah int
+  jumlah_bagus int
   kondisi enum [note: '''
     reject,
     reparasi,

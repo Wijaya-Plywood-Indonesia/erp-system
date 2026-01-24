@@ -6,6 +6,18 @@ Table produksi_dempuls {
   updated_at timestamp
 }
 
+Table rencana_pegawai_dempuls{
+  id bigint
+  id_produksi_dempul bigint [ref: > produksi_dempuls.id]
+  id_pegawai bigint
+  jam_masuk time
+  jam_pulang time
+  ijin varchar
+  keterangan varchar
+  created_at timestamp
+  updated_at timestamp
+}
+
 Table bahan_dempuls{
   id bigint
   id_produksi_dempul bigint [ref: > produksi_dempuls.id]
