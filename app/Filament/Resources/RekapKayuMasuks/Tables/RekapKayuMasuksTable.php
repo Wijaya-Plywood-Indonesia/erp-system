@@ -5,13 +5,15 @@ namespace App\Filament\Resources\RekapKayuMasuks\Tables;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Filament\Tables\Filters\Filter;
+use Filament\Forms\Components\DatePicker;
 use Illuminate\Database\Eloquent\Builder;
+use Carbon\Carbon;
 
 class RekapKayuMasuksTable
 {
     public static function configure(Table $table): Table
     {
-
         return $table
             ->paginated([25, 50, 100])
             ->defaultPaginationPageOption(25)
@@ -19,27 +21,26 @@ class RekapKayuMasuksTable
             ->columns([
 
                 // ===========================
-                // KOLOM ASLI DB (AMAN SORT+SEARCH)
+                // KOLOM ASLI DB
                 // ===========================
 
                 TextColumn::make('tgl_kayu_masuk')
                     ->label('Tanggal')
-                    ->date()
+                    ->date('d/m/Y')
                     ->sortable(),
 
                 TextColumn::make('penggunaanSupplier.nama_supplier')
-                    ->label('Nama')
+                    ->label('Supplier')
                     ->sortable()
                     ->searchable(),
 
                 TextColumn::make('seri')
-                    ->label('Seri')
+                    ->label('Nomor Seri')
                     ->sortable()
                     ->searchable(),
 
                 // ===========================
                 // KOLOM RELASI / HASIL OLAHAN
-                // SORT & SEARCH MANUAL
                 // ===========================
 
                 TextColumn::make('panjang')
@@ -51,11 +52,11 @@ class RekapKayuMasuksTable
                             ->pluck('panjang')
                             ->unique()
                             ->implode(', ')
-                        ?? '-'
+                            ?? '-'
                     ),
 
                 TextColumn::make('jenis')
-                    ->label('Jenis')
+                    ->label('Jenis Kayu')
                     ->wrap()
                     ->getStateUsing(
                         fn($record) =>
@@ -63,7 +64,7 @@ class RekapKayuMasuksTable
                             ->pluck('jenisKayu.nama_kayu')
                             ->unique()
                             ->implode(', ')
-                        ?? '-'
+                            ?? '-'
                     )
                     ->searchable(
                         query: fn(Builder $query, string $search) =>
@@ -83,7 +84,7 @@ class RekapKayuMasuksTable
                             ->pluck('lahan.kode_lahan')
                             ->unique()
                             ->implode(', ')
-                        ?? '-'
+                            ?? '-'
                     )
                     ->searchable(
                         query: fn(Builder $query, string $search) =>
@@ -93,10 +94,6 @@ class RekapKayuMasuksTable
                             $q->where('kode_lahan', 'like', "%{$search}%")
                         )
                     ),
-
-                // ===========================
-                // TOTAL BATANG (SUM)
-                // ===========================
 
                 TextColumn::make('banyak')
                     ->label('Total Batang')
@@ -115,7 +112,7 @@ class RekapKayuMasuksTable
                             ->pluck('diameter')
                             ->unique()
                             ->implode(', ')
-                        ?? '-'
+                            ?? '-'
                     ),
 
                 // ===========================
@@ -129,7 +126,6 @@ class RekapKayuMasuksTable
                         $record->notaKayu->first()?->status ?? 'Belum Diperiksa'
                     )
                     ->getStateUsing(function ($record) {
-
                         $status = $record->notaKayu->first()?->status;
 
                         if ($status && str_contains(strtolower($status), 'sudah')) {
@@ -155,6 +151,47 @@ class RekapKayuMasuksTable
                         )
                     ),
 
+            ])
+            ->filters([
+                // Filter Rentang Tanggal
+                Filter::make('tgl_kayu_masuk')
+                    ->form([
+                        DatePicker::make('dari_tanggal')
+                            ->label('Dari Tanggal')
+                            ->placeholder('Pilih tanggal awal')
+                            ->native(false)
+                            ->closeOnDateSelection()
+                            ->suffixIcon('heroicon-o-calendar')
+                            ->suffixIconColor('primary'),
+                        DatePicker::make('sampai_tanggal')
+                            ->label('Sampai Tanggal')
+                            ->placeholder('Pilih tanggal akhir')
+                            ->native(false)
+                            ->closeOnDateSelection()
+                            ->suffixIcon('heroicon-o-calendar')
+                            ->suffixIconColor('primary'),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when(
+                                $data['dari_tanggal'],
+                                fn(Builder $query, $date): Builder => $query->whereDate('tgl_kayu_masuk', '>=', $date),
+                            )
+                            ->when(
+                                $data['sampai_tanggal'],
+                                fn(Builder $query, $date): Builder => $query->whereDate('tgl_kayu_masuk', '<=', $date),
+                            );
+                    })
+                    ->indicateUsing(function (array $data): array {
+                        $indicators = [];
+                        if ($data['dari_tanggal'] ?? null) {
+                            $indicators['dari_tanggal'] = 'Dari: ' . Carbon::parse($data['dari_tanggal'])->format('d/m/Y');
+                        }
+                        if ($data['sampai_tanggal'] ?? null) {
+                            $indicators['sampai_tanggal'] = 'Sampai: ' . Carbon::parse($data['sampai_tanggal'])->format('d/m/Y');
+                        }
+                        return $indicators;
+                    })
             ])
             ->defaultSort('seri', 'desc');
     }
