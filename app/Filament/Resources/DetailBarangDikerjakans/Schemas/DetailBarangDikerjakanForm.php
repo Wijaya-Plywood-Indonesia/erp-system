@@ -52,8 +52,7 @@ class DetailBarangDikerjakanForm
                             ->orderBy('nama_grade')
                             ->get()
                             ->mapWithKeys(fn($g) => [
-                                $g->id => ($g->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
-                                    . ' | ' . $g->nama_grade
+                                $g->id =>  $g->nama_grade
                             ])
                     )
                     ->reactive()
@@ -109,13 +108,14 @@ class DetailBarangDikerjakanForm
                             ->orderBy('barang_setengah_jadi_hp.id', 'asc');
 
                         return $query->get()->mapWithKeys(function ($b) {
-                            return [
-                                $b->id => ($b->grade?->kategoriBarang?->nama_kategori ?? '-') . ' | ' .
-                                    ($b->ukuran?->nama_ukuran ?? '-') . ' | ' .
-                                    ($b->grade?->nama_grade ?? '-') . ' | ' .
-                                    ($b->jenisBarang?->nama_jenis_barang ?? '-')
-                            ];
-                        });
+    return [
+        $b->id =>
+            ($b->ukuran?->tebal ?? '-') . ' | ' .
+            ($b->grade?->nama_grade ?? '-') . ' | ' .
+            ($b->jenisBarang?->nama_jenis_barang ?? '-')
+    ];
+});
+
                     })
                     ->columnSpanFull(),
 
