@@ -25,31 +25,21 @@ class ProduksiRepairSummaryWidget extends Widget
 
         $produksiId = $record->id;
 
-        // ======================
         // 1. TOTAL PRODUKSI (LEMBAR)
-        // ======================
         $totalAll = HasilRepair::where('id_produksi_repair', $produksiId)
             ->sum(DB::raw('CAST(jumlah AS UNSIGNED)'));
 
-        // ======================
-        // 2. TOTAL PEGAWAI (HEADCOUNT / UNIK)
-        // ======================
-        // Kita ambil relasi pegawai dari record ProduksiRepair
-        // Pastikan model ProduksiRepair punya relasi 'rencanaPegawais'
+        // 2. TOTAL PEGAWAI KESELURUHAN (UNIK)
         $totalPegawai = $record->rencanaPegawais()
-            ->with('pegawai') // Load data pegawai biar aman
             ->get()
-            // Filter Unik berdasarkan ID Pegawai
-            // (Asumsi kolom foreign key adalah 'id_pegawai')
             ->unique('id_pegawai')
             ->count();
 
-        // ======================
-        // 3. GLOBAL UKURAN + KW
-        // ======================
+        // 3. GLOBAL UKURAN + KW + JUMLAH ORANG (INI KUNCINYA)
         $globalUkuranKw = HasilRepair::query()
             ->where('hasil_repairs.id_produksi_repair', $produksiId)
             ->join('rencana_repairs', 'rencana_repairs.id', '=', 'hasil_repairs.id_rencana_repair')
+            ->join('rencana_pegawais', 'rencana_pegawais.id', '=', 'rencana_repairs.id_rencana_pegawai')
             ->join('modal_repairs', 'modal_repairs.id', '=', 'rencana_repairs.id_modal_repair')
             ->join('ukurans', 'ukurans.id', '=', 'modal_repairs.id_ukuran')
             ->selectRaw('
@@ -59,17 +49,17 @@ class ProduksiRepairSummaryWidget extends Widget
                     TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
                 ) AS ukuran,
                 rencana_repairs.kw,
-                SUM(CAST(hasil_repairs.jumlah AS UNSIGNED)) AS total
+                SUM(CAST(hasil_repairs.jumlah AS UNSIGNED)) AS total,
+                COUNT(DISTINCT rencana_pegawais.id_pegawai) AS jumlah_orang
             ')
             ->groupBy('ukuran', 'rencana_repairs.kw')
             ->orderBy('ukuran')
             ->orderBy('rencana_repairs.kw')
             ->get();
 
-        // Masukkan ke array summary untuk dikirim ke View
         $this->summary = [
             'totalAll'       => $totalAll,
-            'totalPegawai'   => $totalPegawai, // <--- Data Baru
+            'totalPegawai'   => $totalPegawai,
             'globalUkuranKw' => $globalUkuranKw,
         ];
     }
