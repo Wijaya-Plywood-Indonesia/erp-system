@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources\HasilRepairs\Tables;
 
 use Filament\Tables\Table;
@@ -116,7 +117,7 @@ class HasilRepairsTable
 
                 TextColumn::make('keterangan')
                     ->label('Keterangan')
-                    ->tooltip(fn ($state) => $state)
+                    ->tooltip(fn($state) => $state)
                     ->icon('heroicon-m-document-text')
                     ->placeholder('-')
                     ->wrap(),
@@ -146,7 +147,7 @@ class HasilRepairsTable
                     ->action(function ($record, array $data) use ($idProduksiRepair) {
                         $totalTambah = (int) $data['tambah'];
                         $rencanaIds = self::getGroupRencanaIds($record, $idProduksiRepair);
-                        
+
                         // Hitung jumlah pekerja untuk pembagian
                         $jumlahPekerja = count($rencanaIds);
 
@@ -208,7 +209,7 @@ class HasilRepairsTable
                     ->action(function ($record, array $data) use ($idProduksiRepair) {
                         $totalMejaBaru = (int) $data['total_meja'];
                         $rencanaIds = self::getGroupRencanaIds($record, $idProduksiRepair);
-                        
+
                         $jumlahPekerja = count($rencanaIds);
 
                         if ($jumlahPekerja > 0) {

@@ -20,14 +20,18 @@ class ProduksiSandingsTable
     public static function configure(Table $table): Table
     {
         return $table
+            /** * Mengatur pengurutan default: 
+             * 'tanggal' secara Descending (DESC) agar data terbaru di atas.
+             */
+            ->defaultSort('tanggal', 'desc')
             ->columns([
                 TextColumn::make('tanggal')
                     ->label('Tanggal Produksi')
                     ->formatStateUsing(
-                        fn ($state) =>
-                            Carbon::parse($state)
-                                ->locale('id')
-                                ->translatedFormat('l, j F Y')
+                        fn($state) =>
+                        Carbon::parse($state)
+                            ->locale('id')
+                            ->translatedFormat('l, j F Y')
                     )
                     ->sortable()
                     ->searchable(),
@@ -42,23 +46,23 @@ class ProduksiSandingsTable
                     ->placeholder('Tidak ada kendala')
                     ->wrap()
                     ->limit(50)
-                    ->tooltip(fn ($record) => $record->kendala)
+                    ->tooltip(fn($record) => $record->kendala)
                     ->searchable(),
 
                 TextColumn::make('shift')
                     ->label('Shift')
                     ->badge()
-                    ->icon(fn (string $state): string => match ($state) {
+                    ->icon(fn(string $state): string => match ($state) {
                         'PAGI'  => 'heroicon-o-sun',
                         'MALAM' => 'heroicon-o-moon',
                         default => 'heroicon-o-question-mark-circle',
                     })
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'PAGI'  => 'success',
                         'MALAM' => 'gray',
                         default => 'secondary',
                     })
-                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                    ->formatStateUsing(fn(string $state): string => match ($state) {
                         'PAGI'  => 'Pagi',
                         'MALAM' => 'Malam',
                         default => $state,
@@ -76,19 +80,20 @@ class ProduksiSandingsTable
             ])
 
             ->recordActions([
-                /* ================= KENDALA ================= */
+                /* ================= MANAJEMEN KENDALA ================= */
                 Action::make('kelola_kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
                     ->icon('heroicon-m-chat-bubble-left-right')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'gray')
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'gray')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Catatan Kendala')
                             ->required()
                             ->rows(4),
                     ])
-                    ->mountUsing(fn ($form, $record) =>
+                    ->mountUsing(
+                        fn($form, $record) =>
                         $form->fill(['kendala' => $record->kendala])
                     )
                     ->action(function (array $data, $record): void {
@@ -111,13 +116,13 @@ class ProduksiSandingsTable
                 EditAction::make()
                     ->label('')
                     ->tooltip('Edit Data')
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
                 /* ================= DELETE ================= */
                 DeleteAction::make()
                     ->label('')
                     ->tooltip('Hapus Data')
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->before(function ($record) {
 
                         $hasRelation =
@@ -133,7 +138,7 @@ class ProduksiSandingsTable
                                 ->danger()
                                 ->send();
 
-                            // ⛔ HENTIKAN DELETE TOTAL
+                            // ⛔ HENTIKAN PROSES DELETE
                             throw new Halt();
                         }
                     }),
@@ -142,13 +147,13 @@ class ProduksiSandingsTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->visible(fn ($records) =>
+                        ->visible(
+                            fn($records) =>
                             $records->every(
-                                fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi'
+                                fn($r) => $r->validasiTerakhir?->status !== 'divalidasi'
                             )
                         )
                         ->before(function ($records) {
-
                             foreach ($records as $record) {
                                 $hasRelation =
                                     $record->modalSandings()->exists()
@@ -159,11 +164,10 @@ class ProduksiSandingsTable
                                 if ($hasRelation) {
                                     Notification::make()
                                         ->title('Gagal menghapus data terpilih')
-                                        ->body('Salah satu Produksi Sanding masih memiliki relasi.')
+                                        ->body('Salah satu data yang dipilih masih memiliki relasi aktif.')
                                         ->danger()
                                         ->send();
 
-                                    // ⛔ STOP BULK DELETE
                                     throw new Halt();
                                 }
                             }

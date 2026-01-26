@@ -21,30 +21,38 @@ class LainLainsTable
                     ->getStateUsing(
                         fn($record) =>
                         $record->pegawai
-                        ? "{$record->pegawai->kode_pegawai} - {$record->pegawai->nama_pegawai}"
-                        : '-'
+                            ? "{$record->pegawai->kode_pegawai} - {$record->pegawai->nama_pegawai}"
+                            : '-'
                     )
                     ->sortable()
                     ->searchable(),
+
+                // Menampilkan jam saja (format 24 jam)
                 TextColumn::make('masuk')
                     ->label('Masuk')
-                    ->dateTime('d M Y H:i'),
+                    ->dateTime('H:i'), // Gunakan 'H:i' untuk jam:menit
 
+                // Menampilkan jam saja (format 24 jam)
                 TextColumn::make('pulang')
                     ->label('Pulang')
-                    ->dateTime('d M Y H:i'),
+                    ->dateTime('H:i'), // Gunakan 'H:i' untuk jam:menit
 
                 TextColumn::make('ijin')
                     ->label('Ijin')
+                    ->default('-')
+                    ->color('primary')
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 TextColumn::make('ket')
                     ->label('Keterangan')
+                    ->default('-')
+                    ->color('primary')
                     ->limit(30)
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 TextColumn::make('hasil')
                     ->label('Hasil')
+                    ->default('-')
                     ->limit(30)
                     ->toggleable(isToggledHiddenByDefault: false),
             ])
