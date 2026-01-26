@@ -20,7 +20,12 @@ class BahanPenolongHpForm
             'tepung_pjp' => 'Tepung PJP (kg)',
             'isi_steples' => 'Isi Steples (pack)',
             'solasi_putih' => 'Solasi Putih (roll)',
+            'solasi_coklat' => 'Solasi Coklat (roll)',
             'pewarna' => 'Pewarna (gr)',
+            'kalsium' => 'Kalsium (gram)',
+            'semen' => 'Semen (kg)',
+            'lem_pvac' => 'Lem PVAC (gr)',
+            'tepung_anggrek' => 'Tepung Anggrek (kg)',
         ];
     }
 
