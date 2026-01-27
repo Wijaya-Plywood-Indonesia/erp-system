@@ -23,19 +23,23 @@ class ModalSandingForm
             |--------------------------------------------------------------------------
             */
             Select::make('grade_id')
-                ->label('Grade')
-                ->default(fn(callable $get) => self::lastValue($get, 'grade_id'))
-                ->options(
-                    Grade::with('kategoriBarang')
-                        ->get()
-                        ->mapWithKeys(fn($g) => [
-                            $g->id => ($g->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
-                                . ' - ' . $g->nama_grade
-                        ])
-                )
-                ->reactive()
-                ->searchable()
-                ->placeholder('Semua Grade'),
+    ->label('Grade')
+    ->default(fn(callable $get) => self::lastValue($get, 'grade_id'))
+    ->options(
+        Grade::with('kategoriBarang')
+            ->whereHas('kategoriBarang', function ($q) {
+                $q->whereIn('nama_kategori', ['PLATFORM', 'PLYWOOD']);
+            })
+            ->get()
+            ->mapWithKeys(fn($g) => [
+                $g->id => ($g->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
+                    . ' - ' . $g->nama_grade
+            ])
+    )
+    ->reactive()
+    ->searchable()
+    ->placeholder('Semua Grade'),
+
 
             /*
             |--------------------------------------------------------------------------
@@ -61,7 +65,11 @@ class ModalSandingForm
                 // OPTIONS saat create / filter
                 ->options(function (callable $get) {
                     $query = BarangSetengahJadiHp::query()
-                        ->with(['ukuran', 'jenisBarang', 'grade.kategoriBarang']);
+    ->with(['ukuran', 'jenisBarang', 'grade.kategoriBarang'])
+    ->whereHas('grade.kategoriBarang', function ($q) {
+        $q->whereIn('nama_kategori', ['PLATFORM', 'PLYWOOD']);
+    });
+
 
                     if ($get('grade_id')) {
                         $query->where('id_grade', $get('grade_id'));
