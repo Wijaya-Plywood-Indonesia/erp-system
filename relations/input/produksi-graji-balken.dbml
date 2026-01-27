@@ -1,5 +1,6 @@
 Table produksi_graji_balken {
     id bigint
+    tanggal_produksi date
     kendala varchar
     created_at timestamp
     updated_at timestamp
