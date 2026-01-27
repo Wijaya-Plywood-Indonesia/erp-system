@@ -10,6 +10,7 @@ class hasil_guellotine extends Model
 
     protected $fillable = [
         'id_produksi_guellotine',
+        'id_pegawai_guellotine',
         'id_ukuran',
         'id_jenis_kayu',
         'jumlah',
@@ -20,6 +21,18 @@ class hasil_guellotine extends Model
     {
         return $this->belongsTo(produksi_guellotine::class, 'id_produksi_guellotine');
     }
+
+    public function pegawaiGuellotines()
+{
+    return $this->belongsToMany(
+    pegawai_guellotine::class,
+    'hasil_guellotine_pegawai',
+    'id_hasil_guellotine',      // FK ke tabel ini
+    'id_pegawai_guellotine'    // FK ke tabel pegawai
+);
+
+}
+
 
     public function ukuran()
     {
