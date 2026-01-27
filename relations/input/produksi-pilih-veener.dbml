@@ -1,0 +1,52 @@
+Table ProduksiPilihVeener{
+    id bigint [pk]
+    tanggal date
+    keterangan text
+    create_at timestamp
+    updated_at timestamp
+}
+
+Table ModalPilihVeener{
+    id bigint [pk]
+    id_produksi_pilih_veener bigint [ref: > ProduksiPilihVeener.id]
+    id_ukuran bigint
+    id_jenis_kayu bigint
+    kw varchar 
+    jumlah_bahan int
+    nomor_palet int
+    create_at timestamp
+    updated_at timestamp
+}
+
+Table PegawaiPilihVeener{
+    id bigint [pk]
+    id_produksi_pilih_veener bigint [ref: > ProduksiPilihVeener.id]
+    id_pegawai bigint
+    jam_masuk time
+    jam_pulang time
+    nomor_meja int
+    ijin varchar 
+    keterangan text
+    create_at timestamp
+    update_at timestamp
+}
+
+Table HasilPilihVeener{
+    id bigint [pk]
+    id_produksi_pilih_veener bigint [ref: > ProduksiPilihVeener.id]
+    id_modal_pilih_veener bigint [ref: > ModalPilihVeener.id]
+    jumlah_modal int
+    jumlah_hasil int
+    nomor_palet int
+    create_at timestamp
+    update_at timestamp
+}
+
+Table ValidasiPilihVeener{
+    id bigint [pk]
+    id_produksi_pilih_veener bigint [ref: > ProduksiPilihVeener.id]
+    role varchar
+    status varchar
+    created_at timestamp
+    updated_at timestamp
+}

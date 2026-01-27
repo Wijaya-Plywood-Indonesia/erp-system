@@ -1,0 +1,117 @@
+{
+  "version": "1.0.0",
+  "darkMode": true,
+  "gridEnabling": false,
+  "detailLevel": "All",
+  "tablePositions": [
+    {
+      "name": "ProduksiPilihVeener",
+      "schemaName": "public",
+      "x": 424,
+      "y": 432
+    },
+    {
+      "name": "ModalPilihVeener",
+      "schemaName": "public",
+      "x": 48,
+      "y": 248
+    },
+    {
+      "name": "PegawaiPilihVeener",
+      "schemaName": "public",
+      "x": 712,
+      "y": 600
+    },
+    {
+      "name": "HasilPilihVeener",
+      "schemaName": "public",
+      "x": 480,
+      "y": 48
+    },
+    {
+      "name": "ValidasiPilihVeener",
+      "schemaName": "public",
+      "x": 232,
+      "y": 712
+    }
+  ],
+  "tableGroupCollapseStates": [],
+  "stickyNoteLayouts": [],
+  "referencePaths": [
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "ProduksiPilihVeener",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_pilih_veener"
+      ],
+      "secondTableName": "ModalPilihVeener",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "ProduksiPilihVeener",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_pilih_veener"
+      ],
+      "secondTableName": "PegawaiPilihVeener",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "ProduksiPilihVeener",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_pilih_veener"
+      ],
+      "secondTableName": "HasilPilihVeener",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "ModalPilihVeener",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_modal_pilih_veener"
+      ],
+      "secondTableName": "HasilPilihVeener",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "ProduksiPilihVeener",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_pilih_veener"
+      ],
+      "secondTableName": "ValidasiPilihVeener",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    }
+  ]
+}
