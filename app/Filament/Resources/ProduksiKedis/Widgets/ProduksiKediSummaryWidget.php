@@ -6,6 +6,7 @@ use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use App\Models\ProduksiKedi;
 use App\Models\DetailBongkarKedi;
+use App\Models\DetailPegawaiKedi; // Tambahkan import ini
 
 class ProduksiKediSummaryWidget extends Widget
 {
@@ -25,15 +26,17 @@ class ProduksiKediSummaryWidget extends Widget
 
         $produksiId = $record->id;
 
-        // ======================
-        // TOTAL KESELURUHAN
-        // ======================
+        // 1. TOTAL HASIL PRODUKSI (DARI TABEL BONGKAR)
         $totalAll = DetailBongkarKedi::where('id_produksi_kedi', $produksiId)
             ->sum(DB::raw('CAST(jumlah AS UNSIGNED)'));
 
-        // ======================
-        // GLOBAL UKURAN + KW
-        // ======================
+        // 2. TOTAL PEGAWAI UNIK (DARI TABEL PEGAWAI KEDI)
+        // Menggunakan distinct agar jika 1 orang punya 2 tugas tetap dihitung 1 orang
+        $totalPegawai = DetailPegawaiKedi::where('id_produksi_kedi', $produksiId)
+            ->distinct('id_pegawai')
+            ->count('id_pegawai');
+
+        // 3. GLOBAL UKURAN + KW
         $globalUkuranKw = DetailBongkarKedi::query()
             ->where('id_produksi_kedi', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'detail_bongkar_kedi.id_ukuran')
@@ -51,9 +54,7 @@ class ProduksiKediSummaryWidget extends Widget
             ->orderBy('detail_bongkar_kedi.kw')
             ->get();
 
-        // ======================
-        // GLOBAL UKURAN (SEMUA KW)
-        // ======================
+        // 4. GLOBAL UKURAN (SEMUA KW)
         $globalUkuran = DetailBongkarKedi::query()
             ->where('id_produksi_kedi', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'detail_bongkar_kedi.id_ukuran')
@@ -69,8 +70,10 @@ class ProduksiKediSummaryWidget extends Widget
             ->orderBy('ukuran')
             ->get();
 
+        // SIMPAN SEMUA KE ARRAY SUMMARY UNTUK DIKIRIM KE BLADE
         $this->summary = [
             'totalAll'       => $totalAll,
+            'totalPegawai'   => $totalPegawai, // Baris ini yang sebelumnya hilang
             'globalUkuranKw' => $globalUkuranKw,
             'globalUkuran'   => $globalUkuran,
         ];
