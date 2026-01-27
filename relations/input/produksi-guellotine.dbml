@@ -23,9 +23,9 @@ Table hasil_guellotine {
     id bigint
     id_produksi_guellotine bigint [ref: > produksi_guellotine.id]
     id_ukuran bigint
-    jenis_kayu bigint
+    id_jenis_kayu bigint
     jumlah int
-    no_palet id_produksi_guellotine
+    no_palet int
     created_at timestamp
     updated_at timestamp
 }
