@@ -3,12 +3,20 @@
 namespace App\Filament\Resources\ProduksiGrajiBalkens\Pages;
 
 use App\Filament\Resources\ProduksiGrajiBalkens\ProduksiGrajiBalkenResource;
+use App\Filament\Resources\ProduksiGrajiBalkens\Widgets\ProduksiGrajiBalkenSummaryWidget;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 
 class ViewProduksiGrajiBalken extends ViewRecord
 {
     protected static string $resource = ProduksiGrajiBalkenResource::class;
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            ProduksiGrajiBalkenSummaryWidget::class,
+        ];
+    }
 
     protected function getHeaderActions(): array
     {
