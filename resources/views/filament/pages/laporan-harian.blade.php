@@ -130,6 +130,11 @@
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-300">
                                             POT AFALAN
                                         </span>
+                                        @elseif(str_contains($row['hasil'], 'LAIN-LAIN'))
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300 ring-1 ring-amber-500/30">
+                                            LAIN-LAIN
+                                        </span>
+                                        <span class="text-[12px] text-zinc-500 ml-1">{{ str_replace('LAIN-LAIN: ', '', $row['hasil']) }}</span>
                                         @else
                                         <span class="text-zinc-700 dark:text-zinc-300 font-bold">{{ $row["hasil"] }}</span>
                                         @endif
