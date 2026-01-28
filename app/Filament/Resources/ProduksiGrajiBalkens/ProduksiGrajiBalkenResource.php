@@ -22,7 +22,7 @@ class ProduksiGrajiBalkenResource extends Resource
     protected static ?string $model = ProduksiGrajiBalken::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-    protected static string|UnitEnum|null $navigationGroup = 'Graji Balken';
+    protected static string|UnitEnum|null $navigationGroup = 'Finishing';
 
     protected static ?string $recordTitleAttribute = 'no';
 
