@@ -24,7 +24,7 @@ class DetailBarangDikerjakanPotSikuForm
                         // 🔑 Ambil Produksi Nyusup (parent)
                         $produksi = $livewire->getOwnerRecord();
 
-                        if (! $produksi) {
+                        if (!$produksi) {
                             return [];
                         }
 
@@ -64,6 +64,7 @@ class DetailBarangDikerjakanPotSikuForm
                 TextInput::make('tinggi')
                     ->label('Tinggi')
                     ->numeric()
+                    ->suffix('cm')
                     ->required(),
 
                 TextInput::make('kw')
@@ -77,6 +78,7 @@ class DetailBarangDikerjakanPotSikuForm
                     ->label('Nomor Palet')
                     ->numeric()
                     ->required(),
+
             ]);
     }
 }

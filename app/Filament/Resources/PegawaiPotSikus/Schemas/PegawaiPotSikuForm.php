@@ -15,9 +15,9 @@ class PegawaiPotSikuForm
     {
         return collect(
             CarbonPeriod::create('00:00', '1 hour', '23:00')->toArray()
-        )->mapWithKeys(fn ($time) => [
-            $time->format('H:i') => $time->format('H.i'),
-        ])->toArray();
+        )->mapWithKeys(fn($time) => [
+                $time->format('H:i') => $time->format('H.i'),
+            ])->toArray();
     }
     public static function configure(Schema $schema): Schema
     {
@@ -29,18 +29,18 @@ class PegawaiPotSikuForm
                     ->default('06:00')
                     ->required()
                     ->searchable()
-                    ->dehydrateStateUsing(fn ($state) => $state ? $state . ':00' : null)
-                    ->formatStateUsing(fn ($state) => $state ? substr($state, 0, 5) : null),
+                    ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
                 // --- JAM PULANG ---
                 Select::make('pulang')
                     ->label('Jam Pulang')
                     ->options(self::timeOptions())
-                    ->default('17:00')
+                    ->default('16:00')
                     ->required()
                     ->searchable()
-                    ->dehydrateStateUsing(fn ($state) => $state ? $state . ':00' : null)
-                    ->formatStateUsing(fn ($state) => $state ? substr($state, 0, 5) : null),
+                    ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
                 TextInput::make('tugas')
                     ->label('Tugas')
@@ -49,26 +49,30 @@ class PegawaiPotSikuForm
 
                 // 👷 PEGAWAI (DENGAN VALIDASI DUPLIKAT)
                 Select::make('id_pegawai')
-                ->label('Pegawai')
-                ->options(
-                    Pegawai::query()
-                        ->get()
-                        ->mapWithKeys(fn($pegawai) => [
-                            $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
-                        ])
-                )
-                ->rule(function ($livewire) {
+                    ->label('Pegawai')
+                    ->options(
+                        Pegawai::query()
+                            ->get()
+                            ->mapWithKeys(fn($pegawai) => [
+                                $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
+                            ])
+                    )
+                    ->rule(function ($livewire) {
                         return function (string $attribute, $value, $fail) use ($livewire) {
 
                             $produksiId = $livewire->ownerRecord->id ?? null;
 
-                            if (! $produksiId) {
+                            if (!$produksiId) {
                                 return;
                             }
+
+                            // ✅ KHUSUS RELATION MANAGER
+                            $currentId = $livewire->getMountedTableActionRecord()?->id;
 
                             $exists = PegawaiPotSiku::query()
                                 ->where('id_produksi_pot_siku', $produksiId)
                                 ->where('id_pegawai', $value)
+                                ->when($currentId, fn($q) => $q->where('id', '!=', $currentId))
                                 ->exists();
 
                             if ($exists) {
@@ -76,8 +80,8 @@ class PegawaiPotSikuForm
                             }
                         };
                     })
-                ->searchable()
-                ->required(),
+                    ->searchable()
+                    ->required(),
             ]);
     }
 }
