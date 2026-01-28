@@ -144,13 +144,23 @@
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300 ring-1 ring-sky-500/30">
                                             GRAJI TRIPLEK
                                         </span>
-                                        <span class="text-[10px] text-zinc-500 ml-1">{{ str_replace('GRAJI TRIPLEK: ', '', $row['hasil']) }}</span>
+                                        <span class="text-[12px] text-zinc-500 ml-1">{{ str_replace('GRAJI TRIPLEK: ', '', $row['hasil']) }}</span>
                                         {{-- Masukkan ke bagian pengecekan str_contains pada Blade --}}
                                         @elseif(str_contains($row['hasil'], 'NYUSUP'))
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-lime-100 text-lime-800 dark:bg-lime-900 dark:text-lime-300 ring-1 ring-lime-500/30">
                                             NYUSUP
                                         </span>
-                                        <span class="text-[10px] text-zinc-500 ml-1">{{ str_replace('NYUSUP: ', '', $row['hasil']) }}</span>
+                                        <span class="text-[12px] text-zinc-500 ml-1">{{ str_replace('NYUSUP: ', '', $row['hasil']) }}</span>
+                                        @elseif(str_contains($row['hasil'], 'SANDING'))
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300 ring-1 ring-teal-500/30">
+                                            SANDING
+                                        </span>
+                                        <span class="text-[12px] text-zinc-500 ml-1">{{ str_replace('SANDING: ', '', $row['hasil']) }}</span>
+                                        @elseif(str_contains($row['hasil'], 'PILIH PLYWOOD'))
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-300 ring-1 ring-rose-500/30">
+                                            PILIH PLYWOOD
+                                        </span>
+                                        <span class="text-[12px] text-zinc-500 ml-1">{{ str_replace('PILIH PLYWOOD: ', '', $row['hasil']) }}</span>
                                         @else
                                         <span class="text-zinc-700 dark:text-zinc-300 font-bold">{{ $row["hasil"] }}</span>
                                         @endif

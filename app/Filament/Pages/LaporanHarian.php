@@ -30,6 +30,8 @@ use App\Models\DetailLainLain;
 use App\Models\ProduksiDempul;
 use App\Models\ProduksiGrajitriplek;
 use App\Models\ProduksiNyusup;
+use App\Models\ProduksiSanding;
+use App\Models\ProduksiPilihPlywood;
 
 // --- 2. IMPORT TRANSFORMER CLASSES ---
 use App\Filament\Pages\LaporanHarian\Transformers\RotaryWorkerMap;
@@ -44,6 +46,8 @@ use App\Filament\Pages\LaporanHarian\Transformers\LainLainWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\DempulWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\GrajiTriplekWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\NyusupWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\SandingWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\PilihPlywoodWorkerMap;
 
 use App\Exports\LaporanHarianExport;
 
@@ -226,11 +230,33 @@ class LaporanHarian extends Page implements HasForms
             );
 
             $listNyusup = NyusupWorkerMap::make(
-                \App\Models\ProduksiNyusup::with([
+                ProduksiNyusup::with([
                     'pegawaiNyusup.pegawai',
                     'detailBarangDikerjakan.barangSetengahJadiHp.ukuran',
                     'detailBarangDikerjakan.barangSetengahJadiHp.jenisBarang',
                     'detailBarangDikerjakan.barangSetengahJadiHp.grade.kategoriBarang',
+                ])
+                    ->whereDate('tanggal_produksi', $tgl)
+                    ->get()
+            );
+
+            $listSanding = SandingWorkerMap::make(
+                ProduksiSanding::with([
+                    'pegawaiSandings.pegawai',
+                    'hasilSandings.barangSetengahJadi.ukuran',
+                    'hasilSandings.barangSetengahJadi.jenisBarang',
+                    'hasilSandings.barangSetengahJadi.grade.kategoriBarang',
+                ])
+                    ->whereDate('tanggal', $tgl)
+                    ->get()
+            );
+
+            $listPilihPlywood = PilihPlywoodWorkerMap::make(
+                ProduksiPilihPlywood::with([
+                    'pegawaiPilihPlywood.pegawai',
+                    'hasilPilihPlywood.barangSetengahJadiHp.ukuran',
+                    'hasilPilihPlywood.barangSetengahJadiHp.jenisBarang',
+                    'hasilPilihPlywood.barangSetengahJadiHp.grade.kategoriBarang',
                 ])
                     ->whereDate('tanggal_produksi', $tgl)
                     ->get()
@@ -248,7 +274,9 @@ class LaporanHarian extends Page implements HasForms
                 $listLainLain,
                 $listDempul,
                 $listGrajiTriplek,
-                $listNyusup
+                $listNyusup,
+                $listSanding,
+                $listPilihPlywood
             );
 
             // =====================
