@@ -26,6 +26,7 @@ use App\Models\ProduksiKedi;
 use App\Models\ProduksiJoint;
 use App\Models\ProduksiSandingJoint;
 use App\Models\ProduksiPotAfJoint;
+use App\Models\DetailLainLain;
 
 // --- 2. IMPORT TRANSFORMER CLASSES ---
 use App\Filament\Pages\LaporanHarian\Transformers\RotaryWorkerMap;
@@ -36,6 +37,7 @@ use App\Filament\Pages\LaporanHarian\Transformers\KediWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\JointWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\SandingJoinWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\PotAfalanJoinWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\LainLainWorkerMap;
 
 use App\Exports\LaporanHarianExport;
 
@@ -190,6 +192,13 @@ class LaporanHarian extends Page implements HasForms
             );
             $this->statistics['pot_afalan'] = count($listPotAfJoin);
 
+            $listLainLain = LainLainWorkerMap::make(
+                DetailLainLain::with(['lainLains.pegawai'])
+                    ->whereDate('tanggal', $tgl)
+                    ->get()
+            );
+            $this->statistics['lain_lain'] = count($listLainLain);
+
 
             $pegawaiBekerja = array_merge(
                 $listRotary,
@@ -199,7 +208,8 @@ class LaporanHarian extends Page implements HasForms
                 $listKedi,
                 $listJoint,
                 $listSandingJoin,
-                $listPotAfJoin
+                $listPotAfJoin,
+                $listLainLain
             );
 
             // =====================
