@@ -1,40 +1,19 @@
 <?php
 
-namespace App\Filament\Resources\HasilGuellotines\Schemas;
+namespace App\Filament\Resources\HasilGrajiBalkens\Schemas;
 
 use Filament\Schemas\Schema;
 use App\Models\JenisKayu;
-use App\Models\pegawai_guellotine;
 use App\Models\Ukuran;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 
-class HasilGuellotineForm
+class HasilGrajiBalkenForm
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
-                // Ganti bagian Select Pegawai menjadi seperti ini:
-                Select::make('pegawaiGuellotines') // Sesuaikan dengan nama fungsi di model hasil_guellotine
-                    ->label('Pegawai')
-                    ->relationship('pegawaiGuellotines', 'id') // Tambahkan ini agar Filament tahu ini relasi
-                    ->getOptionLabelFromRecordUsing(fn($record) => $record->pegawai->nama_pegawai) // Ambil nama dari relasi pegawai
-                    ->required()
-                    ->multiple()
-                    ->searchable()
-                    ->options(function ($livewire) {
-                        $produksi = $livewire->getOwnerRecord();
-                        if (! $produksi) return [];
-
-                        return \App\Models\pegawai_guellotine::with('pegawai')
-                            ->where('id_produksi_guellotine', $produksi->id)
-                            ->get()
-                            ->mapWithKeys(fn($p) => [
-                                $p->id => $p->pegawai->nama_pegawai
-                            ]);
-                    })
-                    ->columnSpanFull(),
                 // Relasi ke Kayu Masuk (Optional)
                 Select::make('id_ukuran')
                     ->label('Ukuran')

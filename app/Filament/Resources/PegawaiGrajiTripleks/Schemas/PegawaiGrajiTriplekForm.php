@@ -78,7 +78,7 @@ class PegawaiGrajiTriplekForm
                                 ->exists();
 
                             if ($exists) {
-                                $fail('Pegawai ini sudah terdaftar pada produksi joint ini.');
+                                $fail('Pegawai ini sudah terdaftar pada produksi Graji Triplek ini.');
                             }
                         };
                     }),
