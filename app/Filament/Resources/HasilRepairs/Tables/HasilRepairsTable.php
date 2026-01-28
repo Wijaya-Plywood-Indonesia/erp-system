@@ -160,14 +160,17 @@ class HasilRepairsTable
                                 // Jika ada sisa pembagian, berikan ke orang-orang pertama dalam urutan
                                 $tambahanPerOrang = $rataRata + ($index < $sisa ? 1 : 0);
 
-                                if ($tambahanPerOrang <= 0) continue;
+                                if ($tambahanPerOrang <= 0)
+                                    continue;
 
                                 $rencana = RencanaRepair::find($rencanaId);
-                                if (!$rencana) continue;
+                                if (!$rencana)
+                                    continue;
 
                                 // Pastikan data produksi valid
                                 $produksiExists = DB::table('produksi_repairs')->where('id', $rencana->id_produksi_repair)->exists();
-                                if (!$produksiExists) continue;
+                                if (!$produksiExists)
+                                    continue;
 
                                 $hasilExist = HasilRepair::where('id_rencana_repair', $rencanaId)->first();
 
@@ -198,7 +201,16 @@ class HasilRepairsTable
                             ->numeric()
                             ->minValue(0)
                             ->required()
-                            ->suffix(' lembar'),
+                            ->suffix(' lembar')
+                            ->default(function ($record) use ($idProduksiRepair) {
+                                if (!$record)
+                                    return 0;
+
+                                $rencanaIds = self::getGroupRencanaIds($record, $idProduksiRepair);
+
+                                return HasilRepair::whereIn('id_produksi_repair', $rencanaIds)
+                                    ->sum('jumlah');
+                            }),
                     ])
                     ->mountUsing(function ($form, $record) {
                         // Pre-fill form dengan TOTAL yang sudah ada (bukan rata-rata)
@@ -221,7 +233,8 @@ class HasilRepairsTable
                                 $jatahPerOrang = $rataRata + ($index < $sisa ? 1 : 0);
 
                                 $rencana = RencanaRepair::find($rencanaId);
-                                if (!$rencana) continue;
+                                if (!$rencana)
+                                    continue;
 
                                 $hasilExist = HasilRepair::where('id_rencana_repair', $rencanaId)->first();
 
@@ -268,7 +281,8 @@ class HasilRepairsTable
 
                         foreach ($rencanaIds as $rencanaId) {
                             $rencana = RencanaRepair::find($rencanaId);
-                            if (!$rencana) continue;
+                            if (!$rencana)
+                                continue;
 
                             $hasilExist = HasilRepair::where('id_rencana_repair', $rencanaId)->first();
 
