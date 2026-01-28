@@ -23,6 +23,17 @@ class HasilPilihVeneer extends Model
 
     public function modalPilihVeneer()
     {
-        return $this->belongsTo(ModalPilihVeneer::class, 'id_produksi_pilih_veneer');
+        return $this->belongsTo(ModalPilihVeneer::class, 'id_modal_pilih_veneer');
+    }
+
+    // Tambahkan relasi pivot ke pegawai (seperti di Guellotine)
+    public function pegawaiPilihVeneers()
+    {
+        return $this->belongsToMany(
+            PegawaiPilihVeneer::class,
+            'hasil_pilih_veneer_pegawai', // Pastikan tabel pivot ini ada di migration
+            'id_hasil_pilih_veneer',
+            'id_pegawai_pilih_veneer'
+        );
     }
 }

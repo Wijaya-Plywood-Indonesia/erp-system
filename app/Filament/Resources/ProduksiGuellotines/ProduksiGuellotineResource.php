@@ -22,7 +22,7 @@ class ProduksiGuellotineResource extends Resource
     protected static ?string $model = produksi_guellotine::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-    protected static string|UnitEnum|null $navigationGroup = 'Guellotine';
+    protected static string|UnitEnum|null $navigationGroup = 'Finishing';
     protected static ?string $modelLabel = 'Produksi Guellotine';
     protected static ?string $pluralModelLabel = 'Produksi Guellotine';
 
