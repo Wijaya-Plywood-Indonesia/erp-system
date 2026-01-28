@@ -87,7 +87,7 @@ class ProduksiDempulSummaryWidget extends Widget
 
         $this->summary = [
             'totalAll'       => $totalAll,
-            'totalPegawai'   => $totalPegawai, // <--- Jangan lupa masukkan ke array
+            'totalPegawai'   => $totalPegawai, 
             'globalUkuranKw' => $globalUkuranKw,
             'globalUkuran'   => $globalUkuran,
         ];
