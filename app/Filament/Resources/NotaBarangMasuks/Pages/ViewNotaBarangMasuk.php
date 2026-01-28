@@ -13,7 +13,9 @@ class ViewNotaBarangMasuk extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make(),
+            EditAction::make()
+                ->visible(fn($record) => $record->divalidasi_oleh === null),
+
         ];
     }
 }

@@ -57,17 +57,22 @@ class NotaBarangMasuksTable
                     ->openUrlInNewTab()
                     ->visible(fn($record) => $record->divalidasi_oleh !== null),
                 ViewAction::make(),
-                EditAction::make(),
+
+                EditAction::make()
+                    ->visible(fn($record) => $record->divalidasi_oleh === null),
+
                 DeleteAction::make()
+                    ->visible(fn($record) => $record->divalidasi_oleh === null)
                     ->before(function ($record) {
                         if ($record->detail()->exists()) {
-                            return abort(403, 'Tidak bisa menghapus nota karena masih ada detail yang terkait.');
+                            abort(403, 'Tidak bisa menghapus nota karena masih ada detail yang terkait.');
                         }
                     })
                     ->failureNotificationTitle('Penghapusan gagal')
-                    ->failureNotification(function () {
-                        return 'Nota masih memiliki detail. Hapus detailnya dulu.';
-                    }),
+                    ->failureNotification(
+                        fn() =>
+                        'Nota masih memiliki detail. Hapus detailnya dulu.'
+                    ),
             ])
             ->defaultSort('created_at', 'desc')
             ->toolbarActions([

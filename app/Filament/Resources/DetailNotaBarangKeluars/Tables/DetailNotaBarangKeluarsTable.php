@@ -5,6 +5,7 @@ namespace App\Filament\Resources\DetailNotaBarangKeluars\Tables;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
@@ -97,43 +98,51 @@ class DetailNotaBarangKeluarsTable
                         // Refresh komponen supaya status berubah
                         $livewire->dispatch('$refresh');
                     }),
-                Action::make('batalkan_validasi')
-                    ->label('Batalkan Validasi')
-                    ->icon('heroicon-o-x-circle')
-                    ->color('danger')
-                    ->requiresConfirmation()
-                    ->visible(function (RelationManager $livewire) {
-                        $nota = $livewire->ownerRecord;
+                // Action::make('batalkan_validasi')
+                //     ->label('Batalkan Validasi')
+                //     ->icon('heroicon-o-x-circle')
+                //     ->color('danger')
+                //     ->requiresConfirmation()
+                //     ->visible(function (RelationManager $livewire) {
+                //         $nota = $livewire->ownerRecord;
 
-                        // Tombol muncul hanya jika nota SUDAH divalidasi
-                        return $nota->divalidasi_oleh != null;
-                    })
-                    ->action(function (RelationManager $livewire) {
-                        $nota = $livewire->ownerRecord;
+                //         // Tombol muncul hanya jika nota SUDAH divalidasi
+                //         return $nota->divalidasi_oleh != null;
+                //     })
+                //     ->action(function (RelationManager $livewire) {
+                //         $nota = $livewire->ownerRecord;
 
-                        $nota->update([
-                            'divalidasi_oleh' => null,
-                        ]);
+                //         $nota->update([
+                //             'divalidasi_oleh' => null,
+                //         ]);
 
-                        Notification::make()
-                            ->title('Validasi berhasil dibatalkan.')
-                            ->danger()
-                            ->send();
-                    })
-                    ->after(fn($livewire) => $livewire->dispatch('$refresh')),
+                //         Notification::make()
+                //             ->title('Validasi berhasil dibatalkan.')
+                //             ->danger()
+                //             ->send();
+                //     })
+                //     ->after(fn($livewire) => $livewire->dispatch('$refresh')),
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
                 //
             ])
             ->recordActions([
-                EditAction::make(),
-                DeleteBulkAction::make(),
+                EditAction::make()
+                    ->visible(function (RelationManager $livewire) {
+                        $nota = $livewire->getOwnerRecord();
+
+                        return $nota?->divalidasi_oleh === null;
+                    }),
+                DeleteAction::make()
+                    ->visible(function (RelationManager $livewire) {
+                        $nota = $livewire->getOwnerRecord();
+
+                        return $nota?->divalidasi_oleh === null;
+                    }),
             ])
             ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
+
             ]);
     }
 }
