@@ -21,20 +21,24 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
         $this->data = $data;
     }
 
+    /**
+     * Memetakan data dari array gabungan ke baris Excel
+     */
     public function array(): array
     {
         $result = [];
 
-        foreach ($this->data as $index => $row) {
+        foreach ($this->data as $row) {
             $result[] = [
-                $row['kodep'],
-                $row['nama'],
-                $row['masuk'],
-                $row['pulang'],
-                $row['hasil'],
-                $row['ijin'],
-                $row['potongan_targ'] > 0 ? $row['potongan_targ'] : '',
-                $row['keterangan'],
+                $row['kodep'] ?? '-',
+                $row['nama'] ?? '-',
+                $row['masuk'] ?? '-',
+                $row['pulang'] ?? '-',
+                $row['hasil'] ?? '-',
+                $row['ijin'] ?? '',
+                // Jika potongan 0 atau null, dikosongkan agar rapi di Excel
+                (isset($row['potongan_targ']) && $row['potongan_targ'] > 0) ? $row['potongan_targ'] : '',
+                $row['keterangan'] ?? '',
             ];
         }
 
@@ -45,12 +49,12 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
     {
         return [
             'Kodep',
-            'Nama',
+            'Nama Pegawai',
             'Masuk',
             'Pulang',
-            'Hasil',
+            'Hasil / Divisi',
             'Ijin',
-            'Potongan Targ',
+            'Potongan Target',
             'Keterangan',
         ];
     }
@@ -59,7 +63,7 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
     {
         $lastRow = count($this->data) + 1;
 
-        // Style untuk header
+        // 1. Style Header (Baris 1)
         $sheet->getStyle('A1:H1')->applyFromArray([
             'font' => [
                 'bold' => true,
@@ -68,7 +72,7 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
             ],
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
-                'startColor' => ['rgb' => '4472C4'],
+                'startColor' => ['rgb' => '2D3748'], // Warna abu-abu gelap agar modern
             ],
             'alignment' => [
                 'horizontal' => Alignment::HORIZONTAL_CENTER,
@@ -82,7 +86,7 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
             ],
         ]);
 
-        // Style untuk semua data
+        // 2. Style Seluruh Data (Border & Vertical Center)
         $sheet->getStyle("A2:H{$lastRow}")->applyFromArray([
             'borders' => [
                 'allBorders' => [
@@ -95,20 +99,35 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
             ],
         ]);
 
-        // Alignment khusus
+        // 3. Logika Warna Khusus untuk Baris "Lain-lain"
+        for ($i = 2; $i <= $lastRow; $i++) {
+            $hasilValue = $sheet->getCell("E{$i}")->getValue();
+
+            // Jika baris berisi "LAIN-LAIN", berikan warna teks khusus (Amber/Cokelat)
+            if (str_contains($hasilValue, 'LAIN-LAIN')) {
+                $sheet->getStyle("E{$i}")->getFont()->applyFromArray([
+                    'bold' => true,
+                    'color' => ['rgb' => 'B45309'], // Warna Amber sesuai badge UI
+                ]);
+            }
+
+            // Jika baris adalah Pegawai Libur (Hasil adalah '-')
+            if ($hasilValue === '-') {
+                $sheet->getStyle("A{$i}:H{$i}")->getFont()->getColor()->setRGB('A0AEC0');
+            }
+        }
+
+        // 4. Alignment Kolom
         $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER); // Kodep
         $sheet->getStyle("C2:D{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER); // Jam
         $sheet->getStyle("F2:F{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER); // Ijin
         $sheet->getStyle("G2:G{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT); // Potongan
 
-        // Format number untuk potongan
+        // 5. Format Number (Mata Uang/Ribuan)
         $sheet->getStyle("G2:G{$lastRow}")->getNumberFormat()->setFormatCode('#,##0');
 
-        // Freeze header
-        $sheet->freezePane('A2');
-
-        // Auto filter
-        $sheet->setAutoFilter("A1:H{$lastRow}");
+        $sheet->freezePane('A2'); // Freeze header saat scroll
+        $sheet->setAutoFilter("A1:H{$lastRow}"); // Tambahkan filter di Excel
 
         return [];
     }
@@ -116,19 +135,19 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
     public function columnWidths(): array
     {
         return [
-            'A' => 10,  // Kodep
-            'B' => 25,  // Nama
+            'A' => 12,  // Kodep
+            'B' => 30,  // Nama
             'C' => 10,  // Masuk
             'D' => 10,  // Pulang
-            'E' => 30,  // Hasil
+            'E' => 40,  // Hasil / Divisi (Lebih lebar karena ada detail pekerjaan)
             'F' => 10,  // Ijin
-            'G' => 15,  // Potongan
-            'H' => 30,  // Keterangan
+            'G' => 18,  // Potongan
+            'H' => 35,  // Keterangan
         ];
     }
 
     public function title(): string
     {
-        return 'ABSEN';
+        return 'LAPORAN_HARIAN';
     }
 }

@@ -13,26 +13,26 @@
     {
       "name": "ModalPilihVeener",
       "schemaName": "public",
-      "x": 48,
-      "y": 248
+      "x": 109.48899873661634,
+      "y": 255.1499538245707
     },
     {
       "name": "PegawaiPilihVeener",
       "schemaName": "public",
-      "x": 712,
-      "y": 600
+      "x": 694.8402794223396,
+      "y": 525.6404802244648
     },
     {
       "name": "HasilPilihVeener",
       "schemaName": "public",
-      "x": 480,
-      "y": 48
+      "x": 482.8599534296101,
+      "y": 118.0695474807929
     },
     {
       "name": "ValidasiPilihVeener",
       "schemaName": "public",
-      "x": 232,
-      "y": 712
+      "x": 140.48149025247795,
+      "y": 629.06053563498
     }
   ],
   "tableGroupCollapseStates": [],
