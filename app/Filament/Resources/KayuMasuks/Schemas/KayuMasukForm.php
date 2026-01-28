@@ -86,11 +86,17 @@ class KayuMasukForm
                     ->required()
                     ->dehydrated(true)
                     ->default(function () {
-                        $lastSeri = KayuMasuk::max('seri');
-                        return $lastSeri ? (($lastSeri >= 1000) ? 1 : $lastSeri + 1) : 1;
+                        $lastSeri = KayuMasuk::latest('id')->value('seri');
+
+                        if (!$lastSeri) {
+                            return 1;
+                        }
+
+                        return ($lastSeri % 1000) + 1;
                     })
                     ->hint(function () {
-                        $lastSeri = KayuMasuk::max('seri');
+                        $lastSeri = KayuMasuk::latest('id')->value('seri');
+
                         return $lastSeri
                             ? "Seri terakhir di database: {$lastSeri}"
                             : "Belum ada seri sebelumnya (akan dimulai dari 1)";
