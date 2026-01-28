@@ -76,6 +76,17 @@ class RepairDataMap
                     if (!$rp->pegawai)
                         continue;
 
+                    // --- FILTER PERBAIKAN: CEK HASIL REPAIR DULU ---
+                    $hasilIndividu = (int) $rp->rencanaRepairs
+                        ->where('id_modal_repair', $modal->id)
+                        ->flatMap->hasilRepairs
+                        ->sum('jumlah');
+
+                    // Jika tidak ada hasil produksi, jangan masukkan ke laporan
+                    if ($hasilIndividu <= 0) {
+                        continue;
+                    }
+
                     $nomorMeja = $rp->nomor_meja ?? '-';
                     $key = $nomorMeja . '|' . $kodeUkuran;
 
@@ -97,14 +108,6 @@ class RepairDataMap
                         ];
                     }
 
-                    // =============================
-                    // HASIL INDIVIDU
-                    // =============================
-                    $hasilIndividu = $rp->rencanaRepairs
-                        ->where('id_modal_repair', $modal->id)
-                        ->flatMap->hasilRepairs
-                        ->sum('jumlah');
-
                     $result[$key]['hasil'] += $hasilIndividu;
 
                     $result[$key]['pekerja'][] = [
@@ -120,16 +123,31 @@ class RepairDataMap
                         'keterangan' => $rp->keterangan ?? '-',
                         'nomor_meja' => $nomorMeja,
                         'hasil' => $hasilIndividu,
+                        'pot_target' => 0,
                     ];
                 }
             }
         }
 
         // =============================
-        // HITUNG SELISIH
+        // HITUNG SELISIH & POTONGAN PER ORANG
         // =============================
         foreach ($result as &$row) {
             $row['selisih'] = $row['hasil'] - $row['target'];
+
+            if ($row['selisih'] < 0 && $row['potongan_per_lembar'] > 0) {
+                $totalDendaMeja = abs($row['selisih']) * $row['potongan_per_lembar'];
+                $jumlahPekerja = count($row['pekerja']);
+
+                if ($jumlahPekerja > 0) {
+                    $rawPotongan = $totalDendaMeja / $jumlahPekerja;
+                    $potonganFinal = self::roundToNearest500($rawPotongan);
+
+                    foreach ($row['pekerja'] as &$p) {
+                        $p['pot_target'] = $potonganFinal;
+                    }
+                }
+            }
         }
 
         return array_values($result);
@@ -141,10 +159,10 @@ class RepairDataMap
         $rest = $value - $base;
 
         if ($rest < 300)
-            return $base;
+            return (int) $base;
         if ($rest < 800)
-            return $base + 500;
+            return (int) ($base + 500);
 
-        return $base + 1000;
+        return (int) ($base + 1000);
     }
 }
