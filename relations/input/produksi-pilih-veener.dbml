@@ -1,50 +1,50 @@
-Table ProduksiPilihVeener{
+Table produksi_pilih_veneer{
     id bigint [pk]
-    tanggal date
-    keterangan text
-    create_at timestamp
+    tanggal_produksi date
+    kendala text
+    created_at timestamp
     updated_at timestamp
 }
 
-Table ModalPilihVeener{
+Table pegawai_pilih_veneer{
     id bigint [pk]
-    id_produksi_pilih_veener bigint [ref: > ProduksiPilihVeener.id]
+    id_produksi_pilih_veener bigint [ref: > produksi_pilih_veneer.id]
+    id_pegawai bigint
+    masuk time
+    pulang time
+    tugas varchar
+    ijin varchar 
+    ket text
+    created_at timestamp
+    updated_at timestamp
+}
+
+Table modal_pilih_veneer{
+    id bigint [pk]
+    id_produksi_pilih_veener bigint [ref: > produksi_pilih_veneer.id]
     id_ukuran bigint
     id_jenis_kayu bigint
     kw varchar 
-    jumlah_bahan int
-    nomor_palet int
-    create_at timestamp
+    jumlah int
+    no_palet int
+    created_at timestamp
     updated_at timestamp
 }
 
-Table PegawaiPilihVeener{
+Table hasil_pilih_veneer{
     id bigint [pk]
-    id_produksi_pilih_veener bigint [ref: > ProduksiPilihVeener.id]
-    id_pegawai bigint
-    jam_masuk time
-    jam_pulang time
-    nomor_meja int
-    ijin varchar 
-    keterangan text
-    create_at timestamp
-    update_at timestamp
+    id_produksi_pilih_veener bigint [ref: > produksi_pilih_veneer.id]
+    id_modal_pilih_veener bigint [ref: > modal_pilih_veneer.id]
+    kw varchar
+    jumlah int
+    no_palet int
+    created_at timestamp
+    updated_at timestamp
 }
 
-Table HasilPilihVeener{
+Table validasi_pilih_veneer{
     id bigint [pk]
-    id_produksi_pilih_veener bigint [ref: > ProduksiPilihVeener.id]
-    id_modal_pilih_veener bigint [ref: > ModalPilihVeener.id]
-    jumlah_modal int
-    jumlah_hasil int
-    nomor_palet int
-    create_at timestamp
-    update_at timestamp
-}
-
-Table ValidasiPilihVeener{
-    id bigint [pk]
-    id_produksi_pilih_veener bigint [ref: > ProduksiPilihVeener.id]
+    id_produksi_pilih_veener bigint [ref: > produksi_pilih_veneer.id]
     role varchar
     status varchar
     created_at timestamp
