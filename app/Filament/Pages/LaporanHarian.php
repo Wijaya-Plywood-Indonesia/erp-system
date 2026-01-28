@@ -27,6 +27,9 @@ use App\Models\ProduksiJoint;
 use App\Models\ProduksiSandingJoint;
 use App\Models\ProduksiPotAfJoint;
 use App\Models\DetailLainLain;
+use App\Models\ProduksiDempul;
+use App\Models\ProduksiGrajitriplek;
+use App\Models\ProduksiNyusup;
 
 // --- 2. IMPORT TRANSFORMER CLASSES ---
 use App\Filament\Pages\LaporanHarian\Transformers\RotaryWorkerMap;
@@ -38,6 +41,9 @@ use App\Filament\Pages\LaporanHarian\Transformers\JointWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\SandingJoinWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\PotAfalanJoinWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\LainLainWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\DempulWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\GrajiTriplekWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\NyusupWorkerMap;
 
 use App\Exports\LaporanHarianExport;
 
@@ -199,6 +205,36 @@ class LaporanHarian extends Page implements HasForms
             );
             $this->statistics['lain_lain'] = count($listLainLain);
 
+            $listDempul = DempulWorkerMap::make(
+                ProduksiDempul::with([
+                    'rencanaPegawaiDempuls.pegawai',
+                    'detailDempuls.barangSetengahJadi' // <--- Penting agar nama barang muncul
+                ])
+                    ->whereDate('tanggal', $tgl)
+                    ->get()
+            );
+
+            $listGrajiTriplek = GrajiTriplekWorkerMap::make(
+                ProduksiGrajitriplek::with([
+                    'pegawaiGrajiTriplek.pegawaiGrajiTriplek', // Memanggil relasi pegawai di model PegawaiGrajiTriplek
+                    'hasilGrajiTriplek.barangSetengahJadiHp.ukuran',
+                    'hasilGrajiTriplek.barangSetengahJadiHp.jenisBarang',
+                    'hasilGrajiTriplek.barangSetengahJadiHp.grade.kategoriBarang',
+                ])
+                    ->whereDate('tanggal_produksi', $tgl)
+                    ->get()
+            );
+
+            $listNyusup = NyusupWorkerMap::make(
+                \App\Models\ProduksiNyusup::with([
+                    'pegawaiNyusup.pegawai',
+                    'detailBarangDikerjakan.barangSetengahJadiHp.ukuran',
+                    'detailBarangDikerjakan.barangSetengahJadiHp.jenisBarang',
+                    'detailBarangDikerjakan.barangSetengahJadiHp.grade.kategoriBarang',
+                ])
+                    ->whereDate('tanggal_produksi', $tgl)
+                    ->get()
+            );
 
             $pegawaiBekerja = array_merge(
                 $listRotary,
@@ -209,7 +245,10 @@ class LaporanHarian extends Page implements HasForms
                 $listJoint,
                 $listSandingJoin,
                 $listPotAfJoin,
-                $listLainLain
+                $listLainLain,
+                $listDempul,
+                $listGrajiTriplek,
+                $listNyusup
             );
 
             // =====================

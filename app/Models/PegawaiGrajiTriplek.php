@@ -9,14 +9,14 @@ class PegawaiGrajiTriplek extends Model
     protected $table = 'pegawai_graji_triplek';
 
     protected $fillable = [
-        'id_produksi_hp',
+        'id_produksi_graji_triplek',
         'id_pegawai',
         'tugas',
         'masuk',
         'pulang',
         'ijin',
         'ket',
-        
+
     ];
 
     public function produksiGrajiTriplek()
