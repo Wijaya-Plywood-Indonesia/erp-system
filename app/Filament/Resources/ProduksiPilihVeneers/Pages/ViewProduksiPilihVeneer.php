@@ -3,12 +3,19 @@
 namespace App\Filament\Resources\ProduksiPilihVeneers\Pages;
 
 use App\Filament\Resources\ProduksiPilihVeneers\ProduksiPilihVeneerResource;
+use App\Filament\Resources\ProduksiPilihVeneers\Widgets\ProduksiPilihVeneerSummaryWidget;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 
 class ViewProduksiPilihVeneer extends ViewRecord
 {
     protected static string $resource = ProduksiPilihVeneerResource::class;
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            ProduksiPilihVeneerSummaryWidget::class,
+        ];
+    }
 
     protected function getHeaderActions(): array
     {
