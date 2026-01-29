@@ -32,6 +32,7 @@ use App\Models\ProduksiGrajitriplek;
 use App\Models\ProduksiNyusup;
 use App\Models\ProduksiSanding;
 use App\Models\ProduksiPilihPlywood;
+use App\Models\ProduksiHp;
 
 // --- 2. IMPORT TRANSFORMER CLASSES ---
 use App\Filament\Pages\LaporanHarian\Transformers\RotaryWorkerMap;
@@ -48,6 +49,7 @@ use App\Filament\Pages\LaporanHarian\Transformers\GrajiTriplekWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\NyusupWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\SandingWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\PilihPlywoodWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\HotpressWorkerMap;
 
 use App\Exports\LaporanHarianExport;
 
@@ -142,121 +144,44 @@ class LaporanHarian extends Page implements HasForms
                 'total' => 0,
             ];
 
-            // =====================
-            // DATA BEKERJA
-            // =====================
-
-            $listRotary = RotaryWorkerMap::make(
-                ProduksiRotary::with(['mesin', 'detailPegawaiRotary.pegawai'])
-                    ->whereDate('tgl_produksi', $tgl)
-                    ->get()
-            );
-            $this->statistics['rotary'] = count($listRotary);
-
-            $listRepair = RepairWorkerMap::make(
-                ProduksiRepair::with(['rencanaPegawais.pegawai'])
-                    ->whereDate('tanggal', $tgl)
-                    ->get()
-            );
-            $this->statistics['repair'] = count($listRepair);
-
-            $listDryer = PressDryerWorkerMap::make(
-                ProduksiPressDryer::with(['detailPegawais.pegawai'])
-                    ->whereDate('tanggal_produksi', $tgl)
-                    ->get()
-            );
-            $this->statistics['dryer'] = count($listDryer);
-
-            $listStik = StikWorkerMap::make(
-                ProduksiStik::with(['detailPegawaiStik.pegawai:id,kode_pegawai,nama_pegawai'])
-                    ->whereDate('tanggal_produksi', $tgl)
-                    ->get()
-            );
-            $this->statistics['stik'] = count($listStik);
-
-            $listKedi = KediWorkerMap::make(
-                ProduksiKedi::with(['detailPegawaiKedi.pegawai:id,kode_pegawai,nama_pegawai'])
-                    ->whereDate('tanggal', $tgl)
-                    ->get()
-            );
-            $this->statistics['kedi'] = count($listKedi);
-
-            $listJoint = JointWorkerMap::make(
-                ProduksiJoint::with(['pegawaiJoint.pegawai:id,kode_pegawai,nama_pegawai'])
-                    ->whereDate('tanggal_produksi', $tgl)
-                    ->get()
-            );
-            $this->statistics['joint'] = count($listJoint);
-
-            $listSandingJoin = SandingJoinWorkerMap::make(
-                ProduksiSandingJoint::with(['pegawaiSandingJoint.pegawai:id,kode_pegawai,nama_pegawai'])
-                    ->whereDate('tanggal_produksi', $tgl)
-                    ->get()
-            );
-            $this->statistics['sanding'] = count($listSandingJoin);
-
-            $listPotAfJoin = PotAfalanJoinWorkerMap::make(
-                ProduksiPotAfJoint::with(['pegawaiPotAfJoint.pegawai:id,kode_pegawai,nama_pegawai'])
-                    ->whereDate('tanggal_produksi', $tgl)
-                    ->get()
-            );
-            $this->statistics['pot_afalan'] = count($listPotAfJoin);
-
-            $listLainLain = LainLainWorkerMap::make(
-                DetailLainLain::with(['lainLains.pegawai'])
-                    ->whereDate('tanggal', $tgl)
-                    ->get()
-            );
-            $this->statistics['lain_lain'] = count($listLainLain);
+            // 1. DATA BEKERJA PER DIVISI
+            $listRotary = RotaryWorkerMap::make(ProduksiRotary::with(['mesin', 'detailPegawaiRotary.pegawai'])->whereDate('tgl_produksi', $tgl)->get());
+            $listRepair = RepairWorkerMap::make(ProduksiRepair::with(['rencanaPegawais.pegawai'])->whereDate('tanggal', $tgl)->get());
+            $listDryer = PressDryerWorkerMap::make(ProduksiPressDryer::with(['detailPegawais.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
+            $listStik = StikWorkerMap::make(ProduksiStik::with(['detailPegawaiStik.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
+            $listKedi = KediWorkerMap::make(ProduksiKedi::with(['detailPegawaiKedi.pegawai'])->whereDate('tanggal', $tgl)->get());
+            $listJoint = JointWorkerMap::make(ProduksiJoint::with(['pegawaiJoint.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
+            $listSandingJoin = SandingJoinWorkerMap::make(ProduksiSandingJoint::with(['pegawaiSandingJoint.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
+            $listPotAfJoin = PotAfalanJoinWorkerMap::make(ProduksiPotAfJoint::with(['pegawaiPotAfJoint.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
+            $listLainLain = LainLainWorkerMap::make(DetailLainLain::with(['lainLains.pegawai'])->whereDate('tanggal', $tgl)->get());
 
             $listDempul = DempulWorkerMap::make(
-                ProduksiDempul::with([
-                    'rencanaPegawaiDempuls.pegawai',
-                    'detailDempuls.barangSetengahJadi' // <--- Penting agar nama barang muncul
-                ])
-                    ->whereDate('tanggal', $tgl)
-                    ->get()
+                ProduksiDempul::with(['rencanaPegawaiDempuls.pegawai', 'detailDempuls.barangSetengahJadi.ukuran', 'detailDempuls.barangSetengahJadi.jenisBarang', 'detailDempuls.barangSetengahJadi.grade.kategoriBarang'])->whereDate('tanggal', $tgl)->get()
             );
 
             $listGrajiTriplek = GrajiTriplekWorkerMap::make(
-                ProduksiGrajitriplek::with([
-                    'pegawaiGrajiTriplek.pegawaiGrajiTriplek', // Memanggil relasi pegawai di model PegawaiGrajiTriplek
-                    'hasilGrajiTriplek.barangSetengahJadiHp.ukuran',
-                    'hasilGrajiTriplek.barangSetengahJadiHp.jenisBarang',
-                    'hasilGrajiTriplek.barangSetengahJadiHp.grade.kategoriBarang',
-                ])
-                    ->whereDate('tanggal_produksi', $tgl)
-                    ->get()
+                ProduksiGrajitriplek::with(['pegawaiGrajiTriplek.pegawaiGrajiTriplek', 'hasilGrajiTriplek.barangSetengahJadiHp.ukuran', 'hasilGrajiTriplek.barangSetengahJadiHp.jenisBarang', 'hasilGrajiTriplek.barangSetengahJadiHp.grade.kategoriBarang'])->whereDate('tanggal_produksi', $tgl)->get()
             );
 
             $listNyusup = NyusupWorkerMap::make(
-                ProduksiNyusup::with([
-                    'pegawaiNyusup.pegawai',
-                    'detailBarangDikerjakan.barangSetengahJadiHp.ukuran',
-                    'detailBarangDikerjakan.barangSetengahJadiHp.jenisBarang',
-                    'detailBarangDikerjakan.barangSetengahJadiHp.grade.kategoriBarang',
-                ])
-                    ->whereDate('tanggal_produksi', $tgl)
-                    ->get()
+                ProduksiNyusup::with(['pegawaiNyusup.pegawai', 'detailBarangDikerjakan.barangSetengahJadiHp.ukuran', 'detailBarangDikerjakan.barangSetengahJadiHp.jenisBarang', 'detailBarangDikerjakan.barangSetengahJadiHp.grade.kategoriBarang'])->whereDate('tanggal_produksi', $tgl)->get()
             );
 
             $listSanding = SandingWorkerMap::make(
-                ProduksiSanding::with([
-                    'pegawaiSandings.pegawai',
-                    'hasilSandings.barangSetengahJadi.ukuran',
-                    'hasilSandings.barangSetengahJadi.jenisBarang',
-                    'hasilSandings.barangSetengahJadi.grade.kategoriBarang',
-                ])
-                    ->whereDate('tanggal', $tgl)
-                    ->get()
+                ProduksiSanding::with(['pegawaiSandings.pegawai', 'hasilSandings.barangSetengahJadi.ukuran', 'hasilSandings.barangSetengahJadi.jenisBarang', 'hasilSandings.barangSetengahJadi.grade.kategoriBarang'])->whereDate('tanggal', $tgl)->get()
             );
 
             $listPilihPlywood = PilihPlywoodWorkerMap::make(
-                ProduksiPilihPlywood::with([
-                    'pegawaiPilihPlywood.pegawai',
-                    'hasilPilihPlywood.barangSetengahJadiHp.ukuran',
-                    'hasilPilihPlywood.barangSetengahJadiHp.jenisBarang',
-                    'hasilPilihPlywood.barangSetengahJadiHp.grade.kategoriBarang',
+                ProduksiPilihPlywood::with(['pegawaiPilihPlywood.pegawai', 'hasilPilihPlywood.barangSetengahJadiHp.ukuran', 'hasilPilihPlywood.barangSetengahJadiHp.jenisBarang', 'hasilPilihPlywood.barangSetengahJadiHp.grade.kategoriBarang'])->whereDate('tanggal_produksi', $tgl)->get()
+            );
+
+            $listHotpress = HotpressWorkerMap::make(
+                ProduksiHp::with([
+                    'detailPegawaiHp.pegawaiHp',
+                    'platformHasilHp.barangSetengahJadi.ukuran',
+                    'platformHasilHp.barangSetengahJadi.grade.kategoriBarang',
+                    'triplekHasilHp.barangSetengahJadi.ukuran',
+                    'triplekHasilHp.barangSetengahJadi.grade.kategoriBarang',
                 ])
                     ->whereDate('tanggal_produksi', $tgl)
                     ->get()
@@ -276,18 +201,19 @@ class LaporanHarian extends Page implements HasForms
                 $listGrajiTriplek,
                 $listNyusup,
                 $listSanding,
-                $listPilihPlywood
+                $listPilihPlywood,
+                $listHotpress
             );
 
-            // =====================
-            // DATA LIBUR
-            // =====================
+            // Update Statistics
+            $this->statistics['rotary'] = count($listRotary);
+            $this->statistics['repair'] = count($listRepair);
+            $this->statistics['dryer'] = count($listDryer);
+            $this->statistics['kedi'] = count($listKedi);
+            $this->statistics['stik'] = count($listStik);
 
-            $kodePegawaiKerja = array_filter(
-                array_column($pegawaiBekerja, 'kodep'),
-                fn($v) => $v !== '-' && $v !== null
-            );
-
+            // 2. DATA LIBUR (Pegawai yang tidak ada di list kerja)
+            $kodePegawaiKerja = array_filter(array_column($pegawaiBekerja, 'kodep'), fn($v) => $v !== '-' && $v !== null);
             $pegawaiLibur = Pegawai::whereNotIn('kode_pegawai', $kodePegawaiKerja)->get();
 
             $listLibur = [];
@@ -303,64 +229,32 @@ class LaporanHarian extends Page implements HasForms
                     'keterangan' => '',
                 ];
             }
-
             $this->statistics['libur'] = count($listLibur);
 
-            // =====================
-            // GABUNG + SORT (REVISI)
-            // =====================
-
+            // 3. GABUNG DAN SORTING (Murni Berdasarkan Kode Pegawai)
             $finalMerge = array_merge($pegawaiBekerja, $listLibur);
 
             usort($finalMerge, function ($a, $b) {
+                $kodeA = (string) ($a['kodep'] ?? '');
+                $kodeB = (string) ($b['kodep'] ?? '');
 
-                $kodeA = trim((string) ($a['kodep'] ?? ''));
-                $kodeB = trim((string) ($b['kodep'] ?? ''));
+                // Prioritaskan yang punya kode di atas yang kodenya '-' atau kosong
+                $isEmptyA = ($kodeA === '' || $kodeA === '-');
+                $isEmptyB = ($kodeB === '' || $kodeB === '-');
 
-                $namaA = trim((string) ($a['nama'] ?? ''));
-                $namaB = trim((string) ($b['nama'] ?? ''));
+                if ($isEmptyA && !$isEmptyB) return 1;
+                if (!$isEmptyA && $isEmptyB) return -1;
 
-                // 1️⃣ Data lengkap (kodep & nama ada)
-                $validA = ($kodeA !== '' && $kodeA !== '-' && $namaA !== '' && $namaA !== '-');
-                $validB = ($kodeB !== '' && $kodeB !== '-' && $namaB !== '' && $namaB !== '-');
-
-                if ($validA !== $validB) {
-                    return $validA ? -1 : 1;
-                }
-
-                // 2️⃣ Kode ada tapi nama kosong / '-'
-                $halfA = ($kodeA !== '' && $kodeA !== '-' && ($namaA === '' || $namaA === '-'));
-                $halfB = ($kodeB !== '' && $kodeB !== '-' && ($namaB === '' || $namaB === '-'));
-
-                if ($halfA !== $halfB) {
-                    return $halfA ? 1 : -1;
-                }
-
-                // 3️⃣ Urutkan berdasarkan kodep
-                $cmpKode = strcmp($kodeA, $kodeB);
-                if ($cmpKode !== 0) {
-                    return $cmpKode;
-                }
-
-                // 4️⃣ Jika kode sama, urutkan nama
-                return strcmp($namaA, $namaB);
+                // Natural sorting (Mengatasi P1, P2, P10 agar berurutan benar)
+                return strnatcasecmp($kodeA, $kodeB);
             });
 
             $this->laporanGabungan = array_values($finalMerge);
             $this->statistics['total'] = count($this->laporanGabungan);
 
-            Notification::make()
-                ->success()
-                ->title('Data Dimuat')
-                ->body("Total {$this->statistics['total']} pegawai")
-                ->send();
+            Notification::make()->success()->title('Data Dimuat')->body("Total {$this->statistics['total']} pegawai")->send();
         } catch (Exception $e) {
-            Notification::make()
-                ->danger()
-                ->title('Error')
-                ->body($e->getMessage())
-                ->send();
-
+            Notification::make()->danger()->title('Error')->body($e->getMessage())->send();
             Log::error($e->getMessage());
             $this->laporanGabungan = [];
         } finally {

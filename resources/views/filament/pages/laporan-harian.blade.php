@@ -161,6 +161,12 @@
                                             PILIH PLYWOOD
                                         </span>
                                         <span class="text-[12px] text-zinc-500 ml-1">{{ str_replace('PILIH PLYWOOD: ', '', $row['hasil']) }}</span>
+                                        @elseif(str_contains($row['hasil'], 'HOT PRESS'))
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 ring-1 ring-red-500/30">
+                                            <x-heroicon-m-fire class="w-3 h-3 mr-1" />
+                                            HOT PRESS
+                                        </span>
+                                        <span class="text-[10px] text-zinc-500 ml-1">{{ str_replace('HOTPRESS: ', '', $row['hasil']) }}</span>
                                         @else
                                         <span class="text-zinc-700 dark:text-zinc-300 font-bold">{{ $row["hasil"] }}</span>
                                         @endif
