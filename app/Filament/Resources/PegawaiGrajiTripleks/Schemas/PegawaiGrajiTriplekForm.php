@@ -53,35 +53,43 @@ class PegawaiGrajiTriplekForm
 
                 // --- ID PEGAWAI (Relation: pegawai) ---
                 Select::make('id_pegawai')
-                    ->label('Pegawai')
-                    ->options(
-                        Pegawai::query()
-                            ->get()
-                            ->mapWithKeys(fn($pegawai) => [
-                                $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
-                            ])
-                    )
-                    ->searchable()
-                    ->required()
-                    ->rule(function ($livewire) {
-                        return function (string $attribute, $value, $fail) use ($livewire) {
+    ->label('Pegawai')
+    ->options(
+        Pegawai::query()
+            ->get()
+            ->mapWithKeys(fn ($pegawai) => [
+                $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
+            ])
+    )
+    ->searchable()
+    ->required()
+    ->rule(function ($livewire) {
+        return function (string $attribute, $value, $fail) use ($livewire) {
 
-                            $produksiId = $livewire->ownerRecord->id ?? null;
+            $produksiId = $livewire->ownerRecord->id ?? null;
 
-                            if (! $produksiId) {
-                                return;
-                            }
+            if (! $produksiId) {
+                return;
+            }
 
-                            $exists = PegawaiGrajiTriplek::query()
-                                ->where('id_produksi_graji_triplek', $produksiId)
-                                ->where('id_pegawai', $value)
-                                ->exists();
+            $query = PegawaiGrajiTriplek::query()
+                ->where('id_produksi_graji_triplek', $produksiId)
+                ->where('id_pegawai', $value);
 
-                            if ($exists) {
-                                $fail('Pegawai ini sudah terdaftar pada produksi Graji Triplek ini.');
-                            }
-                        };
-                    }),
+            // ✅ Abaikan record yg sedang diedit (relation manager)
+            if ($livewire->getMountedTableActionRecord()) {
+                $query->whereKeyNot(
+                    $livewire->getMountedTableActionRecord()->id
+                );
+            }
+
+            if ($query->exists()) {
+                $fail('Pegawai ini sudah terdaftar pada produksi Graji Triplek ini.');
+            }
+        };
+    }),
+
+
             ]);
     }
 }
