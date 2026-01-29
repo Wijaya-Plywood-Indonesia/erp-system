@@ -107,9 +107,15 @@
                                             DRYER
                                         </span>
                                         @elseif(str_contains($row['hasil'], 'REPAIR'))
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                                            REPAIR
-                                        </span>
+                                        <div class="flex items-center gap-1">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 ring-1 ring-blue-500/30">
+                                                REPAIR
+                                            </span>
+
+                                            <span class="text-[10px] text-zinc-500 font-medium italic truncate max-w-[250px]" title="{{ $row['hasil'] }}">
+                                                {{ str_replace('REPAIR', '', $row['hasil']) }}
+                                            </span>
+                                        </div>
                                         @elseif(str_contains($row['hasil'], 'SANDING JOINT'))
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-blue-800 dark:bg-teal-900 dark:text-teal-300">
                                             SANDING JOIN

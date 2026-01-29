@@ -146,7 +146,16 @@ class LaporanHarian extends Page implements HasForms
 
             // 1. DATA BEKERJA PER DIVISI
             $listRotary = RotaryWorkerMap::make(ProduksiRotary::with(['mesin', 'detailPegawaiRotary.pegawai'])->whereDate('tgl_produksi', $tgl)->get());
-            $listRepair = RepairWorkerMap::make(ProduksiRepair::with(['rencanaPegawais.pegawai'])->whereDate('tanggal', $tgl)->get());
+            $listRepair = RepairWorkerMap::make(
+                ProduksiRepair::with([
+                    'rencanaPegawais.pegawai',
+                    'modalRepairs.ukuran',
+                    'modalRepairs.jenisKayu',
+                    'rencanaPegawais.rencanaRepairs.hasilRepairs'
+                ])
+                    ->whereDate('tanggal', $tgl) // Filter tanggal di level Produksi
+                    ->get()
+            );
             $listDryer = PressDryerWorkerMap::make(ProduksiPressDryer::with(['detailPegawais.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listStik = StikWorkerMap::make(ProduksiStik::with(['detailPegawaiStik.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listKedi = KediWorkerMap::make(ProduksiKedi::with(['detailPegawaiKedi.pegawai'])->whereDate('tanggal', $tgl)->get());
