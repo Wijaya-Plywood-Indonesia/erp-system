@@ -36,4 +36,19 @@ class HasilPilihVeneer extends Model
             'id_pegawai_pilih_veneer'
         );
     }
+
+    protected static function booted()
+    {
+        // Setiap kali data HASIL disimpan (create/update)
+        static::saved(
+            fn($model) =>
+            broadcast(new \App\Events\ProductionUpdated($model->id_produksi_pilih_veneer, 'veneer'))
+        );
+
+        // Setiap kali data HASIL dihapus
+        static::deleted(
+            fn($model) =>
+            broadcast(new \App\Events\ProductionUpdated($model->id_produksi_pilih_veneer, 'veneer'))
+        );
+    }
 }
