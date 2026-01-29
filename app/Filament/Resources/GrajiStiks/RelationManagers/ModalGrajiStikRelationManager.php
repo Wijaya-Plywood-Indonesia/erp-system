@@ -18,6 +18,10 @@ use Filament\Tables\Table;
 class ModalGrajiStikRelationManager extends RelationManager
 {
     protected static string $relationship = 'modalGrajiStik';
+    public function isReadOnly(): bool
+    {
+        return false;
+    }
 
     public function form(Schema $schema): Schema
     {

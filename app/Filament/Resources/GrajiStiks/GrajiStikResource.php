@@ -52,8 +52,8 @@ class GrajiStikResource extends Resource
     public static function getRelations(): array
     {
         return [
-            ModalGrajiStikRelationManager::class,
             PegawaiGrajiStikRelationManager::class,
+            ModalGrajiStikRelationManager::class,
             HasilGrajiStikRelationManager::class,
             ValidasiGrajiStikRelationManager::class
         ];

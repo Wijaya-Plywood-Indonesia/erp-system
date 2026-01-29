@@ -18,6 +18,10 @@ use Filament\Tables\Table;
 class ValidasiGrajiStikRelationManager extends RelationManager
 {
     protected static string $relationship = 'validasiGrajiStik';
+    public function isReadOnly(): bool
+    {
+        return false;
+    }
 
     public function form(Schema $schema): Schema
     {
