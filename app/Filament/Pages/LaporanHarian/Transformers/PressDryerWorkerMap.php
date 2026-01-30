@@ -29,11 +29,14 @@ class PressDryerWorkerMap
                 $mesinUtamaId = $firstMesin->id_mesin_dryer;
             }
 
-            // Nama Divisi di Laporan (Contoh: PRESS DRYER - DRYER 1)
-            $labelDivisi = "PRESS DRYER - " . strtoupper($namaMesin);
-
             $shift = strtoupper($item->shift ?? 'PAGI');
-            // $tanggal = Carbon::parse($item->tanggal_produksi)->format('d/m/Y'); // Tidak dipakai di row result, tapi berguna untuk debug
+
+            // --- PERBAIKAN LABEL: HANYA DRYER - SHIFT ---
+            if (stripos($namaMesin, 'DRYER') !== false) {
+                $labelDivisi = "DRYER - " . $shift;
+            } else {
+                $labelDivisi = strtoupper($namaMesin);
+            }
 
             /* ============================================================
              * 2. HASIL PRODUKSI
@@ -44,7 +47,6 @@ class PressDryerWorkerMap
 
             if ($item->detailHasils->isNotEmpty()) {
                 $totalHasil = $item->detailHasils->sum('isi');
-                // Ambil ukuran ID dari hasil pertama (jika relevan untuk target non-dryer)
                 $ukuranId = $item->detailHasils->first()->id_ukuran ?? null;
             }
 
@@ -65,14 +67,12 @@ class PressDryerWorkerMap
                 }
                 // B. LOGIKA MESIN LAIN (BERDASARKAN UKURAN / DEFAULT MESIN)
                 else {
-                    // Cari spesifik ID Mesin + ID Ukuran
                     $targetModel = Target::where('id_mesin', $mesinUtamaId)
                         ->when($ukuranId !== null, function ($q) use ($ukuranId) {
                             return $q->where('id_ukuran', $ukuranId);
                         })
                         ->first();
 
-                    // Fallback: Cari default ID Mesin (tanpa ukuran)
                     if (!$targetModel) {
                         $targetModel = Target::where('id_mesin', $mesinUtamaId)
                             ->whereNull('id_ukuran')
@@ -81,14 +81,10 @@ class PressDryerWorkerMap
                 }
             }
 
-            // Fallback Terakhir (Jaga-jaga jika target masih null)
+            // Fallback Terakhir
             if ($targetModel === null && $mesinUtamaId) {
                 if (stripos($namaMesin, 'DRYER') !== false) {
-                    if ($shift === 'PAGI') {
-                        $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
-                    } elseif ($shift === 'MALAM') {
-                        $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
-                    }
+                    $targetModel = Target::where('kode_ukuran', 'DRYER ' . $shift)->first();
                 } else {
                     $targetModel = Target::where('id_mesin', $mesinUtamaId)
                         ->whereNull('id_ukuran')
@@ -114,11 +110,9 @@ class PressDryerWorkerMap
             $selisihProduksi = $totalHasil - $targetHarian;
             $potonganPerOrang = 0;
 
-            // Syarat Potongan: Target Ada (>0), Hasil Kurang (Selisih <0), Harga Potongan Ada (>0)
             if ($targetHarian > 0 && $selisihProduksi < 0 && $potonganPerLembar > 0) {
 
-                // Hitung Toleransi Kendala (Opsional - Jika ada data kendala)
-                $totalKendalaMenit = 0;
+                $totalKendalaMenit = 0; // Bisa dihubungkan ke relasi kendala jika ada
                 $jamKerja = (float) ($targetModel->jam ?? 0);
                 $jamKerjaMenit = $jamKerja * 60;
 
@@ -135,7 +129,7 @@ class PressDryerWorkerMap
                         $potonganTotal = $kekuranganPerforma * $potonganPerLembar;
                         $potonganRaw = $potonganTotal / $jumlahPekerja;
 
-                        // ✅ PEMBULATAN 3 TINGKAT (SESUAI REQUEST)
+                        // PEMBULATAN 3 TINGKAT
                         $ribuan = floor($potonganRaw / 1000);
                         $ratusan = $potonganRaw % 1000;
 
@@ -158,10 +152,10 @@ class PressDryerWorkerMap
                 if (!$dp->pegawai)
                     continue;
 
-                $jamMasuk = $dp->masuk ? Carbon::parse($dp->masuk)->format('H:i') : '';
-                $jamPulang = $dp->pulang ? Carbon::parse($dp->pulang)->format('H:i') : '';
+                // --- FORMAT WAKTU DENGAN DETIK 00:00:00 ---
+                $jamMasuk = $dp->masuk ? Carbon::parse($dp->masuk)->format('H:i:s') : '-';
+                $jamPulang = $dp->pulang ? Carbon::parse($dp->pulang)->format('H:i:s') : '-';
 
-                // Prioritas potongan manual input user
                 $potonganFinal = $dp->potongan ?? $potonganPerOrang;
 
                 $results[] = [
@@ -169,10 +163,7 @@ class PressDryerWorkerMap
                     'nama' => $dp->pegawai->nama_pegawai ?? 'TANPA NAMA',
                     'masuk' => $jamMasuk,
                     'pulang' => $jamPulang,
-
-                    // Kolom Hasil / Divisi
-                    'hasil' => $labelDivisi,
-
+                    'hasil' => $labelDivisi, // DRYER - PAGI atau DRYER - MALAM
                     'ijin' => $dp->ijin ?? '',
                     'potongan_targ' => (int) $potonganFinal,
                     'keterangan' => $dp->keterangan ?? '',
