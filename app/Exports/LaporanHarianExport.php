@@ -29,14 +29,25 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
         $result = [];
 
         foreach ($this->data as $row) {
+            // Memastikan format waktu menyertakan detik (HH:mm:ss)
+            $jamMasuk = $row['masuk'] ?? '-';
+            $jamPulang = $row['pulang'] ?? '-';
+
+            // Jika formatnya masih HH:mm, kita tambahkan :00 secara manual atau parse ulang
+            if ($jamMasuk !== '-' && strlen($jamMasuk) === 5) {
+                $jamMasuk .= ':00';
+            }
+            if ($jamPulang !== '-' && strlen($jamPulang) === 5) {
+                $jamPulang .= ':00';
+            }
+
             $result[] = [
                 $row['kodep'] ?? '-',
                 $row['nama'] ?? '-',
-                $row['masuk'] ?? '-',
-                $row['pulang'] ?? '-',
+                $jamMasuk, // Sekarang 06:00:00
+                $jamPulang, // Sekarang 14:00:00
                 $row['hasil'] ?? '-',
                 $row['ijin'] ?? '',
-                // Jika potongan 0 atau null, dikosongkan agar rapi di Excel
                 (isset($row['potongan_targ']) && $row['potongan_targ'] > 0) ? $row['potongan_targ'] : '',
                 $row['keterangan'] ?? '',
             ];

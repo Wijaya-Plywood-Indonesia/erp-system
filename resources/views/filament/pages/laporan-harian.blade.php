@@ -103,9 +103,24 @@
                                             ROTARY
                                         </span>
                                         @elseif(str_contains($row['hasil'], 'DRYER'))
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                                            DRYER
-                                        </span>
+                                        <div class="flex items-center gap-2">
+                                            @if(str_contains($row['hasil'], 'PAGI'))
+                                            {{-- Badge untuk Dryer Pagi --}}
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300 ring-1 ring-orange-500/30">
+                                                DRYER PAGI
+                                            </span>
+                                            @elseif(str_contains($row['hasil'], 'MALAM'))
+                                            {{-- Badge untuk Dryer Malam --}}
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300 ring-1 ring-indigo-500/30">
+                                                DRYER MALAM
+                                            </span>
+                                            @else
+                                            {{-- Fallback jika shift tidak terdeteksi --}}
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                                                DRYER
+                                            </span>
+                                            @endif
+                                        </div>
                                         @elseif(str_contains($row['hasil'], 'REPAIR'))
                                         <div class="flex items-center gap-1">
                                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 ring-1 ring-blue-500/30">
