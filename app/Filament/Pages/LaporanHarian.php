@@ -33,6 +33,10 @@ use App\Models\ProduksiNyusup;
 use App\Models\ProduksiSanding;
 use App\Models\ProduksiPilihPlywood;
 use App\Models\ProduksiHp;
+use App\Models\ProduksiPotSiku;
+use App\Models\ProduksiPotJelek;
+use App\Models\TurunKayu;
+
 
 // --- 2. IMPORT TRANSFORMER CLASSES ---
 use App\Filament\Pages\LaporanHarian\Transformers\RotaryWorkerMap;
@@ -50,6 +54,9 @@ use App\Filament\Pages\LaporanHarian\Transformers\NyusupWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\SandingWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\PilihPlywoodWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\HotpressWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\PotSikuWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\PotJelekWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\TurunKayuWorkerMap;
 
 use App\Exports\LaporanHarianExport;
 
@@ -196,6 +203,29 @@ class LaporanHarian extends Page implements HasForms
                     ->get()
             );
 
+
+            $listPotSiku = PotSikuWorkerMap::make(
+                ProduksiPotSiku::with([
+                    'pegawaiPotSiku.pegawai',
+                    'detailBarangDikerjakanPotSiku.ukuran',
+                    'detailBarangDikerjakanPotSiku.jenisKayu'
+                ])->whereDate('tanggal_produksi', $tgl)->get()
+            );
+
+            $listPotJelek = PotJelekWorkerMap::make(
+                ProduksiPotJelek::with([
+                    'pegawaiPotJelek.pegawai',
+                    'detailBarangDikerjakanPotJelek.ukuran',
+                    'detailBarangDikerjakanPotJelek.jenisKayu'
+                ])->whereDate('tanggal_produksi', $tgl)->get()
+            );
+
+            $listTurunKayu = TurunKayuWorkerMap::make(
+                TurunKayu::with(['pegawaiTurunKayu.pegawai'])
+                    ->whereDate('tanggal', $tgl)
+                    ->get()
+            );
+
             $pegawaiBekerja = array_merge(
                 $listRotary,
                 $listRepair,
@@ -211,7 +241,10 @@ class LaporanHarian extends Page implements HasForms
                 $listNyusup,
                 $listSanding,
                 $listPilihPlywood,
-                $listHotpress
+                $listHotpress,
+                $listPotSiku,
+                $listPotJelek,
+                $listTurunKayu
             );
 
             // Update Statistics

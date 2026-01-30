@@ -188,6 +188,27 @@
                                             HOT PRESS
                                         </span>
                                         <span class="text-[10px] text-zinc-500 ml-1">{{ str_replace('HOTPRESS: ', '', $row['hasil']) }}</span>
+                                        @elseif(str_contains($row['hasil'], 'POT SIKU'))
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300 ring-1 ring-purple-500/30">
+                                            POT SIKU
+                                        </span>
+                                        @elseif(str_contains($row['hasil'], 'POT JELEK'))
+                                        <div class="flex items-center gap-1">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-300 ring-1 ring-rose-500/30">
+                                                POT JELEK
+                                            </span>
+
+                                            <span class="text-[10px] text-zinc-500 font-medium italic truncate max-w-[250px]" title="{{ $row['hasil'] }}">
+                                                {{ str_replace('POT JELEK: ', '', $row['hasil']) }}
+                                            </span>
+                                        </div>
+                                        <span class="text-[10px] text-zinc-500 ml-1 italic">
+                                            {{ str_replace('POT SIKU: ', '', $row['hasil']) }}
+                                        </span>
+                                        @elseif(str_contains($row['hasil'], 'TURUN KAYU'))
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300 ring-1 ring-amber-500/30">
+                                            TURUN KAYU
+                                        </span>
                                         @else
                                         <span class="text-zinc-700 dark:text-zinc-300 font-bold">{{ $row["hasil"] }}</span>
                                         @endif

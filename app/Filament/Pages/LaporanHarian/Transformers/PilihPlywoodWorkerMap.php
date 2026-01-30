@@ -41,8 +41,8 @@ class PilihPlywoodWorkerMap
                 foreach ($produksi->pegawaiPilihPlywood as $pp) {
                     if (!$pp->pegawai) continue;
 
-                    $jamMasuk = $pp->masuk ? Carbon::parse($pp->masuk)->format('H:i') : '-';
-                    $jamPulang = $pp->pulang ? Carbon::parse($pp->pulang)->format('H:i') : '-';
+                    $jamMasuk = $pp->masuk ? Carbon::parse($pp->masuk)->format('H:i:s') : '-';
+                    $jamPulang = $pp->pulang ? Carbon::parse($pp->pulang)->format('H:i:s') : '-';
 
                     $results[] = [
                         'kodep' => $pp->pegawai->kode_pegawai ?? '-',
