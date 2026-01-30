@@ -1,25 +1,38 @@
 <x-filament-widgets::widget>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    {{-- <div class="flex flex-wrap gap-4 w-full bg-gray-100"> --}}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
         
         <x-overview-produksi-card
-            title="Total Batang" 
-            :value="$total_kayu" 
-            icon="heroicon-m-circle-stack" 
-            color="blue" 
+                title="Produksi Jati"
+                :totalProduksi="10000"
+                satuanProduksi="m³"
+                :totalPegawai="30"
+                :detailUkuran="[
+                        ['ukuran' => '200cm (Grade A)', 'jumlah' => 5000],
+                        ['ukuran' => '400cm (Grade B)', 'jumlah' => 3000],
+                        ['ukuran' => '600cm (Grade C)', 'jumlah' => 2000]
+                    ]" 
         />
 
         <x-overview-produksi-card
-            title="Grade Premium" 
-            :value="$grade_a" 
-            icon="heroicon-m-star" 
-            color="green" 
+                title="Produksi Mahoni"
+                :totalProduksi="8500"
+                satuanProduksi="m³"
+                :totalPegawai="20"
+                :detailUkuran="[
+                        ['ukuran' => '200cm (Grade A)', 'jumlah' => 4000],
+                        ['ukuran' => '400cm (Grade B)', 'jumlah' => 4500]
+                    ]" 
         />
 
         <x-overview-produksi-card
-            title="Grade Standar" 
-            :value="$grade_c ?? 0" 
-            icon="heroicon-m-exclamation-triangle" 
-            color="orange" 
+                title="Produksi Sengon"
+                :totalProduksi="5000"
+                satuanProduksi="m³"
+                :totalPegawai="15"
+                :detailUkuran="[
+                        ['ukuran' => '200cm (Grade A)', 'jumlah' => 5000]
+                    ]" 
         />
 
     </div>

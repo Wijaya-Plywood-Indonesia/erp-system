@@ -10,8 +10,7 @@ class CardProduksiOverwiew extends Widget
     protected static bool $isDiscovered = true;
 
     protected string $view = 'filament.widgets.card-produksi-overwiew';
-
-
+protected int | string | array $columnSpan = 'full';
 protected function getViewData(): array
     {
         return [
