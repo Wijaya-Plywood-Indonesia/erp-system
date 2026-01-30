@@ -33,13 +33,15 @@ class SandingWorkerMap
                     $detailProduksi[] = "{$namaLengkapBarang} ({$jumlah} Pcs)";
                 }
             }
+            $shift = $produksi->shift->nama_shift ?? $produksi->shift ?? '-';
 
-            $labelHasil = "SANDING: " . (empty($detailProduksi) ? '-' : implode('; ', $detailProduksi));
+            $labelHasil = "SANDING - {$shift} " . (empty($detailProduksi) ? '-' : implode('; ', $detailProduksi));
 
             // 2. Looping Pegawai Sanding
             if ($produksi->pegawaiSandings) {
                 foreach ($produksi->pegawaiSandings as $ps) {
-                    if (!$ps->pegawai) continue;
+                    if (!$ps->pegawai)
+                        continue;
 
                     $jamMasuk = $ps->masuk ? Carbon::parse($ps->masuk)->format('H:i:s') : '-';
                     $jamPulang = $ps->pulang ? Carbon::parse($ps->pulang)->format('H:i:s') : '-';
