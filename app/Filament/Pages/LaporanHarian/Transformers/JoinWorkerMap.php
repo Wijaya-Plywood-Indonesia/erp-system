@@ -6,7 +6,7 @@ use Carbon\Carbon;
 use App\Models\Target;
 use Illuminate\Support\Facades\Log;
 
-class JointWorkerMap
+class JoinWorkerMap
 {
     public static function make($collection): array
     {
