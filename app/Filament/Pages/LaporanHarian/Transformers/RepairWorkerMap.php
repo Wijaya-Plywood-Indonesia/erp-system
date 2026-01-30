@@ -139,8 +139,8 @@ class RepairWorkerMap
                         $pegawaiFinal[$kodep] = [
                             'kodep' => $kodep,
                             'nama' => $rp->pegawai->nama_pegawai,
-                            'masuk' => $rp->jam_masuk ? Carbon::parse($rp->jam_masuk)->format('H:i') : '',
-                            'pulang' => $rp->jam_pulang ? Carbon::parse($rp->jam_pulang)->format('H:i') : '',
+                            'masuk' => $rp->jam_masuk ? Carbon::parse($rp->jam_masuk)->format('H:i:s') : '',
+                            'pulang' => $rp->jam_pulang ? Carbon::parse($rp->jam_pulang)->format('H:i:s') : '',
                             'hasil_raw' => ["{$meja['label']} ({$pData['hasil_ind']})"],
                             'potongan_targ' => ($rp->potongan ?? $potonganPerOrang),
                             'ijin' => $rp->ijin ?? '',

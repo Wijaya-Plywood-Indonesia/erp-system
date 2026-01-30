@@ -57,7 +57,7 @@ class LaporanKayuMasukController extends Controller
                 'jenis_kayus.nama_kayu',
                 'lahans.kode_lahan',
             ])
-            ->orderByDesc('kayu_masuks.seri');
+            ->orderByDesc('kayu_masuks.tgl_kayu_masuk');
     }
 
     public function index(Request $request)
@@ -80,7 +80,22 @@ class LaporanKayuMasukController extends Controller
             ['label' => 'Poin', 'field' => 'poin'],
         ];
 
-        $fileName = 'laporan_kayu_' . ($request->dari ?? 'all') . '_sd_' . ($request->sampai ?? 'now') . '.xlsx';
+        // Logika Pengondisian Nama File
+        if ($request->filled('dari') && $request->filled('sampai')) {
+            // Jika filter tanggal diisi keduanya
+            $labelTanggal = $request->dari . '_sd_' . $request->sampai;
+        } elseif ($request->filled('dari')) {
+            // Jika hanya tanggal 'dari' yang diisi
+            $labelTanggal = 'dari_' . $request->dari;
+        } elseif ($request->filled('sampai')) {
+            // Jika hanya tanggal 'sampai' yang diisi
+            $labelTanggal = 'sampai_' . $request->sampai;
+        } else {
+            // Jika tidak ada filter sama sekali (Default: Tanggal Hari Ini)
+            $labelTanggal = now()->format('Y-m-d');
+        }
+
+        $fileName = 'laporan_kayu_' . $labelTanggal . '.xlsx';
 
         return Excel::download(
             new LaporanKayu($this->baseQuery($request), $columns),

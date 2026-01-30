@@ -34,8 +34,6 @@ class DempulWorkerMap
             }
 
             // Gabungkan semua detail menjadi satu string untuk kolom hasil
-            // Gunakan PHP_EOL atau separator lain jika ingin lebih rapi, 
-            // namun implode(", ") biasanya paling aman untuk tampilan tabel.
             $labelHasil = "DEMPUL: " . (empty($detailProduksi) ? '-' : implode('; ', $detailProduksi));
 
             // 2. Looping Pegawai yang terdaftar
@@ -43,8 +41,9 @@ class DempulWorkerMap
                 foreach ($produksi->rencanaPegawaiDempuls as $rp) {
                     if (!$rp->pegawai) continue;
 
-                    $jamMasuk = $rp->masuk ? Carbon::parse($rp->masuk)->format('H:i') : '-';
-                    $jamPulang = $rp->pulang ? Carbon::parse($rp->pulang)->format('H:i') : '-';
+                    // --- PENYESUAIAN FORMAT JAM: HH:mm:ss ---
+                    $jamMasuk = $rp->masuk ? Carbon::parse($rp->masuk)->format('H:i:s') : '-';
+                    $jamPulang = $rp->pulang ? Carbon::parse($rp->pulang)->format('H:i:s') : '-';
 
                     $results[] = [
                         'kodep' => $rp->pegawai->kode_pegawai ?? '-',
