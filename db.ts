@@ -35,6 +35,8 @@ type dbListProduksi = {
 export { Produksi, dbListProduksi };
 
 
+
+
 const ListProduksi: Produksi = [
     {
         name: "Produksi Rotaries",
@@ -607,3 +609,153 @@ const ListProduksi: Produksi = [
 //         }
 //     },
 // ]
+
+
+
+
+//   {
+//     "name": "Produksi Repair",
+//     "urlResource": "produksi-repairs",
+//     "dbListName": {
+//       "dbName": "produksi_repairs",
+//       "dbPegawaiName": "rencana_repairs",
+//       "dbHasilName": [
+//         {
+//           "name": "Hasil Repairs",
+//           "dbName": "hasil_repairs",
+//           "satuan_hasil": "Lembar",
+//           "satuan_kualitas": "kw",
+//           "key_jumlah": "jumlah",
+//           "key_ukuran": ""
+//         }
+//       ]
+//     }
+//   },
+
+
+// {
+//     "name": "Produksi Hot Press",
+//     "urlResource": "produksi-hot-press",
+//     "dbListName": {
+//       "dbName": "produksi_hp",
+//       "dbPegawaiName": "detail_pegawai_hp",
+//       "dbHasilName": [
+//         {
+//           "name": "Hasil Platform Hot Press",
+//           "dbName": "platform_hasil_hp",
+//           "satuan_hasil": "Lembar",
+//           "satuan_kualitas": "grade",
+//           "key_jumlah": "isi"
+//         },
+//         {
+//           "name": "Hasil Triplek Hot Press",
+//           "dbName": "triplek_hasil_hp",
+//           "satuan_hasil": "Lembar",
+//           "satuan_kualitas": "kw",
+//           "key_jumlah": "jumlah"
+//         }
+//       ]
+//     }
+//   },
+
+
+
+// {
+//     "name": "Produksi Pilih Veneer",
+//     "urlResource": "produksi-pilih-veneer",
+//     "dbListName": {
+//       "dbName": "produksi_pilih_veneer",
+//       "dbPegawaiName": "pegawai_pilih_veneer",
+//       "dbHasilName": [
+//         {
+//           "name": "Hasil Pilih Veneer",
+//           "dbName": "hasil_pilih_veneer",
+//           "satuan_hasil": "Lembar",
+//           "satuan_kualitas": "kw",
+//           "key_jumlah": "jumlah"
+//         }
+//       ]
+//     }
+//   },
+
+//   {
+//     "name": "Produksi Dempul",
+//     "urlResource": "produksi-dempul",
+//     "dbListName": {
+//       "dbName": "produksi_dempuls",
+//       "dbPegawaiName": "detail_dempul_pegawai",
+//       "dbHasilName": [
+//         {
+//           "name": "Hasil Detail Dempul",
+//           "dbName": "detail_dempuls",
+//           "satuan_hasil": "Pcs",
+//           "satuan_kualitas": "grade",
+//           "key_jumlah": "hasil"
+//         }
+//       ]
+//     },
+//     "addtional_info": {
+//       "key_satuan_kualitas": "$b->grade->nama_grade",
+//       "catatan": "Evaluasi kategori, ukuran, grade, dan jenis barang."
+//     }
+//   },
+
+//   {
+//     "name": "Produksi Graji Triplek",
+//     "urlResource": "produksi-graji-triplek",
+//     "dbListName": {
+//       "dbName": "produksi_graji_triplek",
+//       "dbPegawaiName": "pegawai_graji_triplek",
+//       "dbHasilName": [
+//         {
+//           "name": "Hasil Graji Triplek",
+//           "dbName": "hasil_graji_triplek",
+//           "satuan_hasil": "Pcs",
+//           "satuan_kualitas": "grade",
+//           "key_jumlah": "isi"
+//         }
+//       ]
+//     }
+//   },
+
+//   {
+//     "name": "Produksi Nyusup",
+//     "urlResource": "produksi-nyusup",
+//     "dbListName": {
+//       "dbName": "produksi_nyusup",
+//       "dbPegawaiName": "pegawai_nyusup",
+//       "dbHasilName": [
+//         {
+//           "name": "Hasil Nyusup",
+//           "dbName": "detail_barang_dikerjakan",
+//           "satuan_hasil": "Pcs",
+//           "satuan_kualitas": "grade",
+//           "key_jumlah": "hasil"
+//         }
+//       ]
+//     }
+//   },
+//   {
+//     "name": "Produksi Pilih Plywoods",
+//     "urlResource": "produksi-pilih-plywood",
+//     "dbListName": {
+//       "dbName": "produksi_pilih_plywood",
+//       "dbPegawaiName": "pegawai_pilih_plywood",
+//       "dbHasilName": [
+//         {
+//           "name": "Hasil Bagus",
+//           "dbName": "hasil_pilih_plywood",
+//           "satuan_hasil": "Pcs",
+//           "satuan_kualitas": "grade",
+//           "key_jumlah": "jumlah_bagus"
+//         },
+//         {
+//           "name": "Hasil Cacat",
+//           "dbName": "hasil_pilih_plywood",
+//           "satuan_hasil": "Pcs",
+//           "satuan_kualitas": "grade",
+//           "key_jumlah": "jumlah"
+//         }
+//       ]
+//     }
+//   }

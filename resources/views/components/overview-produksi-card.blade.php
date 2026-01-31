@@ -21,7 +21,15 @@
     ][$color] ?? 'from-gray-500 to-gray-600';
 @endphp
 
-<div x-data="{ expanded: false }" 
+<div x-data="{
+    expanded: false,
+    hasDetail: {{ count($detailUkuran) > 0 ? 'true' : 'false' }},
+    toggle() {
+        if (this.hasDetail) {
+            this.expanded = !this.expanded;
+        }
+    }
+ }" 
      class="w-full min-w-md mx-auto bg-white dark:bg-gray-900 rounded-2xl shadow-lg overflow-hidden transition-all duration-300 ease-in-out border border-gray-200 dark:border-gray-800"
      :class="expanded ? 'shadow-2xl ring-2 ring-primary-500/50 md:col-span-2' : ''">
     
@@ -34,8 +42,7 @@
         </div>
         <span class="text-[10px] bg-emerald-500 dark:bg-red-400 px-2 py-1 rounded-full animate-pulse font-bold">Live</span>
     </div>
-
-    <div class="p-6 cursor-pointer" @click="expanded = !expanded">
+    <div class="p-6 cursor-pointer" @click="toggle()">
         <div class="grid grid-cols-2 gap-4">
             <div class="flex flex-col">
                 <span class="text-gray-500 dark:text-gray-400 text-xs font-medium uppercase italic">Total Produksi</span>

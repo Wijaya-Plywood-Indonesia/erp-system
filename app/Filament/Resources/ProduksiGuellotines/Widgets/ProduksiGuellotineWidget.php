@@ -44,26 +44,7 @@ class ProduksiGuellotineWidget extends Widget
 
 
         // ======================
-        // 3. GLOBAL UKURAN + KW
-        // ======================
-        // $globalUkuranKw = hasil_guellotine::query()
-        //     ->where('id_produksi_guellotine', $produksiId)
-        //     ->join('ukurans', 'ukurans.id', '=', 'hasil_guellotine.id_ukuran')
-        //     ->selectRaw('
-        //         CONCAT(
-        //             TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.panjang AS CHAR))), " x ",
-        //             TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.lebar AS CHAR))), " x ",
-        //             TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
-        //         ) AS ukuran,
-        //         hasil_guellotine.id_jenis_kayu,
-        //         SUM(CAST(hasil_guellotine.jumlah AS UNSIGNED)) AS total
-        //     ')
-        //     ->groupBy('ukuran', 'hasil_guellotine.id_jenis_kayu')
-        //     ->orderBy('ukuran')
-        //     ->orderBy('hasil_guellotine.id_jenis_kayu')
-        //     ->get();
-        // ======================
-        // 3. GLOBAL UKURAN + kayu
+        // 3. GLOBAL UKURAN + (satuan kualitas[hasil_kayu|kw|grade])
         // ======================
         $globalUkuranKayu = hasil_guellotine::query()
             ->join('ukurans', 'ukurans.id', '=', 'hasil_guellotine.id_ukuran')
@@ -83,23 +64,8 @@ class ProduksiGuellotineWidget extends Widget
             ->toArray();
 
         // ======================
-        // 4. GLOBAL UKURAN (SEMUA KW)
+        // 4. GLOBAL UKURAN (SEMUA satuan kualitas[hasil_kayu|kw|grade])
         // ======================
-        // $globalUkuran = hasil_guellotine::query()
-        //     ->where('id_produksi_guellotine', $produksiId)
-        //     ->join('ukurans', 'ukurans.id', '=', 'hasil_guellotine.id_ukuran')
-        //     ->selectRaw('
-        //         CONCAT(
-        //             TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.panjang AS CHAR))), " x ",
-        //             TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.lebar AS CHAR))), " x ",
-        //             TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
-        //         ) AS ukuran,
-        //         SUM(CAST(hasil_guellotine.jumlah AS UNSIGNED)) AS total
-        //     ')
-        //     ->groupBy('ukuran')
-        //     ->orderBy('ukuran')
-        //     ->get();
-
         $globalUkuran = hasil_guellotine::query()
             ->where('id_produksi_guellotine', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'hasil_guellotine.id_ukuran')

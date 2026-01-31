@@ -128,6 +128,41 @@ class CardProduksiOverwiew extends Widget
         $this->cards = $processedCards;
     }
 
+    public function customProduksiRepair()
+    {
+        // ! REPAIR
+            //     $globalUkuranKw = HasilRepair::query()
+            // ->where('hasil_repairs.id_produksi_repair', $produksiId)
+            // ->join('rencana_repairs', 'rencana_repairs.id', '=', 'hasil_repairs.id_rencana_repair')
+            // ->join('rencana_pegawais', 'rencana_pegawais.id', '=', 'rencana_repairs.id_rencana_pegawai')
+            // ->join('modal_repairs', 'modal_repairs.id', '=', 'rencana_repairs.id_modal_repair')
+            // ->join('ukurans', 'ukurans.id', '=', 'modal_repairs.id_ukuran')
+            // ->selectRaw('
+            //     CONCAT(
+            //         TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
+            //         TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
+            //         TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
+            //     ) AS ukuran,
+            //     rencana_repairs.kw,
+            //     SUM(CAST(hasil_repairs.jumlah AS UNSIGNED)) AS total,
+            //     COUNT(DISTINCT rencana_pegawais.id_pegawai) AS jumlah_orang
+            // ')
+            // ->groupBy('ukuran', 'rencana_repairs.kw')
+            // ->orderBy('ukuran')
+            // ->orderBy('rencana_repairs.kw')
+            // ->get();
+
+        //   $globalUkuran = $globalUkuranKw->groupBy('ukuran')->map(function ($rows) {
+        // return (object) [
+        // 'ukuran' => $rows->first()->ukuran,
+        // 'total' => $rows->sum('total'),
+        // 'total_orang' => $rows->sum('jumlah_orang')
+        // ];
+        // })->values();
+
+        // 
+    }
+
     protected function getViewData(): array
     {
         return $this->cards;
