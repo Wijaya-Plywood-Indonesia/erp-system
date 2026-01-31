@@ -10,20 +10,41 @@ use App\Models\PegawaiGrajiStik;
 class ProduksiGrajiStikSummaryWidget extends Widget
 {
     protected string $view = 'filament.resources.produksi-graji-stik.widgets.summary';
-
     protected int|string|array $columnSpan = 'full';
 
     public ?GrajiStik $record = null;
-
     public array $summary = [];
+
+    /**
+     * Listener untuk menangkap sinyal 'graji_stik'
+     */
+    public function getListeners(): array
+    {
+        $id = $this->record?->id;
+
+        if (!$id) return [];
+
+        return [
+            "echo:production.graji_stik.{$id},.ProductionUpdated" => 'refreshSummary',
+        ];
+    }
 
     public function mount(?GrajiStik $record = null): void
     {
-        if (!$record) return;
+        $this->record = $record;
+        $this->refreshSummary();
+    }
 
-        $produksiId = $record->id;
+    /**
+     * Fungsi utama untuk memperbarui data summary secara real-time
+     */
+    public function refreshSummary(): void
+    {
+        if (!$this->record) return;
 
-        // 1. TOTAL HASIL (SUM HASIL_GRAJI)
+        $produksiId = $this->record->id;
+
+        // 1. TOTAL HASIL
         $totalAll = HasilGrajiStik::where('id_graji_stiks', $produksiId)
             ->sum('hasil_graji');
 
@@ -32,8 +53,7 @@ class ProduksiGrajiStikSummaryWidget extends Widget
             ->distinct('id_pegawai')
             ->count('id_pegawai');
 
-        // 3. GLOBAL UKURAN (Karena di Stik tidak ada id_jenis_kayu di hasil, kita ambil via Modal)
-        // Jika Anda ingin menambahkan Jenis Kayu, pastikan tabel modal_graji_stiks memilikinya.
+        // 3. GLOBAL UKURAN (Via Join Modal)
         $globalUkuran = HasilGrajiStik::query()
             ->where('hasil_graji_stiks.id_graji_stiks', $produksiId)
             ->join('modal_graji_stiks', 'modal_graji_stiks.id', '=', 'hasil_graji_stiks.id_modal_graji_stiks')
@@ -56,4 +76,4 @@ class ProduksiGrajiStikSummaryWidget extends Widget
             'globalUkuran'  => $globalUkuran,
         ];
     }
-}   
+}

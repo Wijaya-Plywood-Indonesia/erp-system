@@ -16,7 +16,7 @@ class PegawaiPilihVeneer extends Model
         'pulang',
         'ijin',
         'ket',
-        
+
     ];
 
     public function produksiPilihVeneer()
@@ -27,5 +27,34 @@ class PegawaiPilihVeneer extends Model
     public function pegawai()
     {
         return $this->belongsTo(Pegawai::class, 'id_pegawai');
+    }
+
+    protected static function booted()
+    {
+        /**
+         * static::saved mencakup event Created (data baru) 
+         * dan Updated (perubahan data lama).
+         */
+        static::saved(function ($model) {
+            if ($model->id_produksi_pilih_veneer) {
+                \App\Events\ProductionUpdated::dispatch(
+                    $model->id_produksi_pilih_veneer,
+                    'veneer'
+                );
+            }
+        });
+
+        /**
+         * static::deleted memastikan widget refresh 
+         * saat ada data yang dihapus.
+         */
+        static::deleted(function ($model) {
+            if ($model->id_produksi_pilih_veneer) {
+                \App\Events\ProductionUpdated::dispatch(
+                    $model->id_produksi_pilih_veneer,
+                    'veneer'
+                );
+            }
+        });
     }
 }

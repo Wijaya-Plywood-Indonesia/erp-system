@@ -43,4 +43,20 @@ class PlatformHasilHp extends Model
     {
         return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu', 'id');
     }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_produksi_hp) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_hp, 'hotpress');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_produksi_hp) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_hp, 'hotpress');
+            }
+        });
+    }
 }

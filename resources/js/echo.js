@@ -5,13 +5,9 @@ window.Pusher = Pusher;
 
 console.log('Echo.js sedang dimuat...');
 window.Echo = new Echo({
-    broadcaster: 'reverb',
+    broadcaster: 'pusher',
     key: import.meta.env.VITE_PUSHER_APP_KEY,
-   cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
-//     wsPort: import.meta.env.VITE_REVERB_PORT ?? 80,
-//     wssPort: import.meta.env.VITE_REVERB_PORT ?? 443,
-    // forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
-    forceTLS: false,
-    // enabledTransports: ['ws', 'wss'],
+    cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
+    forceTLS: true
 });
 console.log('Echo berhasil dipasang ke window!');

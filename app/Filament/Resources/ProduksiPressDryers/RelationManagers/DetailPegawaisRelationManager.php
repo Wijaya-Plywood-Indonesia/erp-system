@@ -77,7 +77,7 @@ class DetailPegawaisRelationManager extends RelationManager
                     ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
                     ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
-                    Select::make('id_pegawai')
+                Select::make('id_pegawai')
                     ->label('Pegawai')
                     ->options(function ($livewire, $record) {
                         // Ambil daftar pegawai yang SUDAH ada di produksi ini
@@ -153,7 +153,20 @@ class DetailPegawaisRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('pegawai.nama_pegawai')
                     ->label('Pegawai')
-                    ->searchable(),
+                    ->formatStateUsing(
+                        fn($record) => $record->pegawai
+                            ? $record->pegawai->kode_pegawai . ' - ' . $record->pegawai->nama_pegawai
+                            : '—'
+                    )
+                    ->badge()
+                    ->searchable(
+                        query: fn($query, $search) => $query->whereHas(
+                            'pegawai',
+                            fn($q) => $q
+                                ->where('nama_pegawai', 'like', "%{$search}%")
+                                ->orWhere('kode_pegawai', 'like', "%{$search}%")
+                        )
+                    ),
 
                 TextColumn::make('tugas')
                     ->searchable(),

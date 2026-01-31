@@ -56,4 +56,20 @@ class DetailHasilPaletRotary extends Model
         $lahan = $this->penggunaanLahan?->lahan;
         return $lahan ? "{$lahan->kode_lahan} - {$lahan->nama_lahan}" : '-';
     }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_produksi) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi, 'rotary');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_produksi) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi, 'rotary');
+            }
+        });
+    }
 }

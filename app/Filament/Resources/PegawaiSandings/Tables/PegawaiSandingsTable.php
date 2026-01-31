@@ -24,7 +24,20 @@ class PegawaiSandingsTable
                 TextColumn::make('pegawai.nama_pegawai')
                     ->label('Pegawai')
                     ->sortable()
-                    ->searchable(),
+                    ->formatStateUsing(
+                        fn($record) => $record->pegawai
+                            ? $record->pegawai->kode_pegawai . ' - ' . $record->pegawai->nama_pegawai
+                            : '—'
+                    )
+                    ->badge()
+                    ->searchable(
+                        query: fn($query, $search) => $query->whereHas(
+                            'pegawai',
+                            fn($q) => $q
+                                ->where('nama_pegawai', 'like', "%{$search}%")
+                                ->orWhere('kode_pegawai', 'like', "%{$search}%")
+                        )
+                    ),
                 TextColumn::make('tugas')
                     ->searchable(),
                 TextColumn::make('masuk')
@@ -54,7 +67,7 @@ class PegawaiSandingsTable
             ])
             ->headerActions([
                 CreateAction::make()
-                ->hidden(
+                    ->hidden(
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
@@ -86,12 +99,12 @@ class PegawaiSandingsTable
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
                 EditAction::make()
-                ->hidden(
+                    ->hidden(
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
                 DeleteAction::make()
-                ->hidden(
+                    ->hidden(
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),

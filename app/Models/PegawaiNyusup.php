@@ -32,4 +32,20 @@ class PegawaiNyusup extends Model
     {
         return $this->hasMany(DetailBarangDikerjakan::class, 'id_pegawai_nyusup');
     }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_produksi_nyusup) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_nyusup, 'nyusup');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_produksi_nyusup) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_nyusup, 'nyusup');
+            }
+        });
+    }
 }

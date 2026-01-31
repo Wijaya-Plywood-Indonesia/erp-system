@@ -11,6 +11,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
+use App\Models\Pegawai;
 
 class PegawaiRotaryForm
 {
@@ -43,7 +44,13 @@ class PegawaiRotaryForm
                 //ini akan bisa direpeater
                 Select::make('id_pegawai')
                     ->label('Pegawai')
-                    ->relationship('pegawai', 'nama_pegawai')
+                    ->options(
+                        Pegawai::query()
+                            ->get()
+                            ->mapWithKeys(fn($pegawai) => [
+                                $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
+                            ])
+                    )
                     ->searchable()
                     ->required(),
 

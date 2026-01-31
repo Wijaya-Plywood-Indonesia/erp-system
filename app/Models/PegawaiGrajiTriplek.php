@@ -28,4 +28,20 @@ class PegawaiGrajiTriplek extends Model
     {
         return $this->belongsTo(Pegawai::class, 'id_pegawai');
     }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_produksi_graji_triplek) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_graji_triplek, 'graji_triplek');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_produksi_graji_triplek) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_graji_triplek, 'graji_triplek');
+            }
+        });
+    }
 }

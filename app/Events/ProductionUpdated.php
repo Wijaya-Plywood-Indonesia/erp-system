@@ -24,4 +24,9 @@ class ProductionUpdated implements ShouldBroadcast
             new Channel("production.{$this->type}.{$this->productionId}"),
         ];
     }
+
+    public function broadcastAs(): string
+    {
+        return 'ProductionUpdated';
+    }
 }

@@ -33,4 +33,20 @@ class HasilSanding extends Model
     {
         return $this->belongsTo(Mesin::class, 'id_mesin');
     }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_produksi_sanding) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_sanding, 'sanding');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_produksi_sanding) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_sanding, 'sanding');
+            }
+        });
+    }
 }

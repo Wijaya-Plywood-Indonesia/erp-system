@@ -17,18 +17,12 @@ class ProduksiPilihVeneerSummaryWidget extends Widget
 
     public array $summary = [];
 
-    /**
-     * LANGKAH 1: Tambahkan Listeners Echo
-     * Menunggu sinyal "ProductionUpdated" dari Reverb
-     */
-    // Tambahkan ini di bagian atas class
     public function getListeners(): array
     {
         $produksiId = $this->record->id;
 
         return [
-            // Gunakan sintaks string penuh untuk memastikan tidak ada typo
-            "echo:production.veneer.{$produksiId},ProductionUpdated" => 'refreshSummary',
+            "echo:production.veneer.{$produksiId},.ProductionUpdated" => 'refreshSummary',
         ];
     }
 

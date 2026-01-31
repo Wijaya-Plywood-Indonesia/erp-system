@@ -6,7 +6,7 @@ use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use App\Models\ProduksiKedi;
 use App\Models\DetailBongkarKedi;
-use App\Models\DetailPegawaiKedi; // Tambahkan import ini
+use App\Models\DetailPegawaiKedi;
 
 class ProduksiKediSummaryWidget extends Widget
 {
@@ -18,26 +18,46 @@ class ProduksiKediSummaryWidget extends Widget
 
     public array $summary = [];
 
+    /**
+     * LANGKAH 1: Listener untuk menangkap sinyal 'kedi'
+     */
+    public function getListeners(): array
+    {
+        $id = $this->record?->id;
+
+        if (!$id) return [];
+
+        return [
+            "echo:production.kedi.{$id},.ProductionUpdated" => 'refreshSummary',
+        ];
+    }
+
     public function mount(?ProduksiKedi $record = null): void
     {
-        if (!$record) {
-            return;
-        }
+        $this->record = $record;
+        $this->refreshSummary();
+    }
 
-        $produksiId = $record->id;
+    /**
+     * LANGKAH 2: Fungsi refresh untuk update data real-time
+     */
+    public function refreshSummary(): void
+    {
+        if (!$this->record) return;
 
-        // 1. TOTAL HASIL PRODUKSI (DARI TABEL BONGKAR)
+        $produksiId = $this->record->id;
+
+        // 1. TOTAL HASIL PRODUKSI
         $totalAll = DetailBongkarKedi::where('id_produksi_kedi', $produksiId)
             ->sum(DB::raw('CAST(jumlah AS UNSIGNED)'));
 
-        // 2. TOTAL PEGAWAI UNIK (DARI TABEL PEGAWAI KEDI)
-        // Menggunakan distinct agar jika 1 orang punya 2 tugas tetap dihitung 1 orang
+        // 2. TOTAL PEGAWAI UNIK
         $totalPegawai = DetailPegawaiKedi::where('id_produksi_kedi', $produksiId)
             ->distinct('id_pegawai')
             ->count('id_pegawai');
 
-        // 3. GLOBAL UKURAN + KW
-        $globalUkuranKw = DetailBongkarKedi::query()
+        // Query Dasar
+        $baseQuery = DetailBongkarKedi::query()
             ->where('id_produksi_kedi', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'detail_bongkar_kedi.id_ukuran')
             ->selectRaw('
@@ -45,7 +65,12 @@ class ProduksiKediSummaryWidget extends Widget
                     TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
                     TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
                     TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
-                ) AS ukuran,
+                ) AS ukuran
+            ');
+
+        // 3. GLOBAL UKURAN + KW
+        $globalUkuranKw = (clone $baseQuery)
+            ->selectRaw('
                 detail_bongkar_kedi.kw,
                 SUM(CAST(detail_bongkar_kedi.jumlah AS UNSIGNED)) AS total
             ')
@@ -55,25 +80,15 @@ class ProduksiKediSummaryWidget extends Widget
             ->get();
 
         // 4. GLOBAL UKURAN (SEMUA KW)
-        $globalUkuran = DetailBongkarKedi::query()
-            ->where('id_produksi_kedi', $produksiId)
-            ->join('ukurans', 'ukurans.id', '=', 'detail_bongkar_kedi.id_ukuran')
-            ->selectRaw('
-                CONCAT(
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
-                    TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
-                ) AS ukuran,
-                SUM(CAST(detail_bongkar_kedi.jumlah AS UNSIGNED)) AS total
-            ')
+        $globalUkuran = (clone $baseQuery)
+            ->selectRaw('SUM(CAST(detail_bongkar_kedi.jumlah AS UNSIGNED)) AS total')
             ->groupBy('ukuran')
             ->orderBy('ukuran')
             ->get();
 
-        // SIMPAN SEMUA KE ARRAY SUMMARY UNTUK DIKIRIM KE BLADE
         $this->summary = [
             'totalAll'       => $totalAll,
-            'totalPegawai'   => $totalPegawai, // Baris ini yang sebelumnya hilang
+            'totalPegawai'   => $totalPegawai,
             'globalUkuranKw' => $globalUkuranKw,
             'globalUkuran'   => $globalUkuran,
         ];
