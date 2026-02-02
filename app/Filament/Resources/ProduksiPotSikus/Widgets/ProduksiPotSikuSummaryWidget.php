@@ -23,7 +23,8 @@ class ProduksiPotSikuSummaryWidget extends Widget
     {
         $id = $this->record?->id;
 
-        if (! $id) return [];
+        if (!$id)
+            return [];
 
         return [
             // Mendengarkan channel production.pot_siku.{id}
@@ -45,7 +46,8 @@ class ProduksiPotSikuSummaryWidget extends Widget
      */
     public function refreshSummary(): void
     {
-        if (! $this->record) return;
+        if (!$this->record)
+            return;
 
         $produksiId = $this->record->id;
 
@@ -88,11 +90,53 @@ class ProduksiPotSikuSummaryWidget extends Widget
             ->orderBy('ukuran')
             ->get();
 
+        //
+        $targetPerPegawai = 300; // cm
+
+        $progressPegawai = DetailBarangDikerjakanPotSiku::query()
+            ->where('detail_barang_dikerjakan_pot_siku.id_produksi_pot_siku', $produksiId)
+            ->join(
+                'pegawai_pot_siku',
+                'pegawai_pot_siku.id',
+                '=',
+                'detail_barang_dikerjakan_pot_siku.id_pegawai_pot_siku'
+            )
+            ->join(
+                'pegawais',
+                'pegawais.id',
+                '=',
+                'pegawai_pot_siku.id_pegawai'
+            )
+            ->selectRaw('
+        pegawais.id AS pegawais_id,
+        pegawais.nama_pegawai,
+        SUM(CAST(detail_barang_dikerjakan_pot_siku.tinggi AS UNSIGNED)) AS total_tinggi
+    ')
+            ->groupBy('pegawais.id', 'pegawais.nama_pegawai')
+            ->get()
+            ->map(function ($row) use ($targetPerPegawai) {
+                $progress = min(
+                    round(($row->total_tinggi / $targetPerPegawai) * 100, 1),
+                    100
+                );
+
+                return [
+                    'pegawais' => $row->nama_pegawai,
+                    'total' => $row->total_tinggi,
+                    'target' => $targetPerPegawai,
+                    'progress' => $progress,
+                ];
+            });
+
+
         $this->summary = [
-            'totalAll'       => $totalAll,
-            'totalPegawai'   => $totalPegawai,
+            'totalAll' => $totalAll,
+            'totalPegawai' => $totalPegawai,
             'globalUkuranKw' => $globalUkuranKw,
-            'globalUkuran'   => $globalUkuran,
+            'globalUkuran' => $globalUkuran,
+            'progressPegawai' => $progressPegawai,
         ];
+
+
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\DetailBarangDikerjakanPotSikus\Schemas;
 
 use App\Models\PegawaiPotSiku;
+use App\Models\Target;
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\Select;
 use App\Models\JenisKayu;
@@ -38,15 +39,15 @@ class DetailBarangDikerjakanPotSikuForm
                     ->columnSpanFull(),
                 Select::make('id_ukuran')
                     ->label('Ukuran')
-                    ->options(
-                        Ukuran::all()
-                            ->pluck('dimensi', 'id') // ← memanggil accessor getDimensiAttribute()
-                    )
                     ->searchable()
-                    ->afterStateUpdated(function ($state) {
-                        session(['last_ukuran' => $state]);
-                    })
-                    ->default(fn() => session('last_ukuran'))
+                    ->options(
+                        Ukuran::whereIn(
+                            'id',
+                            Target::where('id_mesin', 16)->pluck('id_ukuran')
+                        )
+                            ->get()
+                            ->pluck('dimensi', 'id')
+                    )
                     ->required(),
 
                 Select::make('id_jenis_kayu')
