@@ -41,8 +41,8 @@ class GrajiTriplekWorkerMap
                     // DISESUAIKAN: Nama relasi di model Anda adalah pegawaiGrajiTriplek
                     if (!$pg->pegawaiGrajiTriplek) continue;
 
-                    $jamMasuk = $pg->masuk ? Carbon::parse($pg->masuk)->format('H:i') : '-';
-                    $jamPulang = $pg->pulang ? Carbon::parse($pg->pulang)->format('H:i') : '-';
+                    $jamMasuk = $pg->masuk ? Carbon::parse($pg->masuk)->format('H:i:s') : '-';
+                    $jamPulang = $pg->pulang ? Carbon::parse($pg->pulang)->format('H:i:s') : '-';
 
                     $results[] = [
                         'kodep' => $pg->pegawaiGrajiTriplek->kode_pegawai ?? '-',

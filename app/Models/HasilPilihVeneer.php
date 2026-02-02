@@ -39,16 +39,30 @@ class HasilPilihVeneer extends Model
 
     protected static function booted()
     {
-        // Setiap kali data HASIL disimpan (create/update)
-        static::saved(
-            fn($model) =>
-            broadcast(new \App\Events\ProductionUpdated($model->id_produksi_pilih_veneer, 'veneer'))
-        );
+        /**
+         * static::saved mencakup event Created (data baru) 
+         * dan Updated (perubahan data lama).
+         */
+        static::saved(function ($model) {
+            if ($model->id_produksi_pilih_veneer) {
+                \App\Events\ProductionUpdated::dispatch(
+                    $model->id_produksi_pilih_veneer,
+                    'veneer'
+                );
+            }
+        });
 
-        // Setiap kali data HASIL dihapus
-        static::deleted(
-            fn($model) =>
-            broadcast(new \App\Events\ProductionUpdated($model->id_produksi_pilih_veneer, 'veneer'))
-        );
+        /**
+         * static::deleted memastikan widget refresh 
+         * saat ada data yang dihapus.
+         */
+        static::deleted(function ($model) {
+            if ($model->id_produksi_pilih_veneer) {
+                \App\Events\ProductionUpdated::dispatch(
+                    $model->id_produksi_pilih_veneer,
+                    'veneer'
+                );
+            }
+        });
     }
 }

@@ -11,39 +11,52 @@ use App\Models\DetailPegawaiStik;
 class ProduksiStikSummaryWidget extends Widget
 {
     protected string $view = 'filament.resources.produksi-stik.widgets.summary';
-
     protected int|string|array $columnSpan = 'full';
 
     public ?ProduksiStik $record = null;
-
     public array $summary = [];
+
+    /**
+     * Listener Pusher untuk tipe 'stik'
+     */
+    public function getListeners(): array
+    {
+        $id = $this->record?->id;
+
+        if (! $id) return [];
+
+        return [
+            "echo:production.stik.{$id},.ProductionUpdated" => 'refreshSummary',
+        ];
+    }
 
     public function mount(?ProduksiStik $record = null): void
     {
-        if (! $record) {
-            return;
-        }
+        $this->record = $record;
+        $this->refreshSummary();
+    }
 
-        $produksiId = $record->id;
+    /**
+     * Fungsi Refresh Data secara Real-time
+     */
+    public function refreshSummary(): void
+    {
+        if (! $this->record) return;
 
-        // ======================
+        $produksiId = $this->record->id;
+
         // 1. TOTAL PRODUKSI (LEMBAR)
-        // ======================
         $totalAll = DetailHasilStik::where('id_produksi_stik', $produksiId)
             ->sum(DB::raw('CAST(total_lembar AS UNSIGNED)'));
 
-        // ======================
         // 2. TOTAL PEGAWAI (UNIK)
-        // ======================
         $totalPegawai = DetailPegawaiStik::where('id_produksi_stik', $produksiId)
             ->whereNotNull('id_pegawai')
             ->distinct('id_pegawai')
             ->count('id_pegawai');
 
-        // ======================
-        // 3. GLOBAL UKURAN + KW
-        // ======================
-        $globalUkuranKw = DetailHasilStik::query()
+        // Query Dasar Ukuran
+        $baseQuery = DetailHasilStik::query()
             ->where('id_produksi_stik', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'detail_hasil_stik.id_ukuran')
             ->selectRaw('
@@ -51,29 +64,22 @@ class ProduksiStikSummaryWidget extends Widget
                     TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
                     TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
                     TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
-                ) AS ukuran,
+                ) AS ukuran
+            ');
+
+        // 3. GLOBAL UKURAN + KW
+        $globalUkuranKw = (clone $baseQuery)
+            ->selectRaw('
                 detail_hasil_stik.kw,
                 SUM(CAST(detail_hasil_stik.total_lembar AS UNSIGNED)) AS total
             ')
             ->groupBy('ukuran', 'detail_hasil_stik.kw')
             ->orderBy('ukuran')
-            ->orderBy('detail_hasil_stik.kw')
             ->get();
 
-        // ======================
         // 4. GLOBAL UKURAN (SEMUA KW)
-        // ======================
-        $globalUkuran = DetailHasilStik::query()
-            ->where('id_produksi_stik', $produksiId)
-            ->join('ukurans', 'ukurans.id', '=', 'detail_hasil_stik.id_ukuran')
-            ->selectRaw('
-                CONCAT(
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
-                    TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
-                ) AS ukuran,
-                SUM(CAST(detail_hasil_stik.total_lembar AS UNSIGNED)) AS total
-            ')
+        $globalUkuran = (clone $baseQuery)
+            ->selectRaw('SUM(CAST(detail_hasil_stik.total_lembar AS UNSIGNED)) AS total')
             ->groupBy('ukuran')
             ->orderBy('ukuran')
             ->get();

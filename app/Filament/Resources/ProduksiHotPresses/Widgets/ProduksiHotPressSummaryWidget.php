@@ -10,38 +10,51 @@ use App\Models\TriplekHasilHp;
 class ProduksiHotPressSummaryWidget extends Widget
 {
     protected string $view = 'filament.resources.produksi-hotpress.widgets.summary';
-
     protected int|string|array $columnSpan = 'full';
 
     public ?ProduksiHp $record = null;
-
     public array $summary = [];
+
+    /**
+     * Listener Pusher untuk departemen Hot Press
+     */
+    public function getListeners(): array
+    {
+        $id = $this->record?->id;
+        if (!$id) return [];
+
+        return [
+            "echo:production.hotpress.{$id},.ProductionUpdated" => 'refreshSummary',
+        ];
+    }
 
     public function mount(?ProduksiHp $record = null): void
     {
-        if (!$record) return;
+        $this->record = $record;
+        $this->refreshSummary();
+    }
 
+    /**
+     * Fungsi utama untuk memperbarui data summary secara real-time
+     */
+    public function refreshSummary(): void
+    {
+        if (!$this->record) return;
+
+        $record = $this->record;
         $produksiId = $record->id;
 
-        // =================================================
         // 1. HITUNG PEGAWAI
-        // =================================================
         $totalPegawai = $record->detailPegawaiHp()
-            ->whereNotNull('id_pegawai') // Pastikan tidak menghitung data kosong
-            ->distinct('id_pegawai')     // Ambil ID pegawai yang unik saja
+            ->whereNotNull('id_pegawai')
+            ->distinct('id_pegawai')
             ->count('id_pegawai');
 
-        // =================================================
         // 2. DATA HASIL PLATFORM
-        // =================================================
-        $totalPlatform = PlatformHasilHp::where('id_produksi_hp', $produksiId)
-            ->sum('isi');
+        $totalPlatform = PlatformHasilHp::where('id_produksi_hp', $produksiId)->sum('isi');
 
         $listPlatform = PlatformHasilHp::query()
             ->where('platform_hasil_hp.id_produksi_hp', $produksiId)
-            // ✅ PERBAIKAN DI SINI:
-            // 1. Nama tabel master: 'barang_setengah_jadi_hp' (bukan barang_setengah_jadi)
-            // 2. Nama kolom FK: 'id_barang_setengah_jadi' (bukan id_barang_setengah_jadi_hp)
             ->join('barang_setengah_jadi_hp', 'barang_setengah_jadi_hp.id', '=', 'platform_hasil_hp.id_barang_setengah_jadi')
             ->join('ukurans', 'ukurans.id', '=', 'barang_setengah_jadi_hp.id_ukuran')
             ->join('grades', 'grades.id', '=', 'barang_setengah_jadi_hp.id_grade')
@@ -58,15 +71,11 @@ class ProduksiHotPressSummaryWidget extends Widget
             ->orderBy('ukuran')
             ->get();
 
-        // =================================================
         // 3. DATA HASIL TRIPLEK
-        // =================================================
-        $totalTriplek = TriplekHasilHp::where('id_produksi_hp', $produksiId)
-            ->sum('isi');
+        $totalTriplek = TriplekHasilHp::where('id_produksi_hp', $produksiId)->sum('isi');
 
         $listTriplek = TriplekHasilHp::query()
             ->where('triplek_hasil_hp.id_produksi_hp', $produksiId)
-            // ✅ PERBAIKAN DI SINI JUGA:
             ->join('barang_setengah_jadi_hp', 'barang_setengah_jadi_hp.id', '=', 'triplek_hasil_hp.id_barang_setengah_jadi')
             ->join('ukurans', 'ukurans.id', '=', 'barang_setengah_jadi_hp.id_ukuran')
             ->join('grades', 'grades.id', '=', 'barang_setengah_jadi_hp.id_grade')
@@ -83,8 +92,6 @@ class ProduksiHotPressSummaryWidget extends Widget
             ->orderBy('ukuran')
             ->get();
 
-
-        // KIRIM KE VIEW
         $this->summary = [
             'totalPegawai'  => $totalPegawai,
             'totalPlatform' => $totalPlatform,

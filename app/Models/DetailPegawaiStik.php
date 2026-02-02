@@ -27,4 +27,20 @@ class DetailPegawaiStik extends Model
     {
         return $this->belongsTo(Pegawai::class, 'id_pegawai');
     }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_produksi_stik) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_stik, 'stik');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_produksi_stik) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_stik, 'stik');
+            }
+        });
+    }
 }

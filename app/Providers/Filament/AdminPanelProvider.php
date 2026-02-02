@@ -33,6 +33,10 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
+// Reverb and Vite Config
+use Filament\Support\Assets\Js;
+use Illuminate\Support\Facades\Vite;
+
 class AdminPanelProvider extends PanelProvider
 {
 
@@ -45,6 +49,10 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->globalSearch(false)
             ->viteTheme('resources/css/app.css')
+            ->assets([
+                // Gunakan Vite::asset agar Filament tahu file mana yang harus dimuat
+                Js::make('app-js', Vite::asset('resources/js/app.js'))->module(),
+            ])
             ->colors([
                 'primary' => Color::Amber,
                 'kuninng-loh' => '#ffff00',

@@ -43,8 +43,8 @@ class SandingWorkerMap
                     if (!$ps->pegawai)
                         continue;
 
-                    $jamMasuk = $ps->masuk ? Carbon::parse($ps->masuk)->format('H:i') : '-';
-                    $jamPulang = $ps->pulang ? Carbon::parse($ps->pulang)->format('H:i') : '-';
+                    $jamMasuk = $ps->masuk ? Carbon::parse($ps->masuk)->format('H:i:s') : '-';
+                    $jamPulang = $ps->pulang ? Carbon::parse($ps->pulang)->format('H:i:s') : '-';
 
                     $results[] = [
                         'kodep' => $ps->pegawai->kode_pegawai ?? '-',

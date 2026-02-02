@@ -79,6 +79,11 @@ jobs:
         with:
           php-version: "8.4"
       - name: Install Composer Dependencies (Prod)
+        env:
+          BROADCAST_CONNECTION: log # Ubah sementara ke log saat build agar tidak butuh key
+          REVERB_APP_KEY: "dummy-key"
+          REVERB_APP_SECRET: "dummy-secret"
+          REVERB_APP_ID: "123456"
         run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction
       - name: Setup Node.js
         uses: actions/setup-node@v4

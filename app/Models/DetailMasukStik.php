@@ -29,6 +29,22 @@ class DetailMasukStik extends Model
 
     public function jenisKayu()
     {
-        return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu','id');
+        return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu', 'id');
+    }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_produksi_stik) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_stik, 'stik');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_produksi_stik) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_stik, 'stik');
+            }
+        });
     }
 }

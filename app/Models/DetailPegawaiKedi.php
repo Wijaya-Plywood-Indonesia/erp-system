@@ -34,4 +34,20 @@ class DetailPegawaiKedi extends Model
     {
         return $this->belongsTo(Pegawai::class, 'id_pegawai');
     }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_produksi_kedi) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_kedi, 'kedi');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_produksi_kedi) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_kedi, 'kedi');
+            }
+        });
+    }
 }

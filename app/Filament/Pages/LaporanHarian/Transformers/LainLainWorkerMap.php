@@ -16,8 +16,8 @@ class LainLainWorkerMap
                 foreach ($detailLain->lainLains as $item) {
                     if (!$item->pegawai) continue;
 
-                    $jamMasuk = $item->masuk ? Carbon::parse($item->masuk)->format('H:i') : '-';
-                    $jamPulang = $item->pulang ? Carbon::parse($item->pulang)->format('H:i') : '-';
+                    $jamMasuk = $item->masuk ? Carbon::parse($item->masuk)->format('H:i:s') : '-';
+                    $jamPulang = $item->pulang ? Carbon::parse($item->pulang)->format('H:i:s') : '-';
 
                     $results[] = [
                         'kodep' => $item->pegawai->kode_pegawai ?? '-',

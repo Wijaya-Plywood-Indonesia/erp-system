@@ -6,7 +6,7 @@ use Carbon\Carbon;
 use App\Models\Target;
 use Illuminate\Support\Facades\Log;
 
-class JointWorkerMap
+class JoinWorkerMap
 {
     public static function make($collection): array
     {
@@ -83,8 +83,8 @@ class JointWorkerMap
                     $results[] = [
                         'kodep' => $pj->pegawai->kode_pegawai ?? '-',
                         'nama' => $pj->pegawai->nama_pegawai ?? 'TANPA NAMA',
-                        'masuk' => $pj->masuk ? Carbon::parse($pj->masuk)->format('H:i') : '',
-                        'pulang' => $pj->pulang ? Carbon::parse($pj->pulang)->format('H:i') : '',
+                        'masuk' => $pj->masuk ? Carbon::parse($pj->masuk)->format('H:i:s') : '',
+                        'pulang' => $pj->pulang ? Carbon::parse($pj->pulang)->format('H:i:s') : '',
                         'hasil' => $labelPekerjaan,
                         'ijin' => $pj->ijin ?? '',
                         'potongan_targ' => (int) ($pj->potongan ?? $potonganPerOrang),

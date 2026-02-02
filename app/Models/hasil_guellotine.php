@@ -23,15 +23,14 @@ class hasil_guellotine extends Model
     }
 
     public function pegawaiGuellotines()
-{
-    return $this->belongsToMany(
-    pegawai_guellotine::class,
-    'hasil_guellotine_pegawai',
-    'id_hasil_guellotine',      // FK ke tabel ini
-    'id_pegawai_guellotine'    // FK ke tabel pegawai
-);
-
-}
+    {
+        return $this->belongsToMany(
+            pegawai_guellotine::class,
+            'hasil_guellotine_pegawai',
+            'id_hasil_guellotine',      // FK ke tabel ini
+            'id_pegawai_guellotine'    // FK ke tabel pegawai
+        );
+    }
 
 
     public function ukuran()
@@ -42,5 +41,21 @@ class hasil_guellotine extends Model
     public function jenisKayu()
     {
         return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu');
+    }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_produksi_guellotine) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_guellotine, 'guellotine');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_produksi_guellotine) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_guellotine, 'guellotine');
+            }
+        });
     }
 }

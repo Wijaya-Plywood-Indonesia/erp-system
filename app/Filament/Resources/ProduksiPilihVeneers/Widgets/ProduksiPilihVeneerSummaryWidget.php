@@ -17,17 +17,12 @@ class ProduksiPilihVeneerSummaryWidget extends Widget
 
     public array $summary = [];
 
-    /**
-     * LANGKAH 1: Tambahkan Listeners Echo
-     * Menunggu sinyal "ProductionUpdated" dari Reverb
-     */
-    protected function getListeners(): array
+    public function getListeners(): array
     {
         $produksiId = $this->record->id;
 
         return [
-            // Mendengarkan channel WebSocket khusus produksi veneer ini
-            "echo:production.veneer.{$produksiId},ProductionUpdated" => 'refreshSummary',
+            "echo:production.veneer.{$produksiId},.ProductionUpdated" => 'refreshSummary',
         ];
     }
 

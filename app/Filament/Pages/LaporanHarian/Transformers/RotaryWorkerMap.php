@@ -94,8 +94,8 @@ class RotaryWorkerMap
 
             // 4. Mapping Pegawai
             foreach ($item->detailPegawaiRotary as $pegawai) {
-                $jamMasuk = $pegawai->jam_masuk ? Carbon::parse($pegawai->jam_masuk)->format('H:i') : '';
-                $jamPulang = $pegawai->jam_pulang ? Carbon::parse($pegawai->jam_pulang)->format('H:i') : '';
+                $jamMasuk = $pegawai->jam_masuk ? Carbon::parse($pegawai->jam_masuk)->format('H:i:s') : '';
+                $jamPulang = $pegawai->jam_pulang ? Carbon::parse($pegawai->jam_pulang)->format('H:i:s') : '';
 
                 $results[] = [
                     'kodep' => $pegawai->pegawai->kode_pegawai ?? '-',

@@ -35,11 +35,7 @@
                     <div class="flex justify-between items-center border-b border-gray-100 pb-2 last:border-0 dark:border-gray-700">
                         <div>
                             <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                                {{ $row->ukuran }}
-                            </div>
-                            {{-- 👇 PERUBAHAN DI SINI: Hapus background, ganti jadi teks bersih --}}
-                            <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mt-0.5">
-                                <span class="text-blue-400 dark:text-blue-600">•</span> {{ $row->kw }}
+                                {{ $row->ukuran }} - {{ $row->kw }}
                             </div>
                         </div>
                         <div class="font-bold text-gray-700 dark:text-gray-300">
@@ -70,11 +66,7 @@
                     <div class="flex justify-between items-center border-b border-gray-100 pb-2 last:border-0 dark:border-gray-700">
                         <div>
                             <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                                {{ $row->ukuran }}
-                            </div>
-                            {{-- 👇 PERUBAHAN DI SINI: Hapus background, ganti jadi teks bersih --}}
-                            <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mt-0.5">
-                                <span class="text-purple-400 dark:text-purple-600">•</span> {{ $row->kw }}
+                                {{ $row->ukuran }} - {{ $row->kw }}
                             </div>
                         </div>
                         <div class="font-bold text-gray-700 dark:text-gray-300">

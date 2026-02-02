@@ -10,32 +10,47 @@ use App\Models\HasilRepair;
 class ProduksiRepairSummaryWidget extends Widget
 {
     protected string $view = 'filament.resources.produksi-repairs.widgets.summary';
-
     protected int|string|array $columnSpan = 'full';
 
     public ?ProduksiRepair $record = null;
-
     public array $summary = [];
+
+    /**
+     * Listener untuk menangkap sinyal 'repair'
+     */
+    public function getListeners(): array
+    {
+        $id = $this->record?->id;
+
+        if (!$id) return [];
+
+        return [
+            "echo:production.repair.{$id},.ProductionUpdated" => 'refreshSummary',
+        ];
+    }
 
     public function mount(?ProduksiRepair $record = null): void
     {
-        if (!$record) {
-            return;
-        }
+        $this->record = $record;
+        $this->refreshSummary();
+    }
 
-        $produksiId = $record->id;
+    public function refreshSummary(): void
+    {
+        if (!$this->record) return;
+
+        $produksiId = $this->record->id;
 
         // 1. TOTAL PRODUKSI (LEMBAR)
         $totalAll = HasilRepair::where('id_produksi_repair', $produksiId)
             ->sum(DB::raw('CAST(jumlah AS UNSIGNED)'));
 
         // 2. TOTAL PEGAWAI KESELURUHAN (UNIK)
-        $totalPegawai = $record->rencanaPegawais()
-            ->get()
-            ->unique('id_pegawai')
-            ->count();
+        $totalPegawai = $this->record->rencanaPegawais()
+            ->distinct('id_pegawai')
+            ->count('id_pegawai');
 
-        // 3. GLOBAL UKURAN + KW + JUMLAH ORANG (INI KUNCINYA)
+        // 3. GLOBAL UKURAN + KW + JUMLAH ORANG
         $globalUkuranKw = HasilRepair::query()
             ->where('hasil_repairs.id_produksi_repair', $produksiId)
             ->join('rencana_repairs', 'rencana_repairs.id', '=', 'hasil_repairs.id_rencana_repair')
