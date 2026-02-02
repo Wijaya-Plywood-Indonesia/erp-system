@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
@@ -11,10 +12,16 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
-class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithColumnWidths, WithTitle
+class LaporanHarianExport implements
+    FromArray,
+    WithHeadings,
+    WithStyles,
+    WithColumnWidths,
+    WithTitle
 {
-    protected $data;
+    protected array $data;
 
     public function __construct(array $data)
     {
@@ -22,33 +29,34 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
     }
 
     /**
-     * Memetakan data dari array gabungan ke baris Excel
+     * =========================
+     * DATA ROW EXCEL
+     * =========================
      */
     public function array(): array
     {
         $result = [];
 
         foreach ($this->data as $row) {
-            // Memastikan format waktu menyertakan detik (HH:mm:ss)
-            $jamMasuk = $row['masuk'] ?? '-';
-            $jamPulang = $row['pulang'] ?? '-';
 
-            // Jika formatnya masih HH:mm, kita tambahkan :00 secara manual atau parse ulang
-            if ($jamMasuk !== '-' && strlen($jamMasuk) === 5) {
-                $jamMasuk .= ':00';
-            }
-            if ($jamPulang !== '-' && strlen($jamPulang) === 5) {
-                $jamPulang .= ':00';
-            }
+            $jamMasuk = $this->convertTimeToExcel($row['masuk'] ?? null);
+            $jamPulang = $this->convertTimeToExcel($row['pulang'] ?? null);
+            $jamKerja = $this->calculateWorkingHours(
+                $row['masuk'] ?? null,
+                $row['pulang'] ?? null
+            );
 
             $result[] = [
                 $row['kodep'] ?? '-',
                 $row['nama'] ?? '-',
-                $jamMasuk, // Sekarang 06:00:00
-                $jamPulang, // Sekarang 14:00:00
+                $jamMasuk,                 // TIME Excel
+                $jamPulang,                // TIME Excel
+                $jamKerja,               // 👈 KOLOM BARU
                 $row['hasil'] ?? '-',
                 $row['ijin'] ?? '',
-                (isset($row['potongan_targ']) && $row['potongan_targ'] > 0) ? $row['potongan_targ'] : '',
+                (isset($row['potongan_targ']) && $row['potongan_targ'] > 0)
+                ? $row['potongan_targ']
+                : '',
                 $row['keterangan'] ?? '',
             ];
         }
@@ -56,6 +64,55 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
         return $result;
     }
 
+    /**
+     * =========================
+     * HELPER: CONVERT JAM KE TIME EXCEL
+     * =========================
+     */
+    protected function convertTimeToExcel(?string $time): ?float
+    {
+        if (empty($time) || $time === '-') {
+            return null;
+        }
+
+        // Normalisasi HH:mm
+        [$hour, $minute] = explode(':', substr($time, 0, 5));
+
+        // Excel time = jam / 24
+        return ($hour / 24) + ($minute / 1440);
+    }
+    /**
+     * =========================
+     * HELPER: HITUNG JAM KERJA
+     * =========================
+     */
+    protected function calculateWorkingHours(?string $masuk, ?string $pulang): ?float
+    {
+        if (empty($masuk) || empty($pulang) || $masuk === '-' || $pulang === '-') {
+            return null;
+        }
+
+        [$inH, $inM] = explode(':', substr($masuk, 0, 5));
+        [$outH, $outM] = explode(':', substr($pulang, 0, 5));
+
+        $masukMenit = ($inH * 60) + $inM;
+        $pulangMenit = ($outH * 60) + $outM;
+
+        // Shift malam
+        if ($pulangMenit <= $masukMenit) {
+            $pulangMenit += 1440; // +1 hari
+        }
+
+        $totalMenit = $pulangMenit - $masukMenit;
+
+        // Excel durasi jadi angka aja
+        return round($totalMenit / 60, 2);
+    }
+    /**
+     * =========================
+     * HEADINGS
+     * =========================
+     */
     public function headings(): array
     {
         return [
@@ -63,6 +120,7 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
             'Nama Pegawai',
             'Masuk',
             'Pulang',
+            'Jam Kerja',        // 👈 BARU
             'Hasil / Divisi',
             'Ijin',
             'Potongan Target',
@@ -70,11 +128,16 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
         ];
     }
 
+    /**
+     * =========================
+     * STYLING
+     * =========================
+     */
     public function styles(Worksheet $sheet)
     {
         $lastRow = count($this->data) + 1;
 
-        // 1. Style Header (Baris 1)
+        // HEADER
         $sheet->getStyle('A1:H1')->applyFromArray([
             'font' => [
                 'bold' => true,
@@ -83,7 +146,7 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
             ],
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
-                'startColor' => ['rgb' => '2D3748'], // Warna abu-abu gelap agar modern
+                'startColor' => ['rgb' => '2D3748'],
             ],
             'alignment' => [
                 'horizontal' => Alignment::HORIZONTAL_CENTER,
@@ -97,7 +160,7 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
             ],
         ]);
 
-        // 2. Style Seluruh Data (Border & Vertical Center)
+        // DATA BORDER
         $sheet->getStyle("A2:H{$lastRow}")->applyFromArray([
             'borders' => [
                 'allBorders' => [
@@ -110,53 +173,85 @@ class LaporanHarianExport implements FromArray, WithHeadings, WithStyles, WithCo
             ],
         ]);
 
-        // 3. Logika Warna Khusus untuk Baris "Lain-lain"
-        for ($i = 2; $i <= $lastRow; $i++) {
-            $hasilValue = $sheet->getCell("E{$i}")->getValue();
+        //JAM KERJA
+        $sheet->getStyle("E2:E{$lastRow}")
+            ->getNumberFormat()
+            ->setFormatCode('0'); // atau '0' kalau mau bulat
 
-            // Jika baris berisi "LAIN-LAIN", berikan warna teks khusus (Amber/Cokelat)
-            if (str_contains($hasilValue, 'LAIN-LAIN')) {
+        $sheet->getStyle("E2:E{$lastRow}")
+            ->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        // FORMAT JAM (PENTING)
+        $sheet->getStyle("C2:D{$lastRow}")
+            ->getNumberFormat()
+            ->setFormatCode('hh:mm:ss');
+
+        // FORMAT POTONGAN
+        $sheet->getStyle("G2:G{$lastRow}")
+            ->getNumberFormat()
+            ->setFormatCode('#,##0');
+
+        // ALIGNMENT
+        $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("C2:D{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("F2:F{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("G2:G{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        // KETERANGAN → WRAP TEXT
+        $sheet->getStyle("H2:H{$lastRow}")
+            ->getAlignment()
+            ->setWrapText(true)
+            ->setVertical(Alignment::VERTICAL_TOP);
+
+        // LOGIKA WARNA
+        for ($i = 2; $i <= $lastRow; $i++) {
+            $hasil = (string) $sheet->getCell("E{$i}")->getValue();
+
+            if (str_contains($hasil, 'LAIN-LAIN')) {
                 $sheet->getStyle("E{$i}")->getFont()->applyFromArray([
                     'bold' => true,
-                    'color' => ['rgb' => 'B45309'], // Warna Amber sesuai badge UI
+                    'color' => ['rgb' => 'B45309'],
                 ]);
             }
 
-            // Jika baris adalah Pegawai Libur (Hasil adalah '-')
-            if ($hasilValue === '-') {
-                $sheet->getStyle("A{$i}:H{$i}")->getFont()->getColor()->setRGB('A0AEC0');
+            if ($hasil === '-') {
+                $sheet->getStyle("A{$i}:H{$i}")
+                    ->getFont()
+                    ->getColor()
+                    ->setRGB('A0AEC0');
             }
         }
 
-        // 4. Alignment Kolom
-        $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER); // Kodep
-        $sheet->getStyle("C2:D{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER); // Jam
-        $sheet->getStyle("F2:F{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER); // Ijin
-        $sheet->getStyle("G2:G{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT); // Potongan
-
-        // 5. Format Number (Mata Uang/Ribuan)
-        $sheet->getStyle("G2:G{$lastRow}")->getNumberFormat()->setFormatCode('#,##0');
-
-        $sheet->freezePane('A2'); // Freeze header saat scroll
-        $sheet->setAutoFilter("A1:H{$lastRow}"); // Tambahkan filter di Excel
+        $sheet->freezePane('A2');
+        $sheet->setAutoFilter("A1:H{$lastRow}");
 
         return [];
     }
 
+    /**
+     * =========================
+     * COLUMN WIDTH
+     * =========================
+     */
     public function columnWidths(): array
     {
         return [
-            'A' => 12,  // Kodep
-            'B' => 30,  // Nama
-            'C' => 10,  // Masuk
-            'D' => 10,  // Pulang
-            'E' => 40,  // Hasil / Divisi (Lebih lebar karena ada detail pekerjaan)
-            'F' => 10,  // Ijin
-            'G' => 18,  // Potongan
-            'H' => 35,  // Keterangan
+            'A' => 12, // Tanggal
+            'B' => 24, // Nama / Unit
+            'C' => 9,  // Jam Masuk
+            'D' => 9,  // Jam Pulang
+            'E' => 32, // Proses / Keterangan utama
+            'F' => 8,  // Jam Kerja (angka)
+            'G' => 12, // Shift
+            'H' => 28, // Catatan
         ];
     }
 
+    /**
+     * =========================
+     * SHEET TITLE
+     * =========================
+     */
     public function title(): string
     {
         return 'LAPORAN_HARIAN';
