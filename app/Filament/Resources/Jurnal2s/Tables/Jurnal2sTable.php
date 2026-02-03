@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Jurnal2s\Tables;
 
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
@@ -29,30 +30,36 @@ class Jurnal2sTable
                     ->label('Banyak'),
 
                 TextColumn::make('kubikasi')
-                    ->label('Kubikasi'),
+                    ->label('Kubikasi')
+                    ->numeric(decimalPlaces: 4),
 
                 TextColumn::make('harga')
                     ->label('Harga'),
 
                 TextColumn::make('total')
-                    ->label('Total'),
+                    ->label('Total')
+                    ->numeric(decimalPlaces: 4),
 
                 TextColumn::make('user_id')
-                    ->label('User'),
+                    ->label('Dibuat Oleh'),
 
                 TextColumn::make('created_at')
                     ->label('Tanggal')
-                    ->date('d M Y'),
+                    ->date('d M Y')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
             ])
             ->filters([
                 Filter::make('hari_ini')
                     ->label('Hari Ini')
-                    ->query(fn (Builder $query) =>
+                    ->query(
+                        fn(Builder $query) =>
                         $query->whereDate('created_at', now()->toDateString())
                     ),
             ])
             ->recordActions([
                 EditAction::make(),
+                DeleteAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
