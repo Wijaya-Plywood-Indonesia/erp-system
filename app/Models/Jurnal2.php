@@ -17,5 +17,6 @@ class Jurnal2 extends Model
         'harga',
         'total',
         'user_id',
+        'status_sinkron',
     ];
 }

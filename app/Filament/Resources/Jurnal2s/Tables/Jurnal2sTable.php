@@ -43,6 +43,14 @@ class Jurnal2sTable
                 TextColumn::make('user_id')
                     ->label('Dibuat Oleh'),
 
+                TextColumn::make('status_sinkron')
+                    ->label('Status')
+                    ->badge()
+                    ->color(
+                        fn($state) =>
+                        $state === 'sudah sinkron' ? 'success' : 'warning'
+                    ),
+
                 TextColumn::make('created_at')
                     ->label('Tanggal')
                     ->date('d M Y')
