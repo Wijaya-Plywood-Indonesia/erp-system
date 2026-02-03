@@ -19,6 +19,7 @@ class Jurnal1stResource extends Resource
     protected static ?string $model = Jurnal1st::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
 
     public static function form(Schema $schema): Schema
     {

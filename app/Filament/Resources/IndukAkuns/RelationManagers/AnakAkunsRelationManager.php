@@ -49,21 +49,6 @@ class AnakAkunsRelationManager extends RelationManager
 
                 Select::make('status')
                     ->label('Status')
-                    ->default('0')
-                    ->options([
-                        1 => 'Aktif',
-                        0 => 'Non-Aktif',
-                    ])
-                    ->native(false) // Disarankan agar UI lebih konsisten dengan Filament
-                    ->required(),
-                Textarea::make('keterangan')
-                    ->label('Deskripsi')
-                    ->rows(3)
-                    ->columnSpanFull(),
-
-
-                Select::make('status')
-                    ->label('Status')
                     ->options([
                         'aktif' => 'Aktif',
                         'non-aktif' => 'Non-Aktif',
@@ -71,6 +56,12 @@ class AnakAkunsRelationManager extends RelationManager
                     ->default('aktif')
                     ->required()
                     ->native(false),
+
+                Textarea::make('keterangan')
+                    ->label('Deskripsi')
+                    ->rows(3)
+                    ->columnSpanFull(),
+
 
             ]);
     }
