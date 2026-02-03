@@ -4,11 +4,13 @@
         
         @foreach ($cards as $card)
             <x-overview-produksi-card
-                :title="$card['name']"
-                :totalProduksi="$card['total_produksi']"
-                :satuanProduksi="$card['satuan_hasil']"
-                :totalPegawai="$card['total_pegawai']"
-                :detailUkuran="$card['rekap_ukuran']"
+                :name="$card['name']"
+                :urlResource="$card['urlResource']" 
+                :totalProduksi="$card['total_produksi']" 
+                :totalPegawai="$card['total_pegawai']" 
+                :satuanHasil="$card['satuan_hasil']" 
+                :dataRekap="$card['data_rekap']"
+
                 {{-- :url="route('filament.admin.resources.' . $card['urlResource'] . '.index')" --}}
             />
         @endforeach

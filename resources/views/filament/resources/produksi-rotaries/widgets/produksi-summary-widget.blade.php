@@ -1,4 +1,4 @@
-`<x-filament::widget>
+<x-filament::widget>
   <x-filament::card
     class="w-full space-y-10 dark:bg-gray-900 dark:border-gray-800"
   >

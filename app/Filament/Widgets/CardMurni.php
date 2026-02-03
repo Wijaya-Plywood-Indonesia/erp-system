@@ -5,9 +5,9 @@ namespace App\Filament\Widgets;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
-class CardProduksiOverwiew extends Widget
+class CardMurni extends Widget
 {
-    protected static bool $isDiscovered = true;
+    protected static bool $isDiscovered = false;
 
     protected string $view = 'filament.widgets.card-produksi-overwiew';
 

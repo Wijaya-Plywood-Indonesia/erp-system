@@ -5,134 +5,133 @@ namespace App\Filament\Widgets;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+
 class CardProduksiOverwiew extends Widget
 {
     protected static bool $isDiscovered = true;
-
     protected string $view = 'filament.widgets.card-produksi-overwiew';
-
     public array $cards = [];
+    protected int | string | array $columnSpan = 'full';
 
     public function mount(): void
     {
         $this->loadAndProcessData();
-        dd($this->cards);
     }
-    protected int | string | array $columnSpan = 'full';
 
     public function loadAndProcessData()
     {
-        // 1. Ambil data dari JSON
-        $jsonPath = base_path('app/Data/resources.json');
+        $jsonPath = base_path('app/Data/cai2.json');
+        if (!File::exists($jsonPath)) return;
+        
         $listProduksi = json_decode(File::get($jsonPath), true);
-
         $processedCards = [];
 
         foreach ($listProduksi as $produksi) {
             $totalProduksi = 0;
-            $rekapKualitasUkuran = [];
-            $rekapKualitasUkuran2 = [];
+            $rekapUtama = [];
+            $uniquePegawai = collect();
 
+            $listShowData = $produksi['dbListName']['dbHasilName'] ?? [];
 
-            // 2. Query untuk setiap Tabel Hasil (Bisa lebih dari satu per Produksi)
-            foreach ($produksi['dbListName']['dbHasilName'] as $hasilConfig) {
+            foreach ($listShowData as $hasilConfig) {
+                $rekapGlobal = [];
+                $rekapDetail = [];
+
                 $tableName = $hasilConfig['dbName'];
-
                 $keyJumlah = $hasilConfig['key_jumlah'];
+                $satuanKwalitas = $hasilConfig['satuan_kualitas'] ?? 'kw';
 
-                // Ambil ID Product Today
-                $idProduct = DB::table($tableName)
-                ->whereDate('created_at','>=', now()->startOfDay())
-                ->orderBy('id','desc')
-                ->first();
+                // SQL format ukuran sesuai kebutuhan resource Anda (Trim .00)
+                $ukuranSql = "CONCAT(
+                    TRIM(TRAILING '.00' FROM CAST(ukurans.panjang AS CHAR)), ' x ',
+                    TRIM(TRAILING '.00' FROM CAST(ukurans.lebar AS CHAR)), ' x ',
+                    TRIM(TRAILING '0' FROM TRIM(TRAILING '.' FROM CAST(ukurans.tebal AS CHAR)))
+                )";
 
-                // Ambil Total Produksi
-                $sum = DB::table($tableName)
-                ->whereDate('created_at','>=', now()->startOfDay())
-                ->sum(DB::raw(
-                    'CAST('.$keyJumlah.' AS UNSIGNED)'
-                    ));
-                $totalProduksi += $sum;
+                $query = DB::table($tableName)->whereDate("$tableName.created_at", now()->today());
 
-                // Ambil Rekap Ukuran + Kualitas (Join ke tabel ukurans)
+                // Logic Join Berantai
+                if (isset($hasilConfig['joins'])) {
+                    foreach ($hasilConfig['joins'] as $join) {
+                        $query->join($join[0], $join[1], $join[2], $join[3]);
+                    }
+                } else {
+                    $query->join('ukurans', 'ukurans.id', '=', "$tableName.id_ukuran");
+                }
 
-                
-                // Kita asumsikan struktur kolom: id_ukuran, id_jenis_kayu/grade/kw, dan jumlah
-                $detail = DB::table($tableName)
-                    // Gunakan nama tabel agar tidak ambigu (tableName.created_at)
-                    ->whereDate("$tableName.created_at", now()->today())
-                    ->join('ukurans', 'ukurans.id', '=', "$tableName.id_ukuran")
-                    ->selectRaw("
-                        CONCAT(ukurans.panjang, ' x ', ukurans.lebar, ' x ', ukurans.tebal) as ukuran,
-                        SUM(CAST($keyJumlah AS UNSIGNED)) as total
-                    ")
-                    ->groupBy('ukuran')
-                    ->get()
-                    ->map(fn($item) => [
-                        'ukuran_title' => $item->ukuran,
-                        'jumlah' => $item->total
-                    ])
-                    ->toArray();
-                
-                $satuan_kualitas = $hasilConfig['satuan_kualitas'];
-                $detail2 = DB::table($tableName)
-                    // Gunakan nama tabel agar tidak ambigu (tableName.created_at)
-                    ->whereDate("$tableName.created_at", now()->today())
-                    ->join('ukurans', 'ukurans.id', '=', "$tableName.id_ukuran")
-                    ->selectRaw("
-                        CONCAT(ukurans.panjang, ' x ', ukurans.lebar, ' x ', ukurans.tebal) as ukuran,
-                        $tableName.$satuan_kualitas as kualitas,
-                        SUM(CAST($keyJumlah AS UNSIGNED)) as total
-                    ")
-                    ->groupBy('ukuran', "{$tableName}.{$satuan_kualitas}")
-                    ->get()
-                    ->map(fn($item) => [
-                        'ukuran_title' => "{$item->ukuran} {$item->kualitas}",
-                        'jumlah' => $item->total
-                    ])
-                    ->toArray();
+                $kwRaw = $hasilConfig['custom_kw'] ?? "$tableName.$satuanKwalitas";
+                $pegawaiCol = $hasilConfig['pegawai_join_key'] ?? null;
 
-                $rekapKualitasUkuran = array_merge($rekapKualitasUkuran, $detail);
-                $rekapKualitasUkuran2 = array_merge($rekapKualitasUkuran2, $detail2);
+                // Ambil Data Rekap & Pegawai dalam satu query hasil jika memungkinkan
+                $data = $query->selectRaw("
+                    $ukuranSql as ukuran,
+                    $kwRaw as kualitas,
+                    SUM(CAST($tableName.$keyJumlah AS UNSIGNED)) as total
+                ")
+                ->groupBy(DB::raw("ukuran"), DB::raw($kwRaw))
+                ->get();
+
+                $totalProduksi += $data->sum('total');
+
+                // Mapping Rekap
+                foreach ($data->groupBy('ukuran') as $ukuran => $items) {
+                    $rekapGlobal[] = ['ukuran_title' => $ukuran, 'jumlah' => $items->sum('total')];
+                    foreach ($items as $item) {
+                        $rekapDetail[] = [
+                            'ukuran_title' => $item->ukuran . " (" . ($item->kualitas ?? '') . ")",
+                            'jumlah' => $item->total
+                        ];
+                    }
+                }
+
+                $rekapUtama[] = [
+                    'name' => $hasilConfig['name'],
+                    'rekap' => [
+                        [
+                            'title' => "Hasil Berdasrkan Kualitas",
+                            'data' => $rekapDetail,
+                        ],
+                        [
+                            'title' => "Hasil Berdasrkan Ukuran",
+                            'data' => $rekapGlobal,
+                        ]
+                    ]
+                ];
             }
 
-            // 3. Query Total Pegawai (Unik)
-            $totalPegawai = DB::table($produksi['dbListName']['dbPegawaiName'])
-            
-                ->whereDate('created_at','>=', now()->startOfDay())
-                ->whereNotNull('id_pegawai')
-                ->distinct('id_pegawai')
-                ->count('id_pegawai');
 
-            // 4. Masukkan ke Array untuk Blade
+            // Logic Pegawai yang lebih akurat
+            $pegawaiTable = $produksi['dbListName']['dbPegawaiName'] ?? null;
+            $totalPegawai = 0;
+
+            if ($pegawaiTable) {
+                // Khusus untuk Repair atau yang punya join kompleks di JSON
+                $totalPegawai = DB::table($pegawaiTable)
+                    ->whereDate("$pegawaiTable.created_at", now()->today())
+                    ->whereNotNull('id_pegawai')
+                    ->distinct('id_pegawai')
+                    ->count('id_pegawai');
+            }
+
             $processedCards[] = [
                 'name' => $produksi['name'],
                 'urlResource' => $produksi['urlResource'],
                 'total_produksi' => $totalProduksi,
                 'total_pegawai' => $totalPegawai,
-                'satuan_hasil' => $produksi['dbListName']['dbHasilName'][0]['satuan_hasil'] ?? 'Pcs',
-                'data_rekap' => [
-                    [
-                        "title" => "Detail Ukuran Kayu (Global)",
-                        "data" => $rekapKualitasUkuran,
-                    ],
-                    [
-                        "title" => "Detail Ukuran Kayu + KW",
-                        "data" => $rekapKualitasUkuran2,
-                    ],
-                ],
+                'satuan_hasil' => $listShowData[0]['satuan_hasil'] ?? 'Pcs',
+                'data_rekap' => $rekapUtama,
                 'additional_info' => $produksi['addtional_info'] ?? null,
             ];
+
         }
+
+        
 
         $this->cards = $processedCards;
     }
 
     protected function getViewData(): array
     {
-        return $this->cards;
+        return ['cards' => $this->cards];
     }
-
 }
-
-
