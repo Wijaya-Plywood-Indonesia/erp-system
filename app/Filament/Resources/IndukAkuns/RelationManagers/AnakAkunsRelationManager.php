@@ -55,6 +55,15 @@ class AnakAkunsRelationManager extends RelationManager
                     ->rows(3)
                     ->maxLength(500)
                     ->columnSpanFull(),
+
+                Select::make('status')
+                    ->label('Status')
+                    ->options([
+                        1 => 'Aktif',
+                        0 => 'Non-Aktif',
+                    ])
+                    ->native(false) // Disarankan agar UI lebih konsisten dengan Filament
+                    ->required()
             ]);
     }
 
@@ -87,6 +96,11 @@ class AnakAkunsRelationManager extends RelationManager
                     ->limit(30)
                     ->suffix('...')
                     ->toggleable(),
+
+                TextColumn::make('status')
+                    ->label('status')
+                    ->sortable()
+                    ->searchable()
             ])
             ->filters([
                 //

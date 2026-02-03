@@ -23,6 +23,8 @@ return new class extends Migration {
                 ->nullable()
                 ->constrained('users')
                 ->nullOnDelete();
+
+            $table->boolean('status')->default(false);
         });
     }
 

@@ -16,7 +16,6 @@ Table detailOngkosKupasanSpindless{
 
 }
 
-
 Table hargaPegawai{
     id bigint [pk]
     harga int 
