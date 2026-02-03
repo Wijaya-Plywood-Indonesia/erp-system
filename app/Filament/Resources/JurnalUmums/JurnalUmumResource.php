@@ -21,7 +21,9 @@ class JurnalUmumResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
-
+    protected static ?string $navigationLabel = 'Jurnal Umum';
+    protected static ?string $pluralModelLabel = 'Jurnal Umum';
+    protected static ?string $modelLabel = 'Jurnal Umum';
 
     public static function form(Schema $schema): Schema
     {

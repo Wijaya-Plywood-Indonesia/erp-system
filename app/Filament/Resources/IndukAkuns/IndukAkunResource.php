@@ -22,11 +22,14 @@ use UnitEnum;
 class IndukAkunResource extends Resource
 {
     protected static ?string $model = IndukAkun::class;
-    protected static ?string $label = 'Induk Akun';
-    protected static ?string $pluralLabel = 'Induk Akun';
+    protected static ?string $label = 'Master Akun';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocument;
-    protected static string|UnitEnum|null $navigationGroup = 'Master Akun';
+    protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
+    protected static ?string $navigationLabel = 'Master Akun';
+    protected static ?string $pluralModelLabel = 'Master Akun';
+    protected static ?string $modelLabel = 'Master Akun';
+
 
     public static function form(Schema $schema): Schema
     {
