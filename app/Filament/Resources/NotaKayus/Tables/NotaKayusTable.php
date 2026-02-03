@@ -10,6 +10,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
 
@@ -24,27 +25,31 @@ class NotaKayusTable
                 TextColumn::make('info_kayu')
                     ->label('Info Kayu')
                     ->sortable()
-                    ->getStateUsing(function ($record) {
-                        if (!$record->kayuMasuk)
-                            return '-';
+                    ->searchable(query: function ($query, string $search) {
+                        // Menghapus SEMUA karakter selain angka (termasuk spasi)
+                        // "Seri 2" -> "2" | "Seri2" -> "2" | "Seri   2" -> "2"
+                        $numberOnly = preg_replace('/[^0-9]/', '', $search);
 
+                        return $query->whereHas('kayuMasuk', function ($q) use ($search, $numberOnly) {
+                            // Cek apakah hasil pembersihan menghasilkan angka
+                            if (is_numeric($numberOnly) && $numberOnly !== '') {
+                                // Gunakan '=' untuk hasil EKSAK agar Seri 12 atau 22 tidak ikut muncul
+                                $q->where('seri', '=', $numberOnly);
+                            } else {
+                                // Jika mencari nama supplier
+                                $q->whereHas('penggunaanSupplier', function ($sq) use ($search) {
+                                    $sq->where('nama_supplier', 'like', "%{$search}%");
+                                });
+                            }
+                        });
+                    })
+                    ->getStateUsing(function ($record) {
+                        if (!$record->kayuMasuk) return '-';
                         $seri = $record->kayuMasuk->seri ?? '-';
                         $namaSupplier = $record->kayuMasuk->penggunaanSupplier?->nama_supplier ?? '-';
                         $noTelepon = $record->kayuMasuk->penggunaanSupplier?->no_telepon ?? '-';
 
                         return "Seri {$seri} - {$namaSupplier} ({$noTelepon})";
-                    })
-                    ->searchable(query: function ($query, string $search) {
-                        // Kita bersihkan input user, jika user ketik "Seri 44", kita ambil angka "44" saja
-                        $numberSearch = filter_var($search, FILTER_SANITIZE_NUMBER_INT);
-
-                        return $query->whereHas('kayuMasuk', function ($q) use ($search, $numberSearch) {
-                            $q->where('seri', 'like', "%{$search}%") // Cari jika user ketik angka saja
-                                ->when($numberSearch, fn($sq) => $sq->orWhere('seri', 'like', "%{$numberSearch}%")) // Cari angka di dalam teks "Seri X"
-                                ->orWhereHas('penggunaanSupplier', function ($sq) use ($search) {
-                                    $sq->where('nama_supplier', 'like', "%{$search}%"); // Sekalian bisa cari nama supplier
-                                });
-                        });
                     }),
 
                 TextColumn::make('penanggung_jawab')
@@ -187,6 +192,12 @@ class NotaKayusTable
                 // BulkActionGroup::make([
                 //      DeleteBulkAction::make(),
                 // ]),
+            ])
+            ->filters([
+                SelectFilter::make('seri')
+                    ->relationship('kayuMasuk', 'seri')
+                    ->searchable()
+                    ->label('Pilih Seri'),
             ]);
     }
 }

@@ -21,6 +21,7 @@ return new class extends Migration
             $table->integer('harga');
             $table->integer('total');
             $table->string('createdBy');
+            $table->string('status');
             $table->timestamps();
         });
     }

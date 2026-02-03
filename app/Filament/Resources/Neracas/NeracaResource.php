@@ -9,6 +9,7 @@ use App\Filament\Resources\Neracas\Schemas\NeracaForm;
 use App\Filament\Resources\Neracas\Tables\NeracasTable;
 use App\Models\Neraca;
 use BackedEnum;
+use UnitEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -20,7 +21,11 @@ class NeracaResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
+    protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
+
     protected static ?string $recordTitleAttribute = 'Neraca';
+
+    protected static ?int $navigationSort = 4;
 
     public static function form(Schema $schema): Schema
     {
