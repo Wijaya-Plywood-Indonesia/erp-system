@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class JurnalTiga extends Model
 {
     // Inisiasi Table
-    protected $table = 'jurnal_tiga';
+    protected $table = 'jurnal_tigas';
 
 
     protected $fillable = [
@@ -19,5 +19,9 @@ class JurnalTiga extends Model
         'harga',
         'total',
         'createdBy'
+    ];
+
+    protected $casts = [
+        'akun_seratus' => 'integer'
     ];
 }
