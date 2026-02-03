@@ -119,8 +119,6 @@ class AnakAkunsRelationManager extends RelationManager
                     ->label('Deskripsi')
                     ->rows(3)
                     ->columnSpanFull(),
-
-
             ]);
     }
 

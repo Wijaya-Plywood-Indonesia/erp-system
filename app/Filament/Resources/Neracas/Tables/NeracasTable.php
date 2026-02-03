@@ -45,7 +45,7 @@ class NeracasTable
 
                 // Total saldo dengan ringkasan Grand Total di bawah tabel
                 TextColumn::make('total')
-                    ->label('Total Saldo')
+                    ->label('Total')
                     ->summarize([
                         // Summarizer 1: Total Kelompok 1, 2, 3
                         Summarizer::make()

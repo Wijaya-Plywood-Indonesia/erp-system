@@ -26,12 +26,13 @@ class JurnalTigaResource extends Resource
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
 
     // Menentukan label untuk satu rekaman (misal: "Create Produksi3th")
-    protected static ?string $modelLabel = 'Jurnal 3th';
+    protected static ?string $modelLabel = 'Jurnal 3rd';
 
     protected static ?int $navigationSort = 3;
 
     // Menentukan label untuk jamak/daftar (misal: Judul di tabel List)
-    protected static ?string $pluralModelLabel = 'Jurnal 3th';
+    protected static ?string $pluralModelLabel = 'Jurnal 3rd';
+
 
     public static function form(Schema $schema): Schema
     {

@@ -8,7 +8,6 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\BadgeColumn;
 
 class JurnalTigasTable
 {
@@ -60,6 +59,17 @@ class JurnalTigasTable
                     ->badge() // Menggunakan badge agar lebih rapi
                     ->color('gray'),
 
+                TextColumn::make('status')
+                    ->label('Status')
+                    ->badge() // Mengaktifkan fitur badge
+                    ->color(fn(string $state): string => match ($state) {
+                        'sinkron' => 'success',      // Warna Hijau
+                        'belum sinkron' => 'danger', // Warna Merah
+                        default => 'gray',
+                    })
+                    ->formatStateUsing(fn(string $state): string => ucfirst($state)) // Merapikan teks (Contoh: Sinkron)
+                    ->sortable(),
+
                 TextColumn::make('created_at')
                     ->label('Waktu Input')
                     ->dateTime('d M Y H:i')
@@ -71,6 +81,8 @@ class JurnalTigasTable
                     ->dateTime('d M Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
+
+
             ])
             ->filters([
                 // Anda bisa menambahkan filter berdasarkan CreatedBy atau Akun di sini
