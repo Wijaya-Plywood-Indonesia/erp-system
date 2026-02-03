@@ -22,6 +22,12 @@ class JurnalTigaResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'JurnalTiga';
 
+    // Menentukan label untuk satu rekaman (misal: "Create Produksi3th")
+    protected static ?string $modelLabel = 'Jurnal 3th';
+
+    // Menentukan label untuk jamak/daftar (misal: Judul di tabel List)
+    protected static ?string $pluralModelLabel = 'Jurnal 3th';
+
     public static function form(Schema $schema): Schema
     {
         return JurnalTigaForm::configure($schema);
