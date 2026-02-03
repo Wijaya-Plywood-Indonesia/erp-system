@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\IndukAkuns\Schemas;
 
+use App\Models\IndukAkun;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Schema;
@@ -18,7 +19,7 @@ class IndukAkunForm
                     ->reactive()
                     ->afterStateUpdated(function ($state, callable $set) {
                         // Cari akun berdasarkan kode
-                        $akun = \App\Models\IndukAkun::where('kode_induk_akun', $state)->first();
+                        $akun = IndukAkun::where('kode_induk_akun', $state)->first();
 
                         // Isi hint dinamis
                         if ($akun) {

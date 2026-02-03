@@ -18,6 +18,7 @@ class AnakAkunsRelationManager extends RelationManager
 {
     // diperbaiki → harus camelCase sesuai relasi di model
     protected static string $relationship = 'anakAkuns';
+    protected static ?string $title = 'Anak Akun';
     public function isReadOnly(): bool
     {
         return false;
@@ -50,20 +51,22 @@ class AnakAkunsRelationManager extends RelationManager
                     ->preload()
                     ->nullable(),
 
+                Select::make('status')
+                    ->label('Status')
+                    ->default('0')
+                    ->options([
+                        1 => 'Aktif',
+                        0 => 'Non-Aktif',
+                    ])
+                    ->native(false) // Disarankan agar UI lebih konsisten dengan Filament
+                    ->required(),
                 Textarea::make('keterangan')
                     ->label('Deskripsi')
                     ->rows(3)
                     ->maxLength(500)
                     ->columnSpanFull(),
 
-                Select::make('status')
-                    ->label('Status')
-                    ->options([
-                        1 => 'Aktif',
-                        0 => 'Non-Aktif',
-                    ])
-                    ->native(false) // Disarankan agar UI lebih konsisten dengan Filament
-                    ->required()
+
             ]);
     }
 
