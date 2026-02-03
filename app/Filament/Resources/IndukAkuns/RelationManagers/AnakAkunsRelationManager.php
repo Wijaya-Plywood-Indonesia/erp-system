@@ -46,11 +46,6 @@ class AnakAkunsRelationManager extends RelationManager
                     ->preload()
                     ->nullable(),
 
-                Textarea::make('keterangan')
-                    ->label('Deskripsi')
-                    ->rows(3)
-                    ->columnSpanFull(),
-
                 Select::make('status')
                     ->label('Status')
                     ->options([
@@ -60,6 +55,11 @@ class AnakAkunsRelationManager extends RelationManager
                     ->default('aktif')
                     ->required()
                     ->native(false),
+
+                Textarea::make('keterangan')
+                    ->label('Deskripsi')
+                    ->rows(3)
+                    ->columnSpanFull(),
             ]);
     }
 
@@ -87,7 +87,7 @@ class AnakAkunsRelationManager extends RelationManager
                         if ($state === '0' || $state === 0) return 'Non-Aktif';
                         return ucfirst($state);
                     })
-                    ->color(fn ($state): string => match ((string)$state) {
+                    ->color(fn($state): string => match ((string)$state) {
                         'aktif', '1' => 'success',
                         'non-aktif', '0' => 'danger',
                         default => 'gray',

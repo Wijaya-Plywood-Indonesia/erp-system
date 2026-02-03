@@ -15,30 +15,31 @@ class JurnalTigaForm
     {
         return $schema
             ->components([
-                // 1. Modif1000: Menyimpan Kode Induk Akun
                 Select::make('modif1000')
                     ->label('Induk Akun')
                     ->options(fn() => AnakAkun::query()
                         ->with('indukAkun')
                         ->get()
                         ->unique('id_induk_akun')
-                        ->pluck('indukAkun.kode_induk_akun', 'id_induk_akun'))
+                        // PARAMETER KEDUA diubah menjadi kode_induk_akun agar database menyimpan 1000, bukan ID
+                        ->pluck('indukAkun.kode_induk_akun', 'indukAkun.kode_induk_akun'))
                     ->live()
                     ->afterStateUpdated(fn(Set $set) => $set('akun_seratus', null)),
 
-                // 2. Akun Seratus: Mengambil Kode Anak Akun dengan Filter Ratusan Murni
+                // 2. Akun Seratus: Mencari berdasarkan KODE induk
                 Select::make('akun_seratus')
-                    ->label('Kelompok Akun')
+                    ->label('Anak Akun')
                     ->options(function (Get $get) {
-                        $idInduk = $get('modif1000');
+                        $kodeInduk = $get('modif1000'); // Sekarang berisi kode (misal: 1000)
 
-                        if (!$idInduk) return [];
+                        if (!$kodeInduk) return [];
 
-                        return AnakAkun::where('id_induk_akun', $idInduk)
+                        // Karena modif1000 mengirim KODE, kita cari AnakAkun yang punya IndukAkun dengan kode tersebut
+                        return AnakAkun::whereHas('indukAkun', function ($query) use ($kodeInduk) {
+                            $query->where('kode_induk_akun', $kodeInduk);
+                        })
                             ->get()
-                            // Logika Filter: Hanya ambil yang berakhiran "00"
                             ->filter(function ($item) {
-                                // Memeriksa apakah kode berakhiran 00 (Contoh: 1100, 1200)
                                 return str_ends_with((string)$item->kode_anak_akun, '00');
                             })
                             ->pluck('kode_anak_akun', 'kode_anak_akun');
@@ -79,6 +80,12 @@ class JurnalTigaForm
                 TextInput::make('createdBy')
                     ->label('Petugas Input')
                     ->default(fn() => auth()->user()->name)
+                    ->readOnly()
+                    ->dehydrated(),
+
+                TextInput::make('status')
+                    ->label('Status')
+                    ->default('Belum Sinkron')
                     ->readOnly()
                     ->dehydrated(),
             ]);

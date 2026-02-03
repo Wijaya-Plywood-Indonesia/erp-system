@@ -15,11 +15,11 @@ return new class extends Migration
             $table->id();
             $table->integer('modif1000');
             $table->integer('akun_seratus');
-            $table->string('detail');
-            $table->integer('banyak');
-            $table->decimal('kubikasi');
-            $table->integer('harga');
-            $table->integer('total');
+            $table->string('detail')->nullable();
+            $table->integer('banyak')->nullable();
+            $table->decimal('kubikasi')->nullable();
+            $table->integer('harga')->nullable();
+            $table->integer('total')->nullable();
             $table->string('createdBy');
             $table->string('status');
             $table->timestamps();
