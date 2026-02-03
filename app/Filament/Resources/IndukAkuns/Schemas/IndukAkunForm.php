@@ -6,7 +6,7 @@ use App\Models\IndukAkun;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Get;
-use App\Models\IndukAkun;
+
 
 class IndukAkunForm
 {
@@ -19,9 +19,10 @@ class IndukAkunForm
                     ->required()
                     ->reactive()
                     ->afterStateUpdated(function ($state, callable $set) {
-                        $akun = IndukAkun::where('kode_induk_akun', $state)->first();
+                        // Cari akun berdasarkan kode
+                        $akun = IndukAkun::where('kode_induk_akun', $state)->first()
 
-                    ->formatStateUsing(fn ($state) => (string) $state)
+                    // Memastikan input dianggap string agar nol/format angka tidak berubah
                     ->live(onBlur: true) 
                     ->hint(function ($state) {
                         if (blank($state)) return null;
