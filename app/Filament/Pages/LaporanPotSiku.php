@@ -42,22 +42,21 @@ class LaporanPotSiku extends Page
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
                 ->action(fn() => $this->exportExcel())
-                ->visible(fn() => !empty($this->dataSiku)), // Hanya muncul jika ada data
+                ->visible(fn() => !empty($this->dataSiku)),
         ];
     }
 
-    // Tambahkan method exportExcel
     public function exportExcel()
     {
         try {
             if (empty($this->dataSiku)) {
-                throw new \Exception("Tidak ada data untuk diunduh.");
+                throw new \Exception('Tidak ada data untuk diunduh.');
             }
 
             $tglFile = Carbon::parse($this->tanggal)->format('d-m-Y');
-            
+
             return Excel::download(
-                new LaporanPotSikuExport($this->dataSiku), 
+                new LaporanPotSikuExport($this->dataSiku),
                 "laporan-pot-siku-{$tglFile}.xlsx"
             );
         } catch (\Exception $e) {
@@ -97,8 +96,12 @@ class LaporanPotSiku extends Page
         $thousands = floor($number / 1000);
         $base = $thousands * 1000;
         $remainder = $number - $base;
-        if ($remainder < 300) return $base;
-        if ($remainder < 800) return $base + 500;
+
+        if ($remainder < 300)
+            return $base;
+        if ($remainder < 800)
+            return $base + 500;
+
         return $base + 1000;
     }
 
@@ -109,15 +112,20 @@ class LaporanPotSiku extends Page
         $produksiList = ProduksiPotSiku::with([
             'pegawaiPotSiku.pegawai',
             'detailBarangDikerjakanPotSiku.jenisKayu',
-            'detailBarangDikerjakanPotSiku.ukuran'
+            'detailBarangDikerjakanPotSiku.ukuran',
         ])
             ->whereDate('tanggal_produksi', $tanggal)
             ->get();
 
         $targetRef = Target::where('kode_ukuran', 'POT SIKU')->first();
+
+        // Target lama (biarkan kalau masih dipakai di laporan lain)
         $stdTarget = $targetRef->target ?? 150;
         $stdJam = $targetRef->jam ?? 10;
         $stdPotonganHarga = $targetRef->potongan ?? 766.67;
+
+        // ✅ TARGET BARU PER PEKERJA
+        $targetPerPegawai = 300; // cm
 
         $this->dataSiku = [];
 
@@ -128,12 +136,16 @@ class LaporanPotSiku extends Page
                 $details = $produksi->detailBarangDikerjakanPotSiku
                     ->where('id_pegawai_pot_siku', $p->id);
 
-                $hasilIndividu = $details->sum('tinggi');
-                $selisihIndividu = $stdTarget - $hasilIndividu;
+                $hasilIndividu = (int) $details->sum('tinggi');
+
+                // 🔥 hitung berdasarkan target 300
+                $selisihIndividu = $targetPerPegawai - $hasilIndividu;
 
                 $potongan = 0;
                 if ($selisihIndividu > 0) {
-                    $potongan = $this->roundToNearestHundred($selisihIndividu * $stdPotonganHarga);
+                    $potongan = $this->roundToNearestHundred(
+                        $selisihIndividu * $stdPotonganHarga
+                    );
                 }
 
                 $detailTabel = [];
@@ -147,17 +159,17 @@ class LaporanPotSiku extends Page
                 }
 
                 $perPekerja[] = [
-                    // MENGGUNAKAN kode_pegawai sesuai model Pegawai Anda
-                    'kode_pegawai' => $p->pegawai->kode_pegawai ?? '-', 
+                    'kode_pegawai' => $p->pegawai->kode_pegawai ?? '-',
                     'nama_pegawai' => $p->pegawai->nama_pegawai ?? '-',
                     'jam_masuk' => $p->masuk ? Carbon::parse($p->masuk)->format('H:i') : '-',
                     'jam_pulang' => $p->pulang ? Carbon::parse($p->pulang)->format('H:i') : '-',
                     'ijin' => $p->ijin ?? '-',
                     'ket' => $p->ket ?? '-',
                     'hasil' => $hasilIndividu,
+                    'target' => $targetPerPegawai, // 🔥 penting untuk progress bar
                     'selisih' => $selisihIndividu > 0 ? $selisihIndividu : 0,
                     'potongan_target' => $potongan,
-                    'detail_barang' => $detailTabel
+                    'detail_barang' => $detailTabel,
                 ];
             }
 
