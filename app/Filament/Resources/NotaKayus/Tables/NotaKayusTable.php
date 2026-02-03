@@ -33,6 +33,18 @@ class NotaKayusTable
                         $noTelepon = $record->kayuMasuk->penggunaanSupplier?->no_telepon ?? '-';
 
                         return "Seri {$seri} - {$namaSupplier} ({$noTelepon})";
+                    })
+                    ->searchable(query: function ($query, string $search) {
+                        // Kita bersihkan input user, jika user ketik "Seri 44", kita ambil angka "44" saja
+                        $numberSearch = filter_var($search, FILTER_SANITIZE_NUMBER_INT);
+
+                        return $query->whereHas('kayuMasuk', function ($q) use ($search, $numberSearch) {
+                            $q->where('seri', 'like', "%{$search}%") // Cari jika user ketik angka saja
+                                ->when($numberSearch, fn($sq) => $sq->orWhere('seri', 'like', "%{$numberSearch}%")) // Cari angka di dalam teks "Seri X"
+                                ->orWhereHas('penggunaanSupplier', function ($sq) use ($search) {
+                                    $sq->where('nama_supplier', 'like', "%{$search}%"); // Sekalian bisa cari nama supplier
+                                });
+                        });
                     }),
 
                 TextColumn::make('penanggung_jawab')
@@ -130,7 +142,7 @@ class NotaKayusTable
                         // Bandingkan total batang dan kubikasi
                         $batangSama = $total1['total_batang'] == $total2['total_batang'];
                         $kubikasiSama = abs($total1['total_kubikasi'] - $total2['total_kubikasi']) < 0.0001; // toleransi desimal
-                        
+
                         return $batangSama && $kubikasiSama;
                     })
                     ->action(function ($record) {
@@ -140,7 +152,7 @@ class NotaKayusTable
                     })
                     ->requiresConfirmation()
                     ->successNotificationTitle('Status berhasil diperbarui'),
-                
+
                 // ACTION CETAK NOTA (Existing)
                 Action::make('print')
                     ->label('Cetak Nota')
@@ -160,7 +172,7 @@ class NotaKayusTable
                     ->icon('heroicon-o-clipboard-document-list')
                     ->color('info') // Warna biru untuk membedakan dengan Nota
                     // Asumsi route-nya bernama 'nota-kayu.turus', arahkan ke controller Turus yang baru dibuat
-                    ->url(fn($record) => route('nota-kayu.turus', $record)) 
+                    ->url(fn($record) => route('nota-kayu.turus', $record))
                     ->openUrlInNewTab()
                     ->visible(fn($record) => $record->status !== 'Belum Diperiksa') // Muncul hanya jika sudah disetujui
                     ->disabled(
