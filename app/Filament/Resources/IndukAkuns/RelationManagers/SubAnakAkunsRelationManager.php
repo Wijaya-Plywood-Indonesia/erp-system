@@ -11,6 +11,7 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -30,25 +31,31 @@ class SubAnakAkunsRelationManager extends RelationManager
                 Select::make('id_anak_akun')
                     ->label('Anak Akun')
                     ->searchable()
-                    ->options(
-                        fn($livewire) =>
-                        AnakAkun::with('indukAkun')
+                    ->preload()
+                    ->reactive() // <-- WAJIB supaya prefix berubah!
+                    ->options(function (Get $get, $livewire) {
+                        return AnakAkun::with('indukAkun')
                             ->where('id_induk_akun', $livewire->ownerRecord->id)
                             ->get()
-                            ->mapWithKeys(function ($record) {
-                                return [
-                                    $record->id =>
-                                        "{$record->indukAkun->kode_induk_akun}{$record->kode_anak_akun}" .
-                                        " • {$record->indukAkun->nama_induk_akun} → {$record->nama_anak_akun}"
-                                ];
-                            })
-                    )
+                            ->mapWithKeys(fn($record) => [
+                                $record->id => "[{$record->kode_anak_akun}] • {$record->indukAkun->nama_induk_akun} → {$record->nama_anak_akun}"
+                            ]);
+                    })
                     ->required(),
-
 
 
                 TextInput::make('kode_sub_anak_akun')
                     ->label('Kode Sub Anak')
+                    ->prefix(function (Get $get) {
+                        $anakAkunId = $get('id_anak_akun');
+                        if (!$anakAkunId) {
+                            return null;
+                        }
+
+                        $anakAkun = AnakAkun::find($anakAkunId);
+                        return $anakAkun ? $anakAkun->kode_anak_akun . '.' : null;
+                    })
+                    ->reactive()
                     ->required(),
 
                 TextInput::make('nama_sub_anak_akun')
@@ -65,7 +72,7 @@ class SubAnakAkunsRelationManager extends RelationManager
                 TextColumn::make('kode_anak_akun')
                     ->label('Kode Akun')
                     ->getStateUsing(function ($record) {
-                        return "{$record->indukAkun->kode_induk_akun}{$record->anakAkun->kode_anak_akun}.{$record->kode_sub_anak_akun}";
+                        return "{$record->anakAkun->kode_anak_akun}.{$record->kode_sub_anak_akun}";
                     })
                     ->sortable()
                     ->searchable(),
