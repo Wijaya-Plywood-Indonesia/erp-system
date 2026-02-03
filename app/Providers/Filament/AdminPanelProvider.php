@@ -127,12 +127,17 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Master')
                     ->icon('heroicon-o-swatch')->collapsed(),
 
+                NavigationGroup::make('Jurnal')
+                    ->icon('heroicon-o-book-open')
+                    ->collapsed(),
 
                 NavigationGroup::make('Master Akun')
                     ->icon('heroicon-o-inbox-stack')->collapsed(),
 
                 NavigationGroup::make('Akses Pengguna')
                     ->icon('heroicon-o-lock-closed')->collapsed(),
+
+
             ])
         ;
     }

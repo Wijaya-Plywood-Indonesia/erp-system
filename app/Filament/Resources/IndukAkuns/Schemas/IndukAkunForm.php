@@ -2,10 +2,11 @@
 
 namespace App\Filament\Resources\IndukAkuns\Schemas;
 
+use App\Models\IndukAkun;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Get;
-use App\Models\IndukAkun;
+
 
 class IndukAkunForm
 {
@@ -16,30 +17,41 @@ class IndukAkunForm
                 TextInput::make('kode_induk_akun')
                     ->label('No Induk Akun')
                     ->required()
-                    // Memastikan input dianggap string agar nol/format angka tidak berubah
-                    ->formatStateUsing(fn ($state) => (string) $state)
-                    ->live(onBlur: true) 
+                    ->reactive()
+                    ->afterStateUpdated(function ($state, callable $set) {
+                        // tidak perlu melakukan apa pun di sini
+                        // fungsi hanya dipakai untuk "reactive"
+                    })
+                    ->live(onBlur: true)
                     ->hint(function ($state) {
-                        if (blank($state)) return null;
+                        if (blank($state)) {
+                            return null;
+                        }
 
                         $akun = IndukAkun::where('kode_induk_akun', $state)->first();
 
-                        return $akun 
-                            ? "⚠ Kode ini milik akun: {$akun->nama_induk_akun}" 
+                        return $akun
+                            ? "⚠ Kode ini milik akun: {$akun->nama_induk_akun}"
                             : "ℹ Kode belum digunakan";
                     })
                     ->hintColor(function ($state) {
-                        if (blank($state)) return 'gray';
+                        if (blank($state)) {
+                            return 'gray';
+                        }
+
                         $exists = IndukAkun::where('kode_induk_akun', $state)->exists();
                         return $exists ? 'danger' : 'info';
                     }),
 
+                /** NAMA AKUN */
                 TextInput::make('nama_induk_akun')
                     ->required()
                     ->maxLength(255),
 
+                /** KETERANGAN */
                 Textarea::make('keterangan')
                     ->columnSpanFull(),
+
             ]);
     }
 }

@@ -18,7 +18,11 @@ use Filament\Tables\Table;
 class SubAnakAkunsRelationManager extends RelationManager
 {
     protected static string $relationship = 'SubAnakAkuns';
-
+    protected static ?string $title = 'Sub-Anak Akun';
+    public function isReadOnly(): bool
+    {
+        return false;
+    }
     public function form(Schema $schema): Schema
     {
         return $schema
