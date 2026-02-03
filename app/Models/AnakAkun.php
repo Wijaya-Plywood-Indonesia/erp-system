@@ -15,6 +15,7 @@ class AnakAkun extends Model
         'nama_anak_akun',
         'keterangan',
         'parent',
+        'status',
         'created_by',
     ];
 
