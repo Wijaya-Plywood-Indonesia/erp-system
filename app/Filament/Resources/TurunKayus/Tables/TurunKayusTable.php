@@ -16,11 +16,13 @@ use Filament\Actions\Action;
 
 use Filament\Actions\ViewAction;
 use Filament\Actions\DeleteAction;
+
 class TurunKayusTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('tanggal', 'desc')
             ->columns([
                 TextColumn::make('tanggal')
                     ->sortable()
@@ -66,6 +68,7 @@ class TurunKayusTable
                     ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
                     ->modalSubmitActionLabel('Simpan'),
                 EditAction::make(),
+                ViewAction::make(),
                 DeleteAction::make(),
             ])
             ->toolbarActions([
