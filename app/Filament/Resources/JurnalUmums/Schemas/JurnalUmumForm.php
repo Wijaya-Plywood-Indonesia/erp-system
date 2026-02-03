@@ -8,6 +8,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Auth;
 
 class JurnalUmumForm
 {
@@ -36,21 +37,42 @@ class JurnalUmumForm
 
                 Select::make('no_akun')
                     ->label('No Akun')
-                    ->options(
-                        AnakAkun::query()
-                            ->with('indukAkun') // penting: ambil data induk akun
+                    ->options(function () {
+
+                        $options = [];
+
+                        $anakAkuns = AnakAkun::with([
+                            'indukAkun',
+                            'subAnakAkuns' => fn($q) => $q->orderBy('kode_sub_anak_akun')
+                        ])
                             ->orderBy('kode_anak_akun')
-                            ->get()
-                            ->mapWithKeys(function ($akun) {
+                            ->get();
 
-                                $induk = $akun->indukAkun?->kode_induk_akun ?? '-';
+                        foreach ($anakAkuns as $anak) {
 
-                                return [
-                                    $akun->kode_anak_akun => "{$induk}-{$akun->kode_anak_akun} — {$akun->nama_anak_akun}"
-                                ];
-                            })
-                    )
+                            $indukKode = $anak->indukAkun?->kode_induk_akun ?? '-';
+
+                            // Jika tidak ada Sub Anak → tambahkan ".00"
+                            if ($anak->subAnakAkuns->isEmpty()) {
+
+                                $kode = "{$anak->kode_anak_akun}.00";
+
+                                $options[$kode] = "{$kode} — {$anak->nama_anak_akun}";
+                            }
+
+                            // Jika ada Sub Anak → tampilkan semuanya
+                            foreach ($anak->subAnakAkuns as $sub) {
+
+                                $kode = "{$anak->kode_anak_akun}.{$sub->kode_sub_anak_akun}";
+
+                                $options[$kode] = "{$kode} — {$sub->nama_sub_anak_akun}";
+                            }
+                        }
+
+                        return $options;
+                    })
                     ->searchable()
+                    ->preload()
                     ->required(),
 
                 TextInput::make('no-dokumen')
@@ -101,8 +123,11 @@ class JurnalUmumForm
                     ->dehydrateStateUsing(fn($state) => str_replace('.', '', $state))
                     ->numeric(),
 
+
                 TextInput::make('created_by')
-                    ->label('Dibuat Oleh'),
+                    ->label('Dibuat Oleh')
+                    ->default(fn() => Auth::user()->name)
+                    ->readOnly(), // <-- boleh dikirim ke database
 
                 TextInput::make('status')
                     ->label('Status')
