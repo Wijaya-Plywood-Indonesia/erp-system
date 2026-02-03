@@ -18,7 +18,8 @@ class JurnalTiga extends Model
         'kubikasi',
         'harga',
         'total',
-        'createdBy'
+        'createdBy',
+        'status'
     ];
 
     protected $casts = [
