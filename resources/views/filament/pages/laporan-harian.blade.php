@@ -102,14 +102,39 @@
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300">
                                             ROTARY
                                         </span>
+
+                                        <!-- Dryer -->
                                         @elseif(str_contains($row['hasil'], 'DRYER'))
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                                            DRYER
-                                        </span>
+                                        <div class="flex items-center gap-2">
+                                            @if(str_contains($row['hasil'], 'PAGI'))
+                                            {{-- Badge untuk Dryer Pagi --}}
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300 ring-1 ring-orange-500/30">
+                                                DRYER PAGI
+                                            </span>
+                                            @elseif(str_contains($row['hasil'], 'MALAM'))
+                                            {{-- Badge untuk Dryer Malam --}}
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300 ring-1 ring-indigo-500/30">
+                                                DRYER MALAM
+                                            </span>
+                                            @else
+                                            {{-- Fallback jika shift tidak terdeteksi --}}
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                                                DRYER
+                                            </span>
+                                            @endif
+                                        </div>
+
+
                                         @elseif(str_contains($row['hasil'], 'REPAIR'))
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                                            REPAIR
-                                        </span>
+                                        <div class="flex items-center gap-1">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 ring-1 ring-blue-500/30">
+                                                REPAIR
+                                            </span>
+
+                                            <span class="text-[10px] text-zinc-500 font-medium italic truncate max-w-[250px]" title="{{ $row['hasil'] }}">
+                                                {{ str_replace('REPAIR', '', $row['hasil']) }}
+                                            </span>
+                                        </div>
                                         @elseif(str_contains($row['hasil'], 'SANDING JOINT'))
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-blue-800 dark:bg-teal-900 dark:text-teal-300">
                                             SANDING JOIN
@@ -151,10 +176,29 @@
                                             NYUSUP
                                         </span>
                                         <span class="text-[12px] text-zinc-500 ml-1">{{ str_replace('NYUSUP: ', '', $row['hasil']) }}</span>
+                                       <!-- Sanding -->
+
                                         @elseif(str_contains($row['hasil'], 'SANDING'))
+                                         <div class="flex items-center gap-2">
+                                            @if(str_contains($row['hasil'], 'PAGI'))
+<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300 ring-1 ring-teal-500/30">
+                                            SANDING PAGI
+                                        </span>
+                                         @elseif(str_contains($row['hasil'], 'MALAM'))
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300 ring-1 ring-teal-500/30">
+                                            SANDING MALAM
+                                        </span>
+                                        @else
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300 ring-1 ring-teal-500/30">
                                             SANDING
                                         </span>
+                                        <span>
+
+                                        </span>
+                                           @endif
+                                         </div>
+                                        
+                                            <!-- Sanding -->
                                         <span class="text-[12px] text-zinc-500 ml-1">{{ str_replace('SANDING: ', '', $row['hasil']) }}</span>
                                         @elseif(str_contains($row['hasil'], 'PILIH PLYWOOD'))
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-300 ring-1 ring-rose-500/30">
@@ -167,6 +211,27 @@
                                             HOT PRESS
                                         </span>
                                         <span class="text-[10px] text-zinc-500 ml-1">{{ str_replace('HOTPRESS: ', '', $row['hasil']) }}</span>
+                                        @elseif(str_contains($row['hasil'], 'POT SIKU'))
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300 ring-1 ring-purple-500/30">
+                                            POT SIKU
+                                        </span>
+                                        @elseif(str_contains($row['hasil'], 'POT JELEK'))
+                                        <div class="flex items-center gap-1">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-300 ring-1 ring-rose-500/30">
+                                                POT JELEK
+                                            </span>
+
+                                            <span class="text-[10px] text-zinc-500 font-medium italic truncate max-w-[250px]" title="{{ $row['hasil'] }}">
+                                                {{ str_replace('POT JELEK: ', '', $row['hasil']) }}
+                                            </span>
+                                        </div>
+                                        <span class="text-[10px] text-zinc-500 ml-1 italic">
+                                            {{ str_replace('POT SIKU: ', '', $row['hasil']) }}
+                                        </span>
+                                        @elseif(str_contains($row['hasil'], 'TURUN KAYU'))
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300 ring-1 ring-amber-500/30">
+                                            TURUN KAYU
+                                        </span>
                                         @else
                                         <span class="text-zinc-700 dark:text-zinc-300 font-bold">{{ $row["hasil"] }}</span>
                                         @endif

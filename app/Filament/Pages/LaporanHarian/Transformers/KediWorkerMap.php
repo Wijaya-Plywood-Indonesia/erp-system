@@ -49,7 +49,6 @@ class KediWorkerMap
                     $detailItems = $produksi->detailBongkarKedi;
                 }
                 $labelDivisi = "KEDI (BONGKAR)";
-
             } elseif ($produksi->status === 'masuk') {
                 if ($produksi->detailMasukKedi) {
                     $totalHasil = $produksi->detailMasukKedi->sum('jumlah');
@@ -99,8 +98,8 @@ class KediWorkerMap
                     if (!$dp->pegawai)
                         continue;
 
-                    $jamMasuk = $dp->masuk ? Carbon::parse($dp->masuk)->format('H:i') : '';
-                    $jamPulang = $dp->pulang ? Carbon::parse($dp->pulang)->format('H:i') : '';
+                    $jamMasuk = $dp->masuk ? Carbon::parse($dp->masuk)->format('H:i:s') : '';
+                    $jamPulang = $dp->pulang ? Carbon::parse($dp->pulang)->format('H:i:s') : '';
                     $potonganFinal = $dp->potongan ?? $potonganPerOrang;
 
                     $results[] = [

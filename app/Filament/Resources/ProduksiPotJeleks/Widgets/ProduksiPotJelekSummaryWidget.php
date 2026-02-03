@@ -18,32 +18,48 @@ class ProduksiPotJelekSummaryWidget extends Widget
 
     public array $summary = [];
 
+    /**
+     * Listener untuk menangkap broadcast dari Pusher
+     */
+    public function getListeners(): array
+    {
+        $id = $this->record?->id;
+
+        if (! $id) return [];
+
+        return [
+            // Sesuai dengan tipe 'pot_jelek' di model Anda
+            "echo:production.pot_jelek.{$id},.ProductionUpdated" => 'refreshSummary',
+        ];
+    }
+
     public function mount(?ProduksiPotJelek $record = null): void
     {
-        if (! $record) {
-            return;
-        }
+        $this->record = $record;
+        $this->refreshSummary();
+    }
 
-        $produksiId = $record->id;
+    /**
+     * Fungsi utama untuk load data (Real-time)
+     */
+    public function refreshSummary(): void
+    {
+        if (! $this->record) return;
 
-        // ======================
+        $produksiId = $this->record->id;
+
         // TOTAL PRODUKSI (TINGGI)
-        // ======================
         $totalAll = DetailBarangDikerjakanPotJelek::where('id_produksi_pot_jelek', $produksiId)
             ->sum(DB::raw('CAST(tinggi AS UNSIGNED)'));
 
-        // ======================
         // TOTAL PEGAWAI
-        // ======================
         $totalPegawai = PegawaiPotJelek::where('id_produksi_pot_jelek', $produksiId)
             ->whereNotNull('id_pegawai')
             ->distinct('id_pegawai')
             ->count('id_pegawai');
 
-        // ======================
-        // GLOBAL UKURAN + KW (TINGGI)
-        // ======================
-        $globalUkuranKw = DetailBarangDikerjakanPotJelek::query()
+        // Query Dasar Ukuran
+        $baseQuery = DetailBarangDikerjakanPotJelek::query()
             ->where('id_produksi_pot_jelek', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'detail_barang_dikerjakan_pot_jelek.id_ukuran')
             ->selectRaw('
@@ -51,7 +67,12 @@ class ProduksiPotJelekSummaryWidget extends Widget
                     TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
                     TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
                     TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
-                ) AS ukuran,
+                ) AS ukuran
+            ');
+
+        // GLOBAL UKURAN + KW
+        $globalUkuranKw = (clone $baseQuery)
+            ->selectRaw('
                 detail_barang_dikerjakan_pot_jelek.kw,
                 SUM(CAST(detail_barang_dikerjakan_pot_jelek.tinggi AS UNSIGNED)) AS total
             ')
@@ -60,26 +81,15 @@ class ProduksiPotJelekSummaryWidget extends Widget
             ->orderBy('detail_barang_dikerjakan_pot_jelek.kw')
             ->get();
 
-        // ======================
-        // GLOBAL UKURAN (SEMUA KW) (TINGGI)
-        // ======================
-        $globalUkuran = DetailBarangDikerjakanPotJelek::query()
-            ->where('id_produksi_pot_jelek', $produksiId)
-            ->join('ukurans', 'ukurans.id', '=', 'detail_barang_dikerjakan_pot_jelek.id_ukuran')
-            ->selectRaw('
-                CONCAT(
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
-                    TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
-                ) AS ukuran,
-                SUM(CAST(detail_barang_dikerjakan_pot_jelek.tinggi AS UNSIGNED)) AS total
-            ')
+        // GLOBAL UKURAN (SEMUA KW)
+        $globalUkuran = (clone $baseQuery)
+            ->selectRaw('SUM(CAST(detail_barang_dikerjakan_pot_jelek.tinggi AS UNSIGNED)) AS total')
             ->groupBy('ukuran')
             ->orderBy('ukuran')
             ->get();
 
         $this->summary = [
-            'totalAll'        => $totalAll,
+            'totalAll'       => $totalAll,
             'totalPegawai'   => $totalPegawai,
             'globalUkuranKw' => $globalUkuranKw,
             'globalUkuran'   => $globalUkuran,

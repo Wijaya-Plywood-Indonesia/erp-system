@@ -9,48 +9,60 @@ use App\Models\DetailDempul;
 
 class ProduksiDempulSummaryWidget extends Widget
 {
-    // Pastikan view ini mengarah ke file blade yang benar
     protected string $view = 'filament.resources.produksi-dempul.widgets.summary';
-
     protected int|string|array $columnSpan = 'full';
 
     public ?ProduksiDempul $record = null;
-
     public array $summary = [];
+
+    /**
+     * Listener untuk mendengarkan broadcast 'dempul'
+     */
+    public function getListeners(): array
+    {
+        $id = $this->record?->id;
+        if (!$id) return [];
+
+        return [
+            "echo:production.dempul.{$id},.ProductionUpdated" => 'refreshSummary',
+        ];
+    }
 
     public function mount(?ProduksiDempul $record = null): void
     {
-        if (!$record) {
-            return;
-        }
+        $this->record = $record;
+        $this->refreshSummary();
+    }
 
-        $produksiId = $record->id;
+    /**
+     * Fungsi Refresh Data Real-time
+     */
+    public function refreshSummary(): void
+    {
+        if (!$this->record) return;
 
-        // ======================
+        $produksiId = $this->record->id;
+
         // 1. TOTAL KESELURUHAN (HASIL)
-        // ======================
         $totalAll = DetailDempul::where('id_produksi_dempul', $produksiId)
             ->sum(DB::raw('CAST(hasil AS UNSIGNED)'));
 
-        // ======================
-        // 2. TOTAL PEGAWAI (HEADCOUNT / ORANG) - [BARU]
-        // ======================
-        // Logika: Ambil detail -> Load Pegawai -> Gabung -> Hapus Duplikat
-        $totalPegawai = DetailDempul::where('id_produksi_dempul', $produksiId)
-            ->with('pegawais')  // Load relasi many-to-many
-            ->get()
-            ->pluck('pegawais') // Ambil hanya collection pegawainya
-            ->flatten()         // Gabungkan array pegawai yang terpisah-pisah
-            ->unique('id')      // Filter agar 1 ID Pegawai hanya dihitung 1 kali
-            ->count();          // Hitung jumlah akhirnya
+        // 2. TOTAL PEGAWAI (HEADCOUNT)
+        // Karena Many-to-Many, kita ambil ID pegawai unik dari tabel pivot
+        $totalPegawai = DB::table('detail_dempul_pegawai')
+            ->join('detail_dempuls', 'detail_dempuls.id', '=', 'detail_dempul_pegawai.id_detail_dempul')
+            ->where('detail_dempuls.id_produksi_dempul', $produksiId)
+            ->distinct('id_pegawai')
+            ->count('id_pegawai');
 
-        // ======================
-        // 3. GLOBAL UKURAN + KW (GRADE)
-        // ======================
-        $globalUkuranKw = DetailDempul::query()
+        // Query Dasar Ukuran
+        $baseQuery = DetailDempul::query()
             ->where('detail_dempuls.id_produksi_dempul', $produksiId)
             ->join('barang_setengah_jadi_hp', 'barang_setengah_jadi_hp.id', '=', 'detail_dempuls.id_barang_setengah_jadi_hp')
-            ->join('ukurans', 'ukurans.id', '=', 'barang_setengah_jadi_hp.id_ukuran')
+            ->join('ukurans', 'ukurans.id', '=', 'barang_setengah_jadi_hp.id_ukuran');
+
+        // 3. GLOBAL UKURAN + KW
+        $globalUkuranKw = (clone $baseQuery)
             ->join('grades', 'grades.id', '=', 'barang_setengah_jadi_hp.id_grade')
             ->selectRaw('
                 CONCAT(
@@ -63,16 +75,10 @@ class ProduksiDempulSummaryWidget extends Widget
             ')
             ->groupBy('ukuran', 'grades.nama_grade')
             ->orderBy('ukuran')
-            ->orderBy('grades.nama_grade')
             ->get();
 
-        // ======================
         // 4. GLOBAL UKURAN (SEMUA KW)
-        // ======================
-        $globalUkuran = DetailDempul::query()
-            ->where('detail_dempuls.id_produksi_dempul', $produksiId)
-            ->join('barang_setengah_jadi_hp', 'barang_setengah_jadi_hp.id', '=', 'detail_dempuls.id_barang_setengah_jadi_hp')
-            ->join('ukurans', 'ukurans.id', '=', 'barang_setengah_jadi_hp.id_ukuran')
+        $globalUkuran = (clone $baseQuery)
             ->selectRaw('
                 CONCAT(
                     TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
@@ -87,7 +93,7 @@ class ProduksiDempulSummaryWidget extends Widget
 
         $this->summary = [
             'totalAll'       => $totalAll,
-            'totalPegawai'   => $totalPegawai, 
+            'totalPegawai'   => $totalPegawai,
             'globalUkuranKw' => $globalUkuranKw,
             'globalUkuran'   => $globalUkuran,
         ];

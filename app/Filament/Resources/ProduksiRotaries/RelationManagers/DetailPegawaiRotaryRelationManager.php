@@ -110,7 +110,20 @@ class DetailPegawaiRotaryRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('pegawai.nama_pegawai')
                     ->label('Nama Pegawai')
-                    ->searchable(),
+                    ->formatStateUsing(
+                        fn($record) => $record->pegawai
+                            ? $record->pegawai->kode_pegawai . ' - ' . $record->pegawai->nama_pegawai
+                            : '—'
+                    )
+                    ->badge()
+                    ->searchable(
+                        query: fn($query, $search) => $query->whereHas(
+                            'pegawai',
+                            fn($q) => $q
+                                ->where('nama_pegawai', 'like', "%{$search}%")
+                                ->orWhere('kode_pegawai', 'like', "%{$search}%")
+                        )
+                    ),
                 TextColumn::make('role')
                     ->label('Role')
                     ->formatStateUsing(fn(string $state): string => [

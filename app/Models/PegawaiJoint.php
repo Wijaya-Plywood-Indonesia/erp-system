@@ -27,4 +27,20 @@ class PegawaiJoint extends Model
     {
         return $this->belongsTo(Pegawai::class, 'id_pegawai');
     }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_produksi_joint) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_joint, 'join');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_produksi_joint) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_joint, 'join');
+            }
+        });
+    }
 }

@@ -21,7 +21,20 @@ class PegawaiGrajiTripleksTable
             ->columns([
                 TextColumn::make('pegawaiGrajiTriplek.nama_pegawai')
                     ->label('Pegawai')
-                    ->searchable(),
+                    ->formatStateUsing(
+                        fn($record) => $record->pegawaiGrajiTriplek
+                            ? $record->pegawaiGrajiTriplek->kode_pegawai . ' - ' . $record->pegawaiGrajiTriplek->nama_pegawai
+                            : '—'
+                    )
+                    ->badge()
+                    ->searchable(
+                        query: fn($query, $search) => $query->whereHas(
+                            'pegawai',
+                            fn($q) => $q
+                                ->where('nama_pegawai', 'like', "%{$search}%")
+                                ->orWhere('kode_pegawai', 'like', "%{$search}%")
+                        )
+                    ),
 
                 TextColumn::make('tugas')
                     ->label('Tugas')
@@ -99,5 +112,4 @@ class PegawaiGrajiTripleksTable
                 ]),
             ]);
     }
-
 }

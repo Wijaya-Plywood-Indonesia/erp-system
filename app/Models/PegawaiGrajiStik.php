@@ -26,4 +26,20 @@ class PegawaiGrajiStik extends Model
     {
         return $this->belongsTo(Pegawai::class, 'id_pegawai');
     }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_graji_stiks) {
+                \App\Events\ProductionUpdated::dispatch($model->id_graji_stiks, 'graji_stik');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_graji_stiks) {
+                \App\Events\ProductionUpdated::dispatch($model->id_graji_stiks, 'graji_stik');
+            }
+        });
+    }
 }

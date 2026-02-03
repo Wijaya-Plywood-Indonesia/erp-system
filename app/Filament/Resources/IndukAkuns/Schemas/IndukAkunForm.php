@@ -2,13 +2,15 @@
 
 namespace App\Filament\Resources\IndukAkuns\Schemas;
 
+use App\Models\IndukAkun;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
-use Filament\Schemas\Schema;
+use Filament\Forms\Get;
+
 
 class IndukAkunForm
 {
-    public static function configure(Schema $schema): Schema
+    public static function configure($schema)
     {
         return $schema
             ->components([
@@ -17,25 +19,39 @@ class IndukAkunForm
                     ->required()
                     ->reactive()
                     ->afterStateUpdated(function ($state, callable $set) {
-                        // Cari akun berdasarkan kode
-                        $akun = \App\Models\IndukAkun::where('kode_induk_akun', $state)->first();
-
-                        // Isi hint dinamis
-                        if ($akun) {
-                            $set('kode_hint', "⚠ Kode ini milik akun: {$akun->nama_induk_akun}");
-                        } else {
-                            $set('kode_hint', "ℹ Kode belum digunakan");
-                        }
+                        // tidak perlu melakukan apa pun di sini
+                        // fungsi hanya dipakai untuk "reactive"
                     })
-                    ->hint(fn($state, $get) => $get('kode_hint'))
-                    ->hintColor(
-                        fn($state, $get) =>
-                        str_starts_with($get('kode_hint'), '⚠') ? 'danger' : 'info'
-                    ),
+                    ->live(onBlur: true)
+                    ->hint(function ($state) {
+                        if (blank($state)) {
+                            return null;
+                        }
+
+                        $akun = IndukAkun::where('kode_induk_akun', $state)->first();
+
+                        return $akun
+                            ? "⚠ Kode ini milik akun: {$akun->nama_induk_akun}"
+                            : "ℹ Kode belum digunakan";
+                    })
+                    ->hintColor(function ($state) {
+                        if (blank($state)) {
+                            return 'gray';
+                        }
+
+                        $exists = IndukAkun::where('kode_induk_akun', $state)->exists();
+                        return $exists ? 'danger' : 'info';
+                    }),
+
+                /** NAMA AKUN */
                 TextInput::make('nama_induk_akun')
-                    ->required(),
+                    ->required()
+                    ->maxLength(255),
+
+                /** KETERANGAN */
                 Textarea::make('keterangan')
                     ->columnSpanFull(),
+
             ]);
     }
 }

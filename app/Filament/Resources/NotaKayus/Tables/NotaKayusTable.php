@@ -10,6 +10,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
 
@@ -24,10 +25,26 @@ class NotaKayusTable
                 TextColumn::make('info_kayu')
                     ->label('Info Kayu')
                     ->sortable()
-                    ->getStateUsing(function ($record) {
-                        if (!$record->kayuMasuk)
-                            return '-';
+                    ->searchable(query: function ($query, string $search) {
+                        // Menghapus SEMUA karakter selain angka (termasuk spasi)
+                        // "Seri 2" -> "2" | "Seri2" -> "2" | "Seri   2" -> "2"
+                        $numberOnly = preg_replace('/[^0-9]/', '', $search);
 
+                        return $query->whereHas('kayuMasuk', function ($q) use ($search, $numberOnly) {
+                            // Cek apakah hasil pembersihan menghasilkan angka
+                            if (is_numeric($numberOnly) && $numberOnly !== '') {
+                                // Gunakan '=' untuk hasil EKSAK agar Seri 12 atau 22 tidak ikut muncul
+                                $q->where('seri', '=', $numberOnly);
+                            } else {
+                                // Jika mencari nama supplier
+                                $q->whereHas('penggunaanSupplier', function ($sq) use ($search) {
+                                    $sq->where('nama_supplier', 'like', "%{$search}%");
+                                });
+                            }
+                        });
+                    })
+                    ->getStateUsing(function ($record) {
+                        if (!$record->kayuMasuk) return '-';
                         $seri = $record->kayuMasuk->seri ?? '-';
                         $namaSupplier = $record->kayuMasuk->penggunaanSupplier?->nama_supplier ?? '-';
                         $noTelepon = $record->kayuMasuk->penggunaanSupplier?->no_telepon ?? '-';
@@ -130,7 +147,7 @@ class NotaKayusTable
                         // Bandingkan total batang dan kubikasi
                         $batangSama = $total1['total_batang'] == $total2['total_batang'];
                         $kubikasiSama = abs($total1['total_kubikasi'] - $total2['total_kubikasi']) < 0.0001; // toleransi desimal
-                        
+
                         return $batangSama && $kubikasiSama;
                     })
                     ->action(function ($record) {
@@ -140,7 +157,7 @@ class NotaKayusTable
                     })
                     ->requiresConfirmation()
                     ->successNotificationTitle('Status berhasil diperbarui'),
-                
+
                 // ACTION CETAK NOTA (Existing)
                 Action::make('print')
                     ->label('Cetak Nota')
@@ -160,7 +177,7 @@ class NotaKayusTable
                     ->icon('heroicon-o-clipboard-document-list')
                     ->color('info') // Warna biru untuk membedakan dengan Nota
                     // Asumsi route-nya bernama 'nota-kayu.turus', arahkan ke controller Turus yang baru dibuat
-                    ->url(fn($record) => route('nota-kayu.turus', $record)) 
+                    ->url(fn($record) => route('nota-kayu.turus', $record))
                     ->openUrlInNewTab()
                     ->visible(fn($record) => $record->status !== 'Belum Diperiksa') // Muncul hanya jika sudah disetujui
                     ->disabled(
@@ -175,6 +192,12 @@ class NotaKayusTable
                 // BulkActionGroup::make([
                 //      DeleteBulkAction::make(),
                 // ]),
+            ])
+            ->filters([
+                SelectFilter::make('seri')
+                    ->relationship('kayuMasuk', 'seri')
+                    ->searchable()
+                    ->label('Pilih Seri'),
             ]);
     }
 }

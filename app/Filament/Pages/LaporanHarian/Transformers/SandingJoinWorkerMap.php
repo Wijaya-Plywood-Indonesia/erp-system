@@ -62,8 +62,8 @@ class SandingJoinWorkerMap
                     $results[] = [
                         'kodep' => $psj->pegawai->kode_pegawai ?? '-',
                         'nama' => $psj->pegawai->nama_pegawai ?? 'TANPA NAMA',
-                        'masuk' => $psj->masuk ? Carbon::parse($psj->masuk)->format('H:i') : '',
-                        'pulang' => $psj->pulang ? Carbon::parse($psj->pulang)->format('H:i') : '',
+                        'masuk' => $psj->masuk ? Carbon::parse($psj->masuk)->format('H:i:s') : '',
+                        'pulang' => $psj->pulang ? Carbon::parse($psj->pulang)->format('H:i:s') : '',
                         'hasil' => 'SANDING JOINT',
                         'ijin' => $psj->ijin ?? '',
                         'potongan_targ' => (int) ($psj->potongan ?? $potonganPerOrang),

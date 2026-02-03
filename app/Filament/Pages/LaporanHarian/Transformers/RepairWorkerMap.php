@@ -14,6 +14,9 @@ class RepairWorkerMap
 
         foreach ($collection as $produksi) {
 
+            // Tempat penampungan untuk grouping per meja per modal
+            $groupMeja = [];
+
             // 1. Loop Modal (Ukuran Kayu yang dikerjakan)
             foreach ($produksi->modalRepairs as $modal) {
 
@@ -22,44 +25,25 @@ class RepairWorkerMap
                 $jenisKayuModel = $modal->jenisKayu;
                 $kw = $modal->kw ?? $modal->kualitas ?? 1;
 
-                // Label Visual
                 $labelPekerjaan = 'REPAIR';
                 if ($ukuranModel) {
                     $labelPekerjaan .= ' ' . $ukuranModel->panjang . 'x' . $ukuranModel->lebar;
                 }
 
-                // --- LOGGING STEP 1: DATA MENTAH ---
-                // Kita cek data apa yang masuk dari Modal Repair
-                Log::info("🔍 [REPAIR DEBUG] Memproses Modal ID: {$modal->id}", [
-                    'Panjang' => $ukuranModel->panjang ?? 'NULL',
-                    'Lebar' => $ukuranModel->lebar ?? 'NULL',
-                    'Tebal' => $ukuranModel->tebal ?? 'NULL',
-                    'KW' => $kw,
-                    'Jenis' => $jenisKayuModel->kode_kayu ?? 'NULL',
-                    'ID Mesin' => $produksi->id_mesin
-                ]);
-
-                // Buat Kode Ukuran
                 $kodeUkuran = 'REPAIR-NOT-FOUND';
-
                 if ($ukuranModel && $jenisKayuModel) {
-                    // FORMAT: REPAIR + P + L + T(koma) + KW + JENIS(Upper)
                     $kodeUkuran = 'REPAIR' .
                         $ukuranModel->panjang .
                         $ukuranModel->lebar .
                         str_replace('.', ',', $ukuranModel->tebal) .
                         $kw .
-                        strtoupper($jenisKayuModel->kode_kayu); // Pastikan Uppercase
+                        strtoupper($jenisKayuModel->kode_kayu);
                 }
 
-                // --- LOGGING STEP 2: STRING YANG DIHASILKAN ---
-                Log::info("🧩 [REPAIR DEBUG] String Pencarian: '{$kodeUkuran}'");
-
-                // --- B. CARI TARGET ---
+                // --- B. CARI TARGET (LEVEL 1, 2, 3 TIDAK DIUBAH SAMA SEKALI) ---
                 $targetModel = null;
                 $levelFound = 0;
 
-                // Level 1: String Persis + Mesin Spesifik
                 $targetLv1 = Target::where('kode_ukuran', $kodeUkuran)
                     ->where('id_mesin', $produksi->id_mesin)
                     ->first();
@@ -68,13 +52,11 @@ class RepairWorkerMap
                     $targetModel = $targetLv1;
                     $levelFound = 1;
                 } else {
-                    // Level 2: String Persis (Mesin Umum)
                     $targetLv2 = Target::where('kode_ukuran', $kodeUkuran)->first();
                     if ($targetLv2) {
                         $targetModel = $targetLv2;
                         $levelFound = 2;
                     } else {
-                        // Level 3: Fallback ID
                         $targetLv3 = Target::where([
                             'id_mesin' => $produksi->id_mesin,
                             'id_ukuran' => $modal->id_ukuran,
@@ -88,26 +70,13 @@ class RepairWorkerMap
                     }
                 }
 
-                // --- LOGGING STEP 3: HASIL PENCARIAN TARGET ---
-                if ($targetModel) {
-                    Log::info("✅ [REPAIR DEBUG] Target DITEMUKAN di Level {$levelFound}", [
-                        'Target' => $targetModel->target,
-                        'Potongan' => $targetModel->potongan
-                    ]);
-                } else {
-                    Log::warning("❌ [REPAIR DEBUG] Target TIDAK DITEMUKAN untuk '{$kodeUkuran}'");
-                }
-
                 $targetWajib = (int) ($targetModel->target ?? 0);
                 $potonganPerLembar = (int) ($targetModel->potongan ?? 0);
 
-                // --- C. LOOP PEGAWAI ---
+                // --- C. LOOP PEGAWAI UNTUK GROUPING MEJA ---
                 foreach ($produksi->rencanaPegawais as $rp) {
+                    if (!$rp->pegawai) continue;
 
-                    if (!$rp->pegawai)
-                        continue;
-
-                    // Hitung Hasil
                     $hasilIndividu = 0;
                     if ($rp->rencanaRepairs) {
                         $hasilIndividu = $rp->rencanaRepairs
@@ -116,39 +85,79 @@ class RepairWorkerMap
                             ->sum('jumlah');
                     }
 
-                    // Hitung Potongan
-                    $selisih = $hasilIndividu - $targetWajib;
-                    $potonganPerOrang = 0;
+                    if ($hasilIndividu <= 0) continue;
 
-                    if ($selisih < 0 && $targetWajib > 0 && $potonganPerLembar > 0) {
-                        $nominalPotongan = abs($selisih) * $potonganPerLembar;
+                    $nomorMeja = $rp->nomor_meja ?? '-';
+                    $keyMeja = $nomorMeja . '|' . $modal->id;
 
-                        // Pembulatan
-                        $ribuan = floor($nominalPotongan / 1000);
-                        $ratusan = $nominalPotongan % 1000;
-
-                        if ($ratusan < 300) {
-                            $potonganPerOrang = $ribuan * 1000;
-                        } elseif ($ratusan < 800) {
-                            $potonganPerOrang = ($ribuan * 1000) + 500;
-                        } else {
-                            $potonganPerOrang = ($ribuan + 1) * 1000;
-                        }
+                    if (!isset($groupMeja[$keyMeja])) {
+                        $groupMeja[$keyMeja] = [
+                            'target' => $targetWajib,
+                            'potongan_per_lembar' => $potonganPerLembar,
+                            'total_hasil_meja' => 0,
+                            'pekerja' => [],
+                            'label' => $labelPekerjaan
+                        ];
                     }
 
-                    $potonganFinal = $rp->potongan ?? $potonganPerOrang;
-
-                    $results[] = [
-                        'kodep' => $rp->pegawai->kode_pegawai ?? '-',
-                        'nama' => $rp->pegawai->nama_pegawai ?? 'TANPA NAMA',
-                        'masuk' => $rp->jam_masuk ? Carbon::parse($rp->jam_masuk)->format('H:i') : '',
-                        'pulang' => $rp->jam_pulang ? Carbon::parse($rp->jam_pulang)->format('H:i') : '',
-                        'hasil' => $labelPekerjaan,
-                        'ijin' => $rp->ijin ?? '',
-                        'potongan_targ' => (int) $potonganFinal,
-                        'keterangan' => $rp->keterangan ?? '',
+                    $groupMeja[$keyMeja]['total_hasil_meja'] += $hasilIndividu;
+                    $groupMeja[$keyMeja]['pekerja'][] = [
+                        'rp' => $rp,
+                        'hasil_ind' => $hasilIndividu
                     ];
                 }
+            }
+
+            // --- D. HITUNG POTONGAN PER MEJA & DISTRIBUSI ---
+            $pegawaiFinal = [];
+
+            foreach ($groupMeja as $meja) {
+                $selisih = $meja['total_hasil_meja'] - $meja['target'];
+                $potonganPerOrang = 0;
+
+                if ($selisih < 0 && $meja['target'] > 0) {
+                    $totalDendaMeja = abs($selisih) * $meja['potongan_per_lembar'];
+                    $jumlahPekerja = count($meja['pekerja']);
+
+                    if ($jumlahPekerja > 0) {
+                        $rawPotongan = $totalDendaMeja / $jumlahPekerja;
+
+                        // Pembulatan sesuai logika roundToNearest500 Anda
+                        $base = floor($rawPotongan / 1000) * 1000;
+                        $rest = $rawPotongan - $base;
+                        if ($rest < 300) $potonganPerOrang = (int) $base;
+                        elseif ($rest < 800) $potonganPerOrang = (int) ($base + 500);
+                        else $potonganPerOrang = (int) ($base + 1000);
+                    }
+                }
+
+                foreach ($meja['pekerja'] as $pData) {
+                    $rp = $pData['rp'];
+                    $kodep = $rp->pegawai->kode_pegawai;
+
+                    if (!isset($pegawaiFinal[$kodep])) {
+                        $pegawaiFinal[$kodep] = [
+                            'kodep' => $kodep,
+                            'nama' => $rp->pegawai->nama_pegawai,
+                            'masuk' => $rp->jam_masuk ? Carbon::parse($rp->jam_masuk)->format('H:i:s') : '',
+                            'pulang' => $rp->jam_pulang ? Carbon::parse($rp->jam_pulang)->format('H:i:s') : '',
+                            'hasil_raw' => ["{$meja['label']} ({$pData['hasil_ind']})"],
+                            'potongan_targ' => ($rp->potongan ?? $potonganPerOrang),
+                            'ijin' => $rp->ijin ?? '',
+                            'keterangan' => $rp->keterangan ?? '',
+                        ];
+                    } else {
+                        $pegawaiFinal[$kodep]['hasil_raw'][] = "{$meja['label']} ({$pData['hasil_ind']})";
+                        $pegawaiFinal[$kodep]['potongan_targ'] += ($rp->potongan ?? $potonganPerOrang);
+                    }
+                }
+            }
+
+            // --- E. MASUKKAN KE HASIL AKHIR ---
+            foreach ($pegawaiFinal as $row) {
+                $row['hasil'] = implode(', ', $row['hasil_raw']);
+                unset($row['hasil_raw']);
+                $results[] = $row;
             }
         }
 

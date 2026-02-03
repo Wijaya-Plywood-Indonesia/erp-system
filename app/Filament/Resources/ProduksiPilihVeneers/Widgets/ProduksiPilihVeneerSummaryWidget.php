@@ -17,11 +17,33 @@ class ProduksiPilihVeneerSummaryWidget extends Widget
 
     public array $summary = [];
 
+    public function getListeners(): array
+    {
+        $produksiId = $this->record->id;
+
+        return [
+            "echo:production.veneer.{$produksiId},.ProductionUpdated" => 'refreshSummary',
+        ];
+    }
+
+    /**
+     * LANGKAH 2: Modifikasi mount() 
+     * Memanggil fungsi load data utama
+     */
     public function mount(?ProduksiPilihVeneer $record = null): void
     {
-        if (!$record) return;
+        $this->refreshSummary();
+    }
 
-        $produksiId = $record->id;
+    /**
+     * LANGKAH 3: Fungsi Refresh Data
+     * Fungsi ini akan dipanggil otomatis oleh Reverb setiap kali ada data baru disimpan
+     */
+    public function refreshSummary(): void
+    {
+        if (!$this->record) return;
+
+        $produksiId = $this->record->id;
 
         // 1. TOTAL HASIL (LEMBAR)
         $totalAll = HasilPilihVeneer::where('id_produksi_pilih_veneer', $produksiId)

@@ -20,6 +20,4 @@ class NotaKayu extends Model
     {
         return $this->belongsTo(KayuMasuk::class, 'id_kayu_masuk');
     }
-
-
 }

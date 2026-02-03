@@ -52,7 +52,7 @@ class RekapKayuMasuksTable
                             ->pluck('panjang')
                             ->unique()
                             ->implode(', ')
-                            ?? '-'
+                        ?? '-'
                     ),
 
                 TextColumn::make('jenis')
@@ -64,7 +64,7 @@ class RekapKayuMasuksTable
                             ->pluck('jenisKayu.nama_kayu')
                             ->unique()
                             ->implode(', ')
-                            ?? '-'
+                        ?? '-'
                     )
                     ->searchable(
                         query: fn(Builder $query, string $search) =>
@@ -84,7 +84,7 @@ class RekapKayuMasuksTable
                             ->pluck('lahan.kode_lahan')
                             ->unique()
                             ->implode(', ')
-                            ?? '-'
+                        ?? '-'
                     )
                     ->searchable(
                         query: fn(Builder $query, string $search) =>
@@ -112,7 +112,7 @@ class RekapKayuMasuksTable
                             ->pluck('diameter')
                             ->unique()
                             ->implode(', ')
-                            ?? '-'
+                        ?? '-'
                     ),
 
                 // ===========================
@@ -193,6 +193,6 @@ class RekapKayuMasuksTable
                         return $indicators;
                     })
             ])
-            ->defaultSort('seri', 'desc');
+            ->defaultSort('id', 'desc');
     }
 }

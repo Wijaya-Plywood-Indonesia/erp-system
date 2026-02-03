@@ -102,11 +102,6 @@ class DetailKayuMasukForm
                 // ==========================
                 // DIAMETER
                 // ==========================
-                TextInput::make('jumlah_batang')
-                    ->label('Jumlah Batang')
-                    ->required()
-                    ->default(1)
-                    ->numeric(),
 
                 TextInput::make('diameter')
                     ->label('Diameter (cm)')
@@ -114,6 +109,11 @@ class DetailKayuMasukForm
                     ->required()
                     ->numeric(),
 
+                TextInput::make('jumlah_batang')
+                    ->label('Jumlah Batang')
+                    ->required()
+                    ->default(1)
+                    ->numeric(),
             ]);
     }
 }

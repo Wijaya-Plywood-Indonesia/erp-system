@@ -41,8 +41,8 @@ class NyusupWorkerMap
                 foreach ($produksi->pegawaiNyusup as $pn) {
                     if (!$pn->pegawai) continue;
 
-                    $jamMasuk = $pn->masuk ? Carbon::parse($pn->masuk)->format('H:i') : '-';
-                    $jamPulang = $pn->pulang ? Carbon::parse($pn->pulang)->format('H:i') : '-';
+                    $jamMasuk = $pn->masuk ? Carbon::parse($pn->masuk)->format('H:i:s') : '-';
+                    $jamPulang = $pn->pulang ? Carbon::parse($pn->pulang)->format('H:i:s') : '-';
 
                     $results[] = [
                         'kodep' => $pn->pegawai->kode_pegawai ?? '-',

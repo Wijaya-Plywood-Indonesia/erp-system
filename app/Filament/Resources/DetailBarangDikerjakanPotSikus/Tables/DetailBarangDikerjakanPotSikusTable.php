@@ -26,7 +26,8 @@ class DetailBarangDikerjakanPotSikusTable
             ->groups([
                 Group::make('id_pegawai_pot_siku')
                     ->label('Pegawai')
-                    ->getTitleFromRecordUsing(fn ($record) =>
+                    ->getTitleFromRecordUsing(
+                        fn($record) =>
                         $record->pegawaiPotSiku?->pegawai?->nama_pegawai
                         ?? 'Pegawai Tidak Diketahui'
                     )
@@ -55,7 +56,33 @@ class DetailBarangDikerjakanPotSikusTable
                     ->label('Kualitas (KW)'),
 
                 TextColumn::make('tinggi')
-                    ->label('Tinggi'),
+                    ->label('Tinggi')
+                    ->suffix(' cm'),
+
+                TextColumn::make('kubikasi')
+                    ->label('Kubikasi')
+                    ->state(function ($record) {
+                        $ukuran = $record->ukuran;
+
+                        if (
+                            !$ukuran ||
+                            $ukuran->panjang <= 0 ||
+                            $ukuran->lebar <= 0 ||
+                            $record->tinggi <= 0
+                        ) {
+                            return '-';
+                        }
+
+                        // panjang & lebar = mm, tinggi = cm
+                        $kubikasi = (
+                            $ukuran->panjang *
+                            $ukuran->lebar *
+                            $record->tinggi
+                        ) / 100_000_000;
+
+                        return number_format($kubikasi, 4, ',', '.');
+                    })
+                    ->suffix(' m³'),
             ])
 
             /*
@@ -65,7 +92,8 @@ class DetailBarangDikerjakanPotSikusTable
             */
             ->headerActions([
                 CreateAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
@@ -77,12 +105,14 @@ class DetailBarangDikerjakanPotSikusTable
             */
             ->recordActions([
                 EditAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
 
                 DeleteAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
@@ -95,7 +125,8 @@ class DetailBarangDikerjakanPotSikusTable
             ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(fn ($livewire) =>
+                        ->hidden(
+                            fn($livewire) =>
                             $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                         ),
                 ]),

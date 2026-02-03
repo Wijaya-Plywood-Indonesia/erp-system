@@ -33,6 +33,10 @@ use App\Models\ProduksiNyusup;
 use App\Models\ProduksiSanding;
 use App\Models\ProduksiPilihPlywood;
 use App\Models\ProduksiHp;
+use App\Models\ProduksiPotSiku;
+use App\Models\ProduksiPotJelek;
+use App\Models\TurunKayu;
+
 
 // --- 2. IMPORT TRANSFORMER CLASSES ---
 use App\Filament\Pages\LaporanHarian\Transformers\RotaryWorkerMap;
@@ -40,7 +44,7 @@ use App\Filament\Pages\LaporanHarian\Transformers\RepairWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\PressDryerWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\StikWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\KediWorkerMap;
-use App\Filament\Pages\LaporanHarian\Transformers\JointWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\JoinWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\SandingJoinWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\PotAfalanJoinWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\LainLainWorkerMap;
@@ -50,6 +54,9 @@ use App\Filament\Pages\LaporanHarian\Transformers\NyusupWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\SandingWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\PilihPlywoodWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\HotpressWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\PotSikuWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\PotJelekWorkerMap;
+use App\Filament\Pages\LaporanHarian\Transformers\TurunKayuWorkerMap;
 
 use App\Exports\LaporanHarianExport;
 
@@ -146,11 +153,20 @@ class LaporanHarian extends Page implements HasForms
 
             // 1. DATA BEKERJA PER DIVISI
             $listRotary = RotaryWorkerMap::make(ProduksiRotary::with(['mesin', 'detailPegawaiRotary.pegawai'])->whereDate('tgl_produksi', $tgl)->get());
-            $listRepair = RepairWorkerMap::make(ProduksiRepair::with(['rencanaPegawais.pegawai'])->whereDate('tanggal', $tgl)->get());
+            $listRepair = RepairWorkerMap::make(
+                ProduksiRepair::with([
+                    'rencanaPegawais.pegawai',
+                    'modalRepairs.ukuran',
+                    'modalRepairs.jenisKayu',
+                    'rencanaPegawais.rencanaRepairs.hasilRepairs'
+                ])
+                    ->whereDate('tanggal', $tgl) // Filter tanggal di level Produksi
+                    ->get()
+            );
             $listDryer = PressDryerWorkerMap::make(ProduksiPressDryer::with(['detailPegawais.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listStik = StikWorkerMap::make(ProduksiStik::with(['detailPegawaiStik.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listKedi = KediWorkerMap::make(ProduksiKedi::with(['detailPegawaiKedi.pegawai'])->whereDate('tanggal', $tgl)->get());
-            $listJoint = JointWorkerMap::make(ProduksiJoint::with(['pegawaiJoint.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
+            $listJoint = JoinWorkerMap::make(ProduksiJoint::with(['pegawaiJoint.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listSandingJoin = SandingJoinWorkerMap::make(ProduksiSandingJoint::with(['pegawaiSandingJoint.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listPotAfJoin = PotAfalanJoinWorkerMap::make(ProduksiPotAfJoint::with(['pegawaiPotAfJoint.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listLainLain = LainLainWorkerMap::make(DetailLainLain::with(['lainLains.pegawai'])->whereDate('tanggal', $tgl)->get());
@@ -187,6 +203,29 @@ class LaporanHarian extends Page implements HasForms
                     ->get()
             );
 
+
+            $listPotSiku = PotSikuWorkerMap::make(
+                ProduksiPotSiku::with([
+                    'pegawaiPotSiku.pegawai',
+                    'detailBarangDikerjakanPotSiku.ukuran',
+                    'detailBarangDikerjakanPotSiku.jenisKayu'
+                ])->whereDate('tanggal_produksi', $tgl)->get()
+            );
+
+            $listPotJelek = PotJelekWorkerMap::make(
+                ProduksiPotJelek::with([
+                    'pegawaiPotJelek.pegawai',
+                    'detailBarangDikerjakanPotJelek.ukuran',
+                    'detailBarangDikerjakanPotJelek.jenisKayu'
+                ])->whereDate('tanggal_produksi', $tgl)->get()
+            );
+
+            $listTurunKayu = TurunKayuWorkerMap::make(
+                TurunKayu::with(['pegawaiTurunKayu.pegawai'])
+                    ->whereDate('tanggal', $tgl)
+                    ->get()
+            );
+
             $pegawaiBekerja = array_merge(
                 $listRotary,
                 $listRepair,
@@ -202,7 +241,10 @@ class LaporanHarian extends Page implements HasForms
                 $listNyusup,
                 $listSanding,
                 $listPilihPlywood,
-                $listHotpress
+                $listHotpress,
+                $listPotSiku,
+                $listPotJelek,
+                $listTurunKayu
             );
 
             // Update Statistics

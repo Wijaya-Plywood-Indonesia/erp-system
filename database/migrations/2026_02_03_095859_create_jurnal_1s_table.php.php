@@ -1,0 +1,42 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        //
+        Schema::create('jurnal_1st', function (Blueprint $table) {
+            $table->id();
+
+            $table->integer('modif10');
+            $table->integer('no_akun');
+            $table->string('nama_akun');
+            $table->enum('bagian', ['d', 'k']); // debet/kredit
+            $table->integer('banyak')->nullable(); // qty
+
+            // m3 dengan 4 angka di belakang koma
+            $table->decimal('m3', 12, 4)->nullable();
+
+            $table->integer('harga')->nullable();
+            $table->integer('total')->nullable();
+            $table->string('status')->nullable();
+            $table->string('created_by')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        //
+        Schema::dropIfExists('jurnal_1st');
+    }
+};

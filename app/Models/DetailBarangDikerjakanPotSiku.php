@@ -37,4 +37,20 @@ class DetailBarangDikerjakanPotSiku extends Model
     {
         return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu');
     }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_produksi_pot_siku) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_pot_siku, 'pot_siku');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_produksi_pot_siku) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_pot_siku, 'pot_siku');
+            }
+        });
+    }
 }

@@ -23,13 +23,15 @@ class LaporanPotSikuExport implements FromCollection, WithHeadings, WithMapping,
     public function collection()
     {
         $exportData = collect();
-        $currentRow = 2; // Data dimulai dari baris ke-2 (setelah header)
+        $currentRow = 2;
 
         foreach ($this->data as $laporan) {
             foreach ($laporan['pekerja_list'] as $pekerja) {
+
+                $fixedTarget = 300; // ← TARGET FIXED
+
                 $rowCount = count($pekerja['detail_barang']);
-                
-                // Jika pekerja memiliki detail, tandai baris untuk di-merge
+
                 if ($rowCount > 1) {
                     $this->mergeRows[] = [
                         'start' => $currentRow,
@@ -44,6 +46,7 @@ class LaporanPotSikuExport implements FromCollection, WithHeadings, WithMapping,
                         'nama_pegawai' => $pekerja['nama_pegawai'],
                         'jam_masuk' => $pekerja['jam_masuk'],
                         'jam_pulang' => $pekerja['jam_pulang'],
+                        'target' => $fixedTarget, // ← SELALU 300
                         'jenis_kayu' => $detail['jenis_kayu'],
                         'ukuran' => $detail['ukuran'],
                         'kw' => $detail['kw'],
@@ -53,18 +56,30 @@ class LaporanPotSikuExport implements FromCollection, WithHeadings, WithMapping,
                         'keterangan' => $pekerja['ket'],
                     ]);
                 }
+
                 $currentRow += $rowCount;
             }
         }
+
         return $exportData;
     }
 
     public function headings(): array
     {
         return [
-            'Tanggal', 'Kode', 'Nama Pegawai', 'Masuk', 'Pulang', 
-            'Jenis Kayu', 'Ukuran', 'KW', 'Hasil (Tinggi)', 
-            'Total Hasil', 'Potongan Target', 'Keterangan'
+            'Tanggal',
+            'Kode',
+            'Nama Pegawai',
+            'Masuk',
+            'Pulang',
+            'Target',            // ← KOLOM BARU FIX 300
+            'Jenis Kayu',
+            'Ukuran',
+            'KW',
+            'Hasil (Tinggi)',
+            'Total Hasil',
+            'Potongan Target',
+            'Keterangan'
         ];
     }
 
@@ -76,6 +91,7 @@ class LaporanPotSikuExport implements FromCollection, WithHeadings, WithMapping,
             $row['nama_pegawai'],
             $row['jam_masuk'],
             $row['jam_pulang'],
+            300, // ← LANGSUNG FIXED DI MAP JUGA
             $row['jenis_kayu'],
             $row['ukuran'],
             $row['kw'],
@@ -88,20 +104,20 @@ class LaporanPotSikuExport implements FromCollection, WithHeadings, WithMapping,
 
     public function styles(Worksheet $sheet)
     {
-        // Styling Header
-        $sheet->getStyle('A1:L1')->getFont()->setBold(true);
-        $sheet->getStyle('A1:L1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        // Header
+        $sheet->getStyle('A1:M1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:M1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        // Eksekusi Merging Cells untuk kolom yang datanya berulang (A-E dan J-L)
+        // Merge untuk A–F (karena 'Target' adalah kolom F) dan K–M
         foreach ($this->mergeRows as $range) {
-            foreach (['A', 'B', 'C', 'D', 'E', 'J', 'K', 'L'] as $col) {
+            foreach (['A', 'B', 'C', 'D', 'E', 'F', 'K', 'L', 'M'] as $col) {
                 $sheet->mergeCells("{$col}{$range['start']}:{$col}{$range['end']}");
                 $sheet->getStyle("{$col}{$range['start']}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
             }
         }
 
-        // Format angka/rupiah untuk kolom Potongan (K)
-        $sheet->getStyle('K2:K' . $sheet->getHighestRow())
+        // Format angka Rupiah untuk kolom Potongan (L)
+        $sheet->getStyle('L2:L' . $sheet->getHighestRow())
             ->getNumberFormat()
             ->setFormatCode('#,##0');
 

@@ -10,110 +10,143 @@
     <div wire:loading.remove class="space-y-12">
         @forelse($dataSiku as $data)
         @foreach($data['pekerja_list'] as $pekerja)
-        {{-- Menambahkan mb-14 untuk jarak antar kotak pegawai agar tidak dempet --}}
+
+        @php
+            $target = $pekerja['target'] ?? 300;
+            $hasil  = $pekerja['hasil'] ?? 0;
+            $progress = $target > 0 ? min(100, round(($hasil / $target) * 100, 1)) : 0;
+        @endphp
+
         <div class="mb-14 border border-gray-700 rounded-lg overflow-hidden bg-gray-900 text-white shadow-2xl">
 
-            {{-- Header Identitas: Nama di tengah dan besar, Jam di kiri/kanan --}}
+            {{-- ================= HEADER ================= --}}
             <div class="p-4 bg-gray-800 border-b border-gray-700">
                 <div class="flex justify-between items-center">
-                    {{-- Jam Masuk --}}
                     <div class="flex flex-col items-start">
-                        <span class="text-[10px] text-gray-500 uppercase tracking-tighter">Jam Masuk</span>
+                        <span class="text-[10px] text-gray-500 uppercase">Jam Masuk</span>
                         <span class="text-xs font-bold text-green-400">{{ $pekerja['jam_masuk'] }}</span>
                     </div>
 
-                    {{-- Nama Pekerja: Tengah & Besar --}}
                     <div class="text-center">
                         <h3 class="text-[10px] font-bold uppercase tracking-widest text-orange-500 mb-1">
                             LAPORAN POT SIKU - {{ $data['tanggal'] }}
                         </h3>
-                        <h2 class="text-xl font-black uppercase tracking-tight text-white">
-                            {{ $pekerja['kode_pegawai'] }} - {{ $pekerja['nama_pegawai'] }}
-                        </h2>
+                        <div class="flex items-center justify-center gap-2">
+    <h2 class="text-xl font-black uppercase text-white">
+        {{ $pekerja['kode_pegawai'] }} - {{ $pekerja['nama_pegawai'] }}
+    </h2>
+
+    {{-- BADGE --}}
+    @if($hasil >= $target)
+        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-green-600/20 text-green-400 border border-green-600">
+            ✔ Tercapai
+        </span>
+    @else
+        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-600/20 text-red-400 border border-red-600">
+            ✘ Belum
+        </span>
+    @endif
+</div>
                     </div>
 
-                    {{-- Jam Pulang --}}
                     <div class="flex flex-col items-end">
-                        <span class="text-[10px] text-gray-500 uppercase tracking-tighter">Jam Pulang</span>
+                        <span class="text-[10px] text-gray-500 uppercase">Jam Pulang</span>
                         <span class="text-xs font-bold text-red-400">{{ $pekerja['jam_pulang'] }}</span>
+                    </div>
+                </div>
+{{-- BADGE --}}
+<div class="mt-1">
+    @if($hasil >= $target)
+        <span class="px-3 py-1 rounded-full text-[10px] font-bold bg-green-600/20 text-green-400 border border-green-600">
+            ✔ TER CAPAI
+        </span>
+    @else
+        <span class="px-3 py-1 rounded-full text-[10px] font-bold bg-red-600/20 text-red-400 border border-red-600">
+            ✘ BELUM TERCAPAI
+        </span>
+    @endif
+</div>
+                {{-- ================= PROGRESS BAR ================= --}}
+                <div class="mt-4">
+                    <div class="flex justify-between text-[11px] mb-1">
+                        <span class="text-gray-400">Progress Target ({{ $target }} cm)</span>
+                        <span class="text-gray-300 font-bold">
+                            {{ $hasil }} / {{ $target }} cm ({{ $progress }}%)
+                        </span>
+                    </div>
+
+                    <div style="width:100%;height:10px;background:#2d2d2d;border-radius:999px;overflow:hidden;">
+                        <div
+                            style="
+                                width: {{ $progress }}%;
+                                height: 100%;
+                                background: {{ $progress >= 100 ? '#22c55e' : ($progress >= 75 ? '#3b82f6' : '#f59e0b') }};
+                                transition: width .4s ease;
+                            ">
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {{-- Tabel Detail --}}
+            {{-- ================= TABEL DETAIL ================= --}}
             <div class="overflow-x-auto">
-                <table class="w-full text-sm text-left">
+                <table class="w-full text-sm">
                     <thead class="text-[11px] uppercase bg-gray-800 text-gray-400 border-b border-gray-700">
                         <tr>
-                            <th class="px-6 py-3 border-r border-gray-700 text-center">Jenis Kayu</th>
-                            <th class="px-6 py-3 border-r border-gray-700 text-center">Ukuran</th>
-                            <th class="px-6 py-3 border-r border-gray-700 text-center">Kw</th>
-                            <th class="px-6 py-3 border-r border-gray-700 text-center text-white">Hasil/Tinggi</th>
-                            <th class="px-6 py-3 text-center text-red-400">Potongan Target</th>
+                            <th class="px-6 py-3 text-center">Jenis Kayu</th>
+                            <th class="px-6 py-3 text-center">Ukuran</th>
+                            <th class="px-6 py-3 text-center">KW</th>
+                            <th class="px-6 py-3 text-center text-green-400">Hasil</th>
+                            <th class="px-6 py-3 text-center text-red-400">Potongan</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach($pekerja['detail_barang'] as $index => $row)
-                        <tr class="border-b border-gray-800 hover:bg-gray-800/50">
-                            <td class="px-6 py-4 border-r border-gray-800 font-medium text-center uppercase">{{
-                                $row['jenis_kayu'] }}</td>
-                            <td class="px-6 py-4 border-r border-gray-800 text-center">{{ $row['ukuran'] }}</td>
-                            <td class="px-6 py-4 border-r border-gray-800 text-center uppercase">{{ $row['kw'] }}</td>
-                            <td class="px-6 py-4 border-r border-gray-800 text-center font-bold text-green-400">{{
-                                $row['tinggi'] }}</td>
-
-                            @if($loop->first)
-                            <td rowspan="{{ count($pekerja['detail_barang']) }}"
-                                class="px-6 py-4 text-center align-middle bg-red-950/10">
-                                <div class="text-xl font-black text-red-500">
-                                    Rp {{ number_format($pekerja['potongan_target'], 0, ',', '.') }}
-                                </div>
-                                <div class="text-[9px] text-gray-500 mt-1 uppercase">Total Potongan</div>
+                        @foreach($pekerja['detail_barang'] as $row)
+                        <tr class="border-b border-gray-800 hover:bg-gray-800/40">
+                            <td class="px-6 py-3 text-center uppercase">{{ $row['jenis_kayu'] }}</td>
+                            <td class="px-6 py-3 text-center">{{ $row['ukuran'] }}</td>
+                            <td class="px-6 py-3 text-center uppercase">{{ $row['kw'] }}</td>
+                            <td class="px-6 py-3 text-center font-bold text-green-400">{{ $row['tinggi'] }}</td>
+                            <td class="px-6 py-3 text-center font-bold text-red-500">
+                                Rp {{ number_format($pekerja['potongan_target'], 0, ',', '.') }}
                             </td>
-                            @endif
                         </tr>
                         @endforeach
                     </tbody>
-                    {{-- Footer Summary --}}
-                    <tfoot class="bg-gray-800/80 text-[10px] font-bold uppercase tracking-tighter">
+
+                    {{-- ================= FOOTER ================= --}}
+                    <tfoot class="bg-gray-800 text-[10px] uppercase">
                         <tr>
-                            <td colspan="5" class="px-4 py-4 text-center border-t border-gray-700 text-gray-400">
-                                <span class="mx-2">Target: <strong class="text-white">{{ $data['target_harian']
-                                        }}</strong></span>
-                                <span class="mx-1 text-gray-600">|</span>
-                                <span class="mx-2">Jam Kerja: <strong class="text-white">{{ $data['jam_kerja']
-                                        }}</strong></span>
-                                <span class="mx-1 text-gray-600">|</span>
-                                <span class="mx-2">Hasil: <strong class="text-green-400">{{ $pekerja['hasil']
-                                        }}</strong></span>
-                                <span class="mx-1 text-gray-600">|</span>
-                                <span class="mx-2">Selisih: <strong class="text-red-500">{{ $pekerja['selisih']
-                                        }}</strong></span>
-                                <span class="mx-1 text-gray-600">|</span>
-                                <span class="mx-2">Ijin: <strong class="text-yellow-500">{{ $pekerja['ijin']
-                                        }}</strong></span>
+                            <td colspan="5" class="px-4 py-4 text-center text-gray-400">
+                                Target: <strong class="text-white">{{ $target }}</strong> |
+                                Hasil: <strong class="text-green-400">{{ $hasil }}</strong> |
+                                Selisih: <strong class="text-red-500">{{ $pekerja['selisih'] }}</strong> |
+                                Ijin: <strong class="text-yellow-500">{{ $pekerja['ijin'] }}</strong>
                             </td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
 
-            {{-- Kendala & Keterangan --}}
-            <div class="p-4 bg-gray-800/30 border-t border-gray-700 text-[11px] grid grid-cols-2 gap-4">
+            {{-- ================= KENDALA ================= --}}
+            <div class="p-4 bg-gray-800/30 border-t border-gray-700 text-[11px] grid grid-cols-2">
                 <div>
                     <span class="text-gray-500 font-bold uppercase">Kendala:</span>
-                    <span class="text-yellow-500 ml-2 font-semibold italic">{{ $data['kendala'] }}</span>
+                    <span class="text-yellow-500 ml-2 italic">{{ $data['kendala'] }}</span>
                 </div>
                 <div class="text-right">
-                    <span class="text-gray-500 font-bold uppercase">Keterangan:</span>
+                    <span class="text-gray-500 font-bold uppercase">Ket:</span>
                     <span class="text-gray-300 ml-2 italic">{{ $pekerja['ket'] }}</span>
                 </div>
             </div>
         </div>
+
         @endforeach
         @empty
-        <div class="p-16 text-center bg-gray-800 rounded-xl border border-dashed border-gray-600 shadow-inner">
-            <p class="text-gray-500 italic text-lg">Data laporan pot siku tidak tersedia untuk tanggal ini.</p>
+        <div class="p-16 text-center bg-gray-800 rounded-xl border border-dashed border-gray-600">
+            <p class="text-gray-500 italic text-lg">
+                Data laporan pot siku tidak tersedia untuk tanggal ini.
+            </p>
         </div>
         @endforelse
     </div>

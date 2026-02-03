@@ -16,8 +16,8 @@ class PegawaiPotSikuForm
         return collect(
             CarbonPeriod::create('00:00', '1 hour', '23:00')->toArray()
         )->mapWithKeys(fn($time) => [
-                $time->format('H:i') => $time->format('H.i'),
-            ])->toArray();
+            $time->format('H:i') => $time->format('H.i'),
+        ])->toArray();
     }
     public static function configure(Schema $schema): Schema
     {

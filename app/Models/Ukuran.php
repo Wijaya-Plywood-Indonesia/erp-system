@@ -60,7 +60,7 @@ class Ukuran extends Model
         return $this->hasMany(VeneerBahanHp::class, 'id_ukuran');
     }
 
-        public function barangSetengahJadiHp()
+    public function barangSetengahJadiHp()
     {
         return $this->hasMany(BarangSetengahJadiHp::class, 'id_ukuran');
     }
@@ -81,7 +81,7 @@ class Ukuran extends Model
 
     public function getNamaUkuranAttribute(): string
     {
-        return "{$this->panjang}m x {$this->lebar}m x {$this->tebal}cm";
+        return "{$this->panjang}mm x {$this->lebar}mm x {$this->tebal}mm";
     }
 
 

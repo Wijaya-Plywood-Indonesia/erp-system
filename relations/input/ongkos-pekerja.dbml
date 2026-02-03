@@ -1,0 +1,33 @@
+Table ongkosPekerja{
+    id bigint [pk]
+    id_produksi bigint [note: '''
+        Ambil data setiap produksi
+        1. Mesin
+        2. Jenis Pekerjaan (Turun kayu, potong, dll).
+    ''']
+    bulan datetime
+}
+
+Table detailOngkosKupasanSpindless{
+    id bigint [pk]
+    id_ongkos_pekerja bigint [ref: > ongkosPekerja.id]
+    total int 
+    kubikasi decimal
+
+}
+
+Table hargaPegawai{
+    id bigint [pk]
+    harga int 
+}
+
+
+Table totalSolasi{
+    id bigint [pk]
+    total int
+}
+
+Table hargaSolasi{
+    id bigint [pk]
+    harga int
+}

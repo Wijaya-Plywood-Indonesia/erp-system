@@ -17,7 +17,7 @@ class DetailPegawaiHp extends Model
         'pulang',
         'ijin',
         'ket',
-        
+
     ];
 
     public function mesin()
@@ -33,5 +33,21 @@ class DetailPegawaiHp extends Model
     public function pegawaiHp()
     {
         return $this->belongsTo(Pegawai::class, 'id_pegawai');
+    }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_produksi_hp) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_hp, 'hotpress');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_produksi_hp) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_hp, 'hotpress');
+            }
+        });
     }
 }

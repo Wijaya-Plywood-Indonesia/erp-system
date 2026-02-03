@@ -47,8 +47,8 @@ class HotpressWorkerMap
                     // Nama relasi di model Anda adalah pegawaiHp
                     if (!$dp->pegawaiHp) continue;
 
-                    $jamMasuk = $dp->masuk ? Carbon::parse($dp->masuk)->format('H:i') : '-';
-                    $jamPulang = $dp->pulang ? Carbon::parse($dp->pulang)->format('H:i') : '-';
+                    $jamMasuk = $dp->masuk ? Carbon::parse($dp->masuk)->format('H:i:s') : '-';
+                    $jamPulang = $dp->pulang ? Carbon::parse($dp->pulang)->format('H:i:s') : '-';
 
                     $results[] = [
                         'kodep' => $dp->pegawaiHp->kode_pegawai ?? '-',

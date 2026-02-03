@@ -27,4 +27,20 @@ class PegawaiPilihPlywood extends Model
     {
         return $this->belongsTo(Pegawai::class, 'id_pegawai');
     }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_produksi_pilih_plywood) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_pilih_plywood, 'pilih_plywood');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_produksi_pilih_plywood) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_pilih_plywood, 'pilih_plywood');
+            }
+        });
+    }
 }

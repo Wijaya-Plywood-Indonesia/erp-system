@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\ProduksiHotpresses\RelationManagers;
+namespace App\Filament\Resources\ProduksiHotPresses\RelationManagers;
 
 use App\Filament\Resources\RencanaKerjaHps\Schemas\RencanaKerjaHpForm;
 use App\Filament\Resources\RencanaKerjaHps\Tables\RencanaKerjaHpsTable;
@@ -26,10 +26,9 @@ class RencanaKerjaHpRelationManager extends RelationManager
     }
 
     public function form(Schema $schema): Schema
-    {
-        {
-        return RencanaKerjaHpForm::configure($schema);
-    }
+    { {
+            return RencanaKerjaHpForm::configure($schema);
+        }
     }
 
     public function table(Table $table): Table
