@@ -13,39 +13,35 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 
 class AnakAkunsRelationManager extends RelationManager
 {
-    // diperbaiki → harus camelCase sesuai relasi di model
     protected static string $relationship = 'anakAkuns';
+
     protected static ?string $title = 'Anak Akun';
     public function isReadOnly(): bool
     {
         return false;
     }
+
     public function form(Schema $schema): Schema
     {
         return $schema
             ->components([
-
                 TextInput::make('kode_anak_akun')
                     ->label('Kode Anak Akun')
                     ->required()
                     ->maxLength(50)
-                    ->unique(ignoreRecord: true) // ini otomatis munculkan error inline merah
-                    ->validationMessages([
-                        'unique' => 'Kode anak akun ini sudah digunakan oleh akun lain.',
-                    ]),
+                    ->unique(ignoreRecord: true),
 
                 TextInput::make('nama_anak_akun')
                     ->label('Nama Anak Akun')
                     ->required()
                     ->maxLength(255),
 
-                // Parent (opsional)
                 Select::make('parent')
                     ->label('Parent')
-                    ->options(AnakAkun::pluck('nama_anak_akun', 'id'))
                     ->relationship('parentAkun', 'nama_anak_akun')
                     ->searchable()
                     ->preload()
@@ -63,9 +59,18 @@ class AnakAkunsRelationManager extends RelationManager
                 Textarea::make('keterangan')
                     ->label('Deskripsi')
                     ->rows(3)
-                    ->maxLength(500)
                     ->columnSpanFull(),
 
+
+                Select::make('status')
+                    ->label('Status')
+                    ->options([
+                        'aktif' => 'Aktif',
+                        'non-aktif' => 'Non-Aktif',
+                    ])
+                    ->default('aktif')
+                    ->required()
+                    ->native(false),
 
             ]);
     }
@@ -75,48 +80,43 @@ class AnakAkunsRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('nama_anak_akun')
             ->columns([
-
                 TextColumn::make('kode_anak_akun')
                     ->label('Kode Akun')
-                    ->getStateUsing(function ($record) {
-                        return "{$record->indukAkun->kode_induk_akun}{$record->kode_anak_akun}";
-                    })
                     ->sortable()
                     ->searchable(),
-
-                // Tampilkan parent
-                TextColumn::make('parentAkun.nama_anak_akun')
-                    ->label('Parent')
-                    ->placeholder('-'),
 
                 TextColumn::make('nama_anak_akun')
                     ->label('Nama Anak Akun')
                     ->sortable()
                     ->searchable(),
 
-
-                TextColumn::make('keterangan')
-                    ->limit(30)
-                    ->suffix('...')
-                    ->toggleable(),
-
                 TextColumn::make('status')
-                    ->label('status')
-                    ->sortable()
-                    ->searchable()
-            ])
-            ->filters([
-                //
+                    ->label('Status')
+                    ->badge()
+                    ->formatStateUsing(function ($state) {
+                        // Antisipasi jika DB masih berisi 0/1 atau string aktif
+                        if ($state === '1' || $state === 1)
+                            return 'Aktif';
+                        if ($state === '0' || $state === 0)
+                            return 'Non-Aktif';
+                        return ucfirst($state);
+                    })
+                    ->color(fn($state): string => match ((string) $state) {
+                        'aktif', '1' => 'success',
+                        'non-aktif', '0' => 'danger',
+                        default => 'gray',
+                    })
+                    ->sortable(),
             ])
             ->headerActions([
                 CreateAction::make()
                     ->mutateFormDataUsing(function (array $data): array {
-                        // Auto isi created_by
-                        $data['created_by'] = auth()->id();
+                        // Menggunakan Auth::id() agar IDE tidak bingung
+                        $data['created_by'] = Auth::id();
                         return $data;
                     }),
             ])
-            ->recordActions([
+            ->actions([
                 EditAction::make(),
                 DeleteAction::make(),
             ]);
