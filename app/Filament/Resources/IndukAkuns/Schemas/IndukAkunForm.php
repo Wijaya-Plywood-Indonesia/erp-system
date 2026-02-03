@@ -19,33 +19,39 @@ class IndukAkunForm
                     ->required()
                     ->reactive()
                     ->afterStateUpdated(function ($state, callable $set) {
-                        // Cari akun berdasarkan kode
-                        $akun = IndukAkun::where('kode_induk_akun', $state)->first()
-
-                    // Memastikan input dianggap string agar nol/format angka tidak berubah
-                    ->live(onBlur: true) 
+                        // tidak perlu melakukan apa pun di sini
+                        // fungsi hanya dipakai untuk "reactive"
+                    })
+                    ->live(onBlur: true)
                     ->hint(function ($state) {
-                        if (blank($state)) return null;
-
+                        if (blank($state)) {
+                            return null;
+                        }
 
                         $akun = IndukAkun::where('kode_induk_akun', $state)->first();
 
-                        return $akun 
-                            ? "⚠ Kode ini milik akun: {$akun->nama_induk_akun}" 
+                        return $akun
+                            ? "⚠ Kode ini milik akun: {$akun->nama_induk_akun}"
                             : "ℹ Kode belum digunakan";
                     })
                     ->hintColor(function ($state) {
-                        if (blank($state)) return 'gray';
+                        if (blank($state)) {
+                            return 'gray';
+                        }
+
                         $exists = IndukAkun::where('kode_induk_akun', $state)->exists();
                         return $exists ? 'danger' : 'info';
                     }),
 
+                /** NAMA AKUN */
                 TextInput::make('nama_induk_akun')
                     ->required()
                     ->maxLength(255),
 
+                /** KETERANGAN */
                 Textarea::make('keterangan')
                     ->columnSpanFull(),
+
             ]);
     }
 }
