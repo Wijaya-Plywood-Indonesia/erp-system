@@ -52,12 +52,13 @@ class JurnalUmumsTable
                 TextColumn::make('synced_at')
                     ->label('Waktu Sinkron')
                     ->dateTime('d M Y H:i')
-                    ->placeholder('-')
-                    ->sortable(),
+                    ->toggleable(true),
 
-                TextColumn::make('syncedBy.name')
-    ->label('Disinkron Oleh')
-    ->placeholder('-'),
+                TextColumn::make('synced_by')
+                    ->label('Disinkron Oleh')
+                    ->searchable()
+                    ->placeholder('-')
+                    ->toggleable(true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

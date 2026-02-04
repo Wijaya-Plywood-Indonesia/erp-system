@@ -5,6 +5,7 @@ namespace App\Services\Jurnal;
 use App\Models\Jurnal2;
 use App\Models\JurnalTiga;
 use App\Models\AnakAkun;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class Jurnal2ToJurnal3Service
@@ -53,7 +54,8 @@ class Jurnal2ToJurnal3Service
 
                 $row->update([
                     'status_sinkron' => 'sudah sinkron',
-                    'sinkron_at'     => now(),
+                    'synced_at' => now(),
+                    'synced_by' => Auth::user()->name,
                 ]);
 
                 $total++;

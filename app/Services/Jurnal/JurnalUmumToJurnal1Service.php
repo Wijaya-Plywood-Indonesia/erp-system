@@ -58,9 +58,7 @@ class JurnalUmumToJurnal1Service
                 $row->update([
                     'status'    => 'Sudah Sinkron',
                     'synced_at' => now(),
-                    'synced_by' => optional(Auth::user())->id,
-
-
+                    'synced_by' => Auth::user()->name,
                 ]);
 
                 $total++;
