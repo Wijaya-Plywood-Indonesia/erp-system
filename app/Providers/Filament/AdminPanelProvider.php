@@ -124,6 +124,10 @@ class AdminPanelProvider extends PanelProvider
                     ->icon('heroicon-o-book-open')
                     ->collapsed(),
 
+                NavigationGroup::make('Logs')
+                    ->icon('heroicon-o-finger-print')
+                    ->collapsed(),
+
                 NavigationGroup::make('Master Akun')
                     ->icon('heroicon-o-inbox-stack')->collapsed(),
 

@@ -1,33 +1,45 @@
-Table ongkosPekerja{
+Table OngkosPekerja{
     id bigint [pk]
-    id_produksi bigint [note: '''
-        Ambil data setiap produksi
-        1. Mesin
-        2. Jenis Pekerjaan (Turun kayu, potong, dll).
+    id_produksi bigint [note: '''1. Ambil Data Mesin/Divisi/Dll''']
+}
+
+Table DetailOngkosSpindless{
+    id bigint [pk]
+    id_ongkos_spindless bigint [ref: > OngkosPekerja.id]
+    id_produksi_rotary bigint [note: '''
+        1. Ambil data mesin
+        2. Ambil data tanggal 
+        3. Ambil data ukuran
+        4. Ambil data jenis kayu
+        5. Ambil data kualitas (kw)
+        6. Ambil data pekerja
+        7. Ambil data keterangan
     ''']
-    bulan datetime
+    id_harga_pekerja bigint [ref: > HargaPekerja.id]
+    id_total_solasi bigint [ref: > TotalSolasi.id]
+    id_harga_solasi bigint [ref: > HargaSolasi.id]
+    tanggal date
+    banyak integer
+    kubikasi float
+    kubikasi_solasi float
+    banyak_solasi integer
+    ongkos_kubikasi float
+    ongkos_mesin integer
+    ongkos_kubikasi_mesin float
+    ongkos_perlembar integer
 }
 
-Table detailOngkosKupasanSpindless{
+Table TotalSolasi {
     id bigint [pk]
-    id_ongkos_pekerja bigint [ref: > ongkosPekerja.id]
-    total int 
-    kubikasi decimal
-
+    total integer
 }
 
-Table hargaPegawai{
+Table HargaPekerja {
     id bigint [pk]
-    harga int 
+    harga integer
 }
 
-
-Table totalSolasi{
+Table HargaSolasi {
     id bigint [pk]
-    total int
-}
-
-Table hargaSolasi{
-    id bigint [pk]
-    harga int
+    harga integer
 }

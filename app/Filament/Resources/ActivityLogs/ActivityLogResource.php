@@ -4,6 +4,7 @@ namespace App\Filament\Resources\ActivityLogs;
 
 use App\Filament\Resources\ActivityLogs\Pages\ManageActivityLogs;
 use BackedEnum;
+use UnitEnum;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -17,6 +18,8 @@ class ActivityLogResource extends Resource
     protected static ?string $model = Activity::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
+    protected static string|UnitEnum|null $navigationGroup = 'Logs';
 
     protected static ?string $recordTitleAttribute = 'AcitivityLog';
 
