@@ -49,6 +49,15 @@ class JurnalUmumsTable
                     ->searchable(),
                 TextColumn::make('status')
                     ->searchable(),
+                TextColumn::make('synced_at')
+                    ->label('Waktu Sinkron')
+                    ->dateTime('d M Y H:i')
+                    ->placeholder('-')
+                    ->sortable(),
+
+                TextColumn::make('syncedBy.name')
+    ->label('Disinkron Oleh')
+    ->placeholder('-'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
