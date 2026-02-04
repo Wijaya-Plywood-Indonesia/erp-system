@@ -22,6 +22,12 @@ return new class extends Migration
             $table->integer('total')->nullable();
             $table->string('user_id')->nullable();
             $table->string('status_sinkron')->default('belum sinkron');
+            $table->timestamp('synced_at')->nullable()->after('status');
+            $table->unsignedBigInteger('synced_by')->nullable()->after('synced_at');
+            $table->foreign('synced_by')
+                ->references('id')
+                ->on('users')
+                ->nullOnDelete();
             $table->timestamps();
         });
     }
