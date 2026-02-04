@@ -5,7 +5,7 @@ namespace App\Filament\Resources\ProduksiPilihPlywoods\Schemas;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 
-class ProduksiPilihPlywoodInfolist
+class ProduksiPilihPlywoodInfoList
 {
     public static function configure(Schema $schema): Schema
     {

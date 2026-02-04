@@ -15,10 +15,10 @@ return new class extends Migration
             $table->id();
             $table->integer('akun_seribu');
             $table->string('detail');
-            $table->integer('banyak');
-            $table->decimal('kubikasi');
-            $table->integer('harga');
-            $table->integer('total');
+            $table->integer('banyak')->nullable();
+            $table->decimal('kubikasi')->nullable();
+            $table->integer('harga')->nullable();
+            $table->integer('total')->nullable();
             $table->timestamps();
         });
     }

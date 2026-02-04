@@ -80,7 +80,22 @@ class JurnalTigasTable
                     ->label('Waktu Diperbarui')
                     ->dateTime('d M Y H:i')
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                // Kolom untuk melihat siapa yang melakukan sinkronisasi
+                TextColumn::make('synchronized_by')
+                    ->label('Disinkron Oleh')
+                    ->badge()
+                    ->color('success')
+                    ->toggleable(isToggledHiddenByDefault: true), // Muncul secara default tapi bisa disembunyikan
+
+                // Kolom untuk melihat waktu presisi sinkronisasi
+                TextColumn::make('synchronized_at')
+                    ->label('Waktu Sinkron')
+                    ->dateTime('d M Y H:i')
+                    ->sortable()
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
 
 
             ])

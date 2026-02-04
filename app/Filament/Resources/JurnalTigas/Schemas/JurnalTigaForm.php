@@ -24,6 +24,7 @@ class JurnalTigaForm
                         // PARAMETER KEDUA diubah menjadi kode_induk_akun agar database menyimpan 1000, bukan ID
                         ->pluck('indukAkun.kode_induk_akun', 'indukAkun.kode_induk_akun'))
                     ->live()
+                    ->native(false)
                     ->afterStateUpdated(fn(Set $set) => $set('akun_seratus', null)),
 
                 // 2. Akun Seratus: Mencari berdasarkan KODE induk

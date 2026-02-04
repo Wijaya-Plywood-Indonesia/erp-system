@@ -31,7 +31,14 @@ class JurnalUmum extends Model
         'harga',
         'created_by',
         'status',
+        'synced_at',
+        'synced_by',
     ];
+
+    public function syncedBy()
+{
+    return $this->belongsTo(User::class, 'synced_by');
+}
 
     /**
      * Casting untuk tipe data.

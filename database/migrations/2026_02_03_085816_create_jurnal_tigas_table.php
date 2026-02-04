@@ -21,7 +21,9 @@ return new class extends Migration
             $table->integer('harga')->nullable();
             $table->integer('total')->nullable();
             $table->string('createdBy');
-            $table->string('status');
+            $table->string('status')->default('belum sinkron');
+            $table->string('synchronized_by')->nullable(); // Nama petugas yang menekan tombol sync
+            $table->dateTime('synchronized_at')->nullable(); // Waktu presisi saat disinkronkan
             $table->timestamps();
         });
     }
