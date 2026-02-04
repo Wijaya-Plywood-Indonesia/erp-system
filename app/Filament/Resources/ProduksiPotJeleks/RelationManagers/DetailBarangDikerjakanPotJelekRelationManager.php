@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\ProduksiPotjeleks\RelationManagers;
+namespace App\Filament\Resources\ProduksiPotJeleks\RelationManagers;
 
 use App\Filament\Resources\DetailBarangDikerjakanPotJeleks\Schemas\DetailBarangDikerjakanPotJelekForm;
 use App\Filament\Resources\DetailBarangDikerjakanPotJeleks\Tables\DetailBarangDikerjakanPotJeleksTable;
