@@ -21,7 +21,7 @@ return new class extends Migration
             $table->integer('harga')->nullable();
             $table->integer('total')->nullable();
             $table->string('createdBy');
-            $table->string('status');
+            $table->string('status')->default('belum sinkron');
             $table->timestamps();
         });
     }

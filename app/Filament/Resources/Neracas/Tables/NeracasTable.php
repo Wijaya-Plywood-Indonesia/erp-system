@@ -91,7 +91,7 @@ class NeracasTable
                 // Tambahkan filter di sini jika diperlukan
             ])
             ->recordActions([
-                EditAction::make(),
+                // EditAction::make(),
             ])
             ->bulkActions([
                 BulkActionGroup::make([
