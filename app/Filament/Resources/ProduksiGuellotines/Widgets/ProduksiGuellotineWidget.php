@@ -57,8 +57,31 @@ class ProduksiGuellotineSummaryWidget extends Widget
             ->distinct('id_pegawai')
             ->count('id_pegawai');
 
-        // Query Dasar Ukuran
-        $baseQuery = hasil_guellotine::query()
+
+        // ======================
+        // 3. GLOBAL UKURAN + (satuan kualitas[hasil_kayu|kw|grade])
+        // ======================
+        $globalUkuranKayu = hasil_guellotine::query()
+            ->join('ukurans', 'ukurans.id', '=', 'hasil_guellotine.id_ukuran')
+            ->join('jenis_kayus', 'jenis_kayus.id', '=', 'hasil_guellotine.id_jenis_kayu')
+            ->selectRaw('
+                CONCAT(
+                    TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.panjang AS CHAR))), " x ",
+                    TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.lebar AS CHAR))), " x ",
+                    TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
+                ) AS ukuran_label,
+                jenis_kayus.nama_kayu AS jenis_kayu_label,
+                SUM(CAST(hasil_guellotine.jumlah AS UNSIGNED)) AS jumlah
+            ')
+            ->groupBy('ukuran_label', 'jenis_kayu_label')
+            ->orderBy('jenis_kayu_label')
+            ->get()
+            ->toArray();
+
+        // ======================
+        // 4. GLOBAL UKURAN (SEMUA satuan kualitas[hasil_kayu|kw|grade])
+        // ======================
+        $globalUkuran = hasil_guellotine::query()
             ->where('id_produksi_guellotine', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'hasil_guellotine.id_ukuran')
             ->selectRaw('

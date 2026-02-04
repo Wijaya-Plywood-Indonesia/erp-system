@@ -1,0 +1,324 @@
+[
+  {
+    "name": "Produksi Rotaries",
+    "urlResource": "produksi-rotaries",
+    "dbListName": {
+      "dbName": "produksi_rotaries",
+      "dbPegawaiName": "pegawai_rotaries",
+      "dbHasilName": [
+        {
+          "name": "Hasil Palet Rotaries",
+          "dbName": "detail_hasil_palet_rotaries",
+          "satuan_hasil": "Lembar",
+          "satuan_kualitas": "kw",
+          "key_jumlah": "total_lembar"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Pot Siku",
+    "urlResource": "produksi-pot-siku",
+    "dbListName": {
+      "dbName": "produksi_pot_siku",
+      "dbPegawaiName": "pegawai_pot_siku",
+      "dbHasilName": [
+        {
+          "dbName": "detail_barang_dikerjakan_pot_siku",
+          "satuan_hasil": "Lembar",
+          "key_jumlah": "tinggi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Pot Jelek",
+    "urlResource": "produksi-pot-jelek",
+    "dbListName": {
+      "dbName": "produksi_pot_jelek",
+      "dbPegawaiName": "pegawai_pot_jelek",
+      "dbHasilName": [
+        {
+          "dbName": "detail_barang_dikerjakan_pot_jelek",
+          "satuan_hasil": "Lembar",
+          "key_jumlah": "tinggi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Press Dryers",
+    "urlResource": "produksi-press-dryers",
+    "dbListName": {
+      "dbName": "produksi_press_dryers",
+      "dbPegawaiName": "detail_pegawais",
+      "dbHasilName": [
+        {
+          "dbName": "detail_hasils",
+          "satuan_hasil": "Lembar",
+          "key_jumlah": "isi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Kedi",
+    "urlResource": "produksi-kedi",
+    "dbListName": {
+      "dbName": "produksi_kedi",
+      "dbPegawaiName": "detail_pegawai_kedi",
+      "dbHasilName": [
+        {
+          "dbName": "detail_masuk_kedi",
+          "satuan_hasil": "Lembar",
+          "key_jumlah": "jumlah"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Stik",
+    "urlResource": "produksi-stik",
+    "dbListName": {
+      "dbName": "produksi_stik",
+      "dbPegawaiName": "detail_pegawai_stik",
+      "dbHasilName": [
+        {
+          "dbName": "detail_hasil_stik",
+          "satuan_hasil": "Lembar",
+          "key_jumlah": "total_lembar"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Joint",
+    "urlResource": "produksi-joints",
+    "dbListName": {
+      "dbName": "produksi_joint",
+      "dbPegawaiName": "pegawai_joint",
+      "dbHasilName": [
+        {
+          "dbName": "hasil_joint",
+          "satuan_hasil": "Lembar",
+          "key_jumlah": "jumlah"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Pot Af Joint",
+    "urlResource": "produksi-pot-af-joints",
+    "dbListName": {
+      "dbName": "produksi_pot_af_joint",
+      "dbPegawaiName": "pegawai_pot_af_joint",
+      "dbHasilName": [
+        {
+          "dbName": "hasil_pot_af_joint",
+          "satuan_hasil": "Lembar",
+          "key_jumlah": "jumlah"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Sanding Joint",
+    "urlResource": "produksi-sanding-joints",
+    "dbListName": {
+      "dbName": "produksi_sanding_joint",
+      "dbPegawaiName": "pegawai_sanding_joint",
+      "dbHasilName": [
+        {
+          "dbName": "hasil_sanding_joint",
+          "satuan_hasil": "Lembar",
+          "key_jumlah": "jumlah"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Graji Balken",
+    "urlResource": "produksi-graji-balken",
+    "dbListName": {
+      "dbName": "produksi_graji_balken",
+      "dbPegawaiName": "pegawai_graji_balken",
+      "dbHasilName": [
+        {
+          "dbName": "hasil_graji_balken",
+          "satuan_hasil": "Lembar",
+          "key_jumlah": "jumlah",
+          "join_paths": [
+            { "table": "jenis_kayus", "on": "id_jenis_kayu" }
+          ],
+          "kw_expression": "jenis_kayus.nama_kayu"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Guellotine",
+    "urlResource": "produksi-guellotine",
+    "dbListName": {
+      "dbName": "produksi_guellotine",
+      "dbPegawaiName": "pegawai_guellotine",
+      "dbHasilName": [
+        {
+          "dbName": "hasil_guellotine",
+          "satuan_hasil": "Lembar",
+          "key_jumlah": "jumlah",
+          "join_paths": [
+            { "table": "jenis_kayus", "on": "id_jenis_kayu" }
+          ],
+          "kw_expression": "jenis_kayus.nama_kayu"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Repair",
+    "urlResource": "produksi-repairs",
+    "dbListName": {
+      "dbName": "produksi_repairs",
+      "dbPegawaiName": "rencana_repairs",
+      "dbHasilName": [
+        {
+          "dbName": "hasil_repairs",
+          "satuan_hasil": "Lembar",
+          "key_jumlah": "jumlah",
+          "join_paths": [
+            { "table": "rencana_repairs", "on": "id_rencana_repair" },
+            { "table": "modal_repairs", "on": "rencana_repairs.id_modal_repair" }
+          ],
+          "kw_expression": "rencana_repairs.kw"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Hot Press",
+    "urlResource": "produksi-hot-press",
+    "dbListName": {
+      "dbName": "produksi_hp",
+      "dbPegawaiName": "detail_pegawai_hp",
+      "dbHasilName": [
+        {
+          "name": "Hasil Platform Hot Press",
+          "dbName": "platform_hasil_hp",
+          "satuan_hasil": "Lembar",
+          "key_jumlah": "isi",
+          "join_paths": [
+            { "table": "grades", "on": "id_grade" }
+          ],
+          "kw_expression": "grades.nama_grade"
+        },
+        {
+          "name": "Hasil Triplek Hot Press",
+          "dbName": "triplek_hasil_hp",
+          "satuan_hasil": "Lembar",
+          "key_jumlah": "jumlah",
+          "kw_expression": "kw"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Pilih Veneer",
+    "urlResource": "produksi-pilih-veneer",
+    "dbListName": {
+      "dbName": "produksi_pilih_veneer",
+      "dbPegawaiName": "pegawai_pilih_veneer",
+      "dbHasilName": [
+        {
+          "dbName": "hasil_pilih_veneer",
+          "satuan_hasil": "Lembar",
+          "key_jumlah": "jumlah",
+          "join_paths": [
+            { "table": "modal_pilih_veneer", "on": "id_modal_pilih_veneer" }
+          ],
+          "kw_expression": "hasil_pilih_veneer.kw"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Dempul",
+    "urlResource": "produksi-dempul",
+    "dbListName": {
+      "dbName": "produksi_dempuls",
+      "dbPegawaiName": "detail_dempul_pegawai",
+      "dbHasilName": [
+        {
+          "dbName": "detail_dempuls",
+          "satuan_hasil": "Pcs",
+          "key_jumlah": "hasil",
+          "join_paths": [
+            { "table": "barang_setengah_jadi_hp", "on": "id_barang_setengah_jadi_hp" },
+            { "table": "grades", "on": "barang_setengah_jadi_hp.id_grade" }
+          ],
+          "kw_expression": "grades.nama_grade"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Graji Triplek",
+    "urlResource": "produksi-graji-triplek",
+    "dbListName": {
+      "dbName": "produksi_graji_triplek",
+      "dbPegawaiName": "pegawai_graji_triplek",
+      "dbHasilName": [
+        {
+          "dbName": "hasil_graji_triplek",
+          "satuan_hasil": "Pcs",
+          "key_jumlah": "isi",
+          "join_paths": [
+            { "table": "barang_setengah_jadi_hp", "on": "id_barang_setengah_jadi_hp" },
+            { "table": "grades", "on": "barang_setengah_jadi_hp.id_grade" },
+            { "table": "kategori_barang", "on": "grades.id_kategori_barang" }
+          ],
+          "kw_expression": "CONCAT(kategori_barang.nama_kategori, ' ', grades.nama_grade)"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Nyusup",
+    "urlResource": "produksi-nyusup",
+    "dbListName": {
+      "dbName": "produksi_nyusup",
+      "dbPegawaiName": "pegawai_nyusup",
+      "dbHasilName": [
+        {
+          "dbName": "detail_barang_dikerjakan",
+          "satuan_hasil": "Pcs",
+          "key_jumlah": "hasil",
+          "join_paths": [
+            { "table": "barang_setengah_jadi_hp", "on": "id_barang_setengah_jadi_hp" },
+            { "table": "grades", "on": "barang_setengah_jadi_hp.id_grade" }
+          ],
+          "kw_expression": "grades.nama_grade"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Produksi Pilih Plywoods",
+    "urlResource": "produksi-pilih-plywood",
+    "dbListName": {
+      "dbName": "produksi_pilih_plywood",
+      "dbPegawaiName": "pegawai_pilih_plywood",
+      "dbHasilName": [
+        {
+          "name": "Hasil Pilih Plywood",
+          "dbName": "hasil_pilih_plywood",
+          "satuan_hasil": "Pcs",
+          "key_jumlah": "jumlah_bagus",
+          "join_paths": [
+            { "table": "grades", "on": "id_grade" }
+          ],
+          "kw_expression": "grades.nama_grade"
+        }
+      ]
+    }
+  }
+]

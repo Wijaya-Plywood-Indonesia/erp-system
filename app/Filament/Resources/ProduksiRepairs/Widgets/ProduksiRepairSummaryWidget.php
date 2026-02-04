@@ -72,6 +72,8 @@ class ProduksiRepairSummaryWidget extends Widget
             ->orderBy('rencana_repairs.kw')
             ->get();
 
+            
+
         $this->summary = [
             'totalAll'       => $totalAll,
             'totalPegawai'   => $totalPegawai,

@@ -1,5 +1,18 @@
 <x-filament::widget>
-  <x-filament::card class="w-full space-y-8">
+  <x-filament::card
+    class="w-full space-y-10 dark:bg-gray-900 dark:border-gray-800"
+  >
+    {{-- ================= TOTAL PRODUKSI ================= --}}
+    <div class="text-center py-4">
+      <div
+        class="text-4xl font-extrabold text-primary-600 dark:text-primary-500"
+      >
+        {{ number_format($summary["totalAll"] ?? 0) }}
+      </div>
+      <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
+        Total Produksi (Lembar)
+      </div>
+    </div>
 
     {{-- Header Stat Utama --}}
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 py-6 border-b dark:border-gray-700">
