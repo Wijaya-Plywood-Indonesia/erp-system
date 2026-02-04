@@ -108,10 +108,10 @@ class ProduksiPotSikuSummaryWidget extends Widget
                 'pegawai_pot_siku.id_pegawai'
             )
             ->selectRaw('
-        pegawais.id AS pegawais_id,
-        pegawais.nama_pegawai,
-        SUM(CAST(detail_barang_dikerjakan_pot_siku.tinggi AS UNSIGNED)) AS total_tinggi
-    ')
+            pegawais.id AS pegawais_id,
+            pegawais.nama_pegawai,
+            SUM(CAST(detail_barang_dikerjakan_pot_siku.tinggi AS UNSIGNED)) AS total_tinggi
+            ')
             ->groupBy('pegawais.id', 'pegawais.nama_pegawai')
             ->get()
             ->map(function ($row) use ($targetPerPegawai) {
