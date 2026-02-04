@@ -17,7 +17,7 @@ class Jurnal1st extends Model
         'banyak',
         'm3',
         'harga',
-        'tot',
+        'total',
         'created_by',
     ];
 
@@ -27,7 +27,7 @@ class Jurnal1st extends Model
         'banyak' => 'integer',
         'm3' => 'decimal:4',
         'harga' => 'integer',
-        'tot' => 'integer',
+        'total' => 'integer',
         'created_by' => 'string',
     ];
 }

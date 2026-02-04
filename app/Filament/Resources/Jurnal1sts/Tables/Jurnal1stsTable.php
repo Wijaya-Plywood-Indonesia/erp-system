@@ -28,15 +28,8 @@ class Jurnal1stsTable
 
                 TextColumn::make('no_akun')
                     ->label('No Akun')
-                    ->formatStateUsing(function ($state) {
-                        $akun = \App\Models\AnakAkun::where('kode_anak_akun', $state)->first();
-
-                        if (!$akun || !$akun->indukAkun)
-                            return $state;
-
-                        return $akun->indukAkun->kode_induk_akun . $akun->kode_anak_akun;
-                    })
                     ->sortable(),
+
 
                 TextColumn::make('bagian')
                     ->label('Bagian')

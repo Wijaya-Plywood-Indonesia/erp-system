@@ -46,7 +46,7 @@ return new class extends Migration {
 
             // tambahan tracking
             $table->string('created_by')->nullable();
-            $table->string('status')->nullable();
+            $table->string('status')->default('belum sinkron');
 
             $table->timestamps();
         });
