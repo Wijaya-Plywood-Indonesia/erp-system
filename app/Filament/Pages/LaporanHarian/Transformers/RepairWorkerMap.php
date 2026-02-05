@@ -147,7 +147,7 @@ class RepairWorkerMap
                             'keterangan' => $rp->keterangan ?? '',
                         ];
                     } else {
-                        $pegawaiFinal[$kodep]['hasil_raw'][] = "{$meja['label']} ({$pData['hasil_ind']})";
+                        $pegawaiFinal[$kodep]['hasil_raw'][] = "REPAIR";
                         $pegawaiFinal[$kodep]['potongan_targ'] += ($rp->potongan ?? $potonganPerOrang);
                     }
                 }

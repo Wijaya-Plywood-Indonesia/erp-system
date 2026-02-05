@@ -36,6 +36,4 @@ class PenggunaanLahanRotary extends Model
     {
         return $this->hasMany(KayuPecahRotary::class, 'id_penggunaan_lahan');
     }
-
-
 }

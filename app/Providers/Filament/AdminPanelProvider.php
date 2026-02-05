@@ -116,6 +116,10 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Laporan')
                     ->icon('heroicon-o-clipboard-document-list')
                     ->collapsed(),
+
+                NavigationGroup::make('Ongkos')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->collapsed(),
                 // Kategori Per Master-an
                 NavigationGroup::make('Master')
                     ->icon('heroicon-o-swatch')->collapsed(),
