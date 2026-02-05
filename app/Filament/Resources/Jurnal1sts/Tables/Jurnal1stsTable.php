@@ -51,7 +51,7 @@ class Jurnal1stsTable
                     ->money('Rp. ', true) // Format otomatis ke Rp 1.000
                     ->sortable(),
 
-                TextColumn::make('tot')
+                TextColumn::make('total')
                     ->label('Total')
                     ->money('Rp. ', true)
                     ->sortable(),
@@ -60,6 +60,20 @@ class Jurnal1stsTable
                     ->label('Dibuat Oleh')
                     ->sortable()
                     ->searchable(),
+                
+                TextColumn::make('status')
+                    ->searchable(),
+
+                TextColumn::make('synced_at')
+                    ->label('Waktu Sinkron')
+                    ->dateTime('d M Y H:i')
+                    ->toggleable(true),
+
+                TextColumn::make('synced_by')
+                    ->label('Disinkron Oleh')
+                    ->searchable()
+                    ->placeholder('-')
+                    ->toggleable(true),
 
                 TextColumn::make('created_at')
                     ->label('Dibuat Pada')
