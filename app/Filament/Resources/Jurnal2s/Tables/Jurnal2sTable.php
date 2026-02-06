@@ -38,7 +38,7 @@ class Jurnal2sTable
 
                 TextColumn::make('total')
                     ->label('Total')
-                    ->numeric(decimalPlaces: 4),
+                    ->numeric(decimalPlaces: 0),
 
                 TextColumn::make('user_id')
                     ->label('Dibuat Oleh'),

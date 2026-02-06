@@ -18,15 +18,14 @@ return new class extends Migration {
             $table->integer('no_akun');
             $table->string('nama_akun');
             $table->enum('bagian', ['d', 'k']); // debet/kredit
-            $table->integer('banyak')->nullable(); // qty
-
-            // m3 dengan 4 angka di belakang koma
+            $table->integer('banyak')->nullable();
             $table->decimal('m3', 12, 4)->nullable();
-
             $table->integer('harga')->nullable();
             $table->integer('total')->nullable();
             $table->string('status')->nullable();
             $table->string('created_by')->nullable();
+            $table->dateTime('synced_at')->nullable();
+            $table->string('synced_by')->nullable();
             $table->timestamps();
         });
     }

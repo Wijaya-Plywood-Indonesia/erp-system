@@ -19,6 +19,9 @@ class Jurnal1st extends Model
         'harga',
         'total',
         'created_by',
+        'status',
+        'synced_at',
+        'synced_by',
     ];
 
     protected $casts = [
