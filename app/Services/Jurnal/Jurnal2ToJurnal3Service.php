@@ -14,40 +14,41 @@ class Jurnal2ToJurnal3Service
     {
         return DB::transaction(function () {
 
-            /**
-             * 1️⃣ Ambil Jurnal 2 yang belum sinkron
-             *    Tentukan:
-             *    - akun_seratus (1100)
-             *    - nama akun seratus (Kas)
-             *    - modif1000 (1000)
-             */
             $rows = Jurnal2::where('status_sinkron', 'belum sinkron')
                 ->get()
                 ->map(function ($row) {
 
-                    // 1110 / 1120 / 1130
-                    $akunDetail = AnakAkun::where('kode_anak_akun', $row->no_akun)->first();
-                    if (! $akunDetail) {
-                        return null;
+                    /**
+                     * 1️⃣ CARI AKUN BERDASARKAN no_akun
+                     * Bisa akun detail (1310) atau akun seratus (1300)
+                     */
+                    $akun = AnakAkun::where('kode_anak_akun', $row->no_akun)->first();
+
+                    if (! $akun) {
+                        return null; // akun tidak terdaftar
                     }
 
-                    // 1100 (Kas)
-                    $akunSeratus = $akunDetail->parentAkun;
-                    if (! $akunSeratus) {
-                        return null;
-                    }
+                    /**
+                     * 2️⃣ TENTUKAN AKUN SERATUS
+                     * - Jika punya parent → dia akun detail
+                     * - Jika tidak → dia akun seratus
+                     */
+                    $akunSeratus = $akun->parentAkun ?? $akun;
 
-                    // 1000
+                    /**
+                     * 3️⃣ INDUK AKUN (1000)
+                     */
                     $indukAkun = $akunSeratus->indukAkun;
+
                     if (! $indukAkun) {
                         return null;
                     }
 
                     return [
                         'jurnal2_id'   => $row->id,
-                        'akun_seratus' => $akunSeratus->kode_anak_akun, // 1100
-                        'nama_akun'    => $akunSeratus->nama_anak_akun, // Kas
-                        'modif1000'    => $indukAkun->kode_induk_akun,   // 1000
+                        'akun_seratus' => $akunSeratus->kode_anak_akun, // 1100 / 1300
+                        'nama_akun'    => $akunSeratus->nama_anak_akun,
+                        'modif1000'    => $indukAkun->kode_induk_akun,  // 1000
                         'banyak'       => $row->banyak ?? 0,
                         'kubikasi'     => $row->kubikasi ?? 0,
                         'harga'        => $row->harga ?? 0,
@@ -61,8 +62,10 @@ class Jurnal2ToJurnal3Service
             }
 
             /**
-             * 2️⃣ GROUP BY akun_seratus (1100)
-             *    Semua 1110–1190 tergabung otomatis
+             * 4️⃣ GROUP BY AKUN SERATUS
+             * 1110 + 1120 → 1100
+             * 1310 + 1320 → 1300
+             * 1300 langsung → 1300
              */
             $grouped = $rows->groupBy('akun_seratus');
 
@@ -71,12 +74,12 @@ class Jurnal2ToJurnal3Service
                 $first = $items->first();
 
                 /**
-                 * 3️⃣ INSERT KE JURNAL 3
+                 * 5️⃣ INSERT KE JURNAL 3
                  */
                 JurnalTiga::create([
-                    'modif1000'    => $first['modif1000'],   // 1000
-                    'akun_seratus' => $akunSeratus,          // 1100
-                    'detail'       => $first['nama_akun'],   // Kas ✅
+                    'modif1000'    => $first['modif1000'],
+                    'akun_seratus' => $akunSeratus,
+                    'detail'       => $first['nama_akun'],
                     'banyak'       => $items->sum('banyak'),
                     'kubikasi'     => $items->sum('kubikasi'),
                     'harga'        => $items->sum('harga'),
@@ -86,7 +89,7 @@ class Jurnal2ToJurnal3Service
                 ]);
 
                 /**
-                 * 4️⃣ UPDATE JURNAL 2 → SUDAH SINKRON
+                 * 6️⃣ UPDATE JURNAL 2
                  */
                 Jurnal2::whereIn('id', $items->pluck('jurnal2_id'))
                     ->update([
@@ -96,7 +99,6 @@ class Jurnal2ToJurnal3Service
                     ]);
             }
 
-            // jumlah akun seratus (1100, 1200, dst)
             return $grouped->count();
         });
     }
