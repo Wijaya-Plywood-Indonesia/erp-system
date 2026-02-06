@@ -12,11 +12,13 @@ use App\Models\ProduksiKedi;
 use Filament\Actions\Action;
 use Carbon\Carbon;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 
 class LaporanKedi extends Page
 {
     use InteractsWithForms;
+    use HasPageShield;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';

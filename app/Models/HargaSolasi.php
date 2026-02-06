@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class HargaSolasi extends Model
 {
     // Table Init
-    protected $table = 'harga_solasi';
+    protected $table = 'harga_solasis';
 
     protected $fillable = [
         'harga'

@@ -20,9 +20,12 @@ use App\Filament\Pages\LaporanRepairs\Queries\LoadLaporanRepairs;
 use App\Filament\Pages\LaporanRepairs\Transformers\RepairDataMap;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\LaporanRepairExport;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 
 class LaporanRepairs extends Page
 {
+    use HasPageShield;
+
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static ?string $title = 'Laporan Repairs';

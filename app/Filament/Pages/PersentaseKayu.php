@@ -11,10 +11,12 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use UnitEnum;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 
 class PersentaseKayu extends Page implements HasTable
 {
     use InteractsWithTable;
+    use HasPageShield;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
@@ -115,7 +117,7 @@ class PersentaseKayu extends Page implements HasTable
 
             Tables\Columns\TextColumn::make('kubikasi_kayu')
                 ->label('Kubikasi Kayu')
-                ->formatStateUsing(fn ($state) => number_format($state, 4, ',', '.')),
+                ->formatStateUsing(fn($state) => number_format($state, 4, ',', '.')),
 
             Tables\Columns\TextColumn::make('poin')
                 ->label('Poin')

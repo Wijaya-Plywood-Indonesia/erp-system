@@ -21,9 +21,12 @@ use App\Filament\Pages\LaporanPotAfalanJoin\Queries\LoadLaporanPotAfalan;
 use App\Filament\Pages\LaporanPotAfalanJoin\Transformers\PotAfalanDataMap;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\LaporanPotAfalanJoinExport;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 
 class LaporanPotAfalanJoin extends Page
 {
+    use HasPageShield;
+
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static ?string $title = 'Laporan Produksi Potong Afalan Join';

@@ -12,9 +12,9 @@
         @foreach($data['pekerja_list'] as $pekerja)
 
         @php
-            $target = $pekerja['target'] ?? 300;
-            $hasil  = $pekerja['hasil'] ?? 0;
-            $progress = $target > 0 ? min(100, round(($hasil / $target) * 100, 1)) : 0;
+        $target = $pekerja['target'] ?? 300;
+        $hasil = $pekerja['hasil'] ?? 0;
+        $progress = $target > 0 ? min(100, round(($hasil / $target) * 100, 1)) : 0;
         @endphp
 
         <div class="mb-14 border border-gray-700 rounded-lg overflow-hidden bg-gray-900 text-white shadow-2xl">
@@ -32,21 +32,21 @@
                             LAPORAN POT SIKU - {{ $data['tanggal'] }}
                         </h3>
                         <div class="flex items-center justify-center gap-2">
-    <h2 class="text-xl font-black uppercase text-white">
-        {{ $pekerja['kode_pegawai'] }} - {{ $pekerja['nama_pegawai'] }}
-    </h2>
+                            <h2 class="text-xl font-black uppercase text-white">
+                                {{ $pekerja['kode_pegawai'] }} - {{ $pekerja['nama_pegawai'] }}
+                            </h2>
 
-    {{-- BADGE --}}
-    @if($hasil >= $target)
-        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-green-600/20 text-green-400 border border-green-600">
-            ✔ Tercapai
-        </span>
-    @else
-        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-600/20 text-red-400 border border-red-600">
-            ✘ Belum
-        </span>
-    @endif
-</div>
+                            {{-- BADGE --}}
+                            @if($hasil >= $target)
+                            <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-green-600/20 text-green-400 border border-green-600">
+                                ✔ Tercapai
+                            </span>
+                            @else
+                            <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-600/20 text-red-400 border border-red-600">
+                                ✘ Belum
+                            </span>
+                            @endif
+                        </div>
                     </div>
 
                     <div class="flex flex-col items-end">
@@ -54,18 +54,18 @@
                         <span class="text-xs font-bold text-red-400">{{ $pekerja['jam_pulang'] }}</span>
                     </div>
                 </div>
-{{-- BADGE --}}
-<div class="mt-1">
-    @if($hasil >= $target)
-        <span class="px-3 py-1 rounded-full text-[10px] font-bold bg-green-600/20 text-green-400 border border-green-600">
-            ✔ TER CAPAI
-        </span>
-    @else
-        <span class="px-3 py-1 rounded-full text-[10px] font-bold bg-red-600/20 text-red-400 border border-red-600">
-            ✘ BELUM TERCAPAI
-        </span>
-    @endif
-</div>
+                {{-- BADGE --}}
+                <div class="mt-1">
+                    @if($hasil >= $target)
+                    <span class="px-3 py-1 rounded-full text-[10px] font-bold bg-green-600/20 text-green-400 border border-green-600">
+                        ✔ TER CAPAI
+                    </span>
+                    @else
+                    <span class="px-3 py-1 rounded-full text-[10px] font-bold bg-red-600/20 text-red-400 border border-red-600">
+                        ✘ BELUM TERCAPAI
+                    </span>
+                    @endif
+                </div>
                 {{-- ================= PROGRESS BAR ================= --}}
                 <div class="mt-4">
                     <div class="flex justify-between text-[11px] mb-1">
