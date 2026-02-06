@@ -16,19 +16,14 @@ class Jurnal1stsTable
             ->columns([
                 TextColumn::make('modif10')
                     ->label('Modif 10')
-                    ->formatStateUsing(function ($state) {
-                        $akun = \App\Models\AnakAkun::where('kode_anak_akun', $state)->first();
-
-                        if (!$akun || !$akun->indukAkun)
-                            return $state;
-
-                        return $akun->indukAkun->kode_induk_akun . $akun->kode_anak_akun;
-                    })
                     ->sortable(),
 
                 TextColumn::make('no_akun')
                     ->label('No Akun')
                     ->sortable(),
+
+                TextColumn::make('nama_akun')
+                    ->label('Nama Akun'),
 
 
                 TextColumn::make('bagian')
@@ -60,7 +55,7 @@ class Jurnal1stsTable
                     ->label('Dibuat Oleh')
                     ->sortable()
                     ->searchable(),
-                
+
                 TextColumn::make('status')
                     ->searchable(),
 

@@ -51,7 +51,8 @@ class JurnalTigasTable
                 TextColumn::make('total')
                     ->label('Total')
                     ->summarize(\Filament\Tables\Columns\Summarizers\Sum::make()->label('Gran Total'))
-                    ->sortable(),
+                    ->sortable()
+                    ->numeric(),
 
                 // Menampilkan siapa yang menginput data
                 TextColumn::make('createdBy')

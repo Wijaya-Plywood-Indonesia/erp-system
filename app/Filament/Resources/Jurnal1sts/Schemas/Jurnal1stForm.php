@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Jurnal1sts\Schemas;
 
+use App\Models\AnakAkun;
+use App\Models\SubAnakAkun;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
@@ -12,47 +14,70 @@ class Jurnal1stForm
     {
         return $schema
             ->components([
+
+                /**
+                 * MODIF 10
+                 * Bisa pilih ratusan (1200, 1300)
+                 * atau puluhan (1110, 1120)
+                 */
                 Select::make('modif10')
                     ->label('Modif 10')
                     ->options(
-                        \App\Models\AnakAkun::pluck('kode_anak_akun', 'kode_anak_akun')
+                        AnakAkun::orderBy('kode_anak_akun')
+                            ->get()
+                            ->mapWithKeys(fn ($item) => [
+                                $item->kode_anak_akun =>
+                                    $item->kode_anak_akun . ' - ' . $item->nama_anak_akun
+                            ])
+                            ->toArray()
                     )
                     ->searchable()
                     ->reactive()
-                    ->afterStateUpdated(function ($state, callable $set) {
-                        // Reset no akun & nama akun
+                    ->afterStateUpdated(function (callable $set) {
                         $set('no_akun', null);
                         $set('nama_akun', null);
                     })
                     ->required(),
 
+                /**
+                 * NO AKUN
+                 * Selalu SUB AKUN dari modif10
+                 */
                 Select::make('no_akun')
                     ->label('No Akun')
                     ->options(function (callable $get) {
+
                         $kode = $get('modif10');
-
-                        if (!$kode)
+                        if (! $kode) {
                             return [];
+                        }
 
-                        // cari parent berdasarkan kode_anak_akun = modif10
-                        $parent = \App\Models\AnakAkun::where('kode_anak_akun', $kode)->first();
-
-                        if (!$parent)
+                        // cari anak akun yang dipilih
+                        $anakAkun = AnakAkun::where('kode_anak_akun', $kode)->first();
+                        if (! $anakAkun) {
                             return [];
+                        }
 
-                        // ambil semua children berdasarkan parent id
-                        return \App\Models\AnakAkun::where('parent', $parent->id)
-                            ->pluck('kode_anak_akun', 'kode_anak_akun');
+                        return SubAnakAkun::where('id_anak_akun', $anakAkun->id)
+                            ->orderBy('kode_sub_anak_akun')
+                            ->get()
+                            ->mapWithKeys(fn ($sub) => [
+                                $sub->kode_sub_anak_akun =>
+                                    $sub->kode_sub_anak_akun . ' - ' . $sub->nama_sub_anak_akun
+                            ])
+                            ->toArray();
                     })
-                    ->preload()
-                    ->reactive()
                     ->searchable()
+                    ->reactive()
                     ->afterStateUpdated(function ($state, callable $set) {
-                        $akun = \App\Models\AnakAkun::where('kode_anak_akun', $state)->first();
-                        $set('nama_akun', $akun?->nama_anak_akun);
+                        $sub = SubAnakAkun::where('kode_sub_anak_akun', $state)->first();
+                        $set('nama_akun', $sub?->nama_sub_anak_akun);
                     })
                     ->required(),
 
+                /**
+                 * NAMA AKUN (snapshot)
+                 */
                 TextInput::make('nama_akun')
                     ->label('Nama Akun')
                     ->disabled()
@@ -66,9 +91,8 @@ class Jurnal1stForm
                         'k' => 'Kredit',
                     ])
                     ->required(),
-                TextInput::make('banyak')
-                    ->numeric()
-                    ->nullable(),
+
+                TextInput::make('banyak')->numeric()->nullable(),
 
                 TextInput::make('m3')
                     ->numeric()
@@ -80,15 +104,15 @@ class Jurnal1stForm
                     ->prefix('Rp')
                     ->nullable(),
 
-                TextInput::make('tot')
+                TextInput::make('total')
                     ->numeric()
                     ->prefix('Rp')
                     ->nullable(),
 
                 TextInput::make('created_by')
-                    ->default(fn() => auth()->user()->name)
+                    ->default(fn () => auth()->user()->name)
                     ->disabled()
-                    ->dehydrated() // penting! agar tetap tersimpan ke database meski disabled
+                    ->dehydrated(),
             ]);
     }
 }
