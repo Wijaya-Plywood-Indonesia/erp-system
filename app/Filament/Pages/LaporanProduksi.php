@@ -19,11 +19,13 @@ use App\Filament\Pages\LaporanProduksi\Transformers\ProduksiDataMap;
 use Maatwebsite\Excel\Facades\Excel;
 
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 
 class LaporanProduksi extends Page implements HasForms
 {
     use InteractsWithForms;
+    use HasPageShield;
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected string $view = 'filament.pages.laporan-produksi';
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';

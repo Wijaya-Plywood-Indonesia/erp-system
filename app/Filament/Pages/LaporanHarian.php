@@ -59,10 +59,12 @@ use App\Filament\Pages\LaporanHarian\Transformers\PotJelekWorkerMap;
 use App\Filament\Pages\LaporanHarian\Transformers\TurunKayuWorkerMap;
 
 use App\Exports\LaporanHarianExport;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 
 class LaporanHarian extends Page implements HasForms
 {
     use InteractsWithForms;
+    use HasPageShield;
 
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';

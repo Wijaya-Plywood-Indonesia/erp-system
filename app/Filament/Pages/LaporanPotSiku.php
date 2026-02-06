@@ -13,11 +13,13 @@ use App\Models\ProduksiPotSiku;
 use App\Models\Target;
 use Carbon\Carbon;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 
 class LaporanPotSiku extends Page
 {
     use InteractsWithForms;
+    use HasPageShield;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected string $view = 'filament.pages.laporan-pot-siku';

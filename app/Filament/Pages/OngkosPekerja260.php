@@ -2,59 +2,59 @@
 
 namespace App\Filament\Pages;
 
+use App\Exports\OngkosPekerja260Export;
 use Filament\Pages\Page;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Components\DatePicker;
+use Filament\Schemas\Components\Section;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
-use Filament\Schemas\Components\Section;
 
 use App\Filament\Pages\LaporanHarian\Services\LoadOngkosPekerja260;
 use App\Filament\Pages\LaporanHarian\Transformers\OngkosPekerja260DataMap;
-use App\Exports\OngkosPekerjaExport;
-
-use Maatwebsite\Excel\Facades\Excel;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\Log;
 use BackedEnum;
-use UnitEnum;
+use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\Log;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use UnitEnum;
 
 class OngkosPekerja260 extends Page
 {
     use InteractsWithForms;
     use HasPageShield;
 
-    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-banknotes';
+    protected static string|null|BackedEnum $navigationIcon = 'heroicon-o-banknotes';
     protected string $view = 'filament.pages.ongkos-pekerja260';
-    protected static UnitEnum|string|null $navigationGroup = 'Ongkos';
+    protected static string|null|UnitEnum $navigationGroup = 'Ongkos';
     protected static ?string $title = 'Ongkos Pekerja 260';
     protected static ?int $navigationSort = 6;
 
     public $laporanOngkos = [];
-    public $startDate = null;
-    public $endDate = null;
     public bool $isLoading = false;
+
+    /**
+     * Sesuai standar Filament v4, simpan state form dalam satu array.
+     */
+    public ?array $filterData = [];
 
     public function mount(): void
     {
-        // Logika Dinamis: Jika awal bulan, tampilkan rekap bulan lalu (Januari)
-        if (now()->day <= 10) {
-            $this->startDate = now()->subMonth()->startOfMonth()->format('Y-m-d');
-            $this->endDate = now()->subMonth()->endOfMonth()->format('Y-m-d');
-        } else {
-            $this->startDate = now()->startOfMonth()->format('Y-m-d');
-            $this->endDate = now()->format('Y-m-d');
-        }
+        // Penentuan range default
+        $start = now()->day <= 10 ? now()->subMonth()->startOfMonth() : now()->startOfMonth();
+        $end = now()->day <= 10 ? now()->subMonth()->endOfMonth() : now();
 
+        // Inisialisasi state awal ke dalam properti filterData
         $this->form->fill([
-            'start_date' => $this->startDate,
-            'end_date' => $this->endDate,
+            'start_date' => $start->format('Y-m-d'),
+            'end_date' => $end->format('Y-m-d'),
         ]);
 
         $this->loadAllData();
     }
 
+    /**
+     * Menggunakan getFormSchema untuk mendefinisikan struktur form.
+     */
     protected function getFormSchema(): array
     {
         return [
@@ -66,7 +66,7 @@ class OngkosPekerja260 extends Page
                         ->native(false)
                         ->displayFormat('d/m/Y')
                         ->closeOnDateSelection()
-                        ->afterStateUpdated(fn($state) => $this->updatedFilter('startDate', $state)),
+                        ->afterStateUpdated(fn() => $this->loadAllData()),
 
                     DatePicker::make('end_date')
                         ->label('Tanggal Selesai')
@@ -74,23 +74,17 @@ class OngkosPekerja260 extends Page
                         ->native(false)
                         ->displayFormat('d/m/Y')
                         ->closeOnDateSelection()
-                        ->afterStateUpdated(fn($state) => $this->updatedFilter('endDate', $state)),
+                        ->afterStateUpdated(fn() => $this->loadAllData()),
                 ])->columns(2),
         ];
     }
 
-    public function updatedFilter($property, $value)
+    /**
+     * Menghubungkan schema dengan properti filterData.
+     */
+    protected function getFormStatePath(): string
     {
-        $this->$property = $value;
-
-        // PAKSA Form Fill: Ini kunci agar filter berjalan. 
-        // Mengisi ulang form secara parsial memastikan Filament mengenali nilai baru.
-        $this->form->fill([
-            'start_date' => $this->startDate,
-            'end_date' => $this->endDate,
-        ], partial: true);
-
-        $this->loadAllData();
+        return 'filterData';
     }
 
     public function loadAllData()
@@ -98,45 +92,76 @@ class OngkosPekerja260 extends Page
         $this->isLoading = true;
 
         try {
-            // Ambil data langsung dari state form mentah (Raw State)
-            $state = $this->form->getRawState();
-            $start = $state['start_date'] ?? $this->startDate;
-            $end = $state['end_date'] ?? $this->endDate;
+            // Ambil data langsung dari state path 'filterData'
+            $state = $this->form->getState();
+            $start = $state['start_date'] ?? null;
+            $end = $state['end_date'] ?? null;
 
             if (!$start || !$end) return;
 
+            // Eksekusi Service
             $dataMentah = LoadOngkosPekerja260::fetch($start, $end);
+
+            // Transformasi Data
             $this->laporanOngkos = OngkosPekerja260DataMap::make($dataMentah);
 
             $jumlahData = count($this->laporanOngkos);
-
-            // Log untuk memantau di laravel.log
-            Log::info("FILTER BERHASIL: {$start} s/d {$end} - Data: {$jumlahData}");
+            Log::info("ERP Filter: {$start} - {$end} | Count: {$jumlahData}");
 
             if ($jumlahData > 0) {
                 Notification::make()
                     ->title('Data Berhasil Dimuat')
                     ->body("Menampilkan {$jumlahData} baris data.")
                     ->success()
-                    ->duration(2000)
                     ->send();
             } else {
+                $this->laporanOngkos = [];
                 Notification::make()
                     ->title('Data Kosong')
-                    ->body('Tidak ditemukan produksi mesin 260 pada periode ini.')
                     ->warning()
                     ->send();
             }
-
-            $this->startDate = $start;
-            $this->endDate = $end;
         } catch (\Exception $e) {
-            Log::error("FILTER ERROR: " . $e->getMessage());
+            Log::error("ERP_ERROR: " . $e->getMessage());
             Notification::make()->title('Kesalahan Sistem')->danger()->send();
             $this->laporanOngkos = [];
         }
 
         $this->isLoading = false;
+    }
+
+    public function exportToExcel()
+    {
+        // Cek jika data sudah dimuat
+        if (empty($this->laporanOngkos)) {
+            Notification::make()
+                ->title('Gagal Export')
+                ->body('Data tidak ditemukan. Silakan filter tanggal terlebih dahulu.')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        try {
+            $state = $this->form->getState();
+            $startDate = $state['start_date'] ?? now()->format('Y-m-d');
+            $endDate = $state['end_date'] ?? now()->format('Y-m-d');
+
+            $filename = "Rekap_Ongkos_260_{$startDate}_to_{$endDate}.xlsx";
+
+            // Eksekusi Download
+            return \Maatwebsite\Excel\Facades\Excel::download(
+                new \App\Exports\OngkosPekerja260Export($this->laporanOngkos),
+                $filename
+            );
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Export Error: " . $e->getMessage());
+            Notification::make()
+                ->title('Kesalahan Sistem')
+                ->body('Terjadi kesalahan saat memproses file Excel.')
+                ->danger()
+                ->send();
+        }
     }
 
     protected function getHeaderActions(): array
@@ -148,15 +173,5 @@ class OngkosPekerja260 extends Page
                 ->color('success')
                 ->action('exportToExcel'),
         ];
-    }
-
-    public function exportToExcel()
-    {
-        if (empty($this->laporanOngkos)) {
-            Notification::make()->title('Gagal')->body('Data kosong.')->warning()->send();
-            return;
-        }
-        $filename = "Ongkos-Pekerja-260-{$this->startDate}-to-{$this->endDate}.xlsx";
-        return Excel::download(new OngkosPekerjaExport($this->laporanOngkos), $filename);
     }
 }
