@@ -25,9 +25,9 @@ class Jurnal1stForm
                     ->options(
                         AnakAkun::orderBy('kode_anak_akun')
                             ->get()
-                            ->mapWithKeys(fn ($item) => [
+                            ->mapWithKeys(fn($item) => [
                                 $item->kode_anak_akun =>
-                                    $item->kode_anak_akun . ' - ' . $item->nama_anak_akun
+                                $item->kode_anak_akun . ' - ' . $item->nama_anak_akun
                             ])
                             ->toArray()
                     )
@@ -46,31 +46,26 @@ class Jurnal1stForm
                 Select::make('no_akun')
                     ->label('No Akun')
                     ->options(function (callable $get) {
-
                         $kode = $get('modif10');
-                        if (! $kode) {
-                            return [];
-                        }
+                        if (!$kode) return [];
 
-                        // cari anak akun yang dipilih
                         $anakAkun = AnakAkun::where('kode_anak_akun', $kode)->first();
-                        if (! $anakAkun) {
-                            return [];
-                        }
+                        if (!$anakAkun) return [];
 
                         return SubAnakAkun::where('id_anak_akun', $anakAkun->id)
                             ->orderBy('kode_sub_anak_akun')
                             ->get()
-                            ->mapWithKeys(fn ($sub) => [
-                                $sub->kode_sub_anak_akun =>
-                                    $sub->kode_sub_anak_akun . ' - ' . $sub->nama_sub_anak_akun
+                            ->mapWithKeys(fn($sub) => [
+                                // Pastikan key tetap string agar koma tidak hilang
+                                (string) $sub->kode_sub_anak_akun => $sub->kode_sub_anak_akun . ' - ' . $sub->nama_sub_anak_akun
                             ])
                             ->toArray();
                     })
                     ->searchable()
                     ->reactive()
                     ->afterStateUpdated(function ($state, callable $set) {
-                        $sub = SubAnakAkun::where('kode_sub_anak_akun', $state)->first();
+                        // Cari menggunakan string
+                        $sub = SubAnakAkun::where('kode_sub_anak_akun', (string) $state)->first();
                         $set('nama_akun', $sub?->nama_sub_anak_akun);
                     })
                     ->required(),
@@ -82,6 +77,7 @@ class Jurnal1stForm
                     ->label('Nama Akun')
                     ->disabled()
                     ->dehydrated()
+                    ->formatStateUsing(fn($state) => (string) $state)
                     ->required(),
 
                 Select::make('bagian')
@@ -110,7 +106,7 @@ class Jurnal1stForm
                     ->nullable(),
 
                 TextInput::make('created_by')
-                    ->default(fn () => auth()->user()->name)
+                    ->default(fn() => auth()->user()->name)
                     ->disabled()
                     ->dehydrated(),
             ]);

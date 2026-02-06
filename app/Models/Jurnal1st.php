@@ -26,7 +26,7 @@ class Jurnal1st extends Model
 
     protected $casts = [
         'modif10' => 'integer',
-        'no_akun' => 'integer',
+        'no_akun' => 'string',
         'banyak' => 'integer',
         'm3' => 'decimal:4',
         'harga' => 'integer',

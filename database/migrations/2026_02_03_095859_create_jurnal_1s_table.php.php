@@ -15,7 +15,7 @@ return new class extends Migration {
             $table->id();
 
             $table->integer('modif10');
-            $table->integer('no_akun');
+            $table->string('no_akun');
             $table->string('nama_akun');
             $table->enum('bagian', ['d', 'k']); // debet/kredit
             $table->integer('banyak')->nullable();
