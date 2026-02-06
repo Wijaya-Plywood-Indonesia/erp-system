@@ -18,7 +18,7 @@ class ListJurnal2s extends ListRecords
     {
         return [
             Action::make('syncJurnal')
-            ->label('Sinkronisasi')
+            ->label('Sinkronisasi ke Jurnal 3')
             ->icon('heroicon-o-arrow-path')
             ->color('success')
             ->requiresConfirmation()

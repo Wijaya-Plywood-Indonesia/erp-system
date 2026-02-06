@@ -53,14 +53,13 @@ class JurnalUmumToJurnal1Service
                     'harga'      => $row->harga ?? 0,
                     'total'     => $tot,
                     'created_by' => $row->created_by,
+                    'status'=> 'belum sinkron',
                 ]);
 
                 $row->update([
                     'status'    => 'Sudah Sinkron',
                     'synced_at' => now(),
-                    'synced_by' => optional(Auth::user())->id,
-
-
+                    'synced_by' => Auth::user()->name,
                 ]);
 
                 $total++;

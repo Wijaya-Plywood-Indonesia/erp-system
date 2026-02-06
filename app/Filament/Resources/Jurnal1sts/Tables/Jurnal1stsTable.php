@@ -16,19 +16,14 @@ class Jurnal1stsTable
             ->columns([
                 TextColumn::make('modif10')
                     ->label('Modif 10')
-                    ->formatStateUsing(function ($state) {
-                        $akun = \App\Models\AnakAkun::where('kode_anak_akun', $state)->first();
-
-                        if (!$akun || !$akun->indukAkun)
-                            return $state;
-
-                        return $akun->indukAkun->kode_induk_akun . $akun->kode_anak_akun;
-                    })
                     ->sortable(),
 
                 TextColumn::make('no_akun')
                     ->label('No Akun')
                     ->sortable(),
+
+                TextColumn::make('nama_akun')
+                    ->label('Nama Akun'),
 
 
                 TextColumn::make('bagian')
@@ -51,7 +46,7 @@ class Jurnal1stsTable
                     ->money('Rp. ', true) // Format otomatis ke Rp 1.000
                     ->sortable(),
 
-                TextColumn::make('tot')
+                TextColumn::make('total')
                     ->label('Total')
                     ->money('Rp. ', true)
                     ->sortable(),
@@ -60,6 +55,20 @@ class Jurnal1stsTable
                     ->label('Dibuat Oleh')
                     ->sortable()
                     ->searchable(),
+
+                TextColumn::make('status')
+                    ->searchable(),
+
+                TextColumn::make('synced_at')
+                    ->label('Waktu Sinkron')
+                    ->dateTime('d M Y H:i')
+                    ->toggleable(true),
+
+                TextColumn::make('synced_by')
+                    ->label('Disinkron Oleh')
+                    ->searchable()
+                    ->placeholder('-')
+                    ->toggleable(true),
 
                 TextColumn::make('created_at')
                     ->label('Dibuat Pada')
