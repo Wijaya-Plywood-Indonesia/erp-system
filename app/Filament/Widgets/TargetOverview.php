@@ -4,11 +4,10 @@ namespace App\Filament\Widgets;
 
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class TargetOverview extends Widget
 {
-    protected static bool $isDiscovered = true;
+    protected static bool $isDiscovered = false;
     public array $full_data = [];
     public array $targetKosong = []; 
     protected int|string|array $columnSpan = 'full';
@@ -52,6 +51,7 @@ class TargetOverview extends Widget
                 ->groupBy("tgl_produksi")
                 ->orderBy("tgl_produksi", "ASC")
                 ->get();
+                
 
             $dataPerTanggal = [];
 
