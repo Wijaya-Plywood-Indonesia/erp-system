@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\JurnalUmums\Pages;
 
 use App\Filament\Resources\JurnalUmums\JurnalUmumResource;
+use App\Filament\Resources\JurnalUmums\Widgets\CreateJurnalWidget;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Actions\Action;
@@ -21,6 +22,8 @@ class ListJurnalUmums extends ListRecords
                 ->icon('heroicon-o-arrow-path')
                 ->color('success')
                 ->requiresConfirmation()
+                ->visible(fn() => now()->isThursday())
+                ->disabled(fn() => !now()->isThursday())
                 ->action(function () {
                     $count = app(JurnalUmumToJurnal1Service::class)->sync();
 
@@ -30,7 +33,12 @@ class ListJurnalUmums extends ListRecords
                         ->success()
                         ->send();
                 }),
-            CreateAction::make(),
+            CreateAction::make()
+                ->label('Tambah Jurnal')
+                ->modalHeading('Buat Jurnal Umum Baru')
+                ->modalWidth('4xl') // Mengatur lebar popup agar form string akun terlihat jelas
+                ->createAnother(false),
+
         ];
     }
 }

@@ -19,7 +19,7 @@ return new class extends Migration {
             $table->integer('jurnal')->nullable();
 
             // No Akun biasanya VARCHAR karena ada titik, contoh 1411.01
-            $table->integer('no_akun');
+            $table->string('no_akun');
 
             // No transaksi
             $table->string('no-dokumen')->nullable();

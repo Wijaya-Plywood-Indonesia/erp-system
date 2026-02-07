@@ -36,9 +36,9 @@ class JurnalUmum extends Model
     ];
 
     public function syncedBy()
-{
-    return $this->belongsTo(User::class, 'synced_by');
-}
+    {
+        return $this->belongsTo(User::class, 'synced_by');
+    }
 
     /**
      * Casting untuk tipe data.
@@ -46,12 +46,10 @@ class JurnalUmum extends Model
     protected $casts = [
         'tgl' => 'date',
         'jurnal' => 'integer',
-        'no_akun' => 'integer',
+        'no_akun' => 'string',
         'mm' => 'integer',
         'banyak' => 'integer',
         'm3' => 'decimal:4',
         'harga' => 'integer',
     ];
-
-
 }

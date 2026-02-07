@@ -137,8 +137,6 @@ class AdminPanelProvider extends PanelProvider
 
                 NavigationGroup::make('Akses Pengguna')
                     ->icon('heroicon-o-lock-closed')->collapsed(),
-
-
             ])
         ;
     }

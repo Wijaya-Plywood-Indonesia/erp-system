@@ -42,7 +42,6 @@ class JurnalUmumForm
                         $options = [];
 
                         $anakAkuns = AnakAkun::with([
-                            'indukAkun',
                             'subAnakAkuns' => fn($q) => $q->orderBy('kode_sub_anak_akun')
                         ])
                             ->orderBy('kode_anak_akun')
@@ -63,7 +62,7 @@ class JurnalUmumForm
                             // Jika ada Sub Anak → tampilkan semuanya
                             foreach ($anak->subAnakAkuns as $sub) {
 
-                                $kode = "{$anak->kode_anak_akun}.{$sub->kode_sub_anak_akun}";
+                                $kode = "{$sub->kode_sub_anak_akun}";
 
                                 $options[$kode] = "{$kode} — {$sub->nama_sub_anak_akun}";
                             }
