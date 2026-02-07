@@ -25,7 +25,8 @@ class ProduksiPressDryerSummaryWidget extends Widget
     {
         $id = $this->record?->id;
 
-        if (!$id) return [];
+        if (!$id)
+            return [];
 
         return [
             // Gunakan identitas 'dryer' sesuai yang di-dispatch di Model
@@ -47,7 +48,8 @@ class ProduksiPressDryerSummaryWidget extends Widget
      */
     public function refreshSummary(): void
     {
-        if (!$this->record) return;
+        if (!$this->record)
+            return;
 
         $produksiId = $this->record->id;
 
@@ -91,10 +93,10 @@ class ProduksiPressDryerSummaryWidget extends Widget
             ->get();
 
         $this->summary = [
-            'totalAll'       => $totalAll,
-            'totalPegawai'   => $totalPegawai,
+            'totalAll' => $totalAll,
+            'totalPegawai' => $totalPegawai,
             'globalUkuranKw' => $globalUkuranKw,
-            'globalUkuran'   => $globalUkuran,
+            'globalUkuran' => $globalUkuran,
         ];
     }
 }
