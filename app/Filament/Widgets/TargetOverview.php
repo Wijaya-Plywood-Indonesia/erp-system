@@ -27,8 +27,8 @@ class TargetOverview extends Widget
         $keyJumlah = "total_lembar";
 
 
-        $startOfWeek = now()->startOfWeek(Carbon::MONDAY)->format('Y-m-d');
-        $endOfWeek = now()->endOfWeek(Carbon::SUNDAY)->format('Y-m-d');
+        $endDate = now()->format('Y-m-d'); 
+        $startDate = now()->subDays(6)->format('Y-m-d');
         $todayStr = now()->format('Y-m-d'); // String tanggal hari ini
 
         $data_mesin = DB::table("mesins")
@@ -46,7 +46,7 @@ class TargetOverview extends Widget
             $nama_mesin = $mesin->nama_mesin;
 
             $ambil_data_tanggal = DB::table($table_name)
-                ->whereBetween("tgl_produksi", [$startOfWeek, $endOfWeek])
+                ->whereBetween("tgl_produksi", [$startDate, $endDate])
                 ->where("id_mesin", $id_mesin)
                 ->selectRaw("MIN(id) AS id, tgl_produksi AS tanggal")
                 ->groupBy("tgl_produksi")
