@@ -17,6 +17,15 @@ class Pegawai extends Model
         'jenis_kelamin_pegawai',
         'tanggal_masuk',
         'foto',
+
+        // Kolom baru
+        'karyawan_di',
+        'alamat_perusahaan',
+        'jabatan',
+        'nik',
+        'tempat_tanggal_lahir',
+        'scan_ktp',
+        'scan_kk',
     ];
     public function pegawaiRotaries()
     {

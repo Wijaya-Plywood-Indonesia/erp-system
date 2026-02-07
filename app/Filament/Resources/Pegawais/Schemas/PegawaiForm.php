@@ -7,6 +7,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Schemas\Components\Utilities\Get; // Import Get
 
@@ -16,61 +17,130 @@ class PegawaiForm
     {
         return $schema
             ->components([
+                // =====================================================
+                // SECTION: INFORMASI DASAR PEGAWAI
+                // =====================================================
+                Section::make('Informasi Dasar Pegawai')
+                    ->description('Data identitas utama pegawai.')
+                    ->columns(2)
+                    ->schema([
 
-                TextInput::make('kode_pegawai')
-                    ->required()
-                    ->unique(
-                        table: 'pegawais',
-                        column: 'kode_pegawai',
-                        ignoreRecord: true
-                    )
-                    ->live(onBlur: true) // Supaya terbaca untuk nama file
-                    ->validationMessages([
-                        'unique' => 'Kode pegawai ini sudah digunakan.',
+                        TextInput::make('kode_pegawai')
+                            ->label('Kode Pegawai')
+                            ->required()
+                            ->unique(
+                                table: 'pegawais',
+                                column: 'kode_pegawai',
+                                ignoreRecord: true
+                            )
+                            ->live(onBlur: true),
+
+                        TextInput::make('nama_pegawai')
+                            ->label('Nama Pegawai')
+                            ->required()
+                            ->live(onBlur: true),
+
+                        Textarea::make('alamat')
+                            ->label('Alamat')
+                            ->columnSpanFull(),
+
+                        TextInput::make('no_telepon_pegawai')
+                            ->label('Nomor Telepon')
+                            ->tel(),
+
+                        Select::make('jenis_kelamin_pegawai')
+                            ->label('Jenis Kelamin')
+                            ->options([
+                                '0' => 'Perempuan',
+                                '1' => 'Laki-laki',
+                            ])
+                            ->default('0')
+                            ->required(),
+
+                        DatePicker::make('tanggal_masuk')
+                            ->label('Tanggal Masuk')
+                            ->required(),
+
                     ]),
 
-                TextInput::make('nama_pegawai')
-                    ->required()
-                    ->live(onBlur: true), // 🔥 WAJIB: Agar nama terbaca saat upload
+                // =====================================================
+                // SECTION: INFORMASI PEKERJAAN
+                // =====================================================
+                Section::make('Informasi Pekerjaan')
+                    ->description('Detail pekerjaan dan posisi pegawai.')
+                    ->columns(2)
+                    ->schema([
 
-                Textarea::make('alamat')
-                    ->columnSpanFull(),
+                        TextInput::make('karyawan_di')
+                            ->label('Karyawan di'),
 
-                TextInput::make('no_telepon_pegawai')
-                    ->tel(),
+                        TextInput::make('alamat_perusahaan')
+                            ->label('Alamat Perusahaan'),
 
-                Select::make('jenis_kelamin_pegawai')
-                    ->label('Jenis Kelamin')
-                    ->options([
-                        '0' => 'Perempuan',
-                        '1' => 'Laki-laki',
-                    ])
-                    ->default('0')
-                    ->required(),
+                        TextInput::make('jabatan')
+                            ->label('Jabatan / Posisi')
+                            ->columnSpanFull(),
+                    ]),
 
-                DatePicker::make('tanggal_masuk')
-                    ->label('Tanggal Masuk')
-                    ->required(),
+                // =====================================================
+                // SECTION: INFORMASI KEPENDUDUKAN
+                // =====================================================
+                Section::make('Informasi Kependudukan')
+                    ->description('Data identitas resmi pegawai.')
+                    ->columns(2)
+                    ->schema([
 
-                // ==========================================
-                // FOTO PEGAWAI (AUTO RENAME & COMPRESS)
-                // ==========================================
-                CompressedFileUpload::make('foto')
-                    ->label('Foto 3x4 atau 4x6')
-                    ->disk('public')
-                    ->directory('pegawai')
-                    ->required()
-                    ->imageEditor()
-                    ->imageCropAspectRatio('3:4') // Rasio pas foto
+                        TextInput::make('nik')
+                            ->label('NIK')
+                            ->numeric()
+                            ->minLength(16)
+                            ->maxLength(16),
 
-                    // 🪄 PENAMAAN FILE: "K001_Budi-Santoso.webp"
-                    ->fileName(function (Get $get) {
-                        $kode = $get('kode_pegawai') ?: 'No-Code';
-                        $nama = $get('nama_pegawai') ?: 'Tanpa-Nama';
+                        TextInput::make('tempat_tanggal_lahir')
+                            ->label('Tempat & Tanggal Lahir')
+                            ->placeholder('Contoh: Surabaya, 12 Agustus 1999')
+                            ->columnSpanFull(),
+                    ]),
 
-                        // Gabungkan Kode dan Nama agar unik dan mudah dicari
-                        return "{$kode}_{$nama}";
-                    }),
+                // =====================================================
+                // SECTION: DOKUMEN PENDUKUNG
+                // =====================================================
+                Section::make('Dokumen Pendukung')
+                    ->description('Unggah dokumen yang diperlukan.')
+                    ->columns(2)
+                    ->schema([
+
+                        CompressedFileUpload::make('scan_ktp')
+                            ->label('Scan KTP')
+                            ->disk('public')
+                            ->directory('pegawai/ktp')
+                            ->imageEditor()
+                            ->fileName(function (Get $get) {
+                                return ($get('kode_pegawai') ?: 'NoCode') . '_KTP';
+                            }),
+
+                        CompressedFileUpload::make('scan_kk')
+                            ->label('Scan KK')
+                            ->disk('public')
+                            ->directory('pegawai/kk')
+                            ->imageEditor()
+                            ->fileName(function (Get $get) {
+                                return ($get('kode_pegawai') ?: 'NoCode') . '_KK';
+                            }),
+
+                        CompressedFileUpload::make('foto')
+                            ->label('Foto Pegawai')
+                            ->disk('public')
+                            ->directory('pegawai')
+                            ->imageEditor()
+                            ->imageCropAspectRatio('3:4')
+
+                            ->fileName(function (Get $get) {
+                                $kode = $get('kode_pegawai') ?: 'NoCode';
+                                $nama = $get('nama_pegawai') ?: 'TanpaNama';
+                                return "{$kode}_{$nama}";
+                            }),
+                    ]),
             ]);
     }
 }
