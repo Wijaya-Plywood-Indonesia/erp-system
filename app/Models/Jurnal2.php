@@ -18,5 +18,7 @@ class Jurnal2 extends Model
         'total',
         'user_id',
         'status_sinkron',
+        'synced_at',
+        'synced_by',
     ];
 }

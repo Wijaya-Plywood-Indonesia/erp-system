@@ -17,11 +17,13 @@ return new class extends Migration
             $table->integer('no_akun');
             $table->string('nama_akun');
             $table->integer('banyak')->nullable();
-            $table->decimal('kubikasi')->nullable();
+            $table->decimal('kubikasi', 12, 4)->nullable();
             $table->integer('harga')->nullable();
             $table->integer('total')->nullable();
             $table->string('user_id')->nullable();
             $table->string('status_sinkron')->default('belum sinkron');
+            $table->dateTime('synced_at')->nullable();
+            $table->string('synced_by')->nullable();
             $table->timestamps();
         });
     }

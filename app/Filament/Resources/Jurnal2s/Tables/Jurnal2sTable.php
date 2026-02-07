@@ -38,7 +38,7 @@ class Jurnal2sTable
 
                 TextColumn::make('total')
                     ->label('Total')
-                    ->numeric(decimalPlaces: 4),
+                    ->numeric(decimalPlaces: 0),
 
                 TextColumn::make('user_id')
                     ->label('Dibuat Oleh'),
@@ -50,6 +50,16 @@ class Jurnal2sTable
                         fn($state) =>
                         $state === 'sudah sinkron' ? 'success' : 'warning'
                     ),
+                TextColumn::make('synced_at')
+                    ->label('Waktu Sinkron')
+                    ->dateTime('d M Y H:i')
+                    ->toggleable(true),
+
+                TextColumn::make('synced_by')
+                    ->label('Disinkron Oleh')
+                    ->searchable()
+                    ->placeholder('-')
+                    ->toggleable(true),
 
                 TextColumn::make('created_at')
                     ->label('Tanggal')

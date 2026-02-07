@@ -16,12 +16,14 @@ use App\Exports\LaporanProduksiStikExport;
 use Carbon\Carbon;
 
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 
 
 class LaporanStik extends Page
 {
     use InteractsWithForms;
+    use HasPageShield;
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected string $view = 'filament.pages.laporan-stik';
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';

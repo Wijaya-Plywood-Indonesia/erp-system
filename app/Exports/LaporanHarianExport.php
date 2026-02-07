@@ -55,8 +55,8 @@ class LaporanHarianExport implements
                 $row['hasil'] ?? '-',
                 $row['ijin'] ?? '',
                 (isset($row['potongan_targ']) && $row['potongan_targ'] > 0)
-                ? $row['potongan_targ']
-                : '',
+                    ? $row['potongan_targ']
+                    : '',
                 $row['keterangan'] ?? '',
             ];
         }

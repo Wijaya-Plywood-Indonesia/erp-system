@@ -11,40 +11,12 @@ class HotpressWorkerMap
         $results = [];
 
         foreach ($collection as $produksi) {
-            $detailProduksi = [];
+            // Label hasil sekarang dibuat statis tanpa detail barang
+            $labelHasil = "HOT PRESS";
 
-            // 1. Ambil Hasil Platform
-            if ($produksi->platformHasilHp) {
-                foreach ($produksi->platformHasilHp as $item) {
-                    $b = $item->barangSetengahJadi;
-                    $namaBarang = $b ?
-                        ($b->grade?->kategoriBarang?->nama_kategori ?? '-') . ' | ' .
-                        ($b->ukuran?->nama_ukuran ?? '-') . ' | ' .
-                        ($b->grade?->nama_grade ?? '-') : 'Platform';
-
-                    $detailProduksi[] = "PLT: {$namaBarang} ({$item->isi} Pcs)";
-                }
-            }
-
-            // 2. Ambil Hasil Triplek
-            if ($produksi->triplekHasilHp) {
-                foreach ($produksi->triplekHasilHp as $item) {
-                    $b = $item->barangSetengahJadi;
-                    $namaBarang = $b ?
-                        ($b->grade?->kategoriBarang?->nama_kategori ?? '-') . ' | ' .
-                        ($b->ukuran?->nama_ukuran ?? '-') . ' | ' .
-                        ($b->grade?->nama_grade ?? '-') : 'Triplek';
-
-                    $detailProduksi[] = "TPL: {$namaBarang} ({$item->isi} Pcs)";
-                }
-            }
-
-            $labelHasil = "HOTPRESS: " . (empty($detailProduksi) ? '-' : implode('; ', $detailProduksi));
-
-            // 3. Mapping Pegawai
+            // Mapping Pegawai
             if ($produksi->detailPegawaiHp) {
                 foreach ($produksi->detailPegawaiHp as $dp) {
-                    // Nama relasi di model Anda adalah pegawaiHp
                     if (!$dp->pegawaiHp) continue;
 
                     $jamMasuk = $dp->masuk ? Carbon::parse($dp->masuk)->format('H:i:s') : '-';
@@ -55,7 +27,7 @@ class HotpressWorkerMap
                         'nama' => $dp->pegawaiHp->nama_pegawai ?? 'TANPA NAMA',
                         'masuk' => $jamMasuk,
                         'pulang' => $jamPulang,
-                        'hasil' => $labelHasil,
+                        'hasil' => $labelHasil, // Mengirim teks "HOT PRESS" saja
                         'ijin' => $dp->ijin ?? '-',
                         'potongan_targ' => 0,
                         'keterangan' => $dp->ket ?? $produksi->kendala ?? '',

@@ -21,9 +21,12 @@ use App\Filament\Pages\LaporanJoin\Queries\LoadLaporanJoin;
 use App\Filament\Pages\LaporanJoin\Transformers\JoinDataMap;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\LaporanJoinExport; // Opsional: Jika sudah membuat exportnya
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 
 class LaporanJoin extends Page
 {
+    use HasPageShield;
+
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static ?string $title = 'Laporan Produksi Join';

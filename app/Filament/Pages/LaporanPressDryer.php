@@ -24,10 +24,13 @@ use App\Filament\Pages\LaporanPressDryer\Queries\LoadPressDryer;
 use App\Filament\Pages\LaporanPressDryer\Transformers\DryerDataMap;
 
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 
 class LaporanPressDryer extends Page implements HasForms
 {
+    use HasPageShield;
+
     use Forms\Concerns\InteractsWithForms;
 
     // Page Resource View

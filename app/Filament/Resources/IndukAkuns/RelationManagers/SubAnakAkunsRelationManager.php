@@ -72,7 +72,8 @@ class SubAnakAkunsRelationManager extends RelationManager
                 TextColumn::make('kode_anak_akun')
                     ->label('Kode Akun')
                     ->getStateUsing(function ($record) {
-                        return "{$record->anakAkun->kode_anak_akun}.{$record->kode_sub_anak_akun}";
+                        return "{$record->kode_sub_anak_akun}";
+                        // {$record->anakAkun->kode_anak_akun}.
                     })
                     ->sortable()
                     ->searchable(),

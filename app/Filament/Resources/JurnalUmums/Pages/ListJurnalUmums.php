@@ -17,7 +17,7 @@ class ListJurnalUmums extends ListRecords
     {
         return [
             Action::make('sinkronisasi')
-                ->label('Sinkronisasi')
+                ->label('Sinkronisasi ke Jurnal 1')
                 ->icon('heroicon-o-arrow-path')
                 ->color('success')
                 ->requiresConfirmation()

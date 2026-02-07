@@ -17,7 +17,7 @@ return new class extends Migration
             $table->integer('akun_seratus');
             $table->string('detail')->nullable();
             $table->integer('banyak')->nullable();
-            $table->decimal('kubikasi')->nullable();
+            $table->decimal('kubikasi', 12, 4)->nullable();
             $table->integer('harga')->nullable();
             $table->integer('total')->nullable();
             $table->string('createdBy');

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class TotalSolasi extends Model
 {
     // Table Init 
-    protected $table = 'total_solasi';
+    protected $table = 'total_solasis';
 
     protected $fillable = [
         'total'

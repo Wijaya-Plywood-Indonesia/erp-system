@@ -19,11 +19,14 @@ class Jurnal1st extends Model
         'harga',
         'total',
         'created_by',
+        'status',
+        'synced_at',
+        'synced_by',
     ];
 
     protected $casts = [
         'modif10' => 'integer',
-        'no_akun' => 'integer',
+        'no_akun' => 'string',
         'banyak' => 'integer',
         'm3' => 'decimal:4',
         'harga' => 'integer',

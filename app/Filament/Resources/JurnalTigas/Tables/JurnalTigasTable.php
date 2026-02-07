@@ -46,12 +46,14 @@ class JurnalTigasTable
                 // Kolom Keuangan dengan format Rupiah/Ribuan
                 TextColumn::make('harga')
                     ->label('Harga')
-                    ->sortable(),
+                    ->sortable()
+                    ->numeric(),
 
                 TextColumn::make('total')
                     ->label('Total')
                     ->summarize(\Filament\Tables\Columns\Summarizers\Sum::make()->label('Gran Total'))
-                    ->sortable(),
+                    ->sortable()
+                    ->numeric(),
 
                 // Menampilkan siapa yang menginput data
                 TextColumn::make('createdBy')

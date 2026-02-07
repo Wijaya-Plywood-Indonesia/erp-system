@@ -21,9 +21,12 @@ use App\Filament\Pages\LaporanSandingJoin\Queries\LoadLaporanSandingJoin;
 use App\Filament\Pages\LaporanSandingJoin\Transformers\SandingJoinDataMap;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\LaporanSandingJoinExport;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 
 class LaporanSandingJoin extends Page
 {
+    use HasPageShield;
+
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static ?string $title = 'Laporan Produksi Sanding Join';
