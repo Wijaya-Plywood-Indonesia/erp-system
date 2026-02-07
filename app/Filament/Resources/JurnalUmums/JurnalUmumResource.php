@@ -46,7 +46,7 @@ class JurnalUmumResource extends Resource
     {
         return [
             'index' => ListJurnalUmums::route('/'),
-            'create' => CreateJurnalUmum::route('/create'),
+            // 'create' => CreateJurnalUmum::route('/create'),
             'edit' => EditJurnalUmum::route('/{record}/edit'),
         ];
     }
