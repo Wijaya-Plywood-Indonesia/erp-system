@@ -138,7 +138,7 @@ class AbsenExport implements
                 $sheet->getStyle("A{$i}:G{$i}")
                     ->getFont()
                     ->getColor()
-                    ->setRGB('A0AEC0'); // Abu-abu untuk yang libur
+                    ->setRGB('000000'); // Abu-abu untuk yang libur
             }
         }
 

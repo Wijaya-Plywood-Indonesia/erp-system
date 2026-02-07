@@ -200,8 +200,8 @@ jobs:
           (cd "$BUILD_DIR" && zip -r ../deploy.zip . -q)
 
       # --- Setup SSH
-    - name: Setup SSH Key
-      run: |
+      - name: Setup SSH Key
+        run: |
           mkdir -p $HOME/.ssh
           chmod 700 $HOME/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > $HOME/.ssh/id_ed25519
