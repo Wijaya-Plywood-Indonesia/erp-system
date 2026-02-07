@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiRotaries\Widgets;
 
+use App\Services\TargetPegawai;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use App\Models\DetailHasilPaletRotary;
@@ -23,7 +24,8 @@ class ProduksiSummaryWidget extends Widget
     {
         $id = $this->record?->id;
 
-        if (!$id) return [];
+        if (!$id)
+            return [];
 
         return [
             // Sesuai dengan tipe 'rotary' yang Anda set di Model tadi
@@ -46,7 +48,8 @@ class ProduksiSummaryWidget extends Widget
      */
     public function refreshSummary(): void
     {
-        if (!$this->record) return;
+        if (!$this->record)
+            return;
 
         $record = $this->record;
         $produksiId = $record->id;
@@ -89,11 +92,21 @@ class ProduksiSummaryWidget extends Widget
             ->orderBy('ukuran')
             ->get();
 
+        // 5. Ambil Target
+        $dbName = "produksi_rotaries";
+        $dbHasil = "detail_hasil_palet_rotaries";
+        $customQueryId = "id_produksi";
+        $produksiId = (int)$record->id;
+        $keyJumlah = "total_lembar";
+
+        $globalTarget = TargetPegawai::produksiRotary2($dbName, $dbHasil, $customQueryId, $produksiId, $keyJumlah);
+
         $this->summary = [
-            'totalAll'            => $totalAll,
-            'totalPegawai'        => $totalPegawai,
+            'totalAll' => $totalAll,
+            'totalPegawai' => $totalPegawai,
             'globalUkuranKwJenis' => $globalUkuranKwJenis,
-            'globalUkuran'        => $globalUkuran,
+            'globalUkuran' => $globalUkuran,
+            'globalTarget' => $globalTarget
         ];
     }
 }

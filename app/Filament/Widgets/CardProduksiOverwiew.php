@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\File;
 
 class CardProduksiOverwiew extends Widget
 {
-    protected static bool $isDiscovered = true;
+    protected static bool $isDiscovered = false;
     protected string $view = 'filament.widgets.card-produksi-overwiew';
     public array $cards = [];
     protected int | string | array $columnSpan = 'full';
