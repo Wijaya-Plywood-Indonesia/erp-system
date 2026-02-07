@@ -1,0 +1,32 @@
+[
+      {
+    "name": "Produksi Press Dryers",
+    "urlResource": "produksi-press-dryers",
+    "dbListName": {
+      "dbName": "produksi_press_dryers",
+      "key_tanggal": "tanggal_produksi",
+      "dbMesin": {
+        "dbName": "detail_mesins",
+        "key_id_mesin": "id_mesin_dryer"
+    },
+      "joins": [
+        [
+          "detail_mesins",
+          "detail.mesins.id_produksi_dryer",
+          "=",
+          "produksi_press_dryers.id"
+        ]
+      ],
+      "dbPegawaiName": "detail_pegawais",
+      "dbHasilName": [
+        {
+          "name": "Hasil Press Dryers",
+          "dbName": "detail_hasils",
+          "satuan_hasil": "Lembar",
+          "satuan_kualitas": "kw",
+          "key_jumlah": "isi"
+        }
+      ]
+    }
+  }
+]
