@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\KontrakController;
 use App\Models\KontrakKerja;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\NotaKayuController;
@@ -8,6 +9,10 @@ use App\Http\Controllers\NotaBMController;
 use App\Http\Controllers\LaporanKayuMasukController;
 use App\Http\Controllers\NotaKayuTurusController;
 
+
+
+Route::get('/kontrak/bulk-print', [KontrakController::class, 'bulkPrint'])
+    ->name('kontrak.bulk.print');
 
 Route::get('/kontrak/{record}/print', function (KontrakKerja $record) {
     return view('contracts.pkwt', compact('record'));

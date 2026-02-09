@@ -20,31 +20,33 @@ class RunDailyScheduler
         // --- AUTO UPDATE DURASI ---
         DailyScheduler::checkAndRun('update_durasi_kontrak', '06:00', function () {
             DB::statement("
-                UPDATE kontrak_kerja
-                SET durasi_kontrak = 
-                    CASE
-                        WHEN kontrak_mulai IS NULL OR kontrak_selesai IS NULL
-                            THEN 0
-                        ELSE DATEDIFF(kontrak_selesai, kontrak_mulai)
-                    END
-            ");
+            UPDATE kontrak_kerja
+            SET durasi_kontrak = 
+                CASE
+                    WHEN kontrak_mulai IS NULL OR kontrak_selesai IS NULL
+                        THEN 0
+                    ELSE DATEDIFF(kontrak_selesai, kontrak_mulai)
+                END
+            WHERE status_kontrak != 'extended'
+        ");
         });
 
         // --- AUTO UPDATE STATUS ---
         DailyScheduler::checkAndRun('update_status_kontrak', '06:00', function () {
             DB::statement("
-                UPDATE kontrak_kerja
-                SET status_kontrak = 
-                    CASE
-                        WHEN kontrak_mulai IS NULL OR kontrak_selesai IS NULL
-                            THEN 'expired'
-                        WHEN CURDATE() > kontrak_selesai
-                            THEN 'expired'
-                        WHEN DATEDIFF(kontrak_selesai, CURDATE()) <= 30
-                            THEN 'soon'
-                        ELSE 'active'
-                    END
-            ");
+            UPDATE kontrak_kerja
+            SET status_kontrak = 
+                CASE
+                    WHEN kontrak_mulai IS NULL OR kontrak_selesai IS NULL
+                        THEN 'expired'
+                    WHEN CURDATE() > kontrak_selesai
+                        THEN 'expired'
+                    WHEN DATEDIFF(kontrak_selesai, CURDATE()) <= 30
+                        THEN 'soon'
+                    ELSE 'active'
+                END
+            WHERE status_kontrak != 'extended'
+        ");
         });
 
         return $next($request);
