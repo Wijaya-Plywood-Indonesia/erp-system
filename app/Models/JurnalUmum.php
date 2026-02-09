@@ -17,6 +17,7 @@ class JurnalUmum extends Model
      * Kolom yang boleh diisi mass-assignment.
      */
     protected $fillable = [
+        'nama_akun',
         'tgl',
         'jurnal',
         'no_akun',
@@ -51,5 +52,6 @@ class JurnalUmum extends Model
         'banyak' => 'integer',
         'm3' => 'decimal:4',
         'harga' => 'integer',
+        'synced_at' => 'datetime',
     ];
 }

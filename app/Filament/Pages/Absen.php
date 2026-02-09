@@ -90,11 +90,17 @@ class Absen extends Page implements HasForms
             ->schema([
                 DatePicker::make('tanggal')
                     ->label('Pilih Tanggal Laporan')
-                    ->live()
                     ->native(false)
                     ->displayFormat('d/m/Y')
                     ->format('Y-m-d')
-                    ->afterStateUpdated(fn() => $this->loadData()),
+                    ->maxDate(now())
+                    ->default(now())
+                    ->live()
+                    ->closeOnDateSelection()
+                    ->afterStateUpdated(fn() => $this->loadData())
+                    ->suffixIcon('heroicon-o-calendar')
+                    ->suffixIconColor('primary')
+                    ->helperText('Menampilkan status seluruh pegawai (Bekerja & Tidak).'),
             ])->statePath('data');
     }
 
@@ -121,9 +127,8 @@ class Absen extends Page implements HasForms
         $tgl = Carbon::parse($this->data['tanggal'] ?? now())->toDateString();
 
         try {
-            // 1. Fetching data dari semua divisi
-            $listRotary = RotaryWorkerMap::make(ProduksiRotary::with(['mesin', 'detailPegawaiRotary.pegawai'])->whereDate('tgl_produksi', $tgl)->get());
-            $listRepair = RepairWorkerMap::make(ProduksiRepair::with(['rencanaPegawais.pegawai', 'rencanaPegawais.rencanaRepairs.hasilRepairs'])->whereDate('tanggal', $tgl)->get());
+            $listRotary = RotaryWorkerMap::make(ProduksiRotary::with(['detailPegawaiRotary.pegawai'])->whereDate('tgl_produksi', $tgl)->get());
+            $listRepair = RepairWorkerMap::make(ProduksiRepair::with(['rencanaPegawais.pegawai'])->whereDate('tanggal', $tgl)->get());
             $listDryer = PressDryerWorkerMap::make(ProduksiPressDryer::with(['detailPegawais.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listStik = StikWorkerMap::make(ProduksiStik::with(['detailPegawaiStik.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listKedi = KediWorkerMap::make(ProduksiKedi::with(['detailPegawaiKedi.pegawai'])->whereDate('tanggal', $tgl)->get());
@@ -141,7 +146,6 @@ class Absen extends Page implements HasForms
             $listPotJelek = PotJelekWorkerMap::make(ProduksiPotJelek::with(['pegawaiPotJelek.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listTurunKayu = TurunKayuWorkerMap::make(TurunKayu::with(['pegawaiTurunKayu.pegawai'])->whereDate('tanggal', $tgl)->get());
 
-            // 2. Gabungkan data mentah
             $pegawaiBekerjaRaw = array_merge(
                 $listRotary,
                 $listRepair,
@@ -163,29 +167,24 @@ class Absen extends Page implements HasForms
                 $listTurunKayu
             );
 
-            // --- LOGIKA PENGGABUNGAN MULTI-DIVISI ---
+            // LOGIKA PENGGABUNGAN MULTI-DIVISI (ARRAY UNTUK BADGE)
             $pegawaiBekerja = collect($pegawaiBekerjaRaw)
-                ->groupBy('kodep') // Kelompokkan berdasarkan kode pegawai
+                ->groupBy('kodep')
                 ->map(function ($group) {
                     $first = $group->first();
-
-                    // Gabungkan semua divisi unik, contoh: "Lain-lain, Turun kayu"
-                    $allDivisi = $group->pluck('hasil')->unique()->filter()->implode(', ');
+                    $allDivisi = $group->pluck('hasil')->unique()->filter()->values()->all();
 
                     return [
                         'kodep'      => $first['kodep'] ?? '-',
                         'nama'       => $first['nama'] ?? '-',
                         'masuk'      => $first['masuk'] ?? '-',
                         'pulang'     => $first['pulang'] ?? '-',
-                        'hasil'      => $allDivisi ?: '-',
+                        'hasil'      => $allDivisi, // Array divisi
                         'ijin'       => $first['ijin'] ?? '',
                         'keterangan' => $first['keterangan'] ?? '',
                     ];
-                })
-                ->values()
-                ->all();
+                })->values()->all();
 
-            // 3. Cari Pegawai Libur
             $kodePegawaiKerja = array_filter(array_column($pegawaiBekerja, 'kodep'), fn($v) => $v !== '-' && $v !== null);
             $pegawaiLibur = Pegawai::whereNotIn('kode_pegawai', $kodePegawaiKerja)->get();
 
@@ -196,24 +195,20 @@ class Absen extends Page implements HasForms
                     'nama' => $p->nama_pegawai,
                     'masuk' => '-',
                     'pulang' => '-',
-                    'hasil' => '-',
+                    'hasil' => ['-'], // Konsisten array
                     'ijin' => '',
                     'keterangan' => 'LIBUR / TIDAK ADA JADWAL',
                 ];
             }
 
-            // 4. Final Merge & Sort Natural
             $finalMerge = array_merge($pegawaiBekerja, $listLibur);
             usort($finalMerge, fn($a, $b) => strnatcasecmp((string)($a['kodep'] ?? ''), (string)($b['kodep'] ?? '')));
 
             $this->listAbsensi = array_values($finalMerge);
-
-            Log::info("ABSEN SUCCESS: Load data untuk {$tgl}. Total baris: " . count($this->listAbsensi));
         } catch (\Exception $e) {
             Log::error("ABSEN ERROR: " . $e->getMessage());
             Notification::make()->danger()->title('Gagal memuat data')->body($e->getMessage())->send();
         }
-
         $this->isLoading = false;
     }
 
