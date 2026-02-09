@@ -17,6 +17,7 @@ class JurnalUmum extends Model
      * Kolom yang boleh diisi mass-assignment.
      */
     protected $fillable = [
+        'nama_akun',
         'tgl',
         'jurnal',
         'no_akun',
@@ -36,9 +37,9 @@ class JurnalUmum extends Model
     ];
 
     public function syncedBy()
-{
-    return $this->belongsTo(User::class, 'synced_by');
-}
+    {
+        return $this->belongsTo(User::class, 'synced_by');
+    }
 
     /**
      * Casting untuk tipe data.
@@ -46,12 +47,11 @@ class JurnalUmum extends Model
     protected $casts = [
         'tgl' => 'date',
         'jurnal' => 'integer',
-        'no_akun' => 'integer',
+        'no_akun' => 'string',
         'mm' => 'integer',
         'banyak' => 'integer',
         'm3' => 'decimal:4',
         'harga' => 'integer',
+        'synced_at' => 'datetime',
     ];
-
-
 }

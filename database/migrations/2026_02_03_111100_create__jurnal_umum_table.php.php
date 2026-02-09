@@ -13,13 +13,14 @@ return new class extends Migration {
         //
         Schema::create('jurnal_umum', function (Blueprint $table) {
             $table->id();
+            $table->string('nama_akun');
 
             $table->date('tgl')->nullable();
 
             $table->integer('jurnal')->nullable();
 
             // No Akun biasanya VARCHAR karena ada titik, contoh 1411.01
-            $table->integer('no_akun');
+            $table->string('no_akun');
 
             // No transaksi
             $table->string('no-dokumen')->nullable();
