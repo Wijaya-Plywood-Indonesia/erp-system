@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\ModalSanding;
 use App\Observers\ModalSandingObserver;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use App\Models\RencanaKerjaHp;
 use App\Observers\RencanaKerjaHpObserver;
@@ -25,6 +26,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // ⬆⬆⬆  WAJIB: supaya MySQL ikut Asia/Jakarta
         ModalSanding::observe(ModalSandingObserver::class);
         RencanaKerjaHp::observe(RencanaKerjaHpObserver::class);
         // PlatformHasilHp::observe(PlatformHasilHpObserver::class);
