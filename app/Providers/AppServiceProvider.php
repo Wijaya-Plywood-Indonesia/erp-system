@@ -29,11 +29,6 @@ class AppServiceProvider extends ServiceProvider
         // ⬆⬆⬆  WAJIB: supaya MySQL ikut Asia/Jakarta
         ModalSanding::observe(ModalSandingObserver::class);
         RencanaKerjaHp::observe(RencanaKerjaHpObserver::class);
-
-        if (app()->environment('local')) {
-            // Kita paksa sistem menganggap hari ini adalah Kamis, 12 Feb 2026
-            \Carbon\Carbon::setTestNow(\Carbon\Carbon::create(2026, 2, 12, 9, 0, 0));
-        }
         // PlatformHasilHp::observe(PlatformHasilHpObserver::class);
         // TriplekHasilHp::observe(TriplekHasilHpObserver::class);
 
