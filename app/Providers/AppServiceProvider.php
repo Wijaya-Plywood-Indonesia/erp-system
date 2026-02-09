@@ -26,8 +26,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // ⬇⬇⬇  PASANGKAN DI SINI, PALING ATAS DALAM boot()  ⬇⬇⬇
-        DB::statement("SET time_zone = '+07:00'");
         // ⬆⬆⬆  WAJIB: supaya MySQL ikut Asia/Jakarta
         ModalSanding::observe(ModalSandingObserver::class);
         RencanaKerjaHp::observe(RencanaKerjaHpObserver::class);
