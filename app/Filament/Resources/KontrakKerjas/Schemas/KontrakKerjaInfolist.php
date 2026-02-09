@@ -54,8 +54,25 @@ class KontrakKerjaInfolist
                                 'dicetak' => 'warning',
                                 'ditandatangani' => 'success',
                             }),
+                        TextEntry::make('status_kontrak')
+                            ->label('Status Kontrak')
+                            ->badge()
+                            ->formatStateUsing(fn($state) => match ($state) {
+                                'active' => 'Aktif',
+                                'soon' => 'Segera Habis',
+                                'expired' => 'Kadaluarsa',
+                                'extended' => 'Perpanjangan',
+                                default => $state,
+                            })
+                            ->color(fn($state) => match ($state) {
+                                'active' => 'success',
+                                'soon' => 'warning',
+                                'expired' => 'danger',
+                                'extended' => 'gray',
+                            }),
 
                         TextEntry::make('bukti_ttd')->label('Bukti TTD'),
+
                     ]),
 
                 /** 🔹 PENANGGUNG JAWAB */
@@ -65,19 +82,6 @@ class KontrakKerjaInfolist
                             TextEntry::make('dibuat_oleh')->label('Dibuat Oleh'),
                             TextEntry::make('divalidasi_oleh')->label('Divalidasi Oleh'),
                         ]),
-                    ]),
-
-                /** 🔹 STATUS SISTEM KONTRAK */
-                Section::make('Status Kontrak (System)')
-                    ->schema([
-                        TextEntry::make('status_kontrak')
-                            ->label('Status Kontrak')
-                            ->badge()
-                            ->color(fn($state) => match ($state) {
-                                'active' => 'success',
-                                'soon' => 'warning',
-                                'expired' => 'danger',
-                            }),
                     ]),
 
                 /** 🔹 TIMESTAMP */

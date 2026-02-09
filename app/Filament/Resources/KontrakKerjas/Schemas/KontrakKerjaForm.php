@@ -130,6 +130,7 @@ class KontrakKerjaForm
                         'active' => 'Aktif',
                         'soon' => 'Segera Habis',
                         'expired' => 'Expired',
+                        'extended' => 'Extended',
                     ])
                     ->default('active')
                     ->required(),

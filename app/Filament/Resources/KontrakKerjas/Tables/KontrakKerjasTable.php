@@ -3,12 +3,15 @@
 namespace App\Filament\Resources\KontrakKerjas\Tables;
 
 use App\Models\KontrakKerja;
+use App\Services\NomorKontrakService;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -20,6 +23,11 @@ class KontrakKerjasTable
     {
         return $table
             ->columns([
+                TextColumn::make('no_kontrak')
+                    ->label('No Dokumen Kontrak')
+                    ->searchable()
+                    ->sortable(),
+
                 TextColumn::make('kode')
                     ->label('Kode Pegawai')
                     ->searchable()
@@ -63,6 +71,8 @@ class KontrakKerjasTable
                         'active' => 'success',
                         'soon' => 'warning',
                         'expired' => 'danger',
+                        'extended' => 'extended',
+
                         default => 'gray',
                     }),
 
@@ -86,11 +96,13 @@ class KontrakKerjasTable
                         'active' => 'Aktif',
                         'soon' => 'Segera Habis',
                         'expired' => 'Habis',
+                        'extended' => 'Perpanjangan'
                     ]),
             ])
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
+                DeleteAction::make(),
 
                 Action::make('print')
                     ->label('Cetak Kontrak')
@@ -98,6 +110,67 @@ class KontrakKerjasTable
                     ->url(fn($record): string => route('kontrak.print', $record))
                     ->openUrlInNewTab(),
 
+                Action::make('perpanjang')
+                    ->label('Perpanjang')
+                    ->icon('heroicon-o-arrow-path')
+                    ->form([
+                        Select::make('durasi')
+                            ->label('Durasi Perpanjangan')
+                            ->options([
+                                30 => '30 Hari',
+                                60 => '60 Hari',
+                                90 => '90 Hari',
+                            ])
+                            ->required(),
+                    ])
+                    ->action(function ($record, array $data) {
+
+                        $durasi = intval($data['durasi']);
+
+                        // 👉 mulai dari besok setelah kontrak selesai
+                        $mulaiBaru = Carbon::parse($record->kontrak_selesai)->addDay();
+
+                        // 👉 geser kalau jatuh di hari libur
+                        $mulaiBaru = nextWorkingDay($mulaiBaru);
+
+                        // 👉 hitung selesai
+                        $selesaiBaru = $mulaiBaru->copy()->addDays($durasi);
+
+                        // 👉 pastikan selesai juga hari kerja
+                        $selesaiBaru = previousWorkingDay($selesaiBaru);
+
+                        // 👉 tanggal kontrak (hari ini tapi harus hari kerja)
+                        $tanggalKontrak = nextWorkingDay(now());
+
+                        KontrakKerja::create([
+                            'kode' => $record->kode,
+                            'nama' => $record->nama,
+                            'jenis_kelamin' => $record->jenis_kelamin,
+                            'tanggal_masuk' => $record->tanggal_masuk,
+                            'karyawan_di' => $record->karyawan_di,
+                            'alamat_perusahaan' => $record->alamat_perusahaan,
+                            'jabatan' => $record->jabatan,
+                            'nik' => $record->nik,
+                            'tempat_tanggal_lahir' => $record->tempat_tanggal_lahir,
+                            'alamat' => $record->alamat,
+                            'no_telepon' => $record->no_telepon,
+
+                            'kontrak_mulai' => $mulaiBaru,
+                            'kontrak_selesai' => $selesaiBaru,
+                            'durasi_kontrak' => $durasi,
+
+                            'tanggal_kontrak' => $tanggalKontrak,
+                            'no_kontrak' => NomorKontrakService::generate(),
+
+                            'status_dokumen' => 'draft',
+                            'status_kontrak' => 'extended',
+
+                            'dibuat_oleh' => auth()->id(),
+                            'divalidasi_oleh' => null,
+                        ]);
+                    })
+                    ->requiresConfirmation()
+                    ->color('warning'),
             ])
             ->defaultSort('id', 'desc')
             ->toolbarActions([
