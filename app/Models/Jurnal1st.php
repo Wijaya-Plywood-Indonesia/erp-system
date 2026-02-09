@@ -9,6 +9,8 @@ class Jurnal1st extends Model
     //
     protected $table = 'jurnal_1st';
 
+    protected $guarded = [];
+
     protected $fillable = [
         'modif10',
         'no_akun',

@@ -2,24 +2,24 @@
 
     {{-- HEADER --}}
     <div class="grid grid-cols-3 gap-4">
-    <input type="date" wire:model="tanggal"
-        class="border rounded p-2
+        <input type="date" wire:model="tanggal"
+            class="border rounded p-2
                bg-white dark:bg-gray-900
                text-gray-800 dark:text-gray-100
                border-gray-300 dark:border-gray-700">
 
-    <input wire:model="kode_jurnal" placeholder="Kode Jurnal"
-        class="border rounded p-2
+        <input wire:model="kode_jurnal" placeholder="Kode Jurnal"
+            class="border rounded p-2
                bg-white dark:bg-gray-900
                text-gray-800 dark:text-gray-100
                border-gray-300 dark:border-gray-700">
 
-    <input wire:model="no_dokumen" placeholder="No Dokumen"
-        class="border rounded p-2
+        <input wire:model="no_dokumen" placeholder="No Dokumen"
+            class="border rounded p-2
                bg-white dark:bg-gray-900
                text-gray-800 dark:text-gray-100
                border-gray-300 dark:border-gray-700">
-</div>
+    </div>
 
 
     {{-- FORM --}}
@@ -33,7 +33,7 @@
         <div>
             <label class="text-sm font-medium">No Akun</label>
             <select wire:model.live="form.no_akun"
-    class="border rounded p-2 w-full
+                class="border rounded p-2 w-full
            bg-white dark:bg-gray-800
            text-gray-800 dark:text-gray-100
            border-gray-300 dark:border-gray-600">
@@ -50,7 +50,7 @@
         <div>
             <label class="text-sm font-medium">Nama Akun</label>
             <input wire:model="form.nama_akun" readonly
-    class="border rounded p-2 w-full
+                class="border rounded p-2 w-full
            bg-gray-100 dark:bg-gray-800
            text-gray-700 dark:text-gray-300
            border-gray-300 dark:border-gray-600">
@@ -61,7 +61,7 @@
         <div>
             <label class="text-sm font-medium">Nama</label>
             <input wire:model="form.nama"
-    class="border rounded p-2 w-full
+                class="border rounded p-2 w-full
            bg-white dark:bg-gray-800
            text-gray-800 dark:text-gray-100
            border-gray-300 dark:border-gray-600">
@@ -81,7 +81,7 @@
         <div class="col-span-2">
             <label class="text-sm font-medium">Keterangan</label>
             <textarea wire:model="form.keterangan"
-    class="border rounded p-2 w-full
+                class="border rounded p-2 w-full
            bg-white dark:bg-gray-800
            text-gray-800 dark:text-gray-100
            border-gray-300 dark:border-gray-600"></textarea>
@@ -181,9 +181,9 @@
                     </td>
                     <td class="px-2 py-1 text-center">
                         <button wire:click="removeItem({{ $i }})"
-    class="text-red-600 dark:text-red-400 font-bold">
-    ✕
-</button>
+                            class="text-red-600 dark:text-red-400 font-bold">
+                            ✕
+                        </button>
 
                     </td>
                 </tr>

@@ -13,6 +13,8 @@ class JurnalUmum extends Model
      */
     protected $table = 'jurnal_umum';
 
+    protected $guarded = [];
+
     /**
      * Kolom yang boleh diisi mass-assignment.
      */
