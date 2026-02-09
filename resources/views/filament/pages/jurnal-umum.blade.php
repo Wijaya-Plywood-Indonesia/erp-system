@@ -1,206 +1,226 @@
 <x-filament::page>
 
-{{-- HEADER --}}
-<div class="grid grid-cols-3 gap-4">
-    <input type="date" wire:model="tanggal" class="border rounded p-2">
-    <input wire:model="kode_jurnal" placeholder="Kode Jurnal" class="border rounded p-2">
-    <input wire:model="no_dokumen" placeholder="No Dokumen" class="border rounded p-2">
-</div>
+    {{-- HEADER --}}
+    <div class="grid grid-cols-3 gap-4">
+        <input type="date" wire:model="tanggal" class="border rounded p-2">
+        <input wire:model="kode_jurnal" placeholder="Kode Jurnal" class="border rounded p-2">
+        <input wire:model="no_dokumen" placeholder="No Dokumen" class="border rounded p-2">
+    </div>
 
-{{-- FORM --}}
-<div class="mt-6 border rounded p-4 grid grid-cols-2 gap-4">
+    {{-- FORM --}}
+    <div class="mt-6 border rounded-lg p-4 grid grid-cols-2 gap-4 bg-white">
 
-    {{-- NO AKUN --}}
-    <div class="col-span-2">
-        <label class="text-sm font-medium">No Akun</label>
-        <select wire:model="form.no_akun" class="border rounded p-2 w-full">
-            <option value="">-- Pilih Akun --</option>
-            @foreach ($akunList as $a)
+        {{-- NO AKUN --}}
+        <div>
+            <label class="text-sm font-medium">No Akun</label>
+            <select wire:model.live="form.no_akun" class="border rounded p-2 w-full">
+                <option value="">-- Pilih Akun --</option>
+                @foreach ($akunList as $a)
                 <option value="{{ $a->kode_sub_anak_akun }}">
                     {{ $a->kode_sub_anak_akun }} - {{ $a->nama_sub_anak_akun }}
                 </option>
-            @endforeach
-        </select>
-    </div>
-
-    {{-- NAMA --}}
-    <div>
-        <label class="text-sm font-medium">Nama</label>
-        <input wire:model="form.nama" class="border rounded p-2 w-full">
-    </div>
-
-    {{-- MM --}}
-    <div>
-        <label class="text-sm font-medium">MM (Tebal Plywood)</label>
-        <input wire:model="form.mm" class="border rounded p-2 w-full">
-    </div>
-
-    {{-- KETERANGAN --}}
-    <div class="col-span-2">
-        <label class="text-sm font-medium">Keterangan</label>
-        <textarea wire:model="form.keterangan"
-            class="border rounded p-2 w-full"></textarea>
-    </div>
-
-    {{-- DEBIT / KREDIT --}}
-    <div class="col-span-2">
-        <label class="text-sm font-medium">Posisi</label>
-        <div class="flex gap-6 mt-1">
-            <label class="flex items-center gap-2">
-                <input type="radio" wire:model="form.map" value="D">
-                Debit
-            </label>
-            <label class="flex items-center gap-2">
-                <input type="radio" wire:model="form.map" value="K">
-                Kredit
-            </label>
+                @endforeach
+            </select>
         </div>
+
+        <div>
+            <label class="text-sm font-medium">Nama Akun</label>
+            <input wire:model="form.nama_akun" readonly class="border rounded p-2 w-full bg-gray-100 text-gray-700">
+        </div>
+
+        {{-- NAMA --}}
+        <div>
+            <label class="text-sm font-medium">Nama</label>
+            <input wire:model="form.nama" class="border rounded p-2 w-full">
+        </div>
+
+        {{-- MM --}}
+        <div>
+            <label class="text-sm font-medium">MM (Tebal Plywood)</label>
+            <input wire:model="form.mm" class="border rounded p-2 w-full">
+        </div>
+
+        {{-- KETERANGAN --}}
+        <div class="col-span-2">
+            <label class="text-sm font-medium">Keterangan</label>
+            <textarea wire:model="form.keterangan" class="border rounded p-2 w-full"></textarea>
+        </div>
+
+        {{-- POSISI --}}
+        <div class="col-span-2">
+            <label class="text-sm font-medium">Posisi</label>
+            <div class="flex gap-6 mt-1">
+                <label class="flex items-center gap-2">
+                    <input type="radio" wire:model="form.map" value="D"> Debit
+                </label>
+                <label class="flex items-center gap-2">
+                    <input type="radio" wire:model="form.map" value="K"> Kredit
+                </label>
+            </div>
+        </div>
+
+        {{-- HIT KBK --}}
+        <div class="col-span-2">
+            <label class="text-sm font-medium">Hit KBK</label>
+            <select wire:model="form.hit_kbk" class="border rounded p-2 w-full">
+                <option value="">-- Pilih --</option>
+                <option value="banyak">Banyak</option>
+                <option value="m3">Kubikasi (M3)</option>
+            </select>
+        </div>
+
+        {{-- BANYAK --}}
+        <div>
+            <label class="text-sm font-medium">Banyak</label>
+            <input type="number" wire:model="form.banyak" class="border rounded p-2 w-full">
+        </div>
+
+        {{-- M3 --}}
+        <div>
+            <label class="text-sm font-medium">Kubikasi (M3)</label>
+            <input type="number" step="0.0001" wire:model="form.m3" class="border rounded p-2 w-full">
+        </div>
+
+        {{-- HARGA --}}
+        <div class="col-span-2">
+            <label class="text-sm font-medium">Harga</label>
+            <input type="number" wire:model="form.harga" class="border rounded p-2 w-full">
+        </div>
+
+        <button wire:click="addItem" class="col-span-2 bg-primary-600 hover:bg-primary-700 text-white rounded p-2">
+            + Tambah ke Draft
+        </button>
     </div>
 
-    {{-- HITUNG BERDASARKAN --}}
-    <div class="col-span-2">
-        <label class="text-sm font-medium">Hitung Berdasarkan</label>
-        <select wire:model="form.hit_kbk" class="border rounded p-2 w-full">
-            <option value="">-- Pilih --</option>
-            <option value="banyak">Banyak</option>
-            <option value="m3">Kubikasi (M3)</option>
-        </select>
+    {{-- DRAFT JURNAL --}}
+    <h3 class="mt-8 font-bold">Draft Jurnal</h3>
+
+    <div class="overflow-x-auto border rounded-lg mt-2">
+        <table class="min-w-[1200px] w-full text-sm border-collapse">
+            <thead class="bg-gray-100 sticky top-0">
+                <tr>
+                    <th class="px-2 py-1 w-[120px]">No Akun</th>
+                    <th class="px-2 py-1 w-[220px]">Nama Akun</th>
+                    <th class="px-2 py-1 w-[150px]">Nama</th>
+                    <th class="px-2 py-1 w-[60px]">D/K</th>
+                    <th class="px-2 py-1 w-[80px]">KBK</th>
+                    <th class="px-2 py-1 w-[90px] text-right">Banyak</th>
+                    <th class="px-2 py-1 w-[90px] text-right">M3</th>
+                    <th class="px-2 py-1 w-[120px] text-right">Harga</th>
+                    <th class="px-2 py-1 w-[130px] text-right">Total</th>
+                    <th class="px-2 py-1 w-[40px]"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($items as $i => $row)
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="px-2 py-1">{{ $row['no_akun'] }}</td>
+                    <td class="px-2 py-1">{{ $row['nama_akun'] }}</td>
+                    <td class="px-2 py-1">{{ $row['nama'] }}</td>
+                    <td class="px-2 py-1 text-center">{{ $row['map'] }}</td>
+                    <td class="px-2 py-1">{{ $row['hit_kbk'] }}</td>
+                    <td class="px-2 py-1 text-right">{{ $row['banyak'] }}</td>
+                    <td class="px-2 py-1 text-right">{{ $row['m3'] }}</td>
+                    <td class="px-2 py-1 text-right">{{ number_format($row['harga']) }}</td>
+                    <td class="px-2 py-1 text-right font-semibold">
+                        {{ number_format($row['total']) }}
+                    </td>
+                    <td class="px-2 py-1 text-center">
+                        <button wire:click="removeItem({{ $i }})" class="text-red-600 font-bold">✕</button>
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
     </div>
 
-    {{-- BANYAK --}}
-    <div>
-        <label class="text-sm font-medium">Banyak</label>
-        <input type="number" wire:model="form.banyak" class="border rounded p-2 w-full">
+    {{-- TOTAL --}}
+    <div class="mt-4 flex gap-10 font-bold">
+        <div>Total Debit: {{ number_format($this->totalDebit) }}</div>
+        <div>Total Kredit: {{ number_format($this->totalKredit) }}</div>
     </div>
 
-    {{-- M3 --}}
-    <div>
-        <label class="text-sm font-medium">Kubikasi (M3)</label>
-        <input type="number" step="0.0001"
-            wire:model="form.m3"
-            class="border rounded p-2 w-full">
-    </div>
-
-    {{-- HARGA --}}
-    <div class="col-span-2">
-        <label class="text-sm font-medium">Harga</label>
-        <input type="number" wire:model="form.harga"
-            class="border rounded p-2 w-full">
-    </div>
-
-    {{-- TAMBAH --}}
-    <button wire:click="addItem"
-        class="col-span-2 bg-primary-600 hover:bg-primary-700 text-white rounded p-2">
-        + Tambah ke Draft
+    <button wire:click="saveJurnal" class="mt-4 bg-green-600 text-white rounded px-4 py-2" @disabled($this->totalDebit
+        !== $this->totalKredit)>
+        Simpan Jurnal
     </button>
-</div>
+
+    <hr class="my-10">
+
+    {{-- JURNAL FINAL --}}
+    <h3 class="font-bold text-lg mb-3">📘 Jurnal Umum (Final)</h3>
+
+    @if ($jurnals->where('status', 'belum sinkron')->count())
+    <button wire:click="confirmSync" class="mb-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+        🔄 Sinkronisasi Jurnal
+    </button>
+
+    @endif
 
 
+    <div class="overflow-x-auto border rounded-lg">
+        <table class="min-w-[1800px] w-full text-sm border-collapse">
+            <thead class="bg-gray-100 sticky top-0">
+                <tr>
+                    <th class="px-2 py-1 w-[220px]">Nama Akun</th>
+                    <th class="px-2 py-1 w-[100px]">Tgl</th>
+                    <th class="px-2 py-1 w-[80px]">Jurnal</th>
+                    <th class="px-2 py-1 w-[120px]">No Akun</th>
+                    <th class="px-2 py-1 w-[120px]">No Dok</th>
+                    <th class="px-2 py-1 w-[150px]">Nama</th>
+                    <th class="px-2 py-1 w-[350px]">Keterangan</th>
+                    <<th class="px-2 py-1 w-[80px] text-center">Map</th>
+                        <th class="px-2 py-1 w-[60px]">MM</th>
+                        <th class="px-2 py-1 w-[80px]">hit kbk</th>
+                        <th class="px-2 py-1 w-[90px] text-right">Banyak</th>
+                        <th class="px-2 py-1 w-[90px] text-right">M3</th>
+                        <th class="px-2 py-1 w-[120px] text-right">Harga</th>
+                        <th class="px-2 py-1 w-[130px] text-right">Total</th>
+                        <th class="px-2 py-1 w-[120px]">Dibuat oleh</th>
+                        <th class="px-2 py-1 w-[90px]">Status</th>
+                        <th class="px-2 py-1 w-[160px]">Disinkron pada</th>
+                        <th class="px-2 py-1 w-[140px]">Disinkron oleh</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($jurnals as $j)
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="px-2 py-1">{{ $j->nama_akun }}</td>
+                    <td class="px-2 py-1">{{ $j->tgl?->format('Y-m-d') }}</td>
+                    <td class="px-2 py-1">{{ $j->jurnal }}</td>
+                    <td class="px-2 py-1">{{ $j->no_akun }}</td>
+                    <td class="px-2 py-1">{{ $j->no_dokumen }}</td>
+                    <td class="px-2 py-1">{{ $j->nama }}</td>
+                    <td class="px-2 py-1 whitespace-normal">{{ $j->keterangan }}</td>
+                    <td class="px-2 py-1 text-center font-semibold">
+                        {{ $j->map === 'D' ? 'Debit' : 'Kredit' }}
+                    </td>
+                    <td class="px-2 py-1">{{ $j->mm }}</td>
+                    <td class="px-2 py-1">{{ $j->hit_kbk }}</td>
+                    <td class="px-2 py-1 text-right">{{ $j->banyak }}</td>
+                    <td class="px-2 py-1 text-right">{{ $j->m3 }}</td>
+                    <td class="px-2 py-1 text-right">{{ number_format($j->harga) }}</td>
+                    <td class="px-2 py-1 text-right font-semibold">
+                        {{ number_format(
+                        ($j->hit_kbk === 'banyak'
+                        ? ($j->banyak ?? 0)
+                        : ($j->m3 ?? 0)
+                        ) * ($j->harga ?? 0)
+                        ) }}
+                    </td>
+                    <td class="px-2 py-1">{{ $j->created_by }}</td>
+                    <td class="px-2 py-1 font-semibold text-green-600">{{ $j->status }}</td>
+                    <td class="px-2 py-1">
+                        {{ $j->synced_at?->format('d/m/Y H:i') }}
+                    </td>
+                    <td class="px-2 py-1">
+                        {{ $j->synced_by }}
+                    </td>
 
-{{-- TABEL SEMENTARA --}}
-<h3 class="mt-8 font-bold">Draft Jurnal</h3>
-
-<table class="w-full mt-2 text-sm border">
-    <thead>
-        <tr class="border-b">
-            <th>Akun</th>
-            <th>Nama</th>
-            <th>DK</th>
-            <th>Total</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach ($items as $i => $row)
-        <tr class="border-b">
-            <td>{{ $row['no_akun'] }}</td>
-            <td>{{ $row['nama'] }}</td>
-            <td>{{ $row['map'] }}</td>
-            <td>{{ number_format($row['total']) }}</td>
-            <td>
-                <button wire:click="removeItem({{ $i }})" class="text-red-500">
-                    Hapus
-                </button>
-            </td>
-        </tr>
-        @endforeach
-    </tbody>
-</table>
-
-{{-- TOTAL --}}
-<div class="mt-4 flex gap-6 font-bold">
-    <div>Total Debit: {{ number_format($this->totalDebit) }}</div>
-    <div>Total Kredit: {{ number_format($this->totalKredit) }}</div>
-</div>
-
-{{-- SIMPAN --}}
-<button wire:click="saveJurnal"
-    class="mt-4 bg-green-600 text-white rounded p-2"
-    @disabled($this->totalDebit !== $this->totalKredit)>
-    Simpan Jurnal
-</button>
-
-<hr class="my-10">
-
-<h3 class="font-bold text-lg mb-3">
-    📘 Jurnal Umum (Final)
-</h3>
-
-<div class="overflow-x-auto border rounded">
-<table class="w-full text-sm">
-    <thead class="bg-gray-100 border-b">
-        <tr>
-            <th>Tgl</th>
-            <th>Jurnal</th>
-            <th>No Dok</th>
-            <th>Akun</th>
-            <th>Nama</th>
-            <th>D</th>
-            <th>K</th>
-            <th>MM</th>
-            <th>KBK</th>
-            <th>Banyak</th>
-            <th>M3</th>
-            <th>Harga</th>
-            <th>User</th>
-            <th>Status</th>
-        </tr>
-    </thead>
-
-    <tbody>
-        @forelse ($jurnals as $j)
-        <tr class="border-b hover:bg-gray-50">
-            <td>{{ $j->tgl }}</td>
-            <td>{{ $j->jurnal }}</td>
-            <td>{{ $j->no_dokumen }}</td>
-            <td>{{ $j->no_akun }}</td>
-            <td>{{ $j->nama }}</td>
-
-            <td class="text-right">
-                {{ $j->map === 'D' ? number_format($j->harga) : '-' }}
-            </td>
-            <td class="text-right">
-                {{ $j->map === 'K' ? number_format($j->harga) : '-' }}
-            </td>
-
-            <td>{{ $j->mm }}</td>
-            <td>{{ $j->hit_kbk }}</td>
-            <td>{{ $j->banyak }}</td>
-            <td>{{ $j->m3 }}</td>
-            <td class="text-right">{{ number_format($j->harga) }}</td>
-            <td>{{ $j->created_by }}</td>
-            <td>{{ $j->status }}</td>
-        </tr>
-        @empty
-        <tr>
-            <td colspan="14" class="text-center py-4 text-gray-500">
-                Belum ada jurnal tersimpan
-            </td>
-        </tr>
-        @endforelse
-    </tbody>
-</table>
-</div>
-
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
 
 </x-filament::page>
