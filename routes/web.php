@@ -1,11 +1,18 @@
 <?php
 
+use App\Models\KontrakKerja;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\NotaKayuController;
 use App\Http\Controllers\NotaBKController;
 use App\Http\Controllers\NotaBMController;
 use App\Http\Controllers\LaporanKayuMasukController;
 use App\Http\Controllers\NotaKayuTurusController;
+
+
+Route::get('/kontrak/{record}/print', function (KontrakKerja $record) {
+    return view('contracts.pkwt', compact('record'));
+})->name('kontrak.print');
+
 
 Route::get('/laporan-kayu-masuk', [LaporanKayuMasukController::class, 'index'])
     ->name('laporan.kayu-masuk');

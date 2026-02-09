@@ -13,6 +13,7 @@ return new class extends Migration {
         //
         Schema::create('jurnal_umum', function (Blueprint $table) {
             $table->id();
+            $table->string('nama_akun');
 
             $table->date('tgl')->nullable();
 

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DetailLainLains\Tables;
 
+use Carbon\Carbon;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -18,7 +19,14 @@ class DetailLainLainsTable
             ->columns([
                 TextColumn::make('tanggal')
                     ->label('Tanggal Repair')
-                    ->date('d/m/Y')
+                    ->formatStateUsing(function ($state) {
+                        if (!$state)
+                            return '-';
+
+                        return Carbon::parse($state)
+                            ->locale('id')
+                            ->translatedFormat('l , d F Y');
+                    })
                     ->sortable()
                     ->searchable(),
             ])
