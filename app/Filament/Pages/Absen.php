@@ -14,7 +14,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 
-// --- MODELS ---
+// --- 1. IMPORT MODELS ---
 use App\Models\Pegawai;
 use App\Models\ProduksiRotary;
 use App\Models\ProduksiRepair;
@@ -35,7 +35,7 @@ use App\Models\ProduksiPotSiku;
 use App\Models\ProduksiPotJelek;
 use App\Models\TurunKayu;
 
-// --- TRANSFORMERS ---
+// --- 2. IMPORT TRANSFORMERS ---
 use App\Filament\Pages\Absen\Transformers\RotaryWorkerMap;
 use App\Filament\Pages\Absen\Transformers\RepairWorkerMap;
 use App\Filament\Pages\Absen\Transformers\PressDryerWorkerMap;
@@ -85,27 +85,17 @@ class Absen extends Page implements HasForms
     }
 
     public function form(Schema $schema): Schema
-
     {
-
         return $schema
             ->schema([
                 DatePicker::make('tanggal')
                     ->label('Pilih Tanggal Laporan')
+                    ->live()
                     ->native(false)
                     ->displayFormat('d/m/Y')
                     ->format('Y-m-d')
-                    ->maxDate(now())
-                    ->default(now())
-                    ->live()
-                    ->closeOnDateSelection()
-                    ->afterStateUpdated(fn() => $this->loadData())
-                    ->suffixIcon('heroicon-o-calendar')
-                    ->suffixIconColor('primary')
-                    ->helperText('Menampilkan status seluruh pegawai (Bekerja & Tidak).'),
-            ])
-            ->statePath('data')
-            ->columns(1);
+                    ->afterStateUpdated(fn() => $this->loadData()),
+            ])->statePath('data');
     }
 
     protected function getHeaderActions(): array
@@ -114,7 +104,6 @@ class Absen extends Page implements HasForms
             Action::make('refresh')
                 ->label('Refresh')
                 ->icon('heroicon-o-arrow-path')
-                ->color('gray')
                 ->action(fn() => $this->loadData()),
 
             Action::make('export')
@@ -129,23 +118,12 @@ class Absen extends Page implements HasForms
     public function loadData(): void
     {
         $this->isLoading = true;
-        $tgl = $this->data['tanggal'] ?? now()->format('Y-m-d');
+        $tgl = Carbon::parse($this->data['tanggal'] ?? now())->toDateString();
 
         try {
-            Log::info("ABSEN: Memproses data tanggal {$tgl}");
-
-            // 1. Ambil data dari semua divisi
+            // 1. Fetching data dari semua divisi
             $listRotary = RotaryWorkerMap::make(ProduksiRotary::with(['mesin', 'detailPegawaiRotary.pegawai'])->whereDate('tgl_produksi', $tgl)->get());
-            $listRepair = RepairWorkerMap::make(
-                ProduksiRepair::with([
-                    'rencanaPegawais.pegawai',
-                    'modalRepairs.ukuran',
-                    'modalRepairs.jenisKayu',
-                    'rencanaPegawais.rencanaRepairs.hasilRepairs'
-                ])
-                    ->whereDate('tanggal', $tgl) // Filter tanggal di level Produksi
-                    ->get()
-            );
+            $listRepair = RepairWorkerMap::make(ProduksiRepair::with(['rencanaPegawais.pegawai', 'rencanaPegawais.rencanaRepairs.hasilRepairs'])->whereDate('tanggal', $tgl)->get());
             $listDryer = PressDryerWorkerMap::make(ProduksiPressDryer::with(['detailPegawais.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listStik = StikWorkerMap::make(ProduksiStik::with(['detailPegawaiStik.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listKedi = KediWorkerMap::make(ProduksiKedi::with(['detailPegawaiKedi.pegawai'])->whereDate('tanggal', $tgl)->get());
@@ -153,64 +131,18 @@ class Absen extends Page implements HasForms
             $listSandingJoin = SandingJoinWorkerMap::make(ProduksiSandingJoint::with(['pegawaiSandingJoint.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listPotAfJoin = PotAfalanJoinWorkerMap::make(ProduksiPotAfJoint::with(['pegawaiPotAfJoint.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listLainLain = LainLainWorkerMap::make(DetailLainLain::with(['lainLains.pegawai'])->whereDate('tanggal', $tgl)->get());
+            $listDempul = DempulWorkerMap::make(ProduksiDempul::with(['rencanaPegawaiDempuls.pegawai'])->whereDate('tanggal', $tgl)->get());
+            $listGrajiTriplek = GrajiTriplekWorkerMap::make(ProduksiGrajitriplek::with(['pegawaiGrajiTriplek.pegawaiGrajiTriplek'])->whereDate('tanggal_produksi', $tgl)->get());
+            $listNyusup = NyusupWorkerMap::make(ProduksiNyusup::with(['pegawaiNyusup.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
+            $listSanding = SandingWorkerMap::make(ProduksiSanding::with(['pegawaiSandings.pegawai'])->whereDate('tanggal', $tgl)->get());
+            $listPilihPlywood = PilihPlywoodWorkerMap::make(ProduksiPilihPlywood::with(['pegawaiPilihPlywood.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
+            $listHotpress = HotpressWorkerMap::make(ProduksiHp::with(['detailPegawaiHp.pegawaiHp'])->whereDate('tanggal_produksi', $tgl)->get());
+            $listPotSiku = PotSikuWorkerMap::make(ProduksiPotSiku::with(['pegawaiPotSiku.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
+            $listPotJelek = PotJelekWorkerMap::make(ProduksiPotJelek::with(['pegawaiPotJelek.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
+            $listTurunKayu = TurunKayuWorkerMap::make(TurunKayu::with(['pegawaiTurunKayu.pegawai'])->whereDate('tanggal', $tgl)->get());
 
-            $listDempul = DempulWorkerMap::make(
-                ProduksiDempul::with(['rencanaPegawaiDempuls.pegawai', 'detailDempuls.barangSetengahJadi.ukuran', 'detailDempuls.barangSetengahJadi.jenisBarang', 'detailDempuls.barangSetengahJadi.grade.kategoriBarang'])->whereDate('tanggal', $tgl)->get()
-            );
-
-            $listGrajiTriplek = GrajiTriplekWorkerMap::make(
-                ProduksiGrajitriplek::with(['pegawaiGrajiTriplek.pegawaiGrajiTriplek', 'hasilGrajiTriplek.barangSetengahJadiHp.ukuran', 'hasilGrajiTriplek.barangSetengahJadiHp.jenisBarang', 'hasilGrajiTriplek.barangSetengahJadiHp.grade.kategoriBarang'])->whereDate('tanggal_produksi', $tgl)->get()
-            );
-
-            $listNyusup = NyusupWorkerMap::make(
-                ProduksiNyusup::with(['pegawaiNyusup.pegawai', 'detailBarangDikerjakan.barangSetengahJadiHp.ukuran', 'detailBarangDikerjakan.barangSetengahJadiHp.jenisBarang', 'detailBarangDikerjakan.barangSetengahJadiHp.grade.kategoriBarang'])->whereDate('tanggal_produksi', $tgl)->get()
-            );
-
-            $listSanding = SandingWorkerMap::make(
-                ProduksiSanding::with(['pegawaiSandings.pegawai', 'hasilSandings.barangSetengahJadi.ukuran', 'hasilSandings.barangSetengahJadi.jenisBarang', 'hasilSandings.barangSetengahJadi.grade.kategoriBarang'])->whereDate('tanggal', $tgl)->get()
-            );
-
-            $listPilihPlywood = PilihPlywoodWorkerMap::make(
-                ProduksiPilihPlywood::with(['pegawaiPilihPlywood.pegawai', 'hasilPilihPlywood.barangSetengahJadiHp.ukuran', 'hasilPilihPlywood.barangSetengahJadiHp.jenisBarang', 'hasilPilihPlywood.barangSetengahJadiHp.grade.kategoriBarang'])->whereDate('tanggal_produksi', $tgl)->get()
-            );
-
-            $listHotpress = HotpressWorkerMap::make(
-                ProduksiHp::with([
-                    'detailPegawaiHp.pegawaiHp',
-                    'platformHasilHp.barangSetengahJadi.ukuran',
-                    'platformHasilHp.barangSetengahJadi.grade.kategoriBarang',
-                    'triplekHasilHp.barangSetengahJadi.ukuran',
-                    'triplekHasilHp.barangSetengahJadi.grade.kategoriBarang',
-                ])
-                    ->whereDate('tanggal_produksi', $tgl)
-                    ->get()
-            );
-
-
-            $listPotSiku = PotSikuWorkerMap::make(
-                ProduksiPotSiku::with([
-                    'pegawaiPotSiku.pegawai',
-                    'detailBarangDikerjakanPotSiku.ukuran',
-                    'detailBarangDikerjakanPotSiku.jenisKayu'
-                ])->whereDate('tanggal_produksi', $tgl)->get()
-            );
-
-            $listPotJelek = PotJelekWorkerMap::make(
-                ProduksiPotJelek::with([
-                    'pegawaiPotJelek.pegawai',
-                    'detailBarangDikerjakanPotJelek.ukuran',
-                    'detailBarangDikerjakanPotJelek.jenisKayu'
-                ])->whereDate('tanggal_produksi', $tgl)->get()
-            );
-
-            $listTurunKayu = TurunKayuWorkerMap::make(
-                TurunKayu::with(['pegawaiTurunKayu.pegawai'])
-                    ->whereDate('tanggal', $tgl)
-                    ->get()
-            );
-
-            // 2. Gabungkan
-            $pegawaiBekerja = array_merge(
+            // 2. Gabungkan data mentah
+            $pegawaiBekerjaRaw = array_merge(
                 $listRotary,
                 $listRepair,
                 $listDryer,
@@ -231,9 +163,31 @@ class Absen extends Page implements HasForms
                 $listTurunKayu
             );
 
-            // 3. Pegawai Libur
+            // --- LOGIKA PENGGABUNGAN MULTI-DIVISI ---
+            $pegawaiBekerja = collect($pegawaiBekerjaRaw)
+                ->groupBy('kodep') // Kelompokkan berdasarkan kode pegawai
+                ->map(function ($group) {
+                    $first = $group->first();
+
+                    // Gabungkan semua divisi unik, contoh: "Lain-lain, Turun kayu"
+                    $allDivisi = $group->pluck('hasil')->unique()->filter()->implode(', ');
+
+                    return [
+                        'kodep'      => $first['kodep'] ?? '-',
+                        'nama'       => $first['nama'] ?? '-',
+                        'masuk'      => $first['masuk'] ?? '-',
+                        'pulang'     => $first['pulang'] ?? '-',
+                        'hasil'      => $allDivisi ?: '-',
+                        'ijin'       => $first['ijin'] ?? '',
+                        'keterangan' => $first['keterangan'] ?? '',
+                    ];
+                })
+                ->values()
+                ->all();
+
+            // 3. Cari Pegawai Libur
             $kodePegawaiKerja = array_filter(array_column($pegawaiBekerja, 'kodep'), fn($v) => $v !== '-' && $v !== null);
-            $pegawaiLibur = Pegawai::whereNotIn('kode_pegawai', $kodePegawaiKerja)->where('is_active', true)->get();
+            $pegawaiLibur = Pegawai::whereNotIn('kode_pegawai', $kodePegawaiKerja)->get();
 
             $listLibur = [];
             foreach ($pegawaiLibur as $p) {
@@ -248,23 +202,28 @@ class Absen extends Page implements HasForms
                 ];
             }
 
-            // 4. Final Merge & Sort
+            // 4. Final Merge & Sort Natural
             $finalMerge = array_merge($pegawaiBekerja, $listLibur);
             usort($finalMerge, fn($a, $b) => strnatcasecmp((string)($a['kodep'] ?? ''), (string)($b['kodep'] ?? '')));
 
             $this->listAbsensi = array_values($finalMerge);
-            Log::info("ABSEN SUCCESS: Total " . count($this->listAbsensi) . " record.");
+
+            Log::info("ABSEN SUCCESS: Load data untuk {$tgl}. Total baris: " . count($this->listAbsensi));
         } catch (\Exception $e) {
             Log::error("ABSEN ERROR: " . $e->getMessage());
-            Notification::make()->danger()->title('Gagal memuat data')->send();
+            Notification::make()->danger()->title('Gagal memuat data')->body($e->getMessage())->send();
         }
+
         $this->isLoading = false;
     }
 
     public function exportExcel()
     {
         $tanggal = $this->data['tanggal'] ?? now()->format('Y-m-d');
-        return Excel::download(new AbsenExport($this->listAbsensi), "Absensi-{$tanggal}.xlsx");
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\AbsenExport($this->listAbsensi),
+            "Absen-{$tanggal}.xlsx"
+        );
     }
 
     public function getViewData(): array
