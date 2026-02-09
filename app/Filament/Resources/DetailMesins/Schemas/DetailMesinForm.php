@@ -47,8 +47,8 @@ class DetailMesinForm
                         Mesin::whereHas('kategoriMesin', function ($query) {
                             $query->where('nama_kategori_mesin', 'DRYER');
                         })
-                            ->orderBy('nama_mesin')
-                            ->pluck('nama_mesin', 'id')
+                        ->orderBy('nama_mesin')
+                        ->pluck('nama_mesin', 'id')
                     )
                     ->searchable()
                     ->required(),

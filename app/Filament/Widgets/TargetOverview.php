@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 
 class TargetOverview extends Widget
 {
-    protected static bool $isDiscovered = false;
+    protected static bool $isDiscovered = true;
     public array $full_data = [];
     public array $targetKosong = []; 
     protected int|string|array $columnSpan = 'full';
