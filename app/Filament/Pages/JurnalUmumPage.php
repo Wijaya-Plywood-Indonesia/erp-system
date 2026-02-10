@@ -27,10 +27,10 @@ class JurnalUmumPage extends Page implements HasActions
     protected string $view = 'filament.pages.jurnal-umum';
     protected Width|string|null $maxContentWidth = Width::Full;
 
-    protected function getHeaderActions(): array
-{
-    return [];
-}
+    //     protected function getHeaderActions(): array
+    // {
+    //     return [];
+    // }
 
 
     public $tanggal;
