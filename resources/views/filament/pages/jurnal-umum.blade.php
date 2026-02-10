@@ -11,7 +11,7 @@
                    bg-white dark:bg-gray-900
                    text-gray-800 dark:text-gray-100
                    border-gray-300 dark:border-gray-700">
-        <input wire:model="no_dokumen" placeholder="No Dokumen" class="border rounded p-2
+        <input wire:model="no_dokumen" placeholder="No" class="border rounded p-2
                    bg-white dark:bg-gray-900
                    text-gray-800 dark:text-gray-100
                    border-gray-300 dark:border-gray-700">
@@ -295,11 +295,18 @@
         </table>
     </div>
     <script>
-    Livewire.on('scroll-to-form', () => {
-        document.getElementById('form-jurnal')
-            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-</script>
+        document.addEventListener('livewire:init', () => {
+            Livewire.on('scroll-to-form', (event) => {
+                const element = document.getElementById('form-jurnal');
+                if (element) {
+                    element.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
 
 
 </x-filament::page>
