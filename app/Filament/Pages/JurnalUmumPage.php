@@ -270,6 +270,12 @@ class JurnalUmumPage extends Page implements HasActions
     //     $this->loadJurnalUmum();
     // }
 
+    public function removeItem($index)
+    {
+        unset($this->items[$index]);
+        $this->items = array_values($this->items); // Reset keys
+    }
+
     protected function loadJurnalUmum()
     {
         $this->jurnals = JurnalUmum::latest('id')->limit(50)->get();
