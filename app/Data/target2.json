@@ -1,18 +1,41 @@
 [
-      {
+  {
+    "name": "Produksi Stik",
+    "urlResource": "produksi-stiks",
+    "dbListName": {
+      "key_id_relation": "id_produksi_stik",
+      "id_kategori_mesin": 4,
+      "dbName": "produksi_stik",
+      "key_tanggal": "tanggal_produksi",
+      "dbPegawaiName": "detail_pegawai_stik",
+      "dbHasilName": [
+        {
+          "name": "Hasil Produksi Stik",
+          "dbName": "detail_hasil_stik",
+          "satuan_hasil": "Lembar",
+          "satuan_kualitas": "kw",
+          "key_jumlah": "total_lembar"
+        }
+      ]
+    }
+  },
+  {
     "name": "Produksi Press Dryers",
     "urlResource": "produksi-press-dryers",
     "dbListName": {
+      "key_id_relation": "id_produksi_dryer",
+      "id_kategori_mesin": 2,
       "dbName": "produksi_press_dryers",
       "key_tanggal": "tanggal_produksi",
       "dbMesin": {
         "dbName": "detail_mesins",
-        "key_id_mesin": "id_mesin_dryer"
-    },
+        "key_id_mesin": "id_mesin_dryer",
+        "spesifik": "DRYER"
+      },
       "joins": [
         [
           "detail_mesins",
-          "detail.mesins.id_produksi_dryer",
+          "detail_mesins.id_produksi_dryer",
           "=",
           "produksi_press_dryers.id"
         ]
