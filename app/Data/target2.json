@@ -28,14 +28,14 @@
       "dbName": "produksi_press_dryers",
       "key_tanggal": "tanggal_produksi",
       "dbMesin": {
-        "dbName": "detail_mesins",
+        "dbName": "detail_mesin",
         "key_id_mesin": "id_mesin_dryer",
         "spesifik": "DRYER"
       },
       "joins": [
         [
-          "detail_mesins",
-          "detail_mesins.id_produksi_dryer",
+          "detail_mesin",
+          "detail_mesin.id_produksi_dryer",
           "=",
           "produksi_press_dryers.id"
         ]
