@@ -24,15 +24,11 @@ class JurnalUmumPage extends Page implements HasActions
     use InteractsWithActions;
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
-    protected static ?string $title = 'Jurnal Umum Faris';
+    protected static ?string $title = 'Jurnal Umum';
     protected string $view = 'filament.pages.jurnal-umum';
+    protected static ?int $navigationSort = 1;
+
     protected Width|string|null $maxContentWidth = Width::Full;
-
-
-    //     protected function getHeaderActions(): array
-    // {
-    //     return [];
-    // }
 
     public $tanggal;
     public $kode_jurnal;
@@ -77,9 +73,32 @@ class JurnalUmumPage extends Page implements HasActions
 
     public function addItem()
     {
-        $qty = $this->form['hit_kbk'] === 'banyak' ? $this->form['banyak'] : $this->form['m3'];
+        // Validasi paksa di backend
+        $this->validate([
+            'form.hit_kbk' => 'required',
+            'form.no_akun' => 'required',
+            'form.harga' => 'required|numeric|min:1',
+        ], [
+            'form.hit_kbk.required' => 'Menu wajib dipilih!',
+        ]);
+
+        $qty = $this->form['hit_kbk'] === 'banyak'
+            ? $this->form['banyak']
+            : $this->form['m3'];
+
+        // Pastikan qty tidak nol agar tidak merusak perhitungan harga rata-rata nantinya
+        if (!$qty || $qty <= 0) {
+            Notification::make()->title('Jumlah (Banyak/M3) tidak boleh kosong!')->danger()->send();
+            return;
+        }
+
         $total = ($qty ?: 0) * ($this->form['harga'] ?: 0);
-        $this->items[] = array_merge($this->form, ['total' => $total]);
+
+        $this->items[] = [
+            ...$this->form,
+            'total' => $total,
+        ];
+
         $this->resetForm();
     }
 
@@ -157,6 +176,7 @@ class JurnalUmumPage extends Page implements HasActions
         ];
 
         $this->dispatch('scroll-to-form');
+
         Notification::make()
             ->title('Mode Edit Aktif')
             ->success()
@@ -281,21 +301,22 @@ class JurnalUmumPage extends Page implements HasActions
         $this->jurnals = JurnalUmum::latest('id')->limit(50)->get();
     }
 
+
     protected function getActions(): array
-{
-    return [
-        Action::make('syncJurnal')
-            ->label('Sinkronisasi Jurnal')
-            ->icon('heroicon-o-arrow-path')
-            ->color('success')
-            ->requiresConfirmation()
-            ->modalHeading('Sinkronisasi Jurnal Umum')
-            ->modalDescription('Yakin ingin menyinkronkan seluruh jurnal umum yang belum disinkron?')
-            ->modalSubmitActionLabel('Ya, Sinkronkan')
-            ->action(function () {
-                app(\App\Services\Jurnal\JurnalUmumToJurnal1Service::class)->sync();
-                $this->loadJurnalUmum();
-            }),
-    ];
-}
+    {
+        return [
+            Action::make('syncJurnal')
+                ->label('Sinkronisasi Jurnal')
+                ->icon('heroicon-o-arrow-path')
+                ->color('success')
+                ->requiresConfirmation()
+                ->modalHeading('Sinkronisasi Jurnal Umum')
+                ->modalDescription('Yakin ingin menyinkronkan seluruh jurnal umum yang belum disinkron?')
+                ->modalSubmitActionLabel('Ya, Sinkronkan')
+                ->action(function () {
+                    app(\App\Services\Jurnal\JurnalUmumToJurnal1Service::class)->sync();
+                    $this->loadJurnalUmum();
+                }),
+        ];
+    }
 }
