@@ -27,10 +27,12 @@ class JurnalUmumPage extends Page implements HasActions
     protected static ?string $title = 'Jurnal Umum Faris';
     protected string $view = 'filament.pages.jurnal-umum';
     protected Width|string|null $maxContentWidth = Width::Full;
-    protected function getHeaderActions(): array
-{
-    return [];
-}
+
+
+    //     protected function getHeaderActions(): array
+    // {
+    //     return [];
+    // }
 
     public $tanggal;
     public $kode_jurnal;
