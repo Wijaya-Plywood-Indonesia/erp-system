@@ -1,3 +1,6 @@
+@push('styles')
+<link href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.css" rel="stylesheet">
+@endpush
 <x-filament::page>
 
     {{-- HEADER --}}
@@ -7,7 +10,7 @@
                    text-gray-800 dark:text-gray-100
                    border-gray-300 dark:border-gray-700">
 
-        <input wire:model="kode_jurnal" placeholder="Kode Jurnal" class="border rounded p-2
+        <input wire:model="kode_jurnal" placeholder="Jurnal" class="border rounded p-2
                    bg-white dark:bg-gray-900
                    text-gray-800 dark:text-gray-100
                    border-gray-300 dark:border-gray-700">
@@ -157,7 +160,7 @@
                     <th class="px-2 py-1 w-[220px]">Nama Akun</th>
                     <th class="px-2 py-1 w-[150px]">Nama</th>
                     <th class="px-2 py-1 w-[60px]">D/K</th>
-                    <th class="px-2 py-1 w-[80px]">KBK</th>
+                    <th class="px-2 py-1 w-[80px]">Hit Kbk</th>
                     <th class="px-2 py-1 w-[90px] text-right">Banyak</th>
                     <th class="px-2 py-1 w-[90px] text-right">M3</th>
                     <th class="px-2 py-1 w-[120px] text-right">Harga</th>
@@ -307,6 +310,4 @@
             });
         });
     </script>
-
-
 </x-filament::page>

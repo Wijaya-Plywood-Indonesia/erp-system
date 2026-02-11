@@ -24,7 +24,7 @@ class JurnalUmumPage extends Page implements HasActions
     use InteractsWithActions;
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
-    protected static ?string $title = 'Jurnal Umum Faris';
+    protected static ?string $title = 'Jurnal Umum Custom';
     protected string $view = 'filament.pages.jurnal-umum';
     protected Width|string|null $maxContentWidth = Width::Full;
 
