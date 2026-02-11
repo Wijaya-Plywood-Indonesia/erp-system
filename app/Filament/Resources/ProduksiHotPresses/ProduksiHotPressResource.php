@@ -7,6 +7,7 @@ use App\Filament\Resources\ProduksiHotPresses\Pages\EditProduksiHotPress;
 use App\Filament\Resources\ProduksiHotPresses\Pages\ListProduksiHotPresses;
 use App\Filament\Resources\ProduksiHotPresses\Pages\ViewProduksiHotPress;
 use App\Filament\Resources\ProduksiHotPresses\Schemas\ProduksiHotPressForm;
+use App\Filament\Resources\ProduksiHotPresses\Schemas\ProduksiHotPressInfoList;
 use App\Filament\Resources\ProduksiHotPresses\Tables\ProduksiHotPressesTable;
 use App\Filament\Resources\ProduksiHotPresses\Schemas\ProduksiStikInfoList;
 use App\Models\ProduksiHp;
@@ -40,7 +41,7 @@ class ProduksiHotPressResource extends Resource
 
     public static function infolist(Schema $schema): Schema
     {
-        return ProduksiStikInfoList::configure($schema);
+        return ProduksiHotPressInfoList::configure($schema);
     }
 
     public static function getRelations(): array
@@ -50,6 +51,7 @@ class ProduksiHotPressResource extends Resource
             RelationManagers\DetailPegawaiHpRelationManager::class,
             RelationManagers\VeneerBahanHpRelationManager::class,
             RelationManagers\PlatformBahanHpRelationManager::class,
+            RelationManagers\BahanHotPressRelationManager::class,
             RelationManagers\PlatformHasilHpRelationManager::class,
             RelationManagers\TriplekHasilHpRelationManager::class,
             RelationManagers\BahanPenolongHpRelationManager::class,
