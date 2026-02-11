@@ -34,10 +34,8 @@ class JurnalUmumToJurnal1Service
                 $userName = Auth::user()?->name ?? 'System';
 
                 foreach ($rows as $row) {
-                    $noAkunRaw = (string) $row->no_akun;
-
-                    // Logika Modif 10
-                    $parts = explode('.', str_replace(',', '.', $noAkunRaw));
+                    $noAkunRaw = number_format((float) $row->no_akun, 2, '.', '');
+                    $parts = explode('.', $noAkunRaw);
                     $angkaDepanKoma = (int) $parts[0];
                     $modif10Value = floor($angkaDepanKoma / 10) * 10;
 
