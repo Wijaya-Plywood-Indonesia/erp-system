@@ -21,7 +21,7 @@
     </div>
 
     {{-- FORM --}}
-    <div id="form-jurnal" class="mt-6 border rounded-lg p-4 grid grid-cols-2 gap-4
+    <div id="form-jurnal" class="scroll-mt-10 mt-6 border rounded-lg p-4 grid grid-cols-2 gap-4
                 bg-white dark:bg-gray-900
                 border-gray-200 dark:border-gray-700
                 text-gray-800 dark:text-gray-100">
@@ -92,15 +92,22 @@
 
         {{-- HIT KBK --}}
         <div class="col-span-2">
-            <label class="text-sm font-medium">Hit KBK</label>
-            <select wire:model="form.hit_kbk" class="border rounded p-2 w-full
-                       bg-white dark:bg-gray-800
-                       text-gray-800 dark:text-gray-100
-                       border-gray-300 dark:border-gray-600">
+            <label class="text-sm font-medium">Hit KBK <span class="text-red-500">*</span></label>
+            <select wire:model="form.hit_kbk"
+                class="border rounded p-2 w-full
+               bg-white dark:bg-gray-800
+               text-gray-800 dark:text-gray-100
+               border-gray-300 dark:border-gray-600"
+                required>
                 <option value="">-- Pilih --</option>
-                <option value="banyak">Banyak</option>
+                <option value="banyak">Banyak (Pcs/Lbr)</option>
                 <option value="m3">Kubikasi (M3)</option>
             </select>
+
+            {{-- Menampilkan pesan error jika belum dipilih --}}
+            @error('form.hit_kbk')
+            <span class="text-sm text-red-400 mt-1">{{ $message }}</span>
+            @enderror
         </div>
 
         {{-- BANYAK --}}
@@ -212,13 +219,12 @@
 
     @if ($jurnals->where('status', 'belum sinkron')->count())
     <x-filament::button
-    wire:click="mountAction('syncJurnal')"
-    color="success"
-    icon="heroicon-o-arrow-path"
-    class="mb-4"
->
-    Sinkronisasi Jurnal
-</x-filament::button>
+        wire:click="mountAction('syncJurnal')"
+        color="success"
+        icon="heroicon-o-arrow-path"
+        class="mb-4">
+        Sinkronisasi Jurnal
+    </x-filament::button>
 
     @endif
 

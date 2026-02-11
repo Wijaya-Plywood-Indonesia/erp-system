@@ -28,7 +28,7 @@ class JurnalTigaResource extends Resource
     // Menentukan label untuk satu rekaman (misal: "Create Produksi3th")
     protected static ?string $modelLabel = 'Jurnal 3rd';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 4;
 
     // Menentukan label untuk jamak/daftar (misal: Judul di tabel List)
     protected static ?string $pluralModelLabel = 'Jurnal 3rd';

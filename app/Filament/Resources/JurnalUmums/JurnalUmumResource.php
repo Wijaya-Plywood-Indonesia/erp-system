@@ -24,6 +24,7 @@ class JurnalUmumResource extends Resource
     protected static ?string $navigationLabel = 'Jurnal Umum';
     protected static ?string $pluralModelLabel = 'Jurnal Umum';
     protected static ?string $modelLabel = 'Jurnal Umum';
+    protected static bool $shouldRegisterNavigation = false;
 
     public static function form(Schema $schema): Schema
     {
@@ -43,9 +44,9 @@ class JurnalUmumResource extends Resource
     }
 
     public static function canCreate(): bool
-{
-    return false;
-}
+    {
+        return false;
+    }
 
 
     public static function getPages(): array
