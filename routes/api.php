@@ -5,148 +5,162 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use App\Models\DetailKayuMasuk;
+use App\Models\DetailTurusanKayu;
+use App\Models\DetailAbsensi;
+use App\Models\User;
+use Filament\Notifications\Notification;
 
 /*
 |--------------------------------------------------------------------------
 | API Routes
 |--------------------------------------------------------------------------
-|
-| Route ini menangani sinkronisasi data Detail Kayu Masuk dari mode offline.
-| URL Endpoint: /api/offline/sync-detail-kayu-masuk
-|
 */
 
-// Middleware ['web', 'auth'] digunakan agar API bisa membaca sesi login user dari browser.
-// Ini penting agar 'created_by' & 'updated_by' di Model otomatis terisi nama user yang login.
+// Middleware ['web', 'auth'] untuk fitur Offline Kayu Masuk (Satu Sesi Browser)
 Route::middleware(['web', 'auth'])->group(function () {
 
+    // 1. Sinkron Detail Kayu Masuk
     Route::post('/offline/sync-detail-kayu-masuk', function (Request $request) {
-
-        // =========================================================
-        // 1. VALIDASI INPUT (KETAT)
-        // =========================================================
-        // Kita validasi array 'items' dan pastikan ID referensi (lahan & jenis kayu) valid.
-
         $validator = Validator::make($request->all(), [
-            'parent_id'             => 'required|exists:kayu_masuks,id', // ID Parent (Kayu Masuk) Wajib Ada
-            'items'                 => 'required|array',                 // Data harus berupa List/Array
-            'items.*.id_lahan'      => 'required|exists:lahans,id',      // Cek apakah ID Lahan ada di DB
-            'items.*.id_jenis_kayu' => 'required|exists:jenis_kayus,id', // Cek apakah ID Jenis Kayu ada di DB
+            'parent_id'             => 'required|exists:kayu_masuks,id',
+            'items'                 => 'required|array',
+            'items.*.id_lahan'      => 'required|exists:lahans,id',
+            'items.*.id_jenis_kayu' => 'required|exists:jenis_kayus,id',
             'items.*.panjang'       => 'required|numeric',
             'items.*.grade'         => 'required',
             'items.*.diameter'      => 'required|numeric',
             'items.*.jumlah_batang' => 'required|numeric|min:1',
         ]);
 
-        // Jika validasi gagal, kembalikan detail error ke Frontend (AlpineJS)
         if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Validasi gagal. Mohon cek data inputan.',
-                'errors' => $validator->errors()
-            ], 422);
+            return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
         }
 
-        // =========================================================
-        // 2. PROSES PENYIMPANAN (DATABASE TRANSACTION)
-        // =========================================================
-        // Kita gunakan Transaction agar data aman. Jika 1 item gagal, semua dibatalkan.
-
         DB::beginTransaction();
-
         try {
-            $parentId = $request->parent_id;
-            $items = $request->items;
-            $count = 0;
-
-            foreach ($items as $item) {
-                // Simpan data ke tabel detail_kayu_masuks
+            foreach ($request->items as $item) {
                 DetailKayuMasuk::create([
-                    'id_kayu_masuk' => $parentId,
+                    'id_kayu_masuk' => $request->parent_id,
                     'id_lahan'      => $item['id_lahan'],
                     'id_jenis_kayu' => $item['id_jenis_kayu'],
                     'panjang'       => $item['panjang'],
                     'grade'         => $item['grade'],
                     'diameter'      => $item['diameter'],
                     'jumlah_batang' => $item['jumlah_batang'],
-
-                    // Field 'keterangan' sebagai penanda bahwa data ini diinput saat offline
                     'keterangan'    => 'Input via Mode Offline',
-
-                    // Catatan: 
-                    // Field 'created_by' dan 'updated_by' akan otomatis diisi 
-                    // oleh boot method di Model Anda karena route ini menggunakan middleware 'auth'
                 ]);
-                $count++;
             }
-
-            // Jika semua loop berhasil tanpa error, simpan permanen ke database
             DB::commit();
-
-            return response()->json([
-                'status' => 'success',
-                'message' => "Berhasil menyinkronkan {$count} data kayu.",
-            ], 200);
+            return response()->json(['status' => 'success', 'message' => 'Data kayu berhasil sinkron.']);
         } catch (\Exception $e) {
-            // Jika ada error (misal koneksi DB putus di tengah jalan), batalkan semua
             DB::rollBack();
-
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Terjadi kesalahan server saat menyimpan data.',
-                'debug_error' => $e->getMessage() // Hapus baris ini saat production
-            ], 500);
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     });
 
-    Route::post('/offline/sync-detail-turusan-kayu', function (Illuminate\Http\Request $request) {
-
-        $validator = Illuminate\Support\Facades\Validator::make($request->all(), [
-            'parent_id'             => 'required|exists:kayu_masuks,id', // Parentnya tetap Kayu Masuk kan? Sesuaikan jika beda
+    // 2. Sinkron Detail Turusan Kayu
+    Route::post('/offline/sync-detail-turusan-kayu', function (Request $request) {
+        $validator = Validator::make($request->all(), [
+            'parent_id'             => 'required|exists:kayu_masuks,id',
             'items'                 => 'required|array',
             'items.*.lahan_id'      => 'required|exists:lahans,id',
             'items.*.jenis_kayu_id' => 'required|exists:jenis_kayus,id',
             'items.*.panjang'       => 'required|numeric',
             'items.*.grade'         => 'required',
-            'items.*.diameter'      => 'required|numeric', // Sesuai validasi form Anda
+            'items.*.diameter'      => 'required|numeric',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
         }
 
-        Illuminate\Support\Facades\DB::beginTransaction();
-
+        DB::beginTransaction();
         try {
-            $parentId = $request->parent_id;
-            $items = $request->items;
-            $count = 0;
-
-            foreach ($items as $item) {
-                // LOGIKA NOMOR URUT OTOMATIS (Server Side)
-                // Kita ambil max nomor urut terakhir untuk parent & lahan ini
-                $lastNo = \App\Models\DetailTurusanKayu::where('id_kayu_masuk', $parentId)
-                    ->max('nomer_urut') ?? 0;
-
-                \App\Models\DetailTurusanKayu::create([
-                    'id_kayu_masuk' => $parentId,
-                    'nomer_urut'    => $lastNo + 1, // Auto Increment
+            foreach ($request->items as $item) {
+                $lastNo = DetailTurusanKayu::where('id_kayu_masuk', $request->parent_id)->max('nomer_urut') ?? 0;
+                DetailTurusanKayu::create([
+                    'id_kayu_masuk' => $request->parent_id,
+                    'nomer_urut'    => $lastNo + 1,
                     'lahan_id'      => $item['lahan_id'],
                     'jenis_kayu_id' => $item['jenis_kayu_id'],
                     'panjang'       => $item['panjang'],
                     'grade'         => $item['grade'],
                     'diameter'      => $item['diameter'],
-                    'kuantitas'     => 1, // Default 1 batang per inputan turus
+                    'kuantitas'     => 1,
                     'keterangan'    => 'Offline Input',
                 ]);
-                $count++;
             }
-
-            Illuminate\Support\Facades\DB::commit();
-            return response()->json(['status' => 'success', 'message' => "Berhasil simpan {$count} data turusan."]);
+            DB::commit();
+            return response()->json(['status' => 'success', 'message' => 'Data turusan berhasil sinkron.']);
         } catch (\Exception $e) {
-            Illuminate\Support\Facades\DB::rollBack();
+            DB::rollBack();
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     });
+});
+
+/**
+ * 3. API SINKRONISASI ABSENSI ANTAR WEBSITE (EXTERNAL)
+ * Endpoint: /api/external/sync-absensi
+ * Tanpa Middleware Auth (Menggunakan API KEY untuk Bypass CORS Server-to-Server)
+ */
+Route::post('/external/sync-absensi', function (Request $request) {
+
+    // VALIDASI API KEY (Ganti sesuai keinginan Anda)
+    $apiKey = $request->header('X-API-KEY');
+    if ($apiKey !== 'SINKRON_SECRET_KEY_123') {
+        return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 401);
+    }
+
+    $validator = Validator::make($request->all(), [
+        'source_name' => 'required|string',
+        'tanggal'     => 'required|date',
+        'absensi'     => 'required|array',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
+    }
+
+    DB::beginTransaction();
+    try {
+        $dataAbsensi = $request->input('absensi');
+        $source = $request->input('source_name');
+        $tanggal = $request->input('tanggal');
+
+        foreach ($dataAbsensi as $item) {
+            // Kita gunakan updateOrCreate agar jika data dikirim 2x tidak duplikat
+            DetailAbsensi::updateOrCreate(
+                [
+                    'kode_pegawai' => ltrim($item['kodep'], '0'), // Normalisasi
+                    'tanggal'      => $tanggal,
+                ],
+                [
+                    'jam_masuk'    => $item['f_masuk'],
+                    'jam_pulang'   => $item['f_pulang'],
+                ]
+            );
+        }
+
+        // KIRIM NOTIFIKASI KE ADMIN (Website Penerima)
+        $admin = User::first(); // Mengambil user admin pertama
+        if ($admin) {
+            Notification::make()
+                ->title('Sinkronisasi Masuk')
+                ->success()
+                ->icon('heroicon-o-arrow-path')
+                ->body("Data absensi dari $source telah berhasil diterima.")
+                ->sendToDatabase($admin);
+        }
+
+        DB::commit();
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data received and synced successfully',
+            'from' => $source
+        ], 200);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+    }
 });
