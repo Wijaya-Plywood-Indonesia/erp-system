@@ -20,4 +20,8 @@ class PegawaiTurunKayuRelationManager extends RelationManager
     {
         return PegawaiTurunKayusTable::configure($table);
     }
+    public function isReadOnly(): bool
+    {
+        return false;
+    }
 }

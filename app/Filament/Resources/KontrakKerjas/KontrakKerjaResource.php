@@ -23,6 +23,9 @@ class KontrakKerjaResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
     protected static ?string $recordTitleAttribute = 'no_kontrak';
+    protected static ?string $navigationLabel = 'Kontrak Kerja';
+    protected static ?string $pluralModelLabel = 'Kontrak Kerja';
+    protected static ?string $modelLabel = 'Kontrak Kerja';
 
     public static function form(Schema $schema): Schema
     {

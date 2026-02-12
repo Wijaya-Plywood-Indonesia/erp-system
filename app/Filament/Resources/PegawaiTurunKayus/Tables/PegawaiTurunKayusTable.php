@@ -42,6 +42,8 @@ class PegawaiTurunKayusTable
                 TextColumn::make('jam_pulang')
                     ->label('Jam Pulang')
                     ->time('H:i'),
+                TextColumn::make('ket')
+                    ->label('Keterangan'),
             ])
             ->filters([
                 SelectFilter::make('id_turun_kayu')

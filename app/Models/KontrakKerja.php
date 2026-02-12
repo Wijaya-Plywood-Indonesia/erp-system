@@ -39,6 +39,11 @@ class KontrakKerja extends Model
         'kontrak_mulai' => 'date',
         'kontrak_selesai' => 'date',
     ];
+    //Relasi bias dengan pegawai
+    public function pegawai()
+    {
+        return $this->belongsTo(Pegawai::class, 'pegawai_id');
+    }
 
     /*
     |--------------------------------------------------------------------------
