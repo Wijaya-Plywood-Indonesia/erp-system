@@ -101,8 +101,6 @@ Route::middleware(['web', 'auth'])->group(function () {
     });
 });
 
-
-
 /**
  * 3. API SINKRONISASI ABSENSI ANTAR WEBSITE (EXTERNAL)
  * Endpoint: /api/external/sync-absensi
@@ -110,7 +108,7 @@ Route::middleware(['web', 'auth'])->group(function () {
  */
 Route::post('/external/sync-absensi', function (Request $request) {
 
-    // 1. Validasi API KEY
+    // 1. Validasi API KEY sederhana
     if ($request->header('X-API-KEY') !== 'SINKRON_SECRET_KEY_123') {
         return response()->json(['message' => 'Unauthorized'], 401);
     }
@@ -130,67 +128,22 @@ Route::post('/external/sync-absensi', function (Request $request) {
         $dataAbsensi = $request->input('absensi');
         $tanggal = $request->input('tanggal');
 
-        // 3. TANGANI DATA INDUK (absensis)
-        // Kita cari laporan untuk tanggal tersebut, jika tidak ada maka buat baru
-        // Ini agar Relation Manager di Filament bisa menampilkan datanya
-        $parent = \App\Models\Absensi::firstOrCreate(
-            ['tanggal' => $tanggal],
-            [
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]
-        );
-
-        $successCount = 0;
-        $skippedCodes = [];
-
         foreach ($dataAbsensi as $item) {
-            $cleanKode = ltrim($item['kodep'], '0');
-
-            // 1. Pastikan Pegawai ada
-            $pegawai = DB::table('pegawais')->where('kode_pegawai', $cleanKode)->first();
-
-            if ($pegawai) {
-                // 2. Cari data absen yang sudah ada di database lokal untuk tanggal tersebut
-                $existing = DetailAbsensi::where('kode_pegawai', $cleanKode)
-                    ->where('tanggal', $tanggal)
-                    ->first();
-
-                // 3. Logika Penggabungan: Ambil jam dari Wahana hanya jika di lokal masih kosong
-                $jamMasukBaru  = ($existing && $existing->jam_masuk && $existing->jam_masuk !== '-')
-                    ? $existing->jam_masuk
-                    : ($item['f_masuk'] ?? null);
-
-                $jamPulangBaru = ($existing && $existing->jam_pulang && $existing->jam_pulang !== '-')
-                    ? $existing->jam_pulang
-                    : ($item['f_pulang'] ?? null);
-
-                // 4. Eksekusi Update atau Create
-                DetailAbsensi::updateOrCreate(
-                    [
-                        'kode_pegawai' => $cleanKode,
-                        'tanggal'      => $tanggal,
-                    ],
-                    [
-                        'id_absensi'   => $parent->id, // Pastikan ID Induk tersedia
-                        'jam_masuk'    => $jamMasukBaru,
-                        'jam_pulang'   => $jamPulangBaru,
-                        'keterangan'   => ($existing ? $existing->keterangan : '') . ' (Synced from Wahana)',
-                    ]
-                );
-                $successCount++;
-            } else {
-                $skippedCodes[] = $cleanKode;
-            }
+            DetailAbsensi::updateOrCreate(
+                [
+                    'kode_pegawai' => ltrim($item['kodep'], '0'),
+                    'tanggal'      => $tanggal,
+                ],
+                [
+                    // Pastikan mengambil key yang benar sesuai data dari Absen.php
+                    'jam_masuk'    => $item['f_masuk'] ?? null,
+                    'jam_pulang'   => $item['f_pulang'] ?? null,
+                ]
+            );
         }
 
         DB::commit();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => "Berhasil memproses $successCount data. (Dilewati: " . count($skippedCodes) . ")",
-            'details' => ['skipped' => $skippedCodes]
-        ]);
+        return response()->json(['status' => 'success', 'message' => 'Data tersimpan.']);
     } catch (\Exception $e) {
         DB::rollBack();
         return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);

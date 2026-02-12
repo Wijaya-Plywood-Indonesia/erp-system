@@ -277,41 +277,52 @@ class Absen extends Page implements HasForms
     public function syncKeWebsiteLain(): void
     {
         if (empty($this->listUnregistered)) {
-            Notification::make()->warning()->title('Tidak ada data anomali untuk disinkron.')->send();
+            Notification::make()->warning()->title('Data kosong.')->send();
             return;
         }
 
-        $tgl = Carbon::parse($this->data['tanggal'])->toDateString();
+        $tgl = \Carbon\Carbon::parse($this->data['tanggal'])->toDateString();
+
+        // SESUAIKAN URL TUJUAN (Jika di Wahana kirim ke Kayu, jika di Kayu kirim ke Wahana)
+        $targetUrl = 'https://kayu.wijayaplywoods.com/api/external/sync-absensi';
 
         try {
-            // URL Website Tujuan (Web B)
-            $urlTujuan = 'https://website-b.com/api/sync-absensi';
+            $response = \Illuminate\Support\Facades\Http::timeout(30)
+                ->withHeaders([
+                    'X-API-KEY' => 'SINKRON_SECRET_KEY_123',
+                    'Accept'    => 'application/json',
+                ])->post($targetUrl, [
+                    'tanggal' => $tgl,
+                    'absensi' => $this->listUnregistered,
+                ]);
 
-            $response = Http::post($urlTujuan, [
-                'source_name' => 'Website Pusat', // Identitas pengirim
-                'tanggal'     => $tgl,
-                'absensi'     => $this->listUnregistered, // Kirim data ID tidak terdaftar
-            ]);
+            $result = $response->json();
 
             if ($response->successful()) {
-                // 1. Notifikasi Sukses di Web Pengirim
                 Notification::make()
                     ->success()
-                    ->title('Sinkronisasi Berhasil')
-                    ->body('Data telah berhasil dikirim ke Website tujuan.')
+                    ->title('Sinkronisasi Selesai')
+                    ->body($result['message'] ?? 'Data berhasil dikirim.')
+                    ->persistent()
                     ->send();
 
-                // 2. LOGIKA MENGHILANGKAN TABEL BAWAH
-                // Karena data sudah dikirim, kita kosongkan array-nya
                 $this->listUnregistered = [];
-
-                // 3. Refresh data inti
                 $this->loadData();
             } else {
-                throw new \Exception('Koneksi gagal atau ditolak oleh server tujuan.');
+                $status = $response->status();
+                Notification::make()
+                    ->danger()
+                    ->title("Gagal (Status: $status)")
+                    ->body($result['message'] ?? 'Terjadi kesalahan pada server tujuan.')
+                    ->persistent()
+                    ->send();
             }
         } catch (\Exception $e) {
-            Notification::make()->danger()->title('Gagal Sinkronisasi')->body($e->getMessage())->send();
+            Notification::make()
+                ->danger()
+                ->title('Kesalahan Koneksi')
+                ->body('Gagal terhubung ke server: ' . $e->getMessage())
+                ->send();
         }
     }
 
