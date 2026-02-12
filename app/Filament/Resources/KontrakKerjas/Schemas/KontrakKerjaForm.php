@@ -2,6 +2,9 @@
 
 namespace App\Filament\Resources\KontrakKerjas\Schemas;
 
+use App\Models\JabatanPerusahaan;
+use App\Models\Pegawai;
+use App\Models\Perusahaan;
 use Carbon\Carbon;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -15,6 +18,45 @@ class KontrakKerjaForm
     {
         return $schema
             ->components([
+                Select::make('pegawai_lookup')
+                    ->label('Ambil Data Dari Pegawai')
+                    ->searchable()
+                    ->reactive() // 🔥 wajib
+                    ->options(
+                        Pegawai::query()
+                            ->get()
+                            ->mapWithKeys(fn($pegawai) => [
+                                $pegawai->id => "{$pegawai->kode_pegawai} | {$pegawai->nama_pegawai}"
+                            ])
+                    )
+                    ->dehydrated(false)
+                    ->afterStateUpdated(function ($state, callable $set) {
+
+                        $pegawai = Pegawai::find($state);
+                        if (!$pegawai)
+                            return;
+
+                        $data = [
+                            'kode' => $pegawai->kode_pegawai,
+                            'nama' => $pegawai->nama_pegawai,
+                            'alamat' => $pegawai->alamat,
+                            'no_telepon' => $pegawai->no_telepon_pegawai,
+                            'jenis_kelamin' => $pegawai->jenis_kelamin_pegawai == 1
+                                ? 'Laki-Laki'
+                                : 'Perempuan',
+                            'tanggal_masuk' => optional($pegawai->tanggal_masuk)?->format('Y-m-d'),
+                            'karyawan_di' => $pegawai->karyawan_di,
+                            'alamat_perusahaan' => $pegawai->alamat_perusahaan,
+                            'jabatan' => $pegawai->jabatan,
+                            'nik' => $pegawai->nik,
+                            'tempat_tanggal_lahir' => $pegawai->tempat_tanggal_lahir,
+                        ];
+
+                        foreach ($data as $field => $value) {
+                            $set($field, $value);
+                        }
+                    }),
+
                 TextInput::make('kode')
                     ->label('Kode Pegawai')
                     ->required(),
@@ -23,20 +65,72 @@ class KontrakKerjaForm
                     ->label('Nama Pegawai')
                     ->required(),
 
-                TextInput::make('jenis_kelamin')
-                    ->label('Jenis Kelamin'),
+                Select::make('jenis_kelamin')
+                    ->label('Jenis Kelamin')
+                    ->options([
+                        'Laki-Laki' => 'Laki-Laki',
+                        'Perempuan' => 'Perempuan',
+                    ])
+                    ->reactive(),
 
                 DatePicker::make('tanggal_masuk')
                     ->label('Tanggal Masuk'),
 
-                TextInput::make('karyawan_di')
-                    ->label('Karyawan Di'),
+                // ==================
+// SELECT PERUSAHAAN
+// ==================
+                Select::make('karyawan_di')
+                    ->label('Karyawan Di')
+                    ->options(Perusahaan::pluck('nama', 'id'))
+                    ->searchable()
+                    ->reactive()
+                    ->required()
+                    ->afterStateUpdated(function ($state, callable $set) {
+                        // Reset jabatan ketika perusahaan berubah
+                        $set('jabatan', null);
 
+                        if ($state) {
+                            // Auto set alamat perusahaan
+                            $perusahaan = Perusahaan::find($state);
+                            $set('alamat_perusahaan', $perusahaan?->alamat);
+                        }
+                    }),
+
+                // ========================
+// ALAMAT PERUSAHAAN (AUTO)
+// ========================
                 TextInput::make('alamat_perusahaan')
-                    ->label('Alamat Perusahaan'),
+                    ->label('Alamat Perusahaan')
+                    ->disabled()          // tidak bisa diubah manual
+                    ->dehydrated()        // tetap disimpan ke database
+                    ->reactive()
+                    ->required()
+                    ->visible(fn($get) => filled($get('karyawan_di')))
+                    ->afterStateHydrated(function ($component, $state, $record) {
+                        if ($record) {
+                            $component->state($record->alamat_perusahaan);
+                        }
+                    }),
 
-                TextInput::make('jabatan')
-                    ->label('Jabatan'),
+                // ========================
+// SELECT JABATAN DINAMIS
+// ========================
+                Select::make('jabatan')
+                    ->label('Jabatan')
+                    ->options(function (callable $get) {
+                        $perusahaanId = $get('karyawan_di');
+
+                        if (!$perusahaanId) {
+                            return [];
+                        }
+
+                        return JabatanPerusahaan::where('perusahaan_id', $perusahaanId)
+                            ->pluck('nama_jabatan', 'id');
+                    })
+                    ->searchable()
+                    ->reactive()
+                    ->required()
+                    ->visible(fn($get) => filled($get('karyawan_di'))),
 
                 TextInput::make('nik')
                     ->label('NIK'),

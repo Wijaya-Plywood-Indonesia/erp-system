@@ -82,5 +82,15 @@ class Pegawai extends Model
         );
     }
 
+    public function perusahaan()
+    {
+        return $this->belongsTo(Perusahaan::class, 'perusahaan_id');
+    }
+
+    public function jabatan()
+    {
+        return $this->belongsTo(JabatanPerusahaan::class, 'jabatan_id');
+    }
+
 
 }
