@@ -32,13 +32,13 @@
                                     <th class="p-3 text-center border-r border-zinc-600 w-16">Kodep</th>
                                     <th class="p-3 text-left border-r border-zinc-600">Nama Pegawai</th>
 
-                                    {{-- KOLOM JAM MANUAL --}}
-                                    <th class="p-2 text-left border-r border-zinc-600">Masuk</th>
-                                    <th class="p-2 text-left border-r border-zinc-600">Pulang</th>
-
                                     {{-- KOLOM JAM MESIN FINGER --}}
                                     <th class="p-2 text-left border-r border-zinc-600">Finger Masuk</th>
                                     <th class="p-2 text-left border-r border-zinc-600">Finger Pulang</th>
+
+                                    {{-- KOLOM JAM MANUAL --}}
+                                    <th class="p-2 text-left border-r border-zinc-600">Masuk</th>
+                                    <th class="p-2 text-left border-r border-zinc-600">Pulang</th>
 
                                     <th class="p-3 text-left border-r border-zinc-600">Hasil / Divisi</th>
                                     <th class="p-3 text-center border-r border-zinc-600 w-12">Ijin</th>
@@ -58,15 +58,6 @@
                                         {{ $row["nama"] }}
                                     </td>
 
-                                    {{-- DATA MANUAL --}}
-                                    <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 font-mono text-zinc-500">
-                                        {{ $row["masuk"] }}
-                                    </td>
-
-                                    <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 font-mono text-zinc-500">
-                                        {{ $row["pulang"] }}
-                                    </td>
-
                                     {{-- DATA MESIN FINGER (HIGHLIGHT BIRU) --}}
                                     <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 font-mono text-zinc-500">
                                         {{ $row["f_masuk"] ?? '-' }}
@@ -74,6 +65,15 @@
 
                                     <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 font-mono text-zinc-500">
                                         {{ $row["f_pulang"] ?? '-' }}
+                                    </td>
+
+                                    {{-- DATA MANUAL --}}
+                                    <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 font-mono text-zinc-500">
+                                        {{ $row["masuk"] }}
+                                    </td>
+
+                                    <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 font-mono text-zinc-500">
+                                        {{ $row["pulang"] }}
                                     </td>
 
                                     <td class="p-2 text-left text-xs font-medium border-r border-zinc-300 dark:border-zinc-700">
@@ -195,7 +195,7 @@
             <div class="bg-zinc-800 p-4 text-white flex justify-between items-center">
                 <h2 class="text-sm font-bold uppercase tracking-wider">LOG MESIN (TIDAK TERDAFTAR)</h2>
                 <div class="text-xs font-mono bg-zinc-700 px-2 py-1 rounded border border-zinc-600">
-                    {{ count($listUnregistered) }} DATA BERMASALAH
+                    {{ count($listUnregistered) }} DATA TIDAK DIKENAL
                 </div>
             </div>
 
