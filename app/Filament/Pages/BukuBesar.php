@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Models\IndukAkun;
 use App\Models\JurnalUmum;
 use Filament\Pages\Page;
+use Carbon\Carbon;
 use BackedEnum;
 use UnitEnum;
 
@@ -16,91 +17,90 @@ class BukuBesar extends Page
     protected static ?string $navigationLabel = 'Buku Besar';
     protected static ?string $title = 'Buku Besar';
 
-     public $indukAkuns;
+    public $indukAkuns;
+    public $filterBulan;
 
     public function mount()
-{
-    $this->indukAkuns = IndukAkun::with([
-        'anakAkuns.children.children'
-    ])
-    ->orderByRaw('CAST(kode_induk_akun AS UNSIGNED) ASC')
-    ->get();
-}
-
-    // Ambil transaksi detail
-    public function getTransaksi($noAkun)
     {
-        return JurnalUmum::where('no_akun', $noAkun)
+        $this->filterBulan = Carbon::now()->format('Y-m'); // Default bulan ini
+        $this->loadData();
+    }
+
+    public function loadData()
+    {
+        $this->indukAkuns = IndukAkun::with([
+            'anakAkuns' => function ($query) {
+                $query->whereNull('parent')->with('children', 'subAnakAkuns');
+            }
+        ])->get();
+    }
+
+    // Fungsi menghitung nominal satu baris transaksi
+    private function hitungNominal($trx)
+    {
+        $qty = $trx->hit_kbk === 'banyak' ? ($trx->banyak ?? 0) : ($trx->m3 ?? 0);
+        return $qty * ($trx->harga ?? 0);
+    }
+
+    // Mendapatkan Saldo Awal (Transaksi sebelum bulan filter)
+    public function getSaldoAwal($kode)
+    {
+        $date = Carbon::parse($this->filterBulan)->startOfMonth();
+        
+        $trxs = JurnalUmum::where('no_akun', $kode)
+            ->where('tgl', '<', $date)
+            ->get();
+
+        $saldo = 0;
+        foreach ($trxs as $trx) {
+            $nominal = $this->hitungNominal($trx);
+            $saldo += ($trx->map === 'D' ? $nominal : -$nominal);
+        }
+        return $saldo;
+    }
+
+    // Transaksi hanya di bulan terpilih
+    public function getTransaksiByKode($kode)
+    {
+        $start = Carbon::parse($this->filterBulan)->startOfMonth();
+        $end = Carbon::parse($this->filterBulan)->endOfMonth();
+
+        return JurnalUmum::where('no_akun', $kode)
+            ->whereBetween('tgl', [$start, $end])
             ->orderBy('tgl')
             ->get();
     }
 
-    public function getTransaksiByKode($kode)
-{
-    return \App\Models\JurnalUmum::where('no_akun', $kode)
-        ->orderBy('tgl')
-        ->get();
-}
+    // Perbaikan Saldo Akun (Mendukung rekursif untuk Induk)
+    public function getTotalRecursive($akun)
+    {
+        $total = 0;
 
-public function getSaldoAkun($kode)
-{
-    $rows = \App\Models\JurnalUmum::where('no_akun', $kode)->get();
-
-    $saldo = 0;
-
-    foreach ($rows as $row) {
-        $qty = $row->hit_kbk === 'banyak'
-            ? ($row->banyak ?? 0)
-            : ($row->m3 ?? 0);
-
-        $total = $qty * ($row->harga ?? 0);
-
-        if ($row->map === 'D') {
-            $saldo += $total;
-        } else {
-            $saldo -= $total;
+        // Jika ini adalah SubAnakAkun (Level Terbawah)
+        if (isset($akun->kode_sub_anak_akun)) {
+            // Saldo Awal + Saldo Berjalan Bulan Ini
+            $total += $this->getSaldoAwal($akun->kode_sub_anak_akun);
+            
+            $trxs = JurnalUmum::where('no_akun', $akun->kode_sub_anak_akun)->get();
+            foreach ($trxs as $trx) {
+                $nominal = $this->hitungNominal($trx);
+                $total += ($trx->map === 'D' ? $nominal : -$nominal);
+            }
+        } 
+        else {
+            // Jika level Anak Akun (Punya children atau subAnakAkuns)
+            if ($akun->children && $akun->children->count()) {
+                foreach ($akun->children as $child) {
+                    $total += $this->getTotalRecursive($child);
+                }
+            }
+            if ($akun->subAnakAkuns && $akun->subAnakAkuns->count()) {
+                foreach ($akun->subAnakAkuns as $sub) {
+                    $total += $this->getTotalRecursive($sub);
+                }
+            }
         }
-    }
 
-    return $saldo;
-}
-
-
-
-    // Hitung saldo detail
-    public function getSaldoDetail($noAkun)
-    {
-        return JurnalUmum::where('no_akun', $noAkun)
-            ->get()
-            ->sum(function ($trx) {
-                $nominal = $trx->harga * (
-                    $trx->hit_kbk === 'banyak'
-                        ? $trx->banyak
-                        : $trx->m3
-                );
-
-                return $trx->map === 'D'
-                    ? $nominal
-                    : -$nominal;
-            });
-    }
-
-    // Hitung saldo induk (1000)
-    public function getSaldoInduk($kodeInduk)
-    {
-        return JurnalUmum::whereHas('anakAkun.indukAkun', function ($q) use ($kodeInduk) {
-            $q->where('kode_induk_akun', $kodeInduk);
-        })->get()->sum(function ($trx) {
-            $nominal = $trx->harga * (
-                $trx->hit_kbk === 'banyak'
-                    ? $trx->banyak
-                    : $trx->m3
-            );
-
-            return $trx->map === 'D'
-                ? $nominal
-                : -$nominal;
-        });
+        return $total;
     }
 }
-
