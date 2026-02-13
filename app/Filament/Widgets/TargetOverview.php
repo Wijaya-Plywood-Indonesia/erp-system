@@ -16,6 +16,8 @@ class TargetOverview extends Widget
     public function mount(): void
     {
         $this->loadAndProcessData();
+
+        // dd($this->full_data);
     }
 
     public function loadAndProcessData()

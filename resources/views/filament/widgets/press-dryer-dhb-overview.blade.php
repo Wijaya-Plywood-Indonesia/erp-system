@@ -1,5 +1,5 @@
 <x-filament-widgets::widget>
-<div class="w-full grid sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4">
+<div class="w-full grid sm:grid-cols-2  gap-4">
 @foreach ($full_data as $data)
 @php
     $mingguIni = $data['data_minggu_ini'] ?? null;

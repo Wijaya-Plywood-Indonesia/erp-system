@@ -1,16 +1,17 @@
 <x-filament-widgets::widget>
-    <div class="w-full grid sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4">
-        @foreach ($full_data as $data)
-        @php
-        $mingguIni = $data['data_minggu_ini'] ?? null;
-        $dataProduksi = $mingguIni['data'] ?? [];
-        $targetMingguanRataRata = 6000;
-
-        $hariIni = $data['data_hari_ini'] ?? [
+<div class="w-full grid sm:grid-cols-2 gap-4">
+@foreach ($full_data as $data)
+@php
+    $mingguIni = $data['data_minggu_ini'] ?? null;
+    $dataProduksi = $mingguIni['data'] ?? [];
+    $targetMingguanRataRata = 6000; 
+    
+    $hariIni = $data['data_hari_ini'] == null ? [
         'total_harian' => 0,
         'progress_harian' => 0,
         'target_harian' => 0
-        ];
+        ]
+        : $data['data_hari_ini'];
 
         $hariDinamis = [];
         for ($i = 6; $i >= 0; $i--) { $hariDinamis[] = now()->subDays($i)->format('D'); }
