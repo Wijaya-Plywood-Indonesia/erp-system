@@ -43,6 +43,10 @@ class PegawaiTurunKayuForm
                     //   ->multiple() // bisa pilih banyak
                     ->searchable()
                     ->required(),
+
+                TextInput::make('ket')
+                    ->label('Keterangan')
+                    ->nullable(),
             ]);
     }
     public static function timeOptions(): array

@@ -1,4 +1,66 @@
+@push('styles')
+<link href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.css" rel="stylesheet">
+@endpush
 <x-filament::page>
+    @push('styles')
+<link href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.css" rel="stylesheet">
+<style>
+    /* Container Utama */
+    .ts-wrapper.single .ts-control {
+        background-color: white !important;
+        border-color: #d1d5db !important; /* gray-300 */
+        color: #1f2937 !important; /* gray-800 */
+        border-radius: 0.5rem !important;
+        padding: 0.5rem !important;
+        box-shadow: none !important;
+    }
+
+    /* Dark Mode - Container */
+    .dark .ts-wrapper.single .ts-control {
+        background-color: #111827 !important; /* gray-900 */
+        border-color: #374151 !important; /* gray-700 */
+        color: #f3f4f6 !important; /* gray-100 */
+    }
+
+    /* Input Pencarian */
+    .ts-wrapper.single .ts-control input {
+        color: inherit !important;
+    }
+
+    /* Dropdown List */
+    .ts-dropdown {
+        background-color: white !important;
+        border-color: #d1d5db !important;
+        color: #1f2937 !important;
+        border-radius: 0.5rem !important;
+        margin-top: 5px !important;
+    }
+
+    /* Dark Mode - Dropdown */
+    .dark .ts-dropdown {
+        background-color: #111827 !important;
+        border-color: #374151 !important;
+        color: #f3f4f6 !important;
+    }
+
+    /* Dropdown Options */
+    .ts-dropdown .option {
+        padding: 8px 12px !important;
+    }
+
+    /* Hover/Active Option */
+    .ts-dropdown .active {
+        background-color: #fbbf24 !important; /* Primary / Amber (Filament style) */
+        color: black !important;
+    }
+
+    .dark .ts-dropdown .active {
+        background-color: #f59e0b !important;
+        color: white !important;
+    }
+</style>
+@endpush
+
 
     {{-- HEADER --}}
     <div class="grid grid-cols-3 gap-4">
@@ -7,37 +69,34 @@
                    text-gray-800 dark:text-gray-100
                    border-gray-300 dark:border-gray-700">
 
-        <input wire:model="kode_jurnal" placeholder="Kode Jurnal" class="border rounded p-2
+        <input wire:model="kode_jurnal" placeholder="Jurnal" class="border rounded p-2
                    bg-white dark:bg-gray-900
                    text-gray-800 dark:text-gray-100
                    border-gray-300 dark:border-gray-700">
-        <input wire:model="no_dokumen" placeholder="No Dokumen" class="border rounded p-2
+        <input wire:model="no_dokumen" placeholder="No" class="border rounded p-2
                    bg-white dark:bg-gray-900
                    text-gray-800 dark:text-gray-100
                    border-gray-300 dark:border-gray-700">
     </div>
 
     {{-- FORM --}}
-    <div id="form-jurnal" class="mt-6 border rounded-lg p-4 grid grid-cols-2 gap-4
+    <div id="form-jurnal" class="scroll-mt-10 mt-6 border rounded-lg p-4 grid grid-cols-2 gap-4
                 bg-white dark:bg-gray-900
                 border-gray-200 dark:border-gray-700
                 text-gray-800 dark:text-gray-100">
 
         {{-- NO AKUN --}}
-        <div>
-            <label class="text-sm font-medium">No Akun</label>
-            <select wire:model.live="form.no_akun" class="border rounded p-2 w-full
-                       bg-white dark:bg-gray-800
-                       text-gray-800 dark:text-gray-100
-                       border-gray-300 dark:border-gray-600">
-                <option value="">-- Pilih Akun --</option>
-                @foreach ($akunList as $a)
-                <option value="{{ $a->kode_sub_anak_akun }}">
-                    {{ $a->kode_sub_anak_akun }} - {{ $a->nama_sub_anak_akun }}
-                </option>
-                @endforeach
-            </select>
-        </div>
+        <div wire:ignore class="col-span-1"> 
+    <label class="text-sm font-medium">No Akun</label>
+    <select id="no_akun" class="w-full"> {{-- Hapus class border/bg di sini --}}
+        <option value="">-- Pilih Akun --</option>
+        @foreach ($akunList as $a)
+        <option value="{{ $a->kode_sub_anak_akun }}">
+            {{ $a->kode_sub_anak_akun }} - {{ $a->nama_sub_anak_akun }}
+        </option>
+        @endforeach
+    </select>
+</div>
 
         <div>
             <label class="text-sm font-medium">Nama Akun</label>
@@ -89,15 +148,20 @@
 
         {{-- HIT KBK --}}
         <div class="col-span-2">
-            <label class="text-sm font-medium">Hit KBK</label>
+            <label class="text-sm font-medium">Hit KBK <span class="text-red-500">*</span></label>
             <select wire:model="form.hit_kbk" class="border rounded p-2 w-full
-                       bg-white dark:bg-gray-800
-                       text-gray-800 dark:text-gray-100
-                       border-gray-300 dark:border-gray-600">
+               bg-white dark:bg-gray-800
+               text-gray-800 dark:text-gray-100
+               border-gray-300 dark:border-gray-600" required>
                 <option value="">-- Pilih --</option>
-                <option value="banyak">Banyak</option>
+                <option value="banyak">Banyak (Pcs/Lbr)</option>
                 <option value="m3">Kubikasi (M3)</option>
             </select>
+
+            {{-- Menampilkan pesan error jika belum dipilih --}}
+            @error('form.hit_kbk')
+            <span class="text-sm text-red-400 mt-1">{{ $message }}</span>
+            @enderror
         </div>
 
         {{-- BANYAK --}}
@@ -157,7 +221,7 @@
                     <th class="px-2 py-1 w-[220px]">Nama Akun</th>
                     <th class="px-2 py-1 w-[150px]">Nama</th>
                     <th class="px-2 py-1 w-[60px]">D/K</th>
-                    <th class="px-2 py-1 w-[80px]">KBK</th>
+                    <th class="px-2 py-1 w-[80px]">Hit Kbk</th>
                     <th class="px-2 py-1 w-[90px] text-right">Banyak</th>
                     <th class="px-2 py-1 w-[90px] text-right">M3</th>
                     <th class="px-2 py-1 w-[120px] text-right">Harga</th>
@@ -208,14 +272,10 @@
     <h3 class="font-bold text-lg mb-3">📘 Jurnal Umum (Final)</h3>
 
     @if ($jurnals->where('status', 'belum sinkron')->count())
-    <x-filament::button
-    wire:click="mountAction('syncJurnal')"
-    color="success"
-    icon="heroicon-o-arrow-path"
-    class="mb-4"
->
-    Sinkronisasi Jurnal
-</x-filament::button>
+    <x-filament::button wire:click="mountAction('syncJurnal')" color="success" icon="heroicon-o-arrow-path"
+        class="mb-4">
+        Sinkronisasi Jurnal
+    </x-filament::button>
 
     @endif
 
@@ -295,11 +355,51 @@
         </table>
     </div>
     <script>
-    Livewire.on('scroll-to-form', () => {
-        document.getElementById('form-jurnal')
-            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-</script>
+        document.addEventListener('livewire:init', () => {
+            Livewire.on('scroll-to-form', (event) => {
+                const element = document.getElementById('form-jurnal');
+                if (element) {
+                    element.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
+    @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/tom-select/dist/js/tom-select.complete.min.js"></script>
+    <script>
+        function initTomSelect() {
+        const el = document.getElementById('no_akun');
+        if (!el) return;
+        
+        // Hapus instansi lama jika ada (mencegah double render)
+        if (el.tomselect) {
+            el.tomselect.destroy();
+        }
 
+        new TomSelect(el, {
+            create: false,
+            searchField: ['text'],
+            placeholder: 'Cari / pilih no akun...',
+            allowEmptyOption: true,
+            onChange(value) {
+                @this.set('form.no_akun', value);
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', initTomSelect);
+    // Jika menggunakan Livewire 3/Filament Navigasi
+    document.addEventListener('livewire:navigated', initTomSelect);
+    
+    // Listener jika field harus berubah saat Anda klik tombol "Edit" di tabel
+    window.addEventListener('set-no-akun', event => {
+        const ts = document.getElementById('no_akun').tomselect;
+        if (ts) ts.setValue(event.detail.value);
+    });
+    </script>
+    @endpush
 
 </x-filament::page>

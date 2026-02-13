@@ -15,13 +15,15 @@ class JurnalUmumToJurnal1Service
     {
         return DB::transaction(function () {
             try {
+                // Menggunakan whereRaw untuk keamanan case-sensitivity status
                 $rows = JurnalUmum::whereRaw('LOWER(status) = ?', ['belum sinkron'])->get();
 
                 if ($rows->isEmpty()) {
-                    Log::info("Sinkronisasi: Tidak ada data Jurnal Umum yang perlu diproses.");
+                    Log::info("Sinkronisasi: Tidak ada data yang perlu diproses.");
                     return 0;
                 }
 
+                // Ambil daftar akun untuk pengecekan saldo yang sudah ada
                 $noAkunList = $rows->pluck('no_akun')->unique()->toArray();
                 $existingJurnals = Jurnal1st::whereIn('no_akun', $noAkunList)
                     ->whereRaw('LOWER(status) = ?', ['belum sinkron'])
@@ -32,11 +34,12 @@ class JurnalUmumToJurnal1Service
                 $userName = Auth::user()?->name ?? 'System';
 
                 foreach ($rows as $row) {
-                    $noAkunRaw = (string) $row->no_akun;
-                    $parts = explode('.', str_replace(',', '.', $noAkunRaw));
+                    $noAkunRaw = number_format((float) $row->no_akun, 2, '.', '');
+                    $parts = explode('.', $noAkunRaw);
                     $angkaDepanKoma = (int) $parts[0];
                     $modif10Value = floor($angkaDepanKoma / 10) * 10;
 
+                    // Konversi Nilai
                     $mapInput = strtoupper($row->map);
                     $rowHarga = (float) ($row->harga ?? 0);
                     $rowBanyak = (float) ($row->banyak ?? 0);
@@ -45,6 +48,7 @@ class JurnalUmumToJurnal1Service
                     $isBanyak = ($row->hit_kbk === 'banyak');
                     $nominalBaris = $isBanyak ? ($rowBanyak * $rowHarga) : ($rowM3 * $rowHarga);
 
+                    // Signed Nominal (Debit + / Kredit -)
                     $signedNominal = ($mapInput === 'D') ? $nominalBaris : -$nominalBaris;
                     $volMutasi = $isBanyak ? $rowBanyak : $rowM3;
                     $signedVolume = $volMutasi * (($mapInput === 'D') ? 1 : -1);
@@ -52,6 +56,7 @@ class JurnalUmumToJurnal1Service
                     $existing = $existingJurnals->get($noAkunRaw);
 
                     if ($existing) {
+                        // UPDATE SALDO (Weighted Average / Netting)
                         $bagianDB = strtoupper($existing->bagian);
                         $totalLamaSigned = ($bagianDB === 'D') ? (float)$existing->total : -(float)$existing->total;
                         $volLama = $isBanyak ? (float)$existing->banyak : (float)$existing->m3;
@@ -73,6 +78,7 @@ class JurnalUmumToJurnal1Service
                             'bagian' => $bagianBaru,
                         ]);
                     } else {
+                        // BUAT DATA BARU
                         Jurnal1st::create([
                             'modif10'    => (string) $modif10Value,
                             'no_akun'    => $noAkunRaw,
@@ -87,11 +93,11 @@ class JurnalUmumToJurnal1Service
                         ]);
                     }
 
+                    // Panggil cleanup yang sudah dimodifikasi (Tanpa Hapus)
                     $this->handleCleanup($row, $userName);
                     $totalProcessed++;
                 }
 
-                Log::info("Sinkronisasi Sukses: Berhasil memindahkan $totalProcessed baris.");
                 return $totalProcessed;
             } catch (\Exception $e) {
                 Log::error("Gagal Sinkronisasi Jurnal: " . $e->getMessage());
@@ -100,17 +106,18 @@ class JurnalUmumToJurnal1Service
         });
     }
 
+    /**
+     * Handle Cleanup: Hanya mengubah status, tidak menghapus data.
+     */
     protected function handleCleanup($row, $userName)
     {
-        $date = Carbon::parse($row->tgl);
-        if ($date->isWednesday() || $date->isThursday()) {
-            $row->update([
-                'status'    => 'sudah sinkron',
-                'synced_at' => now(),
-                'synced_by' => $userName,
-            ]);
-        } else {
-            $row->delete();
-        }
+        // PERUBAHAN UTAMA: 
+        // Semua data, apapun harinya, akan diupdate menjadi 'sudah sinkron' 
+        // sehingga tetap ada di database dan tidak akan diproses dua kali.
+        $row->update([
+            'status'    => 'sudah sinkron',
+            'synced_at' => now(),
+            'synced_by' => $userName,
+        ]);
     }
 }

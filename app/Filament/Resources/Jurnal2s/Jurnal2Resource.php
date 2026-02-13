@@ -21,6 +21,7 @@ class Jurnal2Resource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
+    protected static ?int $navigationSort = 3;
 
     protected static ?string $recordTitleAttribute = 'p';
 

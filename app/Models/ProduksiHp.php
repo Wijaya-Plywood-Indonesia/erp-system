@@ -38,6 +38,11 @@ class ProduksiHp extends Model
         return $this->hasMany(TriplekHasilHp::class, 'id_produksi_hp');
     }
 
+    public function bahanHotpress()
+    {
+        return $this->hasMany(BahanHotpress::class, 'id_produksi_hp');
+    }
+
     public function validasiHp()
     {
         return $this->hasMany(ValidasiHp::class, 'id_produksi_hp');

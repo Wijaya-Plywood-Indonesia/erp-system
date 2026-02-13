@@ -24,6 +24,7 @@ class Jurnal1stResource extends Resource
     protected static ?string $navigationLabel = 'Jurnal 1st';
     protected static ?string $pluralModelLabel = 'Jurnal 1st';
     protected static ?string $modelLabel = 'Jurnal 1st';
+    protected static ?int $navigationSort = 2;
 
     public static function form(Schema $schema): Schema
     {

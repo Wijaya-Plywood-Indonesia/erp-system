@@ -22,6 +22,9 @@ class HariLiburResource extends Resource
     //protected int $defaultPaginationPageSize = 50;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static ?string $navigationLabel = 'Hari Libur';
+    protected static ?string $pluralModelLabel = 'Hari Libur';
+    protected static ?string $modelLabel = 'Hari Libur';
 
     public static function form(Schema $schema): Schema
     {

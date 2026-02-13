@@ -11,6 +11,11 @@ use Filament\Tables\Table;
 
 class DetailTurunKayuRelationManager extends RelationManager
 {
+
+    public function isReadOnly(): bool
+    {
+        return false;
+    }
     protected static string $relationship = 'detailTurunKayu';
 
     public function form(Schema $schema): Schema

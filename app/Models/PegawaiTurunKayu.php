@@ -17,7 +17,7 @@ class PegawaiTurunKayu extends Model
         'jam_masuk',
         'jam_pulang',
         'izin',
-        'keterangan',
+        'ket',
     ];
 
 
