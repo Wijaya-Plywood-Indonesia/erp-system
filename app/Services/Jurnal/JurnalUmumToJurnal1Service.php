@@ -3,11 +3,10 @@
 namespace App\Services\Jurnal;
 
 use App\Models\JurnalUmum;
-use App\Models\Jurnal1st;
-use Illuminate\Support\Facades\Auth;
+use App\Models\Neraca;
+use App\Models\IndukAkun;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon;
 
 class JurnalUmumToJurnal1Service
 {
@@ -15,109 +14,73 @@ class JurnalUmumToJurnal1Service
     {
         return DB::transaction(function () {
             try {
-                // Menggunakan whereRaw untuk keamanan case-sensitivity status
+                // 1. Ambil semua data Jurnal Umum yang belum disinkronkan
                 $rows = JurnalUmum::whereRaw('LOWER(status) = ?', ['belum sinkron'])->get();
 
-                if ($rows->isEmpty()) {
-                    Log::info("Sinkronisasi: Tidak ada data yang perlu diproses.");
-                    return 0;
-                }
-
-                // Ambil daftar akun untuk pengecekan saldo yang sudah ada
-                $noAkunList = $rows->pluck('no_akun')->unique()->toArray();
-                $existingJurnals = Jurnal1st::whereIn('no_akun', $noAkunList)
-                    ->whereRaw('LOWER(status) = ?', ['belum sinkron'])
-                    ->get()
-                    ->keyBy('no_akun');
+                if ($rows->isEmpty()) return 0;
 
                 $totalProcessed = 0;
-                $userName = Auth::user()?->name ?? 'System';
 
                 foreach ($rows as $row) {
-                    $noAkunRaw = number_format((float) $row->no_akun, 2, '.', '');
-                    $parts = explode('.', $noAkunRaw);
-                    $angkaDepanKoma = (int) $parts[0];
-                    $modif10Value = floor($angkaDepanKoma / 10) * 10;
+                    // 2. Identifikasi Kelompok Ribuan (Modif 1000)
+                    // Contoh: 1111.00 -> 1000, 2110.00 -> 2000
+                    $noAkunRaw = (float) $row->no_akun;
+                    $kodeInduk = floor($noAkunRaw / 1000) * 1000;
+                    $noAkunInduk = number_format($kodeInduk, 0, '.', '');
 
-                    // Konversi Nilai
-                    $mapInput = strtoupper($row->map);
-                    $rowHarga = (float) ($row->harga ?? 0);
-                    $rowBanyak = (float) ($row->banyak ?? 0);
-                    $rowM3 = (float) ($row->m3 ?? 0);
+                    // 3. Logika SUMIF (Debit vs Kredit)
+                    // Mengambil nilai nominal baris
+                    $nominal = ($row->hit_kbk === 'banyak')
+                        ? (float)$row->banyak * (float)$row->harga
+                        : (float)$row->m3 * (float)$row->harga;
 
-                    $isBanyak = ($row->hit_kbk === 'banyak');
-                    $nominalBaris = $isBanyak ? ($rowBanyak * $rowHarga) : ($rowM3 * $rowHarga);
+                    // Rumus: Jika Map = D maka (+), jika Map = K maka (-)
+                    $signedNominal = (strtoupper($row->map) === 'D' || $row->map === 'Debit')
+                        ? $nominal
+                        : -$nominal;
 
-                    // Signed Nominal (Debit + / Kredit -)
-                    $signedNominal = ($mapInput === 'D') ? $nominalBaris : -$nominalBaris;
-                    $volMutasi = $isBanyak ? $rowBanyak : $rowM3;
-                    $signedVolume = $volMutasi * (($mapInput === 'D') ? 1 : -1);
+                    // 4. Update atau Create ke Tabel Neraca
+                    $neraca = Neraca::where('akun_seribu', $noAkunInduk)->first();
 
-                    $existing = $existingJurnals->get($noAkunRaw);
+                    if ($neraca) {
+                        // Akumulasi: Saldo Neraca Sekarang + (Total Debit - Total Kredit baru)
+                        $newTotal = (float)$neraca->total + $signedNominal;
 
-                    if ($existing) {
-                        // UPDATE SALDO (Weighted Average / Netting)
-                        $bagianDB = strtoupper($existing->bagian);
-                        $totalLamaSigned = ($bagianDB === 'D') ? (float)$existing->total : -(float)$existing->total;
-                        $volLama = $isBanyak ? (float)$existing->banyak : (float)$existing->m3;
-                        $volLamaSigned = ($bagianDB === 'D') ? $volLama : -$volLama;
-
-                        $totalBaruSigned = $totalLamaSigned + $signedNominal;
-                        $volBaruSigned = $volLamaSigned + $signedVolume;
-
-                        $absTotalBaru = abs($totalBaruSigned);
-                        $absVolBaru = abs($volBaruSigned);
-                        $bagianBaru = ($totalBaruSigned >= 0) ? 'D' : 'K';
-                        $finalHarga = ($absVolBaru > 0) ? ($absTotalBaru / $absVolBaru) : 0;
-
-                        $existing->update([
-                            'banyak' => $isBanyak ? $absVolBaru : $existing->banyak,
-                            'm3'     => !$isBanyak ? $absVolBaru : $existing->m3,
-                            'harga'  => $finalHarga,
-                            'total'  => $absTotalBaru,
-                            'bagian' => $bagianBaru,
+                        $neraca->update([
+                            'total' => $newTotal,
+                            // Update volume jika diperlukan untuk pelaporan
+                            'banyak' => (float)$neraca->banyak + ($row->hit_kbk === 'banyak' ? (float)$row->banyak : 0),
+                            'kubikasi' => (float)$neraca->kubikasi + ($row->hit_kbk === 'm3' ? (float)$row->m3 : 0),
                         ]);
                     } else {
-                        // BUAT DATA BARU
-                        Jurnal1st::create([
-                            'modif10'    => (string) $modif10Value,
-                            'no_akun'    => $noAkunRaw,
-                            'nama_akun'  => $row->nama_akun ?? $row->nama,
-                            'bagian'     => $mapInput,
-                            'banyak'     => $isBanyak ? $rowBanyak : 0,
-                            'm3'         => !$isBanyak ? $rowM3 : 0,
-                            'harga'      => $rowHarga,
-                            'total'      => $nominalBaris,
-                            'created_by' => $row->created_by,
-                            'status'     => 'belum sinkron',
+                        // Ambil Nama Induk dari Model IndukAkun secara dinamis
+                        $namaInduk = IndukAkun::where('kode_induk_akun', $noAkunInduk)->value('nama_induk_akun');
+
+                        Neraca::create([
+                            'akun_seribu' => $noAkunInduk,
+                            'detail'      => $namaInduk ?? 'Akun Induk ' . $noAkunInduk,
+                            'banyak'      => ($row->hit_kbk === 'banyak') ? $row->banyak : 0,
+                            'kubikasi'    => ($row->hit_kbk === 'm3') ? $row->m3 : 0,
+                            'harga'       => $row->harga,
+                            'total'       => $signedNominal,
                         ]);
                     }
 
-                    // Panggil cleanup yang sudah dimodifikasi (Tanpa Hapus)
-                    $this->handleCleanup($row, $userName);
+                    // 5. Tandai baris asli sebagai 'sudah sinkron'
+                    $row->update([
+                        'status' => 'sudah sinkron',
+                        'synced_at' => now(),
+                        'synced_by' => auth()->user()->name ?? 'System',
+                    ]);
+
                     $totalProcessed++;
                 }
 
                 return $totalProcessed;
             } catch (\Exception $e) {
-                Log::error("Gagal Sinkronisasi Jurnal: " . $e->getMessage());
+                Log::error("Gagal Sync SUMIF Neraca: " . $e->getMessage());
                 throw $e;
             }
         });
-    }
-
-    /**
-     * Handle Cleanup: Hanya mengubah status, tidak menghapus data.
-     */
-    protected function handleCleanup($row, $userName)
-    {
-        // PERUBAHAN UTAMA: 
-        // Semua data, apapun harinya, akan diupdate menjadi 'sudah sinkron' 
-        // sehingga tetap ada di database dan tidak akan diproses dua kali.
-        $row->update([
-            'status'    => 'sudah sinkron',
-            'synced_at' => now(),
-            'synced_by' => $userName,
-        ]);
     }
 }
