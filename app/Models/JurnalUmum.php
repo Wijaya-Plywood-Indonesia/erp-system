@@ -43,6 +43,15 @@ class JurnalUmum extends Model
         return $this->belongsTo(User::class, 'synced_by');
     }
 
+    public function anakAkun()
+{
+    return $this->belongsTo(
+        \App\Models\AnakAkun::class,
+        'no_akun',
+        'kode_anak_akun'
+    );
+}
+
     /**
      * Casting untuk tipe data.
      */

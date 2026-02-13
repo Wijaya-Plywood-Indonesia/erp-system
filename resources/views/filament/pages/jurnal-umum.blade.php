@@ -8,18 +8,17 @@
     /* Container Utama */
     .ts-wrapper.single .ts-control {
         background-color: white !important;
-        border-color: #d1d5db !important; /* gray-300 */
-        color: #1f2937 !important; /* gray-800 */
+        border-color: #d1d5db !important; 
+        color: #1f2937 !important; 
         border-radius: 0.5rem !important;
         padding: 0.5rem !important;
         box-shadow: none !important;
     }
 
-    /* Dark Mode - Container */
     .dark .ts-wrapper.single .ts-control {
-        background-color: #111827 !important; /* gray-900 */
-        border-color: #374151 !important; /* gray-700 */
-        color: #f3f4f6 !important; /* gray-100 */
+        background-color: #111827 !important; 
+        border-color: #374151 !important; 
+        color: #f3f4f6 !important; 
     }
 
     /* Input Pencarian */
@@ -149,7 +148,7 @@
         {{-- HIT KBK --}}
         <div class="col-span-2">
             <label class="text-sm font-medium">Hit KBK <span class="text-red-500">*</span></label>
-            <select wire:model="form.hit_kbk" class="border rounded p-2 w-full
+            <select wire:model.live="form.hit_kbk" class="border rounded p-2 w-full
                bg-white dark:bg-gray-800
                text-gray-800 dark:text-gray-100
                border-gray-300 dark:border-gray-600" required>

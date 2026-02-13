@@ -31,17 +31,14 @@ class AnakAkun extends Model
      * Relasi Self Parent
      * AnakAkun dapat memiliki 1 parent (AnakAkun lain)
      */
-    public function parentAkun()
-    {
-        return $this->belongsTo(AnakAkun::class, 'parent');
-    }
-    /**
-     * Relasi Self Children
-     * AnakAkun dapat memiliki banyak child (AnakAkun lain)
-     */
     public function children()
     {
         return $this->hasMany(AnakAkun::class, 'parent');
+    }
+
+    public function parentAkun()
+    {
+        return $this->belongsTo(AnakAkun::class, 'parent');
     }
 
     /**

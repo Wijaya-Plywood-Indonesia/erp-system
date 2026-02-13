@@ -147,6 +147,22 @@ class JurnalUmumPage extends Page implements HasActions
                 Action::make('cancel')->label('Batal')->close(),
             ])->send();
     }
+
+    public function updated($propertyName)
+{
+    if ($propertyName === 'form.hit_kbk') {
+
+        if ($this->form['hit_kbk'] === 'banyak') {
+            $this->form['banyak'] = 1;
+            $this->form['m3'] = null;
+        }
+
+        if ($this->form['hit_kbk'] === 'm3') {
+            $this->form['banyak'] = null;
+        }
+    }
+}
+
     public function editJurnal(int $id)
     {
         $jurnal = JurnalUmum::findOrFail($id);
