@@ -18,7 +18,6 @@ use Filament\Tables\Grouping\Group;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
-use Illuminate\Contracts\View\View;
 
 class DetailTurusanKayusTable
 {
@@ -57,24 +56,24 @@ class DetailTurusanKayusTable
                         return "{$namaKayu} {$panjang} ({$grade})";
                     })
                     ->sortable(['jenisKayu.nama_kayu', 'panjang', 'grade'])
-                    ->searchable(['jenisKayu.nama_kayu', 'panjang'])
-                    ->color(fn($record) => match (trim((string) $record->grade)) {
-                        '1', 'A' => 'success',
-                        '2', 'B' => 'primary',
-                        default => 'gray',
-                    }),
+                    ->searchable(['jenisKayu.nama_kayu', 'panjang']),
 
                 TextColumn::make('diameter')
                     ->label('D')
                     ->numeric()
                     ->sortable(),
 
+                // Update Kolom Kubikasi: Menambahkan variabel panjang ke dalam rumus
                 TextColumn::make('kubikasi')
                     ->label('Kubikasi')
                     ->getStateUsing(function ($record) {
-                        $diameter = (int) $record->diameter;
-                        $kuantitas = $record->kuantitas ?? 1;
-                        $kubikasi = $diameter * $diameter * $kuantitas * 0.785 / 1_000_000;
+                        $panjang = (int) ($record->panjang ?? 0);
+                        $diameter = (int) ($record->diameter ?? 0);
+                        $kuantitas = (int) ($record->kuantitas ?? 1);
+
+                        // Rumus Lengkap: (P * D * D * Qty * 0.785) / 1.000.000
+                        $kubikasi = ($panjang * $diameter * $diameter * $kuantitas * 0.785) / 1_000_000;
+
                         return number_format($kubikasi, 6, ',', '.');
                     })
                     ->suffix(' m³')
@@ -100,14 +99,15 @@ class DetailTurusanKayusTable
                         $nama = $record->lahan?->nama_lahan ?? '-';
                         $jenis_kayu = $record->jenisKayu?->nama_kayu ?? '-';
 
+                        // Perhitungan Total dalam Group: Menggunakan rumus yang menyertakan panjang
                         if ($records instanceof Collection && $records->isNotEmpty()) {
                             $totalBatang = $records->count();
-                            $totalKubikasi = $records->sum(fn($r) => (float) ($r->diameter * $r->diameter * ($r->kuantitas ?? 1) * 0.785 / 1000000));
+                            $totalKubikasi = $records->sum(fn($r) => (float) (($r->panjang ?? 0) * ($r->diameter ?? 0) * ($r->diameter ?? 0) * ($r->kuantitas ?? 1) * 0.785 / 1_000_000));
                         } else {
                             $parentId = $record->id_kayu_masuk ?? $record->kayu_masuk_id;
                             $query = DetailTurusanKayu::where('id_kayu_masuk', $parentId)->where('lahan_id', $record->lahan_id)->get();
                             $totalBatang = $query->count();
-                            $totalKubikasi = $query->sum(fn($r) => (float) ($r->diameter * $r->diameter * ($r->kuantitas ?? 1) * 0.785 / 1000000));
+                            $totalKubikasi = $query->sum(fn($r) => (float) (($r->panjang ?? 0) * ($r->diameter ?? 0) * ($r->diameter ?? 0) * ($r->kuantitas ?? 1) * 0.785 / 1_000_000));
                         }
 
                         return "{$kode} {$nama} {$jenis_kayu} - {$totalBatang} batang (" . number_format($totalKubikasi, 4, ',', '.') . " m³)";
@@ -115,7 +115,6 @@ class DetailTurusanKayusTable
             ])
             ->defaultGroup('lahan.kode_lahan')
             ->headerActions([
-                // CREATE ONLINE (LOCKED)
                 CreateAction::make()
                     ->label('Tambah Kayu')
                     ->createAnother(true)
@@ -126,7 +125,6 @@ class DetailTurusanKayusTable
                             ->success()->send();
                     }),
 
-                // OFFLINE MODE (LOCKED)
                 Action::make('offlineInput')
                     ->label('Mode Offline')
                     ->icon('heroicon-m-signal-slash')
