@@ -1,24 +1,23 @@
-@if($isLoading)
-    <div class="flex items-center justify-center min-h-[60vh]">
-        <div class="flex flex-col items-center gap-4 text-primary-600">
-            <svg class="w-10 h-10 animate-spin" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8z">
-                </path>
-            </svg>
-
-            <span class="text-lg font-semibold">
-                Memuat Buku Besar...
-            </span>
-
-            <span class="text-sm text-gray-500 dark:text-gray-400">
-                Mohon tunggu, sedang menghitung saldo & transaksi
-            </span>
+<x-filament-panels::page wire:init="initLoad">
+    @if($isLoading)
+        <div class="flex items-center justify-center min-h-[60vh]">
+            <div class="flex flex-col items-center gap-4 text-primary-600">
+                <svg class="w-10 h-10 animate-spin" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10"
+                        stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor"
+                        d="M4 12a8 8 0 018-8v8z">
+                    </path>
+                </svg>
+                <span class="text-lg font-semibold">
+                    Memuat Buku Besar...
+                </span>
+                <span class="text-sm text-gray-500 dark:text-gray-400">
+                    Mohon tunggu, sedang menghitung saldo & transaksi
+                </span>
+            </div>
         </div>
-    </div>
-@else
-<x-filament-panels::page>
+    @else
     
     <div class="space-y-6">
 

@@ -17,30 +17,33 @@ class BukuBesar extends Page
     protected static ?string $navigationLabel = 'Buku Besar';
     protected static ?string $title = 'Buku Besar';
 
-    public $indukAkuns;
+    public $indukAkuns = [];
     public $filterBulan;
     public $isLoading = true;
 
     public function mount()
     {
         $this->filterBulan = Carbon::now()->format('Y-m'); // Default bulan ini
-        $this->isLoading = true;
-        $this->loadData();
-        $this->isLoading = false;
     }
 
-    public function loadData()
+    public function initLoad()
 {
-    $this->indukAkuns = IndukAkun::with([
-        'anakAkuns' => function ($query) {
-            $query->whereNull('parent')
-                  ->with([
-                      'children.children', // rekursif 2 level
-                      'subAnakAkuns'
-                  ]);
-        }
-    ])->get();
+    $this->loadData();
+    $this->isLoading = false;
 }
+
+    public function loadData()
+    {
+        $this->indukAkuns = IndukAkun::with([
+            'anakAkuns' => function ($query) {
+                $query->whereNull('parent')
+                    ->with([
+                        'children.children', // rekursif 2 level
+                        'subAnakAkuns'
+                    ]);
+            }
+        ])->get();
+    }
 
     // Fungsi menghitung nominal satu baris transaksi
     private function hitungNominal($trx)
