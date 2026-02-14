@@ -8,6 +8,8 @@ use Filament\Pages\Page;
 use Carbon\Carbon;
 use BackedEnum;
 use UnitEnum;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class BukuBesar extends Page
 {
@@ -24,6 +26,12 @@ class BukuBesar extends Page
     public function mount()
     {
         $this->filterBulan = Carbon::now()->format('Y-m'); // Default bulan ini
+    }
+
+    public function initLoad()
+    {
+        $this->loadData();
+        $this->isLoading = false;
     }
 
     public function loadData()
