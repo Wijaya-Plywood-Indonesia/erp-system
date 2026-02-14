@@ -15,6 +15,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidths, WithTitle
 {
     protected array $data;
+
     public function __construct(array $data)
     {
         $this->data = $data;
@@ -24,11 +25,9 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
     {
         $result = [];
         foreach ($this->data as $row) {
-            // LOGIKA: Ambil murni Nama Divisinya saja (Membersihkan hasil produksi)
+            // Pembersihan Nama Divisi
             $divisiRaw = is_array($row['hasil']) ? $row['hasil'] : explode(', ', $row['hasil']);
-
             $cleanDivisi = collect($divisiRaw)->map(function ($item) {
-                // Mengambil kata pertama atau membersihkan teks sebelum tanda ':' atau '('
                 $name = trim(explode(':', explode('(', $item)[0])[0]);
                 return strtoupper($name);
             })->unique()->implode(', ');
@@ -36,9 +35,13 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
             $result[] = [
                 $row['kodep'] ?? '-',
                 $row['nama'] ?? '-',
+                // FINGER (Data Mesin) - Kolom C & D
+                $this->convertTimeToExcel($row['f_masuk']),
+                $this->convertTimeToExcel($row['f_pulang']),
+                // MANUAL (Data Input) - Kolom E & F
                 $this->convertTimeToExcel($row['masuk']),
                 $this->convertTimeToExcel($row['pulang']),
-                $cleanDivisi ?: '-', // Hanya nama divisi, misal: "REPAIR, HOT PRESS"
+                $cleanDivisi ?: '-',
                 $row['ijin'] ?? '',
                 $row['keterangan'] ?? '',
             ];
@@ -46,65 +49,99 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
         return $result;
     }
 
+    /**
+     * Mengonversi string waktu ke format serial Excel agar rumus matematika Excel jalan
+     */
     protected function convertTimeToExcel($time)
     {
         if (empty($time) || $time === '-' || strlen($time) < 5) return null;
-        [$h, $m] = explode(':', substr($time, 0, 5));
-        return ($h / 24) + ($m / 1440);
+
+        try {
+            // Ambil HH:mm
+            $parts = explode(':', substr($time, 0, 5));
+            if (count($parts) < 2) return null;
+
+            $h = (int) $parts[0];
+            $m = (int) $parts[1];
+
+            return ($h / 24) + ($m / 1440);
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 
     public function headings(): array
     {
-        return ['Kodep', 'Nama Pegawai', 'Masuk', 'Pulang', 'Divisi', 'Ijin', 'Keterangan'];
+        return [
+            'Kodep',
+            'Nama Pegawai',
+            'Finger Masuk',
+            'Finger Pulang',
+            'Manual Masuk',
+            'Manual Pulang',
+            'Divisi',
+            'Ijin',
+            'Keterangan'
+        ];
     }
 
     public function styles(Worksheet $sheet)
     {
         $lastRow = count($this->data) + 1;
 
-        // Header Style
-        $sheet->getStyle('A1:G1')->applyFromArray([
+        // Header Style (Dark Gray)
+        $sheet->getStyle('A1:I1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '2D3748']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
         ]);
 
-        // Standarisasi Font Hitam dan Border
-        $sheet->getStyle("A2:G{$lastRow}")->applyFromArray([
+        // Isi Data Style
+        $sheet->getStyle("A2:I{$lastRow}")->applyFromArray([
             'font' => ['color' => ['rgb' => '000000']],
             'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'D3D3D3']]],
             'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
         ]);
 
-        // SIMULASI BADGE: Memberikan warna background pada Kolom E (Divisi)
-        for ($i = 2; $i <= $lastRow; $i++) {
-            $divisiText = $sheet->getCell("E{$i}")->getValue();
+        // Format Khusus Kolom Waktu (C, D, E, F) agar Excel mengenalnya sebagai jam
+        $sheet->getStyle("C2:F{$lastRow}")->getNumberFormat()->setFormatCode('hh:mm');
 
+        // Center alignment untuk Kodep dan Jam
+        $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("C2:F{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        // Style Badge untuk Divisi (Kolom G)
+        for ($i = 2; $i <= $lastRow; $i++) {
+            $divisiText = $sheet->getCell("G{$i}")->getValue();
             if ($divisiText !== '-' && !empty($divisiText)) {
-                $sheet->getStyle("E{$i}")->applyFromArray([
-                    'font' => ['bold' => true, 'color' => ['rgb' => '1E40AF']], // Teks Biru Gelap
-                    'fill' => [
-                        'fillType' => Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => 'DBEAFE'], // Background Biru Muda (Simulasi Badge)
-                    ],
+                $sheet->getStyle("G{$i}")->applyFromArray([
+                    'font' => ['bold' => true, 'color' => ['rgb' => '1E40AF']],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBEAFE']],
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
                 ]);
             }
         }
-
-        $sheet->getStyle("C2:D{$lastRow}")->getNumberFormat()->setFormatCode('hh:mm:ss');
-        $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         return [];
     }
 
     public function columnWidths(): array
     {
-        return ['A' => 10, 'B' => 30, 'C' => 12, 'D' => 12, 'E' => 35, 'F' => 10, 'G' => 40];
+        return [
+            'A' => 10, // Kodep
+            'B' => 30, // Nama
+            'C' => 15, // Finger Masuk
+            'D' => 15, // Finger Pulang
+            'E' => 15, // Manual Masuk
+            'F' => 15, // Manual Pulang
+            'G' => 35, // Divisi
+            'H' => 10, // Ijin
+            'I' => 40  // Keterangan
+        ];
     }
 
     public function title(): string
     {
-        return 'LAPORAN_ABSENSI';
+        return 'LAPORAN_ABSENSI_SINKRON';
     }
 }

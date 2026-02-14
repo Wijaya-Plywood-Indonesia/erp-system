@@ -3,62 +3,63 @@
 @endpush
 <x-filament::page>
     @push('styles')
-<link href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.css" rel="stylesheet">
-<style>
-    /* Container Utama */
-    .ts-wrapper.single .ts-control {
-        background-color: white !important;
-        border-color: #d1d5db !important; 
-        color: #1f2937 !important; 
-        border-radius: 0.5rem !important;
-        padding: 0.5rem !important;
-        box-shadow: none !important;
-    }
+    <link href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.css" rel="stylesheet">
+    <style>
+        /* Container Utama */
+        .ts-wrapper.single .ts-control {
+            background-color: white !important;
+            border-color: #d1d5db !important;
+            color: #1f2937 !important;
+            border-radius: 0.5rem !important;
+            padding: 0.5rem !important;
+            box-shadow: none !important;
+        }
 
-    .dark .ts-wrapper.single .ts-control {
-        background-color: #111827 !important; 
-        border-color: #374151 !important; 
-        color: #f3f4f6 !important; 
-    }
+        .dark .ts-wrapper.single .ts-control {
+            background-color: #111827 !important;
+            border-color: #374151 !important;
+            color: #f3f4f6 !important;
+        }
 
-    /* Input Pencarian */
-    .ts-wrapper.single .ts-control input {
-        color: inherit !important;
-    }
+        /* Input Pencarian */
+        .ts-wrapper.single .ts-control input {
+            color: inherit !important;
+        }
 
-    /* Dropdown List */
-    .ts-dropdown {
-        background-color: white !important;
-        border-color: #d1d5db !important;
-        color: #1f2937 !important;
-        border-radius: 0.5rem !important;
-        margin-top: 5px !important;
-    }
+        /* Dropdown List */
+        .ts-dropdown {
+            background-color: white !important;
+            border-color: #d1d5db !important;
+            color: #1f2937 !important;
+            border-radius: 0.5rem !important;
+            margin-top: 5px !important;
+        }
 
-    /* Dark Mode - Dropdown */
-    .dark .ts-dropdown {
-        background-color: #111827 !important;
-        border-color: #374151 !important;
-        color: #f3f4f6 !important;
-    }
+        /* Dark Mode - Dropdown */
+        .dark .ts-dropdown {
+            background-color: #111827 !important;
+            border-color: #374151 !important;
+            color: #f3f4f6 !important;
+        }
 
-    /* Dropdown Options */
-    .ts-dropdown .option {
-        padding: 8px 12px !important;
-    }
+        /* Dropdown Options */
+        .ts-dropdown .option {
+            padding: 8px 12px !important;
+        }
 
-    /* Hover/Active Option */
-    .ts-dropdown .active {
-        background-color: #fbbf24 !important; /* Primary / Amber (Filament style) */
-        color: black !important;
-    }
+        /* Hover/Active Option */
+        .ts-dropdown .active {
+            background-color: #fbbf24 !important;
+            /* Primary / Amber (Filament style) */
+            color: black !important;
+        }
 
-    .dark .ts-dropdown .active {
-        background-color: #f59e0b !important;
-        color: white !important;
-    }
-</style>
-@endpush
+        .dark .ts-dropdown .active {
+            background-color: #f59e0b !important;
+            color: white !important;
+        }
+    </style>
+    @endpush
 
 
     {{-- HEADER --}}
@@ -85,17 +86,17 @@
                 text-gray-800 dark:text-gray-100">
 
         {{-- NO AKUN --}}
-        <div wire:ignore class="col-span-1"> 
-    <label class="text-sm font-medium">No Akun</label>
-    <select id="no_akun" class="w-full"> {{-- Hapus class border/bg di sini --}}
-        <option value="">-- Pilih Akun --</option>
-        @foreach ($akunList as $a)
-        <option value="{{ $a->kode_sub_anak_akun }}">
-            {{ $a->kode_sub_anak_akun }} - {{ $a->nama_sub_anak_akun }}
-        </option>
-        @endforeach
-    </select>
-</div>
+        <div wire:ignore class="col-span-1">
+            <label class="text-sm font-medium">No Akun</label>
+            <select id="no_akun" class="w-full"> {{-- Hapus class border/bg di sini --}}
+                <option value="">-- Pilih Akun --</option>
+                @foreach ($akunList as $a)
+                <option value="{{ $a->kode_sub_anak_akun }}">
+                    {{ $a->kode_sub_anak_akun }} - {{ $a->nama_sub_anak_akun }}
+                </option>
+                @endforeach
+            </select>
+        </div>
 
         <div>
             <label class="text-sm font-medium">Nama Akun</label>
@@ -352,6 +353,22 @@
                 @endforeach
             </tbody>
         </table>
+        <div wire:loading class="text-center py-3 text-sm text-gray-500">
+            Loading data...
+        </div>
+        <div x-data="{
+        observe() {
+            let observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        @this.loadMore()
+                    }
+                })
+            }, { rootMargin: '200px' }
+
+            observer.observe(this.$el)
+        }
+    }" x-init="observe" class="h-10"></div>
     </div>
     <script>
         document.addEventListener('livewire:init', () => {

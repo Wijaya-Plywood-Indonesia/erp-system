@@ -27,6 +27,7 @@ class NeracaResource extends Resource
 
     protected static ?int $navigationSort = 5;
 
+
     public static function form(Schema $schema): Schema
     {
         return NeracaForm::configure($schema);
