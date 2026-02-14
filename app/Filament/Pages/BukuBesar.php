@@ -27,13 +27,17 @@ class BukuBesar extends Page
     }
 
     public function loadData()
-    {
-        $this->indukAkuns = IndukAkun::with([
-            'anakAkuns' => function ($query) {
-                $query->whereNull('parent')->with('children', 'subAnakAkuns');
-            }
-        ])->get();
-    }
+{
+    $this->indukAkuns = IndukAkun::with([
+        'anakAkuns' => function ($query) {
+            $query->whereNull('parent')
+                  ->with([
+                      'children.children', // rekursif 2 level
+                      'subAnakAkuns'
+                  ]);
+        }
+    ])->get();
+}
 
     // Fungsi menghitung nominal satu baris transaksi
     private function hitungNominal($trx)
@@ -46,7 +50,7 @@ class BukuBesar extends Page
     public function getSaldoAwal($kode)
     {
         $date = Carbon::parse($this->filterBulan)->startOfMonth();
-        
+
         $trxs = JurnalUmum::where('no_akun', $kode)
             ->where('tgl', '<', $date)
             ->get();
@@ -80,14 +84,18 @@ class BukuBesar extends Page
         if (isset($akun->kode_sub_anak_akun)) {
             // Saldo Awal + Saldo Berjalan Bulan Ini
             $total += $this->getSaldoAwal($akun->kode_sub_anak_akun);
-            
-            $trxs = JurnalUmum::where('no_akun', $akun->kode_sub_anak_akun)->get();
+
+            $start = Carbon::parse($this->filterBulan)->startOfMonth();
+            $end = Carbon::parse($this->filterBulan)->endOfMonth();
+
+            $trxs = JurnalUmum::where('no_akun', $akun->kode_sub_anak_akun)
+                ->whereBetween('tgl', [$start, $end])
+                ->get();
             foreach ($trxs as $trx) {
                 $nominal = $this->hitungNominal($trx);
                 $total += ($trx->map === 'D' ? $nominal : -$nominal);
             }
-        } 
-        else {
+        } else {
             // Jika level Anak Akun (Punya children atau subAnakAkuns)
             if ($akun->children && $akun->children->count()) {
                 foreach ($akun->children as $child) {

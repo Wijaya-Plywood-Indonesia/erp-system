@@ -41,6 +41,11 @@ class AnakAkun extends Model
         return $this->belongsTo(AnakAkun::class, 'parent');
     }
 
+    public function allChildren()
+{
+    return $this->children->merge($this->subAnakAkuns ?? collect());
+}
+
     /**
      * Relasi ke User Pembuat (created_by)
      */

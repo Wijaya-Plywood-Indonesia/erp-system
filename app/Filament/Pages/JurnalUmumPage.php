@@ -49,6 +49,8 @@ class JurnalUmumPage extends Page implements HasActions
     public $akunList = [];
     public $items = [];
     public $jurnals = [];
+    public $perPage = 50;
+    public $isLoading = false;
 
     public ?int $editingId = null;
     public ?int $deleteId = null;
@@ -313,9 +315,22 @@ class JurnalUmumPage extends Page implements HasActions
     }
 
     protected function loadJurnalUmum()
-    {
-        $this->jurnals = JurnalUmum::latest('id')->limit(50)->get();
+{
+    $this->jurnals = JurnalUmum::latest('id')
+        ->take($this->perPage)
+        ->get();
+}
+
+public function loadMore()
+{
+    if ($this->perPage >= JurnalUmum::count()) {
+        return;
     }
+
+    $this->perPage += 50;
+    $this->loadJurnalUmum();
+    $this->isLoading = false;
+}
 
 
     protected function getActions(): array
