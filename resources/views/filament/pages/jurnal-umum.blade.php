@@ -279,7 +279,7 @@
 
     @endif
 
-    <div class="overflow-x-auto border rounded-lg
+    <div x-ref="scrollContainer" class="overflow-y-auto max-h-[75vh] border rounded-lg
                 border-gray-200 dark:border-gray-700">
         <table class="min-w-[1800px] w-full text-sm border-collapse">
             <thead class="bg-gray-100 dark:bg-gray-800 sticky top-0">
@@ -353,22 +353,44 @@
                 @endforeach
             </tbody>
         </table>
-        <div wire:loading class="text-center py-3 text-sm text-gray-500">
-            Loading data...
+        @if($hasMore)
+    <div wire:loading.flex class="justify-center items-center py-6">
+        <div class="flex items-center gap-3 text-primary-600 text-lg font-semibold">
+            <svg class="animate-spin h-6 w-6" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor"
+                    d="M4 12a8 8 0 018-8v8z">
+                </path>
+            </svg>
+            Memuat data jurnal...
         </div>
-        <div x-data="{
-        observe() {
-            let observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        @this.loadMore()
-                    }
+    </div>
+@endif
+@if(!$hasMore)
+    <div class="text-center py-6 text-gray-500 text-sm">
+        Semua data sudah ditampilkan
+    </div>
+@endif
+        <div
+        x-data="{
+            observe() {
+                let observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            @this.loadMore()
+                        }
+                    })
+                }, {
+                    root: this.$refs.scrollContainer,
+                    rootMargin: '200px'
                 })
-            }, { rootMargin: '200px' }
 
-            observer.observe(this.$el)
-        }
-    }" x-init="observe" class="h-10"></div>
+                observer.observe(this.$el)
+            }
+        }"
+        x-init="observe"
+        class="h-10"
+    ></div>
     </div>
     <script>
         document.addEventListener('livewire:init', () => {

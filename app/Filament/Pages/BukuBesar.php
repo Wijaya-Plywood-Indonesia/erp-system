@@ -19,11 +19,14 @@ class BukuBesar extends Page
 
     public $indukAkuns;
     public $filterBulan;
+    public $isLoading = true;
 
     public function mount()
     {
         $this->filterBulan = Carbon::now()->format('Y-m'); // Default bulan ini
+        $this->isLoading = true;
         $this->loadData();
+        $this->isLoading = false;
     }
 
     public function loadData()
