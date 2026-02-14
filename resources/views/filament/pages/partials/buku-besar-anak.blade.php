@@ -12,6 +12,7 @@
     $tampilkan = ($saldoAwal != 0) || ($saldoAkhir != 0) || ($jumlahTransaksi > 0);
 @endphp
 
+
 @if($tampilkan)
 <div x-data="{ open: true }" class="mt-2 ml-6">
 
