@@ -27,17 +27,17 @@ class BukuBesar extends Page
     }
 
     public function loadData()
-{
-    $this->indukAkuns = IndukAkun::with([
-        'anakAkuns' => function ($query) {
-            $query->whereNull('parent')
-                  ->with([
-                      'children.children', // rekursif 2 level
-                      'subAnakAkuns'
-                  ]);
-        }
-    ])->get();
-}
+    {
+        $this->indukAkuns = IndukAkun::with([
+            'anakAkuns' => function ($query) {
+                $query->whereNull('parent')
+                    ->with([
+                        'children.children', // rekursif 2 level
+                        'subAnakAkuns'
+                    ]);
+            }
+        ])->get();
+    }
 
     // Fungsi menghitung nominal satu baris transaksi
     private function hitungNominal($trx)
