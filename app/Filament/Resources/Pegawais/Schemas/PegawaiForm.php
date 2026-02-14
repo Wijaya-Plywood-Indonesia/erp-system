@@ -10,7 +10,8 @@ use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Schemas\Components\Utilities\Get; // Import Get
-
+use App\Models\Perusahaan;
+use App\Models\JabatanPerusahaan;
 class PegawaiForm
 {
     public static function configure(Schema $schema): Schema
@@ -71,15 +72,51 @@ class PegawaiForm
                     ->columns(2)
                     ->schema([
 
+                        // =========================
+                        // LOOKUP PERUSAHAAN
+                        // =========================
+                        Select::make('perusahaan_jabatan_lookup')
+                            ->label('Perusahaan & Jabatan')
+                            ->columnSpanFull()
+                            ->searchable()
+                            ->options(
+                                JabatanPerusahaan::with('perusahaan')
+                                    ->get()
+                                    ->mapWithKeys(function ($jp) {
+                                        $p = $jp->perusahaan;
+
+                                        return [
+                                            $jp->id => "{$p->nama} - {$p->alamat} - {$jp->nama_jabatan}"
+                                        ];
+                                    })
+                            )
+                            ->reactive()
+                            ->dehydrated(false) // tidak disimpan
+                            ->afterStateUpdated(function ($state, callable $set) {
+
+                                $jp = JabatanPerusahaan::with('perusahaan')->find($state);
+                                if (!$jp)
+                                    return;
+
+                                $p = $jp->perusahaan;
+
+                                // Snapshot isi
+                                $set('karyawan_di', $p->nama);
+                                $set('alamat_perusahaan', $p->alamat);
+                                $set('jabatan', $jp->nama_jabatan);
+                            }),
+
                         TextInput::make('karyawan_di')
-                            ->label('Karyawan di'),
+                            ->label('Nama Perusahaan')
+                            ->required(),
 
                         TextInput::make('alamat_perusahaan')
-                            ->label('Alamat Perusahaan'),
+                            ->label('Alamat Perusahaan')
+                            ->required(),
 
                         TextInput::make('jabatan')
                             ->label('Jabatan / Posisi')
-                            ->columnSpanFull(),
+                            ->required(),
                     ]),
 
                 // =====================================================
@@ -92,7 +129,7 @@ class PegawaiForm
 
                         TextInput::make('nik')
                             ->label('NIK')
-                            ->numeric()
+                            //->numeric()
                             ->minLength(16)
                             ->maxLength(16),
 

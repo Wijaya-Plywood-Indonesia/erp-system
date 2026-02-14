@@ -15,13 +15,14 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class KontrakKerjaResource extends Resource
 {
     protected static ?string $model = KontrakKerja::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentCheck;
+    protected static string|UnitEnum|null $navigationGroup = 'Pegawai & Kontrak';
     protected static ?string $recordTitleAttribute = 'no_kontrak';
     protected static ?string $navigationLabel = 'Kontrak Kerja';
     protected static ?string $pluralModelLabel = 'Kontrak Kerja';
