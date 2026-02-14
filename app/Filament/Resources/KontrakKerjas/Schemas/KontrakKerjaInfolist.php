@@ -2,10 +2,12 @@
 
 namespace App\Filament\Resources\KontrakKerjas\Schemas;
 
+use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Str;
 
 class KontrakKerjaInfolist
 {
@@ -36,6 +38,7 @@ class KontrakKerjaInfolist
                 /** 🔹 INFORMASI KONTRAK */
                 Section::make('Informasi Kontrak')
                     ->schema([
+
                         Grid::make(2)->schema([
                             TextEntry::make('kontrak_mulai')->label('Kontrak Mulai'),
                             TextEntry::make('kontrak_selesai')->label('Kontrak Selesai'),
@@ -46,6 +49,30 @@ class KontrakKerjaInfolist
                             TextEntry::make('no_kontrak')->label('Nomor Kontrak'),
                         ]),
 
+                        /** 🔥 Tampilkan Bukti Kontrak (Auto Detect: Gambar / PDF) */
+                        ImageEntry::make('bukti_ttd')
+                            ->label('Bukti Kontrak')
+                            ->visible(
+                                fn($record) =>
+                                $record->bukti_ttd &&
+                                Str::endsWith($record->bukti_ttd, ['jpg', 'jpeg', 'png', 'webp'])
+                            )
+                            ->disk('public')
+                            ->height(300)
+                            ->columnSpanFull(),
+
+                        TextEntry::make('bukti_ttd')
+                            ->label('Download Bukti Kontrak (PDF)')
+                            ->visible(
+                                fn($record) =>
+                                $record->bukti_ttd &&
+                                Str::endsWith($record->bukti_ttd, ['pdf'])
+                            )
+                            ->formatStateUsing(fn($state) => 'Klik untuk mengunduh PDF')
+                            ->url(fn($record) => asset('storage/' . $record->bukti_ttd))
+                            ->openUrlInNewTab()
+                            ->columnSpanFull(),
+
                         TextEntry::make('status_dokumen')
                             ->label('Status Dokumen')
                             ->badge()
@@ -54,6 +81,7 @@ class KontrakKerjaInfolist
                                 'dicetak' => 'warning',
                                 'ditandatangani' => 'success',
                             }),
+
                         TextEntry::make('status_kontrak')
                             ->label('Status Kontrak')
                             ->badge()
@@ -70,9 +98,6 @@ class KontrakKerjaInfolist
                                 'expired' => 'danger',
                                 'extended' => 'gray',
                             }),
-
-                        TextEntry::make('bukti_ttd')->label('Bukti TTD'),
-
                     ]),
 
                 /** 🔹 PENANGGUNG JAWAB */

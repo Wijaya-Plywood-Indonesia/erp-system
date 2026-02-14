@@ -15,13 +15,15 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class HariLiburResource extends Resource
 {
     protected static ?string $model = HariLibur::class;
     //protected int $defaultPaginationPageSize = 50;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
+    protected static string|UnitEnum|null $navigationGroup = 'Pegawai & Kontrak';
     protected static ?string $navigationLabel = 'Hari Libur';
     protected static ?string $pluralModelLabel = 'Hari Libur';
     protected static ?string $modelLabel = 'Hari Libur';

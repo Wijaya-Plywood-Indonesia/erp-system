@@ -17,13 +17,13 @@ class BukuBesar extends Page
     protected static ?string $navigationLabel = 'Buku Besar';
     protected static ?string $title = 'Buku Besar';
 
-    public $indukAkuns;
+    public $indukAkuns = [];
     public $filterBulan;
+    public $isLoading = true;
 
     public function mount()
     {
         $this->filterBulan = Carbon::now()->format('Y-m'); // Default bulan ini
-        $this->loadData();
     }
 
     public function loadData()
