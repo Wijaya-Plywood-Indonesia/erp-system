@@ -50,6 +50,7 @@ class JurnalUmumPage extends Page implements HasActions
     public $items = [];
     public $jurnals = [];
     public $perPage = 50;
+    public $hasMore = true;
     public $isLoading = false;
 
     public ?int $editingId = null;
@@ -323,12 +324,28 @@ class JurnalUmumPage extends Page implements HasActions
 
 public function loadMore()
 {
-    if ($this->perPage >= JurnalUmum::count()) {
+    if ($this->isLoading || ! $this->hasMore) {
+        return;
+    }
+
+    $this->isLoading = true;
+
+    $total = JurnalUmum::count();
+
+    if ($this->perPage >= $total) {
+        $this->hasMore = false;
+        $this->isLoading = false;
         return;
     }
 
     $this->perPage += 50;
+
+    if ($this->perPage >= $total) {
+        $this->hasMore = false;
+    }
+
     $this->loadJurnalUmum();
+
     $this->isLoading = false;
 }
 
