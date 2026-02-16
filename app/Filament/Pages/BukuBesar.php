@@ -47,10 +47,15 @@ class BukuBesar extends Page
 
     // Fungsi menghitung nominal satu baris transaksi
     private function hitungNominal($trx)
-    {
-        $qty = $trx->hit_kbk === 'banyak' ? ($trx->banyak ?? 0) : ($trx->m3 ?? 0);
-        return $qty * ($trx->harga ?? 0);
-    }
+{
+    $mode = strtolower($trx->hit_kbk ?? '');
+
+    $qty = ($mode === 'b' || $mode === 'banyak')
+        ? ($trx->banyak ?? 0)
+        : ($trx->m3 ?? 0);
+
+    return $qty * ($trx->harga ?? 0);
+}
 
     // Mendapatkan Saldo Awal (Transaksi sebelum bulan filter)
     public function getSaldoAwal($kode)
@@ -64,7 +69,7 @@ class BukuBesar extends Page
         $saldo = 0;
         foreach ($trxs as $trx) {
             $nominal = $this->hitungNominal($trx);
-            $saldo += ($trx->map === 'D' ? $nominal : -$nominal);
+            $saldo += (strtolower($trx->map) === 'd' ? $nominal : -$nominal);
         }
         return $saldo;
     }
@@ -99,7 +104,7 @@ class BukuBesar extends Page
                 ->get();
             foreach ($trxs as $trx) {
                 $nominal = $this->hitungNominal($trx);
-                $total += ($trx->map === 'D' ? $nominal : -$nominal);
+                $total += (strtolower($trx->map) === 'd' ? $nominal : -$nominal);
             }
         } else {
             // Jika level Anak Akun (Punya children atau subAnakAkuns)

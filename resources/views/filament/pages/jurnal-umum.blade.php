@@ -236,8 +236,16 @@
                     <td class="px-2 py-1">{{ $row['no_akun'] }}</td>
                     <td class="px-2 py-1">{{ $row['nama_akun'] }}</td>
                     <td class="px-2 py-1">{{ $row['nama'] }}</td>
-                    <td class="px-2 py-1 text-center">{{ $row['map'] }}</td>
-                    <td class="px-2 py-1">{{ $row['hit_kbk'] }}</td>
+                    <td class="px-2 py-1 text-center">
+                        {{ strtolower($row['map']) === 'd' ? 'Debit' : 'Kredit' }}
+                    </td>
+
+                    <td class="px-2 py-1">
+                        {{ strtolower($row['hit_kbk']) === 'b' || $row['hit_kbk'] === 'banyak'
+                        ? 'Banyak'
+                        : 'Kubikasi'
+                        }}
+                    </td>
                     <td class="px-2 py-1 text-right">{{ $row['banyak'] }}</td>
                     <td class="px-2 py-1 text-right">{{ $row['m3'] }}</td>
                     <td class="px-2 py-1 text-right">{{ number_format($row['harga']) }}</td>
@@ -317,7 +325,7 @@
                     <td class="px-2 py-1">{{ $j->nama }}</td>
                     <td class="px-2 py-1">{{ $j->keterangan }}</td>
                     <td class="px-2 py-1 text-center font-semibold">
-                        {{ $j->map === 'D' ? 'Debit' : 'Kredit' }}
+                        {{ strtolower($j->map) === 'd' ? 'Debit' : 'Kredit' }}
                     </td>
                     <td class="px-2 py-1">{{ $j->mm }}</td>
                     <td class="px-2 py-1">{{ $j->hit_kbk }}</td>
@@ -326,7 +334,7 @@
                     <td class="px-2 py-1 text-right">{{ number_format($j->harga) }}</td>
                     <td class="px-2 py-1 text-right font-semibold">
                         {{ number_format(
-                        ($j->hit_kbk === 'banyak'
+                        (strtolower($j->hit_kbk) === 'b'
                         ? ($j->banyak ?? 0)
                         : ($j->m3 ?? 0)
                         ) * ($j->harga ?? 0)
@@ -354,25 +362,23 @@
             </tbody>
         </table>
         @if($hasMore)
-    <div wire:loading.flex class="justify-center items-center py-6">
-        <div class="flex items-center gap-3 text-primary-600 text-lg font-semibold">
-            <svg class="animate-spin h-6 w-6" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8z">
-                </path>
-            </svg>
-            Memuat data jurnal...
+        <div wire:loading.flex class="justify-center items-center py-6">
+            <div class="flex items-center gap-3 text-primary-600 text-lg font-semibold">
+                <svg class="animate-spin h-6 w-6" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z">
+                    </path>
+                </svg>
+                Memuat data jurnal...
+            </div>
         </div>
-    </div>
-@endif
-@if(!$hasMore)
-    <div class="text-center py-6 text-gray-500 text-sm">
-        Semua data sudah ditampilkan
-    </div>
-@endif
-        <div
-        x-data="{
+        @endif
+        @if(!$hasMore)
+        <div class="text-center py-6 text-gray-500 text-sm">
+            Semua data sudah ditampilkan
+        </div>
+        @endif
+        <div x-data="{
             observe() {
                 let observer = new IntersectionObserver((entries) => {
                     entries.forEach(entry => {
@@ -387,10 +393,7 @@
 
                 observer.observe(this.$el)
             }
-        }"
-        x-init="observe"
-        class="h-10"
-    ></div>
+        }" x-init="observe" class="h-10"></div>
     </div>
     <script>
         document.addEventListener('livewire:init', () => {
