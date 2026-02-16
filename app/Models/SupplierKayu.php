@@ -29,7 +29,7 @@ class SupplierKayu extends Model
     protected $casts = [
         'jenis_kelamin_pegawai' => 'integer',
         'status_supplier' => 'integer',
-        'nik' => 'encrypted', // ✅ otomatis enkripsi & dekripsi
+
     ];
 
     /**
