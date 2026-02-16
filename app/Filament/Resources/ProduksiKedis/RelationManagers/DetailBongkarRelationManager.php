@@ -79,8 +79,7 @@ class DetailBongkarRelationManager extends RelationManager
 
                 TextInput::make('kw')
                     ->label('Kualitas (KW)')
-                    ->numeric()          // memastikan input angka
-                    ->rule('integer')    // validasi integer
+
                     ->required()
                     ->placeholder('Cth: 1, 2, 3 dll.'),
 

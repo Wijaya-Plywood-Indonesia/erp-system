@@ -102,15 +102,28 @@ class DetailTurusanKayusTable
 
                         if ($records instanceof Collection && $records->isNotEmpty()) {
                             $totalBatang = $records->count();
-                            $totalKubikasi = $records->sum(fn($r) => (float) ($r->diameter * $r->diameter * ($r->kuantitas ?? 1) * 0.785 / 1000000));
+
+                            $totalKubikasi = $records->sum(
+                                fn($r) =>
+                                (($r->panjang ?? 0) * ($r->diameter ?? 0) * ($r->diameter ?? 0) * ($r->kuantitas ?? 1) * 0.785) / 1000000
+                            );
                         } else {
                             $parentId = $record->id_kayu_masuk ?? $record->kayu_masuk_id;
-                            $query = DetailTurusanKayu::where('id_kayu_masuk', $parentId)->where('lahan_id', $record->lahan_id)->get();
+
+                            $query = DetailTurusanKayu::where('id_kayu_masuk', $parentId)
+                                ->where('lahan_id', $record->lahan_id)
+                                ->get();
+
                             $totalBatang = $query->count();
-                            $totalKubikasi = $query->sum(fn($r) => (float) ($r->diameter * $r->diameter * ($r->kuantitas ?? 1) * 0.785 / 1000000));
+
+                            $totalKubikasi = $query->sum(
+                                fn($r) =>
+                                (($r->panjang ?? 0) * ($r->diameter ?? 0) * ($r->diameter ?? 0) * ($r->kuantitas ?? 1) * 0.785) / 1000000
+                            );
                         }
 
-                        return "{$kode} {$nama} {$jenis_kayu} - {$totalBatang} batang (" . number_format($totalKubikasi, 4, ',', '.') . " m³)";
+                        return "{$kode} {$nama} {$jenis_kayu} - {$totalBatang} batang (" .
+                            number_format($totalKubikasi, 4, ',', '.') . " m³)";
                     }),
             ])
             ->defaultGroup('lahan.kode_lahan')
@@ -135,7 +148,7 @@ class DetailTurusanKayusTable
                     ->modalHeading('Input Turusan (Tanpa Sinyal)')
                     ->modalWidth('2xl')
                     ->modalContent(fn() => view('filament.components.offline-turusan-modal', [
-                        'parentId'     => $ownerRecord?->id,
+                        'parentId' => $ownerRecord?->id,
                         'optionsLahan' => Lahan::get()->mapWithKeys(fn($l) => [$l->id => "{$l->kode_lahan} - {$l->nama_lahan}"]),
                         'optionsJenis' => JenisKayu::get()->mapWithKeys(fn($j) => [$j->id => "{$j->kode_kayu} - {$j->nama_kayu}"]),
                     ]))

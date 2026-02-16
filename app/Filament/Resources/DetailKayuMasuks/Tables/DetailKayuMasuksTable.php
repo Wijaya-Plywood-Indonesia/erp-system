@@ -150,7 +150,8 @@ class DetailKayuMasuksTable
                 // 2. TOTAL KUBIKASI (Pindahkan logika penghitungan ke sini)
                 Action::make('total_kubikasi')
                     ->label(function () use ($ownerRecord) {
-                        if (!$ownerRecord) return 'Total: 0 m³';
+                        if (!$ownerRecord)
+                            return 'Total: 0 m³';
                         $total = DetailKayuMasuk::where('id_kayu_masuk', $ownerRecord->id)
                             ->get()
                             ->sum(fn($item) => (($item->panjang ?? 0) * ($item->diameter ?? 0) * ($item->diameter ?? 0) * ($item->jumlah_batang ?? 0) * 0.785) / 1000000);
@@ -169,7 +170,7 @@ class DetailKayuMasuksTable
                     ->modalWidth('2xl')
                     ->visible(!$isLocked)
                     ->modalContent(fn() => view('filament.components.offline-detail-kayu-modal', [
-                        'parentId'     => $ownerRecord?->id,
+                        'parentId' => $ownerRecord?->id,
                         'optionsLahan' => Lahan::all()->mapWithKeys(fn($l) => [$l->id => "{$l->kode_lahan} - {$l->nama_lahan}"]),
                         'optionsJenis' => JenisKayu::pluck('nama_kayu', 'id'),
                     ]))
