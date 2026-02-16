@@ -82,17 +82,27 @@
 
                         @foreach($transaksis as $trx)
                             @php
-                                $qty = $trx->hit_kbk === 'banyak' ? ($trx->banyak ?? 0) : ($trx->m3 ?? 0);
-                                $nominal = $qty * ($trx->harga ?? 0);
-                                if($trx->map === 'D') { $saldoBerjalan += $nominal; $totalDebit += $nominal; } 
-                                else { $saldoBerjalan -= $nominal; $totalKredit += $nominal; }
-                            @endphp
+    $mode = strtolower($trx->hit_kbk ?? '');
+    $qty = ($mode === 'b' || $mode === 'banyak')
+        ? ($trx->banyak ?? 0)
+        : ($trx->m3 ?? 0);
+
+    $nominal = $qty * ($trx->harga ?? 0);
+
+    if(strtolower($trx->map) === 'd') {
+        $saldoBerjalan += $nominal;
+        $totalDebit += $nominal;
+    } else {
+        $saldoBerjalan -= $nominal;
+        $totalKredit += $nominal;
+    }
+@endphp
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                 <td class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-center">{{ \Carbon\Carbon::parse($trx->tgl)->format('d-m-Y') }}</td>
                                 <td class="px-2 py-1 border border-gray-300 dark:border-gray-600">{{ $trx->jurnal ?? '-' }}</td>
                                 <td class="px-2 py-1 border border-gray-300 dark:border-gray-600">{{ $trx->keterangan }}</td>
-                                <td class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right text-green-600 dark:text-green-400">{{ $trx->map === 'D' ? number_format($nominal, 0, ',', '.') : '' }}</td>
-                                <td class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right text-red-600 dark:text-red-400">{{ $trx->map === 'K' ? number_format($nominal, 0, ',', '.') : '' }}</td>
+                                <td class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right text-green-600 dark:text-green-400">{{ strtolower($trx->map) === 'd' ? number_format($nominal, 0, ',', '.') : '' }}</td>
+                                <td class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right text-red-600 dark:text-red-400">{{ strtolower($trx->map) === 'k' ? number_format($nominal, 0, ',', '.') : '' }}</td>
                                 <td class="px-2 py-1 border border-gray-300 dark:border-gray-600 text-right">{{ number_format($saldoBerjalan, 0, ',', '.') }}</td>
                             </tr>
                         @endforeach
