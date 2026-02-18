@@ -3,8 +3,8 @@
 namespace App\Services\Jurnal;
 
 use App\Models\JurnalUmum;
-use App\Models\Neraca;
-use App\Models\IndukAkun;
+use App\Models\Jurnal1st;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -13,74 +13,107 @@ class JurnalUmumToJurnal1Service
     public function sync(): int
     {
         return DB::transaction(function () {
-            try {
-                // 1. Ambil semua data Jurnal Umum yang belum disinkronkan
-                $rows = JurnalUmum::whereRaw('LOWER(status) = ?', ['belum sinkron'])->get();
 
-                if ($rows->isEmpty()) return 0;
+            $rows = JurnalUmum::whereRaw('LOWER(status) = ?', ['belum sinkron'])
+                ->get()
+                ->groupBy('no_akun');
 
-                $totalProcessed = 0;
+            if ($rows->isEmpty()) {
+                Log::info("Sinkronisasi: Tidak ada data yang perlu diproses.");
+                return 0;
+            }
 
-                foreach ($rows as $row) {
-                    // 2. Identifikasi Kelompok Ribuan (Modif 1000)
-                    // Contoh: 1111.00 -> 1000, 2110.00 -> 2000
-                    $noAkunRaw = (float) $row->no_akun;
-                    $kodeInduk = floor($noAkunRaw / 1000) * 1000;
-                    $noAkunInduk = number_format($kodeInduk, 0, '.', '');
+            $totalProcessed = 0;
+            $userName = Auth::user()?->name ?? 'System';
 
-                    // 3. Logika SUMIF (Debit vs Kredit)
-                    // Mengambil nilai nominal baris
-                    $nominal = ($row->hit_kbk === 'banyak')
-                        ? (float)$row->banyak * (float)$row->harga
-                        : (float)$row->m3 * (float)$row->harga;
+            foreach ($rows as $noAkun => $items) {
 
-                    // Rumus: Jika Map = D maka (+), jika Map = K maka (-)
-                    $signedNominal = (strtoupper($row->map) === 'D' || $row->map === 'Debit')
-                        ? $nominal
-                        : -$nominal;
+                $noAkunRaw = number_format((float) $noAkun, 2, '.', '');
+                $parts = explode('.', $noAkunRaw);
+                $angkaDepanKoma = (int) $parts[0];
+                $modif10Value = floor($angkaDepanKoma / 10) * 10;
 
-                    // 4. Update atau Create ke Tabel Neraca
-                    $neraca = Neraca::where('akun_seribu', $noAkunInduk)->first();
+                $totalNominal = 0;
+                $totalVolume  = 0;
 
-                    if ($neraca) {
-                        // Akumulasi: Saldo Neraca Sekarang + (Total Debit - Total Kredit baru)
-                        $newTotal = (float)$neraca->total + $signedNominal;
+                foreach ($items as $row) {
 
-                        $neraca->update([
-                            'total' => $newTotal,
-                            // Update volume jika diperlukan untuk pelaporan
-                            'banyak' => (float)$neraca->banyak + ($row->hit_kbk === 'banyak' ? (float)$row->banyak : 0),
-                            'kubikasi' => (float)$neraca->kubikasi + ($row->hit_kbk === 'm3' ? (float)$row->m3 : 0),
-                        ]);
+                    $map   = strtolower(trim((string)$row->map));
+                    $harga = (float) ($row->harga ?? 0);
+                    $banyak = (float) ($row->banyak ?? 0);
+                    $m3     = (float) ($row->m3 ?? 0);
+
+                    $hitKbk = strtolower(trim((string)$row->hit_kbk));
+
+                    // Hitung nominal & volume
+                    if (empty($hitKbk)) {
+                        $nominal = $harga;
+                        $volume  = 0;
+                    } elseif (in_array($hitKbk, ['b', 'banyak'])) {
+                        $nominal = $banyak * $harga;
+                        $volume  = $banyak;
                     } else {
-                        // Ambil Nama Induk dari Model IndukAkun secara dinamis
-                        $namaInduk = IndukAkun::where('kode_induk_akun', $noAkunInduk)->value('nama_induk_akun');
-
-                        Neraca::create([
-                            'akun_seribu' => $noAkunInduk,
-                            'detail'      => $namaInduk ?? 'Akun Induk ' . $noAkunInduk,
-                            'banyak'      => ($row->hit_kbk === 'banyak') ? $row->banyak : 0,
-                            'kubikasi'    => ($row->hit_kbk === 'm3') ? $row->m3 : 0,
-                            'harga'       => $row->harga,
-                            'total'       => $signedNominal,
-                        ]);
+                        $nominal = $m3 * $harga;
+                        $volume  = $m3;
                     }
 
-                    // 5. Tandai baris asli sebagai 'sudah sinkron'
-                    $row->update([
-                        'status' => 'sudah sinkron',
-                        'synced_at' => now(),
-                        'synced_by' => auth()->user()->name ?? 'System',
-                    ]);
-
-                    $totalProcessed++;
+                    // Debit tambah, Kredit kurang
+                    if ($map === 'd') {
+                        $totalNominal += $nominal;
+                        $totalVolume  += $volume;
+                    } else {
+                        $totalNominal -= $nominal;
+                        $totalVolume  -= $volume;
+                    }
                 }
 
-                return $totalProcessed;
-            } catch (\Exception $e) {
-                Log::error("Gagal Sync SUMIF Neraca: " . $e->getMessage());
-                throw $e;
+                // Ambil saldo lama jika ada
+                $existing = Jurnal1st::where('no_akun', $noAkunRaw)->first();
+
+                if ($existing) {
+                    $totalNominal += (float)$existing->total;
+
+                    $volumeExisting = (float)$existing->banyak > 0
+                        ? (float)$existing->banyak
+                        : (float)$existing->m3;
+
+                    $totalVolume += $volumeExisting;
+
+                    // Hapus saldo lama supaya tidak dobel
+                    $existing->delete();
+                }
+
+                $finalHarga = ($totalVolume != 0)
+                    ? $totalNominal / $totalVolume
+                    : 0;
+
+                Jurnal1st::create([
+                    'modif10'    => (string) $modif10Value,
+                    'no_akun'    => $noAkunRaw,
+                    'nama_akun'  => $items->first()->nama_akun
+                        ?? $items->first()->nama
+                        ?? 'AKUN TIDAK DIKETAHUI',
+                    'bagian'     => 'd', // SELALU D
+                    'banyak'     => $totalVolume > 0 ? $totalVolume : 0,
+                    'm3'         => 0,
+                    'harga'      => $finalHarga,
+                    'total'      => $totalNominal, // boleh minus
+                    'created_by' => $userName,
+                    'status'     => 'belum sinkron',
+                ]);
+
+                // Update semua row jadi sudah sinkron
+                foreach ($items as $row) {
+                    $row->update([
+                        'status'    => 'sudah sinkron',
+                        'synced_at' => now(),
+                        'synced_by' => $userName,
+                    ]);
+                    $totalProcessed++;
+                }
             }
+
+            return $totalProcessed;
         });
     }
 }

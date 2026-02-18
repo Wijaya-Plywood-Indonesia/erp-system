@@ -16,6 +16,8 @@ class Jurnal2sTable
     public static function configure(Table $table): Table
     {
         return $table
+        ->defaultSort('modif100', 'asc')
+    ->defaultSort('no_akun', 'asc')
             ->columns([
                 TextColumn::make('modif100')
                     ->label('Modif 100'),

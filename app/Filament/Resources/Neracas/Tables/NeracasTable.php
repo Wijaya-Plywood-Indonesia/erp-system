@@ -16,6 +16,7 @@ class NeracasTable
     public static function configure(Table $table): Table
     {
         return $table
+        ->defaultSort('akun_seribu', 'asc')
             ->columns([
                 // Menampilkan kode dari akun seribu (Induk)
                 TextColumn::make('akun_seribu')

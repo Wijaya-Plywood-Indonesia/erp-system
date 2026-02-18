@@ -333,13 +333,19 @@
                     <td class="px-2 py-1 text-right">{{ $j->m3 }}</td>
                     <td class="px-2 py-1 text-right">{{ number_format($j->harga) }}</td>
                     <td class="px-2 py-1 text-right font-semibold">
-                        {{ number_format(
-                        (strtolower($j->hit_kbk) === 'b'
-                        ? ($j->banyak ?? 0)
-                        : ($j->m3 ?? 0)
-                        ) * ($j->harga ?? 0)
-                        ) }}
+                        @php
+                        if ($j->hit_kbk === 'b') {
+                        $total = ($j->banyak ?? 0) * ($j->harga ?? 0);
+                        } elseif ($j->hit_kbk === 'k') {
+                        $total = ($j->m3 ?? 0) * ($j->harga ?? 0);
+                        } else {
+                        $total = $j->harga ?? 0;
+                        }
+                        @endphp
+
+                        {{ number_format($total) }}
                     </td>
+
                     <td class="px-2 py-1">{{ $j->created_by }}</td>
                     <td class="px-2 py-1 font-semibold text-green-600">{{ $j->status }}</td>
                     <td class="px-2 py-1">{{ $j->synced_at?->format('d/m/Y H:i') }}</td>
