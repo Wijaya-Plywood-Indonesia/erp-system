@@ -85,7 +85,7 @@ class JurnalUmumPage extends Page implements HasActions
             'form.hit_kbk.required' => 'Menu wajib dipilih!',
         ]);
 
-        $qty = $this->form['hit_kbk'] === 'banyak'
+        $qty = $this->form['hit_kbk'] === 'b'
             ? $this->form['banyak']
             : $this->form['m3'];
 
@@ -152,19 +152,19 @@ class JurnalUmumPage extends Page implements HasActions
     }
 
     public function updated($propertyName)
-{
-    if ($propertyName === 'form.hit_kbk') {
+    {
+        if ($propertyName === 'form.hit_kbk') {
 
-        if ($this->form['hit_kbk'] === 'banyak') {
-            $this->form['banyak'] = 1;
-            $this->form['m3'] = null;
-        }
+            if ($this->form['hit_kbk'] === 'b') {
+                $this->form['banyak'] = 1;
+                $this->form['m3'] = null;
+            }
 
-        if ($this->form['hit_kbk'] === 'm3') {
-            $this->form['banyak'] = null;
+            if ($this->form['hit_kbk'] === 'm3') {
+                $this->form['banyak'] = null;
+            }
         }
     }
-}
 
     public function editJurnal(int $id)
     {
@@ -316,38 +316,38 @@ class JurnalUmumPage extends Page implements HasActions
     }
 
     protected function loadJurnalUmum()
-{
-    $this->jurnals = JurnalUmum::latest('id')
-        ->take($this->perPage)
-        ->get();
-}
-
-public function loadMore()
-{
-    if ($this->isLoading || ! $this->hasMore) {
-        return;
+    {
+        $this->jurnals = JurnalUmum::latest('id')
+            ->take($this->perPage)
+            ->get();
     }
 
-    $this->isLoading = true;
+    public function loadMore()
+    {
+        if ($this->isLoading || ! $this->hasMore) {
+            return;
+        }
 
-    $total = JurnalUmum::count();
+        $this->isLoading = true;
 
-    if ($this->perPage >= $total) {
-        $this->hasMore = false;
+        $total = JurnalUmum::count();
+
+        if ($this->perPage >= $total) {
+            $this->hasMore = false;
+            $this->isLoading = false;
+            return;
+        }
+
+        $this->perPage += 50;
+
+        if ($this->perPage >= $total) {
+            $this->hasMore = false;
+        }
+
+        $this->loadJurnalUmum();
+
         $this->isLoading = false;
-        return;
     }
-
-    $this->perPage += 50;
-
-    if ($this->perPage >= $total) {
-        $this->hasMore = false;
-    }
-
-    $this->loadJurnalUmum();
-
-    $this->isLoading = false;
-}
 
 
     protected function getActions(): array

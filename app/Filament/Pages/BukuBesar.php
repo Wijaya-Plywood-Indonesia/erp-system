@@ -6,10 +6,9 @@ use App\Models\IndukAkun;
 use App\Models\JurnalUmum;
 use Filament\Pages\Page;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 use BackedEnum;
 use UnitEnum;
-use Illuminate\Support\Facades\DB;
-use Throwable;
 
 class BukuBesar extends Page
 {
@@ -25,13 +24,22 @@ class BukuBesar extends Page
 
     public function mount()
     {
-        $this->filterBulan = Carbon::now()->format('Y-m'); // Default bulan ini
+        $this->filterBulan = Carbon::now()->format('Y-m');
     }
 
+    /**
+     * Dipanggil melalui wire:init di Blade
+     */
     public function initLoad()
     {
-        $this->loadData();
-        $this->isLoading = false;
+        \Illuminate\Support\Facades\Log::info("=== Memulai Load Buku Besar ===");
+        try {
+            $this->loadData();
+            \Illuminate\Support\Facades\Log::info("Data Induk Berhasil Dimuat. Jumlah: " . count($this->indukAkuns));
+            $this->isLoading = false;
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Error saat initLoad: " . $e->getMessage());
+        }
     }
 
     public function loadData()
@@ -40,80 +48,100 @@ class BukuBesar extends Page
             'anakAkuns' => function ($query) {
                 $query->whereNull('parent')
                     ->with([
-                        'children.children', // rekursif 2 level
+                        'children.children',
                         'subAnakAkuns'
                     ]);
             }
         ])->get();
     }
 
-    // Fungsi menghitung nominal satu baris transaksi
+    /**
+     * Menghitung nominal satu baris transaksi dengan proteksi nilai null
+     */
     private function hitungNominal($trx)
     {
-        $qty = $trx->hit_kbk === 'banyak' ? ($trx->banyak ?? 0) : ($trx->m3 ?? 0);
-        return $qty * ($trx->harga ?? 0);
+        if (!$trx) return 0;
+
+        $qty = ($trx->hit_kbk === 'm3') ? (float)($trx->m3 ?? 0) : (float)($trx->banyak ?? 0);
+        return $qty * (float)($trx->harga ?? 0);
     }
 
-    // Mendapatkan Saldo Awal (Transaksi sebelum bulan filter)
+    /**
+     * Mendapatkan Saldo Awal (Transaksi sebelum bulan filter)
+     */
     public function getSaldoAwal($kode)
     {
+        if (!$kode) return 0;
+
         $date = Carbon::parse($this->filterBulan)->startOfMonth();
 
-        $trxs = JurnalUmum::where('no_akun', $kode)
+        $trxs = JurnalUmum::where('no_akun', (string)$kode)
             ->where('tgl', '<', $date)
             ->get();
 
         $saldo = 0;
         foreach ($trxs as $trx) {
             $nominal = $this->hitungNominal($trx);
-            $saldo += ($trx->map === 'D' ? $nominal : -$nominal);
+            $map = strtoupper($trx->map ?? '');
+            $saldo += ($map === 'D' || $map === 'DEBIT') ? $nominal : -$nominal;
         }
         return $saldo;
     }
 
-    // Transaksi hanya di bulan terpilih
+    /**
+     * Transaksi hanya di bulan terpilih
+     */
     public function getTransaksiByKode($kode)
     {
+        if (!$kode) return collect();
+
+        // Log untuk melihat kode apa yang dicari
+        \Illuminate\Support\Facades\Log::debug("Mencari transaksi untuk kode: [" . $kode . "]");
+
         $start = Carbon::parse($this->filterBulan)->startOfMonth();
         $end = Carbon::parse($this->filterBulan)->endOfMonth();
 
-        return JurnalUmum::where('no_akun', $kode)
+        return JurnalUmum::where(function ($q) use ($kode) {
+            $q->where('no_akun', (string)$kode)
+                ->orWhere('no_akun', 'LIKE', $kode . '.%') // Antisipasi 1111 vs 1111.00
+                ->orWhere('no_akun', 'LIKE', (int)$kode);
+        })
             ->whereBetween('tgl', [$start, $end])
-            ->orderBy('tgl')
             ->get();
     }
 
-    // Perbaikan Saldo Akun (Mendukung rekursif untuk Induk)
+    /**
+     * Menghitung total saldo secara rekursif (Saldo Awal + Berjalan)
+     */
     public function getTotalRecursive($akun)
     {
+        if (!$akun) return 0;
+
+        // Log untuk melihat akun mana yang sedang diproses
+        // \Illuminate\Support\Facades\Log::debug("Memproses Akun: " . ($akun->kode_anak_akun ?? $akun->kode_sub_anak_akun));
+
         $total = 0;
 
-        // Jika ini adalah SubAnakAkun (Level Terbawah)
         if (isset($akun->kode_sub_anak_akun)) {
-            // Saldo Awal + Saldo Berjalan Bulan Ini
-            $total += $this->getSaldoAwal($akun->kode_sub_anak_akun);
+            $kode = (string)$akun->kode_sub_anak_akun;
+            $total += $this->getSaldoAwal($kode);
 
-            $start = Carbon::parse($this->filterBulan)->startOfMonth();
-            $end = Carbon::parse($this->filterBulan)->endOfMonth();
+            $trxs = JurnalUmum::where('no_akun', $kode)
+                ->whereBetween('tgl', [
+                    Carbon::parse($this->filterBulan)->startOfMonth(),
+                    Carbon::parse($this->filterBulan)->endOfMonth()
+                ])->get();
 
-            $trxs = JurnalUmum::where('no_akun', $akun->kode_sub_anak_akun)
-                ->whereBetween('tgl', [$start, $end])
-                ->get();
             foreach ($trxs as $trx) {
                 $nominal = $this->hitungNominal($trx);
-                $total += ($trx->map === 'D' ? $nominal : -$nominal);
+                $total += (strtoupper($trx->map) === 'D') ? $nominal : -$nominal;
             }
         } else {
-            // Jika level Anak Akun (Punya children atau subAnakAkuns)
-            if ($akun->children && $akun->children->count()) {
-                foreach ($akun->children as $child) {
-                    $total += $this->getTotalRecursive($child);
-                }
+            foreach ($akun->children ?? [] as $child) {
+                $total += $this->getTotalRecursive($child);
             }
-            if ($akun->subAnakAkuns && $akun->subAnakAkuns->count()) {
-                foreach ($akun->subAnakAkuns as $sub) {
-                    $total += $this->getTotalRecursive($sub);
-                }
+            foreach ($akun->subAnakAkuns ?? [] as $sub) {
+                $total += $this->getTotalRecursive($sub);
             }
         }
 
