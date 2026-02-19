@@ -218,4 +218,5 @@
 </div>
 @endforeach
 </div>
+
 </x-filament-widgets::widget>
