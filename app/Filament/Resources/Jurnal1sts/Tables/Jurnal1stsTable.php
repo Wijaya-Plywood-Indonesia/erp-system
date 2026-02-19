@@ -13,6 +13,8 @@ class Jurnal1stsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('modif10', 'asc')
+            ->defaultSort('no_akun', 'asc')
             ->columns([
                 TextColumn::make('modif10')
                     ->label('Modif 10')

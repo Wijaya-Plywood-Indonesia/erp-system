@@ -7,7 +7,7 @@ use App\Filament\Resources\BahanHotPresses\Pages\EditBahanHotPress;
 use App\Filament\Resources\BahanHotPresses\Pages\ListBahanHotPresses;
 use App\Filament\Resources\BahanHotPresses\Schemas\BahanHotPressForm;
 use App\Filament\Resources\BahanHotPresses\Tables\BahanHotPressesTable;
-use App\Models\BahanHotPress;
+use App\Models\BahanHotpress;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -16,7 +16,7 @@ use Filament\Tables\Table;
 
 class BahanHotPressResource extends Resource
 {
-    protected static ?string $model = BahanHotPress::class;
+    protected static ?string $model = BahanHotpress::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
     public static function shouldRegisterNavigation(): bool

@@ -18,8 +18,8 @@ return new class extends Migration
             $table->string('detail')->nullable();
             $table->integer('banyak')->nullable();
             $table->decimal('kubikasi', 12, 4)->nullable();
-            $table->integer('harga')->nullable();
-            $table->integer('total')->nullable();
+            $table->decimal('harga', 18, 2)->nullable();
+            $table->decimal('total', 18, 2)->nullable();
             $table->string('createdBy');
             $table->string('status')->default('belum sinkron');
             $table->string('synchronized_by')->nullable(); // Nama petugas yang menekan tombol sync

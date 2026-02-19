@@ -41,9 +41,10 @@ class Jurnal1ToJurnal2Service
                     'modif100'   => $akunInduk,
                     'no_akun'    => $akunInduk,
                     'nama_akun'  => $master->nama_anak_akun,
-                    'banyak'     => (int) ($row->banyak ?? 0),
-                    'kubikasi'   => (float) str_replace(',', '', $row->m3 ?? 0), // ✅ FIX
-                    'total'      => (int) ($row->total ?? 0),
+                    'banyak' => $row->banyak ?? 0,
+'kubikasi' => $row->m3 ?? 0,
+'total' => $row->total ?? 0,
+
                 ];
             })->filter();
 
@@ -55,19 +56,29 @@ class Jurnal1ToJurnal2Service
 
             foreach ($grouped as $modif100 => $items) {
 
-                Jurnal2::create([
-                    'modif100'       => $modif100,
-                    'no_akun'        => $modif100,
-                    'nama_akun'      => $items->first()['nama_akun'],
-                    'banyak'         => $items->sum('banyak'),
-                    'kubikasi'       => $items->sum('kubikasi'),
-                    'harga'          => 0,
-                    'total'          => $items->sum('total'),
-                    'user_id'        => Auth::user()->name,
-                    'status_sinkron' => 'belum sinkron',
-                    'synced_at'      => now(),
-                    'synced_by'      => Auth::user()->name,
-                ]);
+    $totalBanyak   = '0';
+    $totalKubikasi = '0';
+    $totalNominal  = '0';
+
+    foreach ($items as $row) {
+        $totalBanyak   = bcadd($totalBanyak, (string)$row['banyak'], 4);
+        $totalKubikasi = bcadd($totalKubikasi, (string)$row['kubikasi'], 4);
+        $totalNominal  = bcadd($totalNominal, (string)$row['total'], 2);
+    }
+
+    Jurnal2::create([
+        'modif100'       => $modif100,
+        'no_akun'        => $modif100,
+        'nama_akun'      => $items->first()['nama_akun'],
+        'banyak'         => $totalBanyak,
+        'kubikasi'       => $totalKubikasi,
+        'harga'          => '0',
+        'total'          => $totalNominal,
+        'user_id'        => Auth::user()->name,
+        'status_sinkron' => 'belum sinkron',
+        'synced_at'      => now(),
+        'synced_by'      => Auth::user()->name,
+    ]);
 
                 /**
                  * 4️⃣ Update jurnal 1

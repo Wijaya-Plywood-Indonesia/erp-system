@@ -111,46 +111,46 @@ class JurnalUmumPage extends Page implements HasActions
     }
 
     public function getTotalDebitProperty()
-{
-    return collect($this->items)
-        ->where(fn($item) => strtolower($item['map']) === 'd')
-        ->sum('total');
-}
+    {
+        return collect($this->items)
+            ->where(fn($item) => strtolower($item['map']) === 'd')
+            ->sum('total');
+    }
     public function getTotalKreditProperty()
-{
-    return collect($this->items)
-        ->where(fn($item) => strtolower($item['map']) === 'k')
-        ->sum('total');
-}
-
-    public function saveJurnal()
-{
-    if ($this->totalDebit !== $this->totalKredit) {
-        Notification::make()->title('Tidak Balance!')->danger()->send();
-        return;
+    {
+        return collect($this->items)
+            ->where(fn($item) => strtolower($item['map']) === 'k')
+            ->sum('total');
     }
 
-    DB::transaction(function () {
-        foreach ($this->items as $row) {
-
-            JurnalUmum::create([
-                ...$row,
-                'map'      => strtolower($row['map']), // D → d
-                'hit_kbk'  => $row['hit_kbk'] === 'banyak' ? 'b' : 'k',
-                'tgl'      => $this->tanggal,
-                'jurnal'   => $this->kode_jurnal,
-                'no_dokumen' => $this->no_dokumen,
-                'created_by' => Auth::user()->name,
-                'status'     => 'belum sinkron',
-            ]);
+    public function saveJurnal()
+    {
+        if ($this->totalDebit !== $this->totalKredit) {
+            Notification::make()->title('Tidak Balance!')->danger()->send();
+            return;
         }
-    });
 
-    $this->items = [];
-    $this->loadJurnalUmum();
+        DB::transaction(function () {
+            foreach ($this->items as $row) {
 
-    Notification::make()->title('Berhasil Simpan Draft')->success()->send();
-}
+                JurnalUmum::create([
+                    ...$row,
+                    'map'      => strtolower($row['map']), // D → d
+                    'hit_kbk'  => $row['hit_kbk'] === 'banyak' ? 'b' : 'k',
+                    'tgl'      => $this->tanggal,
+                    'jurnal'   => $this->kode_jurnal,
+                    'no_dokumen' => $this->no_dokumen,
+                    'created_by' => Auth::user()->name,
+                    'status'     => 'belum sinkron',
+                ]);
+            }
+        });
+
+        $this->items = [];
+        $this->loadJurnalUmum();
+
+        Notification::make()->title('Berhasil Simpan Draft')->success()->send();
+    }
 
     public function confirmSync(): void
     {
@@ -171,7 +171,6 @@ class JurnalUmumPage extends Page implements HasActions
     public function updated($propertyName)
     {
         if ($propertyName === 'form.hit_kbk') {
-
             if ($this->form['hit_kbk'] === 'b') {
                 $this->form['banyak'] = 1;
                 $this->form['m3'] = null;
@@ -220,43 +219,43 @@ class JurnalUmumPage extends Page implements HasActions
     }
 
     public function updateJurnal()
-{
-    if (! $this->editingId) {
-        return;
-    }
+    {
+        if (! $this->editingId) {
+            return;
+        }
 
-    $jurnal = JurnalUmum::find($this->editingId);
+        $jurnal = JurnalUmum::find($this->editingId);
 
-    if (! $jurnal || $jurnal->status === 'sudah sinkron') {
+        if (! $jurnal || $jurnal->status === 'sudah sinkron') {
+            Notification::make()
+                ->title('Jurnal tidak bisa diupdate')
+                ->danger()
+                ->send();
+            return;
+        }
+
+        $jurnal->update([
+            'tgl'        => $this->tanggal,
+            'no_akun'    => $this->form['no_akun'],
+            'nama_akun'  => $this->form['nama_akun'],
+            'nama'       => $this->form['nama'],
+            'mm'         => $this->form['mm'],
+            'keterangan' => $this->form['keterangan'],
+            'map'        => strtolower($this->form['map']), // D → d
+            'hit_kbk'    => $this->form['hit_kbk'] === 'banyak' ? 'b' : 'k',
+            'banyak'     => $this->form['banyak'],
+            'm3'         => $this->form['m3'],
+            'harga'      => $this->form['harga'],
+        ]);
+
+        $this->loadJurnalUmum();
+        $this->cancelEdit();
+
         Notification::make()
-            ->title('Jurnal tidak bisa diupdate')
-            ->danger()
+            ->title('Jurnal berhasil diupdate')
+            ->success()
             ->send();
-        return;
     }
-
-    $jurnal->update([
-        'tgl'        => $this->tanggal,
-        'no_akun'    => $this->form['no_akun'],
-        'nama_akun'  => $this->form['nama_akun'],
-        'nama'       => $this->form['nama'],
-        'mm'         => $this->form['mm'],
-        'keterangan' => $this->form['keterangan'],
-        'map'        => strtolower($this->form['map']), // D → d
-        'hit_kbk'    => $this->form['hit_kbk'] === 'banyak' ? 'b' : 'k',
-        'banyak'     => $this->form['banyak'],
-        'm3'         => $this->form['m3'],
-        'harga'      => $this->form['harga'],
-    ]);
-
-    $this->loadJurnalUmum();
-    $this->cancelEdit();
-
-    Notification::make()
-        ->title('Jurnal berhasil diupdate')
-        ->success()
-        ->send();
-}
 
     public function cancelEdit()
     {
@@ -379,8 +378,15 @@ class JurnalUmumPage extends Page implements HasActions
                 ->modalDescription('Yakin ingin menyinkronkan seluruh jurnal umum yang belum disinkron?')
                 ->modalSubmitActionLabel('Ya, Sinkronkan')
                 ->action(function () {
-                    app(\App\Services\Jurnal\JurnalUmumToJurnal1Service::class)->sync();
+
+                    app(\App\Services\Jurnal\JurnalFullSyncService::class)->syncAll();
+
                     $this->loadJurnalUmum();
+
+                    Notification::make()
+                        ->title('Sinkronisasi Berhasil')
+                        ->success()
+                        ->send();
                 }),
         ];
     }

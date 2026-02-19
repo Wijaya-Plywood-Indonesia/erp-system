@@ -13,7 +13,7 @@ return new class extends Migration {
         //
         Schema::create('jurnal_umum', function (Blueprint $table) {
             $table->id();
-            $table->string('nama_akun');
+            $table->string('nama_akun')->nullable();
 
             $table->date('tgl')->nullable();
 
@@ -43,7 +43,8 @@ return new class extends Migration {
             $table->decimal('m3', 10, 4)->nullable();
 
             // harga → gunakan decimal
-            $table->integer('harga')->nullable();
+            $table->decimal('harga', 18, 2)->nullable();
+
 
             // tambahan tracking
             $table->string('created_by')->nullable();

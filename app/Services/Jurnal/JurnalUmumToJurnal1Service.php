@@ -100,6 +100,8 @@ class JurnalUmumToJurnal1Service
                 Log::error("Gagal Sinkronisasi Langsung ke Neraca: " . $e->getMessage());
                 throw $e;
             }
+
+            return $totalProcessed;
         });
     }
 }
