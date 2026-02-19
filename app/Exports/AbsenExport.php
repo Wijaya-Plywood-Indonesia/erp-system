@@ -30,8 +30,18 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
         foreach ($this->data as $row) {
             // Pembersihan Nama Divisi agar rapi di Excel
             $divisiRaw = is_array($row['hasil']) ? $row['hasil'] : explode(', ', $row['hasil'] ?? '');
+
             $cleanDivisi = collect($divisiRaw)->map(function ($item) {
-                // Mengambil nama divisi utama sebelum tanda kurung atau titik dua
+                $itemUpper = strtoupper(trim($item));
+
+                // LOGIKA KHUSUS UNTUK LAIN-LAIN (Agar detail muncul di samping label)
+                if (str_contains($itemUpper, 'LAIN-LAIN')) {
+                    // Membersihkan label agar menyisakan keterangan saja
+                    $detail = trim(str_ireplace(['LAIN-LAIN', ':', '-'], '', $item));
+                    return !empty($detail) ? "LAIN-LAIN ($detail)" : "LAIN-LAIN";
+                }
+
+                // Logika standar untuk divisi lainnya (Pembersihan angka/detail produksi)
                 $name = trim(explode(':', explode('(', $item)[0])[0]);
                 return strtoupper($name);
             })->unique()->implode(', ');
@@ -40,7 +50,7 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
                 $row['kodep'] ?? '-',
                 $row['nama'] ?? '-',
 
-                // FINGER (Data Mesin) - Mendukung hingga Detik
+                // FINGER (Data Mesin)
                 $this->convertTimeToExcel($row['f_masuk']),
                 $this->convertTimeToExcel($row['f_pulang']),
 
@@ -58,7 +68,6 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
 
     /**
      * Konversi string waktu (HH:mm:ss) ke Serial Number Excel.
-     * Excel menghitung waktu sebagai pecahan dari 24 jam.
      */
     protected function convertTimeToExcel($time)
     {
@@ -67,13 +76,11 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
         }
 
         try {
-            // Memecah jam:menit:detik
             $parts = explode(':', $time);
             $h = (int) ($parts[0] ?? 0);
             $m = (int) ($parts[1] ?? 0);
-            $s = (int) ($parts[2] ?? 0); // Menangkap detik jika ada
+            $s = (int) ($parts[2] ?? 0);
 
-            // Rumus: (Jam/24) + (Menit/1440) + (Detik/86400)
             return ($h / 24) + ($m / 1440) + ($s / 86400);
         } catch (\Exception $e) {
             return null;
@@ -99,7 +106,7 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
     {
         $lastRow = count($this->data) + 1;
 
-        // 1. Style Header (Latar Gelap, Teks Putih)
+        // 1. Style Header
         $sheet->getStyle('A1:I1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '333333']],
@@ -109,13 +116,12 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
             ],
         ]);
 
-        // 2. Format Kolom Waktu (C, D, E, F) ke hh:mm:ss
-        // Ini kunci agar detik muncul di Excel
+        // 2. Format Kolom Waktu
         $sheet->getStyle("C2:F{$lastRow}")
             ->getNumberFormat()
             ->setFormatCode('hh:mm:ss');
 
-        // 3. Grid / Border untuk seluruh tabel
+        // 3. Grid / Border
         $sheet->getStyle("A1:I{$lastRow}")->applyFromArray([
             'borders' => [
                 'allBorders' => [
@@ -126,12 +132,16 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
             'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
         ]);
 
-        // 4. Center Alignment untuk kolom tertentu
+        // 4. Alignment
         $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("C2:F{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("H2:H{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        // 5. Memberi warna pada kolom Divisi (G) agar lebih terbaca
+        // Bungkus teks (Wrap Text) untuk kolom Divisi & Keterangan agar detail muncul semua
+        $sheet->getStyle("G2:G{$lastRow}")->getAlignment()->setWrapText(true);
+        $sheet->getStyle("I2:I{$lastRow}")->getAlignment()->setWrapText(true);
+
+        // 5. Warna Kolom Divisi (G)
         for ($i = 2; $i <= $lastRow; $i++) {
             $divisi = $sheet->getCell("G{$i}")->getValue();
             if ($divisi && $divisi !== '-') {
@@ -148,15 +158,15 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
     public function columnWidths(): array
     {
         return [
-            'A' => 12, // Kodep
-            'B' => 35, // Nama Pegawai
-            'C' => 18, // Finger Masuk
-            'D' => 18, // Finger Pulang
-            'E' => 18, // Sistem Masuk
-            'F' => 18, // Sistem Pulang
-            'G' => 30, // Divisi
-            'H' => 10, // Ijin
-            'I' => 45  // Keterangan
+            'A' => 12,
+            'B' => 35,
+            'C' => 15,
+            'D' => 15,
+            'E' => 15,
+            'F' => 15,
+            'G' => 40, // Diperlebar untuk menampung detail Lain-lain
+            'H' => 10,
+            'I' => 45
         ];
     }
 

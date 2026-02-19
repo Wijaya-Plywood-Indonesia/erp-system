@@ -16,6 +16,7 @@ class AbsensisTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('tanggal', 'desc')
             ->columns([
                 TextColumn::make('tanggal')
                     ->date()
