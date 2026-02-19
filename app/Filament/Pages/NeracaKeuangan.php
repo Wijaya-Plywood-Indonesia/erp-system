@@ -26,9 +26,14 @@ class NeracaKeuangan extends Page
 
     // ================= DATA =================
     public array $neraca = [];
+
     public float $total_aset = 0;
     public float $total_kewajiban = 0;
-    public float $total_ekuitas = 0;
+    public float $total_modal = 0;
+
+    public float $total_pendapatan = 0;
+    public float $total_beban = 0;
+    public float $total_hpp = 0;
 
     public array $listInduk = [];
 
@@ -57,7 +62,6 @@ class NeracaKeuangan extends Page
         $this->loadNeraca();
     }
 
-    // Reload hanya saat tanggal berubah
     public function updated($field)
     {
         if (in_array($field, ['tanggal_awal', 'tanggal_akhir'])) {
@@ -65,7 +69,6 @@ class NeracaKeuangan extends Page
         }
     }
 
-    // ================= APPLY FILTER =================
     public function applyFilter()
     {
         $this->filter_induk = $this->filter_induk_temp;
@@ -79,13 +82,11 @@ class NeracaKeuangan extends Page
         $this->loadNeraca();
     }
 
-    // ================= LOAD DATA =================
+    // ================= LOAD =================
     private function loadNeraca(): void
     {
         $rows = JurnalUmum::query()
-            ->with([
-                'subAkun.anakAkun.indukAkun'
-            ])
+            ->with(['subAkun.anakAkun.indukAkun'])
             ->whereBetween('tgl', [$this->tanggal_awal, $this->tanggal_akhir])
             ->when(!empty($this->filter_induk), function ($query) {
                 $query->whereHas(
@@ -98,6 +99,18 @@ class NeracaKeuangan extends Page
 
         $this->neraca = $this->groupData($rows);
         $this->hitungTotal();
+    }
+
+    // ================= HITUNG NILAI =================
+    private function hitungNilai($row): float
+    {
+        $harga = $row->harga ?? 0;
+
+        return match ($row->hit_kbk) {
+            'm' => $harga * ($row->m3 ?? 0),
+            'b' => $harga * ($row->banyak ?? 0),
+            default => $harga,
+        };
     }
 
     // ================= GROUPING =================
@@ -119,18 +132,57 @@ class NeracaKeuangan extends Page
             $kodeAnak = $anak->kode_anak_akun;
             $kodeSub = $sub->kode_sub_anak_akun;
 
-            $data[$kodeInduk]['nama'] = $induk->nama_induk_akun;
-            $data[$kodeInduk]['anak'][$kodeAnak]['nama'] = $anak->nama_anak_akun;
+            $nilai = $this->hitungNilai($row);
+
+            // INIT STRUKTUR
+            $data[$kodeInduk]['nama'] ??= $induk->nama_induk_akun;
+            $data[$kodeInduk]['anak'][$kodeAnak]['nama'] ??= $anak->nama_anak_akun;
             $data[$kodeInduk]['anak'][$kodeAnak]['sub'][$kodeSub]['nama']
                 = $sub->nama_sub_anak_akun;
 
-            $data[$kodeInduk]['anak'][$kodeAnak]['sub'][$kodeSub]['debit']
-                = ($data[$kodeInduk]['anak'][$kodeAnak]['sub'][$kodeSub]['debit'] ?? 0)
-                + $row->debit;
+            // INIT DEFAULT
+            $data[$kodeInduk]['anak'][$kodeAnak]['sub'][$kodeSub]['debit'] ??= 0;
+            $data[$kodeInduk]['anak'][$kodeAnak]['sub'][$kodeSub]['kredit'] ??= 0;
+            $data[$kodeInduk]['anak'][$kodeAnak]['sub'][$kodeSub]['saldo'] ??= 0;
+            $data[$kodeInduk]['anak'][$kodeAnak]['saldo'] ??= 0;
+            $data[$kodeInduk]['saldo'] ??= 0;
 
-            $data[$kodeInduk]['anak'][$kodeAnak]['sub'][$kodeSub]['kredit']
-                = ($data[$kodeInduk]['anak'][$kodeAnak]['sub'][$kodeSub]['kredit'] ?? 0)
-                + $row->kredit;
+            // ISI DEBIT / KREDIT
+            if ($row->debit > 0) {
+                $data[$kodeInduk]['anak'][$kodeAnak]['sub'][$kodeSub]['debit'] += $nilai;
+            }
+
+            if ($row->kredit > 0) {
+                $data[$kodeInduk]['anak'][$kodeAnak]['sub'][$kodeSub]['kredit'] += $nilai;
+            }
+
+            // HITUNG SALDO PER SUB
+            $kodeInt = (int) $kodeInduk;
+
+            $debit = $data[$kodeInduk]['anak'][$kodeAnak]['sub'][$kodeSub]['debit'];
+            $kredit = $data[$kodeInduk]['anak'][$kodeAnak]['sub'][$kodeSub]['kredit'];
+
+            $saldoSub = $this->hitungSaldoByJenis($kodeInt, $debit, $kredit);
+
+            $data[$kodeInduk]['anak'][$kodeAnak]['sub'][$kodeSub]['saldo'] = $saldoSub;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | 🔥 HITUNG TOTAL ANAK & INDUK
+        |--------------------------------------------------------------------------
+        */
+
+        foreach ($data as $kodeInduk => &$induk) {
+
+            foreach ($induk['anak'] as $kodeAnak => &$anak) {
+
+                $anak['saldo'] = collect($anak['sub'])
+                    ->sum(fn($sub) => $sub['saldo'] ?? 0);
+            }
+
+            $induk['saldo'] = collect($induk['anak'])
+                ->sum(fn($anak) => $anak['saldo'] ?? 0);
         }
 
         ksort($data);
@@ -138,29 +190,59 @@ class NeracaKeuangan extends Page
         return $data;
     }
 
+    // ================= SALDO LOGIC =================
+    private function hitungSaldoByJenis(int $kode, float $debit, float $kredit): float
+    {
+        // Semua akun pakai pola debit - kredit
+        return $debit - $kredit;
+    }
+
     // ================= TOTAL =================
     private function hitungTotal(): void
     {
-        $this->total_aset = 0; // kalau tidak dipakai boleh dihapus
+        $this->total_aset = 0;
         $this->total_kewajiban = 0;
-        $this->total_ekuitas = 0;
+        $this->total_modal = 0;
+        $this->total_pendapatan = 0;
+        $this->total_beban = 0;
+        $this->total_hpp = 0;
 
         foreach ($this->neraca as $kodeInduk => $induk) {
 
-            $saldoInduk = collect($induk['anak'] ?? [])
-                ->flatMap(fn($anak) => $anak['sub'] ?? [])
-                ->sum(fn($sub) => ($sub['debit'] ?? 0) - ($sub['kredit'] ?? 0));
-
             $kode = (int) $kodeInduk;
 
-            // 1000–3000 → Ekuitas
-            if ($kode >= 1000 && $kode <= 3999) {
-                $this->total_ekuitas += $saldoInduk;
+            $debit = collect($induk['anak'] ?? [])
+                ->flatMap(fn($anak) => $anak['sub'] ?? [])
+                ->sum(fn($sub) => $sub['debit'] ?? 0);
+
+            $kredit = collect($induk['anak'] ?? [])
+                ->flatMap(fn($anak) => $anak['sub'] ?? [])
+                ->sum(fn($sub) => $sub['kredit'] ?? 0);
+
+            $saldo = $this->hitungSaldoByJenis($kode, $debit, $kredit);
+
+            if ($kode >= 1000 && $kode <= 1999) {
+                $this->total_aset += $saldo;
             }
 
-            // 4000–6000 → Kewajiban
-            if ($kode >= 4000 && $kode <= 6999) {
-                $this->total_kewajiban += $saldoInduk;
+            if ($kode >= 2000 && $kode <= 2999) {
+                $this->total_kewajiban += $saldo;
+            }
+
+            if ($kode >= 3000 && $kode <= 3999) {
+                $this->total_modal += $saldo;
+            }
+
+            if ($kode >= 4000 && $kode <= 4999) {
+                $this->total_pendapatan += $saldo;
+            }
+
+            if ($kode >= 5000 && $kode <= 5999) {
+                $this->total_beban += $saldo;
+            }
+
+            if ($kode >= 6000 && $kode <= 6999) {
+                $this->total_hpp += $saldo;
             }
         }
     }
