@@ -16,7 +16,7 @@ class NeracasTable
     public static function configure(Table $table): Table
     {
         return $table
-        ->defaultSort('akun_seribu', 'asc')
+            ->defaultSort('akun_seribu', 'asc')
             ->columns([
                 // Menampilkan kode dari akun seribu (Induk)
                 TextColumn::make('akun_seribu')
@@ -47,6 +47,8 @@ class NeracasTable
                 // Total saldo dengan ringkasan Grand Total di bawah tabel
                 TextColumn::make('total')
                     ->label('Total')
+                    ->formatStateUsing(fn($state) =>
+                    number_format($state, 2, ',', '.'))
                     ->summarize([
                         // Summarizer 1: Total Kelompok 1, 2, 3
                         Summarizer::make()

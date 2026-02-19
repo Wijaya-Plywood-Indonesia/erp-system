@@ -31,8 +31,8 @@ class Jurnal1st extends Model
         'no_akun' => 'string',
         'banyak' => 'integer',
         'm3' => 'decimal:4',
-        'harga' => 'integer',
-        'total' => 'integer',
+        'harga' => 'decimal:2',
+'total' => 'decimal:2',
         'created_by' => 'string',
     ];
 }

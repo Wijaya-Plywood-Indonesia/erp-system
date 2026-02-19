@@ -20,8 +20,8 @@ return new class extends Migration {
             $table->enum('bagian', ['d', 'k']); // debet/kredit
             $table->integer('banyak')->nullable();
             $table->decimal('m3', 12, 4)->nullable();
-            $table->integer('harga')->nullable();
-            $table->integer('total')->nullable();
+            $table->decimal('harga', 18, 2)->nullable();
+            $table->decimal('total', 18, 2)->nullable();
             $table->string('status')->nullable();
             $table->string('created_by')->nullable();
             $table->dateTime('synced_at')->nullable();

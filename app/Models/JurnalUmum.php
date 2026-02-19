@@ -62,7 +62,7 @@ class JurnalUmum extends Model
         'mm' => 'integer',
         'banyak' => 'integer',
         'm3' => 'decimal:4',
-        'harga' => 'integer',
+        'harga' => 'decimal:2',
         'synced_at' => 'datetime',
     ];
 }

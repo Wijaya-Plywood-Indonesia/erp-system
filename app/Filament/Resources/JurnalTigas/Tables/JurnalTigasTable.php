@@ -15,7 +15,7 @@ class JurnalTigasTable
     {
         return $table
         ->defaultSort('modif1000', 'asc')
-    ->defaultSort('no_akun', 'asc')
+    ->defaultSort('akun_seratus', 'asc')
             ->columns([
                 // Menampilkan Kode Akun yang dipilih (1100/1110 dll)
                 TextColumn::make('modif1000')

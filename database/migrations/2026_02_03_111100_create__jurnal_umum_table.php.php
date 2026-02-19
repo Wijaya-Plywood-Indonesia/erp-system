@@ -43,7 +43,8 @@ return new class extends Migration {
             $table->decimal('m3', 10, 4)->nullable();
 
             // harga → gunakan decimal
-            $table->integer('harga')->nullable();
+            $table->decimal('harga', 18, 2)->nullable();
+
 
             // tambahan tracking
             $table->string('created_by')->nullable();

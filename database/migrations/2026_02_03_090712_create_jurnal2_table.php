@@ -18,8 +18,8 @@ return new class extends Migration
             $table->string('nama_akun');
             $table->integer('banyak')->nullable();
             $table->decimal('kubikasi', 12, 4)->nullable();
-            $table->integer('harga')->nullable();
-            $table->integer('total')->nullable();
+            $table->decimal('harga', 18, 2)->nullable();
+            $table->decimal('total', 18, 2)->nullable();
             $table->string('user_id')->nullable();
             $table->string('status_sinkron')->default('belum sinkron');
             $table->dateTime('synced_at')->nullable();
