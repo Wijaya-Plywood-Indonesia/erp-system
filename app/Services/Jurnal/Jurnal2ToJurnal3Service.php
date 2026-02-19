@@ -72,21 +72,30 @@ class Jurnal2ToJurnal3Service
             foreach ($grouped as $akunSeratus => $items) {
 
                 $first = $items->first();
+                $totalBanyak   = '0';
+$totalKubikasi = '0';
+$totalHarga    = '0';
+$totalNominal  = '0';
 
-                /**
-                 * 5️⃣ INSERT KE JURNAL 3
-                 */
-                JurnalTiga::create([
-                    'modif1000'    => $first['modif1000'],
-                    'akun_seratus' => $akunSeratus,
-                    'detail'       => $first['nama_akun'],
-                    'banyak'       => $items->sum('banyak'),
-                    'kubikasi'     => $items->sum('kubikasi'),
-                    'harga'        => $items->sum('harga'),
-                    'total'        => $items->sum('total'),
-                    'createdBy'    => Auth::user()->name,
-                    'status'       => 'belum sinkron',
-                ]);
+foreach ($items as $row) {
+    $totalBanyak   = bcadd($totalBanyak, (string)$row['banyak'], 4);
+    $totalKubikasi = bcadd($totalKubikasi, (string)$row['kubikasi'], 4);
+    $totalHarga    = bcadd($totalHarga, (string)$row['harga'], 2);
+    $totalNominal  = bcadd($totalNominal, (string)$row['total'], 2);
+}
+
+JurnalTiga::create([
+    'modif1000'    => $first['modif1000'],
+    'akun_seratus' => $akunSeratus,
+    'detail'       => $first['nama_akun'],
+    'banyak'       => $totalBanyak,
+    'kubikasi'     => $totalKubikasi,
+    'harga'        => $totalHarga,
+    'total'        => $totalNominal,
+    'createdBy'    => Auth::user()->name,
+    'status'       => 'belum sinkron',
+]);
+
 
                 /**
                  * 6️⃣ UPDATE JURNAL 2

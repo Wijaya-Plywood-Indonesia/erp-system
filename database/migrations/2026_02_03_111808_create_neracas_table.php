@@ -17,8 +17,8 @@ return new class extends Migration
             $table->string('detail');
             $table->integer('banyak')->nullable();
             $table->decimal('kubikasi')->nullable();
-            $table->integer('harga')->nullable();
-            $table->integer('total')->nullable();
+            $table->decimal('harga', 18, 2)->nullable();
+            $table->decimal('total', 18, 2)->nullable();
             $table->timestamps();
         });
     }

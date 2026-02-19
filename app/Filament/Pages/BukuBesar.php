@@ -29,10 +29,10 @@ class BukuBesar extends Page
     }
 
     public function initLoad()
-{
-    $this->loadData();
-    $this->isLoading = false;
-}
+    {
+        $this->loadData();
+        $this->isLoading = false;
+    }
 
     public function loadData()
     {
@@ -49,15 +49,22 @@ class BukuBesar extends Page
 
     // Fungsi menghitung nominal satu baris transaksi
     private function hitungNominal($trx)
-{
-    $mode = strtolower($trx->hit_kbk ?? '');
+    {
+        $mode = strtolower($trx->hit_kbk ?? '');
 
-    $qty = ($mode === 'b' || $mode === 'banyak')
-        ? ($trx->banyak ?? 0)
-        : ($trx->m3 ?? 0);
+        // Jika data lama (hit_kbk null/kosong)
+        if ($mode === '' || $mode === null) {
+            return $trx->harga ?? 0;
+        }
 
-    return $qty * ($trx->harga ?? 0);
-}
+        // Jika banyak
+        if ($mode === 'b' || $mode === 'banyak') {
+            return ($trx->banyak ?? 0) * ($trx->harga ?? 0);
+        }
+
+        // Jika kubikasi
+        return ($trx->m3 ?? 0) * ($trx->harga ?? 0);
+    }
 
     // Mendapatkan Saldo Awal (Transaksi sebelum bulan filter)
     public function getSaldoAwal($kode)
