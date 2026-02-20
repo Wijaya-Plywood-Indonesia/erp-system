@@ -7,108 +7,107 @@ use App\Models\JurnalTiga;
 use App\Models\AnakAkun;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class Jurnal2ToJurnal3Service
 {
     public function sync(): int
     {
         return DB::transaction(function () {
+            try {
+                // 1. Ambil baris Jurnal 2 yang belum disinkronkan
+                $rows = Jurnal2::whereRaw('LOWER(status_sinkron) = ?', ['belum sinkron'])->get();
 
-            $rows = Jurnal2::where('status_sinkron', 'belum sinkron')
-                ->get()
-                ->map(function ($row) {
+                if ($rows->isEmpty()) {
+                    Log::info('Jurnal2ToJurnal3: Tidak ada data yang perlu disinkron.');
+                    return 0;
+                }
 
+                $totalProcessed = 0;
+                $userName = Auth::user()?->name ?? 'System';
+
+                foreach ($rows as $row) {
                     /**
-                     * 1️⃣ CARI AKUN BERDASARKAN no_akun
-                     * Bisa akun detail (1310) atau akun seratus (1300)
+                     * 2. TENTUKAN HIERARKI AKUN
+                     * Mencari Akun Seratus (Induk) dari Jurnal 2 (Misal 1110 -> 1100)
                      */
                     $akun = AnakAkun::where('kode_anak_akun', $row->no_akun)->first();
-
-                    if (! $akun) {
-                        return null; // akun tidak terdaftar
+                    if (!$akun) {
+                        Log::warning("Jurnal2 ID {$row->id}: Akun {$row->no_akun} tidak ditemukan di master.");
+                        continue;
                     }
 
-                    /**
-                     * 2️⃣ TENTUKAN AKUN SERATUS
-                     * - Jika punya parent → dia akun detail
-                     * - Jika tidak → dia akun seratus
-                     */
+                    // Menentukan Akun Seratus (1100, 1200, 1300, dsb)
                     $akunSeratus = $akun->parentAkun ?? $akun;
+                    $indukAkun = $akunSeratus->indukAkun; // Level 1000
 
-                    /**
-                     * 3️⃣ INDUK AKUN (1000)
-                     */
-                    $indukAkun = $akunSeratus->indukAkun;
-
-                    if (! $indukAkun) {
-                        return null;
+                    if (!$indukAkun) {
+                        Log::warning("Jurnal2 ID {$row->id}: Induk Akun 1000 tidak ditemukan.");
+                        continue;
                     }
 
-                    return [
-                        'jurnal2_id'   => $row->id,
-                        'akun_seratus' => $akunSeratus->kode_anak_akun, // 1100 / 1300
-                        'nama_akun'    => $akunSeratus->nama_anak_akun,
-                        'modif1000'    => $indukAkun->kode_induk_akun,  // 1000
-                        'banyak'       => $row->banyak ?? 0,
-                        'kubikasi'     => $row->kubikasi ?? 0,
-                        'harga'        => $row->harga ?? 0,
-                        'total'        => $row->total ?? 0,
-                    ];
-                })
-                ->filter();
+                    $kodeSeratus = $akunSeratus->kode_anak_akun;
 
-            if ($rows->isEmpty()) {
-                return 0;
-            }
+                    // Ambil nilai dari Jurnal 2
+                    $addTotal  = (float) $row->total;
+                    $addBanyak = (float) $row->banyak;
+                    $addM3     = (float) $row->kubikasi;
 
-            /**
-             * 4️⃣ GROUP BY AKUN SERATUS
-             * 1110 + 1120 → 1100
-             * 1310 + 1320 → 1300
-             * 1300 langsung → 1300
-             */
-            $grouped = $rows->groupBy('akun_seratus');
+                    // 3. TARGET: JURNAL TIGA (Update or Create)
+                    $jurnal3 = JurnalTiga::where('akun_seratus', $kodeSeratus)->first();
 
-            foreach ($grouped as $akunSeratus => $items) {
+                    if ($jurnal3) {
+                        // Akumulasi Saldo Net
+                        $newTotal  = (float) $jurnal3->total    + $addTotal;
+                        $newBanyak = (float) $jurnal3->banyak   + $addBanyak;
+                        $newM3     = (float) $jurnal3->kubikasi + $addM3;
 
-                $first = $items->first();
-                $totalBanyak   = '0';
-$totalKubikasi = '0';
-$totalHarga    = '0';
-$totalNominal  = '0';
+                        // HARGA: Tetap Konsisten Total / Banyak (AE / AB)
+                        $newHarga = ($newBanyak != 0)
+                            ? ($newTotal / $newBanyak)
+                            : (float) $jurnal3->harga;
 
-foreach ($items as $row) {
-    $totalBanyak   = bcadd($totalBanyak, (string)$row['banyak'], 4);
-    $totalKubikasi = bcadd($totalKubikasi, (string)$row['kubikasi'], 4);
-    $totalHarga    = bcadd($totalHarga, (string)$row['harga'], 2);
-    $totalNominal  = bcadd($totalNominal, (string)$row['total'], 2);
-}
+                        $jurnal3->update([
+                            'total'    => $newTotal,
+                            'banyak'   => $newBanyak,
+                            'kubikasi' => $newM3,
+                            'harga'    => $newHarga,
+                            'status'   => 'belum sinkron', // Untuk diproses ke Neraca
+                        ]);
+                    } else {
+                        // Jika Akun Seratus belum ada di Jurnal 3
+                        $initHarga = ($addBanyak != 0)
+                            ? ($addTotal / $addBanyak)
+                            : (float) $row->harga;
 
-JurnalTiga::create([
-    'modif1000'    => $first['modif1000'],
-    'akun_seratus' => $akunSeratus,
-    'detail'       => $first['nama_akun'],
-    'banyak'       => $totalBanyak,
-    'kubikasi'     => $totalKubikasi,
-    'harga'        => $totalHarga,
-    'total'        => $totalNominal,
-    'createdBy'    => Auth::user()->name,
-    'status'       => 'belum sinkron',
-]);
+                        JurnalTiga::create([
+                            'modif1000'    => $indukAkun->kode_induk_akun,
+                            'akun_seratus' => $kodeSeratus,
+                            'detail'       => $akunSeratus->nama_anak_akun,
+                            'banyak'       => $addBanyak,
+                            'kubikasi'     => $addM3,
+                            'total'        => $addTotal,
+                            'harga'        => $initHarga,
+                            'createdBy'    => $userName,
+                            'status'       => 'belum sinkron',
+                        ]);
+                    }
 
-
-                /**
-                 * 6️⃣ UPDATE JURNAL 2
-                 */
-                Jurnal2::whereIn('id', $items->pluck('jurnal2_id'))
-                    ->update([
+                    // 4. Update status Jurnal 2
+                    $row->update([
                         'status_sinkron' => 'sudah sinkron',
                         'synced_at'      => now(),
-                        'synced_by'      => Auth::user()->name,
+                        'synced_by'      => $userName,
                     ]);
-            }
 
-            return $grouped->count();
+                    $totalProcessed++;
+                }
+
+                return $totalProcessed;
+            } catch (\Exception $e) {
+                Log::error('Gagal Sinkronisasi Jurnal 2 ke Jurnal 3: ' . $e->getMessage());
+                throw $e;
+            }
         });
     }
 }

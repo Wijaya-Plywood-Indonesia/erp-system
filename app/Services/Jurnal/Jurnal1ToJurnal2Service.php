@@ -7,102 +7,103 @@ use App\Models\Jurnal2;
 use App\Models\AnakAkun;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class Jurnal1ToJurnal2Service
 {
     public function sync(): int
     {
         return DB::transaction(function () {
+            try {
+                // 1. Ambil baris Jurnal 1 yang belum disinkronkan ke Jurnal 2
+                $rows = Jurnal1st::whereRaw('LOWER(status) = ?', ['belum sinkron'])->get();
 
-            /**
-             * 1️⃣ Ambil jurnal 1 belum sinkron
-             */
-            $rows = Jurnal1st::where('status', 'Belum Sinkron')->get();
-
-            if ($rows->isEmpty()) {
-                return 0;
-            }
-
-            /**
-             * 2️⃣ Mapping ke akun induk (1110 / 1200 / 1300)
-             */
-            $mapped = $rows->map(function ($row) {
-
-                $akunInduk = $this->resolveAkunInduk((string) $row->no_akun);
-
-                $master = AnakAkun::where('kode_anak_akun', $akunInduk)->first();
-
-                if (! $master) {
-                    return null;
+                if ($rows->isEmpty()) {
+                    Log::info('Jurnal1ToJurnal2: Tidak ada data yang perlu disinkron.');
+                    return 0;
                 }
 
-                return [
-                    'jurnal1_id' => $row->id,
-                    'modif100'   => $akunInduk,
-                    'no_akun'    => $akunInduk,
-                    'nama_akun'  => $master->nama_anak_akun,
-                    'banyak' => $row->banyak ?? 0,
-'kubikasi' => $row->m3 ?? 0,
-'total' => $row->total ?? 0,
+                $totalProcessed = 0;
+                $userName = Auth::user()?->name ?? 'System';
 
-                ];
-            })->filter();
+                foreach ($rows as $row) {
+                    // Identifikasi Akun Induk (Level Ratusan, misal 1111.00 -> 1110)
+                    $akunInduk = $this->resolveAkunInduk((string) $row->no_akun);
 
+                    // Ambil nilai dari Jurnal 1 (Sudah berupa nilai Net Signed dari Jurnal Umum)
+                    $addTotal  = (float) $row->total;
+                    $addBanyak = (float) $row->banyak;
+                    $addM3     = (float) $row->m3;
 
-            /**
-             * 3️⃣ Group by akun induk
-             */
-            $grouped = $mapped->groupBy('modif100');
+                    // 2. TARGET: JURNAL 2 (Update or Create)
+                    $jurnal2 = Jurnal2::where('no_akun', $akunInduk)->first();
 
-            foreach ($grouped as $modif100 => $items) {
+                    if ($jurnal2) {
+                        // Akumulasi Saldo Net
+                        $newTotal  = (float) $jurnal2->total  + $addTotal;
+                        $newBanyak = (float) $jurnal2->banyak + $addBanyak;
+                        $newM3     = (float) $jurnal2->kubikasi + $addM3;
 
-    $totalBanyak   = '0';
-    $totalKubikasi = '0';
-    $totalNominal  = '0';
+                        // Harga: Total / Banyak (Sesuai Rumus AE/AB)
+                        $newHarga = ($newBanyak != 0)
+                            ? ($newTotal / $newBanyak)
+                            : (float) $jurnal2->harga;
 
-    foreach ($items as $row) {
-        $totalBanyak   = bcadd($totalBanyak, (string)$row['banyak'], 4);
-        $totalKubikasi = bcadd($totalKubikasi, (string)$row['kubikasi'], 4);
-        $totalNominal  = bcadd($totalNominal, (string)$row['total'], 2);
-    }
+                        $jurnal2->update([
+                            'total'    => $newTotal,
+                            'banyak'   => $newBanyak,
+                            'kubikasi' => $newM3,
+                            'harga'    => $newHarga,
+                            'status_sinkron' => 'belum sinkron', // Untuk diproses ke Jurnal 3
+                        ]);
+                    } else {
+                        // Inisialisasi Akun di Jurnal 2 jika belum ada
+                        $master = AnakAkun::where('kode_anak_akun', $akunInduk)->first();
 
-    Jurnal2::create([
-        'modif100'       => $modif100,
-        'no_akun'        => $modif100,
-        'nama_akun'      => $items->first()['nama_akun'],
-        'banyak'         => $totalBanyak,
-        'kubikasi'       => $totalKubikasi,
-        'harga'          => '0',
-        'total'          => $totalNominal,
-        'user_id'        => Auth::user()->name,
-        'status_sinkron' => 'belum sinkron',
-        'synced_at'      => now(),
-        'synced_by'      => Auth::user()->name,
-    ]);
+                        $initHarga = ($addBanyak != 0)
+                            ? ($addTotal / $addBanyak)
+                            : (float) $row->harga;
 
-                /**
-                 * 4️⃣ Update jurnal 1
-                 */
-                Jurnal1st::whereIn('id', $items->pluck('jurnal1_id'))
-                    ->update([
-                        'status'    => 'Sudah Sinkron',
+                        Jurnal2::create([
+                            'modif100'       => $akunInduk,
+                            'no_akun'        => $akunInduk,
+                            'nama_akun'      => $master->nama_anak_akun ?? 'AKUN INDUK ' . $akunInduk,
+                            'banyak'         => $addBanyak,
+                            'kubikasi'       => $addM3,
+                            'total'          => $addTotal,
+                            'harga'          => $initHarga,
+                            'user_id'        => $userName,
+                            'status_sinkron' => 'belum sinkron',
+                            'synced_at'      => now(),
+                            'synced_by'      => $userName,
+                        ]);
+                    }
+
+                    // 3. Update Status Jurnal 1st
+                    $row->update([
+                        'status'    => 'sudah sinkron',
                         'synced_at' => now(),
-                        'synced_by' => Auth::user()->name,
+                        'synced_by' => $userName,
                     ]);
-            }
 
-            return $grouped->count();
+                    $totalProcessed++;
+                }
+
+                return $totalProcessed;
+            } catch (\Exception $e) {
+                Log::error('Gagal Sinkronisasi Jurnal 1 ke Jurnal 2: ' . $e->getMessage());
+                throw $e;
+            }
         });
     }
 
     /**
-     * 1111.00 → 1110
-     * 1201.00 → 1200
-     * 1300.10 → 1300
+     * Mapping No Akun ke Level Ratusan (1110, 1200, 1300)
+     * Pola: Ambil 3 angka pertama lalu tambahkan 0
      */
     private function resolveAkunInduk(string $noAkun): string
     {
-        $kode = substr(str_replace('.', '', $noAkun), 0, 4);
-        return substr($kode, 0, 3) . '0';
+        $cleanNo = str_replace('.', '', $noAkun);
+        return substr($cleanNo, 0, 3) . '0';
     }
 }
