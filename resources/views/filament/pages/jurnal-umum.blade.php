@@ -91,10 +91,10 @@
             <select id="no_akun" class="w-full"> {{-- Hapus class border/bg di sini --}}
                 <option value="">-- Pilih Akun --</option>
                 @foreach ($akunList as $a)
-                <option value="{{ $a->kode_sub_anak_akun }}">
-                    {{ $a->kode_sub_anak_akun }} - {{ $a->nama_sub_anak_akun }}
-                </option>
-                @endforeach
+<option value="{{ $a->kode }}">
+    {{ $a->kode }} - {{ $a->nama }}
+</option>
+@endforeach
             </select>
         </div>
 
