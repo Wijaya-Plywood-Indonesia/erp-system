@@ -63,7 +63,7 @@ class PersentaseKayu extends Page implements HasTable
 
             ->groupBy(
                 'nota_kayus.id',
-                'kayu_masuks.tgl_kayu_masuk',
+                // 'kayu_masuks.tgl_kayu_masuk',
                 'lahans.kode_lahan'
             )
 
