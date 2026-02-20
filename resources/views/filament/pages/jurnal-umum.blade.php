@@ -316,7 +316,7 @@
             <tbody>
                 @foreach ($jurnals as $j)
                 <tr class="border-b
-                               hover:bg-gray-50 dark:hover:bg-gray-800">
+                               hover:bg-gray-50 dark:hover:bg-gray-800 text-center">
                     <td class="px-2 py-1">{{ $j->nama_akun }}</td>
                     <td class="px-2 py-1">{{ $j->tgl?->format('Y-m-d') }}</td>
                     <td class="px-2 py-1">{{ $j->jurnal }}</td>
@@ -324,15 +324,15 @@
                     <td class="px-2 py-1">{{ $j->no_dokumen }}</td>
                     <td class="px-2 py-1">{{ $j->nama }}</td>
                     <td class="px-2 py-1">{{ $j->keterangan }}</td>
-                    <td class="px-2 py-1 text-center font-semibold">
+                    <td class="px-2 py-1 font-semibold">
                         {{ strtolower($j->map) === 'd' ? 'Debit' : 'Kredit' }}
                     </td>
                     <td class="px-2 py-1">{{ $j->mm }}</td>
                     <td class="px-2 py-1">{{ $j->hit_kbk }}</td>
-                    <td class="px-2 py-1 text-right">{{ $j->banyak }}</td>
-                    <td class="px-2 py-1 text-right">{{ $j->m3 }}</td>
-                    <td class="px-2 py-1 text-right">{{ number_format($j->harga) }}</td>
-                    <td class="px-2 py-1 text-right font-semibold">
+                    <td class="px-2 py-1">{{ $j->banyak }}</td>
+                    <td class="px-2 py-1">{{ $j->m3 }}</td>
+                    <td class="px-2 py-1">{{ number_format($j->harga) }}</td>
+                    <td class="px-2 py-1 font-semibold">
                         @php
                         if ($j->hit_kbk === 'b') {
                         $total = ($j->banyak ?? 0) * ($j->harga ?? 0);
@@ -418,34 +418,34 @@
     <script src="https://cdn.jsdelivr.net/npm/tom-select/dist/js/tom-select.complete.min.js"></script>
     <script>
         function initTomSelect() {
-        const el = document.getElementById('no_akun');
-        if (!el) return;
-        
-        // Hapus instansi lama jika ada (mencegah double render)
-        if (el.tomselect) {
-            el.tomselect.destroy();
+            const el = document.getElementById('no_akun');
+            if (!el) return;
+
+            // Hapus instansi lama jika ada (mencegah double render)
+            if (el.tomselect) {
+                el.tomselect.destroy();
+            }
+
+            new TomSelect(el, {
+                create: false,
+                searchField: ['text'],
+                placeholder: 'Cari / pilih no akun...',
+                allowEmptyOption: true,
+                onChange(value) {
+                    @this.set('form.no_akun', value);
+                }
+            });
         }
 
-        new TomSelect(el, {
-            create: false,
-            searchField: ['text'],
-            placeholder: 'Cari / pilih no akun...',
-            allowEmptyOption: true,
-            onChange(value) {
-                @this.set('form.no_akun', value);
-            }
-        });
-    }
+        document.addEventListener('DOMContentLoaded', initTomSelect);
+        // Jika menggunakan Livewire 3/Filament Navigasi
+        document.addEventListener('livewire:navigated', initTomSelect);
 
-    document.addEventListener('DOMContentLoaded', initTomSelect);
-    // Jika menggunakan Livewire 3/Filament Navigasi
-    document.addEventListener('livewire:navigated', initTomSelect);
-    
-    // Listener jika field harus berubah saat Anda klik tombol "Edit" di tabel
-    window.addEventListener('set-no-akun', event => {
-        const ts = document.getElementById('no_akun').tomselect;
-        if (ts) ts.setValue(event.detail.value);
-    });
+        // Listener jika field harus berubah saat Anda klik tombol "Edit" di tabel
+        window.addEventListener('set-no-akun', event => {
+            const ts = document.getElementById('no_akun').tomselect;
+            if (ts) ts.setValue(event.detail.value);
+        });
     </script>
     @endpush
 
