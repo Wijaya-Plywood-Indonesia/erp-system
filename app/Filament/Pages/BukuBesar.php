@@ -6,9 +6,10 @@ use App\Models\IndukAkun;
 use App\Models\JurnalUmum;
 use Filament\Pages\Page;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Auth;
 use BackedEnum;
 use UnitEnum;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class BukuBesar extends Page
 {
@@ -24,22 +25,13 @@ class BukuBesar extends Page
 
     public function mount()
     {
-        $this->filterBulan = Carbon::now()->format('Y-m');
+        $this->filterBulan = Carbon::now()->format('Y-m'); // Default bulan ini
     }
 
-    /**
-     * Dipanggil melalui wire:init di Blade
-     */
     public function initLoad()
     {
-        \Illuminate\Support\Facades\Log::info("=== Memulai Load Buku Besar ===");
-        try {
-            $this->loadData();
-            \Illuminate\Support\Facades\Log::info("Data Induk Berhasil Dimuat. Jumlah: " . count($this->indukAkuns));
-            $this->isLoading = false;
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Error saat initLoad: " . $e->getMessage());
-        }
+        $this->loadData();
+        $this->isLoading = false;
     }
 
     public function loadData()
@@ -48,109 +40,102 @@ class BukuBesar extends Page
             'anakAkuns' => function ($query) {
                 $query->whereNull('parent')
                     ->with([
-                        'children.children',
+                        'children.children', // rekursif 2 level
                         'subAnakAkuns'
                     ]);
             }
         ])->get();
     }
 
-    /**
-     * Menghitung nominal satu baris transaksi dengan proteksi nilai null
-     */
+    // Fungsi menghitung nominal satu baris transaksi
     private function hitungNominal($trx)
     {
-        if (!$trx) return 0;
+        $mode = strtolower($trx->hit_kbk ?? '');
 
-        $qty = ($trx->hit_kbk === 'm3') ? (float)($trx->m3 ?? 0) : (float)($trx->banyak ?? 0);
-        return $qty * (float)($trx->harga ?? 0);
+        // Jika data lama (hit_kbk null/kosong)
+        if ($mode === '' || $mode === null) {
+            return $trx->harga ?? 0;
+        }
+
+        // Jika banyak
+        if ($mode === 'b' || $mode === 'banyak') {
+            return ($trx->banyak ?? 0) * ($trx->harga ?? 0);
+        }
+
+        // Jika kubikasi
+        return ($trx->m3 ?? 0) * ($trx->harga ?? 0);
     }
 
-    /**
-     * Mendapatkan Saldo Awal (Transaksi sebelum bulan filter)
-     */
+    // Mendapatkan Saldo Awal (Transaksi sebelum bulan filter)
     public function getSaldoAwal($kode)
     {
-        if (!$kode) return 0;
-
         $date = Carbon::parse($this->filterBulan)->startOfMonth();
 
-        $trxs = JurnalUmum::where('no_akun', (string)$kode)
+        $trxs = JurnalUmum::where('no_akun', $kode)
             ->where('tgl', '<', $date)
             ->get();
 
         $saldo = 0;
         foreach ($trxs as $trx) {
             $nominal = $this->hitungNominal($trx);
-            $map = strtoupper($trx->map ?? '');
-            $saldo += ($map === 'D' || $map === 'DEBIT') ? $nominal : -$nominal;
+            $saldo += (strtolower($trx->map) === 'd' ? $nominal : -$nominal);
         }
         return $saldo;
     }
 
-    /**
-     * Transaksi hanya di bulan terpilih
-     */
+    // Transaksi hanya di bulan terpilih
     public function getTransaksiByKode($kode)
     {
-        if (!$kode) return collect();
-
-        // Log untuk melihat kode apa yang dicari
-        \Illuminate\Support\Facades\Log::debug("Mencari transaksi untuk kode: [" . $kode . "]");
-
         $start = Carbon::parse($this->filterBulan)->startOfMonth();
         $end = Carbon::parse($this->filterBulan)->endOfMonth();
 
-        return JurnalUmum::where(function ($q) use ($kode) {
-            $q->where('no_akun', (string)$kode)
-                ->orWhere('no_akun', 'LIKE', $kode . '.%') // Antisipasi 1111 vs 1111.00
-                ->orWhere('no_akun', 'LIKE', (int)$kode);
-        })
+        return JurnalUmum::where('no_akun', $kode)
             ->whereBetween('tgl', [$start, $end])
+            ->orderBy('tgl')
             ->get();
     }
 
     // Perbaikan Saldo Akun (Mendukung rekursif untuk Induk)
-   public function getTotalRecursive($akun)
-{
-    $total = 0;
+    public function getTotalRecursive($akun)
+    {
+        $total = 0;
 
-    // Ambil kode akun (anak / sub)
-    $kode =
-        $akun->kode_anak_akun
-        ?? $akun->kode_sub_anak_akun
-        ?? null;
+        // Ambil kode akun (anak / sub)
+        $kode =
+            $akun->kode_anak_akun
+            ?? $akun->kode_sub_anak_akun
+            ?? null;
 
-    // ✅ Hitung saldo akun ini sendiri
-    if ($kode) {
-        $total += $this->getSaldoAwal($kode);
+        // ✅ Hitung saldo akun ini sendiri
+        if ($kode) {
+            $total += $this->getSaldoAwal($kode);
 
-        $start = Carbon::parse($this->filterBulan)->startOfMonth();
-        $end = Carbon::parse($this->filterBulan)->endOfMonth();
+            $start = Carbon::parse($this->filterBulan)->startOfMonth();
+            $end = Carbon::parse($this->filterBulan)->endOfMonth();
 
-        $trxs = JurnalUmum::where('no_akun', $kode)
-            ->whereBetween('tgl', [$start, $end])
-            ->get();
+            $trxs = JurnalUmum::where('no_akun', $kode)
+                ->whereBetween('tgl', [$start, $end])
+                ->get();
 
-        foreach ($trxs as $trx) {
-            $nominal = $this->hitungNominal($trx);
-            $total += (strtolower($trx->map) === 'd' ? $nominal : -$nominal);
+            foreach ($trxs as $trx) {
+                $nominal = $this->hitungNominal($trx);
+                $total += (strtolower($trx->map) === 'd' ? $nominal : -$nominal);
+            }
         }
-    }
 
-    // ✅ Tambahkan semua children
-    if (isset($akun->children) && $akun->children->count()) {
-        foreach ($akun->children as $child) {
-            $total += $this->getTotalRecursive($child);
+        // ✅ Tambahkan semua children
+        if (isset($akun->children) && $akun->children->count()) {
+            foreach ($akun->children as $child) {
+                $total += $this->getTotalRecursive($child);
+            }
         }
-    }
 
-    if (isset($akun->subAnakAkuns) && $akun->subAnakAkuns->count()) {
-        foreach ($akun->subAnakAkuns as $sub) {
-            $total += $this->getTotalRecursive($sub);
+        if (isset($akun->subAnakAkuns) && $akun->subAnakAkuns->count()) {
+            foreach ($akun->subAnakAkuns as $sub) {
+                $total += $this->getTotalRecursive($sub);
+            }
         }
-    }
 
-    return $total;
-}
+        return $total;
+    }
 }

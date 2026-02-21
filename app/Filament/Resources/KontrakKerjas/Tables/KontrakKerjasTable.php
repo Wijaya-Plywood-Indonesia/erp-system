@@ -14,11 +14,15 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Tables\Filters\SelectFilter;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use League\Uri\Components\Component;
+
 class KontrakKerjasTable
 {
     public static function configure(Table $table): Table
@@ -105,6 +109,58 @@ class KontrakKerjasTable
                 ViewAction::make(),
                 EditAction::make(),
                 DeleteAction::make(),
+
+                Action::make('updateStatusDokumen')
+                    ->label('Update Bukti & Status')
+                    ->icon('heroicon-o-document-check')
+                    ->color('success')
+                    ->mountUsing(fn(Schema $form, $record) => $form->fill([
+                        'status_dokumen' => $record->status_dokumen,
+                        'bukti_ttd' => $record->bukti_ttd,
+                    ]))
+                    ->form([
+                        Section::make('Status Dokumen')
+                            ->schema([
+                                Select::make('status_dokumen')
+                                    ->label('Status Dokumen')
+                                    ->options([
+                                        'draft' => 'Draft',
+                                        'dicetak' => 'Dicetak',
+                                        'ditandatangani' => 'Ditandatangani',
+                                    ])
+                                    ->required()
+                                    ->columns(1),
+
+                                \App\Forms\Components\CompressedFileUpload::make('bukti_ttd')
+                                    ->label('Bukti Kontrak')
+                                    ->disk('public')
+                                    ->directory('bukti_kontrak')
+                                    ->imageEditor()
+                                    ->helperText('Upload foto kontrak yang sudah ditandatangani')
+                                    ->fileName(function ($record) {
+                                        $noKontrak = $record->kode ?: 'NoKontrak';
+                                        $nama = $record->nama ?: 'TanpaNama';
+                                        return "{$noKontrak}_{$nama}_bukti_kontrak";
+                                    })
+
+                                    ->columns(1),
+                            ]),
+                    ])
+                    ->action(function ($record, array $data) {
+                        $record->update([
+                            'status_dokumen' => $data['status_dokumen'],
+                            'bukti_ttd' => $data['bukti_ttd'],
+                            // Otomatis catat siapa yang memvalidasi saat upload bukti
+                            'divalidasi_oleh' => auth()->user()->name,
+                        ]);
+
+                        Notification::make()
+                            ->title('Status dan Bukti Kontrak berhasil diperbarui')
+                            ->success()
+                            ->send();
+                    })
+                    ->modalWidth('2xl')
+                    ->modalHeading('Pembaharuan Status Dokumen'),
 
                 Action::make('print')
                     ->label('Cetak Kontrak')
@@ -318,8 +374,7 @@ class KontrakKerjasTable
                             ]);
                         })
                         ->requiresConfirmation()
-                        ->openUrlInNewTab()
-                    ,
+                        ->openUrlInNewTab(),
 
                     BulkAction::make('bulkPerpanjang')
                         ->label('Perpanjang Terpilih')

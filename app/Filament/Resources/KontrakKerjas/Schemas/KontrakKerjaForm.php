@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\KontrakKerjas\Schemas;
 
 use App\Forms\Components\CompressedFileUpload;
+use App\Helpers\HolidayHelper;
 use App\Models\JabatanPerusahaan;
 use App\Models\Pegawai;
 use Carbon\Carbon;
@@ -96,60 +97,83 @@ class KontrakKerjaForm
                 ->schema([
                     DatePicker::make('kontrak_mulai')
                         ->label('Kontrak Mulai')
-                        ->reactive()
-                        ->afterStateUpdated(
-                            fn($state, $set, $get) =>
-                            self::updateTanggalSelesai($state, $get('durasi_kontrak'), $set)
-                        ),
+                        ->native(false)
+                        ->displayFormat('d/m/Y')
+                        ->format('Y-m-d')
+                        ->suffixIcon('heroicon-m-calendar-days')
+                        ->suffixIconColor('primary')
+                        ->closeOnDateSelection()
+                        ->live()
+                        // Menambahkan HelperText secara dinamis menggunakan HolidayHelper
+                        ->helperText(function ($state) {
+                            if (!$state) return null;
 
-                    TextInput::make('durasi_kontrak')
-                        ->label('Durasi Kontrak (bulan)')
-                        ->numeric()
-                        ->reactive()
-                        ->afterStateUpdated(
-                            fn($state, $set, $get) =>
-                            self::updateTanggalSelesai($get('kontrak_mulai'), $state, $set)
-                        ),
+                            $dateString = \Carbon\Carbon::parse($state)->toDateString();
 
-                    DatePicker::make('kontrak_selesai')->label('Kontrak Selesai')->readOnly(),
-                    TextInput::make('tanggal_kontrak')->label('Tanggal Kontrak'),
-                    TextInput::make('no_kontrak')->label('Nomor Kontrak'),
-                ])
-                ->columns(2),
+                            // 1. Cek Libur Nasional menggunakan HolidayHelper statis
+                            if (HolidayHelper::isHoliday($dateString)) {
+                                $holiday = HolidayHelper::getHoliday($dateString);
+                                return new \Illuminate\Support\HtmlString(
+                                    "<span class='text-danger-600 font-medium'>Tanggal ini adalah Hari Libur Nasional: <strong>{$holiday->nama_libur}</strong></span>"
+                                );
+                            }
 
-            /* ============================================================
-             | 5. STATUS DOKUMEN
-             ============================================================ */
-            Section::make('Status Dokumen')
-                ->schema([
-                    Select::make('status_dokumen')
-                        ->label('Status Dokumen')
-                        ->options([
-                            'draft' => 'Draft',
-                            'dicetak' => 'Dicetak',
-                            'ditandatangani' => 'Ditandatangani',
-                        ])
-                        ->default('draft'),
-                    CompressedFileUpload::make('bukti_ttd')
-                        ->label('Bukti Kontrak')
-                        ->disk('public')
-                        ->directory('bukti_kontrak')
+                            // 2. Cek apakah Hari Minggu menggunakan Carbon
+                            if (\Carbon\Carbon::parse($state)->isSunday()) {
+                                return new \Illuminate\Support\HtmlString(
+                                    "<span class='text-warning-600'> Tanggal yang dipilih adalah hari Minggu.</span>"
+                                );
+                            }
 
-                        ->imageEditor()
-                        //->imageCropAspectRatio('3:4')
+                            return "Tanggal kontrak dimulai pada hari kerja.";
+                        })
+                        ->afterStateUpdated(function ($state, $set, $get) {
+                            if ($state) {
+                                $cleanDate = \Carbon\Carbon::parse($state)->format('Y-m-d');
 
-                        ->fileName(function (Get $get) {
-                            $noKontrak = $get('kode') ?: 'NoKontrak';
-                            $nama = $get('nama') ?: 'TanpaNama';
-                            return "{$noKontrak}_{$nama}_bukti_kontrak";
+                                // Logika Update Selesai & Nomor Kontrak
+                                self::updateTanggalSelesai($cleanDate, $get('durasi_kontrak'), $set);
+                                $set('tanggal_kontrak', "Malang, " . $cleanDate);
+
+                                if (!$get('no_kontrak')) {
+                                    $set('no_kontrak', \App\Services\NomorKontrakService::generate());
+                                }
+                            }
                         }),
 
+                    Select::make('durasi_kontrak')
+                        ->label('Durasi Kontrak (Hari)')
+                        ->options([
+                            30 => '30 Hari',
+                            60 => '60 Hari',
+                            90 => '90 Hari',
+                        ])
+                        ->native(false)
+                        ->live()
+                        ->afterStateUpdated(function ($state, $set, $get) {
+                            if ($get('kontrak_mulai') && $state) {
+                                $cleanDate = \Carbon\Carbon::parse($get('kontrak_mulai'))->format('Y-m-d');
+                                self::updateTanggalSelesai($cleanDate, $state, $set);
+                            }
+                        }),
+
+                    DatePicker::make('kontrak_selesai')
+                        ->label('Kontrak Selesai')
+                        ->native(false)
+                        ->displayFormat('d/m/Y')
+                        ->format('Y-m-d')
+                        ->readOnly(),
+
+                    TextInput::make('tanggal_kontrak')
+                        ->label('Tanggal Kontrak')
+                        ->placeholder('Malang, YYYY-MM-DD')
+                        ->readOnly(),
+
+                    TextInput::make('no_kontrak')
+                        ->label('Nomor Kontrak'),
                 ])
                 ->columns(2),
 
-            /* ============================================================
-             | 6. METADATA INTERNAL
-             ============================================================ */
             Section::make('Metadata Kontrak')
                 ->schema([
                     TextInput::make('dibuat_oleh')
@@ -210,11 +234,10 @@ class KontrakKerjaForm
 
         $tanggalMasuk = self::parseDate($pegawai->tanggal_masuk);
 
-        $jenisKelamin = match ($pegawai->jenis_kelamin_pegawai) {
+        $jenisKelamin = match ((int) $pegawai->jenis_kelamin_pegawai) {
             1 => 'Laki-Laki',
             0 => 'Perempuan',
             default => null,
-
         };
 
         $set('kode', $pegawai->kode_pegawai);
@@ -256,16 +279,16 @@ class KontrakKerjaForm
         }
     }
 
-    /** Hitung tanggal selesai berdasarkan bulan */
     private static function updateTanggalSelesai($mulai, $durasi, $set)
     {
         if (!$mulai || !$durasi)
             return;
 
         try {
-            $set('kontrak_selesai', Carbon::parse($mulai)->addMonths($durasi));
+            $tanggalSelesai = Carbon::parse($mulai)->addDays((int) $durasi)->format('Y-m-d');
+
+            $set('kontrak_selesai', $tanggalSelesai);
         } catch (\Exception $e) {
-            //
         }
     }
 }
