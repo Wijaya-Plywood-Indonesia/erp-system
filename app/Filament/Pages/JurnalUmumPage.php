@@ -87,17 +87,17 @@ class JurnalUmumPage extends Page implements HasActions
         2 as urutan
     ");
 
-    $induk = IndukAkun::selectRaw("
-        kode_induk_akun as kode,
-        nama_induk_akun as nama,
-        3 as urutan
-    ");
+    // $induk = IndukAkun::selectRaw("
+    //     kode_induk_akun as kode,
+    //     nama_induk_akun as nama,
+    //     3 as urutan
+    // ");
 
-    $union = $sub->unionAll($anak)->unionAll($induk);
+    $union = $sub->unionAll($anak);
 
     $this->akunList = DB::query()
         ->fromSub($union, 'akun')
-        ->orderBy('urutan') // Sub → Anak → Induk
+        ->orderBy('urutan')
         ->orderBy('kode')
         ->get();
 }
@@ -106,21 +106,13 @@ class JurnalUmumPage extends Page implements HasActions
 {
     $this->form['nama_akun'] = '';
 
-    // Cek Sub Anak
     if ($sub = SubAnakAkun::where('kode_sub_anak_akun', $value)->first()) {
         $this->form['nama_akun'] = $sub->nama_sub_anak_akun;
         return;
     }
 
-    // Cek Anak
     if ($anak = AnakAkun::where('kode_anak_akun', $value)->first()) {
         $this->form['nama_akun'] = $anak->nama_anak_akun;
-        return;
-    }
-
-    // Cek Induk
-    if ($induk = IndukAkun::where('kode_induk_akun', $value)->first()) {
-        $this->form['nama_akun'] = $induk->nama_induk_akun;
         return;
     }
 }
