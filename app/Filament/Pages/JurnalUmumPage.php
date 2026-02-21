@@ -85,7 +85,7 @@ class JurnalUmumPage extends Page implements HasActions
             'form.hit_kbk.required' => 'Menu wajib dipilih!',
         ]);
 
-        $qty = $this->form['hit_kbk'] === 'banyak'
+        $qty = $this->form['hit_kbk'] === 'b'
             ? $this->form['banyak']
             : $this->form['m3'];
 
@@ -171,8 +171,7 @@ class JurnalUmumPage extends Page implements HasActions
     public function updated($propertyName)
     {
         if ($propertyName === 'form.hit_kbk') {
-
-            if ($this->form['hit_kbk'] === 'banyak') {
+            if ($this->form['hit_kbk'] === 'b') {
                 $this->form['banyak'] = 1;
                 $this->form['m3'] = null;
             }

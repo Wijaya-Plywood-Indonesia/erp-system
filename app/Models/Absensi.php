@@ -16,7 +16,8 @@ class Absensi extends Model
     ];
 
     protected $casts = [
-        'tanggal' => 'date'
+        'tanggal' => 'date',
+        'file_path' => 'array'
     ];
 
     public function detailAbsensis()

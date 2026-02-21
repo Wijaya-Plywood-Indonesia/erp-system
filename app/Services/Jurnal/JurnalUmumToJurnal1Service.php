@@ -8,114 +8,130 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Step 1: JurnalUmum → Jurnal1
+ *
+ * Jurnal1 menyimpan no_akun PERSIS seperti di JurnalUmum (termasuk sub-kode: '1506.10', '1426.01')
+ * Semua baris dengan no_akun yang sama diagregasi menjadi satu baris net signed.
+ *
+ * RUMUS NOMINAL (kolom N Excel):
+ *   hit_kbk = 'b'  → nominal = banyak × harga
+ *   hit_kbk = 'm'  → nominal = m3 × harga
+ *   hit_kbk = NULL/lain → nominal = harga
+ *
+ * RUMUS VOLUME (kolom O/P Excel):
+ *   SEMUA banyak/m3 masuk — tidak difilter hit_kbk
+ *   Debit (+), Kredit (-)
+ *
+ * STATUS: Tidak ada perubahan — logika ini sudah benar.
+ */
 class JurnalUmumToJurnal1Service
 {
     public function sync(): int
     {
         return DB::transaction(function () {
+            try {
+                $rows = JurnalUmum::whereRaw('LOWER(status) = ?', ['belum sinkron'])->get();
 
-            // 1. Ambil data yang belum sinkron
-            $rows = JurnalUmum::whereRaw('LOWER(status) = ?', ['belum sinkron'])
-                ->get()
-                ->groupBy('no_akun');
-
-            if ($rows->isEmpty()) {
-                Log::info("Sinkronisasi: Tidak ada data yang perlu diproses.");
-                return 0;
-            }
-
-            $totalProcessed = 0;
-            $userName = Auth::user()?->name ?? 'System';
-
-            foreach ($rows as $noAkun => $items) {
-
-                $noAkunRaw = $noAkun;
-                $parts = explode('.', $noAkunRaw);
-                $angkaDepanKoma = (int) $parts[0];
-                $modif10Value = floor($angkaDepanKoma / 10) * 10;
-
-                // Gunakan string '0' agar presisi BCMath terjaga
-                $batchNominal = '0.0000000000'; 
-                $batchVolume  = '0.0000';
-
-                foreach ($items as $row) {
-                    $map    = strtolower(trim((string)$row->map));
-                    $harga  = (string)($row->harga ?? '0');
-                    $banyak = (string)($row->banyak ?? '0');
-                    $m3     = (string)($row->m3 ?? '0');
-                    $hitKbk = strtolower(trim((string)$row->hit_kbk));
-
-                    // 2. Hitung nominal baris ini dengan presisi tinggi
-                    if (empty($hitKbk)) {
-                        $nominal = $harga;
-                        $volume  = '0';
-                    } elseif (in_array($hitKbk, ['b', 'banyak'])) {
-                        $nominal = bcmul($banyak, $harga, 10);
-                        $volume  = $banyak;
-                    } else {
-                        $nominal = bcmul($m3, $harga, 10);
-                        $volume  = $m3;
-                    }
-
-                    // 3. Akumulasi berdasarkan Debit (tambah) atau Kredit (kurang)
-                    if ($map === 'd') {
-                        $batchNominal = bcadd($batchNominal, $nominal, 10);
-                        $batchVolume  = bcadd($batchVolume, $volume, 4);
-                    } else {
-                        $batchNominal = bcsub($batchNominal, $nominal, 10);
-                        $batchVolume  = bcsub($batchVolume, $volume, 4);
-                    }
+                if ($rows->isEmpty()) {
+                    Log::info('JurnalUmum→Jurnal1: Tidak ada data baru.');
+                    return 0;
                 }
 
-                // 4. Ambil saldo lama yang sudah ada di Jurnal 1st (jika ada)
-                $existing = Jurnal1st::where('no_akun', $noAkunRaw)->first();
-                
-                $finalNominal = $batchNominal;
-                $finalVolume  = $batchVolume;
+                $totalProcessed = 0;
+                $userName = Auth::user()?->name ?? 'System';
 
-                if ($existing) {
-                    // Tambahkan hasil batch baru ke saldo yang sudah ada
-                    $finalNominal = bcadd($batchNominal, (string)$existing->total, 10);
-                    
-                    // Ambil volume lama (cek banyak atau m3)
-                    $oldVol = bccomp((string)$existing->banyak, '0', 4) !== 0 
-                              ? (string)$existing->banyak 
-                              : (string)$existing->m3;
-                    
-                    $finalVolume = bcadd($batchVolume, (string)$oldVol, 4);
-                }
+                foreach ($rows as $row) {
+                    $mapInput = strtoupper(trim((string) $row->map));
 
-                // 5. Update atau Simpan ke Jurnal 1st
-                // Rounding ke 2 desimal hanya dilakukan di sini (hasil akhir)
-                Jurnal1st::updateOrCreate(
-                    ['no_akun' => $noAkunRaw],
-                    [
-                        'modif10'    => (string) $modif10Value,
-                        'nama_akun'  => $items->first()->nama_akun 
-                                        ?? $items->first()->nama 
-                                        ?? 'AKUN TIDAK DIKETAHUI',
-                        'bagian'     => 'd',
-                        'banyak'     => $finalVolume,
-                        'm3'         => 0,
-                        'harga'      => 0,
-                        'total'      => bcadd($finalNominal, '0', 2), 
-                        'created_by' => $userName,
-                        'status'     => 'belum sinkron',
-                    ]
-                );
+                    if (!in_array($mapInput, ['D', 'K'])) {
+                        Log::warning("Baris id={$row->id} dilewati: map '{$row->map}' tidak valid.");
+                        continue;
+                    }
 
-                // 6. Tandai Jurnal Umum sebagai sudah sinkron
-                foreach ($items as $row) {
+                    // no_akun PERSIS dari DB, termasuk sub-kode ('1506.10', '1426.01', '1111.00')
+                    $noAkunStr = trim((string) $row->no_akun);
+                    $noAkunInt = (int) explode('.', $noAkunStr)[0];
+
+                    // modif10 = FLOOR(int_part / 10) * 10
+                    $modif10 = (string) ((int) floor($noAkunInt / 10) * 10);
+
+                    $nominal       = $this->resolveNominal($row);
+                    $signedNominal = ($mapInput === 'D') ? $nominal : -$nominal;
+
+                    [$addBanyak, $addM3] = $this->resolveVolume($row, $mapInput);
+
+                    $jurnal1 = Jurnal1st::where('no_akun', $noAkunStr)->first();
+
+                    if ($jurnal1) {
+                        $newTotal  = (float) $jurnal1->total  + $signedNominal;
+                        $newBanyak = (float) $jurnal1->banyak + $addBanyak;
+                        $newM3     = (float) $jurnal1->m3     + $addM3;
+                        $newHarga  = ($newBanyak != 0)
+                            ? ($newTotal / $newBanyak)
+                            : (float) $jurnal1->harga;
+
+                        $jurnal1->update([
+                            'total'  => $newTotal,
+                            'banyak' => $newBanyak,
+                            'm3'     => $newM3,
+                            'harga'  => $newHarga,
+                            'status' => 'belum sinkron',
+                        ]);
+                    } else {
+                        $initHarga = ($addBanyak != 0)
+                            ? ($signedNominal / $addBanyak)
+                            : (float) ($row->harga ?? 0);
+
+                        Jurnal1st::create([
+                            'modif10'    => $modif10,
+                            'no_akun'    => $noAkunStr,
+                            'nama_akun'  => $row->nama_akun ?? $row->nama ?? 'AKUN ' . $noAkunStr,
+                            'bagian'     => strtolower($mapInput),
+                            'total'      => $signedNominal,
+                            'banyak'     => $addBanyak,
+                            'm3'         => $addM3,
+                            'harga'      => $initHarga,
+                            'created_by' => $userName,
+                            'status'     => 'belum sinkron',
+                        ]);
+                    }
+
                     $row->update([
                         'status'    => 'sudah sinkron',
                         'synced_at' => now(),
                         'synced_by' => $userName,
                     ]);
+
                     $totalProcessed++;
                 }
-            }
 
-            return $totalProcessed;
+                Log::info("JurnalUmum→Jurnal1 selesai: {$totalProcessed} baris.");
+                return $totalProcessed;
+            } catch (\Exception $e) {
+                Log::error('Gagal JurnalUmum→Jurnal1: ' . $e->getMessage());
+                throw $e;
+            }
         });
+    }
+
+    private function resolveNominal(JurnalUmum $row): float
+    {
+        $hit   = strtolower(trim((string) ($row->hit_kbk ?? '')));
+        $harga = (float) ($row->harga  ?? 0);
+        $byk   = (float) ($row->banyak ?? 0);
+        $m3    = (float) ($row->m3     ?? 0);
+
+        if ($hit === 'b') return $byk * $harga;
+        if ($hit === 'm') return $m3  * $harga;
+        return $harga;
+    }
+
+    private function resolveVolume(JurnalUmum $row, string $mapInput): array
+    {
+        $banyak = (float) ($row->banyak ?? 0);
+        $m3     = (float) ($row->m3     ?? 0);
+
+        return ($mapInput === 'D') ? [$banyak, $m3] : [-$banyak, -$m3];
     }
 }

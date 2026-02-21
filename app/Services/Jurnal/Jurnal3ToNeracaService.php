@@ -6,48 +6,98 @@ use App\Models\IndukAkun;
 use App\Models\JurnalTiga;
 use App\Models\Neraca;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
+/**
+ * Step 4: Jurnal3 → Neraca
+ *
+ * Neraca adalah level RIBUAN (1000, 2000, 3000, 4000, 5000, 6000).
+ * Input: modif1000 dari JurnalTiga (sudah dihitung oleh Jurnal2ToJurnal3Service)
+ * Output: baris neraca per akun ribuan.
+ *
+ * STATUS: Tidak ada perubahan — logika ini sudah benar.
+ * (Menggunakan $row->modif1000 yang disimpan langsung, tidak bergantung relasi Eloquent)
+ *
+ * CATATAN PENTING:
+ * Pastikan kolom 'total' di tabel neracas bertipe DECIMAL(20,2), BUKAN INT.
+ * Nilai akun 3000 (Modal) mencapai -10,260,178,448 yang melebihi batas INT (±2,147,483,647).
+ * Overflow INT akan menghasilkan nilai aneh seperti -2,147,483,648.
+ */
 class Jurnal3ToNeracaService
 {
     public function sync(): int
     {
-        $rekapJurnal = JurnalTiga::query()
-            ->where('status', 'belum sinkron')
-            ->selectRaw('modif1000, SUM(banyak) as total_banyak, SUM(kubikasi) as total_m3, SUM(harga) as total_harga, SUM(total) as grand_total')
-            ->groupBy('modif1000')
-            ->get();
+        return DB::transaction(function () {
+            try {
+                $rows = JurnalTiga::whereRaw('LOWER(status) = ?', ['belum sinkron'])->get();
 
-        if ($rekapJurnal->isEmpty()) {
-            return 0;
-        }
+                if ($rows->isEmpty()) {
+                    Log::info('Jurnal3→Neraca: Tidak ada data yang perlu disinkron.');
+                    return 0;
+                }
 
-        foreach ($rekapJurnal as $item) {
+                $totalProcessed = 0;
+                $userName = Auth::user()?->name ?? 'System';
 
-            $ketSeribu = IndukAkun::where(
-                'kode_induk_akun',
-                $item->modif1000
-            )->value('nama_induk_akun');
+                foreach ($rows as $row) {
+                    $kodeInduk = (string) $row->modif1000;
 
-            Neraca::updateOrCreate(
-                ['akun_seribu' => $item->modif1000],
-                [
-                    'detail'   => $ketSeribu,
-                    'banyak'   => $item->total_banyak,
-                    'kubikasi' => $item->total_m3,
-                    'harga'    => $item->total_harga,
-                    'total'    => $item->grand_total,
-                ]
-            );
+                    $addTotal  = (float) $row->total;
+                    $addBanyak = (float) $row->banyak;
+                    $addM3     = (float) $row->kubikasi;
 
-            JurnalTiga::where('modif1000', $item->modif1000)
-                ->where('status', 'belum sinkron')
-                ->update([
-                    'status' => 'sinkron',
-                    'synchronized_by' => Auth::user()->name,
-                    'synchronized_at' => now(),
-                ]);
-        }
+                    $neraca = Neraca::where('akun_seribu', $kodeInduk)->first();
 
-        return $rekapJurnal->count();
+                    if ($neraca) {
+                        $newTotal  = (float) $neraca->total    + $addTotal;
+                        $newBanyak = (float) $neraca->banyak   + $addBanyak;
+                        $newM3     = (float) $neraca->kubikasi + $addM3;
+                        $newHarga  = ($newBanyak != 0)
+                            ? ($newTotal / $newBanyak)
+                            : (float) $neraca->harga;
+
+                        $neraca->update([
+                            'total'    => $newTotal,
+                            'banyak'   => $newBanyak,
+                            'kubikasi' => $newM3,
+                            'harga'    => $newHarga,
+                            'detail'   => IndukAkun::where('kode_induk_akun', $kodeInduk)
+                                ->value('nama_induk_akun') ?? $neraca->detail,
+                        ]);
+                    } else {
+                        $namaInduk = IndukAkun::where('kode_induk_akun', $kodeInduk)
+                            ->value('nama_induk_akun');
+
+                        $initHarga = ($addBanyak != 0)
+                            ? ($addTotal / $addBanyak)
+                            : (float) $row->harga;
+
+                        Neraca::create([
+                            'akun_seribu' => $kodeInduk,
+                            'detail'      => $namaInduk ?? 'INDUK ' . $kodeInduk,
+                            'banyak'      => $addBanyak,
+                            'kubikasi'    => $addM3,
+                            'total'       => $addTotal,
+                            'harga'       => $initHarga,
+                        ]);
+                    }
+
+                    $row->update([
+                        'status'          => 'sinkron',
+                        'synchronized_by' => $userName,
+                        'synchronized_at' => now(),
+                    ]);
+
+                    $totalProcessed++;
+                }
+
+                Log::info("Jurnal3→Neraca selesai: {$totalProcessed} baris.");
+                return $totalProcessed;
+            } catch (\Exception $e) {
+                Log::error('Gagal Jurnal3→Neraca: ' . $e->getMessage());
+                throw $e;
+            }
+        });
     }
 }
