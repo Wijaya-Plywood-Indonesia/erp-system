@@ -15,6 +15,7 @@ return new class extends Migration {
             $table->string('nama');
             $table->foreignId('parent_id')->nullable()->constrained('akun_groups')->nullOnDelete();
             $table->json('akun')->nullable(); // list no akun
+            $table->integer('order')->default(0);
             $table->boolean('hidden')->default(false);
             $table->timestamps();
         });

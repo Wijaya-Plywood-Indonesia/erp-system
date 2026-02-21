@@ -42,9 +42,9 @@ class AnakAkun extends Model
     }
 
     public function allChildren()
-{
-    return $this->children->merge($this->subAnakAkuns ?? collect());
-}
+    {
+        return $this->children->merge($this->subAnakAkuns ?? collect());
+    }
 
     /**
      * Relasi ke User Pembuat (created_by)

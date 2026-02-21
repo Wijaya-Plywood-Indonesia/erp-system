@@ -11,6 +11,7 @@ class AkunGroup extends Model
         'nama',
         'parent_id',
         'akun',
+        'order',
         'hidden',
     ];
 
@@ -19,6 +20,8 @@ class AkunGroup extends Model
         'hidden' => 'boolean',
     ];
 
+
+    // RELASI HIERARKI
     public function parent()
     {
         return $this->belongsTo(AkunGroup::class, 'parent_id');
@@ -26,6 +29,28 @@ class AkunGroup extends Model
 
     public function children()
     {
-        return $this->hasMany(AkunGroup::class, 'parent_id');
+        return $this->hasMany(AkunGroup::class, 'parent_id')->orderBy('order');
+    }
+
+    //| RECURSIVE: Ambil struktur tree lengkap
+    public function allAccountsRecursive()
+    {
+        $accounts = collect($this->akunList()->get());
+
+        foreach ($this->children as $child) {
+            $accounts = $accounts->merge(
+                $child->allAccountsRecursive()
+            );
+        }
+
+        return $accounts;
+    }
+    public function mappedTree()
+    {
+        return [
+            'group' => $this,
+            'accounts' => $this->akunList()->get(),
+            'children' => $this->children->map(fn($child) => $child->mappedTree()),
+        ];
     }
 }
