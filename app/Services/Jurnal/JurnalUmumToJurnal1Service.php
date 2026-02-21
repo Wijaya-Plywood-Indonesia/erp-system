@@ -8,20 +8,33 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Step 1: JurnalUmum → Jurnal1
+ *
+ * Jurnal1 menyimpan no_akun PERSIS seperti di JurnalUmum (termasuk sub-kode: '1506.10', '1426.01')
+ * Semua baris dengan no_akun yang sama diagregasi menjadi satu baris net signed.
+ *
+ * RUMUS NOMINAL (kolom N Excel):
+ *   hit_kbk = 'b'  → nominal = banyak × harga
+ *   hit_kbk = 'm'  → nominal = m3 × harga
+ *   hit_kbk = NULL/lain → nominal = harga
+ *
+ * RUMUS VOLUME (kolom O/P Excel):
+ *   SEMUA banyak/m3 masuk — tidak difilter hit_kbk
+ *   Debit (+), Kredit (-)
+ *
+ * STATUS: Tidak ada perubahan — logika ini sudah benar.
+ */
 class JurnalUmumToJurnal1Service
 {
-    /**
-     * Melakukan sinkronisasi semua akun dari Jurnal Umum ke Jurnal 1
-     */
     public function sync(): int
     {
         return DB::transaction(function () {
             try {
-                // 1. Ambil semua baris yang belum disinkronkan
                 $rows = JurnalUmum::whereRaw('LOWER(status) = ?', ['belum sinkron'])->get();
 
                 if ($rows->isEmpty()) {
-                    Log::info('Sinkronisasi: Tidak ada data baru untuk diproses.');
+                    Log::info('JurnalUmum→Jurnal1: Tidak ada data baru.');
                     return 0;
                 }
 
@@ -31,37 +44,30 @@ class JurnalUmumToJurnal1Service
                 foreach ($rows as $row) {
                     $mapInput = strtoupper(trim((string) $row->map));
 
-                    // Validasi dasar map (D/K)
                     if (!in_array($mapInput, ['D', 'K'])) {
-                        Log::warning("Baris id={$row->id} dilewati: map '{$mapInput}' tidak valid.");
+                        Log::warning("Baris id={$row->id} dilewati: map '{$row->map}' tidak valid.");
                         continue;
                     }
 
-                    // Identifikasi Akun & Modif10
-                    $noAkunStr = (string) $row->no_akun;
+                    // no_akun PERSIS dari DB, termasuk sub-kode ('1506.10', '1426.01', '1111.00')
+                    $noAkunStr = trim((string) $row->no_akun);
                     $noAkunInt = (int) explode('.', $noAkunStr)[0];
-                    $modif10Value = (string) (floor($noAkunInt / 10) * 10);
 
-                    // --- 2. KALKULASI NOMINAL (Uang - Rumus Kolom N Excel) ---
-                    $nominal = $this->resolveNominal($row);
+                    // modif10 = FLOOR(int_part / 10) * 10
+                    $modif10 = (string) ((int) floor($noAkunInt / 10) * 10);
+
+                    $nominal       = $this->resolveNominal($row);
                     $signedNominal = ($mapInput === 'D') ? $nominal : -$nominal;
 
-                    // --- 3. KALKULASI VOLUME (Banyak & M3 - Logika Database Direct) ---
-                    // Menggunakan logika SUMIF: Debit (+) dan Kredit (-)
-                    [$addBanyak, $addM3] = $this->resolveVolumeDirect($row, $mapInput);
+                    [$addBanyak, $addM3] = $this->resolveVolume($row, $mapInput);
 
-                    // --- 4. UPDATE ATAU CREATE DI JURNAL 1 ---
                     $jurnal1 = Jurnal1st::where('no_akun', $noAkunStr)->first();
 
                     if ($jurnal1) {
-                        // Akumulasi Saldo Net
                         $newTotal  = (float) $jurnal1->total  + $signedNominal;
                         $newBanyak = (float) $jurnal1->banyak + $addBanyak;
                         $newM3     = (float) $jurnal1->m3     + $addM3;
-
-                        // Perbarui Harga: AE / AB (Total Net / Banyak Net)
-                        // Proteksi pembagian nol: jika banyak 0, gunakan harga terakhir
-                        $newHarga = ($newBanyak != 0)
+                        $newHarga  = ($newBanyak != 0)
                             ? ($newTotal / $newBanyak)
                             : (float) $jurnal1->harga;
 
@@ -70,34 +76,27 @@ class JurnalUmumToJurnal1Service
                             'banyak' => $newBanyak,
                             'm3'     => $newM3,
                             'harga'  => $newHarga,
-                            'status' => 'belum sinkron', // Siap untuk Jurnal 2
+                            'status' => 'belum sinkron',
                         ]);
                     } else {
-                        // Inisialisasi Akun Baru di Jurnal 1
-                        $initTotal  = $signedNominal;
-                        $initBanyak = $addBanyak;
-                        $initM3     = $addM3;
-
-                        // Harga Awal: Total / Banyak
-                        $initHarga = ($initBanyak != 0)
-                            ? ($initTotal / $initBanyak)
+                        $initHarga = ($addBanyak != 0)
+                            ? ($signedNominal / $addBanyak)
                             : (float) ($row->harga ?? 0);
 
                         Jurnal1st::create([
-                            'modif10'   => $modif10Value,
-                            'no_akun'   => $noAkunStr,
-                            'nama_akun' => $row->nama_akun ?? $row->nama ?? 'AKUN BARU',
-                            'bagian'    => 'd', // Default bagian d sesuai template
-                            'total'     => $initTotal,
-                            'banyak'    => $initBanyak,
-                            'm3'        => $initM3,
-                            'harga'     => $initHarga,
+                            'modif10'    => $modif10,
+                            'no_akun'    => $noAkunStr,
+                            'nama_akun'  => $row->nama_akun ?? $row->nama ?? 'AKUN ' . $noAkunStr,
+                            'bagian'     => strtolower($mapInput),
+                            'total'      => $signedNominal,
+                            'banyak'     => $addBanyak,
+                            'm3'         => $addM3,
+                            'harga'      => $initHarga,
                             'created_by' => $userName,
-                            'status'    => 'belum sinkron',
+                            'status'     => 'belum sinkron',
                         ]);
                     }
 
-                    // 5. Tandai baris Jurnal Umum sebagai 'sudah sinkron'
                     $row->update([
                         'status'    => 'sudah sinkron',
                         'synced_at' => now(),
@@ -107,44 +106,32 @@ class JurnalUmumToJurnal1Service
                     $totalProcessed++;
                 }
 
-                Log::info("Sinkronisasi berhasil: {$totalProcessed} baris diproses.");
+                Log::info("JurnalUmum→Jurnal1 selesai: {$totalProcessed} baris.");
                 return $totalProcessed;
             } catch (\Exception $e) {
-                Log::error('Gagal Sinkronisasi Jurnal Umum ke Jurnal 1: ' . $e->getMessage());
+                Log::error('Gagal JurnalUmum→Jurnal1: ' . $e->getMessage());
                 throw $e;
             }
         });
     }
 
-    /**
-     * Logika Nominal (Total Uang) sesuai Kolom N Excel
-     */
     private function resolveNominal(JurnalUmum $row): float
     {
-        $hit    = strtolower(trim((string) ($row->hit_kbk ?? '')));
-        $harga  = (float) ($row->harga  ?? 0);
-        $banyak = (float) ($row->banyak ?? 0);
-        $m3     = (float) ($row->m3     ?? 0);
+        $hit   = strtolower(trim((string) ($row->hit_kbk ?? '')));
+        $harga = (float) ($row->harga  ?? 0);
+        $byk   = (float) ($row->banyak ?? 0);
+        $m3    = (float) ($row->m3     ?? 0);
 
-        if ($hit === 'b') return $banyak * $harga;
-        if ($hit === 'm') return $m3 * $harga;
+        if ($hit === 'b') return $byk * $harga;
+        if ($hit === 'm') return $m3  * $harga;
         return $harga;
     }
 
-    /**
-     * Logika Volume (Banyak & M3) Langsung dari Database
-     * Mengikuti prinsip SUMIF(D) - SUMIF(K)
-     */
-    private function resolveVolumeDirect(JurnalUmum $row, string $mapInput): array
+    private function resolveVolume(JurnalUmum $row, string $mapInput): array
     {
         $banyak = (float) ($row->banyak ?? 0);
         $m3     = (float) ($row->m3     ?? 0);
 
-        // Jika Debit (+) , Jika Kredit (-)
-        if ($mapInput === 'D') {
-            return [$banyak, $m3];
-        } else {
-            return [-$banyak, -$m3];
-        }
+        return ($mapInput === 'D') ? [$banyak, $m3] : [-$banyak, -$m3];
     }
 }

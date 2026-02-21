@@ -13,6 +13,8 @@ class BahanProduksiForm
         return [
             'lem_dover' => 'Lem Dover (kg)',
             'tepung' => 'Tepung (kg)',
+            'lem_pai' => 'Lem Pai (kg)',
+            'aruki' => 'Aruki'
         ];
     }
     public static function configure(Schema $schema): Schema
