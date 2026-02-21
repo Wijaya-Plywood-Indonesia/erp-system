@@ -27,8 +27,11 @@ class AbsensiForm
                     ->suffixIconColor('primary'),
                 FileUpload::make('file_path')
                     ->label('Upload File Logs')
-                    ->disk('public') // Pastikan sudah php artisan storage:link
+                    ->disk('public')
                     ->directory('absensi-logs')
+                    ->multiple() // Mengizinkan upload lebih dari satu file
+                    ->maxFiles(5) // Opsional: Batasi jumlah maksimal file, misalnya 5
+                    ->reorderable() // Opsional: Memungkinkan pengguna mengatur urutan file
                     ->acceptedFileTypes([
                         'text/plain',
                         'application/octet-stream',

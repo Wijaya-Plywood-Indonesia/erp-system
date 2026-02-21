@@ -42,8 +42,8 @@ class DempulWorkerMap
                     if (!$rp->pegawai) continue;
 
                     // --- PENYESUAIAN FORMAT JAM: HH:mm:ss ---
-                    $jamMasuk = $rp->masuk ? Carbon::parse($rp->masuk)->format('H:i:s') : '-';
-                    $jamPulang = $rp->pulang ? Carbon::parse($rp->pulang)->format('H:i:s') : '-';
+                    $jamMasuk = $rp->jam_masuk ? Carbon::parse($rp->jam_masuk)->format('H:i:s') : '-';
+                    $jamPulang = $rp->jam_pulang ? Carbon::parse($rp->jam_pulang)->format('H:i:s') : '-';
 
                     $results[] = [
                         'kodep' => $rp->pegawai->kode_pegawai ?? '-',

@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('absensis', function (Blueprint $table) {
             $table->id();
             $table->date('tanggal');
-            $table->string('file_path');
+            $table->json('file_path');
             $table->string('uploaded_by')->nullable();
             $table->timestamps();
         });

@@ -101,10 +101,10 @@
                             <td class="p-2 border border-zinc-500 dark:border-zinc-700">{{ number_format($items->sum('m3'), 4) }}</td>
                             <td class="p-2 border border-zinc-500 dark:border-zinc-700">{{ number_format($items->unique('tanggal')->sum('ttl_pkj'), 0) }}</td>
                             <td colspan="1" class="p-2 border border-zinc-500 dark:border-zinc-700"></td>
-                            <td class="p-2 border border-zinc-500 dark:border-zinc-700 text-right text-orange-600">{{ number_format($items->unique('tanggal')->sum('ongkos_per_m3'), 0, ',', '.') }}</td>
+                            <td class="p-2 border border-zinc-500 dark:border-zinc-700 text-right text-orange-600">{{ number_format($items->unique('tanggal')->avg('ongkos_per_m3'), 0, ',', '.') }}</td>
                             <td class="p-2 border border-zinc-500 dark:border-zinc-700"></td>
-                            <td class="p-2 border border-zinc-500 dark:border-zinc-700 text-right text-orange-600">{{ number_format($items->unique('tanggal')->sum('ongkos_m3_mesin'), 0, ',', '.') }}</td>
-                            <td class="p-2 border border-zinc-500 dark:border-zinc-700 text-right text-orange-600">{{ number_format($items->unique('tanggal')->sum('ongkos_per_lb'), 0, ',', '.') }}</td>
+                            <td class="p-2 border border-zinc-500 dark:border-zinc-700 text-right text-orange-600">{{ number_format($items->unique('tanggal')->avg('ongkos_m3_mesin'), 0, ',', '.') }}</td>
+                            <td class="p-2 border border-zinc-500 dark:border-zinc-700 text-right text-orange-600">{{ number_format($items->unique('tanggal')->avg('ongkos_per_lb'), 0, ',', '.') }}</td>
                             <td class="p-2 border border-zinc-500 dark:border-zinc-700"></td>
                         </tr>
                     </tfoot>
