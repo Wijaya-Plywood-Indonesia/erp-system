@@ -10,11 +10,9 @@ class NomorKontrakService
     public static function generate()
     {
         $now = Carbon::now();
+        $bulan = $now->month;
+        $tahun = $now->year;
 
-        $bulan = $now->format('n');
-        $tahun = $now->format('Y');
-
-        // ROMAWI
         $romawi = [
             1 => "I",
             2 => "II",
@@ -27,28 +25,22 @@ class NomorKontrakService
             9 => "IX",
             10 => "X",
             11 => "XI",
-            12 => "XII",
+            12 => "XII"
         ][$bulan];
 
-        // Ambil nomor urut terakhir bulan ini
         $last = DB::table('kontrak_kerja')
-            ->whereMonth('tanggal_kontrak', $bulan)
-            ->whereYear('tanggal_kontrak', $tahun)
-            ->orderBy('no_kontrak', 'desc')
+            ->whereMonth('created_at', $bulan)
+            ->whereYear('created_at', $tahun)
+            ->latest('id')
             ->value('no_kontrak');
 
-        // Extract angka depannya (NNN)
+        $num = 1;
         if ($last) {
-            $num = intval(substr($last, 0, 3)) + 1;
-        } else {
-            $num = 1;
+            $parts = explode('/', $last);
+            $num = intval($parts[0]) + 1;
         }
 
         $urut = str_pad($num, 3, '0', STR_PAD_LEFT);
-
-        // Format final
-        $final = "{$urut}/HRD/PKWT/{$romawi}/{$tahun}";
-
-        return $final;
+        return "{$urut}/HRD/PKWT/{$romawi}/{$tahun}";
     }
 }

@@ -91,7 +91,8 @@ class BukuBesar extends Page
 
         return JurnalUmum::where('no_akun', $kode)
             ->whereBetween('tgl', [$start, $end])
-            ->orderBy('tgl')
+            ->orderBy('tgl', 'asc')    // Urutkan Tanggal dulu
+            ->orderBy('jurnal', 'asc')
             ->get();
     }
 
