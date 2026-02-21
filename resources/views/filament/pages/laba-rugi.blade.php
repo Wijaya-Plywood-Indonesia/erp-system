@@ -1,139 +1,156 @@
 <div class="max-w-4xl mx-auto
             bg-white dark:bg-gray-900
             text-gray-800 dark:text-gray-100
-            shadow-2xl rounded-3xl p-10
-            transition-colors duration-300">
+            shadow-xl rounded-2xl p-10">
 
-    <h2 class="text-3xl font-bold text-center mb-10 tracking-wide">
+    <h2 class="text-2xl font-bold text-center mb-10">
         LAPORAN LABA RUGI
     </h2>
 
-    {{-- ================= PENDAPATAN ================= --}}
-    <div class="mb-10">
-        <h3 class="text-lg font-semibold mb-4 
-                   border-b border-gray-300 dark:border-gray-700 pb-2">
-            PENDAPATAN
-        </h3>
+    @php
+        function debit($amount) {
+            return 'Rp ' . number_format(abs($amount), 0, ',', '.');
+        }
 
-        <table class="w-full text-sm">
-            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                @foreach ($akunPendapatan as $item)
-                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition">
-                        <td class="w-24 py-2">{{ $item['kode'] }}</td>
-                        <td class="py-2">{{ $item['nama'] }}</td>
-                        <td class="text-right py-2 font-medium">
-                            {{ number_format($item['total'], 2, ',', '.') }}
-                        </td>
-                    </tr>
-                @endforeach
-            </tbody>
+        function kredit($amount) {
+            return '(Rp ' . number_format(abs($amount), 0, ',', '.') . ')';
+        }
+    @endphp
 
-            <tfoot>
-                <tr class="border-t-2 border-gray-300 dark:border-gray-600 font-semibold">
-                    <td colspan="2" class="pt-3">TOTAL PENDAPATAN</td>
-                    <td class="text-right pt-3 text-green-600 dark:text-green-400">
-                        {{ number_format($totalPendapatan, 2, ',', '.') }}
-                    </td>
-                </tr>
-            </tfoot>
-        </table>
-    </div>
+    <table class="w-full text-sm border-collapse">
 
-    {{-- ================= HPP ================= --}}
-    <div class="mb-10 
-                bg-gray-50 dark:bg-gray-800 
-                rounded-2xl p-6 shadow-inner">
+        {{-- ================= PENDAPATAN (KREDIT) ================= --}}
+        <tr>
+            <td colspan="3" class="font-semibold pb-2">Pendapatan</td>
+        </tr>
 
-        <table class="w-full text-sm">
+        @foreach ($akunPendapatan as $item)
             <tr>
-                <td colspan="2" class="py-2 font-medium">
-                    Harga Pokok Penjualan (HPP)
-                </td>
-                <td class="text-right py-2 text-red-600 dark:text-red-400 font-medium">
-                    ({{ number_format($hpp, 2, ',', '.') }})
-                </td>
-            </tr>
-
-            <tr class="border-t border-gray-300 dark:border-gray-600 font-semibold">
-                <td colspan="2" class="pt-3">
-                    PENDAPATAN KOTOR
-                </td>
-                <td class="text-right pt-3 text-blue-600 dark:text-blue-400">
-                    {{ number_format($pendapatanKotor, 2, ',', '.') }}
+                <td class="w-28 py-1">{{ $item['kode'] }}</td>
+                <td class="pl-2">{{ $item['nama'] }}</td>
+                <td></td>
+                <td class="w-40 text-right">
+                    {{ kredit($item['total']) }}
                 </td>
             </tr>
-        </table>
-    </div>
+        @endforeach
 
-    {{-- ================= BIAYA ================= --}}
-    <div class="mb-10">
-        <h3 class="text-lg font-semibold mb-4 
-                   border-b border-gray-300 dark:border-gray-700 pb-2">
-            BIAYA OPERASIONAL
-        </h3>
+        {{-- Total Pendapatan --}}
+        <tr>
+            <td colspan="3"></td>
+            <td class="text-right border-t border-gray-500 font-semibold">
+                {{ kredit($totalPendapatan) }}
+            </td>
+        </tr>
 
-        <table class="w-full text-sm">
-            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                @foreach ($akunBiaya as $item)
-                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition">
-                        <td class="w-24 py-2">{{ $item['kode'] }}</td>
-                        <td class="py-2">{{ $item['nama'] }}</td>
-                        <td class="text-right py-2 text-red-600 dark:text-red-400 font-medium">
-                            ({{ number_format($item['total'], 2, ',', '.') }})
-                        </td>
-                    </tr>
-                @endforeach
-            </tbody>
 
-            <tfoot>
-                <tr class="border-t-2 border-gray-300 dark:border-gray-600 font-semibold">
-                    <td colspan="2" class="pt-3">TOTAL BIAYA</td>
-                    <td class="text-right pt-3 text-red-600 dark:text-red-400">
-                        ({{ number_format($totalBiaya, 2, ',', '.') }})
-                    </td>
-                </tr>
-            </tfoot>
-        </table>
-    </div>
+        {{-- ================= HPP (DEBIT) ================= --}}
+        <tr>
+            <td colspan="3" class="font-semibold pt-6 pb-2">
+                Harga Pokok Penjualan
+            </td>
+        </tr>
 
-    {{-- ================= SEBELUM PAJAK ================= --}}
-    <div class="border-t border-gray-300 dark:border-gray-700 pt-6">
-        <table class="w-full text-sm font-semibold">
+        <tr>
+            <td></td>
+            <td class="pl-2">Harga Pokok Penjualan</td>
+            <td class="text-right">
+                {{ debit($hpp) }}
+            </td>
+            <td></td>
+        </tr>
+
+
+        {{-- ================= LABA KOTOR ================= --}}
+        <tr>
+            <td colspan="2" class="font-semibold pt-2">Laba Kotor</td>
+            <td></td>
+            <td class="text-right border-t border-gray-500 font-semibold">
+                @if($pendapatanKotor >= 0)
+                    {{ kredit($pendapatanKotor) }}
+                @else
+                    {{ debit($pendapatanKotor) }}
+                @endif
+            </td>
+        </tr>
+
+
+        {{-- ================= BEBAN OPERASIONAL (DEBIT) ================= --}}
+        <tr>
+            <td colspan="3" class="font-semibold pt-6 pb-2">
+                Beban Operasional
+            </td>
+        </tr>
+
+        @foreach ($akunBiaya as $item)
             <tr>
-                <td colspan="2" class="py-2">
-                    PENDAPATAN SEBELUM PAJAK
+                <td class="py-1">{{ $item['kode'] }}</td>
+                <td class="pl-2">{{ $item['nama'] }}</td>
+                <td class="text-right">
+                    {{ debit($item['total']) }}
                 </td>
-                <td class="text-right py-2 text-indigo-600 dark:text-indigo-400">
-                    {{ number_format($pendapatanSebelumPajak, 2, ',', '.') }}
-                </td>
+                <td></td>
             </tr>
+        @endforeach
 
-            <tr>
-                <td colspan="2" class="py-2">
-                    BEBAN PAJAK (5900)
-                </td>
-                <td class="text-right py-2 text-red-600 dark:text-red-400">
-                    ({{ number_format($bebanPajak, 2, ',', '.') }})
-                </td>
-            </tr>
-        </table>
-    </div>
+        {{-- Total Biaya --}}
+        <tr>
+            <td colspan="2"></td>
+            <td class="text-right border-t border-gray-500 font-semibold">
+                {{ debit($totalBiaya) }}
+            </td>
+            <td></td>
+        </tr>
 
-    {{-- ================= LABA BERSIH ================= --}}
-    <div class="border-t-4 border-gray-400 dark:border-gray-600 pt-6 mt-6">
-        <table class="w-full text-lg font-bold">
-            <tr>
-                <td colspan="2">
-                    LABA BERSIH
+
+        {{-- ================= LABA SEBELUM PAJAK ================= --}}
+        <tr>
+            <td colspan="2" class="font-semibold pt-6">
+                Laba Sebelum Pajak
+            </td>
+            <td></td>
+            <td class="text-right border-t border-gray-500 font-semibold">
+                @if($pendapatanSebelumPajak >= 0)
+                    {{ kredit($pendapatanSebelumPajak) }}
+                @else
+                    {{ debit($pendapatanSebelumPajak) }}
+                @endif
+            </td>
+        </tr>
+
+
+        {{-- ================= PAJAK (DEBIT) ================= --}}
+        <tr>
+            <td></td>
+            <td class="pl-2 py-1">Pajak Penghasilan (5900)</td>
+            <td class="text-right">
+                {{ debit($bebanPajak) }}
+            </td>
+            <td></td>
+        </tr>
+
+
+        {{-- ================= LABA / RUGI BERSIH ================= --}}
+        <tr>
+            <td colspan="2" class="font-bold text-base pt-6">
+                {{ $labaBersih >= 0 ? 'Laba Bersih' : 'Rugi Bersih' }}
+            </td>
+
+            @if($labaBersih >= 0)
+                {{-- LABA = Kredit --}}
+                <td></td>
+                <td class="text-right font-bold text-base border-t-4 border-double border-black">
+                    {{ kredit($labaBersih) }}
                 </td>
-                <td class="text-right 
-                    {{ $labaBersih < 0 
-                        ? 'text-red-600 dark:text-red-400' 
-                        : 'text-green-600 dark:text-green-400' }}">
-                    {{ number_format($labaBersih, 2, ',', '.') }}
+            @else
+                {{-- RUGI = Debit --}}
+                <td class="text-right font-bold text-base border-t-4 border-double border-black">
+                    {{ debit($labaBersih) }}
                 </td>
-            </tr>
-        </table>
-    </div>
+                <td></td>
+            @endif
+        </tr>
+
+    </table>
 
 </div>
