@@ -43,12 +43,13 @@ $tampilkan = ($saldoAwal != 0) || ($saldoAkhir != 0) || ($jumlahTransaksi > 0);
         @endphp
 
         @if($children->count())
-        @foreach($children as $child)
+    @foreach($children as $child)
         @include('filament.pages.partials.buku-besar-anak', ['akun' => $child])
-        @endforeach
+    @endforeach
+@endif
 
         {{-- TAMPILKAN TABEL HANYA DI LEVEL TERAKHIR (SUB ANAK atau AKUN TANPA CHILD) --}}
-        @else
+        @if($jumlahTransaksi > 0 || $saldoAwal != 0)
         <div class="overflow-x-auto mt-2">
             @php
             $saldoBerjalan = $saldoAwal;

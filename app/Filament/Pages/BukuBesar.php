@@ -110,41 +110,47 @@ class BukuBesar extends Page
             ->get();
     }
 
-    /**
-     * Menghitung total saldo secara rekursif (Saldo Awal + Berjalan)
-     */
-    public function getTotalRecursive($akun)
-    {
-        if (!$akun) return 0;
+    // Perbaikan Saldo Akun (Mendukung rekursif untuk Induk)
+   public function getTotalRecursive($akun)
+{
+    $total = 0;
 
-        // Log untuk melihat akun mana yang sedang diproses
-        // \Illuminate\Support\Facades\Log::debug("Memproses Akun: " . ($akun->kode_anak_akun ?? $akun->kode_sub_anak_akun));
+    // Ambil kode akun (anak / sub)
+    $kode =
+        $akun->kode_anak_akun
+        ?? $akun->kode_sub_anak_akun
+        ?? null;
 
-        $total = 0;
+    // ✅ Hitung saldo akun ini sendiri
+    if ($kode) {
+        $total += $this->getSaldoAwal($kode);
 
-        if (isset($akun->kode_sub_anak_akun)) {
-            $kode = (string)$akun->kode_sub_anak_akun;
-            $total += $this->getSaldoAwal($kode);
+        $start = Carbon::parse($this->filterBulan)->startOfMonth();
+        $end = Carbon::parse($this->filterBulan)->endOfMonth();
 
-            $trxs = JurnalUmum::where('no_akun', $kode)
-                ->whereBetween('tgl', [
-                    Carbon::parse($this->filterBulan)->startOfMonth(),
-                    Carbon::parse($this->filterBulan)->endOfMonth()
-                ])->get();
+        $trxs = JurnalUmum::where('no_akun', $kode)
+            ->whereBetween('tgl', [$start, $end])
+            ->get();
 
-            foreach ($trxs as $trx) {
-                $nominal = $this->hitungNominal($trx);
-                $total += (strtoupper($trx->map) === 'D') ? $nominal : -$nominal;
-            }
-        } else {
-            foreach ($akun->children ?? [] as $child) {
-                $total += $this->getTotalRecursive($child);
-            }
-            foreach ($akun->subAnakAkuns ?? [] as $sub) {
-                $total += $this->getTotalRecursive($sub);
-            }
+        foreach ($trxs as $trx) {
+            $nominal = $this->hitungNominal($trx);
+            $total += (strtolower($trx->map) === 'd' ? $nominal : -$nominal);
         }
-
-        return $total;
     }
+
+    // ✅ Tambahkan semua children
+    if (isset($akun->children) && $akun->children->count()) {
+        foreach ($akun->children as $child) {
+            $total += $this->getTotalRecursive($child);
+        }
+    }
+
+    if (isset($akun->subAnakAkuns) && $akun->subAnakAkuns->count()) {
+        foreach ($akun->subAnakAkuns as $sub) {
+            $total += $this->getTotalRecursive($sub);
+        }
+    }
+
+    return $total;
+}
 }
