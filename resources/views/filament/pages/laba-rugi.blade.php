@@ -8,20 +8,19 @@
     </h2>
 
     @php
-        function debit($amount) {
-            return 'Rp ' . number_format(abs($amount), 0, ',', '.');
-        }
-
-        function kredit($amount) {
-            return '(Rp ' . number_format(abs($amount), 0, ',', '.') . ')';
+        function rupiah($value) {
+            if ($value < 0) {
+                return '(Rp ' . number_format(abs($value), 0, ',', '.') . ')';
+            }
+            return 'Rp ' . number_format($value, 0, ',', '.');
         }
     @endphp
 
     <table class="w-full text-sm border-collapse">
 
-        {{-- ================= PENDAPATAN (KREDIT) ================= --}}
+        {{-- ================= PENDAPATAN ================= --}}
         <tr>
-            <td colspan="3" class="font-semibold pb-2">Pendapatan</td>
+            <td colspan="4" class="font-semibold pb-2">Pendapatan</td>
         </tr>
 
         @foreach ($akunPendapatan as $item)
@@ -30,7 +29,7 @@
                 <td class="pl-2">{{ $item['nama'] }}</td>
                 <td></td>
                 <td class="w-40 text-right">
-                    {{ kredit($item['total']) }}
+                    {{ rupiah($item['total']) }}
                 </td>
             </tr>
         @endforeach
@@ -39,14 +38,14 @@
         <tr>
             <td colspan="3"></td>
             <td class="text-right border-t border-gray-500 font-semibold">
-                {{ kredit($totalPendapatan) }}
+                {{ rupiah($totalPendapatan) }}
             </td>
         </tr>
 
 
-        {{-- ================= HPP (DEBIT) ================= --}}
+        {{-- ================= HPP ================= --}}
         <tr>
-            <td colspan="3" class="font-semibold pt-6 pb-2">
+            <td colspan="4" class="font-semibold pt-6 pb-2">
                 Harga Pokok Penjualan
             </td>
         </tr>
@@ -54,30 +53,27 @@
         <tr>
             <td></td>
             <td class="pl-2">Harga Pokok Penjualan</td>
-            <td class="text-right">
-                {{ debit($hpp) }}
-            </td>
             <td></td>
+            <td class="text-right">
+                {{ rupiah($hpp) }}
+            </td>
         </tr>
 
 
         {{-- ================= LABA KOTOR ================= --}}
         <tr>
-            <td colspan="2" class="font-semibold pt-2">Laba Kotor</td>
-            <td></td>
+            <td colspan="3" class="font-semibold pt-2">
+                Laba Kotor
+            </td>
             <td class="text-right border-t border-gray-500 font-semibold">
-                @if($pendapatanKotor >= 0)
-                    {{ kredit($pendapatanKotor) }}
-                @else
-                    {{ debit($pendapatanKotor) }}
-                @endif
+                {{ rupiah($pendapatanKotor) }}
             </td>
         </tr>
 
 
-        {{-- ================= BEBAN OPERASIONAL (DEBIT) ================= --}}
+        {{-- ================= BEBAN OPERASIONAL ================= --}}
         <tr>
-            <td colspan="3" class="font-semibold pt-6 pb-2">
+            <td colspan="4" class="font-semibold pt-6 pb-2">
                 Beban Operasional
             </td>
         </tr>
@@ -86,69 +82,52 @@
             <tr>
                 <td class="py-1">{{ $item['kode'] }}</td>
                 <td class="pl-2">{{ $item['nama'] }}</td>
-                <td class="text-right">
-                    {{ debit($item['total']) }}
-                </td>
                 <td></td>
+                <td class="text-right">
+                    {{ rupiah($item['total']) }}
+                </td>
             </tr>
         @endforeach
 
         {{-- Total Biaya --}}
         <tr>
-            <td colspan="2"></td>
+            <td colspan="3"></td>
             <td class="text-right border-t border-gray-500 font-semibold">
-                {{ debit($totalBiaya) }}
+                {{ rupiah($totalBiaya) }}
             </td>
-            <td></td>
         </tr>
 
 
         {{-- ================= LABA SEBELUM PAJAK ================= --}}
         <tr>
-            <td colspan="2" class="font-semibold pt-6">
+            <td colspan="3" class="font-semibold pt-6">
                 Laba Sebelum Pajak
             </td>
-            <td></td>
             <td class="text-right border-t border-gray-500 font-semibold">
-                @if($pendapatanSebelumPajak >= 0)
-                    {{ kredit($pendapatanSebelumPajak) }}
-                @else
-                    {{ debit($pendapatanSebelumPajak) }}
-                @endif
+                {{ rupiah($pendapatanSebelumPajak) }}
             </td>
         </tr>
 
 
-        {{-- ================= PAJAK (DEBIT) ================= --}}
+        {{-- ================= PAJAK ================= --}}
         <tr>
             <td></td>
             <td class="pl-2 py-1">Pajak Penghasilan (5900)</td>
-            <td class="text-right">
-                {{ debit($bebanPajak) }}
-            </td>
             <td></td>
+            <td class="text-right">
+                {{ rupiah($bebanPajak) }}
+            </td>
         </tr>
 
 
         {{-- ================= LABA / RUGI BERSIH ================= --}}
         <tr>
-            <td colspan="2" class="font-bold text-base pt-6">
+            <td colspan="3" class="font-bold text-base pt-6">
                 {{ $labaBersih >= 0 ? 'Laba Bersih' : 'Rugi Bersih' }}
             </td>
-
-            @if($labaBersih >= 0)
-                {{-- LABA = Kredit --}}
-                <td></td>
-                <td class="text-right font-bold text-base border-t-4 border-double border-black">
-                    {{ kredit($labaBersih) }}
-                </td>
-            @else
-                {{-- RUGI = Debit --}}
-                <td class="text-right font-bold text-base border-t-4 border-double border-black">
-                    {{ debit($labaBersih) }}
-                </td>
-                <td></td>
-            @endif
+            <td class="text-right font-bold text-base border-t-4 border-double border-black">
+                {{ rupiah($labaBersih) }}
+            </td>
         </tr>
 
     </table>

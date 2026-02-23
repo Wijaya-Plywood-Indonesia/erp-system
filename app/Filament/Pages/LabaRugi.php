@@ -37,8 +37,8 @@ class LabaRugi extends Page
         */
 
         $pendapatanAkun = AnakAkun::whereHas('indukAkun', function ($q) {
-                $q->where('kode_induk_akun', 4000);
-            })
+            $q->where('kode_induk_akun', 4000);
+        })
             ->whereNull('parent')
             ->orderBy('kode_anak_akun')
             ->get();
@@ -48,8 +48,6 @@ class LabaRugi extends Page
             $total = JurnalTiga::where('akun_seratus', $akun->kode_anak_akun)
                 ->sum('total');
 
-            // Gunakan ABS agar tidak kebalik
-            $total = abs($total);
 
             $this->akunPendapatan[] = [
                 'kode'  => $akun->kode_anak_akun,
@@ -66,12 +64,11 @@ class LabaRugi extends Page
         |--------------------------------------------------------------------------
         */
 
-        $this->hpp = abs(
-            JurnalTiga::where('detail', 'like', '%hpp%')
-                ->sum('total')
-        );
+        $this->hpp =
+    JurnalTiga::where('detail', 'like', '%hpp%')
+        ->sum('total');
 
-        $this->pendapatanKotor = $this->totalPendapatan - $this->hpp;
+        $this->pendapatanKotor = $this->totalPendapatan + $this->hpp;
 
         /*
         |--------------------------------------------------------------------------
@@ -80,8 +77,8 @@ class LabaRugi extends Page
         */
 
         $biayaAkun = AnakAkun::whereHas('indukAkun', function ($q) {
-                $q->where('kode_induk_akun', 5000);
-            })
+            $q->where('kode_induk_akun', 5000);
+        })
             ->whereNull('parent')
             ->where('kode_anak_akun', '!=', 5900)
             ->orderBy('kode_anak_akun')
@@ -92,7 +89,6 @@ class LabaRugi extends Page
             $total = JurnalTiga::where('akun_seratus', $akun->kode_anak_akun)
                 ->sum('total');
 
-            $total = abs($total);
 
             $this->akunBiaya[] = [
                 'kode'  => $akun->kode_anak_akun,
@@ -110,7 +106,7 @@ class LabaRugi extends Page
         */
 
         $this->pendapatanSebelumPajak =
-            $this->pendapatanKotor - $this->totalBiaya;
+            $this->pendapatanKotor + $this->totalBiaya;
 
         /*
         |--------------------------------------------------------------------------
@@ -118,10 +114,9 @@ class LabaRugi extends Page
         |--------------------------------------------------------------------------
         */
 
-        $this->bebanPajak = abs(
-            JurnalTiga::where('akun_seratus', 5900)
-                ->sum('total')
-        );
+        $this->bebanPajak =
+    JurnalTiga::where('akun_seratus', 5900)
+        ->sum('total');
 
         /*
         |--------------------------------------------------------------------------
@@ -130,6 +125,6 @@ class LabaRugi extends Page
         */
 
         $this->labaBersih =
-            $this->pendapatanSebelumPajak - $this->bebanPajak;
+            $this->pendapatanSebelumPajak + $this->bebanPajak;
     }
 }
