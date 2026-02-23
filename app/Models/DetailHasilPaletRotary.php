@@ -30,6 +30,7 @@ class DetailHasilPaletRotary extends Model
     {
         return $this->belongsTo(Ukuran::class, 'id_ukuran');
     }
+    
     public function penggunaanLahan()
     {
         return $this->belongsTo(PenggunaanLahanRotary::class, 'id_penggunaan_lahan', 'id');
