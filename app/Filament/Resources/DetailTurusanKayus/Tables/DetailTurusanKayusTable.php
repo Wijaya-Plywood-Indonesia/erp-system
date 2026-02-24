@@ -159,6 +159,15 @@ class DetailTurusanKayusTable
                             Select::make('lahan_id')->options(Lahan::pluck('kode_lahan', 'id'))->required(),
                         ])
                         ->action(fn(array $data, Collection $records) => $records->each->update(['lahan_id' => $data['lahan_id']])),
+
+                    BulkAction::make('update_panjang')
+                        ->label('Update Panjang')
+                        ->icon('heroicon-o-arrows-up-down')
+                        ->schema([
+                            Select::make('panjang')->label('Panjang Baru')->options([130 => '130', 260 => '260'])->required(),
+                        ])
+                        ->action(fn(array $data, Collection $records) => $records->each->update(['panjang' => $data['panjang']]))
+                        ->deselectRecordsAfterCompletion(),
                 ])->visible(!$isLocked),
             ]);
     }

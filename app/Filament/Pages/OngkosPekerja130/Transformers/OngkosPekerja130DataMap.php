@@ -12,9 +12,14 @@ class OngkosPekerja130DataMap
     public static function make($collection): array
     {
         $results = [];
+
+        // Mengambil data master dengan fallback nilai 0 jika tidak ada data di database
         $masterHargaPkj = HargaPegawai::first()->harga ?? 0;
         $masterTotalSolasi = TotalSolasi::first()->total ?? 0;
         $masterHargaSolasi = HargaSolasi::first()->harga ?? 0;
+
+        // Proteksi agar tidak terjadi pembagian dengan nol jika data master solasi belum diisi
+        $safeMasterSolasi = $masterTotalSolasi ?: 1;
 
         foreach ($collection as $produksi) {
             $namaMesin = strtoupper($produksi->mesin->nama_mesin ?? '');
@@ -48,8 +53,8 @@ class OngkosPekerja130DataMap
                 $byk = $items->sum('total_lembar');
                 $m3 = (($u->panjang ?? 0) * ($u->lebar ?? 0) * ($u->tebal ?? 0) * $byk) / 10000000;
 
-                // Solasi per Ukuran (Individual)
-                $solasiByk = $byk / ($masterTotalSolasi ?: 1);
+                // Solasi per Ukuran menggunakan safe divisor
+                $solasiByk = $byk / $safeMasterSolasi;
                 $solasiHrg = $solasiByk * $masterHargaSolasi;
 
                 $results[] = [
@@ -66,22 +71,26 @@ class OngkosPekerja130DataMap
                     'kw5' => $items->where('kw', '5')->sum('total_lembar'),
                     'byk' => $byk,
                     'm3' => $m3,
-                    // Solasi tetap individual
-                    // 'total_solasi' => $solasiByk,
-                    // 'harga_solasi' => $solasiHrg,
-                    // 'solasi_m3' => $m3 > 0 ? $solasiHrg / $m3 : 0,
-                    // 'solasi_lbr' => $byk > 0 ? $solasiHrg / $byk : 0,
-                    // Kolektif (Akan di-merge: Tanggal, Pekerja, Harga, Ongkos)
+
                     'ttl_pkj' => $totalPekerja,
                     'harga' => $totalHargaPkj,
+
+                    // Proteksi pembagian nol pada akumulasi M3 harian
                     'ongkos_per_m3' => $totalM3Tgl > 0 ? $totalHargaPkj / $totalM3Tgl : 0,
                     'ongkos_mesin' => $ongkosMesin,
-                    'ongkos_m3_mesin' => $totalM3Tgl > 0 ? ($totalHargaPkj + $ongkosMesin + ($totalBykTgl / $masterTotalSolasi * $masterHargaSolasi)) / $totalM3Tgl : 0,
+
+                    // Perbaikan: Menambahkan safeMasterSolasi pada rumus ongkos mesin harian
+                    'ongkos_m3_mesin' => $totalM3Tgl > 0
+                        ? ($totalHargaPkj + $ongkosMesin + ($totalBykTgl / $safeMasterSolasi * $masterHargaSolasi)) / $totalM3Tgl
+                        : 0,
+
+                    // Proteksi pembagian nol pada akumulasi lembar harian
                     'ongkos_per_lb' => $totalBykTgl > 0 ? ($totalHargaPkj + $ongkosMesin) / $totalBykTgl : 0,
                     'ket' => $produksi->kendala ?? '-',
                 ];
             }
         }
+
         return $results;
     }
 }

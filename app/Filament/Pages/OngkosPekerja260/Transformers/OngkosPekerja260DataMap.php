@@ -13,10 +13,13 @@ class OngkosPekerja260DataMap
     {
         $results = [];
 
-        // 1. Ambil Data Master Harga
+        // 1. Ambil Data Master Harga dengan Fallback 0
         $masterHargaPkj = HargaPegawai::first()->harga ?? 0;
         $masterTotalSolasi = TotalSolasi::first()->total ?? 0;
         $masterHargaSolasi = HargaSolasi::first()->harga ?? 0;
+
+        // Proteksi awal untuk pembagi Master Solasi
+        $safeMasterSolasi = $masterTotalSolasi ?: 1;
 
         foreach ($collection as $produksi) {
             $namaMesin = strtoupper($produksi->mesin->nama_mesin ?? '');
@@ -31,25 +34,26 @@ class OngkosPekerja260DataMap
             });
 
             // ============================================================
-            // LOGIKA DI BELAKANG LAYAR: HITUNG AKUMULASI HARIAN
+            // LOGIKA HITUNG AKUMULASI HARIAN (KOLEKTIF)
             // ============================================================
             $totalM3Harian = 0;
             $totalBykHarian = 0;
-            $sumSolasiPerM3Harian = 0; // Perbaikan: Menampung SUM dari Solasi/m3 per baris
+            $sumSolasiPerM3Harian = 0;
 
             foreach ($groupedDetails as $items) {
                 $u = $items->first()->ukuran;
                 $byk = $items->sum('total_lembar');
+
+                // Rumus M3: (P * L * T * Qty) / 10^7
                 $m3Baris = (($u->panjang ?? 0) * ($u->lebar ?? 0) * ($u->tebal ?? 0) * $byk) / 10000000;
 
                 $totalM3Harian += $m3Baris;
                 $totalBykHarian += $byk;
 
-                // Hitung Solasi/m3 Baris ini terlebih dahulu
-                $hargaSolasiBaris = ($byk / ($masterTotalSolasi ?: 1)) * $masterHargaSolasi;
+                // Hitung Solasi/m3 Baris ini (Aman dari Division by Zero)
+                $hargaSolasiBaris = ($byk / $safeMasterSolasi) * $masterHargaSolasi;
                 $solasiPerM3Baris = $m3Baris > 0 ? $hargaSolasiBaris / $m3Baris : 0;
 
-                // Masukkan ke SUM harian
                 $sumSolasiPerM3Harian += $solasiPerM3Baris;
             }
 
@@ -57,27 +61,17 @@ class OngkosPekerja260DataMap
             $totalHargaPekerja = $masterHargaPkj * $totalPekerja;
             $ongkosMesin = (float) ($produksi->mesin->ongkos_mesin ?? 0);
 
-            // Perhitungan Ongkos Berdasarkan Rumus Baru Anda
-            $ongkosPerM3Kolektif = $totalM3Harian > 0 ? $totalHargaPekerja / $totalM3Harian : 0;
-
-            // Rumus: (Gaji + Mesin + SUM Solasi/m3) / Total M3 Harian
-            $ongkosM3PlusMesinKolektif = $totalM3Harian > 0
-                ? ($totalHargaPekerja + $ongkosMesin + $sumSolasiPerM3Harian) / $totalM3Harian
-                : 0;
-
-            $ongkosPerLbKolektif = $totalBykHarian > 0 ? ($totalHargaPekerja + $ongkosMesin) / $totalBykHarian : 0;
-
             // ============================================================
-            // PROSES MAPPING HASIL (Tetap Mengikuti Template Anda)
+            // PROSES MAPPING HASIL PER BARIS
             // ============================================================
-            foreach ($groupedDetails as $key => $items) {
+            foreach ($groupedDetails as $items) {
                 $first = $items->first();
                 $u = $first->ukuran;
                 $totalBanyak = $items->sum('total_lembar');
                 $m3 = (($u->panjang ?? 0) * ($u->lebar ?? 0) * ($u->tebal ?? 0) * $totalBanyak) / 10000000;
 
-                // Hitung Solasi Individu per Baris
-                $totalSolasi = $totalBanyak / ($masterTotalSolasi ?: 1);
+                // Solasi Individu per Baris menggunakan safe divisor
+                $totalSolasi = $totalBanyak / $safeMasterSolasi;
                 $hargaSolasiTotal = $totalSolasi * $masterHargaSolasi;
                 $solasiPerM3 = $m3 > 0 ? $hargaSolasiTotal / $m3 : 0;
                 $solasiPerLbr = $totalBanyak > 0 ? $hargaSolasiTotal / $totalBanyak : 0;
@@ -102,10 +96,17 @@ class OngkosPekerja260DataMap
                     'harga_solasi' => $hargaSolasiTotal,
                     'solasi_m3' => $solasiPerM3,
                     'solasi_lbr' => $solasiPerLbr,
-                    'ongkos_per_m3' => $ongkosPerM3Kolektif,
+
+                    // Logika Kolektif Aman
+                    'ongkos_per_m3' => $totalM3Harian > 0 ? $totalHargaPekerja / $totalM3Harian : 0,
                     'ongkos_mesin' => $ongkosMesin,
-                    'ongkos_m3_mesin' => $ongkosM3PlusMesinKolektif,
-                    'ongkos_per_lb' => $ongkosPerLbKolektif,
+
+                    // Rumus: (Gaji + Mesin + SUM Solasi/m3) / Total M3 Harian
+                    'ongkos_m3_mesin' => $totalM3Harian > 0
+                        ? ($totalHargaPekerja + $ongkosMesin + $sumSolasiPerM3Harian) / $totalM3Harian
+                        : 0,
+
+                    'ongkos_per_lb' => $totalBykHarian > 0 ? ($totalHargaPekerja + $ongkosMesin) / $totalBykHarian : 0,
                     'ket' => $produksi->kendala ?? '-',
                 ];
             }
