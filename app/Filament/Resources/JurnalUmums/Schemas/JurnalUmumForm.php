@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\JurnalUmums\Schemas;
 
 use App\Helpers\AkunHelper;
+use App\Models\AnakAkun;
 use App\Models\JurnalUmum;
 use Filament\Forms\Components\{
     DatePicker,
@@ -30,7 +31,7 @@ class JurnalUmumForm
 
                 TextInput::make('jurnal')
                     ->label('Kode Jurnal')
-                    ->default(fn () => (JurnalUmum::max('jurnal') ?? 0) + 1)
+                    ->default(fn() => (JurnalUmum::max('jurnal') ?? 0) + 1)
                     ->readOnly(),
 
 
@@ -93,7 +94,7 @@ class JurnalUmumForm
 
 
                     ->options([
-                        'DK'  => 'D + K',
+                        'DK' => 'D + K',
                         'DKK' => 'D + K + K',
                         'KDD' => 'K + D + D',
                     ])
@@ -120,10 +121,12 @@ class JurnalUmumForm
                             ->numeric()
                             ->required(),
                     ])
-                    ->minItems(fn ($get) =>
-                        in_array($get('mode'), ['DK','DKK']) ? 1 : 2
+                    ->minItems(
+                        fn($get) =>
+                        in_array($get('mode'), ['DK', 'DKK']) ? 1 : 2
                     )
-                    ->maxItems(fn ($get) =>
+                    ->maxItems(
+                        fn($get) =>
                         $get('mode') === 'KDD' ? 99 : 1
                     )
                     ->live(),
@@ -144,10 +147,12 @@ class JurnalUmumForm
                             ->numeric()
                             ->required(),
                     ])
-                    ->minItems(fn ($get) =>
-                        in_array($get('mode'), ['DK','KDD']) ? 1 : 2
+                    ->minItems(
+                        fn($get) =>
+                        in_array($get('mode'), ['DK', 'KDD']) ? 1 : 2
                     )
-                    ->maxItems(fn ($get) =>
+                    ->maxItems(
+                        fn($get) =>
                         $get('mode') === 'DKK' ? 99 : 1
                     )
                     ->live(),
@@ -158,18 +163,18 @@ class JurnalUmumForm
             Placeholder::make('summary')
                 ->content(function ($get) {
 
-                    $debit  = collect($get('debits') ?? [])->sum('jumlah');
+                    $debit = collect($get('debits') ?? [])->sum('jumlah');
                     $kredit = collect($get('kredits') ?? [])->sum('jumlah');
 
                     if ($debit === $kredit) {
                         return "✅ <b>BALANCE</b><br>
-                                Debit & Kredit: Rp ".number_format($debit);
+                                Debit & Kredit: Rp " . number_format($debit);
                     }
 
                     return "❌ <b>TIDAK BALANCE</b><br>
-                            Debit: Rp ".number_format($debit)."<br>
-                            Kredit: Rp ".number_format($kredit)."<br>
-                            Selisih: Rp ".number_format(abs($debit - $kredit));
+                            Debit: Rp " . number_format($debit) . "<br>
+                            Kredit: Rp " . number_format($kredit) . "<br>
+                            Selisih: Rp " . number_format(abs($debit - $kredit));
                 }),
 
         ]);

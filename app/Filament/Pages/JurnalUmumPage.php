@@ -7,6 +7,8 @@ use Filament\Actions\Contracts\HasActions;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Support\Enums\Width;
 use App\Models\JurnalUmum;
+use App\Models\AnakAkun;
+use App\Models\IndukAkun;
 use App\Models\SubAnakAkun;
 use App\Services\Jurnal\JurnalUmumToJurnal1Service;
 use BackedEnum;
@@ -40,7 +42,7 @@ class JurnalUmumPage extends Page implements HasActions
         'mm' => '',
         'keterangan' => '',
         'map' => 'D',
-        'hit_kbk' => '',
+        'hit_kbk' => 'banyak',
         'banyak' => null,
         'm3' => null,
         'harga' => null,
@@ -61,18 +63,59 @@ class JurnalUmumPage extends Page implements HasActions
         $this->tanggal = now()->format('Y-m-d');
         $this->loadAkun();
         $this->loadJurnalUmum();
+
+        $this->generateKodeJurnal();
+    }
+
+    protected function generateKodeJurnal()
+    {
+        $last = JurnalUmum::max('jurnal');
+        $this->kode_jurnal = $last ? $last + 1 : 1;
     }
 
     protected function loadAkun()
-    {
-        $this->akunList = SubAnakAkun::orderBy('kode_sub_anak_akun')->get();
-    }
+{
+    $sub = SubAnakAkun::selectRaw("
+        kode_sub_anak_akun as kode,
+        nama_sub_anak_akun as nama,
+        1 as urutan
+    ");
+
+    $anak = AnakAkun::selectRaw("
+        kode_anak_akun as kode,
+        nama_anak_akun as nama,
+        2 as urutan
+    ");
+
+    // $induk = IndukAkun::selectRaw("
+    //     kode_induk_akun as kode,
+    //     nama_induk_akun as nama,
+    //     3 as urutan
+    // ");
+
+    $union = $sub->unionAll($anak);
+
+    $this->akunList = DB::query()
+        ->fromSub($union, 'akun')
+        ->orderBy('urutan')
+        ->orderBy('kode')
+        ->get();
+}
 
     public function updatedFormNoAkun($value)
-    {
-        $akun = SubAnakAkun::where('kode_sub_anak_akun', $value)->first();
-        $this->form['nama_akun'] = $akun?->nama_sub_anak_akun ?? '';
+{
+    $this->form['nama_akun'] = '';
+
+    if ($sub = SubAnakAkun::where('kode_sub_anak_akun', $value)->first()) {
+        $this->form['nama_akun'] = $sub->nama_sub_anak_akun;
+        return;
     }
+
+    if ($anak = AnakAkun::where('kode_anak_akun', $value)->first()) {
+        $this->form['nama_akun'] = $anak->nama_anak_akun;
+        return;
+    }
+}
 
     public function addItem()
     {
@@ -85,7 +128,7 @@ class JurnalUmumPage extends Page implements HasActions
             'form.hit_kbk.required' => 'Menu wajib dipilih!',
         ]);
 
-        $qty = $this->form['hit_kbk'] === 'banyak'
+        $qty = $this->form['hit_kbk'] === 'b'
             ? $this->form['banyak']
             : $this->form['m3'];
 
@@ -107,7 +150,18 @@ class JurnalUmumPage extends Page implements HasActions
 
     protected function resetForm()
     {
-        $this->form = ['no_akun' => '', 'nama_akun' => '', 'nama' => '', 'mm' => '', 'keterangan' => '', 'map' => 'D', 'hit_kbk' => '', 'banyak' => null, 'm3' => null, 'harga' => null];
+        $this->form = [
+            'no_akun' => '',
+            'nama_akun' => '',
+            'nama' => '',
+            'mm' => '',
+            'keterangan' => '',
+            'map' => 'D',
+            'hit_kbk' => 'banyak',
+            'banyak' => 1,
+            'm3' => null,
+            'harga' => null
+        ];
     }
 
     public function getTotalDebitProperty()
@@ -148,6 +202,7 @@ class JurnalUmumPage extends Page implements HasActions
 
         $this->items = [];
         $this->loadJurnalUmum();
+        $this->generateKodeJurnal();
 
         Notification::make()->title('Berhasil Simpan Draft')->success()->send();
     }
@@ -171,8 +226,7 @@ class JurnalUmumPage extends Page implements HasActions
     public function updated($propertyName)
     {
         if ($propertyName === 'form.hit_kbk') {
-
-            if ($this->form['hit_kbk'] === 'banyak') {
+            if ($this->form['hit_kbk'] === 'b') {
                 $this->form['banyak'] = 1;
                 $this->form['m3'] = null;
             }
@@ -205,7 +259,7 @@ class JurnalUmumPage extends Page implements HasActions
             'mm'         => $jurnal->mm,
             'keterangan' => $jurnal->keterangan,
             'map'        => $jurnal->map,
-            'hit_kbk'    => $jurnal->hit_kbk,
+            'hit_kbk' => $jurnal->hit_kbk === 'b' ? 'banyak' : 'm3',
             'banyak'     => $jurnal->banyak,
             'm3'         => $jurnal->m3,
             'harga'      => $jurnal->harga,

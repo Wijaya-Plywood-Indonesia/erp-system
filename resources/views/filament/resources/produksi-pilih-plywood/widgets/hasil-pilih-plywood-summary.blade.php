@@ -20,7 +20,9 @@
     ->where('id_barang_setengah_jadi_hp', $barangId)
     ->sum('jumlah') ?? 0;
 
-    $namaBarang = ($bahan->barangSetengahJadiHp->jenisBarang->nama_jenis_barang ?? '-') . ' (' .
+    // Penyesuaian agar Grade (nama_grade) terbaca di sini
+    $namaBarang = ($bahan->barangSetengahJadiHp->jenisBarang->nama_jenis_barang ?? '-') . ' ' .
+    ($bahan->barangSetengahJadiHp->grade->nama_grade ?? '-') . ' (' .
     ($bahan->barangSetengahJadiHp->ukuran->nama_ukuran ?? '-') . ')';
 
     $summaryData[] = [

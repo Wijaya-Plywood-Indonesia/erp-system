@@ -35,9 +35,9 @@ class KontrakKerja extends Model
     ];
 
     protected $casts = [
-        'tanggal_masuk' => 'date',
-        'kontrak_mulai' => 'date',
-        'kontrak_selesai' => 'date',
+        'tanggal_masuk' => 'date:Y-m-d',
+        'kontrak_mulai' => 'date:Y-m-d',
+        'kontrak_selesai' => 'date:Y-m-d',
     ];
     //Relasi bias dengan pegawai
     public function pegawai()

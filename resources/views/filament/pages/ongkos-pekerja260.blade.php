@@ -136,23 +136,41 @@
                     <tfoot class="bg-zinc-100 dark:bg-zinc-900 font-black text-zinc-900 dark:text-white uppercase border-t border-zinc-500 text-center">
                         <tr>
                             <td colspan="10" class="p-2 text-right">Grand Total</td>
-                            <td class="p-2 border border-zinc-500 dark:border-zinc-700">{{ number_format($items->sum('byk'), 0) }}</td>
-                            <td class="p-2 border border-zinc-500 dark:border-zinc-700">{{ number_format($items->sum('m3'), 4) }}</td>
-                            {{-- Footer Total Pekerja --}}
+
+                            {{-- Total Banyak (Sum) --}}
+                            <td class="p-2 border border-zinc-500 dark:border-zinc-700">
+                                {{ number_format($items->sum('byk'), 0) }}
+                            </td>
+
+                            {{-- Total M3 (Sum) --}}
+                            <td class="p-2 border border-zinc-500 dark:border-zinc-700">
+                                {{ number_format($items->sum('m3'), 4) }}
+                            </td>
+
+                            {{-- Total Pekerja (Unique per Tanggal) --}}
                             <td class="p-2 border border-zinc-500 dark:border-zinc-700">
                                 {{ number_format($items->unique('tanggal')->sum('ttl_pkj'), 0) }}
                             </td>
+
                             <td colspan="5" class="p-2 border border-zinc-500 dark:border-zinc-700"></td>
+
+                            {{-- Rata-rata Ongkos per M3 (Average dari semua baris) --}}
                             <td class="p-2 border border-zinc-500 dark:border-zinc-700 text-right text-orange-600">
-                                {{ number_format($items->sum('ongkos_per_m3'), 0, ',', '.') }}
+                                {{ number_format($items->avg('ongkos_per_m3'), 0, ',', '.') }}
                             </td>
+
                             <td class="p-2 border border-zinc-500 dark:border-zinc-700"></td>
+
+                            {{-- Rata-rata Ongkos M3 + Mesin (Average dari semua baris) --}}
                             <td class="p-2 border border-zinc-500 dark:border-zinc-700 text-right text-orange-600">
-                                {{ number_format($items->sum('ongkos_m3_mesin'), 0, ',', '.') }}
+                                {{ number_format($items->avg('ongkos_m3_mesin'), 0, ',', '.') }}
                             </td>
+
+                            {{-- Rata-rata Ongkos per Lembar (Average dari semua baris) --}}
                             <td class="p-2 border border-zinc-500 dark:border-zinc-700 text-right text-orange-600">
-                                {{ number_format($items->sum('ongkos_per_lb'), 0, ',', '.') }}
+                                {{ number_format($items->avg('ongkos_per_lb'), 0, ',', '.') }}
                             </td>
+
                             <td class="p-2 border border-zinc-500 dark:border-zinc-700"></td>
                         </tr>
                     </tfoot>

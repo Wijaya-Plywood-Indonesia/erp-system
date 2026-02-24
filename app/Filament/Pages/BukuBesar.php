@@ -91,7 +91,8 @@ class BukuBesar extends Page
 
         return JurnalUmum::where('no_akun', $kode)
             ->whereBetween('tgl', [$start, $end])
-            ->orderBy('tgl')
+            ->orderBy('tgl', 'asc')    // Urutkan Tanggal dulu
+            ->orderBy('jurnal', 'asc')
             ->get();
     }
 
@@ -100,32 +101,39 @@ class BukuBesar extends Page
     {
         $total = 0;
 
-        // Jika ini adalah SubAnakAkun (Level Terbawah)
-        if (isset($akun->kode_sub_anak_akun)) {
-            // Saldo Awal + Saldo Berjalan Bulan Ini
-            $total += $this->getSaldoAwal($akun->kode_sub_anak_akun);
+        // Ambil kode akun (anak / sub)
+        $kode =
+            $akun->kode_anak_akun
+            ?? $akun->kode_sub_anak_akun
+            ?? null;
+
+        // ✅ Hitung saldo akun ini sendiri
+        if ($kode) {
+            $total += $this->getSaldoAwal($kode);
 
             $start = Carbon::parse($this->filterBulan)->startOfMonth();
             $end = Carbon::parse($this->filterBulan)->endOfMonth();
 
-            $trxs = JurnalUmum::where('no_akun', $akun->kode_sub_anak_akun)
+            $trxs = JurnalUmum::where('no_akun', $kode)
                 ->whereBetween('tgl', [$start, $end])
                 ->get();
+
             foreach ($trxs as $trx) {
                 $nominal = $this->hitungNominal($trx);
                 $total += (strtolower($trx->map) === 'd' ? $nominal : -$nominal);
             }
-        } else {
-            // Jika level Anak Akun (Punya children atau subAnakAkuns)
-            if ($akun->children && $akun->children->count()) {
-                foreach ($akun->children as $child) {
-                    $total += $this->getTotalRecursive($child);
-                }
+        }
+
+        // ✅ Tambahkan semua children
+        if (isset($akun->children) && $akun->children->count()) {
+            foreach ($akun->children as $child) {
+                $total += $this->getTotalRecursive($child);
             }
-            if ($akun->subAnakAkuns && $akun->subAnakAkuns->count()) {
-                foreach ($akun->subAnakAkuns as $sub) {
-                    $total += $this->getTotalRecursive($sub);
-                }
+        }
+
+        if (isset($akun->subAnakAkuns) && $akun->subAnakAkuns->count()) {
+            foreach ($akun->subAnakAkuns as $sub) {
+                $total += $this->getTotalRecursive($sub);
             }
         }
 

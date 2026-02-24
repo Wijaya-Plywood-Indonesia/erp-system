@@ -1,0 +1,70 @@
+<?php
+
+namespace App\Filament\Resources\AkunGroups\Tables;
+
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Grouping\Group;
+use Filament\Tables\Table;
+
+class AkunGroupsTable
+{
+    public static function configure(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('nama')
+                    ->label('Nama Grup')
+                    ->searchable(),
+
+                TextColumn::make('parent.nama')
+                    ->label('Parent')
+                    ->sortable()
+                    ->toggleable(),
+
+                TextColumn::make('order')
+                    ->label('Urutan')
+                    ->sortable(),
+                TextColumn::make('total_anak_akuns')
+                    ->label('Total Akun')
+                    ->badge()
+                    ->color(fn($state) => $state > 0 ? 'warning' : 'gray'),
+
+                IconColumn::make('hidden')
+                    ->label('Hidden')
+                    ->boolean(),
+
+                TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('updated_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            // ->defaultGroup('parent_id')
+            // ->groups([
+            //     Group::make('parent_id')
+            //         ->label('Parent')
+            //         ->collapsible(),
+            // ])
+            ->filters([
+                //
+            ])
+            ->recordActions([
+                ViewAction::make(),
+                EditAction::make(),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
+            ]);
+    }
+}
