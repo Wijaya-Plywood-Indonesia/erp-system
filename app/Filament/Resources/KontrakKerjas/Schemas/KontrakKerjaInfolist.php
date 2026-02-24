@@ -40,8 +40,8 @@ class KontrakKerjaInfolist
                     ->schema([
 
                         Grid::make(2)->schema([
-                            TextEntry::make('kontrak_mulai')->label('Kontrak Mulai'),
-                            TextEntry::make('kontrak_selesai')->label('Kontrak Selesai'),
+                            TextEntry::make('kontrak_mulai')->label('Kontrak Mulai')->date('Y-m-d'),
+                            TextEntry::make('kontrak_selesai')->label('Kontrak Selesai')->date('Y-m-d'),
 
                             TextEntry::make('durasi_kontrak')->label('Durasi Kontrak (hari)'),
                             TextEntry::make('tanggal_kontrak')->label('Tanggal Kontrak'),
@@ -55,7 +55,7 @@ class KontrakKerjaInfolist
                             ->visible(
                                 fn($record) =>
                                 $record->bukti_ttd &&
-                                Str::endsWith($record->bukti_ttd, ['jpg', 'jpeg', 'png', 'webp'])
+                                    Str::endsWith($record->bukti_ttd, ['jpg', 'jpeg', 'png', 'webp'])
                             )
                             ->disk('public')
                             ->height(300)
@@ -66,7 +66,7 @@ class KontrakKerjaInfolist
                             ->visible(
                                 fn($record) =>
                                 $record->bukti_ttd &&
-                                Str::endsWith($record->bukti_ttd, ['pdf'])
+                                    Str::endsWith($record->bukti_ttd, ['pdf'])
                             )
                             ->formatStateUsing(fn($state) => 'Klik untuk mengunduh PDF')
                             ->url(fn($record) => asset('storage/' . $record->bukti_ttd))

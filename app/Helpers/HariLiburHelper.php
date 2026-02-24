@@ -1,83 +1,76 @@
 <?php
 
+namespace App\Helpers;
+
 use App\Models\HariLibur;
 use Carbon\Carbon;
 
-/**
- * Cek apakah suatu tanggal adalah hari libur nasional.
- */
-if (!function_exists('isHoliday')) {
-    function isHoliday($date): bool
+class HolidayHelper
+{
+    /**
+     * Cek apakah suatu tanggal adalah hari libur nasional.
+     */
+    public static function isHoliday($date): bool
     {
         return HariLibur::onDate(
             Carbon::parse($date)->toDateString()
         )->exists();
     }
-}
 
-/**
- * Ambil detail hari liburnya (jika ada).
- */
-if (!function_exists('getHoliday')) {
-    function getHoliday($date)
+    /**
+     * Ambil detail hari liburnya (jika ada).
+     */
+    public static function getHoliday($date)
     {
         return HariLibur::onDate(
             Carbon::parse($date)->toDateString()
         )->first();
     }
-}
 
-/**
- * Cek apakah suatu tanggal adalah hari kerja.
- * Senin–Sabtu kerja | Minggu libur | Libur nasional libur
- */
-if (!function_exists('isWorkingDay')) {
-    function isWorkingDay($date): bool
+    /**
+     * Cek apakah suatu tanggal adalah hari kerja.
+     * Senin–Sabtu kerja | Minggu libur | Libur nasional libur
+     */
+    public static function isWorkingDay($date): bool
     {
         $carbon = Carbon::parse($date);
 
         return !$carbon->isSunday()
-            && !isHoliday($carbon->toDateString());
+            && !self::isHoliday($carbon->toDateString());
     }
-}
 
-/**
- * Mendapatkan hari kerja berikutnya.
- */
-if (!function_exists('nextWorkingDay')) {
-    function nextWorkingDay($date)
+    /**
+     * Mendapatkan hari kerja berikutnya.
+     */
+    public static function nextWorkingDay($date)
     {
         $date = Carbon::parse($date);
 
-        while ($date->isSunday() || isHoliday($date->toDateString())) {
+        while ($date->isSunday() || self::isHoliday($date->toDateString())) {
             $date->addDay();
         }
 
         return $date;
     }
-}
 
-/**
- * Mendapatkan hari kerja sebelumnya.
- */
-if (!function_exists('previousWorkingDay')) {
-    function previousWorkingDay($date)
+    /**
+     * Mendapatkan hari kerja sebelumnya.
+     */
+    public static function previousWorkingDay($date)
     {
         $date = Carbon::parse($date);
 
-        while ($date->isSunday() || isHoliday($date->toDateString())) {
+        while ($date->isSunday() || self::isHoliday($date->toDateString())) {
             $date->subDay();
         }
 
         return $date;
     }
-}
 
-/**
- * Ambil semua hari libur dalam rentang tanggal.
- */
-if (!function_exists('holidaysBetween')) {
-    function holidaysBetween($start, $end)
+    /**
+     * Ambil semua hari libur dalam rentang tanggal.
+     */
+    public static function holidaysBetween($start, $end)
     {
         return HariLibur::whereBetween('date', [
             Carbon::parse($start)->toDateString(),
