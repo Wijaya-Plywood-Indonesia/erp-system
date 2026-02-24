@@ -12,11 +12,19 @@ return new class extends Migration {
     {
         Schema::create('akun_groups', function (Blueprint $table) {
             $table->id();
-            $table->string('nama');
-            $table->foreignId('parent_id')->nullable()->constrained('akun_groups')->nullOnDelete();
-            $table->json('akun')->nullable(); // list no akun
+            $table->string('nama'); // Nama grup (Aktiva Lancar, Aktiva Tetap, dll)
+
+            // Grup bisa punya parent (opsional)
+            $table->foreignId('parent_id')
+                ->nullable()
+                ->constrained('akun_groups')
+                ->nullOnDelete();
+
+            // Urutan tampil di laporan
             $table->integer('order')->default(0);
+
             $table->boolean('hidden')->default(false);
+
             $table->timestamps();
         });
     }
