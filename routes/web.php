@@ -56,28 +56,3 @@ Route::get('/nota-kayu/{record}/turus', [NotaKayuTurusController::class, 'show']
 Route::get('/', function () {
     return view('welcome');
 });
-
-Route::get('/test-produksi', function () {
-    $service = new ProduksiOutflowService();
-    $data = $service->getDataKayuKeluar();
-
-    // Mengembalikan hasil dalam format JSON yang rapi agar mudah dianalisa
-    return response()->json([
-        'total_baris_ditemukan' => count($data),
-        'status' => 'Success',
-        'data' => $data
-    ]);
-});
-
-Route::get('/test-laporan-batch', function () {
-    $service = new ProduksiInflowService();
-    $hasilLaporan = $service->getLaporanBatch();
-
-    // Jika kamu ingin melihat dalam format JSON yang bersih di browser
-    if (request()->has('json')) {
-        return response()->json($hasilLaporan);
-    }
-
-    // Default: Tampilan ramah developer untuk cek struktur data
-    dd($hasilLaporan);
-});
