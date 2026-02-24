@@ -21,8 +21,18 @@ class AnakAkun extends Model
         'created_by',
     ];
 
+    protected $casts = [
+        'status' => 'boolean',
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | RELATIONS
+    |--------------------------------------------------------------------------
+    */
+
     /**
-     * Many-to-many: AnakAkun <-> AkunGroup
+     * Many to Many - Akun Group
      */
     public function akunGroups()
     {
@@ -31,32 +41,11 @@ class AnakAkun extends Model
             'akun_group_anak_akun',
             'anak_akun_id',
             'akun_group_id'
-        );
-    }
-    public function anakAkuns()
-    {
-        return $this->belongsToMany(
-            AkunGroup::class,
-            'akun_group_anak_akun',
-            'anak_akun_id',
-            'akun_group_id'
-        );
-    }
-    public function getFilamentTitle(): string
-    {
-        return "{$this->kode_anak_akun} - {$this->nama_anak_akun}";
+        )->withTimestamps();
     }
 
     /**
-     * Label tampilan untuk select Filament
-     */
-    public function getSelectLabelAttribute()
-    {
-        return "{$this->kode_anak_akun} - {$this->nama_anak_akun}";
-    }
-
-    /**
-     * Relasi ke IndukAkun
+     * Induk Akun
      */
     public function indukAkun()
     {
@@ -64,19 +53,19 @@ class AnakAkun extends Model
     }
 
     /**
-     * Self Parent Akun
+     * Parent Self Reference
      */
     public function parentAkun()
     {
-        return $this->belongsTo(AnakAkun::class, 'parent');
+        return $this->belongsTo(self::class, 'parent');
     }
 
     /**
-     * Children AnakAkun
+     * Children Self Reference
      */
     public function children()
     {
-        return $this->hasMany(AnakAkun::class, 'parent');
+        return $this->hasMany(self::class, 'parent');
     }
 
     /**
@@ -88,10 +77,59 @@ class AnakAkun extends Model
     }
 
     /**
-     * Pembuat
+     * Creator
      */
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | HELPERS
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Check if akun is leaf (tidak punya children)
+     */
+    public function isLeaf(): bool
+    {
+        return !$this->children()->exists();
+    }
+
+    /**
+     * Check if akun punya children
+     */
+    public function hasChildren(): bool
+    {
+        return $this->children()->exists();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | SCOPES
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Scope only active akun
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('status', true);
+    }
+
+    /**
+     * Scope root akun (tanpa parent)
+     */
+    public function scopeRoot($query)
+    {
+        return $query->whereNull('parent');
+    }
+
+    public function getLabelAttribute(): string
+    {
+        return "{$this->kode_anak_akun} - {$this->nama_anak_akun}";
     }
 }

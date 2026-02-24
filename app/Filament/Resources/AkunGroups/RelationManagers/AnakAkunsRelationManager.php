@@ -2,61 +2,115 @@
 
 namespace App\Filament\Resources\AkunGroups\RelationManagers;
 
-use Filament\Actions\AttachAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DetachAction;
+use App\Models\AnakAkun;
 use Filament\Actions\DetachBulkAction;
-use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Forms;
 use Filament\Tables;
+use Filament\Actions\AttachAction;
+use Filament\Actions\DetachAction;
+use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class AnakAkunsRelationManager extends RelationManager
 {
-    protected static string $relationship = 'anakAkuns';
-    protected static ?string $title = 'Anak Akun';
-    protected static ?string $recordTitleAttribute = 'nama_anak_akun';
+    public function isReadOnly(): bool
+    {
+        return false;
+    }
 
-    public function table(Table $table): Table
+    protected static string $relationship = 'anakAkuns';
+
+    protected static ?string $title = 'Daftar Akun';
+
+    /*
+    |--------------------------------------------------------------------------
+    | Leaf Only Enforcement
+    |--------------------------------------------------------------------------
+    */
+
+    public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
+    {
+        return $ownerRecord->isLeaf();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Table
+    |--------------------------------------------------------------------------
+    */
+
+    public function table(Tables\Table $table): Tables\Table
     {
         return $table
             ->recordTitleAttribute('nama_anak_akun')
             ->columns([
                 TextColumn::make('kode_anak_akun')
                     ->label('Kode')
-                    ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->sortable(),
 
                 TextColumn::make('nama_anak_akun')
                     ->label('Nama Akun')
-                    ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->sortable(),
 
-                TextColumn::make('status')
-                    ->label('Status')
-                    ->badge(),
+                TextColumn::make('indukAkun.nama_induk_akun')
+                    ->label('Induk')
+                    ->sortable(),
             ])
             ->headerActions([
+                // AttachAction::make()
+                //     ->label('Daftarkan Akun')
+                //     ->preloadRecordSelect()
+                //     ->multiple()
+                //     ->recordTitle(
+                //         fn(AnakAkun $record) =>
+                //         "{$record->kode_anak_akun} - {$record->nama_anak_akun}"
+                //     )
+                //     ->recordSelectSearchColumns([
+                //         'kode_anak_akun',
+                //         'nama_anak_akun',
+                //     ])
+                //     ->recordSelectOptionsQuery(
+                //         function ($query, $livewire) {
+                //             return $query
+                //                 ->where('status', 'aktif')
+                //                 ->whereDoesntHave(
+                //                     'akunGroups',
+                //                     fn($q) =>
+                //                     $q->where(
+                //                         'akun_group_id',
+                //                         $livewire->ownerRecord->id
+                //                     )
+
+                //                 );
+                //         }
+                //     ),
                 AttachAction::make()
-                    ->recordSelect(function ($select) {
-                        return $select
-                            ->getOptionLabelFromRecordUsing(
-                                fn($record) =>
-                                "{$record->kode_anak_akun} - {$record->nama_anak_akun}"
-                            )
-                            ->searchable()
-                            ->preload();
-                    }),
+                    ->label('Daftarkan Akun')
+                    ->preloadRecordSelect()
+                    ->multiple()
+                    ->recordTitle(
+                        fn(AnakAkun $record) =>
+                        "{$record->kode_anak_akun} - {$record->nama_anak_akun}"
+                    )
+                    ->recordSelectSearchColumns([
+                        'kode_anak_akun',
+                        'nama_anak_akun',
+                    ])
+                    ->recordSelectOptionsQuery(
+                        fn($query) =>
+                        $query
+                            ->where('status', 'aktif')
+                            ->whereDoesntHave('akunGroups') // 🔥 global lock
+                    ),
             ])
-            ->recordActions([
-                DetachAction::make()
-                    ->label('Hapus'),
+            ->actions([
+                DetachAction::make(),
             ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DetachBulkAction::make()
-                        ->label('Hapus Terpilih'),
-                ]),
+            ->bulkActions([
+                DetachBulkAction::make(),
             ]);
     }
 }

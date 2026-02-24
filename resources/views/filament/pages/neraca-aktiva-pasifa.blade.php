@@ -1,171 +1,222 @@
-<x-filament-panels::page class="!max-w-full">
+<x-filament-panels::page>
+<div class="space-y-6" x-data="neracaUI()">
 
-    {{-- ============ FILTER PERIODE ============ --}}
-    <div class="p-4 mb-6 rounded-xl shadow-sm border bg-white dark:bg-gray-800 dark:border-gray-700"
-         x-data="{
-            load() {
-                $wire.call('loadData')
-            }
-         }">
+    {{-- ==================== FILTER PERIODE ==================== --}}
+    <div class="p-4 rounded-xl shadow-sm border bg-white dark:bg-gray-800 dark:border-gray-700">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
 
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-
-            {{-- Bulan Mulai --}}
+            {{-- BULAN MULAI --}}
             <div>
                 <label class="font-semibold text-sm dark:text-gray-200">Bulan Mulai</label>
-                <select wire:model="bulan_mulai" class="mt-1 w-full border-gray-300 rounded-lg dark:bg-gray-700 dark:text-white">
-                    @foreach(range(1, 12) as $b)
-                        <option value="{{ $b }}">{{ \Carbon\Carbon::create()->month($b)->translatedFormat('F') }}</option>
+                <select wire:model="bulan_mulai" wire:change="loadData"
+                    class="w-full border rounded-lg p-2 dark:bg-gray-700">
+                    @foreach(range(1,12) as $bln)
+                        <option value="{{ $bln }}">{{ \Carbon\Carbon::create()->month($bln)->translatedFormat('F') }}</option>
                     @endforeach
                 </select>
             </div>
 
-            {{-- Tahun Mulai --}}
+            {{-- TAHUN MULAI --}}
             <div>
                 <label class="font-semibold text-sm dark:text-gray-200">Tahun Mulai</label>
-                <input type="number" wire:model="tahun_mulai"
-                       class="mt-1 w-full border-gray-300 rounded-lg dark:bg-gray-700 dark:text-white">
+                <input type="number" wire:model="tahun_mulai" wire:change="loadData"
+                    class="w-full border rounded-lg p-2 dark:bg-gray-700">
             </div>
 
-            {{-- Bulan Akhir --}}
+            {{-- BULAN AKHIR --}}
             <div>
                 <label class="font-semibold text-sm dark:text-gray-200">Bulan Akhir</label>
-                <select wire:model="bulan_akhir" class="mt-1 w-full border-gray-300 rounded-lg dark:bg-gray-700 dark:text-white">
-                    @foreach(range(1, 12) as $b)
-                        <option value="{{ $b }}">{{ \Carbon\Carbon::create()->month($b)->translatedFormat('F') }}</option>
+                <select wire:model="bulan_akhir" wire:change="loadData"
+                    class="w-full border rounded-lg p-2 dark:bg-gray-700">
+                    @foreach(range(1,12) as $bln)
+                        <option value="{{ $bln }}">{{ \Carbon\Carbon::create()->month($bln)->translatedFormat('F') }}</option>
                     @endforeach
                 </select>
             </div>
 
-            {{-- Tahun Akhir --}}
+            {{-- TAHUN AKHIR --}}
             <div>
                 <label class="font-semibold text-sm dark:text-gray-200">Tahun Akhir</label>
-                <input type="number" wire:model="tahun_akhir"
-                       class="mt-1 w-full border-gray-300 rounded-lg dark:bg-gray-700 dark:text-white">
+                <input type="number" wire:model="tahun_akhir" wire:change="loadData"
+                    class="w-full border rounded-lg p-2 dark:bg-gray-700">
             </div>
 
         </div>
 
-        <button @click="load()"
-                class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-            Terapkan Periode
-        </button>
+        <div class="mt-4 flex items-center gap-3">
+            <button wire:click="debug"
+                class="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700">
+                Debug (dd)
+            </button>
 
-        @error('periode')
-            <p class="text-red-500 mt-2">{{ $message }}</p>
-        @enderror
+            <button @click="expandAll"
+                class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">
+                Expand All
+            </button>
+
+            <button @click="collapseAll"
+                class="px-3 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-800">
+                Collapse All
+            </button>
+        </div>
     </div>
 
 
+    {{-- ==================== PER PERIODE ==================== --}}
+    @foreach($result as $periode)
+    <div class="p-6 rounded-xl shadow-sm border bg-white dark:bg-gray-800 dark:border-gray-700">
 
-    {{-- ============ LOOP PER BULAN ============ --}}
-    @foreach($periodeData as $bulan)
+        <h2 class="text-2xl font-bold mb-6 dark:text-gray-100">
+            {{ $periode['label'] }}
+        </h2>
 
-        <div class="mb-12">
+        {{-- =============== 2 KOLOM: AKTIVA | PASIVA =============== --}}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-            {{-- === HEADER BULAN === --}}
-            <h2 class="text-xl font-bold mb-3 text-gray-900 dark:text-white">
-                {{ $bulan['label'] }}
-            </h2>
+            {{-- ===================== LEFT: AKTIVA ===================== --}}
+            <div class="p-4 rounded-lg border shadow bg-gray-50 dark:bg-gray-900 dark:border-gray-700">
+                <h3 class="text-xl font-bold mb-4">AKTIVA</h3>
 
-            {{-- GRID 2 KOLOM --}}
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                @foreach($periode['groups'] as $group)
+                    @if($group['nama'] !== 'AKTIVA')
+                        @continue
+                    @endif
 
-                {{-- ===================== AKTIVA ===================== --}}
-                <div class="rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 shadow-sm">
+                    @foreach($group['sub'] as $sub)
+                        {{-- COLLAPSABLE WRAPPER --}}
+                        <div class="mt-4" x-data="{ open: true }">
 
-                    <div class="px-6 py-4 border-b-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800">
-                        <h2 class="font-bold text-lg text-gray-800 dark:text-white">
-                            AKTIVA
-                        </h2>
-                    </div>
+                            {{-- SUB HEADER --}}
+                            <div class="flex items-center justify-between cursor-pointer"
+                                @click="open = !open">
+                                <h4 class="font-semibold dark:text-gray-200">{{ $sub['nama'] }}</h4>
+                                <span x-text="open ? '-' : '+'" class="font-bold text-lg"></span>
+                            </div>
 
-                    <table class="w-full text-sm border-collapse">
-                        <thead class="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-200">
-                            <tr>
-                                <th class="border border-gray-300 dark:border-gray-600 px-4 py-2">No Akun</th>
-                                <th class="border border-gray-300 dark:border-gray-600 px-4 py-2">Nama Akun</th>
-                                <th class="border border-gray-300 dark:border-gray-600 px-4 py-2 text-right">Nilai</th>
-                            </tr>
-                        </thead>
+                            {{-- CONTENT --}}
+                            <div x-show="open" class="mt-2">
+                                <table class="w-full text-sm">
+                                    @foreach($sub['akun'] as $akun)
+                                        <tr class="border-b dark:border-gray-700">
+                                            <td class="p-2 w-28 font-mono">{{ $akun['kode'] }}</td>
+                                            <td class="p-2">{{ $akun['nama'] }}</td>
+                                            <td class="p-2 w-32 font-semibold text-right">
+                                                {{ number_format($akun['saldo'], 0, ',', '.') }}
+                                            </td>
+                                        </tr>
 
-                        <tbody>
-                            @php
-                                $totalAktiva = 0;
-                            @endphp
+                                        {{-- CHILDREN --}}
+                                        @if(isset($akun['children']))
+                                            @foreach($akun['children'] as $child)
+                                                <tr class="bg-gray-100 dark:bg-gray-800">
+                                                    <td class="p-2 pl-6 font-mono text-xs">{{ $child['kode'] }}</td>
+                                                    <td class="p-2 text-xs">{{ $child['nama'] }}</td>
+                                                    <td class="p-2 text-xs text-right">
+                                                        {{ number_format($child['saldo'], 0, ',', '.') }}
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        @endif
+                                    @endforeach
+                                </table>
+                            </div>
 
-                            @foreach($bulan['aktiva'] as $row)
-                                @php $totalAktiva += $row['saldo']; @endphp
+                        </div>
+                    @endforeach
 
-                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60">
-                                    <td class="border px-4 py-2 dark:border-gray-600">{{ $row['kode'] }}</td>
-                                    <td class="border px-4 py-2 dark:border-gray-600">{{ $row['nama'] ?: '-' }}</td>
-                                    <td class="border px-4 py-2 text-right font-semibold dark:border-gray-600">
-                                        {{ $row['saldo'] != 0 ? number_format($row['saldo'],0,',','.') : '-' }}
-                                    </td>
-                                </tr>
-                            @endforeach
-
-                            <tr class="bg-yellow-100 dark:bg-yellow-900/40 font-bold">
-                                <td colspan="2" class="border-2 px-4 py-3 text-right dark:border-gray-500">TOTAL AKTIVA</td>
-
-                                <td class="border-2 px-4 py-3 text-right dark:border-gray-500 text-yellow-700 dark:text-yellow-300">
-                                    {{ number_format($totalAktiva,0,',','.') }}
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-
-                {{-- ===================== PASIVA ===================== --}}
-                <div class="rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 shadow-sm">
-
-                    <div class="px-6 py-4 border-b-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800">
-                        <h2 class="font-bold text-lg text-gray-800 dark:text-white">
-                            PASIVA
-                        </h2>
-                    </div>
-
-                    <table class="w-full text-sm border-collapse">
-                        <thead class="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-200">
-                            <tr>
-                                <th class="border px-4 py-2 dark:border-gray-600">No Akun</th>
-                                <th class="border px-4 py-2 dark:border-gray-600">Nama Akun</th>
-                                <th class="border px-4 py-2 text-right dark:border-gray-600">Nilai</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            @php
-                                $totalPasiva = 0;
-                            @endphp
-
-                            @foreach($bulan['pasiva'] as $row)
-                                @php $totalPasiva += $row['saldo']; @endphp
-
-                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60">
-                                    <td class="border px-4 py-2 dark:border-gray-600">{{ $row['kode'] }}</td>
-                                    <td class="border px-4 py-2 dark:border-gray-600">{{ $row['nama'] ?: '-' }}</td>
-                                    <td class="border px-4 py-2 text-right font-semibold dark:border-gray-600">
-                                        {{ $row['saldo'] != 0 ? number_format($row['saldo'],0,',','.') : '-' }}
-                                    </td>
-                                </tr>
-                            @endforeach
-
-                            <tr class="bg-yellow-100 dark:bg-yellow-900/40 font-bold">
-                                <td colspan="2" class="border-2 px-4 py-3 text-right dark:border-gray-500">TOTAL PASIVA</td>
-                                <td class="border-2 px-4 py-3 text-right dark:border-gray-500 text-yellow-700 dark:text-yellow-300">
-                                    {{ number_format($totalPasiva,0,',','.') }}
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
+                @endforeach
             </div>
+
+
+
+            {{-- ===================== RIGHT: PASIVA ===================== --}}
+            <div class="p-4 rounded-lg border shadow bg-gray-50 dark:bg-gray-900 dark:border-gray-700">
+                <h3 class="text-xl font-bold mb-4">PASIVA</h3>
+
+                @foreach($periode['groups'] as $group)
+                    @if($group['nama'] !== 'PASIVA')
+                        @continue
+                    @endif
+
+                    @foreach($group['sub'] as $sub)
+                        {{-- COLLAPSABLE WRAPPER --}}
+                        <div class="mt-4" x-data="{ open: true }">
+
+                            {{-- SUB HEADER --}}
+                            <div class="flex items-center justify-between cursor-pointer"
+                                @click="open = !open">
+                                <h4 class="font-semibold dark:text-gray-200">{{ $sub['nama'] }}</h4>
+                                <span x-text="open ? '-' : '+'" class="font-bold text-lg"></span>
+                            </div>
+
+                            {{-- CONTENT --}}
+                            <div x-show="open" class="mt-2">
+                                <table class="w-full text-sm">
+                                    @foreach($sub['akun'] as $akun)
+                                        <tr class="border-b dark:border-gray-700">
+                                            <td class="p-2 w-28 font-mono">{{ $akun['kode'] }}</td>
+                                            <td class="p-2">{{ $akun['nama'] }}</td>
+                                            <td class="p-2 w-32 font-semibold text-right">
+                                                {{ number_format($akun['saldo'], 0, ',', '.') }}
+                                            </td>
+                                        </tr>
+
+                                        {{-- CHILDREN --}}
+                                        @if(isset($akun['children']))
+                                            @foreach($akun['children'] as $child)
+                                                <tr class="bg-gray-100 dark:bg-gray-800">
+                                                    <td class="p-2 pl-6 font-mono text-xs">{{ $child['kode'] }}</td>
+                                                    <td class="p-2 text-xs">{{ $child['nama'] }}</td>
+                                                    <td class="p-2 text-xs text-right">
+                                                        {{ number_format($child['saldo'], 0, ',', '.') }}
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        @endif
+                                    @endforeach
+                                </table>
+                            </div>
+
+                        </div>
+                    @endforeach
+
+                @endforeach
+            </div>
+
         </div>
 
+    </div>
     @endforeach
+
+</div>
+
+
+
+
+{{-- ========================== ALPINE JS GLOBAL ========================== --}}
+@push('scripts')
+@verbatim
+<script>
+function neracaUI() {
+    return {
+        expandAll() {
+            document.querySelectorAll('[x-data]').forEach(el => {
+                if (el.__x && el.__x.$data.open !== undefined) {
+                    el.__x.$data.open = true;
+                }
+            });
+        },
+        collapseAll() {
+            document.querySelectorAll('[x-data]').forEach(el => {
+                if (el.__x && el.__x.$data.open !== undefined) {
+                    el.__x.$data.open = false;
+                }
+            });
+        }
+    }
+}
+</script>
+@endverbatim
+@endpush
 
 </x-filament-panels::page>

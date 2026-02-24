@@ -9,6 +9,8 @@ class AkunGroup extends Model
 {
     use HasFactory;
 
+    protected $table = 'akun_groups';
+
     protected $fillable = [
         'nama',
         'parent_id',
@@ -20,6 +22,12 @@ class AkunGroup extends Model
         'hidden' => 'boolean',
     ];
 
+    /*
+    |--------------------------------------------------------------------------
+    | RELATIONS
+    |--------------------------------------------------------------------------
+    */
+
     /**
      * Many-to-many: AkunGroup <-> AnakAkun
      */
@@ -30,22 +38,98 @@ class AkunGroup extends Model
             'akun_group_anak_akun',
             'akun_group_id',
             'anak_akun_id'
-        )->orderBy('kode_anak_akun');
+        )->withTimestamps();
     }
 
     /**
-     * Relasi Group Parent
+     * Parent Group
      */
     public function parent()
     {
-        return $this->belongsTo(AkunGroup::class, 'parent_id');
+        return $this->belongsTo(self::class, 'parent_id');
     }
 
     /**
-     * Relasi Group Children
+     * Children Group
      */
     public function children()
     {
-        return $this->hasMany(AkunGroup::class, 'parent_id');
+        return $this->hasMany(self::class, 'parent_id')
+            ->orderBy('order');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | HELPERS
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Check if group is leaf (tidak punya child)
+     */
+    public function isLeaf(): bool
+    {
+        return !$this->children()->exists();
+    }
+
+    /**
+     * Check if group punya child
+     */
+    public function hasChildren(): bool
+    {
+        return $this->children()->exists();
+    }
+
+    /**
+     * Recursive children (untuk laporan)
+     */
+    public function childrenRecursive()
+    {
+        return $this->children()->with('childrenRecursive');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | SCOPES
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Scope hanya group leaf
+     */
+    public function scopeLeaf($query)
+    {
+        return $query->doesntHave('children');
+    }
+
+    /**
+     * Scope hanya yang visible
+     */
+    public function scopeVisible($query)
+    {
+        return $query->where('hidden', false);
+    }
+
+    /**
+     * Scope urut berdasarkan order
+     */
+    public function scopeOrdered($query)
+    {
+        return $query->orderBy('order');
+    }
+    public function getTotalAnakAkunsAttribute(): int
+    {
+        // Kalau leaf → hitung langsung
+        if ($this->children()->count() === 0) {
+            return $this->anakAkuns()->count();
+        }
+
+        // Kalau parent → jumlahkan semua anak
+        return $this->children()
+            ->withCount('anakAkuns')
+            ->get()
+            ->sum(function ($child) {
+                return $child->anak_akuns_count;
+            });
     }
 }

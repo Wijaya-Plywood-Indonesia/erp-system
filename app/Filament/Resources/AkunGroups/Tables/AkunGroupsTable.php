@@ -8,6 +8,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 
 class AkunGroupsTable
@@ -28,6 +29,10 @@ class AkunGroupsTable
                 TextColumn::make('order')
                     ->label('Urutan')
                     ->sortable(),
+                TextColumn::make('total_anak_akuns')
+                    ->label('Total Akun')
+                    ->badge()
+                    ->color(fn($state) => $state > 0 ? 'warning' : 'gray'),
 
                 IconColumn::make('hidden')
                     ->label('Hidden')
@@ -43,6 +48,12 @@ class AkunGroupsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            // ->defaultGroup('parent_id')
+            // ->groups([
+            //     Group::make('parent_id')
+            //         ->label('Parent')
+            //         ->collapsible(),
+            // ])
             ->filters([
                 //
             ])

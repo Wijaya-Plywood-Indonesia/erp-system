@@ -16,13 +16,18 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class AkunGroupResource extends Resource
 {
     protected static ?string $model = AkunGroup::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->with('anakAkuns');
+    }
     public static function form(Schema $schema): Schema
     {
         return AkunGroupForm::configure($schema);

@@ -53,7 +53,7 @@ class JurnalUmum extends Model
         'mm' => 'integer',
         'banyak' => 'integer',
         'm3' => 'decimal:4',
-        'harga' => 'decimal:2',
+        'harga' => 'decimal:6',
         'synced_at' => 'datetime',
     ];
     public function subAkun()
