@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Grade extends Model
 {
@@ -12,7 +13,7 @@ class Grade extends Model
         'id_kategori_barang',
     ];
 
-    public function kategoriBarang ()
+    public function kategoriBarang()
     {
         return $this->belongsTo(KategoriBarang::class, 'id_kategori_barang');
     }
@@ -20,5 +21,19 @@ class Grade extends Model
     public function barangSetengahJadiHp()
     {
         return $this->hasMany(BarangSetengahJadiHp::class, 'id_grade');
+    }
+
+    public function gradeRules(): HasMany
+    {
+        return $this->hasMany(GradeRule::class);
+    }
+
+    /**
+     * Sesi grading yang berakhir dengan rekomendasi grade ini.
+     * Berguna untuk laporan dan statistik.
+     */
+    public function gradingSessions(): HasMany
+    {
+        return $this->hasMany(GradingSession::class, 'hasil_grade_id');
     }
 }
