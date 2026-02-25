@@ -25,6 +25,9 @@ class MesinsTable
                 TextColumn::make('ongkos_mesin')
                     ->numeric()
                     ->sortable(),
+                TextColumn::make('penyusutan')
+                    ->numeric()
+                    ->sortable(),
                 TextColumn::make('no_akun')
                     ->searchable(),
                 TextColumn::make('created_at')

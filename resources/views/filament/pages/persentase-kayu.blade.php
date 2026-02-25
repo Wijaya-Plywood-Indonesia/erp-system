@@ -57,7 +57,7 @@
             <tbody>
                 @forelse($laporan as $index => $row)
                     <tr @click="toggleRow({{ $index }})" 
-                        class="cursor-pointer border-b border-gray-100 dark:hover:bg-gray-900 dark:border-white/5 dark:hover:bg-white/5 transition-colors"
+                        class="cursor-pointer border-b border-gray-100 hover:bg-gray-400 dark:border-white/5 dark:hover:bg-white/5 transition-colors"
                         :class="selected.includes({{ $index }}) ? 'bg-gray-50 dark:bg-white/5' : ''">
                         {{-- <td class="px-4 py-4 whitespace-nowrap">{{ $data['tgl_masuk'] ?? '2026-02-19' }}</td> --}}
                         <td class="px-4 py-4 font-bold text-primary-600 whitespace-nowrap">
@@ -72,9 +72,9 @@
                                 {{ $row['summary']['rendemen'] }}
                             </span>
                         </td>
-                        <td class="px-4 py-4 whitespace-nowrap font-bold text-green-600 dark:text-green-400">Rp {{ number_format($row['summary']['harga_veneer'] ?? 0, 2) }}</td>
-                        <td class="px-4 py-4 whitespace-nowrap font-bold text-green-600 dark:text-green-400">{{ $row['summary']['harga_v_ongkos'] ? 'Rp ' . number_format($row['summary']['harga_v_ongkos'] ?? 0, 0, '.') : 'Belum Tersedia'}} </td>
-                        <td class="px-4 py-4 whitespace-nowrap font-bold text-green-600 dark:text-green-400">{{ $row['summary']['harga_total'] ? 'Rp ' . number_format($row['summary']['harga_total'] ?? 0, 0, '.') : 'Belum Tersedia'}} </td>
+                        <td class="px-4 py-4 whitespace-nowrap font-bold text-green-600 dark:text-green-400">Rp {{ number_format($row['summary']['harga_veneer'] ?? 0, 2, ',', '.') }}</td>
+                        <td class="px-4 py-4 whitespace-nowrap font-bold text-green-600 dark:text-green-400">{{ $row['summary']['harga_v_ongkos'] ? 'Rp ' . number_format($row['summary']['harga_v_ongkos'] ?? 0, 2, ',', '.') : 'Belum Tersedia'}} </td>
+                        <td class="px-4 py-4 whitespace-nowrap font-bold text-green-600 dark:text-green-400">{{ $row['summary']['harga_vop'] ? 'Rp ' . number_format($row['summary']['harga_vop'] ?? 0, 2, ',', '.') : 'Belum Tersedia'}} </td>
                     </tr>
 
                     <tr x-show="selected.includes({{ $index }})" x-cloak x-transition>
@@ -129,7 +129,7 @@
                                                     <th class="px-2 py-2">Banyak</th>
                                                     <th class="px-2 py-2">Kubikasi</th>
                                                     <th class="px-2 py-2">Pekerja</th>
-                                                    <th class="px-2 py-2 text-green-600 dark:text-green-400">Ongkos</th>
+                                                    <th class="px-2 py-2 text-green-600 dark:text-green-400">Ongkos / Pekerja</th>
                                                     <th class="px-2 py-2">Penyusutan</th>
                                                 </tr>
                                             </thead>
@@ -143,8 +143,8 @@
                                                     <td class="px-2 py-2">{{ $kk['total_banyak'] ?? 0 }}</td>
                                                     <td class="px-2 py-2">{{ number_format($kk['total_kubikasi'] ?? 0, 4) }} m³</td>
                                                     <td class="px-2 py-2">{{ $kk['pekerja'] ?? '-' }}</td>
-                                                    <td class="px-2 py-2 text-green-600 dark:text-green-400 font-bold">{{ $kk['ongkos'] ? 'Rp ' . number_format($kk['ongkos']) : "Belum Tersedia" }}</td>
-                                                    <td class="px-2 py-2">{{ $kk['penyusutan'] ? 'Rp ' . number_format($kk['penyusutan'] ?? 0) : "Belum Tersedia" }}</td>
+                                                    <td class="px-2 py-2 text-green-600 dark:text-green-400 font-bold">{{ $kk['ongkos'] ? 'Rp ' . number_format($kk['ongkos']) : "0 ( Belum Diatur )" }}</td>
+                                                    <td class="px-2 py-2">{{ $kk['penyusutan'] ? 'Rp ' . number_format($kk['penyusutan'] ?? 0) : "0 ( Belum Diatur )" }}</td>
                                                 </tr>
                                                 @endforeach
                                             </tbody>

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\DetailHasilPaletRotary;
+use App\Models\HargaPegawai;
 use App\Models\PenggunaanLahanRotary;
 use App\Models\NotaKayu;
 use App\Models\HargaKayu;
@@ -69,6 +70,10 @@ class ProduksiInflowService
 
             $batchInfo = $batch['info'];
             $batchInfo['tgl_buka_lahan'] = $tglBukaFix;
+            $total_poin = number_format($dataMasuk->sum('poin'), 2, ',', '.');
+            $harga_v_ongkos = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj']) / $batch['grand_total_outflow_m3']);
+            $harga_v_ongkos_penyusutan = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj'] + $batch['grand_total_outflow_penyusutan']) / $batch['grand_total_outflow_m3']);
+
 
             $laporanFinal[] = [
                 'batch_info' => $batchInfo,
@@ -76,15 +81,15 @@ class ProduksiInflowService
                 'outflow' => $batch['outflow_detail'],
                 'summary' => [
                     'total_kayu_masuk' => (int) $dataMasuk->sum('banyak'),
-                    'total_masuk_m3' => (float) round($dataMasuk->sum('kubikasi'), 4),
-                    'total_keluar_m3' => (float) round($batch['grand_total_outflow_m3'], 4),
-                    'total_poin' => number_format($dataMasuk->sum('poin'), 0, ',', '.'),
+                    'total_masuk_m3' => (float) number_format($dataMasuk->sum('kubikasi'), 4),
+                    'total_keluar_m3' => (float) number_format($batch['grand_total_outflow_m3'], 4),
+                    'total_poin' => $total_poin,
                     'rendemen' => $dataMasuk->sum('kubikasi') > 0
-                        ? round(($batch['grand_total_outflow_m3'] / $dataMasuk->sum('kubikasi')) * 100, 2) . '%'
+                        ? number_format(($batch['grand_total_outflow_m3'] / $dataMasuk->sum('kubikasi')) * 100, 2) . '%'
                         : '0%',
-                    'harga_veneer' => (float) ($dataMasuk->sum('poin') / $batch['grand_total_outflow_m3'] ),
-                    'harga_v_ongkos' => null,
-                    'harga_total' => null
+                    'harga_veneer' => (float) ($dataMasuk->sum('poin') / $batch['grand_total_outflow_m3']),
+                    'harga_v_ongkos' => $harga_v_ongkos,
+                    'harga_vop' => $harga_v_ongkos_penyusutan
                 ]
             ];
         }
@@ -105,25 +110,31 @@ class ProduksiInflowService
         $first = $records->first();
         $last = $records->first(fn($i) => $i->jumlah_batang > 0);
 
+        $ongkosPekerja = HargaPegawai::first()
+            ->value('harga') ?? 0;
+
         $idsPenggunaanLahan = $records->pluck('id')->toArray();
+
 
         // SOLUSI 3: Eager Loading dengan pembatasan kolom pada relasi
         $outflowData = DetailHasilPaletRotary::with([
             'produksi:id,tgl_produksi,id_mesin',
-            'produksi.mesin:id,nama_mesin',
+            'produksi.mesin:id,nama_mesin,penyusutan',
             'produksi.detailPegawaiRotary:id,id_produksi',
             'setoranPaletUkuran:id,panjang,lebar,tebal'
         ])
             ->whereIn('id_penggunaan_lahan', $idsPenggunaanLahan)
             ->get();
 
-        $groupedOutflow = $outflowData->map(function ($hasil) {
+        $groupedOutflow = $outflowData->map(function ($hasil) use ($ongkosPekerja) {
             $produksi = $hasil->produksi;
             $ukuran = $hasil->setoranPaletUkuran;
             $totalLembar = (int) ($hasil->total_lembar ?? 0);
 
             // Perbaikan pembagi kubikasi agar akurat (10^9 untuk mm ke m3)
             $m3 = $ukuran ? ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $totalLembar) / 10_000_000 : 0;
+            $pekerja = ($produksi->detailPegawaiRotary->count() ?? 0);
+            $penyusutan = $produksi->mesin->penyusutan ?? 0;
 
             return [
                 'tgl' => Carbon::parse($produksi->tgl_produksi)->format('d-m-Y'),
@@ -132,7 +143,9 @@ class ProduksiInflowService
                 'ukuran' => $ukuran ? "{$ukuran->panjang} x {$ukuran->lebar} x {$ukuran->tebal}" : '-',
                 'banyak' => $totalLembar,
                 'kubikasi' => $m3,
-                'pekerja' => ($produksi->detailPegawaiRotary->count() ?? 0) . " Orang",
+                'pekerja' => (string) $pekerja . " Orang",
+                'ongkos' => $pekerja * $ongkosPekerja,
+                'penyusutan' => $penyusutan
             ];
         })->groupBy(fn($item) => $item['tgl'] . $item['mesin'] . $item['ukuran'])
             ->map(fn($group) => [
@@ -141,10 +154,10 @@ class ProduksiInflowService
                 'jam_kerja' => $group[0]['jam_kerja'],
                 'ukuran' => $group[0]['ukuran'],
                 'total_banyak' => $group->sum('banyak'),
-                'total_kubikasi' => round($group->sum('kubikasi'), 4),
+                'total_kubikasi' => number_format($group->sum('kubikasi'), 4),
                 'pekerja' => $group[0]['pekerja'],
-                'ongkos' => null,
-                'penyusutan' => null
+                'ongkos' => $group[0]['ongkos'],
+                'penyusutan' => $group[0]['penyusutan']
             ])->values()->toArray();
 
         return [
@@ -152,6 +165,8 @@ class ProduksiInflowService
             'tgl_buka_raw' => $first->created_at,
             'status' => $last ? 'SELESAI' : 'PROSES',
             'grand_total_outflow_m3' => collect($groupedOutflow)->sum('total_kubikasi'),
+            'grand_total_outflow_ongkos_pkj' => collect($groupedOutflow)->sum('ongkos'),
+            'grand_total_outflow_penyusutan' => collect($groupedOutflow)->sum('penyusutan'),
             'outflow_detail' => $groupedOutflow,
             'info' => [
                 'lahan' => $first->lahan->nama_lahan ?? '-',
@@ -166,7 +181,7 @@ class ProduksiInflowService
         ];
     }
 
-    
+
     private function getInflowByWindow($idLahan, $start, $end, $statusBatch)
     {
         // SOLUSI 3: Batasi kolom pada Inflow
@@ -198,8 +213,8 @@ class ProduksiInflowService
 
     private function calculatePoin($item)
     {
-        $harga = $this->getHargaSatuan($item->id_jenis_kayu ?? 1, $item->grade ?? 1, $item->panjang ?? 130, $item->diameter);
-        return (int) round(($harga ?? 0) * round($item->kubikasi, 4) * 1000);
+        $harga = $this->getHargaSatuan($item->id_jenis_kayu ?? 1, $item->grade ?? 0, $item->panjang ?? 0, $item->diameter);
+        return (float) (($harga ?? 0) * $item->kubikasi * 1000);
     }
 
     private function getHargaSatuan($idJenisKayu, $grade, $panjang, $diameter)
