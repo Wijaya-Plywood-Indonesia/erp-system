@@ -3,9 +3,7 @@
     "file": "assets/app-JXZ4LL20.css",
     "src": "resources/css/app.css",
     "isEntry": true,
-    "names": [
-      "app.css"
-    ]
+    "names": ["app.css"]
   },
   "resources/js/app.js": {
     "file": "assets/app-tQPGMJKZ.js",

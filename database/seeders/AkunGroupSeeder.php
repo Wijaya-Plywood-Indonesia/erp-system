@@ -72,7 +72,7 @@ class AkunGroupSeeder extends Seeder
         AkunGroup::create([
             'nama' => 'Ekuitas',
             'parent_id' => $pasiva->id,
-            'akun' => [3100, 3200, 3300, 3400, 3500],
+            'akun' => [3100, 3200, 3300, 3400, 3500, 3600, 3800, 3900],
         ]);
     }
 }
