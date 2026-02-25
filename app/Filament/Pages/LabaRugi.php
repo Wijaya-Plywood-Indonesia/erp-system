@@ -33,7 +33,8 @@ class LabaRugi extends Page
     public $akunPendapatan = [];
     public $akunBiaya = [];
     public $akunLainnya = [];
-public $totalLainnya = 0;
+    public $totalLainnya = 0;
+    public $akunMapping = [];
 
     public function mount()
     {
@@ -68,7 +69,8 @@ public $totalLainnya = 0;
             'useCustomFilter',
             'tanggalAwal',
             'tanggalAkhir',
-            'selectedAkun' // ← TAMBAHKAN INI
+            'selectedAkun', // ← TAMBAHKAN INI
+            'akunMapping'
         ])) {
             $this->resetData();
             $this->hitung();
@@ -76,6 +78,12 @@ public $totalLainnya = 0;
     }
 
     public function updatedSelectedAkun()
+    {
+        $this->resetData();
+        $this->hitung();
+    }
+
+    public function updatedAkunMapping()
 {
     $this->resetData();
     $this->hitung();
@@ -93,7 +101,7 @@ public $totalLainnya = 0;
         $this->akunPendapatan = [];
         $this->akunBiaya = [];
         $this->akunLainnya = [];
-$this->totalLainnya = 0;
+        $this->totalLainnya = 0;
     }
 
     private function baseQuery()
@@ -187,30 +195,74 @@ $this->totalLainnya = 0;
             $this->pendapatanSebelumPajak + $this->bebanPajak;
 
         // ================= AKUN LAINNYA =================
-if ($this->useCustomFilter && !empty($this->selectedAkun)) {
+        if ($this->useCustomFilter && !empty($this->selectedAkun)) {
 
-    $akunSemua = AnakAkun::whereIn('kode_anak_akun', $this->selectedAkun)
-        ->whereNull('parent')
-        ->get();
+            $akunSemua = AnakAkun::whereIn('kode_anak_akun', $this->selectedAkun)
+                ->whereNull('parent')
+                ->get();
 
-    foreach ($akunSemua as $akun) {
+            foreach ($akunSemua as $akun) {
 
-        $kodeInduk = $akun->indukAkun->kode_induk_akun ?? null;
+                $kodeInduk = $akun->indukAkun->kode_induk_akun ?? null;
 
-        if (!in_array($kodeInduk, [4000, 5000])) {
+                if (!in_array($kodeInduk, [4000, 5000])) {
 
-            $total = $this->sumFromJurnalUmum($akun->kode_anak_akun);
+                    $total = $this->sumFromJurnalUmum($akun->kode_anak_akun);
 
-            $this->akunLainnya[] = [
-                'kode' => $akun->kode_anak_akun,
-                'nama' => $akun->nama_anak_akun,
+                    $this->akunLainnya[] = [
+                        'kode' => $akun->kode_anak_akun,
+                        'nama' => $akun->nama_anak_akun,
+                        'total' => $total,
+                    ];
+
+                    $this->totalLainnya += $total;
+                }
+            }
+        }
+        // ================= REKLASIFIKASI USER =================
+if (!empty($this->akunMapping)) {
+
+    foreach ($this->akunMapping as $kode => $section) {
+
+        if (!$section) continue;
+
+        $total = $this->sumFromJurnalUmum($kode);
+
+        $nama = AnakAkun::where('kode_anak_akun', $kode)
+            ->value('nama_anak_akun');
+
+        // HAPUS DARI AKUN LAINNYA
+        $this->akunLainnya = array_filter(
+            $this->akunLainnya,
+            fn($item) => $item['kode'] != $kode
+        );
+
+        if ($section === 'pendapatan') {
+
+            $this->akunPendapatan[] = [
+                'kode' => $kode,
+                'nama' => $nama,
                 'total' => $total,
             ];
 
-            $this->totalLainnya += $total;
+            $this->totalPendapatan += $total;
+        }
+
+        if ($section === 'biaya') {
+
+            $this->akunBiaya[] = [
+                'kode' => $kode,
+                'nama' => $nama,
+                'total' => $total,
+            ];
+
+            $this->totalBiaya += $total;
         }
     }
 }
+$this->pendapatanKotor = $this->totalPendapatan + $this->hpp;
+$this->pendapatanSebelumPajak = $this->pendapatanKotor + $this->totalBiaya;
+$this->labaBersih = $this->pendapatanSebelumPajak + $this->bebanPajak;
     }
 
     private function sumFromJurnalUmum($akunRatusan)

@@ -48,8 +48,19 @@
 <tr>
     <td>{{ $item['kode'] }}</td>
     <td class="pl-2">{{ $item['nama'] }}</td>
-    <td class="text-right pr-4">{{ rupiah($item['total']) }}</td>
-    <td></td>
+
+    <td>
+        <select wire:model.live="akunMapping.{{ $item['kode'] }}"
+                class="border rounded p-1 text-xs">
+            <option value="">Lainnya</option>
+            <option value="pendapatan">Pendapatan</option>
+            <option value="biaya">Beban Operasional</option>
+        </select>
+    </td>
+
+    <td class="text-right pr-4">
+        {{ rupiah($item['total']) }}
+    </td>
 </tr>
 @endforeach
 @endif
