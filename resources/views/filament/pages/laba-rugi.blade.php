@@ -118,7 +118,7 @@
         {{-- ================= LABA / RUGI BERSIH ================= --}}
         <tr>
             <td colspan="2" class="font-bold text-lg pt-10">
-                {{ $labaBersih >= 0 ? 'LABA BERSIH' : 'RUGI BERSIH' }}
+                {{ $labaBersih >= 0 ? 'LABA BERSIH' : 'RUGI' }}
             </td>
             <td></td>
             <td class="text-right font-bold text-lg pt-10">
