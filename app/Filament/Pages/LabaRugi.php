@@ -29,44 +29,55 @@ class LabaRugi extends Page
     public $bebanPajak = 0;
     public $labaBersih = 0;
     public $daftarAkun = [];
-public $selectedAkun = [];
+    public $selectedAkun = [];
     public $akunPendapatan = [];
     public $akunBiaya = [];
 
     public function mount()
-{
-    $this->loadDaftarAkunFromGroup();
-    $this->hitung();
-}
-
-private function loadDaftarAkunFromGroup()
-{
-    $group = \App\Models\AkunGroup::where('nama', 'Laba Rugi')
-        ->with('anakAkuns')
-        ->first();
-
-    if (!$group) {
-        $this->daftarAkun = [];
-        return;
+    {
+        $this->loadDaftarAkunFromGroup();
+        $this->hitung();
     }
 
-    $this->daftarAkun = $group->anakAkuns
-        ->sortBy('kode_anak_akun')
-        ->mapWithKeys(function ($anak) {
-            return [
-                $anak->kode_anak_akun => $anak->nama_anak_akun
-            ];
-        })
-        ->toArray();
-}
+    private function loadDaftarAkunFromGroup()
+    {
+        $group = \App\Models\AkunGroup::where('nama', 'Laba Rugi')
+            ->with('anakAkuns')
+            ->first();
+
+        if (!$group) {
+            $this->daftarAkun = [];
+            return;
+        }
+
+        $this->daftarAkun = $group->anakAkuns
+            ->sortBy('kode_anak_akun')
+            ->mapWithKeys(function ($anak) {
+                return [
+                    $anak->kode_anak_akun => $anak->nama_anak_akun
+                ];
+            })
+            ->toArray();
+    }
 
     public function updated($property)
     {
-        if (in_array($property, ['useCustomFilter', 'tanggalAwal', 'tanggalAkhir'])) {
+        if (in_array($property, [
+            'useCustomFilter',
+            'tanggalAwal',
+            'tanggalAkhir',
+            'selectedAkun' // ← TAMBAHKAN INI
+        ])) {
             $this->resetData();
             $this->hitung();
         }
     }
+
+    public function updatedSelectedAkun()
+{
+    $this->resetData();
+    $this->hitung();
+}
 
     private function resetData()
     {
@@ -101,9 +112,17 @@ private function loadDaftarAkunFromGroup()
         $pendapatanAkun = AnakAkun::whereHas('indukAkun', function ($q) {
             $q->where('kode_induk_akun', 4000);
         })
-        ->whereNull('parent')
-        ->orderBy('kode_anak_akun')
-        ->get();
+            ->whereNull('parent')
+            ->orderBy('kode_anak_akun')
+            ->get();
+
+        // 🔥 FILTER DI SINI
+        if ($this->useCustomFilter && !empty($this->selectedAkun)) {
+            $pendapatanAkun = $pendapatanAkun->whereIn(
+                'kode_anak_akun',
+                $this->selectedAkun
+            );
+        }
 
         foreach ($pendapatanAkun as $akun) {
 
@@ -128,10 +147,18 @@ private function loadDaftarAkunFromGroup()
         $biayaAkun = AnakAkun::whereHas('indukAkun', function ($q) {
             $q->where('kode_induk_akun', 5000);
         })
-        ->whereNull('parent')
-        ->where('kode_anak_akun', '!=', 5900)
-        ->orderBy('kode_anak_akun')
-        ->get();
+            ->whereNull('parent')
+            ->where('kode_anak_akun', '!=', 5900)
+            ->orderBy('kode_anak_akun')
+            ->get();
+
+        // 🔥 FILTER DI SINI
+        if ($this->useCustomFilter && !empty($this->selectedAkun)) {
+            $biayaAkun = $biayaAkun->whereIn(
+                'kode_anak_akun',
+                $this->selectedAkun
+            );
+        }
 
         foreach ($biayaAkun as $akun) {
 
