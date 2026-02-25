@@ -28,14 +28,37 @@ class LabaRugi extends Page
     public $pendapatanSebelumPajak = 0;
     public $bebanPajak = 0;
     public $labaBersih = 0;
-
+    public $daftarAkun = [];
+public $selectedAkun = [];
     public $akunPendapatan = [];
     public $akunBiaya = [];
 
     public function mount()
-    {
-        $this->hitung();
+{
+    $this->loadDaftarAkunFromGroup();
+    $this->hitung();
+}
+
+private function loadDaftarAkunFromGroup()
+{
+    $group = \App\Models\AkunGroup::where('nama', 'Laba Rugi')
+        ->with('anakAkuns')
+        ->first();
+
+    if (!$group) {
+        $this->daftarAkun = [];
+        return;
     }
+
+    $this->daftarAkun = $group->anakAkuns
+        ->sortBy('kode_anak_akun')
+        ->mapWithKeys(function ($anak) {
+            return [
+                $anak->kode_anak_akun => $anak->nama_anak_akun
+            ];
+        })
+        ->toArray();
+}
 
     public function updated($property)
     {
