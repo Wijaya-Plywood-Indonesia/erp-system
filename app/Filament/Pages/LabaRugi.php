@@ -3,7 +3,7 @@
 namespace App\Filament\Pages;
 
 use Filament\Pages\Page;
-use App\Models\JurnalTiga;
+use App\Models\JurnalUmum;
 use App\Models\AnakAkun;
 use BackedEnum;
 use UnitEnum;
@@ -17,9 +17,10 @@ class LabaRugi extends Page
 
     // ================= FILTER =================
     public $useCustomFilter = false;
-    public $selectedAkun = [];
+    public $tanggalAwal = null;
+    public $tanggalAkhir = null;
 
-    // ================= TOTAL =================
+    // ================= DATA =================
     public $totalPendapatan = 0;
     public $hpp = 0;
     public $pendapatanKotor = 0;
@@ -27,29 +28,69 @@ class LabaRugi extends Page
     public $pendapatanSebelumPajak = 0;
     public $bebanPajak = 0;
     public $labaBersih = 0;
-
-    // ================= DETAIL =================
+    public $daftarAkun = [];
+    public $selectedAkun = [];
     public $akunPendapatan = [];
     public $akunBiaya = [];
+    public $akunLainnya = [];
+    public $totalLainnya = 0;
+    public $akunMapping = [];
 
     public function mount()
     {
+        $this->loadDaftarAkunFromGroup();
         $this->hitung();
     }
 
-    public function updatedUseCustomFilter()
+    private function loadDaftarAkunFromGroup()
     {
-        $this->hitung();
+        $group = \App\Models\AkunGroup::where('nama', 'Laba Rugi')
+            ->with('anakAkuns')
+            ->first();
+
+        if (!$group) {
+            $this->daftarAkun = [];
+            return;
+        }
+
+        $this->daftarAkun = $group->anakAkuns
+            ->sortBy('kode_anak_akun')
+            ->mapWithKeys(function ($anak) {
+                return [
+                    $anak->kode_anak_akun => $anak->nama_anak_akun
+                ];
+            })
+            ->toArray();
+    }
+
+    public function updated($property)
+    {
+        if (in_array($property, [
+            'useCustomFilter',
+            'tanggalAwal',
+            'tanggalAkhir',
+            'selectedAkun', // ← TAMBAHKAN INI
+            'akunMapping'
+        ])) {
+            $this->resetData();
+            $this->hitung();
+        }
     }
 
     public function updatedSelectedAkun()
     {
+        $this->resetData();
         $this->hitung();
     }
 
-    private function hitung()
+    public function updatedAkunMapping()
+{
+    $this->resetData();
+    $this->hitung();
+}
+
+    private function resetData()
     {
-        // RESET
         $this->totalPendapatan = 0;
         $this->hpp = 0;
         $this->pendapatanKotor = 0;
@@ -59,30 +100,45 @@ class LabaRugi extends Page
         $this->labaBersih = 0;
         $this->akunPendapatan = [];
         $this->akunBiaya = [];
+        $this->akunLainnya = [];
+        $this->totalLainnya = 0;
+    }
 
-        /*
-        |------------------------------------------------------------------
-        | PENDAPATAN (4000)
-        |------------------------------------------------------------------
-        */
+    private function baseQuery()
+    {
+        $query = JurnalUmum::query();
 
-        $pendapatanQuery = AnakAkun::whereHas('indukAkun', function ($q) {
-            $q->where('kode_induk_akun', 4000);
-        })
-        ->whereNull('parent');
-
-        if ($this->useCustomFilter && !empty($this->selectedAkun)) {
-            $pendapatanQuery->whereIn('kode_anak_akun', $this->selectedAkun);
+        if ($this->useCustomFilter && $this->tanggalAwal && $this->tanggalAkhir) {
+            $query->whereBetween('tanggal', [
+                $this->tanggalAwal,
+                $this->tanggalAkhir
+            ]);
         }
 
-        $pendapatanAkun = $pendapatanQuery
+        return $query;
+    }
+
+    private function hitung()
+    {
+        // ================= PENDAPATAN =================
+        $pendapatanAkun = AnakAkun::whereHas('indukAkun', function ($q) {
+            $q->where('kode_induk_akun', 4000);
+        })
+            ->whereNull('parent')
             ->orderBy('kode_anak_akun')
             ->get();
 
+        // 🔥 FILTER DI SINI
+        if ($this->useCustomFilter && !empty($this->selectedAkun)) {
+            $pendapatanAkun = $pendapatanAkun->whereIn(
+                'kode_anak_akun',
+                $this->selectedAkun
+            );
+        }
+
         foreach ($pendapatanAkun as $akun) {
 
-            $total = JurnalTiga::where('akun_seratus', $akun->kode_anak_akun)
-                ->sum('total');
+            $total = $this->sumFromJurnalUmum($akun->kode_anak_akun);
 
             $this->akunPendapatan[] = [
                 'kode'  => $akun->kode_anak_akun,
@@ -93,41 +149,32 @@ class LabaRugi extends Page
             $this->totalPendapatan += $total;
         }
 
-        /*
-        |------------------------------------------------------------------
-        | HPP (TIDAK DIUBAH)
-        |------------------------------------------------------------------
-        */
+        // ================= HPP =================
+        $this->hpp = $this->sumHpp();
 
-        $this->hpp = JurnalTiga::where('detail', 'like', '%hpp%')
-            ->sum('total');
+        $this->pendapatanKotor =
+            $this->totalPendapatan + $this->hpp;
 
-        $this->pendapatanKotor = $this->totalPendapatan + $this->hpp;
-
-        /*
-        |------------------------------------------------------------------
-        | BIAYA (5000 kecuali 5900)
-        |------------------------------------------------------------------
-        */
-
-        $biayaQuery = AnakAkun::whereHas('indukAkun', function ($q) {
+        // ================= BIAYA =================
+        $biayaAkun = AnakAkun::whereHas('indukAkun', function ($q) {
             $q->where('kode_induk_akun', 5000);
         })
-        ->whereNull('parent')
-        ->where('kode_anak_akun', '!=', 5900);
-
-        if ($this->useCustomFilter && !empty($this->selectedAkun)) {
-            $biayaQuery->whereIn('kode_anak_akun', $this->selectedAkun);
-        }
-
-        $biayaAkun = $biayaQuery
+            ->whereNull('parent')
+            ->where('kode_anak_akun', '!=', 5900)
             ->orderBy('kode_anak_akun')
             ->get();
 
+        // 🔥 FILTER DI SINI
+        if ($this->useCustomFilter && !empty($this->selectedAkun)) {
+            $biayaAkun = $biayaAkun->whereIn(
+                'kode_anak_akun',
+                $this->selectedAkun
+            );
+        }
+
         foreach ($biayaAkun as $akun) {
 
-            $total = JurnalTiga::where('akun_seratus', $akun->kode_anak_akun)
-                ->sum('total');
+            $total = $this->sumFromJurnalUmum($akun->kode_anak_akun);
 
             $this->akunBiaya[] = [
                 'kode'  => $akun->kode_anak_akun,
@@ -138,29 +185,147 @@ class LabaRugi extends Page
             $this->totalBiaya += $total;
         }
 
-        /*
-        |------------------------------------------------------------------
-        | RUMUS KAMU (TIDAK DIUBAH)
-        |------------------------------------------------------------------
-        */
-
         $this->pendapatanSebelumPajak =
             $this->pendapatanKotor + $this->totalBiaya;
 
         $this->bebanPajak =
-            JurnalTiga::where('akun_seratus', 5900)
-                ->sum('total');
+            $this->sumFromJurnalUmum(5900);
 
         $this->labaBersih =
             $this->pendapatanSebelumPajak + $this->bebanPajak;
+
+        // ================= AKUN LAINNYA =================
+        if ($this->useCustomFilter && !empty($this->selectedAkun)) {
+
+            $akunSemua = AnakAkun::whereIn('kode_anak_akun', $this->selectedAkun)
+                ->whereNull('parent')
+                ->get();
+
+            foreach ($akunSemua as $akun) {
+
+                $kodeInduk = $akun->indukAkun->kode_induk_akun ?? null;
+
+                if (!in_array($kodeInduk, [4000, 5000])) {
+
+                    $total = $this->sumFromJurnalUmum($akun->kode_anak_akun);
+
+                    $this->akunLainnya[] = [
+                        'kode' => $akun->kode_anak_akun,
+                        'nama' => $akun->nama_anak_akun,
+                        'total' => $total,
+                    ];
+
+                    $this->totalLainnya += $total;
+                }
+            }
+        }
+        // ================= REKLASIFIKASI USER =================
+if (!empty($this->akunMapping)) {
+
+    foreach ($this->akunMapping as $kode => $section) {
+
+        if (!$section) continue;
+
+        $total = $this->sumFromJurnalUmum($kode);
+
+        $nama = AnakAkun::where('kode_anak_akun', $kode)
+            ->value('nama_anak_akun');
+
+        // HAPUS DARI AKUN LAINNYA
+        $this->akunLainnya = array_filter(
+            $this->akunLainnya,
+            fn($item) => $item['kode'] != $kode
+        );
+
+        if ($section === 'pendapatan') {
+
+            $this->akunPendapatan[] = [
+                'kode' => $kode,
+                'nama' => $nama,
+                'total' => $total,
+            ];
+
+            $this->totalPendapatan += $total;
+        }
+
+        if ($section === 'biaya') {
+
+            $this->akunBiaya[] = [
+                'kode' => $kode,
+                'nama' => $nama,
+                'total' => $total,
+            ];
+
+            $this->totalBiaya += $total;
+        }
+    }
+}
+$this->pendapatanKotor = $this->totalPendapatan + $this->hpp;
+$this->pendapatanSebelumPajak = $this->pendapatanKotor + $this->totalBiaya;
+$this->labaBersih = $this->pendapatanSebelumPajak + $this->bebanPajak;
     }
 
-    public function getDaftarAkunProperty()
+    private function sumFromJurnalUmum($akunRatusan)
     {
-        return AnakAkun::whereHas('indukAkun', function ($q) {
-            $q->whereIn('kode_induk_akun', [4000, 5000]);
-        })
-        ->whereNull('parent')
-        ->pluck('nama_anak_akun', 'kode_anak_akun');
+        return $this->baseQuery()
+            ->get()
+            ->map(function ($row) {
+
+                $hit   = strtolower(trim((string) ($row->hit_kbk ?? '')));
+                $harga = (float) ($row->harga ?? 0);
+                $byk   = (float) ($row->banyak ?? 0);
+                $m3    = (float) ($row->m3 ?? 0);
+
+                if ($hit === 'b') {
+                    $nominal = $byk * $harga;
+                } elseif ($hit === 'm') {
+                    $nominal = $m3 * $harga;
+                } else {
+                    $nominal = $harga;
+                }
+
+                $signed = strtoupper($row->map) === 'D'
+                    ? $nominal
+                    : -$nominal;
+
+                $akunPuluhan = floor(((int) explode('.', $row->no_akun)[0]) / 10) * 10;
+                $akunRatusanRow = floor($akunPuluhan / 100) * 100;
+
+                return [
+                    'akun_ratusan' => $akunRatusanRow,
+                    'total' => $signed,
+                ];
+            })
+            ->where('akun_ratusan', $akunRatusan)
+            ->sum('total');
+    }
+
+    private function sumHpp()
+    {
+        return $this->baseQuery()
+            ->get()
+            ->filter(function ($row) {
+                return str_contains(strtolower($row->nama_akun ?? ''), 'hpp');
+            })
+            ->map(function ($row) {
+
+                $hit   = strtolower(trim((string) ($row->hit_kbk ?? '')));
+                $harga = (float) ($row->harga ?? 0);
+                $byk   = (float) ($row->banyak ?? 0);
+                $m3    = (float) ($row->m3 ?? 0);
+
+                if ($hit === 'b') {
+                    $nominal = $byk * $harga;
+                } elseif ($hit === 'm') {
+                    $nominal = $m3 * $harga;
+                } else {
+                    $nominal = $harga;
+                }
+
+                return strtoupper($row->map) === 'D'
+                    ? $nominal
+                    : -$nominal;
+            })
+            ->sum();
     }
 }

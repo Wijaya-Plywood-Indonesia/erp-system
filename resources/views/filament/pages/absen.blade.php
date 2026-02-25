@@ -154,6 +154,22 @@
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-800 ring-1 ring-rose-500/30 uppercase">POT JELEK</span>
                                                 @elseif(str_contains($divisi, 'TURUN KAYU'))
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-yellow-100 text-amber-800 dark:bg-yellow-900 dark:text-yellow-300 ring-1 ring-yellow-500/30 uppercase">TURUN KAYU</span>
+                                                @elseif(str_contains($divisi, 'PILIH VENEER'))
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-violet-100 text-violet-800 ring-1 ring-violet-500/30 uppercase">
+                                                    PILIH VENEER
+                                                </span>
+                                                @elseif(str_contains($divisi, 'GUELLOTINE'))
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-lime-100 text-lime-800 ring-1 ring-lime-500/30 uppercase">
+                                                    GUELLOTINE
+                                                </span>
+                                                @elseif(str_contains($divisi, 'GRAJI BALKEN'))
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-sky-100 text-sky-800 ring-1 ring-sky-500/30 uppercase">
+                                                    GRAJI BALKEN
+                                                </span>
+                                                @elseif(str_contains($divisi, 'GRAJI STIK'))
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-800 ring-1 ring-indigo-500/30 uppercase">
+                                                    GRAJI STIK
+                                                </span>
                                                 @elseif(str_contains($divisi, 'Sync Error'))
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-red-600 text-white animate-pulse">KODE TIDAK TERDAFTAR</span>
                                                 @elseif(str_contains($divisi, 'Finger tanpa produksi'))
