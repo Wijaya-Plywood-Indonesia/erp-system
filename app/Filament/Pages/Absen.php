@@ -47,14 +47,20 @@ use App\Filament\Pages\Absen\Transformers\SandingJoinWorkerMap;
 use App\Filament\Pages\Absen\Transformers\PotAfalanJoinWorkerMap;
 use App\Filament\Pages\Absen\Transformers\LainLainWorkerMap;
 use App\Filament\Pages\Absen\Transformers\DempulWorkerMap;
+use App\Filament\Pages\Absen\Transformers\GrajiBalkenWorkerMap;
 use App\Filament\Pages\Absen\Transformers\GrajiTriplekWorkerMap;
+use App\Filament\Pages\Absen\Transformers\GuellotineWorkerMap;
 use App\Filament\Pages\Absen\Transformers\NyusupWorkerMap;
 use App\Filament\Pages\Absen\Transformers\SandingWorkerMap;
 use App\Filament\Pages\Absen\Transformers\PilihPlywoodWorkerMap;
 use App\Filament\Pages\Absen\Transformers\HotpressWorkerMap;
+use App\Filament\Pages\Absen\Transformers\PilihVeneerWorkerMap;
 use App\Filament\Pages\Absen\Transformers\PotSikuWorkerMap;
 use App\Filament\Pages\Absen\Transformers\PotJelekWorkerMap;
 use App\Filament\Pages\Absen\Transformers\TurunKayuWorkerMap;
+use App\Models\produksi_guellotine;
+use App\Models\ProduksiGrajiBalken;
+use App\Models\ProduksiPilihVeneer;
 use Illuminate\Support\Facades\Http;
 
 use BackedEnum;
@@ -167,6 +173,9 @@ class Absen extends Page implements HasForms
             $listPotSiku = PotSikuWorkerMap::make(ProduksiPotSiku::with(['pegawaiPotSiku.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listPotJelek = PotJelekWorkerMap::make(ProduksiPotJelek::with(['pegawaiPotJelek.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listTurunKayu = TurunKayuWorkerMap::make(TurunKayu::with(['pegawaiTurunKayu.pegawai'])->whereDate('tanggal', $tgl)->get());
+            $listPilihVeneer = PilihVeneerWorkerMap::make(ProduksiPilihVeneer::with(['pegawaiPilihVeneer.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
+            $listGuellotine = GuellotineWorkerMap::make(produksi_guellotine::with(['pegawaiGuellotine.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
+            $listGrajiBalken = GrajiBalkenWorkerMap::make(ProduksiGrajiBalken::with(['pegawaiGrajiBalken.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
 
             $pegawaiBekerjaRaw = array_merge(
                 $listRotary,
@@ -186,7 +195,10 @@ class Absen extends Page implements HasForms
                 $listHotpress,
                 $listPotSiku,
                 $listPotJelek,
-                $listTurunKayu
+                $listTurunKayu,
+                $listPilihVeneer,
+                $listGuellotine,
+                $listGrajiBalken
             );
 
             // 4. Gabungkan Produksi dengan Log Finger
