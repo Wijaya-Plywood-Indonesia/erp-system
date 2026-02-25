@@ -37,7 +37,22 @@
                 <th class="w-40 text-right italic text-gray-400 text-xs">Kredit (Kanan)</th> --}}
             </tr>
         </thead>
+@if(count($akunLainnya))
+<tr>
+    <td colspan="4" class="font-semibold pt-6 pb-2 border-b">
+        Akun Lainnya
+    </td>
+</tr>
 
+@foreach ($akunLainnya as $item)
+<tr>
+    <td>{{ $item['kode'] }}</td>
+    <td class="pl-2">{{ $item['nama'] }}</td>
+    <td class="text-right pr-4">{{ rupiah($item['total']) }}</td>
+    <td></td>
+</tr>
+@endforeach
+@endif
         {{-- ================= PENDAPATAN ================= --}}
         <tr>
             <td colspan="4" class="font-semibold pb-2 border-b">Pendapatan Penjualan</td>
@@ -93,6 +108,7 @@
             <td></td>
         </tr>
         @endforeach
+        
         {{-- Total Biaya --}}
         <tr>
             <td colspan="2"></td>

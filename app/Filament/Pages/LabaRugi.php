@@ -32,6 +32,8 @@ class LabaRugi extends Page
     public $selectedAkun = [];
     public $akunPendapatan = [];
     public $akunBiaya = [];
+    public $akunLainnya = [];
+public $totalLainnya = 0;
 
     public function mount()
     {
@@ -90,6 +92,8 @@ class LabaRugi extends Page
         $this->labaBersih = 0;
         $this->akunPendapatan = [];
         $this->akunBiaya = [];
+        $this->akunLainnya = [];
+$this->totalLainnya = 0;
     }
 
     private function baseQuery()
@@ -181,6 +185,32 @@ class LabaRugi extends Page
 
         $this->labaBersih =
             $this->pendapatanSebelumPajak + $this->bebanPajak;
+
+        // ================= AKUN LAINNYA =================
+if ($this->useCustomFilter && !empty($this->selectedAkun)) {
+
+    $akunSemua = AnakAkun::whereIn('kode_anak_akun', $this->selectedAkun)
+        ->whereNull('parent')
+        ->get();
+
+    foreach ($akunSemua as $akun) {
+
+        $kodeInduk = $akun->indukAkun->kode_induk_akun ?? null;
+
+        if (!in_array($kodeInduk, [4000, 5000])) {
+
+            $total = $this->sumFromJurnalUmum($akun->kode_anak_akun);
+
+            $this->akunLainnya[] = [
+                'kode' => $akun->kode_anak_akun,
+                'nama' => $akun->nama_anak_akun,
+                'total' => $total,
+            ];
+
+            $this->totalLainnya += $total;
+        }
+    }
+}
     }
 
     private function sumFromJurnalUmum($akunRatusan)
