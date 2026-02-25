@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\LainLains\Schemas;
 
+use App\Models\LainLain;
 use App\Models\Pegawai;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -40,15 +41,24 @@ class LainLainForm
                 // --- ID PEGAWAI (Relation: pegawai) ---
                 Select::make('id_pegawai')
                     ->label('Pegawai')
-                    ->options(
-                        Pegawai::query()
+                    ->searchable()
+                    ->required()
+                    ->options(function ($record) {
+                        $query = Pegawai::query();
+
+                        $existsIds = LainLain::pluck('id_pegawai')->toArray();
+
+                        if ($record && $record->id_pegawai) {
+                            $existsIds = array_diff($existsIds, [$record->id_pegawai]);
+                        }
+
+                        return $query
+                            ->whereNotIn('id', $existsIds)
                             ->get()
                             ->mapWithKeys(fn($pegawai) => [
                                 $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
-                            ])
-                    )
-                    ->searchable()
-                    ->required(),
+                            ]);
+                    }),
 
                 TextInput::make('ijin')
                     ->label('Ijin')
