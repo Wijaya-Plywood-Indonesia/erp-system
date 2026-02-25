@@ -4,252 +4,143 @@ namespace App\Filament\Pages;
 
 use App\Models\AkunGroup;
 use App\Models\JurnalUmum;
-use App\Models\AnakAkun;
+use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
+use BackedEnum;
+use UnitEnum;
 
 class NeracaAktivaPasifa extends Page
 {
     protected string $view = 'filament.pages.neraca-aktiva-pasifa';
-    protected Width|string|null $maxContentWidth = Width::Full;
 
-    public int $bulan_mulai;
-    public int $tahun_mulai;
-    public int $bulan_akhir;
-    public int $tahun_akhir;
+    protected static ?string $navigationLabel = 'Neraca Aktiva Pasiva';
+    protected static ?string $title = 'Neraca Aktiva Pasiva';
+    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-scale';
+    protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
 
-    public array $result = [];
+    // protected static Width|string|null $maxContentWidth = Width::Full;
+    public $start_date;
+    public $end_date;
+    public $repeat = 1;
 
-    public function debug()
-    {
-        dd($this->result);
-    }
-    private function loadChildren()
-    {
-        return AnakAkun::select('id', 'parent')
-            ->whereNotNull('parent')
-            ->get()
-            ->groupBy('parent')
-            ->map(function ($items) {
-                return $items->pluck('id')->toArray();
-            })
-            ->toArray();
-    }
+    public array $results = [];
 
     public function mount(): void
     {
-        $now = now();
+        $today = Carbon::today();
 
-        $this->bulan_mulai = $now->month;
-        $this->tahun_mulai = $now->year;
+        $this->start_date = $today->copy()->startOfMonth()->format('Y-m-d');
+        $this->end_date = $today->format('Y-m-d');
 
-        $this->bulan_akhir = $now->month;
-        $this->tahun_akhir = $now->year;
-
-        $this->loadData();
+        $this->applyFilter();
     }
 
-    public function loadData(): void
+    public function applyFilter(): void
     {
-        $start = now()->setDate($this->tahun_mulai, $this->bulan_mulai, 1)->startOfMonth();
-        $end = now()->setDate($this->tahun_akhir, $this->bulan_akhir, 1)->endOfMonth();
+        $this->results = [];
 
-        $period = CarbonPeriod::create($start, '1 month', $end);
+        $start = Carbon::parse($this->start_date)->startOfMonth();
+        $repeat = min($this->repeat, 12);
 
-        if (iterator_count($period) > 12) {
-            $this->addError('periode', 'Maksimal 12 bulan!');
-            return;
-        }
+        for ($i = 0; $i < $repeat; $i++) {
 
-        $this->result = [];
+            $periodStart = $start->copy()->addMonths($i)->startOfMonth();
+            $periodEnd = $start->copy()->addMonths($i)->endOfMonth();
 
-        foreach ($period as $bulan) {
-            $this->result[] = [
-                'label' => $bulan->translatedFormat('F Y'),
-                'groups' => $this->generateMonthReport(
-                    $bulan->copy()->startOfMonth(),
-                    $bulan->copy()->endOfMonth()
-                ),
+            if ($i === 0) {
+                $periodEnd = Carbon::parse($this->end_date);
+            }
+
+            $this->results[] = [
+                'label' => $periodStart->format('F Y'),
+                'aktiva' => $this->buildSide('AKTIVA', $periodStart, $periodEnd),
+                'pasiva' => $this->buildSide('PASIVA', $periodStart, $periodEnd),
             ];
         }
     }
 
-
-    /* ===========================================================
-     * GENERATE MONTH REPORT
-     * ===========================================================
-     */
-    private function generateMonthReport($start, $end): array
+    protected function buildSide(string $side, $start, $end): array
     {
-        $rows = $this->loadTransactions($start, $end);
-        $groupTrees = $this->loadGroupTree();
-        $output = $this->prepareGroupStructure($groupTrees);
-
-        $this->injectAllAccounts($output, $groupTrees);
-        $this->applyTransactions($output, $rows);
-        $childrenMap = $this->loadChildren();
-        $this->attachChildren($output, $childrenMap);
-        return $output;
-    }
-
-
-    /* ===========================================================
-     * LOAD TRANSACTIONS
-     * ===========================================================
-     */
-    private function loadTransactions($start, $end)
-    {
-        return JurnalUmum::with(['subAkun.anakAkun.akunGroups.parent'])
-            ->whereBetween('tgl', [$start, $end])
-            ->get();
-    }
-
-    private function attachChildren(array &$output, array $childrenMap)
-    {
-        foreach ($output as $groupKey => &$group) {
-            foreach ($group['sub'] as $subKey => &$sub) {
-                foreach ($sub['akun'] as $akunId => &$akun) {
-
-                    if (isset($childrenMap[$akunId])) {
-                        $akun['children'] = [];
-
-                        foreach ($childrenMap[$akunId] as $childId) {
-                            $akun['children'][$childId] = [
-                                'kode' => AnakAkun::find($childId)->kode_anak_akun,
-                                'nama' => AnakAkun::find($childId)->nama_anak_akun,
-                                'saldo' => 0,
-                            ];
-                        }
-                    }
-                }
-            }
-        }
-    }
-    /* ===========================================================
-     * LOAD GROUP TREE (multilevel)
-     * ===========================================================
-     */
-    private function loadGroupTree(): array
-    {
-        $groups = AkunGroup::orderBy('order')->get();
-
-        $byId = $groups->keyBy('id')->toArray();
-        $tree = [];
-
-        foreach ($byId as &$g) {
-            $pid = $g['parent_id'];
-
-            if ($pid && isset($byId[$pid])) {
-                $byId[$pid]['children'][] = &$g;
-            } else {
-                $tree[] = &$g;
-            }
-        }
-        unset($g);
-
-        return $tree;
-    }
-
-
-    /* ===========================================================
-     * PREPARE GROUP STRUCTURE
-     * ===========================================================
-     */
-    private function prepareGroupStructure(array $groupTrees): array
-    {
-        $output = [];
-
-        foreach ($groupTrees as $group) {
-            $output['G' . $group['id']] = [
-                'nama' => $group['nama'],
-                'sub' => [],     // subgroups
-            ];
-
-            if (!empty($group['children'])) {
-                foreach ($group['children'] as $sub) {
-                    $output['G' . $group['id']]['sub']['SG' . $sub['id']] = [
-                        'nama' => $sub['nama'],
-                        'akun' => []
-                    ];
-                }
-            }
-        }
-
-        // jika akun tidak punya group/sub group
-        $output['UNGROUPED'] = [
-            'nama' => 'Tidak Masuk Group',
-            'sub' => [
-                'SG0' => [
-                    'nama' => 'Tidak Ada Kategori',
-                    'akun' => []
-                ]
-            ]
-        ];
-
-        return $output;
-    }
-
-
-    /* ===========================================================
-     * INSERT ALL ACCOUNTS INTO SUB GROUPS
-     * ===========================================================
-     */
-    private function injectAllAccounts(array &$output, array $groupTrees): void
-    {
-        $accounts = AnakAkun::with('akunGroups.parent')
-            ->orderBy('kode_anak_akun')
+        $groups = AkunGroup::with([
+            'anakAkuns.subAnakAkuns',
+            'children.childrenRecursive'
+        ])
+            ->whereNull('parent_id')
+            ->where('hidden', false)
+            ->where('nama', 'like', "%{$side}%")
+            ->orderBy('order')
             ->get();
 
-        foreach ($accounts as $akun) {
+        return $groups->map(
+            fn($group) =>
+            $this->buildTree($group, $start, $end)
+        )->toArray();
+    }
 
-            $groupId = optional($akun->akunGroups->first())->parent_id;
-            $subId = optional($akun->akunGroups->first())->id;
+    protected function buildTree($group, $start, $end): array
+    {
+        $total = 0;
+        $accounts = [];
 
-            if ($groupId && $subId) {
-                $groupKey = 'G' . $groupId;
-                $subKey = 'SG' . $subId;
-            } else {
-                $groupKey = 'UNGROUPED';
-                $subKey = 'SG0';
-            }
+        foreach ($group->anakAkuns as $akun) {
 
-            $output[$groupKey]['sub'][$subKey]['akun'][$akun->id] = [
+            $saldo = $this->calculateAccountSaldo($akun, $start, $end);
+
+            $accounts[] = [
                 'kode' => $akun->kode_anak_akun,
                 'nama' => $akun->nama_anak_akun,
-                'saldo' => 0,
+                'total' => $saldo,
             ];
+
+            $total += $saldo;
         }
+
+        $children = [];
+
+        foreach ($group->children as $child) {
+            $childData = $this->buildTree($child, $start, $end);
+            $total += $childData['total'];
+            $children[] = $childData;
+        }
+
+        return [
+            'nama' => $group->nama,
+            'total' => $total,
+            'accounts' => $accounts,
+            'children' => $children,
+        ];
     }
 
-
-    /* ===========================================================
-     * APPLY TRANSACTIONS
-     * ===========================================================
-     */
-    private function applyTransactions(array &$output, $rows): void
+    protected function calculateAccountSaldo($akun, $start, $end): float
     {
-        foreach ($rows as $row) {
+        $kodeList = [$akun->kode_anak_akun];
 
-            $anak = $row->subAkun->anakAkun ?? null;
-            if (!$anak)
-                continue;
-
-            $groupId = optional($anak->akunGroups->first())->parent_id;
-            $subId = optional($anak->akunGroups->first())->id;
-
-            if ($groupId && $subId) {
-                $groupKey = 'G' . $groupId;
-                $subKey = 'SG' . $subId;
-            } else {
-                $groupKey = 'UNGROUPED';
-                $subKey = 'SG0';
-            }
-
-            if (isset($output[$groupKey]['sub'][$subKey]['akun'][$anak->id])) {
-                $output[$groupKey]['sub'][$subKey]['akun'][$anak->id]['saldo'] +=
-                    ($row->debit - $row->kredit);
-            }
+        // Tambahkan semua sub anak akun
+        foreach ($akun->subAnakAkuns as $sub) {
+            $kodeList[] = $sub->kode_sub_anak_akun;
         }
+
+        $journals = JurnalUmum::whereIn('no_akun', $kodeList)
+            ->whereBetween('tgl', [$start, $end])
+            ->get();
+
+        $saldo = 0;
+
+        foreach ($journals as $j) {
+
+            if ($j->hit_kbk === 'k') {
+                $nominal = ($j->harga ?? 0) * ($j->m3 ?? 0);
+            } elseif ($j->hit_kbk === 'b') {
+                $nominal = ($j->harga ?? 0) * ($j->banyak ?? 0);
+            } else {
+                $nominal = $j->harga ?? 0;
+            }
+
+            $saldo += $nominal;
+        }
+
+        return $saldo;
     }
 }
