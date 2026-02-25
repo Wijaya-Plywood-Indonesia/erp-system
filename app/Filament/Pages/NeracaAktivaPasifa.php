@@ -5,9 +5,7 @@ namespace App\Filament\Pages;
 use App\Models\AkunGroup;
 use App\Models\JurnalUmum;
 use Carbon\Carbon;
-use Carbon\CarbonPeriod;
 use Filament\Pages\Page;
-use Filament\Support\Enums\Width;
 use BackedEnum;
 use UnitEnum;
 
@@ -20,7 +18,6 @@ class NeracaAktivaPasifa extends Page
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-scale';
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
 
-    // protected static Width|string|null $maxContentWidth = Width::Full;
     public $start_date;
     public $end_date;
     public $repeat = 1;
@@ -64,6 +61,7 @@ class NeracaAktivaPasifa extends Page
     protected function buildSide(string $side, $start, $end): array
     {
         $groups = AkunGroup::with([
+            'anakAkuns.childrenRecursive',
             'anakAkuns.subAnakAkuns',
             'children.childrenRecursive'
         ])
@@ -75,32 +73,27 @@ class NeracaAktivaPasifa extends Page
 
         return $groups->map(
             fn($group) =>
-            $this->buildTree($group, $start, $end)
+            $this->buildGroupTree($group, $start, $end)
         )->toArray();
     }
 
-    protected function buildTree($group, $start, $end): array
+    protected function buildGroupTree($group, $start, $end): array
     {
         $total = 0;
         $accounts = [];
 
-        foreach ($group->anakAkuns as $akun) {
+        foreach ($group->anakAkuns->whereNull('parent_id') as $akun) {
 
-            $saldo = $this->calculateAccountSaldo($akun, $start, $end);
+            $akunData = $this->buildAkunTree($akun, $start, $end);
 
-            $accounts[] = [
-                'kode' => $akun->kode_anak_akun,
-                'nama' => $akun->nama_anak_akun,
-                'total' => $saldo,
-            ];
-
-            $total += $saldo;
+            $total += $akunData['total'];
+            $accounts[] = $akunData;
         }
 
         $children = [];
 
         foreach ($group->children as $child) {
-            $childData = $this->buildTree($child, $start, $end);
+            $childData = $this->buildGroupTree($child, $start, $end);
             $total += $childData['total'];
             $children[] = $childData;
         }
@@ -113,34 +106,49 @@ class NeracaAktivaPasifa extends Page
         ];
     }
 
-    protected function calculateAccountSaldo($akun, $start, $end): float
+    protected function buildAkunTree($akun, $start, $end): array
     {
-        $kodeList = [$akun->kode_anak_akun];
+        $total = $this->calculateRecursiveSaldo($akun, $start, $end);
 
-        // Tambahkan semua sub anak akun
+        $children = [];
+
+        foreach ($akun->children as $child) {
+            $children[] = $this->buildAkunTree($child, $start, $end);
+        }
+
+        return [
+            'kode' => $akun->kode_anak_akun,
+            'nama' => $akun->nama_anak_akun,
+            'total' => $total,
+            'children' => $children,
+        ];
+    }
+
+    protected function calculateRecursiveSaldo($akun, $start, $end): float
+    {
+        $kodeList = [];
+        $this->collectAllKode($akun, $kodeList);
+
+        $journals = JurnalUmum::whereBetween('tgl', [$start, $end])
+            ->whereIn('no_akun', $kodeList)
+            ->get();
+
+        $totalDebit = $journals->sum('debit');
+        $totalKredit = $journals->sum('kredit');
+
+        return $totalDebit - $totalKredit;
+    }
+
+    protected function collectAllKode($akun, &$kodeList): void
+    {
+        $kodeList[] = $akun->kode_anak_akun;
+
         foreach ($akun->subAnakAkuns as $sub) {
             $kodeList[] = $sub->kode_sub_anak_akun;
         }
 
-        $journals = JurnalUmum::whereIn('no_akun', $kodeList)
-            ->whereBetween('tgl', [$start, $end])
-            ->get();
-
-        $saldo = 0;
-
-        foreach ($journals as $j) {
-
-            if ($j->hit_kbk === 'k') {
-                $nominal = ($j->harga ?? 0) * ($j->m3 ?? 0);
-            } elseif ($j->hit_kbk === 'b') {
-                $nominal = ($j->harga ?? 0) * ($j->banyak ?? 0);
-            } else {
-                $nominal = $j->harga ?? 0;
-            }
-
-            $saldo += $nominal;
+        foreach ($akun->children as $child) {
+            $this->collectAllKode($child, $kodeList);
         }
-
-        return $saldo;
     }
 }
