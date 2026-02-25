@@ -3,258 +3,316 @@
 namespace App\Livewire;
 
 use App\Models\Criteria;
-use App\Models\Criterion;
+use App\Models\Grade;
+use App\Models\GradeRule;
 use App\Models\GradingSession;
 use App\Models\KategoriBarang;
 use App\Models\SessionAnswer;
 use App\Services\InferenceEngine;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 
-/**
- * LIVEWIRE COMPONENT: GradingWizard
- *
- * Ini adalah PENGONTROL UTAMA tampilan sistem pakar.
- *
- * ═══════════════════════════════════════════════════════════
- * APA ITU LIVEWIRE?
- * ═══════════════════════════════════════════════════════════
- * Livewire memungkinkan PHP berjalan secara real-time di browser
- * tanpa perlu menulis JavaScript. Setiap kali pengawas klik tombol,
- * Livewire mengirim request ke server, menjalankan PHP, lalu
- * update DOM yang berubah saja — tanpa page reload.
- *
- * ═══════════════════════════════════════════════════════════
- * STATE MACHINE — 4 STEP
- * ═══════════════════════════════════════════════════════════
- *
- * [start] ──startGrading()──► [question] ──answer()──► [loading]
- * ▲                        │
- * │                 runInference()
- * restart()                  │
- * │                        ▼
- * [result] ◄─────────────────────
- *
- * ═══════════════════════════════════════════════════════════
- * ALUR DETAIL
- * ═══════════════════════════════════════════════════════════
- *
- * 1. mount()         → set default kategori dari KategoriBarang::first()
- * 2. startGrading()  → buat GradingSession di DB, pindah ke step 'question'
- * 3. answer('ya')    → simpan jawaban ke session_answers, increment index
- * answer('tidak') → (sama seperti di atas)
- * 4. Jika index >= total pertanyaan → step = 'loading'
- * Alpine.js mendeteksi perubahan step dan memanggil runInference()
- * 5. runInference()  → panggil InferenceEngine::analyze(), step = 'result'
- * 6. Blade view render hasil berdasarkan $this->result
- * 7. restart()        → kembali ke step 'start' untuk grading berikutnya
- */
 class GradingWizard extends Component
 {
-    // ── Public Properties (State) ─────────────────────────────────────────────
-    // Semua property public di Livewire otomatis di-sync ke view (blade).
-    // Perubahan property → Livewire re-render bagian yang berubah saja.
-
-    /** Step aktif saat ini: 'start' | 'question' | 'loading' | 'result' */
-    public string $step = 'start';
-
-    /** Index pertanyaan saat ini (0-based) */
-    public int $currentIndex = 0;
-
-    /** ID kategori barang yang dipilih pengawas */
-    public int $idKategoriBarang = 0;
-
-    /** Kode produk opsional (untuk identifikasi di lapangan) */
-    public ?string $kodeProduk = null;
-
-    /** ID session yang sedang aktif */
-    public ?int $sessionId = null;
-
-    /** Hasil akhir dari InferenceEngine::analyze() */
-    public array $result = [];
-
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    // --- State Properties ---
+    public string  $step             = 'start';
+    public int     $currentIndex     = 0;
+    public int     $idKategoriBarang = 0;
+    public ?string $kodeProduk       = null;
+    public ?int    $sessionId        = null;
+    public array   $result           = [];
 
     /**
-     * Dipanggil sekali saat komponen pertama kali di-render.
-     * Set default kategori ke yang pertama ada di database.
+     * Inisialisasi komponen saat pertama kali dimuat.
      */
     public function mount(): void
     {
         $first = KategoriBarang::first();
+
+        Log::channel('stack')->info('[WIZARD] mount()', [
+            'user_id'     => Auth::id(),
+            'kategori_id' => $first?->id,
+            'kategori'    => $first?->nama_kategori,
+        ]);
+
         if ($first) {
             $this->idKategoriBarang = $first->id;
+        } else {
+            Log::channel('stack')->warning('[WIZARD] mount() — KategoriBarang::first() null! Tabel kategori_barang kosong?');
         }
     }
 
-    // ── Computed Properties ───────────────────────────────────────────────────
-    // #[Computed] = hasil-nya di-cache dalam satu request.
-    // Tidak dihitung ulang jika dipanggil berkali-kali dalam view.
+    // --- Computed Properties (Caching logic for performance) ---
 
-    /**
-     * Semua kategori barang yang tersedia.
-     * Digunakan untuk dropdown pemilih kategori di step 'start'.
-     */
     #[Computed]
     public function kategoriList()
     {
         return KategoriBarang::all();
     }
 
-    /**
-     * Semua kriteria aktif untuk kategori yang dipilih, urut berdasarkan kolom 'urutan'.
-     * Ini adalah daftar pertanyaan yang akan ditampilkan satu per satu.
-     */
     #[Computed]
     public function criteria()
     {
-        if (! $this->idKategoriBarang) return collect();
+        if (!$this->idKategoriBarang) {
+            Log::channel('stack')->warning('[WIZARD] criteria() — idKategoriBarang = 0, return collect kosong');
+            return collect();
+        }
 
-        return Criteria::forKategori($this->idKategoriBarang)
-            ->active()
+        $result = Criteria::where('id_kategori_barang', $this->idKategoriBarang)
+            ->where('is_active', true)
+            ->orderBy('urutan', 'asc')
             ->get();
+
+        Log::channel('stack')->info('[WIZARD] criteria() loaded', [
+            'id_kategori_barang' => $this->idKategoriBarang,
+            'count'              => $result->count(),
+            'names'              => $result->pluck('nama_kriteria')->toArray(),
+        ]);
+
+        if ($result->isEmpty()) {
+            Log::channel('stack')->warning('[WIZARD] criteria() — KOSONG! Kemungkinan: Tabel belum diisi atau is_active semua false.');
+        }
+
+        return $result;
     }
 
-    /**
-     * Total jumlah pertanyaan untuk kategori ini.
-     */
     #[Computed]
     public function totalQuestions(): int
     {
         return $this->criteria->count();
     }
 
-    /**
-     * Pertanyaan yang sedang aktif saat ini (berdasarkan currentIndex).
-     * Null jika index sudah melewati batas.
-     */
     #[Computed]
     public function currentCriterion(): ?Criteria
     {
-        return $this->criteria->get($this->currentIndex);
+        $criterion = $this->criteria->get($this->currentIndex);
+
+        if (!$criterion) {
+            Log::channel('stack')->warning('[WIZARD] currentCriterion() — NULL!', [
+                'currentIndex'   => $this->currentIndex,
+                'totalQuestions' => $this->totalQuestions,
+            ]);
+        }
+
+        return $criterion;
     }
 
-    // ── Actions ───────────────────────────────────────────────────────────────
+    #[Computed]
+    public function availableGrades()
+    {
+        if (!$this->idKategoriBarang) return collect();
+
+        $grades = Grade::where('id_kategori_barang', $this->idKategoriBarang)->get();
+
+        Log::channel('stack')->info('[WIZARD] availableGrades()', [
+            'id_kategori_barang' => $this->idKategoriBarang,
+            'count'              => $grades->count(),
+            'grades'             => $grades->pluck('nama_grade')->toArray(),
+        ]);
+
+        return $grades;
+    }
+
+    #[Computed]
+    public function isReady(): bool
+    {
+        if ($this->criteria->isEmpty()) {
+            Log::channel('stack')->warning('[WIZARD] isReady = false — criteria kosong');
+            return false;
+        }
+        if ($this->availableGrades->isEmpty()) {
+            Log::channel('stack')->warning('[WIZARD] isReady = false — availableGrades kosong');
+            return false;
+        }
+
+        $gradeIds = $this->availableGrades->pluck('id');
+        $hasRules = GradeRule::whereIn('id_grade', $gradeIds)->exists();
+
+        Log::channel('stack')->info('[WIZARD] isReady check', [
+            'criteria_count' => $this->criteria->count(),
+            'has_rules'      => $hasRules,
+            'result'         => $hasRules,
+        ]);
+
+        return $hasRules;
+    }
+
+    #[Computed]
+    public function readinessError(): ?string
+    {
+        if ($this->availableGrades->isEmpty()) {
+            return 'Belum ada grade untuk kategori ini.';
+        }
+        if ($this->criteria->isEmpty()) {
+            return 'Belum ada pertanyaan. Tambahkan kriteria di menu Master Kriteria.';
+        }
+        $gradeIds = $this->availableGrades->pluck('id');
+        if (!GradeRule::whereIn('id_grade', $gradeIds)->exists()) {
+            return 'Aturan grade (Knowledge Base) belum dikonfigurasi. Isi di menu Aturan Grade.';
+        }
+        return null;
+    }
+
+    // --- Actions & Methods ---
 
     /**
-     * Dipanggil saat pengawas mengubah pilihan kategori di dropdown.
-     * Reset index pertanyaan agar mulai dari awal.
+     * Triggered saat user mengganti kategori barang di layar start.
      */
     public function updatedIdKategoriBarang(): void
     {
+        Log::channel('stack')->info('[WIZARD] updatedIdKategoriBarang()', [
+            'new_value' => $this->idKategoriBarang,
+        ]);
         $this->currentIndex = 0;
-        unset($this->criteria); // invalidate computed cache
+        unset($this->criteria, $this->availableGrades);
     }
 
     /**
-     * Mulai sesi grading baru.
-     * Membuat GradingSession di database dan pindah ke step 'question'.
-     *
-     * Dipanggil: wire:click="startGrading" di blade
+     * Membuat sesi baru dan memulai kuesioner.
      */
     public function startGrading(): void
     {
-        // Guard: pastikan kategori dipilih dan ada pertanyaan
-        if (! $this->idKategoriBarang) return;
-        if ($this->criteria->isEmpty()) return;
-
-        // Buat session baru di DB
-        $session = GradingSession::create([
-            'id_kategori_barang' => $this->idKategoriBarang,
-            'kode_produk'         => $this->kodeProduk ?: null,
-            'user_id'             => Auth::id(),
-            'status'              => 'in_progress',
+        Log::channel('stack')->info('[WIZARD] startGrading() called', [
+            'isReady'            => $this->isReady,
+            'idKategoriBarang'   => $this->idKategoriBarang,
+            'totalQuestions'     => $this->totalQuestions,
+            'user_id'            => Auth::id(),
         ]);
 
-        $this->sessionId    = $session->id;
-        $this->currentIndex = 0;
-        $this->step          = 'question';
+        if (!$this->isReady) {
+            Log::channel('stack')->warning('[WIZARD] startGrading() — ABORTED, isReady = false');
+            return;
+        }
 
-        // Trigger animasi slide di Alpine.js
-        $this->dispatch('question-changed');
+        try {
+            $session = GradingSession::create([
+                'id_kategori_barang' => $this->idKategoriBarang,
+                'kode_produk'        => $this->kodeProduk ?: null,
+                'user_id'            => Auth::id(),
+                'status'             => 'in_progress',
+            ]);
+
+            Log::channel('stack')->info('[WIZARD] GradingSession created', [
+                'id_session' => $session->id,
+            ]);
+
+            $this->sessionId    = $session->id;
+            $this->currentIndex = 0;
+            $this->step         = 'question';
+
+            $this->dispatch('question-changed');
+        } catch (\Throwable $e) {
+            Log::channel('stack')->error('[WIZARD] startGrading() — Exception!', [
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
-     * Rekam jawaban pengawas dan lanjut ke pertanyaan berikutnya.
-     *
-     * Ini adalah action paling sering dipanggil — setiap klik YA/TIDAK.
-     * Prosesnya cepat: hanya satu INSERT ke database lalu increment index.
-     *
-     * @param  string  $jawaban  'ya' atau 'tidak'
+     * Menyimpan jawaban per pertanyaan dan navigasi index.
      */
     public function answer(string $jawaban): void
     {
-        // Guard: validasi input
-        if (! in_array($jawaban, ['ya', 'tidak'], true)) return;
-        if (! $this->sessionId) return;
-        if (! $this->currentCriterion) return;
+        Log::channel('stack')->info('[WIZARD] answer() called', [
+            'jawaban'      => $jawaban,
+            'sessionId'    => $this->sessionId,
+            'currentIndex' => $this->currentIndex,
+            'criterionId'  => $this->currentCriterion?->id,
+        ]);
 
-        // Simpan jawaban ke database
-        // updateOrCreate → aman jika pengawas entah bagaimana klik dua kali
-        SessionAnswer::updateOrCreate(
-            [
-                'session_id'   => $this->sessionId,
-                'criterion_id' => $this->currentCriterion->id,
-            ],
-            [
+        if (!in_array($jawaban, ['ya', 'tidak'], true)) return;
+        if (!$this->sessionId || !$this->currentCriterion) return;
+
+        try {
+            // Menggunakan updateOrCreate untuk mendukung fitur 'kembali' (jika nanti ditambahkan)
+            SessionAnswer::updateOrCreate(
+                [
+                    'id_session'  => $this->sessionId,
+                    'id_criteria' => $this->currentCriterion->id,
+                ],
+                [
+                    'jawaban'     => $jawaban,
+                    'answered_at' => now(),
+                ]
+            );
+
+            Log::channel('stack')->info('[WIZARD] SessionAnswer saved', [
+                'id_criteria' => $this->currentCriterion->id,
                 'jawaban'     => $jawaban,
-                'answered_at' => now(),
-            ]
-        );
+            ]);
+        } catch (\Throwable $e) {
+            Log::channel('stack')->error('[WIZARD] answer() — SessionAnswer Exception!', [
+                'message' => $e->getMessage(),
+            ]);
+            return;
+        }
 
-        // Lanjut ke pertanyaan berikutnya
         $this->currentIndex++;
 
-        // Cek apakah semua pertanyaan sudah dijawab
         if ($this->currentIndex >= $this->totalQuestions) {
-            // Pindah ke loading screen
+            Log::channel('stack')->info('[WIZARD] All questions answered — switching to loading');
             $this->step = 'loading';
-            // Beritahu Alpine.js untuk mulai countdown lalu panggil runInference
             $this->dispatch('start-inference');
         } else {
-            // Trigger animasi slide untuk pertanyaan baru
             $this->dispatch('question-changed');
         }
     }
 
     /**
-     * Jalankan Inference Engine setelah animasi loading selesai.
-     *
-     * Dipanggil dari Alpine.js via: $wire.runInference()
-     * (setelah delay 2 detik untuk animasi loading)
+     * Menjalankan mesin inferensi untuk mendapatkan hasil rekomendasi grade.
      */
     public function runInference(): void
     {
-        $session = GradingSession::with('answers.criterion')
-            ->find($this->sessionId);
+        Log::channel('stack')->info('[WIZARD] runInference() called', [
+            'sessionId' => $this->sessionId,
+        ]);
 
-        if (! $session) return;
+        if (!$this->sessionId) return;
 
-        $engine       = new InferenceEngine();
-        $this->result = $engine->analyze($session);
-        $this->step   = 'result';
+        try {
+            // Load session beserta fakta-fakta jawabannya
+            $session = GradingSession::with('answers.criteria')->find($this->sessionId);
+
+            if (!$session) {
+                Log::channel('stack')->error('[WIZARD] runInference() — GradingSession not found!');
+                return;
+            }
+
+            // Eksekusi Mesin Inferensi
+            $this->result = (new InferenceEngine())->analyze($session);
+
+            Log::channel('stack')->info('[WIZARD] InferenceEngine result', [
+                'winner'     => $this->result['winner']['grade_name'] ?? 'null',
+                'persentase' => $this->result['winner']['persentase'] ?? 'null',
+            ]);
+
+            $this->step = 'result';
+        } catch (\Throwable $e) {
+            Log::channel('stack')->error('[WIZARD] runInference() — Exception!', [
+                'message' => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
+        }
     }
 
     /**
-     * Reset semua state — kembali ke halaman awal.
-     * Dipanggil saat pengawas klik "Grading Baru".
-     *
-     * Method ini diubah namanya menjadi restart() untuk menghindari
-     * tabrakan dengan method reset() bawaan Livewire Component.
+     * Mereset seluruh state untuk memulai grading baru.
      */
     public function restart(): void
     {
-        $this->step          = 'start';
+        Log::channel('stack')->info('[WIZARD] restart() called');
+
+        $this->step         = 'start';
         $this->currentIndex = 0;
         $this->sessionId    = null;
         $this->kodeProduk   = null;
         $this->result       = [];
 
-        unset($this->criteria); // invalidate computed cache
+        // Clear computed properties cache
+        unset($this->criteria, $this->availableGrades);
     }
-
-    // ── Render ────────────────────────────────────────────────────────────────
 
     public function render()
     {

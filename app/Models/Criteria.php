@@ -11,8 +11,6 @@ class Criteria extends Model
     protected $fillable = [
         'id_kategori_barang',
         'nama_kriteria',
-        'kode_kriteria',
-        'icon_emoji',
         'deskripsi',
         'urutan',
         'bobot',
@@ -61,7 +59,7 @@ class Criteria extends Model
      */
     public function gradeRules(): HasMany
     {
-        return $this->hasMany(GradeRule::class);
+        return $this->hasMany(GradeRule::class, 'id_criteria');
     }
 
     /**
@@ -69,6 +67,6 @@ class Criteria extends Model
      */
     public function sessionAnswers(): HasMany
     {
-        return $this->hasMany(SessionAnswer::class);
+        return $this->hasMany(SessionAnswer::class, 'id_criteria');
     }
 }

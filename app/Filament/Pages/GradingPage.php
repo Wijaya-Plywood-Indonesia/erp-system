@@ -17,15 +17,4 @@ class GradingPage extends Page
     protected static ?int $navigationSort = 1;
 
     protected string $view = 'filament.pages.grading-page';
-
-    public static function getNavigationBadge(): ?string
-    {
-        $count = GradingSession::inProgress()->count();
-        return $count > 0 ? (string) $count : null;
-    }
-
-    public static function getNavigationBadgeColor(): ?string
-    {
-        return 'warning';
-    }
 }

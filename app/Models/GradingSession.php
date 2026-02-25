@@ -11,7 +11,6 @@ class GradingSession extends Model
 {
     protected $fillable = [
         'id_kategori_barang',
-        'kode_produk',
         'user_id',
         'status',
         'hasil_grade_id',

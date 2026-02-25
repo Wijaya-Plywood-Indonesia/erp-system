@@ -14,8 +14,18 @@
                 </div>
             </div>
 
+            {{-- TOTAL KUBIKASI (TAMBAHAN BARU) --}}
+            <div style="margin-top: 1.5rem;">
+                <div class="text-3xl font-extrabold text-amber-600 dark:text-amber-500">
+                    {{ number_format($summary['totalKubikasi'] ?? 0, 4) }} m³
+                </div>
+                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Total Kubikasi (m³)
+                </div>
+            </div>
+
             {{-- TOTAL PEGAWAI --}}
-            <div>
+            <div style="margin-top: 1.5rem;">
                 <div class="text-2xl font-bold text-success-600 dark:text-success-500">
                     {{ number_format($summary['totalPegawai'] ?? 0) }}
                 </div>

@@ -17,9 +17,6 @@ return new class extends Migration
             // Kategori produk yang sedang dinilai
             $table->unsignedBigInteger('id_kategori_barang');
 
-            // Kode produk opsional (untuk identifikasi di lapangan)
-            $table->string('kode_produk', 100)->nullable();
-
             // Pengawas yang melakukan grading
             $table->foreignId('user_id')
                 ->constrained()
