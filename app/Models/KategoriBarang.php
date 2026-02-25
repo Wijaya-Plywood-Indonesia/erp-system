@@ -11,8 +11,13 @@ class KategoriBarang extends Model
         'nama_kategori',
     ];
 
-    public function grades ()
+    public function grades()
     {
-        return $this ->hasMany(Grade::class, 'id_kategori_barang');
+        return $this->hasMany(Grade::class, 'id_kategori_barang');
+    }
+
+    public function criteria()
+    {
+        return $this->hasMany(Criteria::class, 'id_kategori_barang');
     }
 }
