@@ -71,8 +71,8 @@ class ProduksiInflowService
             $batchInfo = $batch['info'];
             $batchInfo['tgl_buka_lahan'] = $tglBukaFix;
             $total_poin = number_format($dataMasuk->sum('poin'), 2, ',', '.');
-            $harga_v_ongkos = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj']) / $batch['grand_total_outflow_m3']);
-            $harga_v_ongkos_penyusutan = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj'] + $batch['grand_total_outflow_penyusutan']) / $batch['grand_total_outflow_m3']);
+            $harga_v_ongkos = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj']) / $batch['grand_total_outflow_m3'] ?? 1 );
+            $harga_v_ongkos_penyusutan = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj'] + $batch['grand_total_outflow_penyusutan']) / $batch['grand_total_outflow_m3'] ?? 1 );
 
 
             $laporanFinal[] = [
@@ -87,7 +87,7 @@ class ProduksiInflowService
                     'rendemen' => $dataMasuk->sum('kubikasi') > 0
                         ? number_format(($batch['grand_total_outflow_m3'] / $dataMasuk->sum('kubikasi')) * 100, 2) . '%'
                         : '0%',
-                    'harga_veneer' => (float) ($dataMasuk->sum('poin') / $batch['grand_total_outflow_m3']),
+                    'harga_veneer' => (float) ($dataMasuk->sum('poin') / $batch['grand_total_outflow_m3'] ?? 1 ),
                     'harga_v_ongkos' => $harga_v_ongkos,
                     'harga_vop' => $harga_v_ongkos_penyusutan
                 ]
