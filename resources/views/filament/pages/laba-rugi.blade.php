@@ -3,44 +3,28 @@
     {{-- ================= FILTER PERIODE ================= --}}
     <div class="flex flex-wrap items-end gap-4 mb-6">
 
-        <div>
-            <label class="text-sm">Bulan Awal</label>
-            <select wire:model="bulanAwal" class="border rounded p-2">
-                @foreach(range(1,12) as $b)
-                    <option value="{{ $b }}">
-                        {{ \Carbon\Carbon::create()->month($b)->translatedFormat('F') }}
-                    </option>
-                @endforeach
-            </select>
-        </div>
+        <div class="flex flex-wrap items-end gap-4 mb-6">
 
-        <div>
-            <label class="text-sm">Bulan Akhir</label>
-            <select wire:model="bulanAkhir" class="border rounded p-2">
-                @foreach(range(1,12) as $b)
-                    <option value="{{ $b }}">
-                        {{ \Carbon\Carbon::create()->month($b)->translatedFormat('F') }}
-                    </option>
-                @endforeach
-            </select>
-        </div>
+            <div>
+                <label class="text-sm">Mulai Bulan</label>
+                <input type="month" wire:model.defer="bulanMulai" class="border rounded p-2">
+            </div>
 
-        <div>
-            <label class="text-sm">Tahun</label>
-            <input type="number" wire:model="tahun" class="border rounded p-2 w-24">
-        </div>
+            <div>
+                <label class="text-sm">Sampai Bulan</label>
+                <input type="month" wire:model.defer="bulanSelesai" class="border rounded p-2">
+            </div>
 
-        <button wire:click="terapkanPeriode"
-            class="bg-blue-600 text-white px-4 py-2 rounded">
-            Terapkan
-        </button>
+            <button wire:click="terapkanPeriode" class="bg-blue-600 text-white px-4 py-2 rounded">
+                Terapkan
+            </button>
 
-        @if($modeMultiPeriode)
-            <button wire:click="kembaliDefault"
-                class="bg-gray-500 text-white px-4 py-2 rounded">
+            @if($modeMultiPeriode)
+            <button wire:click="kembaliDefault" class="bg-gray-500 text-white px-4 py-2 rounded">
                 Default
             </button>
-        @endif
+            @endif
+        </div>
     </div>
     @php
     function rupiah($value, $isKredit = false) {
@@ -202,9 +186,13 @@
                 <th class="text-left px-6 py-3 w-32 whitespace-nowrap">Kode</th>
                 <th class="text-left px-6 py-3 min-w-[300px] whitespace-nowrap">Nama Akun</th>
 
-                @foreach($periodeBulanan as $bulan)
+                @foreach($periodeBulanan as $periode)
                 <th class="text-right px-8 py-3 whitespace-nowrap border-l">
-                    {{ \Carbon\Carbon::create()->month($bulan)->translatedFormat('F') }}
+                    {{ \Carbon\Carbon::create(
+                    $periode['tahun'],
+                    $periode['bulan'],
+                    1
+                    )->translatedFormat('F Y') }}
                 </th>
                 @endforeach
             </tr>
@@ -223,11 +211,14 @@
             @foreach ($akunPendapatan as $item)
             <tr class="border-b">
                 <td class="py-1">{{ $item['kode'] }}</td>
-                <td px-6 py-2 min-w-[300px] >{{ $item['nama'] }}</td>
+                <td px-6 py-2 min-w-[300px]>{{ $item['nama'] }}</td>
 
-                @foreach($periodeBulanan as $bulan)
+                @foreach($periodeBulanan as $periode)
                 <td class="text-right px-8 py-2 min-w-[140px] whitespace-nowrap border-l">
-                    {{ number_format($dataBulanan[$item['kode']][$bulan] ?? 0, 0, ',', '.') }}
+                    {{ number_format(
+                    $dataBulanan[$item['kode']][$periode['bulan']] ?? 0,
+                    0, ',', '.'
+                    ) }}
                 </td>
                 @endforeach
             </tr>
@@ -246,24 +237,30 @@
                 <td class="py-1">{{ $item['kode'] }}</td>
                 <td>{{ $item['nama'] }}</td>
 
-                @foreach($periodeBulanan as $bulan)
+                @foreach($periodeBulanan as $periode)
                 <td class="text-right px-8 py-2 whitespace-nowrap border-l">
-                    {{ number_format($dataBulanan[$item['kode']][$bulan] ?? 0, 0, ',', '.') }}
+                    {{ number_format(
+                    $dataBulanan[$item['kode']][$periode['bulan']] ?? 0,
+                    0, ',', '.'
+                    ) }}
                 </td>
                 @endforeach
             </tr>
             @endforeach
             <tr class="bg-gray-100 font-bold">
-    <td colspan="2" class="pt-8">
-        LABA / RUGI BERSIH
-    </td>
+                <td colspan="2" class="pt-8">
+                    LABA / RUGI BERSIH
+                </td>
 
-    @foreach($periodeBulanan as $bulan)
-        <td class="text-right px-8 py-3 border-l">
-            {{ number_format($labaBersihBulanan[$bulan] ?? 0, 0, ',', '.') }}
-        </td>
-    @endforeach
-</tr>
+                @foreach($periodeBulanan as $periode)
+                <td class="text-right px-8 py-3 border-l">
+                    {{ number_format(
+                    $labaBersihBulanan[$periode['bulan']] ?? 0,
+                    0, ',', '.'
+                    ) }}
+                </td>
+                @endforeach
+            </tr>
 
         </tbody>
 

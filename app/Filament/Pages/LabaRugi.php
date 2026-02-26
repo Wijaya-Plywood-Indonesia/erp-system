@@ -19,9 +19,8 @@ class LabaRugi extends Page
     public $useCustomFilter = false;
     public $tanggalAwal = null;
     public $tanggalAkhir = null;
-    public $bulanAwal;
-    public $bulanAkhir;
-    public $tahun;
+    public $bulanMulai;
+public $bulanSelesai;
     public $periodeBulanan = [];
     public $modeMultiPeriode = false;
     public $totalPendapatanBulanan = [];
@@ -49,14 +48,15 @@ public $labaSebelumPajakBulanan = [];
     public $akunMapping = [];
 
     public function mount()
-    {
-        $this->tahun = now()->year;
-        $this->bulanAwal = now()->month;
-        $this->bulanAkhir = now()->month;
+{
+    $today = now();
 
-        $this->loadDaftarAkunFromGroup();
-        $this->hitung();
-    }
+    $this->bulanMulai = $today->copy()->startOfMonth()->format('Y-m');
+    $this->bulanSelesai = $today->format('Y-m');
+
+    $this->loadDaftarAkunFromGroup();
+    $this->hitung();
+}
 
     private function loadDaftarAkunFromGroup()
     {
@@ -138,28 +138,19 @@ public $labaSebelumPajakBulanan = [];
     }
 
     private function baseQuery()
-    {
-        $query = JurnalUmum::query();
+{
+    $query = JurnalUmum::query();
 
-        if ($this->bulanAwal && $this->bulanAkhir && $this->tahun) {
+    if ($this->bulanMulai && $this->bulanSelesai) {
 
-            $start = \Carbon\Carbon::create(
-                $this->tahun,
-                $this->bulanAwal,
-                1
-            )->startOfMonth();
+        $start = \Carbon\Carbon::parse($this->bulanMulai)->startOfMonth();
+        $end   = \Carbon\Carbon::parse($this->bulanSelesai)->endOfMonth();
 
-            $end = \Carbon\Carbon::create(
-                $this->tahun,
-                $this->bulanAkhir,
-                1
-            )->endOfMonth();
-
-            $query->whereBetween('tgl', [$start, $end]);
-        }
-
-        return $query;
+        $query->whereBetween('tgl', [$start, $end]);
     }
+
+    return $query;
+}
 
     private function hitung()
     {
@@ -309,17 +300,26 @@ public $labaSebelumPajakBulanan = [];
     }
 
     private function generatePeriode()
-    {
-        $this->periodeBulanan = [];
+{
+    $this->periodeBulanan = [];
 
-        if (!$this->bulanAwal || !$this->bulanAkhir) {
-            return;
-        }
-
-        for ($i = $this->bulanAwal; $i <= $this->bulanAkhir; $i++) {
-            $this->periodeBulanan[] = $i;
-        }
+    if (!$this->bulanMulai || !$this->bulanSelesai) {
+        return;
     }
+
+    $start = \Carbon\Carbon::parse($this->bulanMulai)->startOfMonth();
+    $end   = \Carbon\Carbon::parse($this->bulanSelesai)->startOfMonth();
+
+    while ($start <= $end) {
+
+        $this->periodeBulanan[] = [
+            'bulan' => $start->month,
+            'tahun' => $start->year,
+        ];
+
+        $start->addMonth();
+    }
+}
 
 private function hitungMultiBulan()
 {
@@ -332,12 +332,15 @@ private function hitungMultiBulan()
     $this->labaSebelumPajakBulanan = [];
     $this->labaBersihBulanan = [];
 
-    foreach ($this->periodeBulanan as $bulan) {
+    foreach ($this->periodeBulanan as $periode) {
 
-        $start = \Carbon\Carbon::create($this->tahun, $bulan, 1)->startOfMonth();
-        $end   = \Carbon\Carbon::create($this->tahun, $bulan, 1)->endOfMonth();
+    $bulan = $periode['bulan'];
+    $tahun = $periode['tahun'];
 
-        $query = JurnalUmum::whereBetween('tgl', [$start, $end])->get();
+    $start = \Carbon\Carbon::create($tahun, $bulan, 1)->startOfMonth();
+    $end   = \Carbon\Carbon::create($tahun, $bulan, 1)->endOfMonth();
+
+    $query = JurnalUmum::whereBetween('tgl', [$start, $end])->get();
 
         foreach ($query as $row) {
 
