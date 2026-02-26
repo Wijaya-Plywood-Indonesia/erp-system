@@ -224,6 +224,27 @@
             </tr>
             @endforeach
 
+            {{-- ================= HPP ================= --}}
+            <tr>
+                <td colspan="{{ 2 + count($periodeBulanan) }}" class="font-semibold pt-6 pb-2 border-b">
+                    Harga Pokok Penjualan
+                </td>
+            </tr>
+
+            <tr class="border-b">
+                <td>HPP</td>
+                <td>Harga Pokok Penjualan</td>
+
+                @foreach($periodeBulanan as $periode)
+                <td class="text-right px-8 py-2 border-l">
+                    {{ number_format(
+                    $hppBulanan[$periode['bulan']] ?? 0,
+                    0, ',', '.'
+                    ) }}
+                </td>
+                @endforeach
+            </tr>
+
 
             {{-- ================= BEBAN ================= --}}
             <tr>

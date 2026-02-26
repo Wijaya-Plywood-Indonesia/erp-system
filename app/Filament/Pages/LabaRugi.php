@@ -20,17 +20,17 @@ class LabaRugi extends Page
     public $tanggalAwal = null;
     public $tanggalAkhir = null;
     public $bulanMulai;
-public $bulanSelesai;
+    public $bulanSelesai;
     public $periodeBulanan = [];
     public $modeMultiPeriode = false;
     public $totalPendapatanBulanan = [];
-public $totalBiayaBulanan = [];
-public $labaBersihBulanan = [];
+    public $totalBiayaBulanan = [];
+    public $labaBersihBulanan = [];
     public $dataBulanan = [];
     public $hppBulanan = [];
-public $pajakBulanan = [];
-public $labaKotorBulanan = [];
-public $labaSebelumPajakBulanan = [];
+    public $pajakBulanan = [];
+    public $labaKotorBulanan = [];
+    public $labaSebelumPajakBulanan = [];
     // ================= DATA =================
     public $totalPendapatan = 0;
     public $hpp = 0;
@@ -48,15 +48,15 @@ public $labaSebelumPajakBulanan = [];
     public $akunMapping = [];
 
     public function mount()
-{
-    $today = now();
+    {
+        $today = now();
 
-    $this->bulanMulai = $today->copy()->startOfMonth()->format('Y-m');
-    $this->bulanSelesai = $today->format('Y-m');
+        $this->bulanMulai = $today->copy()->startOfMonth()->format('Y-m');
+        $this->bulanSelesai = $today->format('Y-m');
 
-    $this->loadDaftarAkunFromGroup();
-    $this->hitung();
-}
+        $this->loadDaftarAkunFromGroup();
+        $this->hitung();
+    }
 
     private function loadDaftarAkunFromGroup()
     {
@@ -138,19 +138,19 @@ public $labaSebelumPajakBulanan = [];
     }
 
     private function baseQuery()
-{
-    $query = JurnalUmum::query();
+    {
+        $query = JurnalUmum::query();
 
-    if ($this->bulanMulai && $this->bulanSelesai) {
+        if ($this->bulanMulai && $this->bulanSelesai) {
 
-        $start = \Carbon\Carbon::parse($this->bulanMulai)->startOfMonth();
-        $end   = \Carbon\Carbon::parse($this->bulanSelesai)->endOfMonth();
+            $start = \Carbon\Carbon::parse($this->bulanMulai)->startOfMonth();
+            $end   = \Carbon\Carbon::parse($this->bulanSelesai)->endOfMonth();
 
-        $query->whereBetween('tgl', [$start, $end]);
+            $query->whereBetween('tgl', [$start, $end]);
+        }
+
+        return $query;
     }
-
-    return $query;
-}
 
     private function hitung()
     {
@@ -300,114 +300,131 @@ public $labaSebelumPajakBulanan = [];
     }
 
     private function generatePeriode()
-{
-    $this->periodeBulanan = [];
+    {
+        $this->periodeBulanan = [];
 
-    if (!$this->bulanMulai || !$this->bulanSelesai) {
-        return;
-    }
-
-    $start = \Carbon\Carbon::parse($this->bulanMulai)->startOfMonth();
-    $end   = \Carbon\Carbon::parse($this->bulanSelesai)->startOfMonth();
-
-    while ($start <= $end) {
-
-        $this->periodeBulanan[] = [
-            'bulan' => $start->month,
-            'tahun' => $start->year,
-        ];
-
-        $start->addMonth();
-    }
-}
-
-private function hitungMultiBulan()
-{
-    $this->dataBulanan = [];
-    $this->totalPendapatanBulanan = [];
-    $this->totalBiayaBulanan = [];
-    $this->hppBulanan = [];
-    $this->pajakBulanan = [];
-    $this->labaKotorBulanan = [];
-    $this->labaSebelumPajakBulanan = [];
-    $this->labaBersihBulanan = [];
-
-    foreach ($this->periodeBulanan as $periode) {
-
-    $bulan = $periode['bulan'];
-    $tahun = $periode['tahun'];
-
-    $start = \Carbon\Carbon::create($tahun, $bulan, 1)->startOfMonth();
-    $end   = \Carbon\Carbon::create($tahun, $bulan, 1)->endOfMonth();
-
-    $query = JurnalUmum::whereBetween('tgl', [$start, $end])->get();
-
-        foreach ($query as $row) {
-
-            $hit   = strtolower(trim((string) ($row->hit_kbk ?? '')));
-            $harga = (float) ($row->harga ?? 0);
-            $byk   = (float) ($row->banyak ?? 0);
-            $m3    = (float) ($row->m3 ?? 0);
-
-            if ($hit === 'b') {
-                $nominal = $byk * $harga;
-            } elseif ($hit === 'm') {
-                $nominal = $m3 * $harga;
-            } else {
-                $nominal = $harga;
-            }
-
-            $signed = strtoupper($row->map) === 'D'
-                ? $nominal
-                : -$nominal;
-
-            $akunPuluhan = floor(((int) explode('.', $row->no_akun)[0]) / 10) * 10;
-            $akunRatusan = floor($akunPuluhan / 100) * 100;
-
-            // simpan per akun
-            $this->dataBulanan[$akunRatusan][$bulan] =
-                ($this->dataBulanan[$akunRatusan][$bulan] ?? 0) + $signed;
-
-            // ================= PENDAPATAN =================
-            if ($akunRatusan >= 4000 && $akunRatusan < 5000) {
-                $this->totalPendapatanBulanan[$bulan] =
-                    ($this->totalPendapatanBulanan[$bulan] ?? 0) + $signed;
-            }
-
-            // ================= BIAYA =================
-            if ($akunRatusan >= 5000 && $akunRatusan < 6000 && $akunRatusan != 5900) {
-                $this->totalBiayaBulanan[$bulan] =
-                    ($this->totalBiayaBulanan[$bulan] ?? 0) + $signed;
-            }
-
-            // ================= PAJAK =================
-            if ($akunRatusan == 5900) {
-                $this->pajakBulanan[$bulan] =
-                    ($this->pajakBulanan[$bulan] ?? 0) + $signed;
-            }
-
-            // ================= HPP =================
-            if (str_contains(strtolower($row->nama_akun ?? ''), 'hpp')) {
-                $this->hppBulanan[$bulan] =
-                    ($this->hppBulanan[$bulan] ?? 0) + $signed;
-            }
+        if (!$this->bulanMulai || !$this->bulanSelesai) {
+            return;
         }
 
-        // ======= RUMUS SAMA PERSIS DENGAN DEFAULT =======
+        $start = \Carbon\Carbon::parse($this->bulanMulai)->startOfMonth();
+        $end   = \Carbon\Carbon::parse($this->bulanSelesai)->startOfMonth();
 
-        $this->labaKotorBulanan[$bulan] =
-            ($this->totalPendapatanBulanan[$bulan] ?? 0)
-            + ($this->hppBulanan[$bulan] ?? 0);
+        while ($start <= $end) {
 
-        $this->labaSebelumPajakBulanan[$bulan] =
-            $this->labaKotorBulanan[$bulan]
-            + ($this->totalBiayaBulanan[$bulan] ?? 0);
+            $this->periodeBulanan[] = [
+                'bulan' => $start->month,
+                'tahun' => $start->year,
+            ];
 
-        $this->labaBersihBulanan[$bulan] =
-            $this->labaSebelumPajakBulanan[$bulan]
-            + ($this->pajakBulanan[$bulan] ?? 0);
+            $start->addMonth();
+        }
     }
-}
+
+    private function hitungMultiBulan()
+    {
+        $this->dataBulanan = [];
+        $this->totalPendapatanBulanan = [];
+        $this->totalBiayaBulanan = [];
+        $this->hppBulanan = [];
+        $this->pajakBulanan = [];
+        $this->labaKotorBulanan = [];
+        $this->labaSebelumPajakBulanan = [];
+        $this->labaBersihBulanan = [];
+
+        // 🔥 TAMBAHKAN DI SINI
+        $kodePendapatan = collect($this->akunPendapatan)->pluck('kode')->toArray();
+        $kodeBiaya      = collect($this->akunBiaya)->pluck('kode')->toArray();
+
+        foreach ($this->periodeBulanan as $periode) {
+
+            $bulan = $periode['bulan'];
+            $tahun = $periode['tahun'];
+
+            $start = \Carbon\Carbon::create($tahun, $bulan, 1)->startOfMonth();
+            $end   = \Carbon\Carbon::create($tahun, $bulan, 1)->endOfMonth();
+
+            $query = JurnalUmum::whereBetween('tgl', [$start, $end])->get();
+
+            foreach ($query as $row) {
+
+                $hit   = strtolower(trim((string) ($row->hit_kbk ?? '')));
+                $harga = (float) ($row->harga ?? 0);
+                $byk   = (float) ($row->banyak ?? 0);
+                $m3    = (float) ($row->m3 ?? 0);
+
+                if ($hit === 'b') {
+                    $nominal = $byk * $harga;
+                } elseif ($hit === 'm') {
+                    $nominal = $m3 * $harga;
+                } else {
+                    $nominal = $harga;
+                }
+
+                $signed = strtoupper($row->map) === 'D'
+                    ? $nominal
+                    : -$nominal;
+
+                $akunPuluhan = floor(((int) explode('.', $row->no_akun)[0]) / 10) * 10;
+                $akunRatusan = floor($akunPuluhan / 100) * 100;
+                // 🔥 FILTER CUSTOM (SAMA SEPERTI MODE DEFAULT)
+                // 🔥 FILTER CUSTOM (TAPI JANGAN BLOCK HPP & PAJAK)
+                if ($this->useCustomFilter && !empty($this->selectedAkun)) {
+
+                    $isHpp = str_contains(strtolower($row->nama_akun ?? ''), 'hpp');
+                    $isPajak = $akunRatusan == 5900;
+
+                    if (!$isHpp && !$isPajak) {
+                        if (!in_array($akunRatusan, $this->selectedAkun)) {
+                            continue;
+                        }
+                    }
+                }
+
+                // simpan per akun
+                $this->dataBulanan[$akunRatusan][$bulan] =
+                    ($this->dataBulanan[$akunRatusan][$bulan] ?? 0) + $signed;
+
+                // ================= PENDAPATAN =================
+                if (in_array($akunRatusan, $kodePendapatan)) {
+                    $this->totalPendapatanBulanan[$bulan] =
+                        ($this->totalPendapatanBulanan[$bulan] ?? 0) + $signed;
+                }
+
+                // ================= BIAYA =================
+                if (in_array($akunRatusan, $kodeBiaya)) {
+                    $this->totalBiayaBulanan[$bulan] =
+                        ($this->totalBiayaBulanan[$bulan] ?? 0) + $signed;
+                }
+
+                // ================= PAJAK =================
+                if ($akunRatusan == 5900) {
+                    $this->pajakBulanan[$bulan] =
+                        ($this->pajakBulanan[$bulan] ?? 0) + $signed;
+                }
+
+                // ================= HPP =================
+                if (str_contains(strtolower($row->nama_akun ?? ''), 'hpp')) {
+                    $this->hppBulanan[$bulan] =
+                        ($this->hppBulanan[$bulan] ?? 0) + $signed;
+                }
+            }
+
+            // ======= RUMUS SAMA PERSIS DENGAN DEFAULT =======
+
+            $this->labaKotorBulanan[$bulan] =
+                ($this->totalPendapatanBulanan[$bulan] ?? 0)
+                + ($this->hppBulanan[$bulan] ?? 0);
+
+            $this->labaSebelumPajakBulanan[$bulan] =
+                $this->labaKotorBulanan[$bulan]
+                + ($this->totalBiayaBulanan[$bulan] ?? 0);
+
+            $this->labaBersihBulanan[$bulan] =
+                $this->labaSebelumPajakBulanan[$bulan]
+                + ($this->pajakBulanan[$bulan] ?? 0);
+        }
+    }
 
     private function sumFromJurnalUmum($akunRatusan)
     {
