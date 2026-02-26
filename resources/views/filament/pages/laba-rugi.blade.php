@@ -15,12 +15,12 @@
                 <input type="month" wire:model.defer="bulanSelesai" class="border rounded p-2">
             </div>
 
-            <button wire:click="terapkanPeriode" class="bg-blue-600 text-white px-4 py-2 rounded">
+            <button wire:click="terapkanPeriode" class="fi-color fi-color-primary fi-bg-color-400 hover:fi-bg-color-300 dark:fi-bg-color-600 dark:hover:fi-bg-color-500 fi-text-color-900 hover:fi-text-color-800 dark:fi-text-color-950 dark:hover:fi-text-color-950 fi-btn fi-size-md  rounded">
                 Terapkan
             </button>
 
             @if($modeMultiPeriode)
-            <button wire:click="kembaliDefault" class="bg-gray-500 text-white px-4 py-2 rounded">
+            <button wire:click="kembaliDefault" class="bg-gray-500 text-white fi-btn fi-size-md rounded">
                 Default
             </button>
             @endif
@@ -120,10 +120,17 @@
 
     {{-- ================= LABA KOTOR ================= --}}
     <tr class="bg-gray-50 dark:bg-gray-800">
-        <td colspan="2" class="font-bold py-2">LABA KOTOR</td>
-        <td></td>
-        <td class="text-right font-bold">Rp {{ rupiah($pendapatanKotor) }}</td>
-    </tr>
+    <td colspan="2" class="font-bold py-2">
+        LABA KOTOR
+        <div class="text-xs font-normal italic text-gray-400">
+            (Total Pendapatan + HPP)
+        </div>
+    </td>
+    <td></td>
+    <td class="text-right font-bold">
+        Rp {{ rupiah($pendapatanKotor) }}
+    </td>
+</tr>
 
     {{-- ================= BEBAN OPERASIONAL ================= --}}
     <tr>
@@ -146,11 +153,18 @@
     </tr>
 
     {{-- ================= LABA SEBELUM PAJAK ================= --}}
-    <tr>
-        <td colspan="2" class="font-semibold pt-6">Laba Sebelum Pajak</td>
-        <td></td>
-        <td class="text-right border-t border-black font-semibold pt-6">Rp {{ rupiah($pendapatanSebelumPajak) }}</td>
-    </tr>
+    <tr class="bg-gray-50 dark:bg-gray-800">
+    <td colspan="2" class="font-semibold pt-6">
+        Laba Sebelum Pajak
+        <div class="text-xs font-normal italic text-gray-400">
+            (Laba Kotor + Total Beban Operasional)
+        </div>
+    </td>
+    <td></td>
+    <td class="text-right border-t border-black font-semibold pt-6">
+        Rp {{ rupiah($pendapatanSebelumPajak) }}
+    </td>
+</tr>
 
     {{-- ================= PAJAK ================= --}}
     <tr>
@@ -161,17 +175,20 @@
     </tr>
 
     {{-- ================= LABA / RUGI BERSIH ================= --}}
-    <tr>
-        <td colspan="2" class="font-bold text-lg pt-10">
-            {{ $labaBersih >= 0 ? 'LABA BERSIH' : 'RUGI' }}
-        </td>
-        <td></td>
-        <td class="text-right font-bold text-lg pt-10">
-            <span class="border-b-4 border-double border-black dark:border-white">
-                Rp {{ rupiah($labaBersih) }}
-            </span>
-        </td>
-    </tr>
+    <tr class="bg-gray-50 dark:bg-gray-800">
+    <td colspan="2" class="font-bold text-lg pt-10">
+        {{ $labaBersih > 0 ? 'LABA BERSIH' : 'RUGI' }}
+        <div class="text-xs font-normal italic text-gray-400">
+            (Laba Sebelum Pajak + Pajak)
+        </div>
+    </td>
+    <td></td>
+    <td class="text-right font-bold text-lg pt-10">
+        <span class="border-b-4 border-double border-black dark:border-white">
+            Rp {{ rupiah($labaBersih) }}
+        </span>
+    </td>
+</tr>
 </table>
 @endif
 @if($modeMultiPeriode)
