@@ -1,4 +1,4 @@
-<div class="max-w-4xl mx-auto bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 shadow-xl rounded-2xl p-10">
+<div class="max-w-full mx-auto bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 shadow-xl rounded-2xl p-10">
     <h2 class="text-2xl font-bold text-center mb-10 text-uppercase"> LAPORAN LABA RUGI </h2>
     {{-- ================= FILTER PERIODE ================= --}}
     <div class="flex flex-wrap items-end gap-4 mb-6">
@@ -268,8 +268,8 @@
                 @endforeach
             </tr>
             @endforeach
-            <tr class="bg-gray-100 font-bold">
-                <td colspan="2" class="pt-8">
+            <tr class="border-b bg-gray-100 dark:bg-gray-800">
+                <td colspan="2" class="pt-8 px-6 py-3">
                     LABA / RUGI BERSIH
                 </td>
 

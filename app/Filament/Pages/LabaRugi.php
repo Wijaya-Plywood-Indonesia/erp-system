@@ -7,11 +7,13 @@ use App\Models\JurnalUmum;
 use App\Models\AnakAkun;
 use BackedEnum;
 use UnitEnum;
+use Filament\Support\Enums\Width;
 
 class LabaRugi extends Page
 {
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
+    protected Width|string|null $maxContentWidth = Width::Full;
     protected static ?string $title = 'Laba Rugi';
     protected string $view = 'filament.pages.laba-rugi';
 
