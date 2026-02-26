@@ -77,7 +77,7 @@ class DetailTurusanKayu extends Model
 
         // formula: diameter * jumlah * 0.785 / 1_000_000
         // kembalikan float dengan presisi cukup tinggi
-        $kubikasi = ($panjang * $diameter * $diameter * $jumlah * 0.785) / 1000000;
+        $kubikasi = ($panjang * $diameter * $diameter * $jumlah * 0.785) / 1_000_000;
 
         return $kubikasi; // mis. 0.123456789
     }

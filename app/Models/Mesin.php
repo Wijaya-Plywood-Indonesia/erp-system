@@ -11,6 +11,7 @@ class Mesin extends Model
         'kategori_mesin_id',
         'nama_mesin',
         'ongkos_mesin',
+        'penyusutan',
         'no_akun',
         'detail_mesin',
     ];

@@ -24,6 +24,9 @@ class MesinForm
                 TextInput::make('ongkos_mesin')
                     ->required()
                     ->numeric(),
+                TextInput::make('penyusutan')
+                    ->required()
+                    ->numeric(),
                 TextInput::make('no_akun')
                     ->required(),
                 Textarea::make('detail_mesin')
