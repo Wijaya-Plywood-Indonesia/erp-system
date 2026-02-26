@@ -232,10 +232,7 @@
 
                 @foreach($periodeBulanan as $periode)
                 <td class="text-right px-8 py-2 min-w-[140px] whitespace-nowrap border-l">
-                    {{ number_format(
-                    $dataBulanan[$item['kode']][$periode['bulan']] ?? 0,
-                    0, ',', '.'
-                    ) }}
+                    {{ rupiah($dataBulanan[$item['kode']][$periode['bulan']] ?? 0) }}
                 </td>
                 @endforeach
             </tr>
@@ -254,10 +251,7 @@
 
                 @foreach($periodeBulanan as $periode)
                 <td class="text-right px-8 py-2 border-l">
-                    {{ number_format(
-                    $hppBulanan[$periode['bulan']] ?? 0,
-                    0, ',', '.'
-                    ) }}
+                    {{ rupiah($dataBulanan[$item['kode']][$periode['bulan']] ?? 0) }}
                 </td>
                 @endforeach
             </tr>
@@ -277,10 +271,7 @@
 
                 @foreach($periodeBulanan as $periode)
                 <td class="text-right px-8 py-2 whitespace-nowrap border-l">
-                    {{ number_format(
-                    $dataBulanan[$item['kode']][$periode['bulan']] ?? 0,
-                    0, ',', '.'
-                    ) }}
+                    {{ rupiah($dataBulanan[$item['kode']][$periode['bulan']] ?? 0) }}
                 </td>
                 @endforeach
             </tr>
@@ -292,10 +283,7 @@
 
                 @foreach($periodeBulanan as $periode)
                 <td class="text-right px-8 py-3 border-l">
-                    {{ number_format(
-                    $labaBersihBulanan[$periode['bulan']] ?? 0,
-                    0, ',', '.'
-                    ) }}
+                    {{ rupiah($labaBersihBulanan[$periode['bulan']] ?? 0) }}
                 </td>
                 @endforeach
             </tr>
