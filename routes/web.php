@@ -1,7 +1,10 @@
 <?php
 
+use App\Services\ProduksiInflowService;
+use App\Services\ProduksiOutflowService;
 use App\Http\Controllers\KontrakController;
 use App\Models\KontrakKerja;
+// use App\Models\ProduksiRotary;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\NotaKayuController;
 use App\Http\Controllers\NotaBKController;
@@ -53,4 +56,3 @@ Route::get('/nota-kayu/{record}/turus', [NotaKayuTurusController::class, 'show']
 Route::get('/', function () {
     return view('welcome');
 });
-
