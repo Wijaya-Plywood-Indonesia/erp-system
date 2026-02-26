@@ -31,7 +31,7 @@ class CriteriaForm
                         ->columnSpan(2),
 
                     TextInput::make('nama_kriteria')
-                        ->label('Pertanyaan')
+                        ->label('Kriteria')
                         ->placeholder('Contoh: Pecah Terbuka')
                         ->required()
                         ->columnSpan(2),
@@ -52,8 +52,14 @@ class CriteriaForm
                         ->numeric()
                         ->step(0.1)
                         ->default(1.0)
+                        ->minValue(0.1)
+                        ->maxValue(1.0) // Batas Tertinggi
                         ->required()
-                        ->helperText('Nilai pengali untuk perhitungan skor akhir.'),
+                        ->validationMessages([
+                            'max' => 'Nilai bobot tidak boleh lebih dari 1.0 (100% Penalti).',
+                            'min' => 'Nilai bobot minimal adalah 0.1.',
+                        ])
+                        ->helperText('Benchmark: 0.1-0.3 (Ringan), 0.4-0.7 (Sedang), 0.8-1.0 (Fatal).'),
 
                     TextInput::make('urutan')
                         ->label('Urutan Tampil')

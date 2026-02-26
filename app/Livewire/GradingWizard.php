@@ -9,6 +9,7 @@ use App\Models\GradingSession;
 use App\Models\KategoriBarang;
 use App\Models\SessionAnswer;
 use App\Services\InferenceEngine;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
@@ -16,7 +17,6 @@ use Livewire\Component;
 
 class GradingWizard extends Component
 {
-    // --- State Properties ---
     public string  $step             = 'start';
     public int     $currentIndex     = 0;
     public int     $idKategoriBarang = 0;
@@ -25,26 +25,19 @@ class GradingWizard extends Component
     public array   $result           = [];
 
     /**
-     * Inisialisasi komponen saat pertama kali dimuat.
+     * Grade yang gugur karena cacat fatal (not_allowed + YA).
+     * Gugur = tidak bisa jadi winner.
+     * Gugur ≠ dihapus dari perhitungan — persentase tetap dihitung.
      */
+    public array $eliminatedGradeIds = [];
+
     public function mount(): void
     {
         $first = KategoriBarang::first();
-
-        Log::channel('stack')->info('[WIZARD] mount()', [
-            'user_id'     => Auth::id(),
-            'kategori_id' => $first?->id,
-            'kategori'    => $first?->nama_kategori,
-        ]);
-
         if ($first) {
             $this->idKategoriBarang = $first->id;
-        } else {
-            Log::channel('stack')->warning('[WIZARD] mount() — KategoriBarang::first() null! Tabel kategori_barang kosong?');
         }
     }
-
-    // --- Computed Properties (Caching logic for performance) ---
 
     #[Computed]
     public function kategoriList()
@@ -55,27 +48,12 @@ class GradingWizard extends Component
     #[Computed]
     public function criteria()
     {
-        if (!$this->idKategoriBarang) {
-            Log::channel('stack')->warning('[WIZARD] criteria() — idKategoriBarang = 0, return collect kosong');
-            return collect();
-        }
+        if (! $this->idKategoriBarang) return collect();
 
-        $result = Criteria::where('id_kategori_barang', $this->idKategoriBarang)
+        return Criteria::where('id_kategori_barang', $this->idKategoriBarang)
             ->where('is_active', true)
             ->orderBy('urutan', 'asc')
             ->get();
-
-        Log::channel('stack')->info('[WIZARD] criteria() loaded', [
-            'id_kategori_barang' => $this->idKategoriBarang,
-            'count'              => $result->count(),
-            'names'              => $result->pluck('nama_kriteria')->toArray(),
-        ]);
-
-        if ($result->isEmpty()) {
-            Log::channel('stack')->warning('[WIZARD] criteria() — KOSONG! Kemungkinan: Tabel belum diisi atau is_active semua false.');
-        }
-
-        return $result;
     }
 
     #[Computed]
@@ -87,56 +65,24 @@ class GradingWizard extends Component
     #[Computed]
     public function currentCriterion(): ?Criteria
     {
-        $criterion = $this->criteria->get($this->currentIndex);
-
-        if (!$criterion) {
-            Log::channel('stack')->warning('[WIZARD] currentCriterion() — NULL!', [
-                'currentIndex'   => $this->currentIndex,
-                'totalQuestions' => $this->totalQuestions,
-            ]);
-        }
-
-        return $criterion;
+        // Semua pertanyaan diajukan — tidak ada yang dilewati karena eliminasi
+        return $this->criteria->get($this->currentIndex);
     }
 
     #[Computed]
     public function availableGrades()
     {
-        if (!$this->idKategoriBarang) return collect();
-
-        $grades = Grade::where('id_kategori_barang', $this->idKategoriBarang)->get();
-
-        Log::channel('stack')->info('[WIZARD] availableGrades()', [
-            'id_kategori_barang' => $this->idKategoriBarang,
-            'count'              => $grades->count(),
-            'grades'             => $grades->pluck('nama_grade')->toArray(),
-        ]);
-
-        return $grades;
+        if (! $this->idKategoriBarang) return collect();
+        return Grade::where('id_kategori_barang', $this->idKategoriBarang)->get();
     }
 
     #[Computed]
     public function isReady(): bool
     {
-        if ($this->criteria->isEmpty()) {
-            Log::channel('stack')->warning('[WIZARD] isReady = false — criteria kosong');
-            return false;
-        }
-        if ($this->availableGrades->isEmpty()) {
-            Log::channel('stack')->warning('[WIZARD] isReady = false — availableGrades kosong');
-            return false;
-        }
-
+        if ($this->criteria->isEmpty()) return false;
+        if ($this->availableGrades->isEmpty()) return false;
         $gradeIds = $this->availableGrades->pluck('id');
-        $hasRules = GradeRule::whereIn('id_grade', $gradeIds)->exists();
-
-        Log::channel('stack')->info('[WIZARD] isReady check', [
-            'criteria_count' => $this->criteria->count(),
-            'has_rules'      => $hasRules,
-            'result'         => $hasRules,
-        ]);
-
-        return $hasRules;
+        return GradeRule::whereIn('id_grade', $gradeIds)->exists();
     }
 
     #[Computed]
@@ -146,113 +92,74 @@ class GradingWizard extends Component
             return 'Belum ada grade untuk kategori ini.';
         }
         if ($this->criteria->isEmpty()) {
-            return 'Belum ada pertanyaan. Tambahkan kriteria di menu Master Kriteria.';
+            return 'Belum ada pertanyaan. Tambahkan di menu Pertanyaan.';
         }
         $gradeIds = $this->availableGrades->pluck('id');
-        if (!GradeRule::whereIn('id_grade', $gradeIds)->exists()) {
-            return 'Aturan grade (Knowledge Base) belum dikonfigurasi. Isi di menu Aturan Grade.';
+        if (! GradeRule::whereIn('id_grade', $gradeIds)->exists()) {
+            return 'Aturan grade belum dikonfigurasi. Isi di menu Aturan Grade.';
         }
         return null;
     }
 
-    // --- Actions & Methods ---
-
-    /**
-     * Triggered saat user mengganti kategori barang di layar start.
-     */
     public function updatedIdKategoriBarang(): void
     {
-        Log::channel('stack')->info('[WIZARD] updatedIdKategoriBarang()', [
-            'new_value' => $this->idKategoriBarang,
-        ]);
-        $this->currentIndex = 0;
+        $this->currentIndex       = 0;
+        $this->eliminatedGradeIds = [];
         unset($this->criteria, $this->availableGrades);
     }
 
-    /**
-     * Membuat sesi baru dan memulai kuesioner.
-     */
     public function startGrading(): void
     {
-        Log::channel('stack')->info('[WIZARD] startGrading() called', [
-            'isReady'            => $this->isReady,
-            'idKategoriBarang'   => $this->idKategoriBarang,
-            'totalQuestions'     => $this->totalQuestions,
+        if (! $this->isReady) return;
+
+        $session = GradingSession::create([
+            'id_kategori_barang' => $this->idKategoriBarang,
+            'kode_produk'        => $this->kodeProduk ?: null,
             'user_id'            => Auth::id(),
+            'status'             => 'in_progress',
         ]);
 
-        if (!$this->isReady) {
-            Log::channel('stack')->warning('[WIZARD] startGrading() — ABORTED, isReady = false');
-            return;
-        }
+        $this->sessionId          = $session->id;
+        $this->currentIndex       = 0;
+        $this->eliminatedGradeIds = [];
+        $this->step               = 'question';
 
-        try {
-            $session = GradingSession::create([
-                'id_kategori_barang' => $this->idKategoriBarang,
-                'kode_produk'        => $this->kodeProduk ?: null,
-                'user_id'            => Auth::id(),
-                'status'             => 'in_progress',
-            ]);
-
-            Log::channel('stack')->info('[WIZARD] GradingSession created', [
-                'id_session' => $session->id,
-            ]);
-
-            $this->sessionId    = $session->id;
-            $this->currentIndex = 0;
-            $this->step         = 'question';
-
-            $this->dispatch('question-changed');
-        } catch (\Throwable $e) {
-            Log::channel('stack')->error('[WIZARD] startGrading() — Exception!', [
-                'message' => $e->getMessage(),
-            ]);
-        }
+        $this->dispatch('question-changed');
     }
 
-    /**
-     * Menyimpan jawaban per pertanyaan dan navigasi index.
-     */
     public function answer(string $jawaban): void
     {
-        Log::channel('stack')->info('[WIZARD] answer() called', [
-            'jawaban'      => $jawaban,
-            'sessionId'    => $this->sessionId,
-            'currentIndex' => $this->currentIndex,
-            'criterionId'  => $this->currentCriterion?->id,
-        ]);
+        if (! in_array($jawaban, ['ya', 'tidak'], true)) return;
+        if (! $this->sessionId || ! $this->currentCriterion) return;
 
-        if (!in_array($jawaban, ['ya', 'tidak'], true)) return;
-        if (!$this->sessionId || !$this->currentCriterion) return;
+        $criterion = $this->currentCriterion;
 
-        try {
-            // Menggunakan updateOrCreate untuk mendukung fitur 'kembali' (jika nanti ditambahkan)
-            SessionAnswer::updateOrCreate(
-                [
-                    'id_session'  => $this->sessionId,
-                    'id_criteria' => $this->currentCriterion->id,
-                ],
-                [
-                    'jawaban'     => $jawaban,
-                    'answered_at' => now(),
-                ]
-            );
-
-            Log::channel('stack')->info('[WIZARD] SessionAnswer saved', [
-                'id_criteria' => $this->currentCriterion->id,
+        SessionAnswer::updateOrCreate(
+            [
+                'id_session'  => $this->sessionId,
+                'id_criteria' => $criterion->id,
+            ],
+            [
                 'jawaban'     => $jawaban,
-            ]);
-        } catch (\Throwable $e) {
-            Log::channel('stack')->error('[WIZARD] answer() — SessionAnswer Exception!', [
-                'message' => $e->getMessage(),
-            ]);
-            return;
+                'answered_at' => now(),
+            ]
+        );
+
+        // Tandai grade sebagai gugur jika jawaban YA + kondisi not_allowed
+        // Grade gugur tetap dihitung persentasenya, hanya tidak bisa jadi winner
+        if ($jawaban === 'ya') {
+            $this->markEliminated($criterion->id);
         }
 
         $this->currentIndex++;
 
+        // Selesai jika semua pertanyaan sudah dijawab
         if ($this->currentIndex >= $this->totalQuestions) {
-            Log::channel('stack')->info('[WIZARD] All questions answered — switching to loading');
+            Log::info('[WIZARD] Semua pertanyaan selesai', [
+                'total_dijawab' => $this->currentIndex,
+                'grade_gugur'   => $this->eliminatedGradeIds,
+            ]);
+
             $this->step = 'loading';
             $this->dispatch('start-inference');
         } else {
@@ -261,56 +168,64 @@ class GradingWizard extends Component
     }
 
     /**
-     * Menjalankan mesin inferensi untuk mendapatkan hasil rekomendasi grade.
+     * Tandai grade sebagai gugur (tidak bisa jadi winner).
+     * Dipanggil saat jawaban YA pada kriteria dengan kondisi not_allowed.
      */
+    private function markEliminated(int $criteriaId): void
+    {
+        $allGradeIds = $this->availableGrades->pluck('id');
+
+        $toEliminate = GradeRule::where('id_criteria', $criteriaId)
+            ->whereIn('id_grade', $allGradeIds)
+            ->where('kondisi', 'not_allowed')
+            ->pluck('id_grade')
+            ->toArray();
+
+        if (! empty($toEliminate)) {
+            Log::info('[WIZARD] Grade gugur (tetap dihitung)', [
+                'criteria_id' => $criteriaId,
+                'gugur'       => Grade::whereIn('id', $toEliminate)->pluck('nama_grade'),
+            ]);
+
+            $this->eliminatedGradeIds = array_unique(
+                array_merge($this->eliminatedGradeIds, $toEliminate)
+            );
+        }
+    }
+
     public function runInference(): void
     {
-        Log::channel('stack')->info('[WIZARD] runInference() called', [
-            'sessionId' => $this->sessionId,
-        ]);
-
-        if (!$this->sessionId) return;
+        if (! $this->sessionId) return;
 
         try {
-            // Load session beserta fakta-fakta jawabannya
-            $session = GradingSession::with('answers.criteria')->find($this->sessionId);
+            $session = GradingSession::with('answers.criteria')
+                ->find($this->sessionId);
 
-            if (!$session) {
-                Log::channel('stack')->error('[WIZARD] runInference() — GradingSession not found!');
-                return;
-            }
+            if (! $session) return;
 
-            // Eksekusi Mesin Inferensi
-            $this->result = (new InferenceEngine())->analyze($session);
-
-            Log::channel('stack')->info('[WIZARD] InferenceEngine result', [
-                'winner'     => $this->result['winner']['grade_name'] ?? 'null',
-                'persentase' => $this->result['winner']['persentase'] ?? 'null',
-            ]);
+            $this->result = (new InferenceEngine())->analyze(
+                $session,
+                $this->eliminatedGradeIds
+            );
 
             $this->step = 'result';
         } catch (\Throwable $e) {
-            Log::channel('stack')->error('[WIZARD] runInference() — Exception!', [
+            Log::error('[WIZARD] runInference() Exception', [
                 'message' => $e->getMessage(),
-                'trace'   => $e->getTraceAsString(),
+                'line'    => $e->getLine(),
             ]);
         }
     }
 
-    /**
-     * Mereset seluruh state untuk memulai grading baru.
-     */
     public function restart(): void
     {
-        Log::channel('stack')->info('[WIZARD] restart() called');
+        $this->step               = 'start';
+        $this->currentIndex       = 0;
+        $this->sessionId          = null;
+        $this->kodeProduk         = null;
+        $this->result             = [];
+        $this->eliminatedGradeIds = [];
 
-        $this->step         = 'start';
-        $this->currentIndex = 0;
-        $this->sessionId    = null;
-        $this->kodeProduk   = null;
-        $this->result       = [];
-
-        // Clear computed properties cache
         unset($this->criteria, $this->availableGrades);
     }
 

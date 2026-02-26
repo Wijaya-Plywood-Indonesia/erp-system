@@ -68,7 +68,7 @@ class GradingSession extends Model
      */
     public function answers(): HasMany
     {
-        return $this->hasMany(SessionAnswer::class, 'session_id');
+        return $this->hasMany(SessionAnswer::class, 'id_session');
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

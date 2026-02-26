@@ -1,54 +1,35 @@
 <div
     x-data="{
         step: @entangle('step').live,
-
-        log(label, data = null) {
-            const style = 'background:#d97706;color:white;padding:2px 6px;border-radius:3px;font-weight:bold'
-            console.log('%c[WIZARD] ' + label, style, data ?? '')
-        },
-
-        logError(label, data = null) {
-            const style = 'background:#dc2626;color:white;padding:2px 6px;border-radius:3px;font-weight:bold'
-            console.error('%c[WIZARD ERROR] ' + label, style, data ?? '')
-        },
+        isAnswering: false,
 
         init() {
-            this.log('Component init', { step: this.step })
-
-            this.$watch('step', (newVal, oldVal) => {
-                this.log('Step changed', { from: oldVal, to: newVal })
-                if (newVal === 'question') {
+            this.$watch('step', (val) => {
+                if (val === 'question') {
+                    this.isAnswering = false
                     this.$nextTick(() => this.slideIn())
                 }
             })
 
             this.$wire.on('start-inference', () => {
-                this.log('Event: start-inference — runInference dalam 2 detik')
-                setTimeout(() => {
-                    this.log('Calling runInference()')
-                    this.$wire.runInference()
-                }, 2000)
+                setTimeout(() => this.$wire.runInference(), 2000)
             })
 
             this.$wire.on('question-changed', () => {
-                this.log('Event: question-changed')
+                this.isAnswering = false
                 this.$nextTick(() => this.slideIn())
             })
+        },
 
-            document.addEventListener('livewire:exception', (e) => {
-                this.logError('Livewire server exception!', {
-                    message: e.detail?.message,
-                    detail: e.detail
-                })
-            })
+        handleAnswer(jawaban) {
+            if (this.isAnswering) return
+            this.isAnswering = true
+            this.$wire.answer(jawaban)
         },
 
         slideIn() {
             const el = this.$refs.questionBody
-            if (!el) {
-                this.logError('$refs.questionBody tidak ditemukan!')
-                return
-            }
+            if (!el) return
             el.style.animation = 'none'
             el.offsetHeight
             el.style.animation = ''
@@ -61,22 +42,11 @@
            px-4 py-8 transition-colors duration-300
            bg-amber-50 dark:bg-zinc-950">
 
-    {{-- ================================================================
-         PENTING: Gunakan HANYA @if Blade untuk mengontrol step mana yang
-         di-render. JANGAN gabungkan dengan x-show/x-cloak pada elemen
-         yang sama — ini menyebabkan konten hilang karena:
-         1. x-cloak menyembunyikan elemen sebelum Alpine init
-         2. Livewire re-render mengubah DOM sebelum Alpine bisa sync
-         Blade @if sudah cukup karena Livewire wire:navigate re-render
-         seluruh komponen saat step berubah di server.
-    ================================================================ --}}
-
     @if($step === 'start')
     {{-- ================================================================ --}}
     {{-- STEP 1: START                                                     --}}
     {{-- ================================================================ --}}
-    <div class="w-full max-w-md space-y-6 text-center
-                animate-[wizardSlideIn_0.3s_ease-out]">
+    <div class="w-full max-w-md space-y-6 text-center">
 
         <div>
             <h1 class="text-4xl font-light tracking-tight text-zinc-900 dark:text-zinc-50"
@@ -89,7 +59,6 @@
             </p>
         </div>
 
-        {{-- Stats — dinamis dari DB --}}
         <div class="grid grid-cols-3 gap-3">
             <div class="rounded-xl py-4 border bg-white dark:bg-zinc-900 border-amber-200 dark:border-zinc-800">
                 <div class="font-mono text-2xl font-medium text-amber-600 dark:text-amber-400">
@@ -111,8 +80,7 @@
 
         @if($this->kategoriList->count() > 1)
         <div class="text-left">
-            <label class="block text-xs font-semibold uppercase tracking-widest mb-2
-                           text-zinc-500 dark:text-zinc-400">
+            <label class="block text-xs font-semibold uppercase tracking-widest mb-2 text-zinc-500 dark:text-zinc-400">
                 Kategori Produk
             </label>
             <select wire:model.live="idKategoriBarang"
@@ -127,50 +95,14 @@
         </div>
         @endif
 
-        {{-- Debug box — hapus setelah production --}}
-        <div class="rounded-xl p-4 text-left font-mono text-xs space-y-1.5
-                    bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700">
-            <p class="font-sans font-semibold text-xs uppercase tracking-widest text-zinc-400 mb-2">🔧 Debug</p>
-            <div class="flex gap-2">
-                <span class="w-32 text-zinc-400">Pertanyaan</span>
-                <span class="{{ $this->totalQuestions > 0 ? 'text-emerald-600' : 'text-red-500' }}">
-                    {{ $this->totalQuestions > 0 ? '✓ '.$this->totalQuestions.' aktif' : '❌ 0 — tabel criterias kosong?' }}
-                </span>
-            </div>
-            <div class="flex gap-2">
-                <span class="w-32 text-zinc-400">Grade</span>
-                <span class="{{ $this->availableGrades->count() > 0 ? 'text-emerald-600' : 'text-red-500' }}">
-                    {{ $this->availableGrades->count() > 0
-                        ? '✓ '.$this->availableGrades->pluck('nama_grade')->join(', ')
-                        : '❌ 0 — tidak ada grade' }}
-                </span>
-            </div>
-            <div class="flex gap-2">
-                <span class="w-32 text-zinc-400">isReady</span>
-                <span class="{{ $this->isReady ? 'text-emerald-600' : 'text-red-500' }}">
-                    {{ $this->isReady ? '✓ true' : '❌ false' }}
-                </span>
-            </div>
-            <div class="flex gap-2">
-                <span class="w-32 text-zinc-400">Step (PHP)</span>
-                <span class="text-amber-500">{{ $step }}</span>
-            </div>
-            @if($this->readinessError)
-            <div class="flex gap-2">
-                <span class="w-32 text-zinc-400">Error</span>
-                <span class="text-red-500">{{ $this->readinessError }}</span>
-            </div>
-            @endif
-        </div>
-
         @if($this->readinessError)
-        <div class="rounded-xl p-4 text-left bg-amber-50 dark:bg-amber-950/30
-                    border border-amber-300 dark:border-amber-800">
+        <div class="rounded-xl p-4 text-left
+                    bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900">
             <div class="flex gap-3 items-start">
-                <span class="text-amber-500 text-lg">⚠️</span>
+                <span class="text-red-500 text-lg flex-shrink-0">⚠️</span>
                 <div>
-                    <p class="text-sm font-semibold text-amber-800 dark:text-amber-300">Sistem belum siap</p>
-                    <p class="text-sm text-amber-700 dark:text-amber-400 mt-1">{{ $this->readinessError }}</p>
+                    <p class="text-sm font-semibold text-red-700 dark:text-red-400 mb-1">Sistem belum siap</p>
+                    <p class="text-sm text-red-600 dark:text-red-500">{{ $this->readinessError }}</p>
                 </div>
             </div>
         </div>
@@ -179,24 +111,27 @@
         <button
             wire:click="startGrading"
             wire:loading.attr="disabled"
+            wire:target="startGrading"
             @if(!$this->isReady) disabled @endif
-            x-on:click="log('startGrading clicked', { isReady: {{ $this->isReady ? 'true' : 'false' }} })"
             class="w-full py-4 rounded-xl text-white font-semibold text-lg
             transition-all duration-200 hover:-translate-y-0.5
-            disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0
+            disabled:opacity-50 disabled:cursor-not-allowed
             {{ $this->isReady
                        ? 'bg-amber-600 hover:bg-amber-500 shadow-lg shadow-amber-600/25'
-                       : 'bg-zinc-300 dark:bg-zinc-700' }}">
+                       : 'bg-zinc-300 dark:bg-zinc-700 cursor-not-allowed' }}">
             <span wire:loading.remove wire:target="startGrading">Mulai</span>
             <span wire:loading wire:target="startGrading">Memuat...</span>
         </button>
+
+        <p class="text-xs uppercase tracking-widest text-zinc-300 dark:text-zinc-700">
+            Sistem Pakar Grading Plywood
+        </p>
     </div>
 
 
     @elseif($step === 'question')
     {{-- ================================================================ --}}
-    {{-- STEP 2: QUESTION                                                  --}}
-    {{-- TIDAK ada x-show/x-cloak — Blade @elseif sudah cukup           --}}
+    {{-- STEP 2: QUESTION — tidak ada notifikasi/banner selama pengerjaan --}}
     {{-- ================================================================ --}}
     <div class="w-full max-w-lg flex flex-col" style="min-height: calc(100vh - 8rem)">
 
@@ -249,37 +184,26 @@
                 {{ $this->currentCriterion->deskripsi }}
             </p>
             @endif
-
-            @else
-            {{-- Fallback debug jika currentCriterion null --}}
-            <div class="p-4 rounded-xl bg-red-50 dark:bg-red-950/40
-                        border border-red-200 text-sm text-red-700 dark:text-red-400">
-                ❌ currentCriterion null!
-                index={{ $currentIndex }}, total={{ $this->totalQuestions }}
-            </div>
             @endif
         </div>
 
-        {{-- Tombol jawab --}}
+        {{-- Tombol YA / TIDAK --}}
         <div class="grid grid-cols-2 gap-3 pt-4 pb-2">
-            <button wire:click="answer('ya')"
-                wire:loading.attr="disabled"
-                x-on:click="log('Jawab: YA', { index: {{ $currentIndex }} })"
+            <button
+                x-on:click="handleAnswer('ya')"
+                x-bind:disabled="isAnswering"
+                x-bind:class="isAnswering ? 'opacity-50 cursor-wait' : 'hover:bg-emerald-600 active:scale-95'"
                 class="py-5 rounded-2xl text-white font-bold text-xl
-                           bg-emerald-700 hover:bg-emerald-600
-                           shadow-lg shadow-emerald-700/20
-                           transition-all active:scale-95 disabled:opacity-50">
+                       bg-emerald-700 shadow-lg shadow-emerald-700/20 transition-all duration-150">
                 ✓ YA
             </button>
-            <button wire:click="answer('tidak')"
-                wire:loading.attr="disabled"
-                x-on:click="log('Jawab: TIDAK', { index: {{ $currentIndex }} })"
+            <button
+                x-on:click="handleAnswer('tidak')"
+                x-bind:disabled="isAnswering"
+                x-bind:class="isAnswering ? 'opacity-50 cursor-wait' : 'hover:bg-red-700 hover:text-white hover:border-red-700 active:scale-95'"
                 class="py-5 rounded-2xl font-bold text-xl border-2
-                           text-red-700 border-red-200
-                           hover:bg-red-700 hover:text-white hover:border-red-700
-                           dark:text-red-400 dark:border-red-900
-                           dark:hover:bg-red-800 dark:hover:text-white
-                           transition-all active:scale-95 disabled:opacity-50">
+                       text-red-700 border-red-200
+                       dark:text-red-400 dark:border-red-900 transition-all duration-150">
                 ✗ TIDAK
             </button>
         </div>
@@ -315,6 +239,7 @@
 
         @if(!empty($result) && isset($result['winner']))
 
+        {{-- Hero: winner --}}
         <div class="rounded-2xl p-8 text-center relative overflow-hidden
                     bg-zinc-900 dark:bg-zinc-950 shadow-2xl">
             <div class="absolute inset-0 pointer-events-none
@@ -334,27 +259,38 @@
             </p>
         </div>
 
+        {{-- Perbandingan semua grade (eligible + eliminated) --}}
         <div class="rounded-2xl p-5 bg-white dark:bg-zinc-900
                     border border-amber-100 dark:border-zinc-800 space-y-4">
             <p class="text-xs uppercase tracking-widest font-semibold text-zinc-400 dark:text-zinc-500">
                 Perbandingan Semua Grade
             </p>
+
             @foreach($result['all'] as $i => $gradeResult)
-            <div>
+            @php $isEliminated = $gradeResult['is_eliminated'] ?? false; @endphp
+            <div class="{{ $isEliminated ? 'opacity-50' : '' }}">
                 <div class="flex justify-between items-baseline mb-1.5 text-sm">
-                    <span class="{{ $i === 0
-                        ? 'font-bold text-amber-600 dark:text-amber-400'
-                        : 'text-zinc-500 dark:text-zinc-400' }}">
+                    <span class="flex items-center gap-1.5
+                        {{ !$isEliminated && $i === 0
+                            ? 'font-bold text-amber-600 dark:text-amber-400'
+                            : 'text-zinc-500 dark:text-zinc-400' }}
+                        {{ $isEliminated ? 'line-through' : '' }}">
                         {{ $gradeResult['grade_name'] }}
-                        @if($i === 0)<span class="text-xs ml-1">★</span>@endif
+                        @if(!$isEliminated && $i === 0)<span class="text-xs no-underline" style="text-decoration:none">★</span>@endif
+                        @if($isEliminated)<span class="text-xs no-underline text-red-400" style="text-decoration:none">✕</span>@endif
                     </span>
-                    <span class="font-mono {{ $i === 0 ? 'font-bold text-amber-600 dark:text-amber-400' : 'text-zinc-400' }}">
+                    <span class="font-mono text-sm
+                        {{ !$isEliminated && $i === 0
+                            ? 'font-bold text-amber-600 dark:text-amber-400'
+                            : 'text-zinc-400' }}">
                         {{ $gradeResult['persentase'] }}%
                     </span>
                 </div>
                 <div class="h-2 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                     <div class="h-full rounded-full transition-all duration-1000 ease-out
-                                {{ $i === 0 ? 'bg-amber-500' : 'bg-zinc-300 dark:bg-zinc-600' }}"
+                                {{ $isEliminated
+                                    ? 'bg-red-300 dark:bg-red-900'
+                                    : ($i === 0 ? 'bg-amber-500' : 'bg-zinc-300 dark:bg-zinc-600') }}"
                         style="width: {{ $gradeResult['persentase'] }}%">
                     </div>
                 </div>
@@ -362,6 +298,7 @@
             @endforeach
         </div>
 
+        {{-- Alasan --}}
         @if(!empty($result['reasons']))
         <div class="rounded-2xl p-5 bg-white dark:bg-zinc-900
                     border border-amber-100 dark:border-zinc-800">
@@ -417,7 +354,6 @@
         </div>
 
         @else
-        {{-- Error: result kosong --}}
         <div class="text-center py-12">
             <p class="text-4xl mb-4">⚠️</p>
             <p class="font-medium text-zinc-700 dark:text-zinc-300">Tidak dapat menghitung hasil.</p>

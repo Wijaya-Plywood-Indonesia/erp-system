@@ -4,31 +4,46 @@ namespace App\Services;
 
 use App\Models\Grade;
 use App\Models\GradingSession;
+use Illuminate\Support\Facades\Log;
 
 class InferenceEngine
 {
-    public function analyze(GradingSession $session): array
+    /**
+     * @param GradingSession $session
+     * @param array $eliminatedGradeIds  Grade yang gugur — tetap dihitung, tidak bisa jadi winner
+     */
+    public function analyze(GradingSession $session, array $eliminatedGradeIds = []): array
     {
-        // keyBy('id_criteria') sudah benar — kolom FK di session_answers
+        Log::info('[ENGINE] START', [
+            'id_session'    => $session->id,
+            'grade_gugur'   => $eliminatedGradeIds,
+        ]);
+
         $answers = $session
             ->answers()
             ->with('criteria')
             ->get()
             ->keyBy('id_criteria');
 
+        // Ambil SEMUA grade — termasuk yang gugur, karena tetap dihitung
         $grades = Grade::where('id_kategori_barang', $session->id_kategori_barang)
             ->with(['gradeRules.criteria'])
             ->get();
 
         if ($grades->isEmpty()) {
-            return $this->buildEmptyResult($session);
+            return $this->buildEmptyResult($session, 'Tidak ada grade untuk kategori ini.');
         }
 
-        $results = [];
+        $eligible   = []; // grade yang bisa jadi winner
+        $eliminated = []; // grade gugur — dihitung tapi tidak bisa menang
 
         foreach ($grades as $grade) {
             $rules = $grade->gradeRules;
-            if ($rules->isEmpty()) continue;
+
+            if ($rules->isEmpty()) {
+                Log::warning('[ENGINE] Grade dilewati — rules kosong: ' . $grade->nama_grade);
+                continue;
+            }
 
             $totalMaxPoin   = (float) $rules->sum('poin_lulus');
             $earnedPoin     = 0.0;
@@ -38,13 +53,10 @@ class InferenceEngine
             foreach ($rules as $rule) {
                 $answer       = $answers->get($rule->id_criteria);
                 $jawabanValue = $answer?->jawaban ?? 'tidak';
+                $points       = (float) $rule->pointsFor($jawabanValue);
+                $earnedPoin  += $points;
 
-                // MASALAH #6: calculatePoints() tidak ada — method yang benar pointsFor()
-                // FIX: ganti calculatePoints → pointsFor
-                $points = (float) $rule->pointsFor($jawabanValue);
-                $earnedPoin += $points;
-
-                $criteriaName = $rule->criteria->nama_kriteria ?? '—';
+                $criteriaName = $rule->criteria?->nama_kriteria ?? '—';
 
                 if ($jawabanValue === 'tidak' || $rule->kondisi === 'allowed') {
                     $passedCriteria[] = $criteriaName;
@@ -63,7 +75,7 @@ class InferenceEngine
                 ? round(($earnedPoin / $totalMaxPoin) * 100, 1)
                 : 0.0;
 
-            $results[$grade->nama_grade] = [
+            $entry = [
                 'grade_id'        => $grade->id,
                 'grade_name'      => $grade->nama_grade,
                 'persentase'      => $persentase,
@@ -71,36 +83,62 @@ class InferenceEngine
                 'max'             => $totalMaxPoin,
                 'passed_criteria' => $passedCriteria,
                 'failed_criteria' => $failedCriteria,
+                'is_eliminated'   => in_array($grade->id, $eliminatedGradeIds),
             ];
+
+            Log::info('[ENGINE] ' . $grade->nama_grade, [
+                'persentase'   => $persentase . '%',
+                'is_eliminated' => $entry['is_eliminated'],
+            ]);
+
+            // Pisahkan ke bucket yang sesuai
+            if (in_array($grade->id, $eliminatedGradeIds)) {
+                $eliminated[$grade->nama_grade] = $entry;
+            } else {
+                $eligible[$grade->nama_grade] = $entry;
+            }
         }
 
-        if (empty($results)) {
-            return $this->buildEmptyResult($session);
+        // Winner hanya dari grade yang tidak gugur
+        if (empty($eligible)) {
+            return $this->buildEmptyResult($session, 'Semua grade gugur. Produk tidak memenuhi standar grade apapun.');
         }
 
-        uasort($results, fn($a, $b) => $b['persentase'] <=> $a['persentase']);
+        uasort($eligible, fn($a, $b) => $b['persentase'] <=> $a['persentase']);
+        uasort($eliminated, fn($a, $b) => $b['persentase'] <=> $a['persentase']);
 
-        $winner     = reset($results);
-        $allResults = array_values($results);
-        $alasan     = $this->generateReasoning($winner, $allResults);
+        $winner         = reset($eligible);
+        $eligibleList   = array_values($eligible);
+        $eliminatedList = array_values($eliminated);
 
-        $session->update([
-            'status'           => 'completed',
-            'hasil_grade_id'   => $winner['grade_id'],
-            'persentase_hasil' => array_column($allResults, 'persentase', 'grade_name'),
-            'alasan_utama'     => $alasan,
-            'durasi_detik'     => now()->diffInSeconds($session->created_at),
-        ]);
+        // Gabungkan untuk tampilan: eligible dulu, eliminated di bawah
+        $allResults = array_merge($eligibleList, $eliminatedList);
+
+        $alasan = $this->generateReasoning($winner, $eligibleList, count($eliminatedList));
+
+        Log::info('[ENGINE] WINNER: ' . $winner['grade_name'] . ' ' . $winner['persentase'] . '%');
+
+        try {
+            $session->update([
+                'status'           => 'completed',
+                'hasil_grade_id'   => $winner['grade_id'],
+                'persentase_hasil' => array_column($allResults, 'persentase', 'grade_name'),
+                'alasan_utama'     => $alasan,
+                'durasi_detik'     => now()->diffInSeconds($session->created_at),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('[ENGINE] Gagal update session: ' . $e->getMessage());
+        }
 
         return [
-            'winner'  => $winner,
-            'all'     => $allResults,
-            'alasan'  => $alasan,
-            'reasons' => $this->buildReasonList($winner, $allResults),
+            'winner'   => $winner,
+            'all'      => $allResults,
+            'alasan'   => $alasan,
+            'reasons'  => $this->buildReasonList($winner, $eligibleList, $eliminatedList),
         ];
     }
 
-    private function generateReasoning(array $winner, array $all): string
+    private function generateReasoning(array $winner, array $eligible, int $eliminatedCount = 0): string
     {
         $pct    = $winner['persentase'];
         $name   = $winner['grade_name'];
@@ -114,15 +152,20 @@ class InferenceEngine
             default    => 'memerlukan perhatian khusus',
         };
 
-        $kalimat  = "Produk ini {$verdict} grade {$name} dengan tingkat kesesuaian {$pct}%. ";
+        $kalimat = "Produk ini {$verdict} grade {$name} dengan tingkat kesesuaian {$pct}%. ";
+
+        if ($eliminatedCount > 0) {
+            $kalimat .= "{$eliminatedCount} grade gugur karena ditemukan cacat yang tidak dapat ditoleransi. ";
+        }
+
         $kalimat .= $failed === 0
-            ? 'Seluruh parameter teknis terpenuhi dengan sempurna.'
-            : "{$failed} dari {$total} kriteria terdeteksi memiliki cacat fisik, namun masih dalam batas toleransi grade ini.";
+            ? 'Seluruh parameter teknis terpenuhi.'
+            : "{$failed} dari {$total} kriteria terdeteksi memiliki cacat, masih dalam batas toleransi grade ini.";
 
         return $kalimat;
     }
 
-    private function buildReasonList(array $winner, array $all): array
+    private function buildReasonList(array $winner, array $eligible, array $eliminated): array
     {
         $reasons = [];
 
@@ -135,8 +178,8 @@ class InferenceEngine
 
         $passedCount = count($winner['passed_criteria']);
         if ($passedCount > 0) {
-            $sample = implode(', ', array_slice($winner['passed_criteria'], 0, 3));
-            $more   = $passedCount > 3 ? ", dan " . ($passedCount - 3) . " lainnya." : '.';
+            $sample    = implode(', ', array_slice($winner['passed_criteria'], 0, 3));
+            $more      = $passedCount > 3 ? ', dan ' . ($passedCount - 3) . ' lainnya.' : '.';
             $reasons[] = [
                 'type' => 'ok',
                 'icon' => '✅',
@@ -154,28 +197,26 @@ class InferenceEngine
             ];
         }
 
-        $losers = array_filter($all, fn($r) => $r['grade_name'] !== $winner['grade_name']);
-        foreach (array_slice(array_values($losers), 0, 2) as $loser) {
-            if (count($loser['failed_criteria']) > 0) {
-                $reasons[] = [
-                    'type' => 'fail',
-                    'icon' => '❌',
-                    'tag'  => "Grade {$loser['grade_name']}",
-                    'text' => "Hanya {$loser['persentase']}% — " . count($loser['failed_criteria']) . " kriteria tidak memenuhi standar.",
-                ];
-            }
+        // Tampilkan grade gugur sebagai informasi
+        foreach (array_slice($eliminated, 0, 3) as $out) {
+            $reasons[] = [
+                'type' => 'fail',
+                'icon' => '❌',
+                'tag'  => "Grade {$out['grade_name']} Gugur",
+                'text' => "Ditemukan cacat fatal yang tidak dapat ditoleransi. Skor teknis: {$out['persentase']}%.",
+            ];
         }
 
         return $reasons;
     }
 
-    private function buildEmptyResult(GradingSession $session): array
+    private function buildEmptyResult(GradingSession $session, string $pesan = ''): array
     {
         $session->update(['status' => 'cancelled']);
         return [
             'winner'  => null,
             'all'     => [],
-            'alasan'  => 'Konfigurasi grade atau kriteria belum lengkap di database.',
+            'alasan'  => $pesan ?: 'Konfigurasi belum lengkap.',
             'reasons' => [],
         ];
     }

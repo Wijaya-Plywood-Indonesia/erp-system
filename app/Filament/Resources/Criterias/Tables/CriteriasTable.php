@@ -27,7 +27,7 @@ class CriteriasTable
                     ->rowIndex(),
 
                 Tables\Columns\TextColumn::make('nama_kriteria')
-                    ->label('Pertanyaan')
+                    ->label('Kriteria')
                     ->searchable()
                     ->wrap(),
 
