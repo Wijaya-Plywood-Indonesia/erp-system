@@ -1,46 +1,30 @@
-<div class="max-w-4xl mx-auto bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 shadow-xl rounded-2xl p-10">
+<div class="max-w-full mx-auto bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 shadow-xl rounded-2xl p-10">
     <h2 class="text-2xl font-bold text-center mb-10 text-uppercase"> LAPORAN LABA RUGI </h2>
     {{-- ================= FILTER PERIODE ================= --}}
     <div class="flex flex-wrap items-end gap-4 mb-6">
 
-        <div>
-            <label class="text-sm">Bulan Awal</label>
-            <select wire:model="bulanAwal" class="border rounded p-2">
-                @foreach(range(1,12) as $b)
-                    <option value="{{ $b }}">
-                        {{ \Carbon\Carbon::create()->month($b)->translatedFormat('F') }}
-                    </option>
-                @endforeach
-            </select>
-        </div>
+        <div class="flex flex-wrap items-end gap-4 mb-6">
 
-        <div>
-            <label class="text-sm">Bulan Akhir</label>
-            <select wire:model="bulanAkhir" class="border rounded p-2">
-                @foreach(range(1,12) as $b)
-                    <option value="{{ $b }}">
-                        {{ \Carbon\Carbon::create()->month($b)->translatedFormat('F') }}
-                    </option>
-                @endforeach
-            </select>
-        </div>
+            <div>
+                <label class="text-sm">Mulai Bulan</label>
+                <input type="month" wire:model.defer="bulanMulai" class="border rounded p-2">
+            </div>
 
-        <div>
-            <label class="text-sm">Tahun</label>
-            <input type="number" wire:model="tahun" class="border rounded p-2 w-24">
-        </div>
+            <div>
+                <label class="text-sm">Sampai Bulan</label>
+                <input type="month" wire:model.defer="bulanSelesai" class="border rounded p-2">
+            </div>
 
-        <button wire:click="terapkanPeriode"
-            class="bg-blue-600 text-white px-4 py-2 rounded">
-            Terapkan
-        </button>
+            <button wire:click="terapkanPeriode" class="fi-color fi-color-primary fi-bg-color-400 hover:fi-bg-color-300 dark:fi-bg-color-600 dark:hover:fi-bg-color-500 fi-text-color-900 hover:fi-text-color-800 dark:fi-text-color-950 dark:hover:fi-text-color-950 fi-btn fi-size-md  rounded">
+                Terapkan
+            </button>
 
-        @if($modeMultiPeriode)
-            <button wire:click="kembaliDefault"
-                class="bg-gray-500 text-white px-4 py-2 rounded">
+            @if($modeMultiPeriode)
+            <button wire:click="kembaliDefault" class="bg-gray-500 text-white fi-btn fi-size-md rounded">
                 Default
             </button>
-        @endif
+            @endif
+        </div>
     </div>
     @php
     function rupiah($value, $isKredit = false) {
@@ -136,10 +120,17 @@
 
     {{-- ================= LABA KOTOR ================= --}}
     <tr class="bg-gray-50 dark:bg-gray-800">
-        <td colspan="2" class="font-bold py-2">LABA KOTOR</td>
-        <td></td>
-        <td class="text-right font-bold">Rp {{ rupiah($pendapatanKotor) }}</td>
-    </tr>
+    <td colspan="2" class="font-bold py-2">
+        LABA KOTOR
+        <div class="text-xs font-normal italic text-gray-400">
+            (Total Pendapatan + HPP)
+        </div>
+    </td>
+    <td></td>
+    <td class="text-right font-bold">
+        Rp {{ rupiah($pendapatanKotor) }}
+    </td>
+</tr>
 
     {{-- ================= BEBAN OPERASIONAL ================= --}}
     <tr>
@@ -162,11 +153,18 @@
     </tr>
 
     {{-- ================= LABA SEBELUM PAJAK ================= --}}
-    <tr>
-        <td colspan="2" class="font-semibold pt-6">Laba Sebelum Pajak</td>
-        <td></td>
-        <td class="text-right border-t border-black font-semibold pt-6">Rp {{ rupiah($pendapatanSebelumPajak) }}</td>
-    </tr>
+    <tr class="bg-gray-50 dark:bg-gray-800">
+    <td colspan="2" class="font-semibold pt-6">
+        Laba Sebelum Pajak
+        <div class="text-xs font-normal italic text-gray-400">
+            (Laba Kotor + Total Beban Operasional)
+        </div>
+    </td>
+    <td></td>
+    <td class="text-right border-t border-black font-semibold pt-6">
+        Rp {{ rupiah($pendapatanSebelumPajak) }}
+    </td>
+</tr>
 
     {{-- ================= PAJAK ================= --}}
     <tr>
@@ -177,17 +175,20 @@
     </tr>
 
     {{-- ================= LABA / RUGI BERSIH ================= --}}
-    <tr>
-        <td colspan="2" class="font-bold text-lg pt-10">
-            {{ $labaBersih >= 0 ? 'LABA BERSIH' : 'RUGI' }}
-        </td>
-        <td></td>
-        <td class="text-right font-bold text-lg pt-10">
-            <span class="border-b-4 border-double border-black dark:border-white">
-                Rp {{ rupiah($labaBersih) }}
-            </span>
-        </td>
-    </tr>
+    <tr class="bg-gray-50 dark:bg-gray-800">
+    <td colspan="2" class="font-bold text-lg pt-10">
+        {{ $labaBersih > 0 ? 'LABA BERSIH' : 'RUGI' }}
+        <div class="text-xs font-normal italic text-gray-400">
+            (Laba Sebelum Pajak + Pajak)
+        </div>
+    </td>
+    <td></td>
+    <td class="text-right font-bold text-lg pt-10">
+        <span class="border-b-4 border-double border-black dark:border-white">
+            Rp {{ rupiah($labaBersih) }}
+        </span>
+    </td>
+</tr>
 </table>
 @endif
 @if($modeMultiPeriode)
@@ -202,9 +203,13 @@
                 <th class="text-left px-6 py-3 w-32 whitespace-nowrap">Kode</th>
                 <th class="text-left px-6 py-3 min-w-[300px] whitespace-nowrap">Nama Akun</th>
 
-                @foreach($periodeBulanan as $bulan)
+                @foreach($periodeBulanan as $periode)
                 <th class="text-right px-8 py-3 whitespace-nowrap border-l">
-                    {{ \Carbon\Carbon::create()->month($bulan)->translatedFormat('F') }}
+                    {{ \Carbon\Carbon::create(
+                    $periode['tahun'],
+                    $periode['bulan'],
+                    1
+                    )->translatedFormat('F Y') }}
                 </th>
                 @endforeach
             </tr>
@@ -223,15 +228,33 @@
             @foreach ($akunPendapatan as $item)
             <tr class="border-b">
                 <td class="py-1">{{ $item['kode'] }}</td>
-                <td px-6 py-2 min-w-[300px] >{{ $item['nama'] }}</td>
+                <td px-6 py-2 min-w-[300px]>{{ $item['nama'] }}</td>
 
-                @foreach($periodeBulanan as $bulan)
+                @foreach($periodeBulanan as $periode)
                 <td class="text-right px-8 py-2 min-w-[140px] whitespace-nowrap border-l">
-                    {{ number_format($dataBulanan[$item['kode']][$bulan] ?? 0, 0, ',', '.') }}
+                    {{ rupiah($dataBulanan[$item['kode']][$periode['bulan']] ?? 0) }}
                 </td>
                 @endforeach
             </tr>
             @endforeach
+
+            {{-- ================= HPP ================= --}}
+            <tr>
+                <td colspan="{{ 2 + count($periodeBulanan) }}" class="font-semibold pt-6 pb-2 border-b">
+                    Harga Pokok Penjualan
+                </td>
+            </tr>
+
+            <tr class="border-b">
+                <td>HPP</td>
+                <td>Harga Pokok Penjualan</td>
+
+                @foreach($periodeBulanan as $periode)
+                <td class="text-right px-8 py-2 border-l">
+                    {{ rupiah($dataBulanan[$item['kode']][$periode['bulan']] ?? 0) }}
+                </td>
+                @endforeach
+            </tr>
 
 
             {{-- ================= BEBAN ================= --}}
@@ -246,24 +269,24 @@
                 <td class="py-1">{{ $item['kode'] }}</td>
                 <td>{{ $item['nama'] }}</td>
 
-                @foreach($periodeBulanan as $bulan)
+                @foreach($periodeBulanan as $periode)
                 <td class="text-right px-8 py-2 whitespace-nowrap border-l">
-                    {{ number_format($dataBulanan[$item['kode']][$bulan] ?? 0, 0, ',', '.') }}
+                    {{ rupiah($dataBulanan[$item['kode']][$periode['bulan']] ?? 0) }}
                 </td>
                 @endforeach
             </tr>
             @endforeach
-            <tr class="bg-gray-100 font-bold">
-    <td colspan="2" class="pt-8">
-        LABA / RUGI BERSIH
-    </td>
+            <tr class="border-b bg-gray-100 dark:bg-gray-800">
+                <td colspan="2" class="pt-8 px-6 py-3">
+                    LABA / RUGI BERSIH
+                </td>
 
-    @foreach($periodeBulanan as $bulan)
-        <td class="text-right px-8 py-3 border-l">
-            {{ number_format($labaBersihBulanan[$bulan] ?? 0, 0, ',', '.') }}
-        </td>
-    @endforeach
-</tr>
+                @foreach($periodeBulanan as $periode)
+                <td class="text-right px-8 py-3 border-l">
+                    {{ rupiah($labaBersihBulanan[$periode['bulan']] ?? 0) }}
+                </td>
+                @endforeach
+            </tr>
 
         </tbody>
 

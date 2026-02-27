@@ -5,6 +5,8 @@ namespace App\Filament\Pages;
 use App\Models\AkunGroup;
 use App\Models\JurnalUmum;
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use BackedEnum;
 use UnitEnum;
@@ -18,42 +20,64 @@ class NeracaAktivaPasifa extends Page
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-scale';
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
 
-    public $start_date;
-    public $end_date;
-    public $repeat = 1;
+    public $from_month;
+    public $to_month;
+    public bool $hideZero = false;
 
     public array $results = [];
 
     public function mount(): void
     {
-        $today = Carbon::today();
+        $now = Carbon::now();
 
-        $this->start_date = $today->copy()->startOfMonth()->format('Y-m-d');
-        $this->end_date = $today->format('Y-m-d');
-
-        $this->applyFilter();
+        $this->from_month = $now->copy()->startOfMonth()->format('Y-m');
+        $this->to_month = $now->format('Y-m');
     }
 
-    public function applyFilter(): void
+    public function generate(): void
     {
         $this->results = [];
 
-        $start = Carbon::parse($this->start_date)->startOfMonth();
-        $repeat = min($this->repeat, 12);
+        if (!$this->from_month || !$this->to_month) {
+            return;
+        }
 
-        for ($i = 0; $i < $repeat; $i++) {
+        $start = Carbon::createFromFormat('Y-m', $this->from_month)->startOfMonth();
+        $end = Carbon::createFromFormat('Y-m', $this->to_month)->endOfMonth();
 
-            $periodStart = $start->copy()->addMonths($i)->startOfMonth();
-            $periodEnd = $start->copy()->addMonths($i)->endOfMonth();
+        if ($start->greaterThan($end)) {
+            Notification::make()
+                ->title('Range bulan tidak valid')
+                ->danger()
+                ->send();
+            return;
+        }
 
-            if ($i === 0) {
-                $periodEnd = Carbon::parse($this->end_date);
-            }
+        $months = $start->diffInMonths($end) + 1;
+
+        if ($months > 12) {
+            Notification::make()
+                ->title('Maksimal 12 bulan')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        $period = CarbonPeriod::create($start, '1 month', $end);
+
+        foreach ($period as $month) {
+
+            $periodStart = $month->copy()->startOfMonth();
+            $periodEnd = $month->copy()->endOfMonth();
 
             $this->results[] = [
-                'label' => $periodStart->format('F Y'),
-                'aktiva' => $this->buildSide('AKTIVA', $periodStart, $periodEnd),
-                'pasiva' => $this->buildSide('PASIVA', $periodStart, $periodEnd),
+                'label' => $month->format('F Y'),
+                'aktiva' => array_filter(
+                    $this->buildSide('AKTIVA', $periodStart, $periodEnd)
+                ),
+                'pasiva' => array_filter(
+                    $this->buildSide('PASIVA', $periodStart, $periodEnd)
+                ),
             ];
         }
     }
@@ -61,9 +85,9 @@ class NeracaAktivaPasifa extends Page
     protected function buildSide(string $side, $start, $end): array
     {
         $groups = AkunGroup::with([
-            'anakAkuns.childrenRecursive',
+            'anakAkuns.children',
             'anakAkuns.subAnakAkuns',
-            'children.childrenRecursive'
+            'children.children'
         ])
             ->whereNull('parent_id')
             ->where('hidden', false)
@@ -71,84 +95,86 @@ class NeracaAktivaPasifa extends Page
             ->orderBy('order')
             ->get();
 
-        return $groups->map(
-            fn($group) =>
-            $this->buildGroupTree($group, $start, $end)
-        )->toArray();
-    }
+        $data = [];
 
-    protected function buildGroupTree($group, $start, $end): array
-    {
-        $total = 0;
-        $accounts = [];
+        foreach ($groups as $group) {
+            $groupData = $this->buildGroupTree($group, $start, $end);
 
-        foreach ($group->anakAkuns->whereNull('parent_id') as $akun) {
-
-            $akunData = $this->buildAkunTree($akun, $start, $end);
-
-            $total += $akunData['total'];
-            $accounts[] = $akunData;
+            if ($groupData !== null) {
+                $data[] = $groupData;
+            }
         }
 
+        return $data;
+    }
+
+    protected function buildGroupTree($group, $start, $end): ?array
+    {
+        $accounts = [];
         $children = [];
+
+        foreach ($group->anakAkuns->whereNull('parent_id') as $akun) {
+            $akunData = $this->buildAkunTree($akun, $start, $end);
+            if ($akunData !== null)
+                $accounts[] = $akunData;
+        }
 
         foreach ($group->children as $child) {
             $childData = $this->buildGroupTree($child, $start, $end);
-            $total += $childData['total'];
-            $children[] = $childData;
+            if ($childData !== null)
+                $children[] = $childData;
+        }
+
+        $total = collect($accounts)->sum('total') +
+            collect($children)->sum('total');
+
+        if ($this->hideZero && abs($total) < 0.01) {
+            return null;
         }
 
         return [
             'nama' => $group->nama,
-            'total' => $total,
+            'total' => round($total, 2),
             'accounts' => $accounts,
             'children' => $children,
         ];
     }
 
-    protected function buildAkunTree($akun, $start, $end): array
+    protected function buildAkunTree($akun, $start, $end): ?array
     {
-        $total = $this->calculateRecursiveSaldo($akun, $start, $end);
-
         $children = [];
 
+        $direct = JurnalUmum::whereBetween('tgl', [$start, $end])
+            ->where('no_akun', $akun->kode_anak_akun)
+            ->get();
+
+        $total = $direct->sum('debit') - $direct->sum('kredit');
+
+        foreach ($akun->subAnakAkuns as $sub) {
+            $subJurnal = JurnalUmum::whereBetween('tgl', [$start, $end])
+                ->where('no_akun', $sub->kode_sub_anak_akun)
+                ->get();
+
+            $total += $subJurnal->sum('debit') - $subJurnal->sum('kredit');
+        }
+
         foreach ($akun->children as $child) {
-            $children[] = $this->buildAkunTree($child, $start, $end);
+            $childData = $this->buildAkunTree($child, $start, $end);
+            if ($childData !== null)
+                $children[] = $childData;
+        }
+
+        $total += collect($children)->sum('total');
+
+        if ($this->hideZero && abs($total) < 0.01) {
+            return null;
         }
 
         return [
             'kode' => $akun->kode_anak_akun,
             'nama' => $akun->nama_anak_akun,
-            'total' => $total,
+            'total' => round($total, 2),
             'children' => $children,
         ];
-    }
-
-    protected function calculateRecursiveSaldo($akun, $start, $end): float
-    {
-        $kodeList = [];
-        $this->collectAllKode($akun, $kodeList);
-
-        $journals = JurnalUmum::whereBetween('tgl', [$start, $end])
-            ->whereIn('no_akun', $kodeList)
-            ->get();
-
-        $totalDebit = $journals->sum('debit');
-        $totalKredit = $journals->sum('kredit');
-
-        return $totalDebit - $totalKredit;
-    }
-
-    protected function collectAllKode($akun, &$kodeList): void
-    {
-        $kodeList[] = $akun->kode_anak_akun;
-
-        foreach ($akun->subAnakAkuns as $sub) {
-            $kodeList[] = $sub->kode_sub_anak_akun;
-        }
-
-        foreach ($akun->children as $child) {
-            $this->collectAllKode($child, $kodeList);
-        }
     }
 }
