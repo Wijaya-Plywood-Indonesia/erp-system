@@ -155,8 +155,8 @@ class ProduksiInflowService
             $m3TotalAllLahan = $totalOutputHarian[$hasil->id_produksi];
             $pekerja = ($produksi->detailPegawaiRotary->count() ?? 0);
 
-            $calculatePekerja = $pekerja * ($m3 / $m3TotalAllLahan);
-            $calculatePekerja = round($calculatePekerja);
+            $msa = $pekerja * ($m3 / $m3TotalAllLahan);
+            $calculatePekerja = round($msa) == 0 ? 1 : round($msa);
             $penyusutan = $produksi->mesin->penyusutan ?? 0;
 
             return [
