@@ -229,7 +229,7 @@ class ProduksiInflowService
                 'seri' => $nota->kayuMasuk->seri ?? '-',
                 'banyak' => $items->sum('kuantitas'),
                 'kubikasi' => (float) $items->sum('kubikasi'),
-                'poin' => (int) $items->sum(fn($i) => $this->calculatePoin($i))
+                'poin' => (float) $items->sum(fn($i) => $this->calculatePoin($i))
             ];
         });
     }
