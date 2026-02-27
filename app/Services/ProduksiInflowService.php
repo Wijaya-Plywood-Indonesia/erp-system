@@ -71,15 +71,21 @@ class ProduksiInflowService
             $batchInfo = $batch['info'];
             $batchInfo['tgl_buka_lahan'] = $tglBukaFix;
             $total_poin = number_format($dataMasuk->sum('poin'), 2, ',', '.');
-            $harga_v_ongkos = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj']) / $batch['grand_total_outflow_m3'] ?? 1 );
-            $harga_v_ongkos_penyusutan = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj'] + $batch['grand_total_outflow_penyusutan']) / $batch['grand_total_outflow_m3'] ?? 1 );
+            $harga_v_ongkos = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj']) / $batch['grand_total_outflow_m3'] ?? 1);
+            $harga_v_ongkos_penyusutan = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj'] + $batch['grand_total_outflow_penyusutan']) / $batch['grand_total_outflow_m3'] ?? 1);
 
+            $outflowCollection = collect($batch['outflow_detail']);
+            $jenis_kayu = $outflowCollection->contains(function ($item) {
+                $namaMesin = strtoupper($item['mesin'] ?? '');
+                return str_contains($namaMesin, 'SPINDLESS') || str_contains($namaMesin, 'MERANTI');
+            });
 
             $laporanFinal[] = [
                 'batch_info' => $batchInfo,
                 'inflow' => $dataMasuk,
                 'outflow' => $batch['outflow_detail'],
                 'summary' => [
+                    'jenis_kayu' => $jenis_kayu ? "KAYU 260" : "KAYU 130",
                     'total_kayu_masuk' => (int) $dataMasuk->sum('banyak'),
                     'total_masuk_m3' => (float) number_format($dataMasuk->sum('kubikasi'), 4),
                     'total_keluar_m3' => (float) number_format($batch['grand_total_outflow_m3'], 4),
@@ -87,7 +93,7 @@ class ProduksiInflowService
                     'rendemen' => $dataMasuk->sum('kubikasi') > 0
                         ? number_format(($batch['grand_total_outflow_m3'] / $dataMasuk->sum('kubikasi')) * 100, 2) . '%'
                         : '0%',
-                    'harga_veneer' => (float) ($dataMasuk->sum('poin') / $batch['grand_total_outflow_m3'] ?? 1 ),
+                    'harga_veneer' => (float) ($dataMasuk->sum('poin') / $batch['grand_total_outflow_m3'] ?? 1),
                     'harga_v_ongkos' => $harga_v_ongkos,
                     'harga_vop' => $harga_v_ongkos_penyusutan
                 ]
@@ -126,14 +132,31 @@ class ProduksiInflowService
             ->whereIn('id_penggunaan_lahan', $idsPenggunaanLahan)
             ->get();
 
-        $groupedOutflow = $outflowData->map(function ($hasil) use ($ongkosPekerja) {
+        $produksiIds = $outflowData->pluck('id_produksi')->unique()->toArray();
+
+        $totalOutputHarian = DetailHasilPaletRotary::whereIn('id_produksi', $produksiIds)
+            ->with('setoranPaletUkuran')
+            ->get()
+            ->groupBy('id_produksi')
+            ->map(function ($details) {
+                return $details->sum(function ($d) {
+                    $u = $d->setoranPaletUkuran;
+                    return $u ? ($u->panjang * $u->lebar * $u->tebal * $d->total_lembar) / 10_000_000 : 0;
+                });
+            });
+
+        $groupedOutflow = $outflowData->map(function ($hasil) use ($ongkosPekerja, $totalOutputHarian) {
             $produksi = $hasil->produksi;
             $ukuran = $hasil->setoranPaletUkuran;
             $totalLembar = (int) ($hasil->total_lembar ?? 0);
 
             // Perbaikan pembagi kubikasi agar akurat (10^9 untuk mm ke m3)
             $m3 = $ukuran ? ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $totalLembar) / 10_000_000 : 0;
+            $m3TotalAllLahan = $totalOutputHarian[$hasil->id_produksi];
             $pekerja = ($produksi->detailPegawaiRotary->count() ?? 0);
+
+            $calculatePekerja = $pekerja * ($m3 / $m3TotalAllLahan);
+            $calculatePekerja = round($calculatePekerja);
             $penyusutan = $produksi->mesin->penyusutan ?? 0;
 
             return [
@@ -143,7 +166,7 @@ class ProduksiInflowService
                 'ukuran' => $ukuran ? "{$ukuran->panjang} x {$ukuran->lebar} x {$ukuran->tebal}" : '-',
                 'banyak' => $totalLembar,
                 'kubikasi' => $m3,
-                'pekerja' => (string) $pekerja . " Orang",
+                'pekerja' => (string) $calculatePekerja . " Orang",
                 'ongkos' => $pekerja * $ongkosPekerja,
                 'penyusutan' => $penyusutan
             ];
