@@ -60,8 +60,13 @@
                         class="cursor-pointer border-b border-gray-100 hover:bg-gray-400 dark:border-white/5 dark:hover:bg-white/5 transition-colors"
                         :class="selected.includes({{ $index }}) ? 'bg-gray-50 dark:bg-white/5' : ''">
                         {{-- <td class="px-4 py-4 whitespace-nowrap">{{ $data['tgl_masuk'] ?? '2026-02-19' }}</td> --}}
-                        <td class="px-4 py-4 font-bold text-primary-600 whitespace-nowrap">
-                            {{ $row['batch_info']['kode'] . ' ' . $row['batch_info']['lahan'] . ' ' . $row['batch_info']['kode_kayu'] }}
+                        <td class="px-4 py-4 font-bold whitespace-nowrap">
+                            <span class="text-primary-600 dark:text-primary-500 me-0.5">{{ $row['batch_info']['kode'] }}</span> 
+                            {{ $row['batch_info']['lahan'] }} 
+                            <span class="ms-0.5 text-primary-700 dark:text-primary-300 text-xs">
+                                {{ $row['batch_info']['kode_kayu'] }}
+                            </span>
+
                         </td>
                         <td class="px-4 py-4 whitespace-nowrap text-center">{{ $row['summary']['total_kayu_masuk'] ?? 0 }}</td>
                         <td class="px-4 py-4 whitespace-nowrap">{{ number_format($row['summary']['total_masuk_m3'] ?? 0, 4) }} m³</td>
@@ -115,6 +120,7 @@
                                 <div class="rounded-lg border border-gray-200 dark:border-white/10 overflow-hidden">
                                     <button @click="openKeluar = !openKeluar" 
                                             class="w-full flex justify-between items-center px-4 py-2 bg-white dark:bg-gray-800 font-bold text-sm">
+                                        {{-- <span>🪵KAYU KELUAR - {{ $row['summary']['jenis_kayu'] }}</span> --}}
                                         <span>🪵KAYU KELUAR</span>
                                         <svg class="w-4 h-4 transition-transform" :class="openKeluar ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                                     </button>
@@ -143,7 +149,9 @@
                                                     <td class="px-2 py-2">{{ $kk['total_banyak'] ?? 0 }}</td>
                                                     <td class="px-2 py-2">{{ number_format($kk['total_kubikasi'] ?? 0, 4) }} m³</td>
                                                     <td class="px-2 py-2">{{ $kk['pekerja'] ?? '-' }}</td>
-                                                    <td class="px-2 py-2 text-green-600 dark:text-green-400 font-bold">{{ $kk['ongkos'] ? 'Rp ' . number_format($kk['ongkos']) : "0 ( Belum Diatur )" }}</td>
+                                                    <td class="px-2 py-2 font-bold {{ $kk['ongkos'] > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">
+                                                        {{ $kk['ongkos'] > 0 ? 'Rp ' . number_format($kk['ongkos']) : "0 ( Belum Diatur )" }}
+                                                    </td>
                                                     <td class="px-2 py-2">{{ $kk['penyusutan'] ? 'Rp ' . number_format($kk['penyusutan'] ?? 0) : "0 ( Belum Diatur )" }}</td>
                                                 </tr>
                                                 @endforeach
