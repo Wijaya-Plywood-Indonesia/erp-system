@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\DetailHasilPaletRotary;
+use App\Models\DetailTurusanKayu;
 use App\Models\HargaPegawai;
 use App\Models\PenggunaanLahanRotary;
 use App\Models\NotaKayu;
@@ -70,7 +71,7 @@ class ProduksiInflowService
 
             $batchInfo = $batch['info'];
             $batchInfo['tgl_buka_lahan'] = $tglBukaFix;
-            $total_poin = number_format($dataMasuk->sum('poin'), 2, ',', '.');
+            $total_poin = number_format($dataMasuk->sum('poin'), 0, ',', '.');
             $harga_v_ongkos = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj']) / $batch['grand_total_outflow_m3'] ?? 1);
             $harga_v_ongkos_penyusutan = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj'] + $batch['grand_total_outflow_penyusutan']) / $batch['grand_total_outflow_m3'] ?? 1);
 
@@ -87,7 +88,7 @@ class ProduksiInflowService
                 'summary' => [
                     'jenis_kayu' => $jenis_kayu ? "KAYU 260" : "KAYU 130",
                     'total_kayu_masuk' => (int) $dataMasuk->sum('banyak'),
-                    'total_masuk_m3' => (float) number_format($dataMasuk->sum('kubikasi'), 4),
+                    'total_masuk_m3' => $dataMasuk->sum('kubikasi'),
                     'total_keluar_m3' => (float) number_format($batch['grand_total_outflow_m3'], 4),
                     'total_poin' => $total_poin,
                     'rendemen' => $dataMasuk->sum('kubikasi') > 0
@@ -116,11 +117,12 @@ class ProduksiInflowService
         $first = $records->first();
         $last = $records->first(fn($i) => $i->jumlah_batang > 0);
 
-        $ongkosPekerja = HargaPegawai::first()
-            ->value('harga') ?? 0;
+        // ! ONGKOS PEKERJA
+            $ongkosPekerja = HargaPegawai::first()
+                ->value('harga') ?? 0;
+        // !
 
         $idsPenggunaanLahan = $records->pluck('id')->toArray();
-
 
         // SOLUSI 3: Eager Loading dengan pembatasan kolom pada relasi
         $outflowData = DetailHasilPaletRotary::with([
@@ -167,7 +169,7 @@ class ProduksiInflowService
                 'banyak' => $totalLembar,
                 'kubikasi' => $m3,
                 'pekerja' => (string) $calculatePekerja . " Orang",
-                'ongkos' => $pekerja * $ongkosPekerja,
+                'ongkos' => $calculatePekerja * $ongkosPekerja,
                 'penyusutan' => $penyusutan
             ];
         })->groupBy(fn($item) => $item['tgl'] . $item['mesin'] . $item['ukuran'])
@@ -223,13 +225,53 @@ class ProduksiInflowService
         }
 
         return $query->get()->map(function ($nota) use ($idLahan) {
-            $items = $nota->kayuMasuk->detailTurusanKayus;
+            $kayuMasukId = $nota->id_kayu_masuk;
+
+            // Perhitungan Tingkat SQL Tinggi untuk Kubikasi dan Poin
+
+            $totals = DetailTurusanKayu::query()
+                ->where('detail_turusan_kayus.id_kayu_masuk', $kayuMasukId)
+                ->where('detail_turusan_kayus.lahan_id', $idLahan)
+                ->leftJoin('harga_kayus', function ($join) {
+                    $join->on('detail_turusan_kayus.jenis_kayu_id', '=', 'harga_kayus.id_jenis_kayu')
+                        ->on('detail_turusan_kayus.grade', '=', 'harga_kayus.grade')
+                        ->on('detail_turusan_kayus.panjang', '=', 'harga_kayus.panjang')
+                        ->whereColumn('detail_turusan_kayus.diameter', '>=', 'harga_kayus.diameter_terkecil')
+                        ->whereColumn('detail_turusan_kayus.diameter', '<=', 'harga_kayus.diameter_terbesar');
+                })
+                ->selectRaw("
+                        SUM(detail_turusan_kayus.kuantitas) as total_qty,
+                        
+                        /* 1. KUBIKASI (Tetap pakai ROUND 4 desimal karena ini sudah FIX sebelumnya) */
+                        SUM(
+                            ROUND(
+                                (CAST(detail_turusan_kayus.panjang AS DECIMAL(20,4)) * CAST(detail_turusan_kayus.diameter AS DECIMAL(20,4)) * CAST(detail_turusan_kayus.diameter AS DECIMAL(20,4)) * 0.785 / 1000000) 
+                                * CAST(detail_turusan_kayus.kuantitas AS DECIMAL(20,4)), 
+                            4)
+                        ) as total_kubikasi,
+
+                        /* 2. POIN: Kita gunakan FLOOR untuk membuang desimal di setiap baris (Gaya Excel) */
+                        SUM(
+                            FLOOR(
+                                (COALESCE(harga_kayus.harga_beli, 0) * ROUND(
+                                    (CAST(detail_turusan_kayus.panjang AS DECIMAL(20,4)) * CAST(detail_turusan_kayus.diameter AS DECIMAL(20,4)) * CAST(detail_turusan_kayus.diameter AS DECIMAL(20,4)) * 0.785 / 1000000) 
+                                    * CAST(detail_turusan_kayus.kuantitas AS DECIMAL(20,4)), 
+                                4)
+                                ) * 1000
+                            )
+                        ) as total_poin,
+
+                        COUNT(CASE WHEN harga_kayus.harga_beli IS NULL THEN 1 END) as harga_kosong_count
+                    ")
+                ->first();
             return [
                 'tanggal' => $nota->created_at->format('d-m-Y'),
-                'seri' => $nota->kayuMasuk->seri ?? '-',
-                'banyak' => $items->sum('kuantitas'),
-                'kubikasi' => (float) $items->sum('kubikasi'),
-                'poin' => (float) $items->sum(fn($i) => $this->calculatePoin($i))
+                'seri' => ($totals->harga_kosong_count > 0)
+                    ? $nota->kayuMasuk->seri . " ⚠️ (Harga Belum Atur: $totals->harga_kosong_count Baris)"
+                    : $nota->kayuMasuk->seri,
+                'banyak' => (int) $totals->total_qty,
+                'kubikasi' => (float) $totals->total_kubikasi,
+                'poin' => (float) $totals->total_poin // Poin sudah sinkron dengan database & excel
             ];
         });
     }

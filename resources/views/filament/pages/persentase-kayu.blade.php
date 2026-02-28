@@ -152,7 +152,7 @@
                                                     <td class="px-2 py-2 font-bold {{ $kk['ongkos'] > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">
                                                         {{ $kk['ongkos'] > 0 ? 'Rp ' . number_format($kk['ongkos']) : "0 ( Belum Diatur )" }}
                                                     </td>
-                                                    <td class="px-2 py-2">{{ $kk['penyusutan'] ? 'Rp ' . number_format($kk['penyusutan'] ?? 0) : "0 ( Belum Diatur )" }}</td>
+                                                    <td class="px-2 py-2 {{ $kk['penyusutan'] == 0  && 'text-red-600 dark:text-red-400'  }}">{{ $kk['penyusutan'] != 0 ? 'Rp ' . number_format($kk['penyusutan'] ?? 0) : "0 ( Belum Diatur )" }}</td>
                                                 </tr>
                                                 @endforeach
                                             </tbody>

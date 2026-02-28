@@ -71,15 +71,19 @@ class DetailTurusanKayusTable
                         $diameter = (int) ($record->diameter ?? 0);
                         $kuantitas = (int) ($record->kuantitas ?? 1);
 
-                        // Rumus Lengkap: (P * D * D * Qty * 0.785) / 1.000.000
-                        $kubikasi = ($panjang * $diameter * $diameter * $kuantitas * 0.785) / 1_000_000;
-
-                        return number_format($kubikasi, 6, ',', '.');
+                        // Kembalikan angka MURNI (float), jangan di number_format di sini
+                        return ($panjang * $diameter * $diameter * $kuantitas * 0.785) / 1_000_000;
                     })
+                    // Gunakan fungsi bawaan Filament untuk format tampilan agar tidak merusak data asli
+                    ->numeric(
+                        decimalPlaces: 6,
+                        decimalSeparator: ',',
+                        thousandsSeparator: '.',
+                    )
                     ->suffix(' m³')
                     ->alignRight()
                     ->toggleable(isToggledHiddenByDefault: true),
-
+                    
                 TextColumn::make('createdBy.name')
                     ->label('Dibuat Oleh')
                     ->toggleable(isToggledHiddenByDefault: true),
