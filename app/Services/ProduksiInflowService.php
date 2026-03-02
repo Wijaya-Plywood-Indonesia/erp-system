@@ -170,7 +170,10 @@ class ProduksiInflowService
                 'kubikasi' => $m3,
                 'pekerja' => (string) $calculatePekerja . " Orang",
                 'ongkos' => $calculatePekerja * $ongkosPekerja,
-                'penyusutan' => $penyusutan
+                'penyusutan' => $penyusutan,
+                'panjang' => $ukuran->panjang,
+                'lebar' => $ukuran->lebar,
+                'tebal' => $ukuran->tebal,
             ];
         })->groupBy(fn($item) => $item['tgl'] . $item['mesin'] . $item['ukuran'])
             ->map(fn($group) => [
@@ -182,7 +185,11 @@ class ProduksiInflowService
                 'total_kubikasi' => number_format($group->sum('kubikasi'), 4),
                 'pekerja' => $group[0]['pekerja'],
                 'ongkos' => $group[0]['ongkos'],
-                'penyusutan' => $group[0]['penyusutan']
+                'penyusutan' => $group[0]['penyusutan'],
+                'panjang' => $group[0]['panjang'],
+                'lebar' => $group[0]['lebar'],
+                'tebal' => $group[0]['tebal'],
+
             ])->values()->toArray();
 
         return [

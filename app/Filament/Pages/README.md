@@ -1,4 +1,4 @@
-# 🪵 Sistem Inflow-Outflow Produksi Veneer Rotary
+# 🪵 Persentase Kayu | Sistem Inflow-Outflow Produksi Rotary
 
 Dokumentasi ini menjelaskan logika teknis dan arsitektur perhitungan yang digunakan dalam `ProduksiInflowService` untuk mensinkronisasi data kayu masuk (Inflow) dengan hasil produksi (Outflow).
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\PreviewPersentaseKayu;
 use App\Services\ProduksiInflowService;
 use App\Services\ProduksiOutflowService;
 use App\Http\Controllers\KontrakController;
@@ -12,6 +13,11 @@ use App\Http\Controllers\NotaBMController;
 use App\Http\Controllers\LaporanKayuMasukController;
 use App\Http\Controllers\NotaKayuTurusController;
 
+Route::middleware(['auth', 'verified'])->prefix('admin')->group(function () {
+    // Route spesifik untuk preview excel
+    Route::get('/persentase-kayu/preview-excel', [PreviewPersentaseKayu::class, 'index'])
+        ->name('filament.admin.pages.persentase-kayu.preview');
+});
 
 
 Route::get('/kontrak/bulk-print', [KontrakController::class, 'bulkPrint'])
