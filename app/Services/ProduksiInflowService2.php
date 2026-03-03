@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\DetailHasilPaletRotary;
 use App\Models\DetailTurusanKayu;
 use App\Models\HargaPegawai;
-use App\Models\Lahan;
 use App\Models\PenggunaanLahanRotary;
 use App\Models\NotaKayu;
 use App\Models\HargaKayu;
@@ -113,25 +112,15 @@ class ProduksiInflowService
         );
     }
 
-    public function getLaporanBatchPreview($bulan = null, $tahun = null, $lahan = null)
+    public function getLaporanBatchPreview($bulan = null, $tahun = null)
     {
         $bulan = $bulan ?: date('m');
         $tahun = $tahun ?: date('y');
-        $lahanX = $this->getActiveLahanSheets($bulan,$tahun)[0] ?? null;
-        // if (!isset($lahan) && !isset($lahanX)) {
-        //     return null;
-        // } 
-        if(!isset($lahan)) {
-            $lahan = $lahanX;
-        }
 
         $paginatedClosures = PenggunaanLahanRotary::with([
             'lahan:id,nama_lahan,kode_lahan',
             'jenisKayu:id,nama_kayu'
         ])
-            ->whereHas('lahan', function($query) use ($lahan) {
-                $query->where('nama_lahan', $lahan);
-            })
             ->where('jumlah_batang', '>', 0)
             ->whereMonth('created_at', $bulan)
             ->whereYear('created_at', $tahun)
@@ -218,16 +207,21 @@ class ProduksiInflowService
         return collect($laporanFinal);
     }
 
-
-    public function getLaporanBatchRekap($bulan = null, $tahun = null, $lahan = null)
+    public function getLaporanBatchRekapFix($bulan = null, $tahun = null, $lahan = null)
     {
         $bulan = $bulan ?: date('m');
         $tahun = $tahun ?: date('Y');
-        $lahanX = $this->getActiveLahanSheets($bulan,$tahun)[0] ?? null;
-        // if (!isset($lahan) && !isset($lahanX)) {
-        //     return null;
-        // } 
-        if(!isset($lahan)) {
+
+        $lahanX = $this->getActiveLahanSheets($bulan, $tahun)[0] ?? null;
+
+        if ($lahan == null && $lahanX == null) {
+            return null;
+        }
+
+
+
+
+        if (!isset($lahan)) {
             $lahan = $lahanX;
         }
 
@@ -299,6 +293,9 @@ class ProduksiInflowService
             'ongkos_pekerja' => $ongkosPekerja
         ]);
 
+        return $result[0] ?? null;
+        /*
+        
         $sql = "
             WITH REKAP_INFLOW AS (
                 SELECT 
@@ -364,11 +361,66 @@ class ProduksiInflowService
         ]);
 
         return $result[0] ?? null;
-
+            */
     }
+public function getLaporanBatchRekap($bulan = null, $tahun = null)
+    {
+        $bulan = $bulan ?: date('m');
+        $tahun = $tahun ?: date('Y');
 
-    
-    private function stitchBatchWithOutflow(array $tempGroup): array
+        $sql = "
+            WITH REKAP_INFLOW AS (
+                SELECT 
+                    SUM(dtk.kuantitas) as total_batang_masuk,
+                    SUM(ROUND((CAST(dtk.panjang AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * 0.785 / 1000000) * CAST(dtk.kuantitas AS DECIMAL(20,4)), 4)) as total_m3_masuk,
+                    SUM(
+                        FLOOR(
+                            (COALESCE(hk.harga_beli, 0) * ROUND(
+                                (CAST(dtk.panjang AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * 0.785 / 1000000) 
+                                * CAST(dtk.kuantitas AS DECIMAL(20,4)), 
+                            4)
+                            ) * 1000
+                        )
+                    ) as total_poin_inflow
+                FROM detail_turusan_kayus dtk
+                JOIN nota_kayus nk ON dtk.id_kayu_masuk = nk.id_kayu_masuk
+                LEFT JOIN harga_kayus hk ON dtk.jenis_kayu_id = hk.id_jenis_kayu 
+                    AND dtk.grade = hk.grade 
+                    AND dtk.panjang = hk.panjang 
+                    AND dtk.diameter >= hk.diameter_terkecil 
+                    AND dtk.diameter <= hk.diameter_terbesar
+                WHERE nk.status LIKE '%Sudah Diperiksa%'
+                AND MONTH(nk.created_at) = :bulan1 AND YEAR(nk.created_at) = :tahun1
+            ),
+            REKAP_OUTFLOW AS (
+                SELECT 
+                    SUM((CAST(spu.panjang AS DECIMAL(20,4)) * CAST(spu.lebar AS DECIMAL(20,4)) * CAST(spu.tebal AS DECIMAL(20,4)) * CAST(dhp.total_lembar AS DECIMAL(20,4))) / 10000000) as total_m3_keluar,
+                    /* Agregasi Ongkos dan Penyusutan (Sesuaikan nama kolom jika berbeda di DB Anda) */
+                    SUM(COALESCE(dhp.total_ongkos, 0)) as total_ongkos_pkj,
+                    SUM(COALESCE(dhp.total_penyusutan, 0)) as total_penyusutan
+                FROM detail_hasil_palet_rotaries dhp
+                JOIN ukurans spu ON dhp.id_ukuran = spu.id
+                WHERE MONTH(dhp.created_at) = :bulan2 AND YEAR(dhp.created_at) = :tahun2
+            )
+            SELECT 
+                i.*, 
+                o.*,
+                COALESCE((o.total_m3_keluar / NULLIF(i.total_m3_masuk, 0)) * 100, 0) as total_rendemen,
+                COALESCE((i.total_poin_inflow / NULLIF(o.total_m3_keluar, 0)), 0) as total_harga_v,
+                /* Rumus: (Total Poin + Total Ongkos) / Total M3 Keluar */
+                COALESCE(((i.total_poin_inflow + o.total_ongkos_pkj) / NULLIF(o.total_m3_keluar, 0)), 0) as total_harga_v_ongkos,
+                /* Rumus VOP: (Total Poin + Total Ongkos + Total Penyusutan) / Total M3 Keluar */
+                COALESCE(((i.total_poin_inflow + o.total_ongkos_pkj + o.total_penyusutan) / NULLIF(o.total_m3_keluar, 0)), 0) as total_harga_vop
+            FROM REKAP_INFLOW i, REKAP_OUTFLOW o
+        ";
+
+        $result = \DB::select($sql, [
+            'bulan1' => $bulan, 'tahun1' => $tahun,
+            'bulan2' => $bulan, 'tahun2' => $tahun
+        ]);
+
+        return $result[0] ?? null;
+    }    private function stitchBatchWithOutflow(array $tempGroup): array
     {
         $records = collect($tempGroup);
         $first = $records->first();
@@ -555,19 +607,5 @@ class ProduksiInflowService
             ->where('diameter_terbesar', '>=', $diameter)
             ->orderBy('diameter_terkecil', 'desc')
             ->value('harga_beli') ?? 0;
-    }
-
-    public function getActiveLahanSheets($bulan = null, $tahun = null)
-    {
-        $bulan = $bulan ?: date('m');
-        $tahun = $tahun ?: date('Y');
-
-        return Lahan::whereHas('penggunaanLahanRotaries.detailProduksiPalet', function ($query) use ($bulan, $tahun) {
-            $query->whereMonth('created_at', $bulan)
-                  ->whereYear('created_at', $tahun);
-        })
-        ->groupBy('nama_lahan')
-        ->pluck('nama_lahan')
-        ->toArray();
     }
 }
