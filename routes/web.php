@@ -1,5 +1,6 @@
 <?php
 
+use App\Exports\ExportExcelPersentaseKayuService;
 use App\Http\Controllers\PreviewPersentaseKayu;
 use App\Services\ProduksiInflowService;
 use App\Services\ProduksiOutflowService;
@@ -62,3 +63,5 @@ Route::get('/nota-kayu/{record}/turus', [NotaKayuTurusController::class, 'show']
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/produksi/export-excel', [PreviewPersentaseKayu::class, 'exportExcel'])->name('produksi.export-excel');

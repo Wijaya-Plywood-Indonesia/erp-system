@@ -13,34 +13,52 @@
         }
     </style>
 </head>
-<body class="antialiased text-slate-800 font-bold"> <div class="p-6">
+<body class="antialiased text-slate-800 font-bold">
+    <div class="p-6">
         <div class="mb-6 bg-white p-4 rounded-lg border border-slate-900 shadow-sm no-print">
-            <form action="{{ url()->current() }}" method="GET" class="flex items-end gap-4">
-                <div>
-                    <label class="block text-xs font-black text-slate-700 uppercase mb-1">Bulan Produksi</label>
-                    <select name="bulan" class="border border-slate-900 rounded px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none">
-                        @foreach(range(1, 12) as $m)
-                            <option value="{{ sprintf('%02d', $m) }}" {{ $selectedBulan == $m ? 'selected' : '' }}>
-                                {{ date('F', mktime(0, 0, 0, $m, 1)) }}
-                            </option>
-                        @endforeach
-                    </select>
+            <form action="{{ url()->current() }}" method="GET">
+                <div class="flex items-center justify-between  gap-4">
+                    {{-- <div class="text-3xl font-bold text-slate-900">
+                        PREVIEW EXPORT EXCEL
+                    </div> --}}
+                    <div class="flex items-end gap-4">
+
+                        <div>
+                            <label class="block text-xs font-black text-slate-700 uppercase mb-1">Bulan Produksi</label>
+                            <select name="bulan" class="border border-slate-900 rounded px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                                @foreach(range(1, 12) as $m)
+                                    <option value="{{ sprintf('%02d', $m) }}" {{ $selectedBulan == $m ? 'selected' : '' }}>
+                                        {{ date('F', mktime(0, 0, 0, $m, 1)) }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-black text-slate-700 uppercase mb-1">Tahun</label>
+                            <select name="tahun" class="border border-slate-900 rounded px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                                @foreach(range(date('Y')-2, date('Y')) as $y)
+                                    <option value="{{ $y }}" {{ $selectedTahun == $y ? 'selected' : '' }}>{{ $y }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <button type="submit" class="bg-slate-900 text-white px-6 py-2 rounded text-sm font-black hover:bg-slate-800 transition-colors">
+                            TAMPILKAN DATA
+                        </button>
+                    </div>
+                    {{-- <button type="button" onclick="window.print()" class="ml-auto bg-emerald-600 text-white px-6 py-2 rounded text-sm font-black hover:bg-emerald-700 transition-colors">
+                        CETAK EXCEL
+                    </button> --}}
+                    <a href="{{ route('produksi.export-excel', request()->query()) }}" 
+                        target="_blank"
+                        class="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg shadow-sm transition-all">
+                        
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        
+                        EXPORT EXCEL
+                    </a>
                 </div>
-                <div>
-                    <label class="block text-xs font-black text-slate-700 uppercase mb-1">Tahun</label>
-                    <select name="tahun" class="border border-slate-900 rounded px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none">
-                        @foreach(range(date('Y')-2, date('Y')) as $y)
-                            <option value="{{ $y }}" {{ $selectedTahun == $y ? 'selected' : '' }}>{{ $y }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <button type="submit" class="bg-slate-900 text-white px-6 py-2 rounded text-sm font-black hover:bg-slate-800 transition-colors">
-                    TAMPILKAN DATA
-                </button>
-                
-                <button type="button" onclick="window.print()" class="ml-auto bg-emerald-600 text-white px-6 py-2 rounded text-sm font-black hover:bg-emerald-700 transition-colors">
-                    CETAK / PDF
-                </button>
             </form>
         </div>
 
@@ -121,44 +139,45 @@
                         <th colspan="1" class="border-r border-slate-900 px-3 py-1 text-slate-900 text-center font-bold"></th>
                         
                         <th colspan="1" class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
-                            {{ number_format($rekap->total_batang_masuk, 0, ',', '.') }}
+                            {{ number_format($rekap['total_kayu_masuk'], 0, ',', '.') }}
                         </th>
                         
                         <th colspan="1" class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">-</th>
                         
                         <th colspan="1" class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
-                            {{ number_format($rekap->total_m3_masuk, 4, ',', '.') }}
+                            {{ number_format($rekap['total_kubikasi_kayu_masuk'], 4, ',', '.') }}
                         </th>
                         
                         <th colspan="1" class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
-                            {{ number_format($rekap->total_poin_inflow, 0, ',', '.') }}
+                            {{ number_format($rekap['total_poin_masuk'], 0, ',', '.') }}
                         </th>
-                        
+                    
                         <th colspan="4" class=" bg-amber-400"></th>
-                        
                         <th colspan="1" class="flex items-center h-full border-r border-slate-900 justify-end">
                             <div class="min-w-24 h-full bg-amber-400 text-end justify-end border-l flex items-center border-slate-900 px-3 py-1 min-h-12 text-slate-900 font-black">
-                                {{ number_format($rekap->total_m3_keluar, 4, ',', '.') }}
+                                {{ number_format($rekap['total_kubikasi_veneer'], 4, ',', '.') }}
                             </div>
+
                         </th>
 
                         <th colspan="1" class="border-r border-slate-900 px-3 py-1 w-32 font-bold">-</th>
                         
                         <th colspan="1" class="border-r border-slate-900 px-3 py-1 w-32 font-bold text-blue-800">
-                            {{ number_format($rekap->total_rendemen, 2) }}%
+                            {{ $rekap['rata_rata_rendemen'] }}
                         </th>
                         
                         <th class="border-r border-slate-900 px-3 py-1 bg-amber-400 font-black text-slate-900 uppercase">
-                            Rp {{ number_format($rekap->total_harga_v, 0, ',', '.') }}
+                            {{-- Menghitung total harga v murni dari poin / m3 veneer --}}
+                            Rp {{ number_format($rekap['total_poin_masuk'] / ($rekap['total_kubikasi_veneer'] ?: 1), 0, ',', '.') }}
                         </th>
                         
                         <th colspan="2" class="border-r border-slate-900 px-3 py-1 "></th>
                         <th class="border-r border-slate-900 px-3 py-1 bg-amber-400 font-black text-slate-900 uppercase">
-                            Rp {{ number_format($rekap->total_harga_v_ongkos, 0, ',', '.') }}
+                            Rp {{ number_format($rekap['total_harga_v_ongkos'], 0, ',', '.') }}
                         </th>
                         <th colspan="1" class="border-r border-slate-900 px-3 py-1 "></th>
                         <th class="border-r border-slate-900 px-3 py-1 bg-amber-400 font-black text-slate-900 uppercase">
-                            Rp {{ number_format($rekap->total_harga_vop, 0, ',', '.') }}
+                            Rp {{ number_format($rekap['total_harga_vop'], 0, ',', '.') }}
                         </th>
                     </tr>
                 </thead>
@@ -248,6 +267,7 @@
                             <td class="px-3 py-2 bg-yellow-50/50 text-right font-black text-slate-900 border-l border-slate-900 whitespace-nowrap">Rp. {{number_format($item['summary']['harga_vop'], 0, ',', '.')}}</td>
                         </tr>
 
+                        @if(!$loop->last)
                         <tr class="h-6 bg-slate-50">
                             <td class="border-r border-slate-900"></td> <td class="border-r border-slate-900"></td> <td class="border-r border-slate-900"></td> <td class="border-r border-slate-900"></td> <td class="border-r border-slate-900"></td> <td class="border-r border-slate-900"></td> <td class="border-r border-slate-900"></td> 
                             <td colspan="5" class="p-0 border-r border-slate-900 w-[352px] h-full">
@@ -262,6 +282,7 @@
 
                             <td class="border-r border-slate-900"></td> <td class="border-r border-slate-900"></td> <td class="border-r border-slate-900"></td> <td class="border-r border-slate-900"></td> <td class="border-r border-slate-900"></td> <td class="border-r border-slate-900"></td> <td class="border-r border-slate-900"></td> <td class="border-slate-900"></td> 
                         </tr>
+                        @endif
                     @endforeach
                 </tbody>
             </table>
