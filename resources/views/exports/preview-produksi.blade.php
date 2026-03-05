@@ -45,19 +45,36 @@
                             TAMPILKAN DATA
                         </button>
                     </div>
-                    {{-- <button type="button" onclick="window.print()" class="ml-auto bg-emerald-600 text-white px-6 py-2 rounded text-sm font-black hover:bg-emerald-700 transition-colors">
-                        CETAK EXCEL
-                    </button> --}}
-                    <a href="{{ route('produksi.export-excel', request()->query()) }}" 
+                    @php
+                        // Validasi apakah sheets kosong atau null
+                        $isSheetsEmpty = empty($sheets) || count($sheets) === 0;
+                    @endphp
+
+                    @if($isSheetsEmpty)
+                        {{-- Tampilan saat DISABLE --}}
+                        <button type="button" 
+                                onclick="alert('Maaf, data kosong. Tidak ada laporan yang bisa di-export untuk periode ini.')"
+                                class="inline-flex items-center px-4 py-2 bg-slate-400 cursor-not-allowed text-white text-sm font-bold rounded-lg shadow-sm">
+                            
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            
+                            EXPORT EXCEL (KOSONG)
+                        </button>
+                    @else
+                        {{-- Tampilan saat AKTIF --}}
+                        <a href="{{ route('produksi.export-excel', request()->query()) }}" 
                         target="_blank"
                         class="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg shadow-sm transition-all">
-                        
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        
-                        EXPORT EXCEL
-                    </a>
+                            
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            
+                            EXPORT EXCEL
+                        </a>
+                    @endif
                 </div>
             </form>
         </div>
@@ -148,8 +165,8 @@
                             {{ number_format($rekap['total_kubikasi_kayu_masuk'], 4, ',', '.') }}
                         </th>
                         
-                        <th colspan="1" class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
-                            {{ number_format($rekap['total_poin_masuk'], 0, ',', '.') }}
+                        <th colspan="1" class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black whitespace-nowrap">
+                          Rp {{ number_format($rekap['total_poin_masuk'], 0, ',', '.') }}
                         </th>
                     
                         <th colspan="4" class=" bg-amber-400"></th>
@@ -160,23 +177,25 @@
 
                         </th>
 
-                        <th colspan="1" class="border-r border-slate-900 px-3 py-1 w-32 font-bold">-</th>
+                        <th colspan="1" class="border-r whitespace-nowrap bg-[#FF88BA] border-slate-900 px-3 py-1 w-32 font-bold">
+                            Rata - Rata
+                        </th>
                         
                         <th colspan="1" class="border-r border-slate-900 px-3 py-1 w-32 font-bold text-blue-800">
                             {{ $rekap['rata_rata_rendemen'] }}
                         </th>
                         
-                        <th class="border-r border-slate-900 px-3 py-1 bg-amber-400 font-black text-slate-900 uppercase">
+                        <th class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
                             {{-- Menghitung total harga v murni dari poin / m3 veneer --}}
-                            Rp {{ number_format($rekap['total_poin_masuk'] / ($rekap['total_kubikasi_veneer'] ?: 1), 0, ',', '.') }}
+                            Rp {{ number_format($rekap['total_harga_veneer'], 0, ',', '.') }}
                         </th>
                         
                         <th colspan="2" class="border-r border-slate-900 px-3 py-1 "></th>
-                        <th class="border-r border-slate-900 px-3 py-1 bg-amber-400 font-black text-slate-900 uppercase">
+                        <th class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
                             Rp {{ number_format($rekap['total_harga_v_ongkos'], 0, ',', '.') }}
                         </th>
                         <th colspan="1" class="border-r border-slate-900 px-3 py-1 "></th>
-                        <th class="border-r border-slate-900 px-3 py-1 bg-amber-400 font-black text-slate-900 uppercase">
+                        <th class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
                             Rp {{ number_format($rekap['total_harga_vop'], 0, ',', '.') }}
                         </th>
                     </tr>
@@ -238,7 +257,7 @@
                             </td>
 
                             <td class="border-r border-slate-900 px-3 py-2 bg-blue-50/30 text-center font-black text-blue-800">{{ $item['summary']['rendemen'] }}</td>
-                            <td class="border-r border-slate-900 px-3 py-2 bg-emerald-50/30 text-right font-black text-emerald-800">{{ $item['summary']['total_keluar_m3'] }}</td>
+                            <td class="border-r border-slate-900 px-3 py-2 bg-emerald-50/30 text-right font-black text-emerald-800 whitespace-nowrap">Rp. {{ number_format($item['summary']['harga_veneer'], 0, ',', '.') }}</td>
                             
                             <td class="border-r border-slate-900 p-0">
                                 <div class="flex flex-col divide-y divide-slate-900">

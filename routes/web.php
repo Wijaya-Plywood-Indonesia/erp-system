@@ -18,6 +18,9 @@ Route::middleware(['auth', 'verified'])->prefix('admin')->group(function () {
     // Route spesifik untuk preview excel
     Route::get('/persentase-kayu/preview-excel', [PreviewPersentaseKayu::class, 'index'])
         ->name('filament.admin.pages.persentase-kayu.preview');
+
+    Route::get('/persentase-kayu/export-excel', [PreviewPersentaseKayu::class, 'exportExcel'])->name('produksi.export-excel');
+
 });
 
 
@@ -63,5 +66,3 @@ Route::get('/nota-kayu/{record}/turus', [NotaKayuTurusController::class, 'show']
 Route::get('/', function () {
     return view('welcome');
 });
-
-Route::get('/produksi/export-excel', [PreviewPersentaseKayu::class, 'exportExcel'])->name('produksi.export-excel');

@@ -54,7 +54,7 @@ class ExportExcelPersentaseKayuService implements
             (float) $this->rekap['total_kubikasi_veneer'],
             'Rata-rata',
             $this->rekap['rata_rata_rendemen'],
-            (float) ($this->rekap['total_poin_masuk'] / ($this->rekap['total_kubikasi_veneer'] ?: 1)),
+            (float) $this->rekap['total_harga_veneer'],
             '',
             '',
             (float) $this->rekap['total_harga_v_ongkos'],
@@ -93,7 +93,7 @@ class ExportExcelPersentaseKayuService implements
                     (float) $prod['total_kubikasi'],
                     '06:00 - 16:00',
                     $isFirstInBatch ? $item['summary']['rendemen'] : '',
-                    $isFirstInBatch ? ($totalPoin / $totalM3Keluar) : '',
+                    $isFirstInBatch ? $item['summary']['harga_veneer'] : '',
                     $prod['pekerja'],
                     (float) $prod['ongkos'],
                     $isFirstInBatch ? (float) $item['summary']['harga_v_ongkos'] : '',
@@ -135,6 +135,7 @@ class ExportExcelPersentaseKayuService implements
 
         // MERGING HEADERS
         $sheet->mergeCells('A1:T1'); // ! NAMA LAHAN
+        $sheet->mergeCells('A4:B4'); // ! TOTAL
         $sheet->mergeCells('A2:A3'); // Tanggal
         $sheet->mergeCells('B2:B3'); // Habis
         $sheet->mergeCells('C2:G2'); // Group Kayu
@@ -156,9 +157,14 @@ class ExportExcelPersentaseKayuService implements
         ]);
 
         // BARIS TOTAL (Baris 3)
-        $sheet->getStyle('A4:T4')->applyFromArray([
+        $sheet->getStyle('A4:L4')->applyFromArray([
             'font' => ['bold' => true],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFC000']], // Oranye/Kuning Emas
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
+        ]);
+        $sheet->getStyle('M4:T4')->applyFromArray([
+            'font' => ['bold' => true],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FF88BA']], // Oranye/Kuning Emas
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
         ]);
 
@@ -170,6 +176,12 @@ class ExportExcelPersentaseKayuService implements
         $sheet->getStyle('R5:R' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFC000'); // Oranye Harga V+O
         $sheet->getStyle('S5:S' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Penyusutan
         $sheet->getStyle('T5:T' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFF00'); // Kuning Terang VOP
+        // ! TOTAL
+        $sheet->getStyle('C4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF'); // Kuning Terang VOP
+        $sheet->getStyle('E4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF'); // Kuning Terang VOP
+        $sheet->getStyle('H4:K4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF'); // Kuning Terang VOP
+        $sheet->getStyle('P4:Q4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF'); // Kuning Terang VOP
+        $sheet->getStyle('S4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF'); // Kuning Terang VOP
 
         // ALIGNMENT & BORDERS
         $sheet->getStyle('A5:T' . $lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
@@ -183,11 +195,13 @@ class ExportExcelPersentaseKayuService implements
         $sheet->getStyle('F4:F' . $lastRow)->getNumberFormat()->setFormatCode('0.0000');
         $sheet->getStyle('L4:L' . $lastRow)->getNumberFormat()->setFormatCode('0.0000');
         // ! POINT
-        // $sheet->getStyle('G4:G' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
-        $sheet->getStyle('G4:G' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
-        // !
-        $sheet->getStyle('O4:O' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
-        $sheet->getStyle('Q4:T' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
+        // Format Rupiah Standar (Rp 1.000.000)
+        $sheet->getStyle('D4:D' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
+        $sheet->getStyle('G4:G' . $lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
+
+        // Untuk baris lainnya
+        $sheet->getStyle('O4:O' . $lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
+        $sheet->getStyle('Q4:T' . $lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
 
         $mergeRow = ['C', 'D', 'E', 'F', 'G', 'N', 'O', 'R', 'T'];
         foreach ($this->mergeBatches as $batch) {
@@ -216,7 +230,7 @@ class ExportExcelPersentaseKayuService implements
             'D' => 9,
             'E' => 8,
             'F' => 12,
-            'G' => 14,
+            'G' => 18,
             'H' => 10,
             'I' => 8,
             'J' => 8,
@@ -225,8 +239,8 @@ class ExportExcelPersentaseKayuService implements
             'M' => 14,
             'N' => 9,
             'O' => 18,
-            'P' => 9,
-            'Q' => 12,
+            'P' => 12,
+            'Q' => 16,
             'R' => 20,
             'S' => 12,
             'T' => 20,

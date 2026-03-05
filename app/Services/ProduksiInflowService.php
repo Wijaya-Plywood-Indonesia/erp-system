@@ -5,28 +5,36 @@ namespace App\Services;
 use App\Models\DetailHasilPaletRotary;
 use App\Models\DetailTurusanKayu;
 use App\Models\HargaPegawai;
-use App\Models\Lahan;
 use App\Models\PenggunaanLahanRotary;
 use App\Models\NotaKayu;
 use App\Models\HargaKayu;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class ProduksiInflowService
 {
-    public function getLaporanBatch()
+    public function getLaporanBatch($month = null, $year = null, $nama_lahan = "Semua Lahan", $perPage = 10)
     {
-        // SOLUSI 1 & 3: Ambil hanya baris penutup batch (jumlah_batang > 0) dengan Pagination
-        // Batasi kolom yang diambil untuk menghemat memori
-        $paginatedClosures = PenggunaanLahanRotary::with([
+        $query = PenggunaanLahanRotary::with([
             'lahan:id,nama_lahan,kode_lahan',
             'jenisKayu:id,nama_kayu'
         ])
-            ->where('jumlah_batang', '>', 0)
-            ->orderBy('created_at', 'desc')
-            ->paginate(10); // Menghasilkan link pagination otomatis
+            ->where('jumlah_batang', '>', 0);
 
+        // Tambahkan Filter Tanggal
+        if ($month) {
+            $query->whereMonth('created_at', $month);
+        }
+        if ($year) {
+            $query->whereYear('created_at', $year);
+        }
+        if ($nama_lahan !== "Semua Lahan"){
+            $query->whereHas('lahan', function ($query) use ($nama_lahan) {
+                $query->where('nama_lahan', $nama_lahan);
+            });
+        }
+        $paginatedClosures = $query->orderBy('created_at', 'desc')
+            ->paginate($perPage);
         $laporanFinal = [];
 
         foreach ($paginatedClosures as $closure) {
@@ -113,14 +121,11 @@ class ProduksiInflowService
         );
     }
 
-    public function getLaporanBatchPreview($bulan = null, $tahun = null, $lahan = null)
+    public function getLaporanBatchPreview($bulan = null, $tahun = null, $lahan = "Semua Lahan", $perPage = 10)
     {
         $bulan = $bulan ?: date('m');
         $tahun = $tahun ?: date('y');
         $lahanX = $this->getActiveLahanSheets($bulan, $tahun)[0] ?? null;
-        // if (!isset($lahan) && !isset($lahanX)) {
-        //     return null;
-        // } 
         if (!isset($lahan)) {
             $lahan = $lahanX;
         }
@@ -221,32 +226,26 @@ class ProduksiInflowService
 
     public function getSummaryLaporanLahan($laporanFinalCollection)
     {
-        if ($laporanFinalCollection->isEmpty()) {
-            return null;
-        }
 
         $totalMasukM3 = $laporanFinalCollection->sum('summary.total_masuk_m3');
         $totalKeluarM3 = $laporanFinalCollection->sum('summary.total_keluar_m3');
+        $totalHargaVeneer = $laporanFinalCollection->avg('summary.harga_veneer');
 
         return [
-            'total_kayu_masuk' => $laporanFinalCollection->sum('summary.total_kayu_masuk'),
-            'total_kubikasi_kayu_masuk' => $totalMasukM3,
+            'total_kayu_masuk' => $laporanFinalCollection->sum('summary.total_kayu_masuk') ?? 0,
+            'total_kubikasi_kayu_masuk' => $totalMasukM3 ?? 0,
             'total_poin_masuk' => $laporanFinalCollection->sum(function ($item) {
                 // Menghapus format ribuan agar bisa dijumlahkan sebagai angka
                 return (float) str_replace(['.', ','], ['', '.'], $item['summary']['total_poin']);
-            }),
-            'total_kubikasi_veneer' => $totalKeluarM3,
+            }) ?? 0,
+            'total_kubikasi_veneer' => $totalKeluarM3 ?? 0,
             'rata_rata_rendemen' => $totalMasukM3 > 0
                 ? number_format(($totalKeluarM3 / $totalMasukM3) * 100, 2) . '%'
                 : '0%',
-            'total_harga_v_ongkos' => $laporanFinalCollection->avg('summary.harga_v_ongkos'),
-            'total_harga_vop' => $laporanFinalCollection->avg('summary.harga_vop'),
+            'total_harga_veneer' => $totalHargaVeneer ?? 0,
+            'total_harga_v_ongkos' => $laporanFinalCollection->avg('summary.harga_v_ongkos') ?? 0,
+            'total_harga_vop' => $laporanFinalCollection->avg('summary.harga_vop') ?? 0,
         ];
-    }
-
-    public function getLaporanBatchRekap($bulan = null, $tahun = null, $lahan = null)
-    {
-
     }
 
     private function stitchBatchWithOutflow(array $tempGroup): array
@@ -296,7 +295,7 @@ class ProduksiInflowService
             $pekerja = ($produksi->detailPegawaiRotary->count() ?? 0);
 
             $msa = $pekerja * ($m3 / $m3TotalAllLahan);
-            $calculatePekerja = round($msa * $pekerja) ?? 1;
+            $calculatePekerja = max(1, round($msa * $pekerja));
             $penyusutan = $produksi->mesin->penyusutan ?? 0;
 
             return [

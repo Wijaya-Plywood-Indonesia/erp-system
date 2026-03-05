@@ -22,6 +22,56 @@
     
     }
 }" class="space-y-4">
+    <div class="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-white/10 shadow-sm">
+        <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+            
+            <div class="flex justify-start w-full items-center gap-3">
+                <div class="p-2 bg-primary-50 dark:bg-primary-500/10 rounded-lg">
+                    <x-heroicon-o-funnel class="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                </div>
+                <div class="hidden sm:block">
+                    <h3 class="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tight">Filter Laporan</h3>
+                </div>
+            </div>
+
+            <div class="flex  items-center gap-3 w-full md:w-auto">
+                
+                <div class="min-w-[180px] flex-1 md:flex-none">
+                    <select wire:model.live="nama_lahan" 
+                        class="block w-full px-3 py-1.5 text-xs font-semibold rounded-lg border-none ring-1 ring-gray-200 dark:ring-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 transition-all appearance-none">
+                        <option value="Semua Lahan" class="dark:bg-gray-800">Semua Lahan</option>
+                        @foreach($listLahan as $lahan)
+                            <option value="{{ $lahan }}" class="dark:bg-gray-800">{{ $lahan }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="min-w-[120px] flex-1 md:flex-none">
+                    <select wire:model.live="month" 
+                        class="block w-full px-3 py-1.5 text-xs font-semibold rounded-lg border-none ring-1 ring-gray-200 dark:ring-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 transition-all appearance-none">
+                        @foreach(range(1, 12) as $m)
+                            <option value="{{ sprintf('%02d', $m) }}" class="dark:bg-gray-800">
+                                {{ \Carbon\Carbon::create()->month($m)->translatedFormat('F') }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="min-w-[100px] flex-1 md:flex-none">
+                    <select wire:model.live="year" 
+                        class="block w-full px-3 py-1.5 text-xs font-semibold rounded-lg border-none ring-1 ring-gray-200 dark:ring-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 transition-all appearance-none">
+                        @foreach(range(date('Y')-3, date('Y')) as $y)
+                            <option value="{{ $y }}" class="dark:bg-gray-800">{{ $y }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div wire:loading wire:target="month, year, nama_lahan" class="flex items-center ml-1">
+                    <div class="animate-spin rounded-full h-4 w-4 border-2 border-primary-500 border-t-transparent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="flex sm:flex-row flex-col justify-between gap-2 mb-4">
         <div class="flex gap-2">
             <button @click="openAll({{ count($laporan->items()) }})" 
@@ -41,13 +91,116 @@
                 🔒 Tutup Semua Baris
             </button>
         </div>
-        <a href="/preview-excel"  
-                class="px-4 py-2 text-xs font-bold rounded-lg shadow-sm transition
-                    bg-green-600 text-slate-100 ring-1 ring-green-950/10
-                    dark:ring-0">
-            📑Preview Export Excel
+        <a 
+            href="{{ route('filament.admin.pages.persentase-kayu.preview', request()->query()) }}" 
+            target="_blank"
+            class="px-4 py-2 text-xs font-bold rounded-lg shadow-sm transition
+                bg-green-600 text-slate-100 ring-1 ring-green-950/10
+                dark:ring-0">
+        📑Preview Export Excel
         </a>
     </div>
+    {{-- SECTION SUMMARY STATS --}}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        
+        <div class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">
+                    <x-heroicon-m-arrow-down-tray class="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <span class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Input Kayu</span>
+            </div>
+            <div class="mt-3 flex flex-col">
+                <span class="text-2xl font-black text-gray-900 dark:text-white">
+                    {{ number_format($rekap['total_kayu_masuk'], 0, ',', '.') }} <span class="text-xs font-medium text-gray-400">Btg</span>
+                </span>
+                <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-1">
+                    {{ number_format($rekap['total_kubikasi_kayu_masuk'], 4, ',', '.') }} m³
+                </span>
+            </div>
+        </div>
+
+        <div class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg">
+                    <x-heroicon-m-arrow-up-tray class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <span class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Output Veneer</span>
+            </div>
+            <div class="mt-3 flex flex-col">
+                <span class="text-2xl font-black text-gray-900 dark:text-white">
+                    {{ number_format($rekap['total_kubikasi_veneer'], 4, ',', '.') }} <span class="text-xs font-medium text-gray-400">m³</span>
+                </span>
+                <span class="text-xs font-bold px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full w-fit mt-1">
+                    Rendemen: {{ $rekap['rata_rata_rendemen'] }}
+                </span>
+            </div>
+        </div>
+
+        <div class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-amber-50 dark:bg-amber-500/10 rounded-lg">
+                    <x-heroicon-m-banknotes class="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <span class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Nilai Poin</span>
+            </div>
+            <div class="mt-3">
+                <span class="text-2xl font-black text-gray-900 dark:text-white">
+                    Rp {{ number_format($rekap['total_poin_masuk'], 0, ',', '.') }}
+                </span>
+                <p class="text-[10px] text-gray-400 mt-1 uppercase leading-tight font-medium">Berdasarkan akumulasi poin log masuk</p>
+            </div>
+        </div>
+
+        <div class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
+            <div class="flex items-center p-2 gap-3 text-white ">
+                <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
+                <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer Rata Rata </span>
+            </div>
+            <div class="mt-3">
+                <span class="text-2xl font-black text-white">
+                    Rp {{ number_format($rekap['total_harga_veneer'], 0, ',', '.') }}
+                </span>
+                <div class="flex items-center gap-1.5 mt-1">
+                    <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
+                    <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price / m³</span>
+                </div>
+            </div>
+        </div>
+        <div class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
+            <div class="flex items-center p-2 gap-3 text-white ">
+                <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
+                <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer + Ongkos Rata Rata </span>
+            </div>
+            <div class="mt-3">
+                <span class="text-2xl font-black text-white">
+                    Rp {{ number_format($rekap['total_harga_v_ongkos'], 0, ',', '.') }}
+                </span>
+                <div class="flex items-center gap-1.5 mt-1">
+                    <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
+                    <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price / m³ + Ongkos Pekerja</span>
+                </div>
+            </div>
+        </div>
+        <div class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
+            <div class="flex items-center p-2 gap-3 text-white ">
+                <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
+                <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer + Ongkos + Penyusutan Rata Rata </span>
+            </div>
+            <div class="mt-3">
+                <span class="text-2xl font-black text-white">
+                    Rp {{ number_format($rekap['total_harga_vop'], 0, ',', '.') }}
+                </span>
+                <div class="flex items-center gap-1.5 mt-1">
+                    <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
+                    <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price / m³ + Ongkos Pekerja + Biaya Penyusutan</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+
     <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-gray-900">
         <table class="w-full text-left text-sm table-auto border-separate border-spacing-0">
             <thead>
@@ -183,180 +336,100 @@
                 @endforelse
             </tbody>
         </table>
-            {{-- MANUAL PAGINATION UI --}}
-        <div class="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-xl dark:bg-gray-900 dark:border-white/10 shadow-sm">
-            {{-- Info Mobile (Sederhana) --}}
+        {{-- MANUAL PAGINATION UI --}}
+        <div class="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-xl dark:bg-gray-900/50 dark:border-white/10 dark:backdrop-blur-md shadow-sm">
+            
+            {{-- Info Mobile --}}
             <div class="flex flex-1 justify-between sm:hidden">
-                <a href="{{ $laporan->previousPageUrl() }}" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md dark:hover:bg-gray-900 {{ $laporan->onFirstPage() ? 'opacity-50 pointer-events-none' : '' }}">
-                    <
+                <a href="{{ $laporan->previousPageUrl() }}" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg dark:bg-gray-800 dark:border-white/10 dark:text-gray-300 {{ $laporan->onFirstPage() ? 'opacity-50 pointer-events-none' : '' }}"> 
+                    <x-heroicon-m-chevron-left class="w-5 h-5" />
                 </a>
-                <a href="{{ $laporan->nextPageUrl() }}" class="ml-3 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md dark:hover:bg-gray-900 {{ !$laporan->hasMorePages() ? 'opacity-50 pointer-events-none' : '' }}">
-                    >
+                <a href="{{ $laporan->nextPageUrl() }}" class="ml-3 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg dark:bg-gray-800 dark:border-white/10 dark:text-gray-300 {{ !$laporan->hasMorePages() ? 'opacity-50 pointer-events-none' : '' }}"> 
+                    <x-heroicon-m-chevron-right class="w-5 h-5" />
                 </a>
             </div>
 
             {{-- Desktop Pagination --}}
             <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                <div>
-                    <p class="text-sm text-gray-700 dark:text-gray-400">
-                        Menampilkan <span class="font-medium">{{ $laporan->firstItem() }}</span> - <span class="font-medium">{{ $laporan->lastItem() }}</span> dari <span class="font-medium">{{ $laporan->total() }}</span>
+                
+                {{-- Sisi Kiri: Info Data --}}
+                <div class="flex items-center gap-4">
+                    <p class="text-xs font-medium text-gray-600 dark:text-gray-400 tracking-wide">
+                        Menampilkan <span class="font-black text-gray-900 dark:text-white">{{ $laporan->firstItem() }}</span> 
+                        <span class="text-gray-400 mx-0.5">-</span> 
+                        <span class="font-black text-gray-900 dark:text-white">{{ $laporan->lastItem() }}</span> 
+                        <span class="lowercase">dari</span> 
+                        <span class="font-black text-gray-900 dark:text-white">{{ $laporan->total() }}</span> <span class="text-[10px] uppercase font-bold text-gray-400">Data</span>
                     </p>
                 </div>
 
+                {{-- TENGAH: Per Page Selector (Sleek Dark Mode) --}}
+                <div class="flex items-center gap-2 group">
+                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest dark:text-gray-500">Baris</label>
+                    <div class="relative">
+                        <select wire:model.live="perPage" 
+                            class="block w-full pl-3 pr-8 py-1.5 text-xs font-bold rounded-lg border-none ring-1 ring-gray-200 dark:ring-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 transition-all cursor-pointer appearance-none hover:ring-gray-300 dark:hover:ring-white/20">
+                            <option value="10" class="dark:bg-gray-900">10</option>
+                            <option value="25" class="dark:bg-gray-900">25</option>
+                            <option value="50" class="dark:bg-gray-900">50</option>
+                            <option value="100" class="dark:bg-gray-900">100</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                            <x-heroicon-m-chevron-down class="w-3 h-3" />
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Sisi Kanan: Navigation Buttons --}}
                 <div>
-                    <nav class="isolate inline-flex -space-x-px rounded-md shadow-sm gap-1" aria-label="Pagination">
-                        {{-- Tombol Previous Icon --}}
+                    <nav class="flex items-center gap-1.5" aria-label="Pagination">
+                        {{-- Previous --}}
                         <a href="{{ $laporan->previousPageUrl() }}" 
-                        class="relative inline-flex items-center rounded-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 dark:hover:bg-gray-900 focus:z-20 focus:outline-offset-0 dark:ring-white/10 {{ $laporan->onFirstPage() ? 'opacity-50 pointer-events-none' : '' }}">
-                            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clip-rule="evenodd" />
-                            </svg>
-                            <span class="sr-only">Previous</span>
+                        class="p-2 transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400 {{ $laporan->onFirstPage() ? 'opacity-30 pointer-events-none' : 'hover:text-primary-600' }}">
+                            <x-heroicon-m-chevron-left class="h-4 w-4" />
                         </a>
 
-                        {{-- Nomor Halaman Manual dengan Logic Ellipsis --}}
+                        {{-- Nomor Halaman --}}
                         @php
-                            $start = max($laporan->currentPage() - 2, 1);
-                            $end = min($start + 4, $laporan->lastPage());
-                            if($end === $laporan->lastPage()) $start = max($end - 4, 1);
+                            $start = max($laporan->currentPage() - 1, 1);
+                            $end = min($start + 2, $laporan->lastPage());
                         @endphp
 
                         @if($start > 1)
-                            <a href="{{ $laporan->url(1) }}" class="relative rounded-md inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 dark:hover:bg-gray-900 dark:text-white dark:ring-white/10">1</a>
-                            @if($start > 2)
-                                <span class="relative inline-flex rounded-md items-center px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300 dark:text-gray-400 dark:ring-white/10">...</span>
-                            @endif
+                            <a href="{{ $laporan->url(1) }}" class="px-3 py-1.5 text-xs font-bold transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-white">1</a>
+                            <span class="text-gray-300 dark:text-gray-600">...</span>
                         @endif
 
                         @foreach(range($start, $end) as $page)
                             @if($page == $laporan->currentPage())
-                                <span aria-current="page" class="relative z-10 inline-flex items-center bg-primary-600 px-4 py-2 text-sm font-semibold text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded-md">
+                                <span class="px-3 py-1.5 text-xs font-black text-white bg-primary-600 rounded-lg shadow-sm shadow-primary-500/20 ring-1 ring-primary-500">
                                     {{ $page }}
                                 </span>
                             @else
-                                <a href="{{ $laporan->url($page) }}" class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 dark:hover:bg-gray-900 focus:z-20 focus:outline-offset-0 dark:text-white dark:ring-white/10 rounded-md">
+                                <a href="{{ $laporan->url($page) }}" class="px-3 py-1.5 text-xs font-bold transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-gray-300">
                                     {{ $page }}
                                 </a>
                             @endif
                         @endforeach
 
                         @if($end < $laporan->lastPage())
-                            @if($end < $laporan->lastPage() - 1)
-                                <span class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300 dark:text-gray-400 dark:ring-white/10 rounded-md">...</span>
-                            @endif
-                            <a href="{{ $laporan->url($laporan->lastPage()) }}" class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 dark:hover:bg-gray-900 dark:text-white dark:ring-white/10 rounded-md">{{ $laporan->lastPage() }}</a>
+                            <span class="text-gray-300 dark:text-gray-600">...</span>
+                            <a href="{{ $laporan->url($laporan->lastPage()) }}" class="px-3 py-1.5 text-xs font-bold transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-white">{{ $laporan->lastPage() }}</a>
                         @endif
 
-                        {{-- Tombol Next Icon --}}
+                        {{-- Next --}}
                         <a href="{{ $laporan->nextPageUrl() }}" 
-                        class="relative inline-flex items-center rounded-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 dark:hover:bg-gray-900 focus:z-20 focus:outline-offset-0 dark:ring-white/10 {{ !$laporan->hasMorePages() ? 'opacity-50 pointer-events-none' : '' }}">
-                            <span class="sr-only">Next</span>
-                            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
-                            </svg>
+                        class="p-2 transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400 {{ !$laporan->hasMorePages() ? 'opacity-30 pointer-events-none' : 'hover:text-primary-600' }}">
+                            <x-heroicon-m-chevron-right class="h-4 w-4" />
                         </a>
                     </nav>
                 </div>
             </div>
         </div>
+
+
     </div>
 </div>
 
-<div class="overflow-x-auto bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
-    <table class="w-full border-collapse border border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-sans text-gray-900 dark:text-gray-100">
-        <thead>
-            <tr class="bg-white dark:bg-gray-800">
-                <th colspan="23" class="text-center py-4 text-xl font-bold uppercase tracking-widest border-b border-gray-400 dark:border-gray-700">
-                    KAYU 130
-                </th>
-            </tr>
-
-            <tr class="bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-600">
-                <th rowspan="2" class="border border-gray-400 dark:border-gray-600 px-2 py-1">Tanggal</th>
-                <th rowspan="2" class="border border-gray-400 dark:border-gray-600 px-2 py-1">Habis</th>
-                <th colspan="5" class="border border-gray-400 dark:border-gray-600 px-2 py-1">Kayu</th>
-                <th colspan="5" class="border border-gray-400 dark:border-gray-600 px-2 py-1">Veneer</th>
-                <th rowspan="2" class="border border-gray-400 dark:border-gray-600 px-2 py-1">Jam Kerja</th>
-                <th rowspan="2" class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-blue-200 dark:bg-blue-900/50"> % </th>
-                <th rowspan="2" class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-green-500 dark:bg-green-600 text-black dark:text-white">harga veneer/m3</th>
-                <th rowspan="2" class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-blue-200 dark:bg-blue-900/50">Pekerja</th>
-                <th rowspan="2" class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-orange-200 dark:bg-orange-900/40">Ongkos/pkj</th>
-                <th rowspan="2" class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-orange-400 dark:bg-orange-600 text-black dark:text-white">Harga Veneer + Ongkos</th>
-                <th rowspan="2" class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-blue-200 dark:bg-blue-900/50">Penyusutan</th>
-                <th rowspan="2" class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-yellow-300 dark:bg-yellow-600 text-black dark:text-white">Harga Veneer + Ongkos + penyusutan</th>
-            </tr>
-
-            <tr class="bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-600">
-                <th class="border border-gray-400 dark:border-gray-600 px-2 py-1">Lahan</th>
-                <th class="border border-gray-400 dark:border-gray-600 px-2 py-1">Batang</th>
-                <th class="border border-gray-400 dark:border-gray-600 px-2 py-1">Pecah</th>
-                <th class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-orange-400 dark:bg-orange-600 text-black dark:text-white">m3</th>
-                <th class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-yellow-300 dark:bg-yellow-600 text-black dark:text-white">Poin</th>
-                <th class="border border-gray-400 dark:border-gray-600 px-2 py-1">Panjang</th>
-                <th class="border border-gray-400 dark:border-gray-600 px-2 py-1">Lebar</th>
-                <th class="border border-gray-400 dark:border-gray-600 px-2 py-1">Tebal</th>
-                <th class="border border-gray-400 dark:border-gray-600 px-2 py-1">Lembar</th>
-                <th class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-orange-400 dark:bg-orange-600 text-black dark:text-white">m3</th>
-            </tr>
-
-            <tr class="bg-orange-400 dark:bg-orange-700 font-bold text-black dark:text-white">
-                <td colspan="3" class="border border-gray-400 dark:border-gray-600 px-2 py-1 text-center italic">Total</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1">42.233</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1">3</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 text-center">1.326</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1">1.415.148.564</td>
-                <td colspan="4" class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-white dark:bg-gray-800"></td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1">524</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-white dark:bg-gray-800 text-center uppercase">Rata-rata</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-blue-200 dark:bg-blue-900/50 text-center">60</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-green-500 dark:bg-green-700 text-center text-black dark:text-white border-l-2">1.757.246</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-white dark:bg-gray-800"></td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-white dark:bg-gray-800"></td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 text-center">1.787.490</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-white dark:bg-gray-800"></td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 text-center">1.796.529</td>
-            </tr>
-        </thead>
-        <tbody>
-            <tr class="border border-gray-400 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 text-xs">
-                    31/12/2025<br>02/01/2026
-                </td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 text-center text-green-600 dark:text-green-400 font-bold">✓</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 text-center font-bold">K</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 text-center">406</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1"></td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-blue-100 dark:bg-blue-900/30">12,6173</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-blue-100 dark:bg-blue-900/30">13.504.075</td>
-                <td colspan="5" class="p-0 border border-gray-400 dark:border-gray-600">
-                    <table class="w-full h-full border-none text-gray-900 dark:text-gray-100">
-                        <tr class="border-b border-gray-400 dark:border-gray-600">
-                            <td class="px-1 py-1 border-r border-gray-400 dark:border-gray-600 w-10 text-center">122</td>
-                            <td class="px-1 py-1 border-r border-gray-400 dark:border-gray-600 w-10 text-center">244</td>
-                            <td class="px-1 py-1 border-r border-gray-400 dark:border-gray-600 w-10 text-center">3,7</td>
-                            <td class="px-1 py-1 border-r border-gray-400 dark:border-gray-600 w-12 text-center">368</td>
-                            <td class="px-1 py-1 bg-blue-100 dark:bg-blue-900/30 text-center">4,0532</td>
-                        </tr>
-                        <tr>
-                            <td class="px-1 py-1 border-r border-gray-400 dark:border-gray-600 text-center">122</td>
-                            <td class="px-1 py-1 border-r border-gray-400 dark:border-gray-600 text-center">244</td>
-                            <td class="px-1 py-1 border-r border-gray-400 dark:border-gray-600 text-center">3,7</td>
-                            <td class="px-1 py-1 border-r border-gray-400 dark:border-gray-600 text-center">307</td>
-                            <td class="px-1 py-1 bg-blue-100 dark:bg-blue-900/30 text-center">3,3813</td>
-                        </tr>
-                    </table>
-                </td>
-                <td class="border border-gray-400 dark:border-gray-600 px-1 py-1 text-center text-xs italic">14:30-17:00<br>06:00-07:30</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-center">59</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-green-500 dark:bg-green-600/50 text-center font-bold">1.816.392</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-center">4</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-orange-100 dark:bg-orange-900/20 text-center text-xs">204.448</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-orange-400 dark:bg-orange-600/50 text-center font-bold">1.843.892</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-center">75.556</td>
-                <td class="border border-gray-400 dark:border-gray-600 px-2 py-1 bg-yellow-300 dark:bg-yellow-600/50 text-center font-bold">1.854.055</td>
-            </tr>
-        </tbody>
-    </table>
-</div>
 </x-filament::page>
 

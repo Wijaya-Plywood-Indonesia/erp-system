@@ -45,6 +45,10 @@ class PreviewPersentaseKayu extends Controller
         $service = new ProduksiInflowService();
         $sheets = $service->getActiveLahanSheets($bulan, $tahun);
 
+        if (empty($sheets)) {
+            return;
+        }
+
         $namaBulan = Carbon::createFromFormat('m', $bulan)->translatedFormat('F');
         $tanggal = now()->format('d-m-Y');
 
