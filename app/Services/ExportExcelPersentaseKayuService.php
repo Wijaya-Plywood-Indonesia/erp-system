@@ -22,14 +22,16 @@ class ExportExcelPersentaseKayuService implements
     protected array $laporan;
     protected array $rekap;
     protected string $activeSheet;
+    protected string $date;
 
     protected array $mergeBatches = [];
 
-    public function __construct(array $laporan, array $rekap, string $activeSheet)
+    public function __construct(array $laporan, array $rekap, string $activeSheet, string $date)
     {
         $this->laporan = $laporan;
         $this->rekap = $rekap;
         $this->activeSheet = $activeSheet;
+        $this->date = $date;
     }
 
     public function array(): array
@@ -60,7 +62,7 @@ class ExportExcelPersentaseKayuService implements
             (float) $this->rekap['total_harga_vop']
         ];
 
-        $currentRow = 4; // Data dimulai dari baris 4 (1&2 Header, 3 Total)
+        $currentRow = 5; // Data dimulai dari baris 4 (1&2 Header, 3 Total)
         foreach ($this->laporan as $item) {
             $outflowCount = count($item['outflow']);
             $totalPoin = (float) str_replace('.', '', $item['summary']['total_poin'] ?? 0);
@@ -83,7 +85,7 @@ class ExportExcelPersentaseKayuService implements
                     $isFirstInBatch ? $item['summary']['total_kayu_masuk'] : '',
                     '',
                     $isFirstInBatch ? $item['summary']['total_masuk_m3'] : '',
-                    $isFirstInBatch ? $item['summary']['total_poin'] : '',
+                    $isFirstInBatch ? $totalPoin : '',
                     $prod['panjang'],
                     $prod['lebar'],
                     $prod['tebal'],
@@ -112,6 +114,7 @@ class ExportExcelPersentaseKayuService implements
     public function headings(): array
     {
         return [
+            ["KAYU {$this->activeSheet} ( {$this->date} )", '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
             ['Tanggal', 'Habis', 'Kayu', '', '', '', '', 'Veneer', '', '', '', '', 'Jam Kerja', '%', 'harga veneer/m3', 'Pekerja', 'Ongkos/pkj', 'Harga Veneer + Ongkos', 'Penyusutan', 'Harga Veneer + Ongkos + penyusutan'],
             ['', '', 'Lahan', 'Batang', 'Pecah', 'm3', 'Poin', 'Panjang', 'Lebar', 'Tebal', 'Lembar', 'm3', '', '', '', '', '', '', '', '']
         ];
@@ -121,68 +124,70 @@ class ExportExcelPersentaseKayuService implements
     {
         $lastRow = $sheet->getHighestRow();
 
-        $sheet->getRowDimension(1)->setRowHeight(25); // Angka 35 bisa Anda sesuaikan (default sekitar 15)
-        $sheet->getRowDimension(3)->setRowHeight(18); // Angka 35 bisa Anda sesuaikan (default sekitar 15)
+        $sheet->getRowDimension(1)->setRowHeight(18); // Angka 35 bisa Anda sesuaikan (default sekitar 15)
+        $sheet->getRowDimension(2)->setRowHeight(25); // Angka 35 bisa Anda sesuaikan (default sekitar 15)
+        $sheet->getRowDimension(4)->setRowHeight(18); // Angka 35 bisa Anda sesuaikan (default sekitar 15)
 
-        $sheet->getStyle('A1:T3')->getAlignment()->setWrapText(true);
+        $sheet->getStyle('A1:T4')->getAlignment()->setWrapText(true);
 
         // Tambahkan juga Vertical Center agar teks berada di tengah secara vertikal
-        $sheet->getStyle('A1:T3')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getStyle('A1:T4')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
 
         // MERGING HEADERS
-        $sheet->mergeCells('A1:A2'); // Tanggal
-        $sheet->mergeCells('B1:B2'); // Habis
-        $sheet->mergeCells('C1:G1'); // Group Kayu
-        $sheet->mergeCells('H1:L1'); // Group Veneer
-        $sheet->mergeCells('M1:M2'); // Jam Kerja
-        $sheet->mergeCells('N1:N2'); // %
-        $sheet->mergeCells('O1:O2'); // harga veneer/m3
-        $sheet->mergeCells('P1:P2'); // Pekerja
-        $sheet->mergeCells('Q1:Q2'); // Ongkos
-        $sheet->mergeCells('R1:R2'); // Harga V+O
-        $sheet->mergeCells('S1:S2'); // Penyusutan
-        $sheet->mergeCells('T1:T2'); // Harga V+O+P
+        $sheet->mergeCells('A1:T1'); // ! NAMA LAHAN
+        $sheet->mergeCells('A2:A3'); // Tanggal
+        $sheet->mergeCells('B2:B3'); // Habis
+        $sheet->mergeCells('C2:G2'); // Group Kayu
+        $sheet->mergeCells('H2:L2'); // Group Veneer
+        $sheet->mergeCells('M2:M3'); // Jam Kerja
+        $sheet->mergeCells('N2:N3'); // %
+        $sheet->mergeCells('O2:O3'); // harga veneer/m3
+        $sheet->mergeCells('P2:P3'); // Pekerja
+        $sheet->mergeCells('Q2:Q3'); // Ongkos
+        $sheet->mergeCells('R2:R3'); // Harga V+O
+        $sheet->mergeCells('S2:S3'); // Penyusutan
+        $sheet->mergeCells('T2:T3'); // Harga V+O+P
 
         // HEADER STYLE
-        $sheet->getStyle('A1:T2')->applyFromArray([
+        $sheet->getStyle('A1:T4')->applyFromArray([
             'font' => ['bold' => true],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
             'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
         ]);
 
         // BARIS TOTAL (Baris 3)
-        $sheet->getStyle('A3:T3')->applyFromArray([
+        $sheet->getStyle('A4:T4')->applyFromArray([
             'font' => ['bold' => true],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFC000']], // Oranye/Kuning Emas
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
         ]);
 
         // COLUMN COLORS (Sesuai Gambar)
-        $sheet->getStyle('F4:G' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Kayu
-        $sheet->getStyle('L4:L' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Veneer m3
-        $sheet->getStyle('N4:N' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda %
-        $sheet->getStyle('O4:O' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('92D050'); // Hijau Harga m3
-        $sheet->getStyle('R4:R' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFC000'); // Oranye Harga V+O
-        $sheet->getStyle('S4:S' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Penyusutan
-        $sheet->getStyle('T4:T' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFF00'); // Kuning Terang VOP
+        $sheet->getStyle('F5:G' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Kayu
+        $sheet->getStyle('L5:L' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Veneer m3
+        $sheet->getStyle('N5:N' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda %
+        $sheet->getStyle('O5:O' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('92D050'); // Hijau Harga m3
+        $sheet->getStyle('R5:R' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFC000'); // Oranye Harga V+O
+        $sheet->getStyle('S5:S' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Penyusutan
+        $sheet->getStyle('T5:T' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFF00'); // Kuning Terang VOP
 
         // ALIGNMENT & BORDERS
-        $sheet->getStyle('A4:T' . $lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-        $sheet->getStyle('A1:T' . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle('A5:T' . $lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getStyle('A5:T' . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
-        $sheet->getStyle('A4:F' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle('M4:N' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle('P4:P' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A5:F' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('M5:N' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('P5:P' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         // FORMAT ANGKA
-        $sheet->getStyle('F3:F' . $lastRow)->getNumberFormat()->setFormatCode('0.0000');
-        $sheet->getStyle('L3:L' . $lastRow)->getNumberFormat()->setFormatCode('0.0000');
+        $sheet->getStyle('F4:F' . $lastRow)->getNumberFormat()->setFormatCode('0.0000');
+        $sheet->getStyle('L4:L' . $lastRow)->getNumberFormat()->setFormatCode('0.0000');
         // ! POINT
-        // $sheet->getStyle('G3:G' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
-        $sheet->getStyle('G3' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
+        // $sheet->getStyle('G4:G' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
+        $sheet->getStyle('G4:G' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
         // !
-        $sheet->getStyle('O3:O' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
-        $sheet->getStyle('Q3:T' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
+        $sheet->getStyle('O4:O' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
+        $sheet->getStyle('Q4:T' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
 
         $mergeRow = ['C', 'D', 'E', 'F', 'G', 'N', 'O', 'R', 'T'];
         foreach ($this->mergeBatches as $batch) {
