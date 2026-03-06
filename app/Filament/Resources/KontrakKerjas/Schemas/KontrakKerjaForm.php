@@ -106,7 +106,8 @@ class KontrakKerjaForm
                         ->live()
                         // Menambahkan HelperText secara dinamis menggunakan HolidayHelper
                         ->helperText(function ($state) {
-                            if (!$state) return null;
+                            if (!$state)
+                                return null;
 
                             $dateString = \Carbon\Carbon::parse($state)->toDateString();
 
@@ -185,12 +186,13 @@ class KontrakKerjaForm
                     Select::make('status_kontrak')
                         ->label('Status Kontrak')
                         ->options([
+                            'new' => 'Baru',
                             'active' => 'Aktif',
                             'soon' => 'Segera Habis',
                             'expired' => 'Expired',
                             'extended' => 'Extended',
                         ])
-                        ->default('active'),
+                        ->default('new'),
                 ])
                 ->columns(2),
         ]);

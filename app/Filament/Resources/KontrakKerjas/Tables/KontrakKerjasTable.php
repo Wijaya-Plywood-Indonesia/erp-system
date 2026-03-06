@@ -20,6 +20,9 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Tables\Filters\SelectFilter;
 use Illuminate\Support\Facades\DB;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Enums\FiltersLayout;
+use Filament\Schemas\Components\Section;
 
 class KontrakKerjasTable
 {
@@ -91,14 +94,21 @@ class KontrakKerjasTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->paginated(false)
+            ->filtersLayout(FiltersLayout::AboveContent)
+            ->filtersFormColumns(2)
+
             ->filters([
+                self::monthYearFilter('kontrak_mulai', 'Mulai Kontrak', 'mulai'),
+                self::monthYearFilter('kontrak_selesai', 'Habis Kontrak', 'selesai'),
+
                 SelectFilter::make('status_kontrak')
                     ->label('Status Pegawai')
                     ->options([
                         'active' => 'Aktif',
+                        'new' => 'Baru',
                         'soon' => 'Segera Habis',
                         'expired' => 'Habis',
-                        'extended' => 'Perpanjangan'
+                        'extended' => 'Perpanjangan',
                     ]),
             ])
             ->recordActions([
@@ -300,7 +310,125 @@ class KontrakKerjasTable
                         ->color('success')
                         ->action(fn($records) => redirect()->route('kontrak.bulk.print', ['ids' => implode(',', $records->pluck('id')->toArray())]))
                         ->openUrlInNewTab(),
+                    BulkAction::make('bulk_perpanjang')
+                        ->label('Perpanjang Kontrak (Bulk)')
+                        ->icon('heroicon-o-arrow-path')
+                        ->color('warning')
+                        ->form([
+                            Select::make('durasi')
+                                ->label('Durasi Perpanjangan')
+                                ->options([
+                                    30 => '30 Hari',
+                                    60 => '60 Hari',
+                                    90 => '90 Hari',
+                                ])
+                                ->required(),
+                        ])
+                        ->action(function ($records, array $data) {
+
+                            $durasi = intval($data['durasi']);
+
+                            foreach ($records as $record) {
+
+                                $mulaiBaru = \App\Helpers\HolidayHelper::nextWorkingDay(
+                                    Carbon::parse($record->kontrak_selesai)->addDay()
+                                );
+
+                                $selesaiBaru = \App\Helpers\HolidayHelper::previousWorkingDay(
+                                    $mulaiBaru->copy()->addDays($durasi)
+                                );
+
+                                KontrakKerja::create([
+                                    'kode' => $record->kode,
+                                    'nama' => $record->nama,
+                                    'jenis_kelamin' => $record->jenis_kelamin,
+                                    'tanggal_masuk' => $record->tanggal_masuk,
+                                    'karyawan_di' => $record->karyawan_di,
+                                    'alamat_perusahaan' => $record->alamat_perusahaan,
+                                    'jabatan' => $record->jabatan,
+                                    'nik' => $record->nik,
+                                    'tempat_tanggal_lahir' => $record->tempat_tanggal_lahir,
+                                    'alamat' => $record->alamat,
+                                    'no_telepon' => $record->no_telepon,
+                                    'kontrak_mulai' => $mulaiBaru,
+                                    'kontrak_selesai' => $selesaiBaru,
+                                    'durasi_kontrak' => $durasi,
+                                    'tanggal_kontrak' => \App\Helpers\HolidayHelper::nextWorkingDay(now()),
+                                    'no_kontrak' => NomorKontrakService::generate(),
+                                    'status_dokumen' => 'draft',
+                                    'status_kontrak' => 'extended',
+                                    'dibuat_oleh' => auth()->user()->name,
+                                    'divalidasi_oleh' => null,
+                                ]);
+                            }
+
+                            Notification::make()
+                                ->title('Perpanjangan kontrak berhasil dibuat untuk ' . $records->count() . ' data')
+                                ->success()
+                                ->send();
+                        })
+                        ->requiresConfirmation(),
                 ]),
             ]);
+    }
+    protected static function monthOptions(): array
+    {
+        return [
+            1 => 'Januari',
+            2 => 'Februari',
+            3 => 'Maret',
+            4 => 'April',
+            5 => 'Mei',
+            6 => 'Juni',
+            7 => 'Juli',
+            8 => 'Agustus',
+            9 => 'September',
+            10 => 'Oktober',
+            11 => 'November',
+            12 => 'Desember',
+        ];
+    }
+
+    protected static function yearOptions(): array
+    {
+        return collect(range(now()->year - 5, now()->year + 5))
+            ->mapWithKeys(fn($year) => [$year => $year])
+            ->toArray();
+    }
+
+    protected static function monthYearFilter(
+        string $field,
+        string $label,
+        string $prefix
+    ): Filter {
+        return Filter::make($prefix)
+            ->form([
+                Section::make($label) // ✅ ini bikin grup
+                    ->schema([
+                        Select::make($prefix . '_bulan')
+                            ->label('Bulan')
+                            ->options(self::monthOptions())
+                            ->required(),
+
+                        Select::make($prefix . '_tahun')
+                            ->label('Tahun')
+                            ->options(self::yearOptions())
+                            ->required(),
+                    ])
+                    ->columns(2), // supaya bulan & tahun sejajar
+            ])
+            ->query(function ($query, array $data) use ($field, $prefix) {
+
+                $bulan = $data[$prefix . '_bulan'] ?? null;
+                $tahun = $data[$prefix . '_tahun'] ?? null;
+
+                if (!$bulan || !$tahun) {
+                    return $query;
+                }
+
+                return $query
+                    ->whereMonth($field, $bulan)
+                    ->whereYear($field, $tahun);
+            });
     }
 }
