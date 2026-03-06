@@ -9,32 +9,23 @@ use App\Models\PenggunaanLahanRotary;
 use App\Models\NotaKayu;
 use App\Models\HargaKayu;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class ProduksiInflowService
 {
-    public function getLaporanBatch($month = null, $year = null, $nama_lahan = "Semua Lahan", $perPage = 10)
+    public function getLaporanBatch()
     {
-        $query = PenggunaanLahanRotary::with([
+        // SOLUSI 1 & 3: Ambil hanya baris penutup batch (jumlah_batang > 0) dengan Pagination
+        // Batasi kolom yang diambil untuk menghemat memori
+        $paginatedClosures = PenggunaanLahanRotary::with([
             'lahan:id,nama_lahan,kode_lahan',
             'jenisKayu:id,nama_kayu'
         ])
-            ->where('jumlah_batang', '>', 0);
+            ->where('jumlah_batang', '>', 0)
+            ->orderBy('created_at', 'desc')
+            ->paginate(10); // Menghasilkan link pagination otomatis
 
-        // Tambahkan Filter Tanggal
-        if ($month) {
-            $query->whereMonth('created_at', $month);
-        }
-        if ($year) {
-            $query->whereYear('created_at', $year);
-        }
-        if ($nama_lahan !== "Semua Lahan"){
-            $query->whereHas('lahan', function ($query) use ($nama_lahan) {
-                $query->where('nama_lahan', $nama_lahan);
-            });
-        }
-        $paginatedClosures = $query->orderBy('created_at', 'desc')
-            ->paginate($perPage);
         $laporanFinal = [];
 
         foreach ($paginatedClosures as $closure) {
@@ -121,22 +112,15 @@ class ProduksiInflowService
         );
     }
 
-    public function getLaporanBatchPreview($bulan = null, $tahun = null, $lahan = "Semua Lahan", $perPage = 10)
+    public function getLaporanBatchPreview($bulan = null, $tahun = null)
     {
         $bulan = $bulan ?: date('m');
         $tahun = $tahun ?: date('y');
-        $lahanX = $this->getActiveLahanSheets($bulan, $tahun)[0] ?? null;
-        if (!isset($lahan)) {
-            $lahan = $lahanX;
-        }
 
         $paginatedClosures = PenggunaanLahanRotary::with([
             'lahan:id,nama_lahan,kode_lahan',
             'jenisKayu:id,nama_kayu'
         ])
-            ->whereHas('lahan', function ($query) use ($lahan) {
-                $query->where('nama_lahan', $lahan);
-            })
             ->where('jumlah_batang', '>', 0)
             ->whereMonth('created_at', $bulan)
             ->whereYear('created_at', $tahun)
@@ -223,32 +207,220 @@ class ProduksiInflowService
         return collect($laporanFinal);
     }
 
-
-    public function getSummaryLaporanLahan($laporanFinalCollection)
+    public function getLaporanBatchRekapFix($bulan = null, $tahun = null, $lahan = null)
     {
+        $bulan = $bulan ?: date('m');
+        $tahun = $tahun ?: date('Y');
 
-        $totalMasukM3 = $laporanFinalCollection->sum('summary.total_masuk_m3');
-        $totalKeluarM3 = $laporanFinalCollection->sum('summary.total_keluar_m3');
-        $totalHargaVeneer = $laporanFinalCollection->avg('summary.harga_veneer');
+        $lahanX = $this->getActiveLahanSheets($bulan, $tahun)[0] ?? null;
 
-        return [
-            'total_kayu_masuk' => $laporanFinalCollection->sum('summary.total_kayu_masuk') ?? 0,
-            'total_kubikasi_kayu_masuk' => $totalMasukM3 ?? 0,
-            'total_poin_masuk' => $laporanFinalCollection->sum(function ($item) {
-                // Menghapus format ribuan agar bisa dijumlahkan sebagai angka
-                return (float) str_replace(['.', ','], ['', '.'], $item['summary']['total_poin']);
-            }) ?? 0,
-            'total_kubikasi_veneer' => $totalKeluarM3 ?? 0,
-            'rata_rata_rendemen' => $totalMasukM3 > 0
-                ? number_format(($totalKeluarM3 / $totalMasukM3) * 100, 2) . '%'
-                : '0%',
-            'total_harga_veneer' => $totalHargaVeneer ?? 0,
-            'total_harga_v_ongkos' => $laporanFinalCollection->avg('summary.harga_v_ongkos') ?? 0,
-            'total_harga_vop' => $laporanFinalCollection->avg('summary.harga_vop') ?? 0,
-        ];
+        if ($lahan == null && $lahanX == null) {
+            return null;
+        }
+
+
+
+
+        if (!isset($lahan)) {
+            $lahan = $lahanX;
+        }
+
+        $ongkosPekerja = DB::table('harga_pegawais')->value('harga') ?? 0;
+
+        $sql = "
+            WITH REKAP_INFLOW AS (
+                SELECT 
+                    SUM(dtk.kuantitas) as total_batang_masuk,
+                    SUM(ROUND((CAST(dtk.panjang AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * 0.785 / 1000000) * CAST(dtk.kuantitas AS DECIMAL(20,4)), 4)) as total_m3_masuk,
+                    SUM(FLOOR((COALESCE(hk.harga_beli, 0) * ROUND((CAST(dtk.panjang AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * 0.785 / 1000000) * CAST(dtk.kuantitas AS DECIMAL(20,4)), 4)) * 1000)) as total_poin_inflow
+                FROM detail_turusan_kayus dtk
+                JOIN nota_kayus nk ON dtk.id_kayu_masuk = nk.id_kayu_masuk
+                JOIN lahans l ON dtk.lahan_id = l.id
+                LEFT JOIN harga_kayus hk ON dtk.jenis_kayu_id = hk.id_jenis_kayu 
+                    AND dtk.grade = hk.grade AND dtk.panjang = hk.panjang 
+                    AND dtk.diameter >= hk.diameter_terkecil AND dtk.diameter <= hk.diameter_terbesar
+                WHERE nk.status LIKE '%Sudah Diperiksa%'
+                AND l.nama_lahan = :lahan1
+                AND MONTH(nk.created_at) = :bulan1 AND YEAR(nk.created_at) = :tahun1
+            ),
+            OUTFLOW_RAW AS (
+                SELECT 
+                    p.id as id_produksi,
+                    p.tgl_produksi,
+                    p.id_mesin,
+                    m.penyusutan as nilai_penyusutan,
+                    (SELECT COUNT(*) FROM pegawai_rotaries dpr WHERE dpr.id_produksi = p.id) as jumlah_pekerja,
+                    (CAST(spu.panjang AS DECIMAL(20,4)) * CAST(spu.lebar AS DECIMAL(20,4)) * CAST(spu.tebal AS DECIMAL(20,4)) * CAST(dhp.total_lembar AS DECIMAL(20,4))) / 10000000 as m3_baris,
+                    SUM((CAST(spu.panjang AS DECIMAL(20,4)) * CAST(spu.lebar AS DECIMAL(20,4)) * CAST(spu.tebal AS DECIMAL(20,4)) * CAST(dhp.total_lembar AS DECIMAL(20,4))) / 10000000) 
+                        OVER(PARTITION BY p.id) as m3_total_harian
+                FROM detail_hasil_palet_rotaries dhp
+                JOIN produksi_rotaries p ON dhp.id_produksi = p.id
+                JOIN penggunaan_lahan_rotaries plr ON plr.id_produksi = p.id
+                JOIN lahans l ON plr.id_lahan = l.id
+                JOIN mesins m ON p.id_mesin = m.id
+                JOIN ukurans spu ON dhp.id_ukuran = spu.id
+                WHERE l.nama_lahan = :lahan2
+                AND MONTH(p.tgl_produksi) = :bulan2 AND YEAR(p.tgl_produksi) = :tahun2
+            ),
+            REKAP_OUTFLOW AS (
+                SELECT 
+                    SUM(m3_baris) as total_m3_keluar,
+                    SUM(
+                        CASE 
+                            WHEN m3_total_harian = 0 THEN 0 
+                            ELSE GREATEST(ROUND(jumlah_pekerja * (m3_baris / m3_total_harian)), 1) 
+                        END * :ongkos_pekerja
+                    ) as total_ongkos_final,
+                    SUM(DISTINCT CASE WHEN id_produksi IS NOT NULL THEN nilai_penyusutan ELSE 0 END) as total_penyusutan_final
+                FROM OUTFLOW_RAW
+            )
+            SELECT 
+                i.*, o.*,
+                COALESCE((o.total_m3_keluar / NULLIF(i.total_m3_masuk, 0)) * 100, 0) as total_rendemen,
+                COALESCE((i.total_poin_inflow / NULLIF(o.total_m3_keluar, 0)), 0) as total_harga_v,
+                COALESCE(((i.total_poin_inflow + o.total_ongkos_final) / NULLIF(o.total_m3_keluar, 0)), 0) as total_harga_v_ongkos,
+                COALESCE(((i.total_poin_inflow + o.total_ongkos_final + o.total_penyusutan_final) / NULLIF(o.total_m3_keluar, 0)), 0) as total_harga_vop
+            FROM REKAP_INFLOW i, REKAP_OUTFLOW o
+        ";
+
+        $result = DB::select($sql, [
+            'lahan1' => $lahan,
+            'bulan1' => $bulan,
+            'tahun1' => $tahun,
+            'lahan2' => $lahan,
+            'bulan2' => $bulan,
+            'tahun2' => $tahun,
+            'ongkos_pekerja' => $ongkosPekerja
+        ]);
+
+        return $result[0] ?? null;
+        /*
+        
+        $sql = "
+            WITH REKAP_INFLOW AS (
+                SELECT 
+                    SUM(dtk.kuantitas) as total_batang_masuk,
+                    SUM(ROUND((CAST(dtk.panjang AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * 0.785 / 1000000) * CAST(dtk.kuantitas AS DECIMAL(20,4)), 4)) as total_m3_masuk,
+                    SUM(FLOOR((COALESCE(hk.harga_beli, 0) * ROUND((CAST(dtk.panjang AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * 0.785 / 1000000) * CAST(dtk.kuantitas AS DECIMAL(20,4)), 4)) * 1000)) as total_poin_inflow
+                FROM detail_turusan_kayus dtk
+                JOIN nota_kayus nk ON dtk.id_kayu_masuk = nk.id_kayu_masuk
+                LEFT JOIN harga_kayus hk ON dtk.jenis_kayu_id = hk.id_jenis_kayu 
+                    AND dtk.grade = hk.grade AND dtk.panjang = hk.panjang 
+                    AND dtk.diameter >= hk.diameter_terkecil AND dtk.diameter <= hk.diameter_terbesar
+                WHERE nk.status LIKE '%Sudah Diperiksa%'
+                AND MONTH(nk.created_at) = :bulan1 AND YEAR(nk.created_at) = :tahun1
+            ),
+            OUTFLOW_RAW AS (
+                -- Mengambil data dasar produksi untuk menghitung MSA dan Penyusutan
+                SELECT 
+                    p.id as id_produksi,
+                    p.tgl_produksi,
+                    p.id_mesin,
+                    m.penyusutan as nilai_penyusutan,
+                    (SELECT COUNT(*) FROM pegawai_rotaries dpr WHERE dpr.id_produksi = p.id) as jumlah_pekerja,
+                    (CAST(spu.panjang AS DECIMAL(20,4)) * CAST(spu.lebar AS DECIMAL(20,4)) * CAST(spu.tebal AS DECIMAL(20,4)) * CAST(dhp.total_lembar AS DECIMAL(20,4))) / 10000000 as m3_baris,
+                    -- Menghitung total output harian per ID Produksi untuk pembagi MSA
+                    SUM((CAST(spu.panjang AS DECIMAL(20,4)) * CAST(spu.lebar AS DECIMAL(20,4)) * CAST(spu.tebal AS DECIMAL(20,4)) * CAST(dhp.total_lembar AS DECIMAL(20,4))) / 10000000) 
+                        OVER(PARTITION BY p.id) as m3_total_harian
+                FROM detail_hasil_palet_rotaries dhp
+                JOIN produksi_rotaries p ON dhp.id_produksi = p.id
+                JOIN mesins m ON p.id_mesin = m.id
+                JOIN ukurans spu ON dhp.id_ukuran = spu.id
+                WHERE MONTH(p.tgl_produksi) = :bulan2 AND YEAR(p.tgl_produksi) = :tahun2
+            ),
+            REKAP_OUTFLOW AS (
+                -- Agregasi final Outflow dengan logika MSA dan Penyusutan Flat
+                SELECT 
+                    SUM(m3_baris) as total_m3_keluar,
+                    -- Logika Ongkos: SUM( ROUND(Pekerja * (m3_baris / m3_total_harian)) * Ongkos )
+                    SUM(
+                        CASE 
+                            WHEN m3_total_harian = 0 THEN 0 
+                            ELSE GREATEST(ROUND(jumlah_pekerja * (m3_baris / m3_total_harian)), 1) 
+                        END * :ongkos_pekerja
+                    ) as total_ongkos_final,
+                    -- Logika Penyusutan: Hanya ambil nilai penyusutan sekali per ID Produksi
+                    SUM(DISTINCT CASE WHEN id_produksi IS NOT NULL THEN nilai_penyusutan ELSE 0 END) as total_penyusutan_final
+                FROM OUTFLOW_RAW
+            )
+            SELECT 
+                i.*, o.*,
+                COALESCE((o.total_m3_keluar / NULLIF(i.total_m3_masuk, 0)) * 100, 0) as total_rendemen,
+                COALESCE((i.total_poin_inflow / NULLIF(o.total_m3_keluar, 0)), 0) as total_harga_v,
+                COALESCE(((i.total_poin_inflow + o.total_ongkos_final) / NULLIF(o.total_m3_keluar, 0)), 0) as total_harga_v_ongkos,
+                COALESCE(((i.total_poin_inflow + o.total_ongkos_final + o.total_penyusutan_final) / NULLIF(o.total_m3_keluar, 0)), 0) as total_harga_vop
+            FROM REKAP_INFLOW i, REKAP_OUTFLOW o
+        ";
+
+        $result = DB::select($sql, [
+            'bulan1' => $bulan,
+            'tahun1' => $tahun,
+            'bulan2' => $bulan,
+            'tahun2' => $tahun,
+            'ongkos_pekerja' => $ongkosPekerja
+        ]);
+
+        return $result[0] ?? null;
+            */
     }
+public function getLaporanBatchRekap($bulan = null, $tahun = null)
+    {
+        $bulan = $bulan ?: date('m');
+        $tahun = $tahun ?: date('Y');
 
-    private function stitchBatchWithOutflow(array $tempGroup): array
+        $sql = "
+            WITH REKAP_INFLOW AS (
+                SELECT 
+                    SUM(dtk.kuantitas) as total_batang_masuk,
+                    SUM(ROUND((CAST(dtk.panjang AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * 0.785 / 1000000) * CAST(dtk.kuantitas AS DECIMAL(20,4)), 4)) as total_m3_masuk,
+                    SUM(
+                        FLOOR(
+                            (COALESCE(hk.harga_beli, 0) * ROUND(
+                                (CAST(dtk.panjang AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * CAST(dtk.diameter AS DECIMAL(20,4)) * 0.785 / 1000000) 
+                                * CAST(dtk.kuantitas AS DECIMAL(20,4)), 
+                            4)
+                            ) * 1000
+                        )
+                    ) as total_poin_inflow
+                FROM detail_turusan_kayus dtk
+                JOIN nota_kayus nk ON dtk.id_kayu_masuk = nk.id_kayu_masuk
+                LEFT JOIN harga_kayus hk ON dtk.jenis_kayu_id = hk.id_jenis_kayu 
+                    AND dtk.grade = hk.grade 
+                    AND dtk.panjang = hk.panjang 
+                    AND dtk.diameter >= hk.diameter_terkecil 
+                    AND dtk.diameter <= hk.diameter_terbesar
+                WHERE nk.status LIKE '%Sudah Diperiksa%'
+                AND MONTH(nk.created_at) = :bulan1 AND YEAR(nk.created_at) = :tahun1
+            ),
+            REKAP_OUTFLOW AS (
+                SELECT 
+                    SUM((CAST(spu.panjang AS DECIMAL(20,4)) * CAST(spu.lebar AS DECIMAL(20,4)) * CAST(spu.tebal AS DECIMAL(20,4)) * CAST(dhp.total_lembar AS DECIMAL(20,4))) / 10000000) as total_m3_keluar,
+                    /* Agregasi Ongkos dan Penyusutan (Sesuaikan nama kolom jika berbeda di DB Anda) */
+                    SUM(COALESCE(dhp.total_ongkos, 0)) as total_ongkos_pkj,
+                    SUM(COALESCE(dhp.total_penyusutan, 0)) as total_penyusutan
+                FROM detail_hasil_palet_rotaries dhp
+                JOIN ukurans spu ON dhp.id_ukuran = spu.id
+                WHERE MONTH(dhp.created_at) = :bulan2 AND YEAR(dhp.created_at) = :tahun2
+            )
+            SELECT 
+                i.*, 
+                o.*,
+                COALESCE((o.total_m3_keluar / NULLIF(i.total_m3_masuk, 0)) * 100, 0) as total_rendemen,
+                COALESCE((i.total_poin_inflow / NULLIF(o.total_m3_keluar, 0)), 0) as total_harga_v,
+                /* Rumus: (Total Poin + Total Ongkos) / Total M3 Keluar */
+                COALESCE(((i.total_poin_inflow + o.total_ongkos_pkj) / NULLIF(o.total_m3_keluar, 0)), 0) as total_harga_v_ongkos,
+                /* Rumus VOP: (Total Poin + Total Ongkos + Total Penyusutan) / Total M3 Keluar */
+                COALESCE(((i.total_poin_inflow + o.total_ongkos_pkj + o.total_penyusutan) / NULLIF(o.total_m3_keluar, 0)), 0) as total_harga_vop
+            FROM REKAP_INFLOW i, REKAP_OUTFLOW o
+        ";
+
+        $result = \DB::select($sql, [
+            'bulan1' => $bulan, 'tahun1' => $tahun,
+            'bulan2' => $bulan, 'tahun2' => $tahun
+        ]);
+
+        return $result[0] ?? null;
+    }    private function stitchBatchWithOutflow(array $tempGroup): array
     {
         $records = collect($tempGroup);
         $first = $records->first();
@@ -295,7 +467,7 @@ class ProduksiInflowService
             $pekerja = ($produksi->detailPegawaiRotary->count() ?? 0);
 
             $msa = $pekerja * ($m3 / $m3TotalAllLahan);
-            $calculatePekerja = max(1, round($msa * $pekerja));
+            $calculatePekerja = round($msa) == 0 ? 1 : round($msa);
             $penyusutan = $produksi->mesin->penyusutan ?? 0;
 
             return [
@@ -435,23 +607,5 @@ class ProduksiInflowService
             ->where('diameter_terbesar', '>=', $diameter)
             ->orderBy('diameter_terkecil', 'desc')
             ->value('harga_beli') ?? 0;
-    }
-
-    public function getActiveLahanSheets($bulan = null, $tahun = null)
-    {
-        $bulan = $bulan ?: date('m');
-        $tahun = $tahun ?: date('Y');
-
-        $paginatedClosures = PenggunaanLahanRotary::whereHas('lahan')
-            ->where('jumlah_batang', '>', 0)
-            ->whereMonth('created_at', $bulan)
-            ->whereYear('created_at', $tahun)
-            ->get()
-            ->pluck('lahan.nama_lahan')
-            ->unique()
-            ->values()
-            ->toArray();
-
-        return $paginatedClosures;
     }
 }
