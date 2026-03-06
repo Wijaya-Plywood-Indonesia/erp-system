@@ -22,6 +22,13 @@ class MesinsTable
 
                 TextColumn::make('nama_mesin')
                     ->searchable(),
+                TextColumn::make('jenis_hasil')
+                    ->searchable()
+                    ->label('Jenis Hasil')
+                    // Gunakan formatStateUsing untuk menampilkan label panjang
+                    ->formatStateUsing(fn (string $state): string => 
+                        $bahanOptions[$state] ?? $state 
+                    ),
                 TextColumn::make('ongkos_mesin')
                     ->numeric()
                     ->sortable(),

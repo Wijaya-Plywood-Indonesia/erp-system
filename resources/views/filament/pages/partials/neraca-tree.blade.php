@@ -15,7 +15,7 @@
             <div>{{ $akun['kode'] }} - {{ $akun['nama'] }}</div>
 
             <div>
-                Rp {{ number_format($akun['total'], 0, ',', '.') }}
+                Rp {{ number_format($akun['total'], 4, ',', '.') }}
             </div>
         </div>
     @endforeach
@@ -35,6 +35,6 @@
 <div class="{{ $indentClass }} flex justify-between font-bold border-t-2 border-gray-800 dark:border-gray-300 mt-2 pt-2">
     <div>Total {{ $group['nama'] }}</div>
     <div>
-        Rp {{ number_format($group['total'], 0, ',', '.') }}
+        Rp {{ number_format($group['total'], 4, ',', '.') }}
     </div>
 </div>

@@ -11,6 +11,11 @@ use App\Models\User;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
+use App\Http\Controllers\ProduksiPressDryerController;
+
+//untuk prodiksi press dryer
+
+Route::post('/produksi-dryer/{id}/kirim', [ProduksiPressDryerController::class, 'kirimKeWebLain']);
 
 /*
 |--------------------------------------------------------------------------
@@ -24,13 +29,13 @@ Route::middleware(['web', 'auth'])->group(function () {
     // 1. Sinkron Detail Kayu Masuk
     Route::post('/offline/sync-detail-kayu-masuk', function (Request $request) {
         $validator = Validator::make($request->all(), [
-            'parent_id'             => 'required|exists:kayu_masuks,id',
-            'items'                 => 'required|array',
-            'items.*.id_lahan'      => 'required|exists:lahans,id',
+            'parent_id' => 'required|exists:kayu_masuks,id',
+            'items' => 'required|array',
+            'items.*.id_lahan' => 'required|exists:lahans,id',
             'items.*.id_jenis_kayu' => 'required|exists:jenis_kayus,id',
-            'items.*.panjang'       => 'required|numeric',
-            'items.*.grade'         => 'required',
-            'items.*.diameter'      => 'required|numeric',
+            'items.*.panjang' => 'required|numeric',
+            'items.*.grade' => 'required',
+            'items.*.diameter' => 'required|numeric',
             'items.*.jumlah_batang' => 'required|numeric|min:1',
         ]);
 
@@ -43,13 +48,13 @@ Route::middleware(['web', 'auth'])->group(function () {
             foreach ($request->items as $item) {
                 DetailKayuMasuk::create([
                     'id_kayu_masuk' => $request->parent_id,
-                    'id_lahan'      => $item['id_lahan'],
+                    'id_lahan' => $item['id_lahan'],
                     'id_jenis_kayu' => $item['id_jenis_kayu'],
-                    'panjang'       => $item['panjang'],
-                    'grade'         => $item['grade'],
-                    'diameter'      => $item['diameter'],
+                    'panjang' => $item['panjang'],
+                    'grade' => $item['grade'],
+                    'diameter' => $item['diameter'],
                     'jumlah_batang' => $item['jumlah_batang'],
-                    'keterangan'    => 'Input via Mode Offline',
+                    'keterangan' => 'Input via Mode Offline',
                 ]);
             }
             DB::commit();
@@ -63,13 +68,13 @@ Route::middleware(['web', 'auth'])->group(function () {
     // 2. Sinkron Detail Turusan Kayu
     Route::post('/offline/sync-detail-turusan-kayu', function (Request $request) {
         $validator = Validator::make($request->all(), [
-            'parent_id'             => 'required|exists:kayu_masuks,id',
-            'items'                 => 'required|array',
-            'items.*.lahan_id'      => 'required|exists:lahans,id',
+            'parent_id' => 'required|exists:kayu_masuks,id',
+            'items' => 'required|array',
+            'items.*.lahan_id' => 'required|exists:lahans,id',
             'items.*.jenis_kayu_id' => 'required|exists:jenis_kayus,id',
-            'items.*.panjang'       => 'required|numeric',
-            'items.*.grade'         => 'required',
-            'items.*.diameter'      => 'required|numeric',
+            'items.*.panjang' => 'required|numeric',
+            'items.*.grade' => 'required',
+            'items.*.diameter' => 'required|numeric',
         ]);
 
         if ($validator->fails()) {
@@ -82,14 +87,14 @@ Route::middleware(['web', 'auth'])->group(function () {
                 $lastNo = DetailTurusanKayu::where('id_kayu_masuk', $request->parent_id)->max('nomer_urut') ?? 0;
                 DetailTurusanKayu::create([
                     'id_kayu_masuk' => $request->parent_id,
-                    'nomer_urut'    => $lastNo + 1,
-                    'lahan_id'      => $item['lahan_id'],
+                    'nomer_urut' => $lastNo + 1,
+                    'lahan_id' => $item['lahan_id'],
                     'jenis_kayu_id' => $item['jenis_kayu_id'],
-                    'panjang'       => $item['panjang'],
-                    'grade'         => $item['grade'],
-                    'diameter'      => $item['diameter'],
-                    'kuantitas'     => 1,
-                    'keterangan'    => 'Offline Input',
+                    'panjang' => $item['panjang'],
+                    'grade' => $item['grade'],
+                    'diameter' => $item['diameter'],
+                    'kuantitas' => 1,
+                    'keterangan' => 'Offline Input',
                 ]);
             }
             DB::commit();
@@ -157,7 +162,7 @@ Route::post('/external/sync-absensi', function (Request $request) {
                     ->first();
 
                 // 3. Logika Penggabungan: Ambil jam dari Wahana hanya jika di lokal masih kosong
-                $jamMasukBaru  = ($existing && $existing->jam_masuk && $existing->jam_masuk !== '-')
+                $jamMasukBaru = ($existing && $existing->jam_masuk && $existing->jam_masuk !== '-')
                     ? $existing->jam_masuk
                     : ($item['f_masuk'] ?? null);
 
@@ -169,13 +174,13 @@ Route::post('/external/sync-absensi', function (Request $request) {
                 DetailAbsensi::updateOrCreate(
                     [
                         'kode_pegawai' => $cleanKode,
-                        'tanggal'      => $tanggal,
+                        'tanggal' => $tanggal,
                     ],
                     [
-                        'id_absensi'   => $parent->id, // Pastikan ID Induk tersedia
-                        'jam_masuk'    => $jamMasukBaru,
-                        'jam_pulang'   => $jamPulangBaru,
-                        'keterangan'   => ($existing ? $existing->keterangan : '') . ' (Synced from Wahana)',
+                        'id_absensi' => $parent->id, // Pastikan ID Induk tersedia
+                        'jam_masuk' => $jamMasukBaru,
+                        'jam_pulang' => $jamPulangBaru,
+                        'keterangan' => ($existing ? $existing->keterangan : '') . ' (Synced from Wahana)',
                     ]
                 );
                 $successCount++;

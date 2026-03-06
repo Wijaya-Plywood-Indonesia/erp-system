@@ -51,6 +51,11 @@ class ProduksiRotary extends Model
         return $this->hasMany(KayuPecahRotary::class, 'id_produksi');
     }
 
+    public function bahanPenolongRotary()
+    {
+        return $this->hasMany(BahanPenolongRotary::class, 'id_produksi');
+    }
+
     public function riwayatKayu(): HasMany
     {
         return $this->hasMany(RiwayatKayu::class, 'id_rotary');
