@@ -10,6 +10,7 @@ class Mesin extends Model
     protected $fillable = [
         'kategori_mesin_id',
         'nama_mesin',
+        'jenis_hasil',
         'ongkos_mesin',
         'penyusutan',
         'no_akun',

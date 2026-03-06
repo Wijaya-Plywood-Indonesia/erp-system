@@ -17,7 +17,7 @@ return new class extends Migration {
                 ->constrained('kategori_mesins') // relasi ke tabel kategori_mesins
                 ->cascadeOnUpdate()
                 ->restrictOnDelete(); // mencegah hapus kategori jika masih ada mesin
-
+            $table->string('jenis_hasil')->nullable();
             $table->string('nama_mesin');
             $table->decimal('ongkos_mesin', 15, 2);
             $table->string('no_akun');
