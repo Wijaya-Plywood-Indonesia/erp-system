@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    // Testing API Akuntansi 
+    'akuntansi' => [
+        'url' => env('AKUNTANSI_URL'),
+        'token' => env('AKUNTANSI_API_TOKEN')
+    ]
+
 ];
