@@ -17,26 +17,190 @@
         } else {
             this.selected.push(idx);
         }
+    },
+    routeToPreview() {
+    
     }
 }" class="space-y-4">
-    <div class="flex gap-2 mb-4">
-        <button @click="openAll({{ count($laporan->items()) }})" 
-                type="button"
-                class="px-3 py-2 text-xs font-bold rounded-lg shadow-sm transition
-                    bg-primary-500 text-white hover:bg-primary-600 
-                    dark:text-black
-                    dark:bg-primary-500 dark:hover:bg-primary-400
-                    ring-1 ring-primary-400 dark:ring-0">
-            🔓 Buka Semua Baris
-        </button>
-        <button @click="closeAll()" 
-                type="button"
-                class="px-3 py-2 text-xs font-bold rounded-lg shadow-sm transition
-                    bg-white text-gray-950 dark:hover:bg-gray-900 ring-1 ring-gray-950/10
-                    dark:bg-white/10 dark:text-white dark:ring-0">
-            🔒 Tutup Semua Baris
-        </button>
+    <div class="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-white/10 shadow-sm">
+        <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+            
+            <div class="flex justify-start w-full items-center gap-3">
+                <div class="p-2 bg-primary-50 dark:bg-primary-500/10 rounded-lg">
+                    <x-heroicon-o-funnel class="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                </div>
+                <div class="hidden sm:block">
+                    <h3 class="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tight">Filter Laporan</h3>
+                </div>
+            </div>
+
+            <div class="flex  items-center gap-3 w-full md:w-auto">
+                
+                <div class="min-w-[180px] flex-1 md:flex-none">
+                    <select wire:model.live="nama_lahan" 
+                        class="block w-full px-3 py-1.5 text-xs font-semibold rounded-lg border-none ring-1 ring-gray-200 dark:ring-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 transition-all appearance-none">
+                        <option value="Semua Lahan" class="dark:bg-gray-800">Semua Lahan</option>
+                        @foreach($listLahan as $lahan)
+                            <option value="{{ $lahan }}" class="dark:bg-gray-800">{{ $lahan }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="min-w-[120px] flex-1 md:flex-none">
+                    <select wire:model.live="month" 
+                        class="block w-full px-3 py-1.5 text-xs font-semibold rounded-lg border-none ring-1 ring-gray-200 dark:ring-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 transition-all appearance-none">
+                        @foreach(range(1, 12) as $m)
+                            <option value="{{ sprintf('%02d', $m) }}" class="dark:bg-gray-800">
+                                {{ \Carbon\Carbon::create()->month($m)->translatedFormat('F') }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="min-w-[100px] flex-1 md:flex-none">
+                    <select wire:model.live="year" 
+                        class="block w-full px-3 py-1.5 text-xs font-semibold rounded-lg border-none ring-1 ring-gray-200 dark:ring-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 transition-all appearance-none">
+                        @foreach(range(date('Y')-3, date('Y')) as $y)
+                            <option value="{{ $y }}" class="dark:bg-gray-800">{{ $y }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div wire:loading wire:target="month, year, nama_lahan" class="flex items-center ml-1">
+                    <div class="animate-spin rounded-full h-4 w-4 border-2 border-primary-500 border-t-transparent"></div>
+                </div>
+            </div>
+        </div>
     </div>
+    <div class="flex sm:flex-row flex-col justify-between gap-2 mb-4">
+        <div class="flex gap-2">
+            <button @click="openAll({{ count($laporan->items()) }})" 
+                    type="button"
+                    class="px-3 py-2 text-xs font-bold rounded-lg shadow-sm transition
+                        bg-primary-500 text-white hover:bg-primary-600 
+                        dark:text-black
+                        dark:bg-primary-500 dark:hover:bg-primary-400
+                        ring-1 ring-primary-400 dark:ring-0">
+                🔓 Buka Semua Baris
+            </button>
+            <button @click="closeAll()" 
+                    type="button"
+                    class="px-3 py-2 text-xs font-bold rounded-lg shadow-sm transition
+                        bg-white text-gray-950 dark:hover:bg-gray-900 ring-1 ring-gray-950/10
+                        dark:bg-white/10 dark:text-white dark:ring-0">
+                🔒 Tutup Semua Baris
+            </button>
+        </div>
+        <a 
+            href="{{ route('filament.admin.pages.persentase-kayu.preview', request()->query()) }}" 
+            target="_blank"
+            class="px-4 py-2 text-xs font-bold rounded-lg shadow-sm transition
+                bg-green-600 text-slate-100 ring-1 ring-green-950/10
+                dark:ring-0">
+        📑Preview Export Excel
+        </a>
+    </div>
+    {{-- SECTION SUMMARY STATS --}}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        
+        <div class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">
+                    <x-heroicon-m-arrow-down-tray class="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <span class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Input Kayu</span>
+            </div>
+            <div class="mt-3 flex flex-col">
+                <span class="text-2xl font-black text-gray-900 dark:text-white">
+                    {{ number_format($rekap['total_kayu_masuk'], 0, ',', '.') }} <span class="text-xs font-medium text-gray-400">Btg</span>
+                </span>
+                <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-1">
+                    {{ number_format($rekap['total_kubikasi_kayu_masuk'], 4, ',', '.') }} m³
+                </span>
+            </div>
+        </div>
+
+        <div class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg">
+                    <x-heroicon-m-arrow-up-tray class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <span class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Output Veneer</span>
+            </div>
+            <div class="mt-3 flex flex-col">
+                <span class="text-2xl font-black text-gray-900 dark:text-white">
+                    {{ number_format($rekap['total_kubikasi_veneer'], 4, ',', '.') }} <span class="text-xs font-medium text-gray-400">m³</span>
+                </span>
+                <span class="text-xs font-bold px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full w-fit mt-1">
+                    Rendemen: {{ $rekap['rata_rata_rendemen'] }}
+                </span>
+            </div>
+        </div>
+
+        <div class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-amber-50 dark:bg-amber-500/10 rounded-lg">
+                    <x-heroicon-m-banknotes class="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <span class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Nilai Poin</span>
+            </div>
+            <div class="mt-3">
+                <span class="text-2xl font-black text-gray-900 dark:text-white">
+                    Rp {{ number_format($rekap['total_poin_masuk'], 0, ',', '.') }}
+                </span>
+                <p class="text-[10px] text-gray-400 mt-1 uppercase leading-tight font-medium">Berdasarkan akumulasi poin log masuk</p>
+            </div>
+        </div>
+
+        <div class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
+            <div class="flex items-center p-2 gap-3 text-white ">
+                <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
+                <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer Rata Rata </span>
+            </div>
+            <div class="mt-3">
+                <span class="text-2xl font-black text-white">
+                    Rp {{ number_format($rekap['total_harga_veneer'], 0, ',', '.') }}
+                </span>
+                <div class="flex items-center gap-1.5 mt-1">
+                    <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
+                    <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price / m³</span>
+                </div>
+            </div>
+        </div>
+        <div class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
+            <div class="flex items-center p-2 gap-3 text-white ">
+                <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
+                <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer + Ongkos Rata Rata </span>
+            </div>
+            <div class="mt-3">
+                <span class="text-2xl font-black text-white">
+                    Rp {{ number_format($rekap['total_harga_v_ongkos'], 0, ',', '.') }}
+                </span>
+                <div class="flex items-center gap-1.5 mt-1">
+                    <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
+                    <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price / m³ + Ongkos Pekerja</span>
+                </div>
+            </div>
+        </div>
+        <div class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
+            <div class="flex items-center p-2 gap-3 text-white ">
+                <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
+                <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer + Ongkos + Penyusutan Rata Rata </span>
+            </div>
+            <div class="mt-3">
+                <span class="text-2xl font-black text-white">
+                    Rp {{ number_format($rekap['total_harga_vop'], 0, ',', '.') }}
+                </span>
+                <div class="flex items-center gap-1.5 mt-1">
+                    <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
+                    <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price / m³ + Ongkos Pekerja + Biaya Penyusutan</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+
     <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-gray-900">
         <table class="w-full text-left text-sm table-auto border-separate border-spacing-0">
             <thead>
@@ -152,7 +316,7 @@
                                                     <td class="px-2 py-2 font-bold {{ $kk['ongkos'] > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">
                                                         {{ $kk['ongkos'] > 0 ? 'Rp ' . number_format($kk['ongkos']) : "0 ( Belum Diatur )" }}
                                                     </td>
-                                                    <td class="px-2 py-2">{{ $kk['penyusutan'] ? 'Rp ' . number_format($kk['penyusutan'] ?? 0) : "0 ( Belum Diatur )" }}</td>
+                                                    <td class="px-2 py-2 {{ $kk['penyusutan'] == 0  && 'text-red-600 dark:text-red-400'  }}">{{ $kk['penyusutan'] != 0 ? 'Rp ' . number_format($kk['penyusutan'] ?? 0) : "0 ( Belum Diatur )" }}</td>
                                                 </tr>
                                                 @endforeach
                                             </tbody>
@@ -172,83 +336,100 @@
                 @endforelse
             </tbody>
         </table>
-            {{-- MANUAL PAGINATION UI --}}
-        <div class="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-xl dark:bg-gray-900 dark:border-white/10 shadow-sm">
-            {{-- Info Mobile (Sederhana) --}}
+        {{-- MANUAL PAGINATION UI --}}
+        <div class="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-xl dark:bg-gray-900/50 dark:border-white/10 dark:backdrop-blur-md shadow-sm">
+            
+            {{-- Info Mobile --}}
             <div class="flex flex-1 justify-between sm:hidden">
-                <a href="{{ $laporan->previousPageUrl() }}" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md dark:hover:bg-gray-900 {{ $laporan->onFirstPage() ? 'opacity-50 pointer-events-none' : '' }}">
-                    <
+                <a href="{{ $laporan->previousPageUrl() }}" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg dark:bg-gray-800 dark:border-white/10 dark:text-gray-300 {{ $laporan->onFirstPage() ? 'opacity-50 pointer-events-none' : '' }}"> 
+                    <x-heroicon-m-chevron-left class="w-5 h-5" />
                 </a>
-                <a href="{{ $laporan->nextPageUrl() }}" class="ml-3 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md dark:hover:bg-gray-900 {{ !$laporan->hasMorePages() ? 'opacity-50 pointer-events-none' : '' }}">
-                    >
+                <a href="{{ $laporan->nextPageUrl() }}" class="ml-3 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg dark:bg-gray-800 dark:border-white/10 dark:text-gray-300 {{ !$laporan->hasMorePages() ? 'opacity-50 pointer-events-none' : '' }}"> 
+                    <x-heroicon-m-chevron-right class="w-5 h-5" />
                 </a>
             </div>
 
             {{-- Desktop Pagination --}}
             <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                <div>
-                    <p class="text-sm text-gray-700 dark:text-gray-400">
-                        Menampilkan <span class="font-medium">{{ $laporan->firstItem() }}</span> - <span class="font-medium">{{ $laporan->lastItem() }}</span> dari <span class="font-medium">{{ $laporan->total() }}</span>
+                
+                {{-- Sisi Kiri: Info Data --}}
+                <div class="flex items-center gap-4">
+                    <p class="text-xs font-medium text-gray-600 dark:text-gray-400 tracking-wide">
+                        Menampilkan <span class="font-black text-gray-900 dark:text-white">{{ $laporan->firstItem() }}</span> 
+                        <span class="text-gray-400 mx-0.5">-</span> 
+                        <span class="font-black text-gray-900 dark:text-white">{{ $laporan->lastItem() }}</span> 
+                        <span class="lowercase">dari</span> 
+                        <span class="font-black text-gray-900 dark:text-white">{{ $laporan->total() }}</span> <span class="text-[10px] uppercase font-bold text-gray-400">Data</span>
                     </p>
                 </div>
 
+                {{-- TENGAH: Per Page Selector (Sleek Dark Mode) --}}
+                <div class="flex items-center gap-2 group">
+                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest dark:text-gray-500">Baris</label>
+                    <div class="relative">
+                        <select wire:model.live="perPage" 
+                            class="block w-full pl-3 pr-8 py-1.5 text-xs font-bold rounded-lg border-none ring-1 ring-gray-200 dark:ring-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 transition-all cursor-pointer appearance-none hover:ring-gray-300 dark:hover:ring-white/20">
+                            <option value="10" class="dark:bg-gray-900">10</option>
+                            <option value="25" class="dark:bg-gray-900">25</option>
+                            <option value="50" class="dark:bg-gray-900">50</option>
+                            <option value="100" class="dark:bg-gray-900">100</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                            <x-heroicon-m-chevron-down class="w-3 h-3" />
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Sisi Kanan: Navigation Buttons --}}
                 <div>
-                    <nav class="isolate inline-flex -space-x-px rounded-md shadow-sm gap-1" aria-label="Pagination">
-                        {{-- Tombol Previous Icon --}}
+                    <nav class="flex items-center gap-1.5" aria-label="Pagination">
+                        {{-- Previous --}}
                         <a href="{{ $laporan->previousPageUrl() }}" 
-                        class="relative inline-flex items-center rounded-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 dark:hover:bg-gray-900 focus:z-20 focus:outline-offset-0 dark:ring-white/10 {{ $laporan->onFirstPage() ? 'opacity-50 pointer-events-none' : '' }}">
-                            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clip-rule="evenodd" />
-                            </svg>
-                            <span class="sr-only">Previous</span>
+                        class="p-2 transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400 {{ $laporan->onFirstPage() ? 'opacity-30 pointer-events-none' : 'hover:text-primary-600' }}">
+                            <x-heroicon-m-chevron-left class="h-4 w-4" />
                         </a>
 
-                        {{-- Nomor Halaman Manual dengan Logic Ellipsis --}}
+                        {{-- Nomor Halaman --}}
                         @php
-                            $start = max($laporan->currentPage() - 2, 1);
-                            $end = min($start + 4, $laporan->lastPage());
-                            if($end === $laporan->lastPage()) $start = max($end - 4, 1);
+                            $start = max($laporan->currentPage() - 1, 1);
+                            $end = min($start + 2, $laporan->lastPage());
                         @endphp
 
                         @if($start > 1)
-                            <a href="{{ $laporan->url(1) }}" class="relative rounded-md inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 dark:hover:bg-gray-900 dark:text-white dark:ring-white/10">1</a>
-                            @if($start > 2)
-                                <span class="relative inline-flex rounded-md items-center px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300 dark:text-gray-400 dark:ring-white/10">...</span>
-                            @endif
+                            <a href="{{ $laporan->url(1) }}" class="px-3 py-1.5 text-xs font-bold transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-white">1</a>
+                            <span class="text-gray-300 dark:text-gray-600">...</span>
                         @endif
 
                         @foreach(range($start, $end) as $page)
                             @if($page == $laporan->currentPage())
-                                <span aria-current="page" class="relative z-10 inline-flex items-center bg-primary-600 px-4 py-2 text-sm font-semibold text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded-md">
+                                <span class="px-3 py-1.5 text-xs font-black text-white bg-primary-600 rounded-lg shadow-sm shadow-primary-500/20 ring-1 ring-primary-500">
                                     {{ $page }}
                                 </span>
                             @else
-                                <a href="{{ $laporan->url($page) }}" class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 dark:hover:bg-gray-900 focus:z-20 focus:outline-offset-0 dark:text-white dark:ring-white/10 rounded-md">
+                                <a href="{{ $laporan->url($page) }}" class="px-3 py-1.5 text-xs font-bold transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-gray-300">
                                     {{ $page }}
                                 </a>
                             @endif
                         @endforeach
 
                         @if($end < $laporan->lastPage())
-                            @if($end < $laporan->lastPage() - 1)
-                                <span class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300 dark:text-gray-400 dark:ring-white/10 rounded-md">...</span>
-                            @endif
-                            <a href="{{ $laporan->url($laporan->lastPage()) }}" class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 dark:hover:bg-gray-900 dark:text-white dark:ring-white/10 rounded-md">{{ $laporan->lastPage() }}</a>
+                            <span class="text-gray-300 dark:text-gray-600">...</span>
+                            <a href="{{ $laporan->url($laporan->lastPage()) }}" class="px-3 py-1.5 text-xs font-bold transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-white">{{ $laporan->lastPage() }}</a>
                         @endif
 
-                        {{-- Tombol Next Icon --}}
+                        {{-- Next --}}
                         <a href="{{ $laporan->nextPageUrl() }}" 
-                        class="relative inline-flex items-center rounded-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 dark:hover:bg-gray-900 focus:z-20 focus:outline-offset-0 dark:ring-white/10 {{ !$laporan->hasMorePages() ? 'opacity-50 pointer-events-none' : '' }}">
-                            <span class="sr-only">Next</span>
-                            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
-                            </svg>
+                        class="p-2 transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400 {{ !$laporan->hasMorePages() ? 'opacity-30 pointer-events-none' : 'hover:text-primary-600' }}">
+                            <x-heroicon-m-chevron-right class="h-4 w-4" />
                         </a>
                     </nav>
                 </div>
             </div>
         </div>
+
+
     </div>
 </div>
+
 </x-filament::page>
 
