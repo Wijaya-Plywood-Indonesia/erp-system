@@ -9,6 +9,13 @@ use Filament\Schemas\Schema;
 
 class MesinForm
 {
+    public static function getBahanOptions(): array
+    {
+        return [
+            'f/b' => 'F/B',
+            'core' => 'Core'
+        ];
+    }
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -21,6 +28,11 @@ class MesinForm
                     ->required(),
                 TextInput::make('nama_mesin')
                     ->required(),
+                Select::make('jenis_hasil')
+                    ->label('Jenis Hasil')
+                    ->options(self::getBahanOptions())
+                    ->native(false)
+                    ->searchable(),
                 TextInput::make('ongkos_mesin')
                     ->required()
                     ->numeric(),
