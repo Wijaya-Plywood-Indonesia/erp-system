@@ -2,31 +2,22 @@
 
 namespace App\Services;
 
+use App\Models\ProduksiPressDryer;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class ProduksiDryerApiService
 {
-    // Ganti dengan URL tujuan yang sebenarnya nanti
-    // Untuk testing, pakai webhook.site dulu
-    protected string $endpointUrl;
-
-    public function __construct()
-    {
-        $this->endpointUrl = config('services.produksi_api.url');
-    }
-
     public function kirimData(int $idProduksi): array
     {
-        // 1. Ambil semua data yang dibutuhkan dari database
-        $produksi = \App\Models\ProduksiPressDryer::with([
+        $produksi = ProduksiPressDryer::with([
             'detailMesins',
             'detailMasuks',
             'detailHasils',
-            'validasis',
+            'validasiPressDryers',  // ← fix: bukan 'validasis'
+            'detailPegawais',       // ← tambahan
         ])->findOrFail($idProduksi);
 
-        // 2. Susun struktur JSON
         $payload = [
             'produksi' => [
                 'id' => $produksi->id,
@@ -34,50 +25,56 @@ class ProduksiDryerApiService
                 'shift' => $produksi->shift,
                 'kendala' => $produksi->kendala,
             ],
-            'detail_mesin' => $produksi->detailMesins->map(fn($m) => [
+            'detail_mesin' => ($produksi->detailMesins ?? collect())->map(fn($m) => [
                 'id_mesin_dryer' => $m->id_mesin_dryer,
                 'jam_kerja_mesin' => $m->jam_kerja_mesin,
-            ]),
-            'detail_masuk' => $produksi->detailMasuks->map(fn($m) => [
+            ])->values(),
+
+            'detail_masuk' => ($produksi->detailMasuks ?? collect())->map(fn($m) => [
                 'no_palet' => $m->no_palet,
                 'kw' => $m->kw,
                 'isi' => $m->isi,
                 'id_kayu_masuk' => $m->id_kayu_masuk,
                 'id_jenis_kayu' => $m->id_jenis_kayu,
-            ]),
-            'detail_hasil' => $produksi->detailHasils->map(fn($h) => [
+            ])->values(),
+
+            'detail_hasil' => ($produksi->detailHasils ?? collect())->map(fn($h) => [
                 'no_palet' => $h->no_palet,
                 'kw' => $h->kw,
                 'isi' => $h->isi,
                 'id_kayu_masuk' => $h->id_kayu_masuk,
                 'id_jenis_kayu' => $h->id_jenis_kayu,
-            ]),
-            'validasi' => $produksi->validasis->map(fn($v) => [
+            ])->values(),
+
+            'validasi' => ($produksi->validasiPressDryers ?? collect())->map(fn($v) => [
                 'role' => $v->role,
                 'status' => $v->status,
-            ]),
+            ])->values(),
+
+            'detail_pegawai' => ($produksi->detailPegawais ?? collect())->map(fn($p) => [
+                'id_pegawai' => $p->id_pegawai ?? null,
+                // sesuaikan kolom dengan tabel detail_pegawais kamu
+            ])->values(),
         ];
 
-        // 3. Kirim via HTTP POST
         try {
             $response = Http::timeout(10)
                 ->withHeaders(['Content-Type' => 'application/json'])
-                ->post($this->endpointUrl, $payload);
+                ->post(config('services.produksi_api.url'), $payload);
 
-            Log::info('API Produksi Dryer dikirim', [
-                'id_produksi' => $idProduksi,
+            Log::info('Kirim data produksi dryer', [
+                'id' => $idProduksi,
                 'status_code' => $response->status(),
             ]);
 
             return [
                 'success' => $response->successful(),
                 'status_code' => $response->status(),
-                'response' => $response->json() ?? $response->body(),
             ];
 
         } catch (\Exception $e) {
-            Log::error('Gagal kirim API Produksi Dryer', [
-                'id_produksi' => $idProduksi,
+            Log::error('Gagal kirim data produksi dryer', [
+                'id' => $idProduksi,
                 'error' => $e->getMessage(),
             ]);
 

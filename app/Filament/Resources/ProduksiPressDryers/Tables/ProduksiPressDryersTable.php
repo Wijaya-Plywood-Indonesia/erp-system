@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\ProduksiPressDryers\Tables;
 
+use App\Models\ProduksiPressDryer;
+use App\Services\ProduksiDryerApiService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -31,8 +33,8 @@ class ProduksiPressDryersTable
                 TextColumn::make('shift')
                     ->label('Shift')
                     ->badge()
-                    ->color(fn (string $state): string => match (strtoupper($state)) {
-                        'PAGI'  => 'success',
+                    ->color(fn(string $state): string => match (strtoupper($state)) {
+                        'PAGI' => 'success',
                         'MALAM' => 'gray',
                         default => 'primary',
                     })
@@ -41,7 +43,7 @@ class ProduksiPressDryersTable
                 TextColumn::make('kendala')
                     ->label('Kendala')
                     ->limit(50)
-                    ->tooltip(fn (string $state): string => $state)
+                    ->tooltip(fn(string $state): string => $state)
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\BadgeColumn::make('validasiTerakhir.status')
@@ -49,7 +51,7 @@ class ProduksiPressDryersTable
                     ->colors([
                         'success' => 'divalidasi',
                         'warning' => 'ditangguhkan',
-                        'danger'  => 'ditolak',
+                        'danger' => 'ditolak',
                     ])
                     ->icons([
                         'heroicon-o-check-circle' => 'divalidasi',
@@ -86,21 +88,48 @@ class ProduksiPressDryersTable
                         return $query
                             ->when(
                                 $data['from'],
-                                fn (Builder $query, $date) =>
-                                    $query->whereDate('tanggal_produksi', '>=', $date),
+                                fn(Builder $query, $date) =>
+                                $query->whereDate('tanggal_produksi', '>=', $date),
                             )
                             ->when(
                                 $data['until'],
-                                fn (Builder $query, $date) =>
-                                    $query->whereDate('tanggal_produksi', '<=', $date),
+                                fn(Builder $query, $date) =>
+                                $query->whereDate('tanggal_produksi', '<=', $date),
                             );
                     }),
             ])
             ->recordActions([
+                // ⭐ INI TOMBOL KIRIM DATA KE API
+                Action::make('kirimData')
+                    ->label('Kirim Data')
+                    ->icon('heroicon-o-paper-airplane')
+                    ->color('success')
+                    ->requiresConfirmation()               // muncul dialog konfirmasi dulu
+                    ->modalHeading('Kirim Data Produksi?')
+                    ->modalDescription('Data produksi ini akan dikirim ke sistem tujuan. Lanjutkan?')
+                    ->modalSubmitActionLabel('Ya, Kirim!')
+                    ->action(function (ProduksiPressDryer $record) {
+                        $service = app(ProduksiDryerApiService::class);
+                        $result = $service->kirimData($record->id);
+
+                        if ($result['success']) {
+                            Notification::make()
+                                ->title('Berhasil!')
+                                ->body('Data produksi berhasil dikirim ke sistem tujuan.')
+                                ->success()
+                                ->send();
+                        } else {
+                            Notification::make()
+                                ->title('Gagal Mengirim!')
+                                ->body($result['error'] ?? 'Terjadi kesalahan saat mengirim data.')
+                                ->danger()
+                                ->send();
+                        }
+                    }),
                 Action::make('kelola_kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn ($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'warning')
+                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Kendala')
@@ -122,16 +151,16 @@ class ProduksiPressDryersTable
                             ->success()
                             ->send();
                     })
-                    ->modalHeading(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
                     ->modalSubmitActionLabel('Simpan'),
 
                 EditAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
                 ViewAction::make(),
 
                 DeleteAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->before(function ($record) {
 
                         $hasRelation =
@@ -157,10 +186,10 @@ class ProduksiPressDryersTable
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->visible(
-                            fn ($records) =>
-                                $records->every(
-                                    fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi'
-                                )
+                            fn($records) =>
+                            $records->every(
+                                fn($r) => $r->validasiTerakhir?->status !== 'divalidasi'
+                            )
                         ),
                 ]),
             ]);

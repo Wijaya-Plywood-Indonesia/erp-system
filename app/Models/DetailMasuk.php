@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class DetailMasuk extends Model
 {
-    protected $table = 'detail_masuks';
+    protected $table = 'detail_masuk';
 
     protected $fillable = [
         'no_palet',
