@@ -13,9 +13,15 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use App\Http\Controllers\ProduksiPressDryerController;
 
-//untuk prodiksi press dryer
+Route::get(
+    '/produksi-dryer/{id}/preview',
+    [ProduksiPressDryerController::class, 'previewPayload']
+);
 
-Route::post('/produksi-dryer/{id}/kirim', [ProduksiPressDryerController::class, 'kirimKeWebLain']);
+Route::post(
+    '/produksi-dryer/{id}/kirim',
+    [ProduksiPressDryerController::class, 'kirimKeWebLain']
+);
 
 /*
 |--------------------------------------------------------------------------
