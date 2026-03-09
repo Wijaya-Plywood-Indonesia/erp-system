@@ -12,10 +12,8 @@ use Illuminate\Support\Facades\Log;
 // TUGAS: Menerima payload dari NotaKayuJurnalPayloadService
 //        lalu mengirimnya ke API Perusahaan 2 via HTTP POST.
 //
-// Flow lengkap di controller:
-//   1. $payload = (new NotaKayuJurnalPayloadService)->buildPayload($nota)
-//   2. $result  = (new JurnalSyncService)->kirim($nota, $payload)
-//   3. Jika berhasil → is_synced = true, simpan no jurnal dari P2
+// CATATAN: Tidak menyimpan apapun ke DB Perusahaan 1.
+//          Nomor jurnal dari P2 hanya ditampilkan di notifikasi Filament.
 // ============================================================
 
 class JurnalSyncService
@@ -26,85 +24,103 @@ class JurnalSyncService
 
     public function __construct()
     {
-        // Ambil dari .env Perusahaan 1
-        // PERUSAHAAN2_URL=https://erp.perusahaan2.com
-        // PERUSAHAAN2_API_TOKEN=xxx
         $this->baseUrl  = rtrim(config('services.akuntansi.url', ''), '/');
-        $this->apiToken = config('services.akuntasi.token', '');
-        $this->timeout  = 30; // detik
+        $this->apiToken = config('services.akuntansi.token', '');
+        $this->timeout  = 30;
     }
 
     // ----------------------------------------------------------
     // KIRIM payload ke Perusahaan 2
-    // Return: array ['success' => bool, 'no_jurnal' => '...', 'message' => '...']
+    //
+    // Return array:
+    //   Berhasil  → ['success' => true,  'no_jurnal' => 2,       'message' => '...']
+    //   Duplikat  → ['success' => true,  'no_jurnal' => 1,       'message' => '...', 'duplicate' => true]
+    //   Gagal     → ['success' => false, 'no_jurnal' => null,    'message' => '...']
     // ----------------------------------------------------------
     public function kirim(NotaKayu $nota, array $payload): array
     {
-        // Jangan kirim ulang jika sudah pernah berhasil
-        if ($nota->is_synced) {
+        // Validasi konfigurasi sebelum kirim
+        if (empty($this->baseUrl) || empty($this->apiToken)) {
+            Log::error('[JurnalSync] Konfigurasi tidak lengkap', [
+                'baseUrl'  => $this->baseUrl,
+                'hasToken' => ! empty($this->apiToken),
+            ]);
+
             return [
-                'success'   => true,
-                'no_jurnal' => $nota->sync_jurnal_no,
-                'message'   => 'Sudah pernah di-sync sebelumnya.',
-                'skipped'   => true,
+                'success'   => false,
+                'no_jurnal' => null,
+                'message'   => 'Konfigurasi PERUSAHAAN2_URL atau PERUSAHAAN2_API_TOKEN belum diisi di .env',
             ];
         }
 
         try {
             $response = Http::withToken($this->apiToken)
+                ->withHeaders([
+                    'Accept'       => 'application/json',
+                    'Content-Type' => 'application/json',
+                ])
                 ->timeout($this->timeout)
                 ->post("{$this->baseUrl}/api/jurnal/store", $payload);
 
-            // Perusahaan 2 harus return JSON: { success: true, no_jurnal: 'J-0044' }
+            $json = $response->json();
+
+            // ── Berhasil (201) atau Duplikat (200) ─────────────
             if ($response->successful()) {
-                $json = $response->json();
 
-                // Update flag di Perusahaan 1
-                $nota->update([
-                    'is_synced'       => true,
-                    'synced_at'       => now(),
-                    'sync_jurnal_no'  => $json['no_jurnal'] ?? null,
-                    'sync_error'      => null,
-                ]);
+                $noJurnal = $json['no_jurnal'] ?? null;
+                $isDuplikat = $json['duplicate'] ?? false;
 
-                Log::info("[JurnalSync] Berhasil", [
-                    'nota'      => $nota->no_nota,
-                    'no_jurnal' => $json['no_jurnal'] ?? '-',
+                Log::info('[JurnalSync] ' . ($isDuplikat ? 'Duplikat' : 'Berhasil'), [
+                    'no_nota'   => $nota->no_nota,
+                    'no_jurnal' => $noJurnal,
                 ]);
 
                 return [
                     'success'   => true,
-                    'no_jurnal' => $json['no_jurnal'] ?? null,
-                    'message'   => 'Jurnal berhasil dikirim ke Perusahaan 2.',
+                    'no_jurnal' => $noJurnal,
+                    'duplicate' => $isDuplikat,
+                    'message'   => $isDuplikat
+                        ? "Nota ini sudah pernah di-sync sebelumnya. Nomor Jurnal: {$noJurnal}"
+                        : "Jurnal berhasil dikirim ke Perusahaan 2. Nomor Jurnal: {$noJurnal}",
                 ];
             }
 
-            // HTTP error (4xx / 5xx)
-            $errorMsg = $response->json('message') ?? $response->body();
+            // ── HTTP Error (4xx / 5xx) ──────────────────────────
+            $errorMsg = $json['message'] ?? $response->body();
 
-            $nota->update(['sync_error' => $errorMsg]);
-
-            Log::error("[JurnalSync] HTTP Error", [
-                'nota'   => $nota->no_nota,
-                'status' => $response->status(),
-                'body'   => $errorMsg,
+            Log::error('[JurnalSync] HTTP Error', [
+                'no_nota' => $nota->no_nota,
+                'status'  => $response->status(),
+                'body'    => $errorMsg,
             ]);
 
             return [
-                'success' => false,
-                'message' => "HTTP {$response->status()}: {$errorMsg}",
+                'success'   => false,
+                'no_jurnal' => null,
+                'message'   => "HTTP {$response->status()}: {$errorMsg}",
+            ];
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            // Server P2 tidak bisa dijangkau
+            Log::error('[JurnalSync] Koneksi gagal', [
+                'no_nota' => $nota->no_nota,
+                'error'   => $e->getMessage(),
+            ]);
+
+            return [
+                'success'   => false,
+                'no_jurnal' => null,
+                'message'   => 'Tidak dapat terhubung ke server Perusahaan 2. Pastikan server sedang berjalan.',
             ];
         } catch (\Exception $e) {
-            $nota->update(['sync_error' => $e->getMessage()]);
-
-            Log::error("[JurnalSync] Exception", [
-                'nota'  => $nota->no_nota,
-                'error' => $e->getMessage(),
+            Log::error('[JurnalSync] Exception', [
+                'no_nota' => $nota->no_nota,
+                'error'   => $e->getMessage(),
             ]);
 
             return [
-                'success' => false,
-                'message' => $e->getMessage(),
+                'success'   => false,
+                'no_jurnal' => null,
+                'message'   => $e->getMessage(),
             ];
         }
     }
