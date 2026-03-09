@@ -28,7 +28,7 @@ class ProduksiInflowService
         if ($year) {
             $query->whereYear('created_at', $year);
         }
-        if ($nama_lahan !== "Semua Lahan"){
+        if ($nama_lahan !== "Semua Lahan") {
             $query->whereHas('lahan', function ($query) use ($nama_lahan) {
                 $query->where('nama_lahan', $nama_lahan);
             });

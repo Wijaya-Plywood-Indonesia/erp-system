@@ -7,9 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class GradeRule extends Model
 {
+    protected $table = 'grade_rules';
+
     protected $fillable = [
-        'grade_id',
-        'criterion_id',
+        'id_grade',
+        'id_criteria',
         'kondisi',
         'penjelasan',
         'poin_lulus',
@@ -23,15 +25,15 @@ class GradeRule extends Model
 
     public function grade(): BelongsTo
     {
-        return $this->belongsTo(Grade::class);
+        return $this->belongsTo(Grade::class, 'id_grade');
     }
 
     /**
-     * Criterion (pertanyaan) yang aturan ini berlaku untuknya.
+     * FIX: Tambahkan 'id_criteria' sebagai foreign key eksplisit.
      */
-    public function criterion(): BelongsTo
+    public function criteria(): BelongsTo
     {
-        return $this->belongsTo(Criteria::class);
+        return $this->belongsTo(Criteria::class, 'id_criteria');
     }
 
     // ── Business Logic ────────────────────────────────────────────────────────

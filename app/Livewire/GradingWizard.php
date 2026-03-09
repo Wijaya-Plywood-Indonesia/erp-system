@@ -3,83 +3,34 @@
 namespace App\Livewire;
 
 use App\Models\Criteria;
-use App\Models\Criterion;
+use App\Models\Grade;
+use App\Models\GradeRule;
 use App\Models\GradingSession;
 use App\Models\KategoriBarang;
 use App\Models\SessionAnswer;
 use App\Services\InferenceEngine;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 
-/**
- * LIVEWIRE COMPONENT: GradingWizard
- *
- * Ini adalah PENGONTROL UTAMA tampilan sistem pakar.
- *
- * ═══════════════════════════════════════════════════════════
- * APA ITU LIVEWIRE?
- * ═══════════════════════════════════════════════════════════
- * Livewire memungkinkan PHP berjalan secara real-time di browser
- * tanpa perlu menulis JavaScript. Setiap kali pengawas klik tombol,
- * Livewire mengirim request ke server, menjalankan PHP, lalu
- * update DOM yang berubah saja — tanpa page reload.
- *
- * ═══════════════════════════════════════════════════════════
- * STATE MACHINE — 4 STEP
- * ═══════════════════════════════════════════════════════════
- *
- * [start] ──startGrading()──► [question] ──answer()──► [loading]
- * ▲                        │
- * │                 runInference()
- * restart()                  │
- * │                        ▼
- * [result] ◄─────────────────────
- *
- * ═══════════════════════════════════════════════════════════
- * ALUR DETAIL
- * ═══════════════════════════════════════════════════════════
- *
- * 1. mount()         → set default kategori dari KategoriBarang::first()
- * 2. startGrading()  → buat GradingSession di DB, pindah ke step 'question'
- * 3. answer('ya')    → simpan jawaban ke session_answers, increment index
- * answer('tidak') → (sama seperti di atas)
- * 4. Jika index >= total pertanyaan → step = 'loading'
- * Alpine.js mendeteksi perubahan step dan memanggil runInference()
- * 5. runInference()  → panggil InferenceEngine::analyze(), step = 'result'
- * 6. Blade view render hasil berdasarkan $this->result
- * 7. restart()        → kembali ke step 'start' untuk grading berikutnya
- */
 class GradingWizard extends Component
 {
-    // ── Public Properties (State) ─────────────────────────────────────────────
-    // Semua property public di Livewire otomatis di-sync ke view (blade).
-    // Perubahan property → Livewire re-render bagian yang berubah saja.
-
-    /** Step aktif saat ini: 'start' | 'question' | 'loading' | 'result' */
-    public string $step = 'start';
-
-    /** Index pertanyaan saat ini (0-based) */
-    public int $currentIndex = 0;
-
-    /** ID kategori barang yang dipilih pengawas */
-    public int $idKategoriBarang = 0;
-
-    /** Kode produk opsional (untuk identifikasi di lapangan) */
-    public ?string $kodeProduk = null;
-
-    /** ID session yang sedang aktif */
-    public ?int $sessionId = null;
-
-    /** Hasil akhir dari InferenceEngine::analyze() */
-    public array $result = [];
-
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    public string  $step             = 'start';
+    public int     $currentIndex     = 0;
+    public int     $idKategoriBarang = 0;
+    public ?string $kodeProduk       = null;
+    public ?int    $sessionId        = null;
+    public array   $result           = [];
 
     /**
-     * Dipanggil sekali saat komponen pertama kali di-render.
-     * Set default kategori ke yang pertama ada di database.
+     * Grade yang gugur karena cacat fatal (not_allowed + YA).
+     * Gugur = tidak bisa jadi winner.
+     * Gugur ≠ dihapus dari perhitungan — persentase tetap dihitung.
      */
+    public array $eliminatedGradeIds = [];
+
     public function mount(): void
     {
         $first = KategoriBarang::first();
@@ -88,114 +39,105 @@ class GradingWizard extends Component
         }
     }
 
-    // ── Computed Properties ───────────────────────────────────────────────────
-    // #[Computed] = hasil-nya di-cache dalam satu request.
-    // Tidak dihitung ulang jika dipanggil berkali-kali dalam view.
-
-    /**
-     * Semua kategori barang yang tersedia.
-     * Digunakan untuk dropdown pemilih kategori di step 'start'.
-     */
     #[Computed]
     public function kategoriList()
     {
         return KategoriBarang::all();
     }
 
-    /**
-     * Semua kriteria aktif untuk kategori yang dipilih, urut berdasarkan kolom 'urutan'.
-     * Ini adalah daftar pertanyaan yang akan ditampilkan satu per satu.
-     */
     #[Computed]
     public function criteria()
     {
         if (! $this->idKategoriBarang) return collect();
 
-        return Criteria::forKategori($this->idKategoriBarang)
-            ->active()
+        return Criteria::where('id_kategori_barang', $this->idKategoriBarang)
+            ->where('is_active', true)
+            ->orderBy('urutan', 'asc')
             ->get();
     }
 
-    /**
-     * Total jumlah pertanyaan untuk kategori ini.
-     */
     #[Computed]
     public function totalQuestions(): int
     {
         return $this->criteria->count();
     }
 
-    /**
-     * Pertanyaan yang sedang aktif saat ini (berdasarkan currentIndex).
-     * Null jika index sudah melewati batas.
-     */
     #[Computed]
     public function currentCriterion(): ?Criteria
     {
+        // Semua pertanyaan diajukan — tidak ada yang dilewati karena eliminasi
         return $this->criteria->get($this->currentIndex);
     }
 
-    // ── Actions ───────────────────────────────────────────────────────────────
-
-    /**
-     * Dipanggil saat pengawas mengubah pilihan kategori di dropdown.
-     * Reset index pertanyaan agar mulai dari awal.
-     */
-    public function updatedIdKategoriBarang(): void
+    #[Computed]
+    public function availableGrades()
     {
-        $this->currentIndex = 0;
-        unset($this->criteria); // invalidate computed cache
+        if (! $this->idKategoriBarang) return collect();
+        return Grade::where('id_kategori_barang', $this->idKategoriBarang)->get();
     }
 
-    /**
-     * Mulai sesi grading baru.
-     * Membuat GradingSession di database dan pindah ke step 'question'.
-     *
-     * Dipanggil: wire:click="startGrading" di blade
-     */
+    #[Computed]
+    public function isReady(): bool
+    {
+        if ($this->criteria->isEmpty()) return false;
+        if ($this->availableGrades->isEmpty()) return false;
+        $gradeIds = $this->availableGrades->pluck('id');
+        return GradeRule::whereIn('id_grade', $gradeIds)->exists();
+    }
+
+    #[Computed]
+    public function readinessError(): ?string
+    {
+        if ($this->availableGrades->isEmpty()) {
+            return 'Belum ada grade untuk kategori ini.';
+        }
+        if ($this->criteria->isEmpty()) {
+            return 'Belum ada pertanyaan. Tambahkan di menu Pertanyaan.';
+        }
+        $gradeIds = $this->availableGrades->pluck('id');
+        if (! GradeRule::whereIn('id_grade', $gradeIds)->exists()) {
+            return 'Aturan grade belum dikonfigurasi. Isi di menu Aturan Grade.';
+        }
+        return null;
+    }
+
+    public function updatedIdKategoriBarang(): void
+    {
+        $this->currentIndex       = 0;
+        $this->eliminatedGradeIds = [];
+        unset($this->criteria, $this->availableGrades);
+    }
+
     public function startGrading(): void
     {
-        // Guard: pastikan kategori dipilih dan ada pertanyaan
-        if (! $this->idKategoriBarang) return;
-        if ($this->criteria->isEmpty()) return;
+        if (! $this->isReady) return;
 
-        // Buat session baru di DB
         $session = GradingSession::create([
             'id_kategori_barang' => $this->idKategoriBarang,
-            'kode_produk'         => $this->kodeProduk ?: null,
-            'user_id'             => Auth::id(),
-            'status'              => 'in_progress',
+            'kode_produk'        => $this->kodeProduk ?: null,
+            'user_id'            => Auth::id(),
+            'status'             => 'in_progress',
         ]);
 
-        $this->sessionId    = $session->id;
-        $this->currentIndex = 0;
-        $this->step          = 'question';
+        $this->sessionId          = $session->id;
+        $this->currentIndex       = 0;
+        $this->eliminatedGradeIds = [];
+        $this->step               = 'question';
 
-        // Trigger animasi slide di Alpine.js
         $this->dispatch('question-changed');
     }
 
-    /**
-     * Rekam jawaban pengawas dan lanjut ke pertanyaan berikutnya.
-     *
-     * Ini adalah action paling sering dipanggil — setiap klik YA/TIDAK.
-     * Prosesnya cepat: hanya satu INSERT ke database lalu increment index.
-     *
-     * @param  string  $jawaban  'ya' atau 'tidak'
-     */
     public function answer(string $jawaban): void
     {
-        // Guard: validasi input
         if (! in_array($jawaban, ['ya', 'tidak'], true)) return;
-        if (! $this->sessionId) return;
-        if (! $this->currentCriterion) return;
+        if (! $this->sessionId || ! $this->currentCriterion) return;
 
-        // Simpan jawaban ke database
-        // updateOrCreate → aman jika pengawas entah bagaimana klik dua kali
+        $criterion = $this->currentCriterion;
+
         SessionAnswer::updateOrCreate(
             [
-                'session_id'   => $this->sessionId,
-                'criterion_id' => $this->currentCriterion->id,
+                'id_session'  => $this->sessionId,
+                'id_criteria' => $criterion->id,
             ],
             [
                 'jawaban'     => $jawaban,
@@ -203,58 +145,89 @@ class GradingWizard extends Component
             ]
         );
 
-        // Lanjut ke pertanyaan berikutnya
+        // Tandai grade sebagai gugur jika jawaban YA + kondisi not_allowed
+        // Grade gugur tetap dihitung persentasenya, hanya tidak bisa jadi winner
+        if ($jawaban === 'ya') {
+            $this->markEliminated($criterion->id);
+        }
+
         $this->currentIndex++;
 
-        // Cek apakah semua pertanyaan sudah dijawab
+        // Selesai jika semua pertanyaan sudah dijawab
         if ($this->currentIndex >= $this->totalQuestions) {
-            // Pindah ke loading screen
+            Log::info('[WIZARD] Semua pertanyaan selesai', [
+                'total_dijawab' => $this->currentIndex,
+                'grade_gugur'   => $this->eliminatedGradeIds,
+            ]);
+
             $this->step = 'loading';
-            // Beritahu Alpine.js untuk mulai countdown lalu panggil runInference
             $this->dispatch('start-inference');
         } else {
-            // Trigger animasi slide untuk pertanyaan baru
             $this->dispatch('question-changed');
         }
     }
 
     /**
-     * Jalankan Inference Engine setelah animasi loading selesai.
-     *
-     * Dipanggil dari Alpine.js via: $wire.runInference()
-     * (setelah delay 2 detik untuk animasi loading)
+     * Tandai grade sebagai gugur (tidak bisa jadi winner).
+     * Dipanggil saat jawaban YA pada kriteria dengan kondisi not_allowed.
      */
+    private function markEliminated(int $criteriaId): void
+    {
+        $allGradeIds = $this->availableGrades->pluck('id');
+
+        $toEliminate = GradeRule::where('id_criteria', $criteriaId)
+            ->whereIn('id_grade', $allGradeIds)
+            ->where('kondisi', 'not_allowed')
+            ->pluck('id_grade')
+            ->toArray();
+
+        if (! empty($toEliminate)) {
+            Log::info('[WIZARD] Grade gugur (tetap dihitung)', [
+                'criteria_id' => $criteriaId,
+                'gugur'       => Grade::whereIn('id', $toEliminate)->pluck('nama_grade'),
+            ]);
+
+            $this->eliminatedGradeIds = array_unique(
+                array_merge($this->eliminatedGradeIds, $toEliminate)
+            );
+        }
+    }
+
     public function runInference(): void
     {
-        $session = GradingSession::with('answers.criterion')
-            ->find($this->sessionId);
+        if (! $this->sessionId) return;
 
-        if (! $session) return;
+        try {
+            $session = GradingSession::with('answers.criteria')
+                ->find($this->sessionId);
 
-        $engine       = new InferenceEngine();
-        $this->result = $engine->analyze($session);
-        $this->step   = 'result';
+            if (! $session) return;
+
+            $this->result = (new InferenceEngine())->analyze(
+                $session,
+                $this->eliminatedGradeIds
+            );
+
+            $this->step = 'result';
+        } catch (\Throwable $e) {
+            Log::error('[WIZARD] runInference() Exception', [
+                'message' => $e->getMessage(),
+                'line'    => $e->getLine(),
+            ]);
+        }
     }
 
-    /**
-     * Reset semua state — kembali ke halaman awal.
-     * Dipanggil saat pengawas klik "Grading Baru".
-     *
-     * Method ini diubah namanya menjadi restart() untuk menghindari
-     * tabrakan dengan method reset() bawaan Livewire Component.
-     */
     public function restart(): void
     {
-        $this->step          = 'start';
-        $this->currentIndex = 0;
-        $this->sessionId    = null;
-        $this->kodeProduk   = null;
-        $this->result       = [];
+        $this->step               = 'start';
+        $this->currentIndex       = 0;
+        $this->sessionId          = null;
+        $this->kodeProduk         = null;
+        $this->result             = [];
+        $this->eliminatedGradeIds = [];
 
-        unset($this->criteria); // invalidate computed cache
+        unset($this->criteria, $this->availableGrades);
     }
-
-    // ── Render ────────────────────────────────────────────────────────────────
 
     public function render()
     {

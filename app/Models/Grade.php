@@ -25,13 +25,15 @@ class Grade extends Model
 
     public function gradeRules(): HasMany
     {
-        return $this->hasMany(GradeRule::class);
+        return $this->hasMany(GradeRule::class, 'id_grade');
     }
 
     /**
      * Sesi grading yang berakhir dengan rekomendasi grade ini.
      * Berguna untuk laporan dan statistik.
      */
+
+
     public function gradingSessions(): HasMany
     {
         return $this->hasMany(GradingSession::class, 'hasil_grade_id');

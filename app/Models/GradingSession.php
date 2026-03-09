@@ -11,7 +11,6 @@ class GradingSession extends Model
 {
     protected $fillable = [
         'id_kategori_barang',
-        'kode_produk',
         'user_id',
         'status',
         'hasil_grade_id',
@@ -69,7 +68,7 @@ class GradingSession extends Model
      */
     public function answers(): HasMany
     {
-        return $this->hasMany(SessionAnswer::class, 'session_id');
+        return $this->hasMany(SessionAnswer::class, 'id_session');
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
