@@ -10,6 +10,8 @@ use App\Models\RencanaKerjaHp;
 use App\Observers\RencanaKerjaHpObserver;
 use Filament\Support\Facades\FilamentView;
 use Illuminate\Support\Facades\Blade;
+use App\Models\ValidasiHasilRotary;
+use App\Observers\ValidasiHasilRotaryObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -29,6 +31,7 @@ class AppServiceProvider extends ServiceProvider
         // ⬆⬆⬆  WAJIB: supaya MySQL ikut Asia/Jakarta
         ModalSanding::observe(ModalSandingObserver::class);
         RencanaKerjaHp::observe(RencanaKerjaHpObserver::class);
+        ValidasiHasilRotary::observe(ValidasiHasilRotaryObserver::class);
         // PlatformHasilHp::observe(PlatformHasilHpObserver::class);
         // TriplekHasilHp::observe(TriplekHasilHpObserver::class);
 
