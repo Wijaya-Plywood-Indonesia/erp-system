@@ -1,0 +1,597 @@
+<?php
+
+namespace App\Services\Akuntansi;
+
+use App\Models\ProduksiRotary;
+use App\Models\PenggunaanLahanRotary;
+use Carbon\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * RotaryJurnalService
+ *
+ * Menghasilkan payload jurnal pembantu dari produksi rotary satu tanggal.
+ *
+ * STRUKTUR PAYLOAD:
+ *   jurnal_header  → info umum (no_jurnal, tanggal, total, balance)
+ *   jurnal_items   → 8 baris akun (masuk jurnal_pembantu_headers di akuntansi)
+ *     └─ items     → rincian per baris akun (masuk jurnal_pembantu_items di akuntansi)
+ *                    field: urut, jenis_pihak, nama_pihak, keterangan,
+ *                           ukuran, banyak, m3, harga, hit_kbk, jumlah
+ *
+ * PEMETAAN AKUN:
+ * DEBIT:
+ *   115-07  Veneer Basah F/B        → items: per mesin → per palet (hit_kbk='k')
+ *   115-08  Veneer Basah CORE       → items: per mesin → per palet (hit_kbk='k')
+ *   510-01  Upah Tenaga Kerja       → items: per mesin (hit_kbk=null)
+ *   520-08  Beban Kerugian Produksi → items: 1 baris selisih (hit_kbk=null)
+ *
+ * KREDIT:
+ *   115-02  Persediaan Kayu 260     → items: per lahan (hit_kbk=null)
+ *   115-01  Persediaan Kayu 130     → items: per lahan (hit_kbk=null)
+ *   115-13  Persediaan Reeling Tape → items: per mesin (hit_kbk=null)
+ *   210-02  Hutang Gaji             → items: per mesin (hit_kbk=null)
+ *   520-09  Keuntungan Produksi     → items: 1 baris selisih (hit_kbk=null)
+ */
+class RotaryJurnalService
+{
+    // ─── Konstanta Kode Akun ─────────────────────────────────────────────────
+
+    const AKUN = [
+        'veneer_fb'       => ['kode' => '115-07', 'nama' => 'Veneer Basah F/B',          'map' => 'd'],
+        'veneer_core'     => ['kode' => '115-08', 'nama' => 'Veneer Basah CORE',         'map' => 'd'],
+        'upah_tk'         => ['kode' => '510-01', 'nama' => 'Upah Tenaga Kerja',         'map' => 'd'],
+        'beban_kerugian'  => ['kode' => '520-08', 'nama' => 'Beban kerugian produksi',   'map' => 'd'],
+        'kayu_130'        => ['kode' => '115-01', 'nama' => 'Persediaan Kayu 130',       'map' => 'k'],
+        'kayu_260'        => ['kode' => '115-02', 'nama' => 'Persediaan Kayu 260',       'map' => 'k'],
+        'hutang_gaji'     => ['kode' => '210-02', 'nama' => 'Hutang Gaji',               'map' => 'k'],
+        'reeling_tape'    => ['kode' => '115-13', 'nama' => 'Persediaan Reeling Tape',   'map' => 'k'],
+        'keuntungan_prod' => ['kode' => '520-09', 'nama' => 'Keuntungan hasil produksi', 'map' => 'k'],
+    ];
+
+    // Mapping nama bahan penolong → kode akun kredit
+    const BAHAN_PENOLONG_MAP = [
+        'reeling tape' => ['kode' => '115-13', 'nama' => 'Persediaan Reeling Tape'],
+        'relling tape' => ['kode' => '115-13', 'nama' => 'Persediaan Reeling Tape'],
+        'reeling'      => ['kode' => '115-13', 'nama' => 'Persediaan Reeling Tape'],
+    ];
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Build payload jurnal untuk tanggal produksi tertentu.
+     *
+     * @param  string  $tanggal  Format: Y-m-d
+     * @return array|null  null = belum semua mesin divalidasi
+     */
+    public function buildJurnalPayload(string $tanggal): ?array
+    {
+        $tgl = Carbon::parse($tanggal)->startOfDay();
+
+        $produksiList = ProduksiRotary::with([
+            'mesin',
+            'detailValidasiHasilRotary',
+            'detailPegawaiRotary.pegawai',
+            'detailLahanRotary.lahan',
+            'detailLahanRotary.jenisKayu',
+            'detailPaletRotary.ukuran',
+            'detailPaletRotary.penggunaanLahan.lahan',
+            'bahanPenolongRotary',
+        ])
+            ->whereDate('tgl_produksi', $tgl)
+            ->get();
+
+        if ($produksiList->isEmpty()) {
+            Log::info("RotaryJurnal: Tidak ada produksi pada tanggal {$tanggal}");
+            return null;
+        }
+
+        // Cek semua mesin sudah divalidasi
+        foreach ($produksiList as $produksi) {
+            $validated = $produksi->detailValidasiHasilRotary
+                ->whereIn('status', ['divalidasi', 'disetujui'])
+                ->count();
+
+            if ($validated === 0) {
+                Log::info("RotaryJurnal: Mesin [{$produksi->mesin->nama_mesin}] belum divalidasi. Jurnal ditunda.");
+                return null;
+            }
+        }
+
+        $calc = $this->hitungNominal($produksiList);
+
+        return $this->buildStructure($tgl, $produksiList, $calc);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  KALKULASI
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private function hitungNominal(Collection $produksiList): array
+    {
+        // ── Kubikasi veneer ───────────────────────────────────────────────────
+        $kubikasiPerMesin  = [];
+        $kubikasiTotalFB   = 0.0;
+        $kubikasiTotalCore = 0.0;
+
+        foreach ($produksiList as $produksi) {
+            $jenis    = strtolower($produksi->mesin->jenis_hasil ?? 'core');
+            $kubikasi = 0.0;
+
+            foreach ($produksi->detailPaletRotary as $palet) {
+                $ukuran = $palet->ukuran;
+                if (!$ukuran) continue;
+                $vol = ($ukuran->panjang ?? 0)
+                     * ($ukuran->lebar   ?? 0)
+                     * ($ukuran->tebal   ?? 0)
+                     * ($palet->total_lembar ?? 0)
+                     / 10_000_000;
+                $kubikasi += $vol;
+            }
+
+            $kubikasiPerMesin[$produksi->id] = ['jenis' => $jenis, 'kubikasi' => $kubikasi];
+
+            if ($jenis === 'f/b') {
+                $kubikasiTotalFB += $kubikasi;
+            } else {
+                $kubikasiTotalCore += $kubikasi;
+            }
+        }
+
+        // ── Poin kayu per lahan ───────────────────────────────────────────────
+        $poinKayu130           = 0.0;
+        $poinKayu260           = 0.0;
+        $detailKayuPerProduksi = [];
+
+        foreach ($produksiList as $produksi) {
+            foreach ($produksi->detailLahanRotary as $lahan) {
+                $namaLahan = strtolower($lahan->lahan->nama_lahan ?? '');
+                $isKayu130 = str_contains($namaLahan, '130');
+                $poin      = $this->getPoinKayuFromLahan($lahan);
+
+                $detailKayuPerProduksi[$produksi->id][] = [
+                    'id_lahan'      => $lahan->id_lahan,
+                    'nama_lahan'    => $lahan->lahan->nama_lahan    ?? '-',
+                    'kode_lahan'    => $lahan->lahan->kode_lahan    ?? '-',
+                    'nama_kayu'     => $lahan->jenisKayu->nama_kayu ?? '-',
+                    'nama_mesin'    => $produksi->mesin->nama_mesin,
+                    'jumlah_batang' => $lahan->jumlah_batang,
+                    'poin'          => $poin,
+                    'is_kayu_130'   => $isKayu130,
+                ];
+
+                if ($isKayu130) {
+                    $poinKayu130 += $poin;
+                } else {
+                    $poinKayu260 += $poin;
+                }
+            }
+        }
+
+        // ── Harga veneer ──────────────────────────────────────────────────────
+        $kubikasiTotal65 = ($kubikasiTotalFB + $kubikasiTotalCore) * 0.65;
+        $totalPoin       = $poinKayu130 + $poinKayu260;
+        $hargaVeneer     = ($kubikasiTotal65 > 0) ? ($totalPoin / $kubikasiTotal65) : 0;
+        $nilaiVeneerFB   = $kubikasiTotalFB   * $hargaVeneer;
+        $nilaiVeneerCore = $kubikasiTotalCore  * $hargaVeneer;
+
+        // ── Upah tenaga kerja ─────────────────────────────────────────────────
+        // Total upah = ongkos_mesin per produksi
+        // Items jurnal = per pegawai (jenis_pihak=karyawan, nama_pihak=nama_pegawai)
+        $totalUpah             = 0.0;
+        $detailUpahPerProduksi = [];  // untuk hitung total
+        $detailPegawaiUpah     = [];  // untuk items jurnal
+
+        foreach ($produksiList as $produksi) {
+            $ongkos    = (float) ($produksi->mesin->ongkos_mesin ?? 0);
+            $totalUpah += $ongkos;
+            $detailUpahPerProduksi[$produksi->id] = [
+                'nama_mesin'   => $produksi->mesin->nama_mesin,
+                'ongkos_mesin' => $ongkos,
+            ];
+
+            // Per pegawai: bagi rata ongkos mesin ke semua pegawai di mesin ini
+            $jumlahPegawai  = $produksi->detailPegawaiRotary->count();
+            $upahPerPegawai = $jumlahPegawai > 0 ? round($ongkos / $jumlahPegawai, 4) : 0;
+
+            foreach ($produksi->detailPegawaiRotary as $pr) {
+                $detailPegawaiUpah[] = [
+                    'nama_pegawai' => $pr->pegawai->nama_pegawai ?? 'Pegawai #' . $pr->id_pegawai,
+                    'role'         => $pr->role ?? '-',
+                    'nama_mesin'   => $produksi->mesin->nama_mesin,
+                    'jumlah'       => $upahPerPegawai,
+                ];
+            }
+        }
+
+        // ── Bahan penolong ────────────────────────────────────────────────────
+        $bahanPenolong = [];
+
+        foreach ($produksiList as $produksi) {
+            foreach ($produksi->bahanPenolongRotary as $bahan) {
+                $namaBahanLower = strtolower(trim($bahan->nama_bahan));
+                $mappedAkun     = null;
+
+                foreach (self::BAHAN_PENOLONG_MAP as $keyword => $akun) {
+                    if (str_contains($namaBahanLower, $keyword)) {
+                        $mappedAkun = $akun;
+                        break;
+                    }
+                }
+
+                if (!$mappedAkun) continue;
+
+                $kode = $mappedAkun['kode'];
+                if (!isset($bahanPenolong[$kode])) {
+                    $bahanPenolong[$kode] = ['kode' => $kode, 'nama' => $mappedAkun['nama'], 'nilai' => 0.0, 'detail' => []];
+                }
+
+                $bahanPenolong[$kode]['nilai']    += (float) ($bahan->jumlah ?? 0);
+                $bahanPenolong[$kode]['detail'][] = [
+                    'nama_mesin' => $produksi->mesin->nama_mesin,
+                    'nama_bahan' => $bahan->nama_bahan,
+                    'jumlah'     => (float) ($bahan->jumlah ?? 0),
+                ];
+            }
+        }
+
+        // ── Selisih ───────────────────────────────────────────────────────────
+        $totalDebit  = $nilaiVeneerFB + $nilaiVeneerCore + $totalUpah;
+        $totalKredit = $poinKayu130 + $poinKayu260 + $totalUpah;
+
+        foreach ($bahanPenolong as $bp) {
+            $totalKredit += $bp['nilai'];
+        }
+
+        $selisih     = round($totalDebit - $totalKredit, 4);
+        $akunSelisih = null;
+
+        if (abs($selisih) > 0.01) {
+            $akunSelisih = $selisih > 0
+                ? ['kode' => '520-09', 'nama' => 'Keuntungan hasil produksi', 'map' => 'k', 'nilai' => abs($selisih)]
+                : ['kode' => '520-08', 'nama' => 'Beban kerugian produksi',   'map' => 'd', 'nilai' => abs($selisih)];
+        }
+
+        return compact(
+            'kubikasiTotalFB', 'kubikasiTotalCore', 'kubikasiTotal65',
+            'hargaVeneer', 'nilaiVeneerFB', 'nilaiVeneerCore',
+            'poinKayu130', 'poinKayu260', 'totalPoin',
+            'totalUpah', 'bahanPenolong',
+            'selisih', 'akunSelisih', 'totalDebit', 'totalKredit',
+            'kubikasiPerMesin', 'detailKayuPerProduksi', 'detailUpahPerProduksi', 'detailPegawaiUpah'
+        );
+    }
+
+    /**
+     * Ambil poin kayu dari lahan via JOIN harga_kayu
+     * Rumus: harga_beli × (p × d² × jml_batang × 0.785 / 1.000.000) × 1000
+     */
+    private function getPoinKayuFromLahan(PenggunaanLahanRotary $lahan): float
+    {
+        try {
+            $poin = DB::table('penggunaan_lahan_rotaries as plr')
+                ->join('riwayat_kayus as rk', 'rk.id_rotary', '=', 'plr.id_produksi')
+                ->join('detail_kayu_masuks as dkm', 'dkm.id_lahan', '=', 'plr.id_lahan')
+                ->leftJoin('harga_kayus as hk', function ($join) {
+                    $join->on('hk.id_jenis_kayu', '=', 'dkm.id_jenis_kayu')
+                         ->on('hk.grade', '=', 'dkm.grade')
+                         ->on('hk.panjang', '=', 'dkm.panjang')
+                         ->whereRaw('dkm.diameter BETWEEN hk.diameter_terkecil AND hk.diameter_terbesar');
+                })
+                ->where('plr.id', $lahan->id)
+                ->selectRaw('
+                    SUM(
+                        hk.harga_beli
+                        * (dkm.panjang * dkm.diameter * dkm.diameter * dkm.jumlah_batang * 0.785 / 1000000)
+                        * 1000
+                    ) as total_poin
+                ')
+                ->value('total_poin');
+
+            return (float) ($poin ?? 0);
+        } catch (\Throwable $e) {
+            Log::warning("RotaryJurnal: Gagal ambil poin kayu lahan #{$lahan->id}: " . $e->getMessage());
+            return 0.0;
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  BUILD STRUKTUR PAYLOAD
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private function buildStructure(Carbon $tgl, Collection $produksiList, array $c): array
+    {
+        $tglFormatted = $tgl->format('Y-m-d');
+        $keterangan   = 'Rotary tgl ' . $tgl->format('j');
+        $noJurnal     = 'ROT/' . $tgl->format('Ymd');
+
+        $rows = [];
+        $urut = 1;
+
+        // ── DEBIT: Veneer F/B ─────────────────────────────────────────────────
+        if ($c['nilaiVeneerFB'] > 0) {
+            $rows[] = $this->makeRow(
+                $urut++, 'd', '115-07', 'Veneer Basah F/B',
+                $c['nilaiVeneerFB'], $keterangan,
+                $this->itemsVeneer($produksiList, $c['kubikasiPerMesin'], 'f/b', $c['hargaVeneer'])
+            );
+        }
+
+        // ── DEBIT: Veneer CORE ────────────────────────────────────────────────
+        if ($c['nilaiVeneerCore'] > 0) {
+            $rows[] = $this->makeRow(
+                $urut++, 'd', '115-08', 'Veneer Basah CORE',
+                $c['nilaiVeneerCore'], $keterangan,
+                $this->itemsVeneer($produksiList, $c['kubikasiPerMesin'], 'core', $c['hargaVeneer'])
+            );
+        }
+
+        // ── DEBIT: Upah Tenaga Kerja ──────────────────────────────────────────
+        if ($c['totalUpah'] > 0) {
+            $rows[] = $this->makeRow(
+                $urut++, 'd', '510-01', 'Upah Tenaga Kerja',
+                $c['totalUpah'], $keterangan,
+                $this->itemsUpah($c['detailPegawaiUpah'], $keterangan)
+            );
+        }
+
+        // ── DEBIT: Beban Kerugian (selisih negatif) ───────────────────────────
+        if ($c['akunSelisih'] && $c['akunSelisih']['map'] === 'd') {
+            $rows[] = $this->makeRow(
+                $urut++, 'd', $c['akunSelisih']['kode'], $c['akunSelisih']['nama'],
+                $c['akunSelisih']['nilai'], $keterangan,
+                $this->itemsSelisih($c['akunSelisih']['nilai'], $keterangan)
+            );
+        }
+
+        // ── KREDIT: Persediaan Kayu 260 ───────────────────────────────────────
+        if ($c['poinKayu260'] > 0) {
+            $rows[] = $this->makeRow(
+                $urut++, 'k', '115-02', 'Persediaan Kayu 260',
+                $c['poinKayu260'], $keterangan,
+                $this->itemsKayu($c['detailKayuPerProduksi'], false, $keterangan)
+            );
+        }
+
+        // ── KREDIT: Persediaan Kayu 130 ───────────────────────────────────────
+        if ($c['poinKayu130'] > 0) {
+            $rows[] = $this->makeRow(
+                $urut++, 'k', '115-01', 'Persediaan Kayu 130',
+                $c['poinKayu130'], $keterangan,
+                $this->itemsKayu($c['detailKayuPerProduksi'], true, $keterangan)
+            );
+        }
+
+        // ── KREDIT: Bahan Penolong ────────────────────────────────────────────
+        foreach ($c['bahanPenolong'] as $bp) {
+            $rows[] = $this->makeRow(
+                $urut++, 'k', $bp['kode'], $bp['nama'],
+                $bp['nilai'], $keterangan,
+                $this->itemsBahanPenolong($bp['detail'], $keterangan)
+            );
+        }
+
+        // ── KREDIT: Hutang Gaji ───────────────────────────────────────────────
+        if ($c['totalUpah'] > 0) {
+            $rows[] = $this->makeRow(
+                $urut++, 'k', '210-02', 'Hutang Gaji',
+                $c['totalUpah'], $keterangan,
+                $this->itemsUpah($c['detailPegawaiUpah'], $keterangan)
+            );
+        }
+
+        // ── KREDIT: Keuntungan Produksi (selisih positif) ─────────────────────
+        if ($c['akunSelisih'] && $c['akunSelisih']['map'] === 'k') {
+            $rows[] = $this->makeRow(
+                $urut++, 'k', $c['akunSelisih']['kode'], $c['akunSelisih']['nama'],
+                $c['akunSelisih']['nilai'], $keterangan,
+                $this->itemsSelisih($c['akunSelisih']['nilai'], $keterangan)
+            );
+        }
+
+        // ── Final debit & kredit ──────────────────────────────────────────────
+        $finalDebit  = $c['totalDebit']  + (($c['akunSelisih']['map'] ?? '') === 'd' ? ($c['akunSelisih']['nilai'] ?? 0) : 0);
+        $finalKredit = $c['totalKredit'] + (($c['akunSelisih']['map'] ?? '') === 'k' ? ($c['akunSelisih']['nilai'] ?? 0) : 0);
+
+        return [
+            'jurnal_header' => [
+                'no_jurnal'       => $noJurnal,
+                'tgl_transaksi'   => $tglFormatted,
+                'jenis_transaksi' => 'produksi',
+                'modul_asal'      => 'rotary',
+                'keterangan'      => $keterangan,
+                'total_debit'     => round($finalDebit, 4),
+                'total_kredit'    => round($finalKredit, 4),
+                'is_balance'      => round($finalDebit, 2) === round($finalKredit, 2),
+                'status'          => 'draft',
+            ],
+            'jurnal_items' => $rows,
+            'summary' => [
+                'tanggal'           => $tglFormatted,
+                'jumlah_mesin'      => $produksiList->count(),
+                'mesin_list'        => $produksiList->pluck('mesin.nama_mesin')->toArray(),
+                'kubikasi_fb_m3'    => round($c['kubikasiTotalFB'],   6),
+                'kubikasi_core_m3'  => round($c['kubikasiTotalCore'], 6),
+                'kubikasi_65pct_m3' => round($c['kubikasiTotal65'],   6),
+                'harga_veneer_m3'   => round($c['hargaVeneer'],       2),
+                'total_poin_kayu'   => round($c['totalPoin'],         2),
+                'total_upah'        => round($c['totalUpah'],         2),
+                'selisih'           => round($c['selisih'],           4),
+                'akun_selisih'      => $c['akunSelisih'],
+            ],
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  HELPER: makeRow
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private function makeRow(int $urut, string $map, string $kode, string $nama, float $nilai, string $keterangan, array $items = []): array
+    {
+        return [
+            'urut'       => $urut,
+            'map'        => $map,
+            'no_akun'    => $kode,
+            'nama_akun'  => $nama,
+            'jumlah'     => round($nilai, 4),
+            'keterangan' => $keterangan,
+            'items'      => $items,   // → jurnal_pembantu_items
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  HELPER: BUILD ITEMS (jurnal_pembantu_items)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Items untuk Veneer F/B dan Veneer CORE
+     * Tiap baris = 1 palet, dengan hit_kbk='k' (harga × m3)
+     */
+    private function itemsVeneer(Collection $produksiList, array $kubikasiPerMesin, string $jenisTarget, float $hargaVeneer): array
+    {
+        $items = [];
+        $urut  = 1;
+
+        foreach ($produksiList as $produksi) {
+            $data = $kubikasiPerMesin[$produksi->id] ?? null;
+            if (!$data || $data['jenis'] !== $jenisTarget) continue;
+
+            foreach ($produksi->detailPaletRotary as $palet) {
+                $ukuran = $palet->ukuran;
+                if (!$ukuran) continue;
+
+                $vol = ($ukuran->panjang ?? 0)
+                     * ($ukuran->lebar   ?? 0)
+                     * ($ukuran->tebal   ?? 0)
+                     * ($palet->total_lembar ?? 0)
+                     / 10_000_000;
+
+                $namaLahan = $palet->penggunaanLahan->lahan->nama_lahan ?? '-';
+                $ukuranStr = "{$ukuran->panjang}x{$ukuran->lebar}x{$ukuran->tebal}";
+
+                $items[] = [
+                    'urut'        => $urut++,
+                    'jenis_pihak' => 'lain',
+                    'nama_pihak'  => $produksi->mesin->nama_mesin,
+                    'keterangan'  => "KW {$palet->kw} - lahan {$namaLahan}",
+                    'ukuran'      => $ukuranStr,
+                    'banyak'      => $palet->total_lembar,
+                    'm3'          => round($vol, 6),
+                    'harga'       => round($hargaVeneer, 4),
+                    'hit_kbk'     => 'k',
+                    'jumlah'      => round($vol * $hargaVeneer, 4),
+                ];
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * Items untuk Upah Tenaga Kerja & Hutang Gaji
+     * Tiap baris = 1 pegawai (jenis_pihak='karyawan', nama_pihak=nama_pegawai)
+     * Upah per pegawai = ongkos_mesin / jumlah_pegawai di mesin itu
+     */
+    private function itemsUpah(array $detailPegawaiUpah, string $keterangan): array
+    {
+        $items = [];
+        $urut  = 1;
+
+        foreach ($detailPegawaiUpah as $detail) {
+            $items[] = [
+                'urut'        => $urut++,
+                'jenis_pihak' => 'karyawan',
+                'nama_pihak'  => $detail['nama_pegawai'],
+                'keterangan'  => $detail['role'] . ' - ' . $detail['nama_mesin'],
+                'ukuran'      => null,
+                'banyak'      => null,
+                'm3'          => null,
+                'harga'       => null,
+                'hit_kbk'     => null,
+                'jumlah'      => round((float) $detail['jumlah'], 4),
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * Items untuk Persediaan Kayu 130 & Kayu 260
+     * Tiap baris = 1 lahan, jumlah langsung dari poin (hit_kbk=null)
+     */
+    private function itemsKayu(array $detailKayuPerProduksi, bool $is130, string $keterangan): array
+    {
+        $items = [];
+        $urut  = 1;
+
+        foreach ($detailKayuPerProduksi as $lahanList) {
+            foreach ($lahanList as $lahan) {
+                if ($lahan['is_kayu_130'] !== $is130) continue;
+
+                $items[] = [
+                    'urut'        => $urut++,
+                    'jenis_pihak' => 'lain',
+                    'nama_pihak'  => 'Lahan ' . $lahan['kode_lahan'] . ' [' . $lahan['nama_lahan'] . ']',
+                    'keterangan'  => $lahan['nama_kayu'] . ' - ' . $lahan['nama_mesin'] . ' - ' . $lahan['jumlah_batang'] . ' batang',
+                    'ukuran'      => null,
+                    'banyak'      => $lahan['jumlah_batang'],
+                    'm3'          => null,
+                    'harga'       => null,
+                    'hit_kbk'     => null,
+                    'jumlah'      => round($lahan['poin'], 4),
+                ];
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * Items untuk Bahan Penolong (Reeling Tape, dll)
+     * Tiap baris = 1 mesin, jumlah langsung (hit_kbk=null)
+     */
+    private function itemsBahanPenolong(array $detail, string $keterangan): array
+    {
+        $items = [];
+        $urut  = 1;
+
+        foreach ($detail as $d) {
+            $items[] = [
+                'urut'        => $urut++,
+                'jenis_pihak' => 'lain',
+                'nama_pihak'  => $d['nama_mesin'],
+                'keterangan'  => $d['nama_bahan'],
+                'ukuran'      => null,
+                'banyak'      => null,
+                'm3'          => null,
+                'harga'       => null,
+                'hit_kbk'     => null,
+                'jumlah'      => round((float) $d['jumlah'], 4),
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * Items untuk Selisih (Keuntungan / Beban Kerugian)
+     * Hanya 1 baris, jumlah langsung (hit_kbk=null)
+     */
+    private function itemsSelisih(float $nilai, string $keterangan): array
+    {
+        return [[
+            'urut'        => 1,
+            'jenis_pihak' => 'lain',
+            'nama_pihak'  => '-',
+            'keterangan'  => 'Selisih D-K produksi rotary',
+            'ukuran'      => null,
+            'banyak'      => null,
+            'm3'          => null,
+            'harga'       => null,
+            'hit_kbk'     => null,
+            'jumlah'      => round($nilai, 4),
+        ]];
+    }
+}

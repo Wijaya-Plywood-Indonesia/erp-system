@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Validator;
 use App\Models\DetailKayuMasuk;
 use App\Models\DetailTurusanKayu;
 use App\Models\DetailAbsensi;
+use App\Http\Controllers\Api\RotaryJurnalController;
 use App\Models\User;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -107,7 +108,21 @@ Route::middleware(['web', 'auth'])->group(function () {
 });
 
 
+Route::prefix('jurnal/rotary')->group(function () {
 
+    // ── PREVIEW / TESTING ────────────────────────────────────────────────────
+    // GET  /api/jurnal/rotary/preview?tanggal=2025-08-01
+    // POST /api/jurnal/rotary/preview   body: { "tanggal": "2025-08-01" }
+    Route::match(['GET', 'POST'], '/preview', [RotaryJurnalController::class, 'preview']);
+
+    // ── TRIGGER (dari event validasi) ────────────────────────────────────────
+    // POST /api/jurnal/rotary/trigger   body: { "id_produksi": 123 }
+    Route::post('/trigger', [RotaryJurnalController::class, 'trigger']);
+
+    // ── CEK STATUS VALIDASI ──────────────────────────────────────────────────
+    // GET  /api/jurnal/rotary/status/2025-08-01
+    Route::get('/status/{tanggal}', [RotaryJurnalController::class, 'statusValidasi']);
+});
 /**
  * 3. API SINKRONISASI ABSENSI ANTAR WEBSITE (EXTERNAL)
  * Endpoint: /api/external/sync-absensi
