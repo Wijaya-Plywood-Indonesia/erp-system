@@ -83,7 +83,10 @@ class ProduksiDryerApiService
 
         try {
             $response = Http::timeout(10)
-                ->withHeaders(['Content-Type' => 'application/json'])
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'X-API-KEY' => config('services.produksi_api.key'), //api Key
+                ])
                 ->post(config('services.produksi_api.url'), $payload);
 
             Log::info('Kirim data produksi dryer', [
