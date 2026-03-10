@@ -3,10 +3,12 @@
 namespace App\Providers;
 
 use App\Models\ModalSanding;
+use App\Models\NotaKayu;
 use App\Observers\ModalSandingObserver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use App\Models\RencanaKerjaHp;
+use App\Observers\NotaKayuObserver;
 use App\Observers\RencanaKerjaHpObserver;
 use Filament\Support\Facades\FilamentView;
 use Illuminate\Support\Facades\Blade;
@@ -32,13 +34,14 @@ class AppServiceProvider extends ServiceProvider
         ModalSanding::observe(ModalSandingObserver::class);
         RencanaKerjaHp::observe(RencanaKerjaHpObserver::class);
         ValidasiHasilRotary::observe(ValidasiHasilRotaryObserver::class);
+        NotaKayu::observe(NotaKayuObserver::class);
         // PlatformHasilHp::observe(PlatformHasilHpObserver::class);
         // TriplekHasilHp::observe(TriplekHasilHpObserver::class);
 
         FilamentView::registerRenderHook(
             'panels::body.end',
             fn(): string => Blade::render(<<<'HTML'
-                
+
                 <!-- Load Library LocalForage -->
                 <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
