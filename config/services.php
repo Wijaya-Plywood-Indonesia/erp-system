@@ -36,6 +36,7 @@ return [
     ],
     'produksi_api' => [
         'url' => env('PRODUKSI_API_URL'),
+        'key' => env('PRODUKSI_API_KEY'),
     ],
     // Testing API Akuntansi 
     'akuntansi' => [
