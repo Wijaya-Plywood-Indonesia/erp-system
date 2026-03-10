@@ -4,6 +4,7 @@ namespace App\Services\Akuntansi;
 
 use App\Models\ProduksiRotary;
 use App\Models\PenggunaanLahanRotary;
+use App\Models\HargaPegawai;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -178,23 +179,20 @@ class RotaryJurnalService
         $nilaiVeneerCore = $kubikasiTotalCore  * $hargaVeneer;
 
         // ── Upah tenaga kerja ─────────────────────────────────────────────────
-        // Total upah = ongkos_mesin per produksi
-        // Items jurnal = per pegawai (jenis_pihak=karyawan, nama_pihak=nama_pegawai)
-        $totalUpah             = 0.0;
-        $detailUpahPerProduksi = [];  // untuk hitung total
-        $detailPegawaiUpah     = [];  // untuk items jurnal
+        // totalHargaPekerja = HargaPegawai::first()->harga × jumlah_pegawai
+        // upahPerPegawai    = totalHargaPekerja / jumlah_pegawai
+        //                   = HargaPegawai::first()->harga (tiap pegawai dapat sama rata)
+        $masterHargaPkj    = (float) (HargaPegawai::first()->harga ?? 0);
+        $totalUpah         = 0.0;
+        $detailPegawaiUpah = [];  // untuk items jurnal
 
         foreach ($produksiList as $produksi) {
-            $ongkos    = (float) ($produksi->mesin->ongkos_mesin ?? 0);
-            $totalUpah += $ongkos;
-            $detailUpahPerProduksi[$produksi->id] = [
-                'nama_mesin'   => $produksi->mesin->nama_mesin,
-                'ongkos_mesin' => $ongkos,
-            ];
+            $jumlahPegawai     = $produksi->detailPegawaiRotary->count();
+            $totalHargaPekerja = $masterHargaPkj * $jumlahPegawai;
+            $upahPerPegawai    = $jumlahPegawai > 0 ? round($totalHargaPekerja / $jumlahPegawai, 4) : 0;
+            // = masterHargaPkj per pegawai
 
-            // Per pegawai: bagi rata ongkos mesin ke semua pegawai di mesin ini
-            $jumlahPegawai  = $produksi->detailPegawaiRotary->count();
-            $upahPerPegawai = $jumlahPegawai > 0 ? round($ongkos / $jumlahPegawai, 4) : 0;
+            $totalUpah += $totalHargaPekerja;
 
             foreach ($produksi->detailPegawaiRotary as $pr) {
                 $detailPegawaiUpah[] = [
@@ -260,7 +258,7 @@ class RotaryJurnalService
             'poinKayu130', 'poinKayu260', 'totalPoin',
             'totalUpah', 'bahanPenolong',
             'selisih', 'akunSelisih', 'totalDebit', 'totalKredit',
-            'kubikasiPerMesin', 'detailKayuPerProduksi', 'detailUpahPerProduksi', 'detailPegawaiUpah'
+            'kubikasiPerMesin', 'detailKayuPerProduksi', 'detailPegawaiUpah'
         );
     }
 
@@ -513,7 +511,7 @@ class RotaryJurnalService
                 'ukuran'      => '-',
                 'banyak'      => null,
                 'm3'          => null,
-                'harga'       => null,
+                'harga'       => round((float) $detail['jumlah'], 4),
                 'hit_kbk'     => null,
                 'jumlah'      => round((float) $detail['jumlah'], 4),
             ];
@@ -544,7 +542,7 @@ class RotaryJurnalService
                     'ukuran'      => '-',
                     'banyak'      => $lahan['jumlah_batang'],
                     'm3'          => null,
-                    'harga'       => null,
+                    'harga'       => round($lahan['poin'], 4),
                     'hit_kbk'     => null,
                     'jumlah'      => round($lahan['poin'], 4),
                 ];
@@ -573,7 +571,7 @@ class RotaryJurnalService
                 'ukuran'      => '-',
                 'banyak'      => null,
                 'm3'          => null,
-                'harga'       => null,
+                'harga'       => round((float) $d['jumlah'], 4),
                 'hit_kbk'     => null,
                 'jumlah'      => round((float) $d['jumlah'], 4),
             ];
@@ -597,7 +595,7 @@ class RotaryJurnalService
             'ukuran'      => '-',
             'banyak'      => null,
             'm3'          => null,
-            'harga'       => null,
+            'harga'       => round($nilai, 4),
             'hit_kbk'     => null,
             'jumlah'      => round($nilai, 4),
         ]];
