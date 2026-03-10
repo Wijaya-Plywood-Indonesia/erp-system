@@ -33,18 +33,15 @@ class AppServiceProvider extends ServiceProvider
         // ⬆⬆⬆  WAJIB: supaya MySQL ikut Asia/Jakarta
         ModalSanding::observe(ModalSandingObserver::class);
         RencanaKerjaHp::observe(RencanaKerjaHpObserver::class);
-<<<<<<< HEAD
         ValidasiHasilRotary::observe(ValidasiHasilRotaryObserver::class);
-=======
         NotaKayu::observe(NotaKayuObserver::class);
->>>>>>> dian
         // PlatformHasilHp::observe(PlatformHasilHpObserver::class);
         // TriplekHasilHp::observe(TriplekHasilHpObserver::class);
 
         FilamentView::registerRenderHook(
             'panels::body.end',
             fn(): string => Blade::render(<<<'HTML'
-                
+
                 <!-- Load Library LocalForage -->
                 <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
