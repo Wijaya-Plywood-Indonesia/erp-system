@@ -471,11 +471,15 @@ class RotaryJurnalService
                 $namaLahan = $palet->penggunaanLahan->lahan->nama_lahan ?? '-';
                 $ukuranStr = "{$ukuran->panjang}x{$ukuran->lebar}x{$ukuran->tebal}";
 
+                // Ambil nama kayu dari lahan yang dipakai mesin ini
+                $namaKayu = $palet->penggunaanLahan->jenisKayu->nama_kayu ?? '-';
+
                 $items[] = [
                     'urut'        => $urut++,
-                    'jenis_pihak' => 'lain',
+                    'jenis_pihak' => 'produksi',
                     'nama_pihak'  => $produksi->mesin->nama_mesin,
-                    'keterangan'  => "KW {$palet->kw} - lahan {$namaLahan}",
+                    'nama_barang' => 'Mesin',
+                    'keterangan'  => "KW {$palet->kw} - lahan {$namaLahan} - {$namaKayu}",
                     'ukuran'      => $ukuranStr,
                     'banyak'      => $palet->total_lembar,
                     'm3'          => round($vol, 6),
@@ -504,8 +508,9 @@ class RotaryJurnalService
                 'urut'        => $urut++,
                 'jenis_pihak' => 'karyawan',
                 'nama_pihak'  => $detail['nama_pegawai'],
+                'nama_barang' => '-',
                 'keterangan'  => $detail['role'] . ' - ' . $detail['nama_mesin'],
-                'ukuran'      => null,
+                'ukuran'      => '-',
                 'banyak'      => null,
                 'm3'          => null,
                 'harga'       => null,
@@ -532,10 +537,11 @@ class RotaryJurnalService
 
                 $items[] = [
                     'urut'        => $urut++,
-                    'jenis_pihak' => 'lain',
+                    'jenis_pihak' => 'pemasok',
                     'nama_pihak'  => 'Lahan ' . $lahan['kode_lahan'] . ' [' . $lahan['nama_lahan'] . ']',
+                    'nama_barang' => 'Kayu',
                     'keterangan'  => $lahan['nama_kayu'] . ' - ' . $lahan['nama_mesin'] . ' - ' . $lahan['jumlah_batang'] . ' batang',
-                    'ukuran'      => null,
+                    'ukuran'      => '-',
                     'banyak'      => $lahan['jumlah_batang'],
                     'm3'          => null,
                     'harga'       => null,
@@ -560,10 +566,11 @@ class RotaryJurnalService
         foreach ($detail as $d) {
             $items[] = [
                 'urut'        => $urut++,
-                'jenis_pihak' => 'lain',
+                'jenis_pihak' => 'produksi',
                 'nama_pihak'  => $d['nama_mesin'],
-                'keterangan'  => $d['nama_bahan'],
-                'ukuran'      => null,
+                'nama_barang' => $d['nama_bahan'],
+                'keterangan'  => '-',
+                'ukuran'      => '-',
                 'banyak'      => null,
                 'm3'          => null,
                 'harga'       => null,
@@ -585,13 +592,64 @@ class RotaryJurnalService
             'urut'        => 1,
             'jenis_pihak' => 'lain',
             'nama_pihak'  => '-',
+            'nama_barang' => '-',
             'keterangan'  => 'Selisih D-K produksi rotary',
-            'ukuran'      => null,
+            'ukuran'      => '-',
             'banyak'      => null,
             'm3'          => null,
             'harga'       => null,
             'hit_kbk'     => null,
             'jumlah'      => round($nilai, 4),
         ]];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  KIRIM KE AKUNTANSI
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Kirim payload ke endpoint akuntansi
+     * Dipanggil dari Observer setelah semua mesin tervalidasi
+     */
+    public function sendToAkuntansi(array $payload, string $tanggal): void
+    {
+        $url    = config('services.akuntansi.url') . '/api/jurnal/rotary/create';
+        $apiKey = config('services.akuntansi.key');
+
+        try {
+            /** @var \Illuminate\Http\Client\Response $response */
+            $response = \Illuminate\Support\Facades\Http::timeout(30)
+                ->withoutVerifying()           // lokal: skip SSL
+                ->withHeaders([
+                    'X-API-KEY'    => $apiKey,
+                    'Content-Type' => 'application/json',
+                    'Accept'       => 'application/json',
+                ])
+                ->post($url, $payload);
+
+            if ($response->successful()) {
+                Log::info('[RotaryJurnal] Berhasil kirim ke akuntansi', [
+                    'tanggal'  => $tanggal,
+                    'response' => $response->json(),
+                ]);
+            } elseif ($response->status() === 409) {
+                // Duplikasi — jurnal sudah pernah dibuat, tidak perlu panic
+                Log::warning('[RotaryJurnal] Jurnal sudah ada di akuntansi (duplikasi)', [
+                    'tanggal'  => $tanggal,
+                    'response' => $response->json(),
+                ]);
+            } else {
+                Log::error('[RotaryJurnal] Gagal kirim ke akuntansi', [
+                    'tanggal'  => $tanggal,
+                    'status'   => $response->status(),
+                    'response' => $response->body(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('[RotaryJurnal] Exception saat kirim ke akuntansi', [
+                'tanggal' => $tanggal,
+                'error'   => $e->getMessage(),
+            ]);
+        }
     }
 }

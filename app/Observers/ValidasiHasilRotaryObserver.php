@@ -6,31 +6,12 @@ use App\Models\ValidasiHasilRotary;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
-/**
- * ValidasiHasilRotaryObserver
- *
- * Otomatis trigger API generate jurnal setelah validasi disimpan.
- *
- * DAFTARKAN di App\Providers\AppServiceProvider::boot():
- * ───────────────────────────────────────────────────────
- *   ValidasiHasilRotary::observe(ValidasiHasilRotaryObserver::class);
- * ───────────────────────────────────────────────────────
- *
- * CATATAN:
- * Observer ini akan memanggil endpoint internal /api/jurnal/rotary/trigger
- * setiap kali status validasi berubah menjadi 'divalidasi' atau 'disetujui'.
- * Sistem secara otomatis mengecek apakah semua mesin pada tanggal tersebut
- * sudah tervalidasi sebelum membuat jurnal.
- */
 class ValidasiHasilRotaryObserver
 {
-    /**
-     * Handle saat validasi dibuat/diupdate
-     */
     public function saved(ValidasiHasilRotary $validasi): void
     {
         if (!in_array($validasi->status, ['divalidasi', 'disetujui'])) {
-            return; // Hanya trigger jika status valid
+            return;
         }
 
         if (!$validasi->id_produksi) {
@@ -42,14 +23,10 @@ class ValidasiHasilRotaryObserver
         $this->triggerJurnalCheck($validasi->id_produksi);
     }
 
-    /**
-     * Panggil API internal untuk cek & generate jurnal
-     */
     private function triggerJurnalCheck(int $idProduksi): void
     {
         try {
-            // Opsi A: Panggil service langsung (lebih efisien, tanpa HTTP call)
-            $service = app(\App\Services\Akuntansi\RotaryJurnalService::class);
+            $service  = app(\App\Services\Akuntansi\RotaryJurnalService::class);
             $produksi = \App\Models\ProduksiRotary::find($idProduksi);
 
             if (!$produksi) {
@@ -68,18 +45,15 @@ class ValidasiHasilRotaryObserver
                 return;
             }
 
-            Log::info("ValidasiObserver: Semua mesin sudah divalidasi (tanggal={$tanggal}). Payload siap.", [
+            Log::info("ValidasiObserver: Semua mesin sudah divalidasi (tanggal={$tanggal}). Mengirim ke akuntansi...", [
                 'total_items'  => count($payload['jurnal_items']),
                 'total_debit'  => $payload['jurnal_header']['total_debit'],
                 'total_kredit' => $payload['jurnal_header']['total_kredit'],
                 'is_balance'   => $payload['jurnal_header']['is_balance'],
             ]);
 
-            // ── Kirim ke web akuntansi (uncomment setelah siap) ──────────────
-            // $this->sendToAkuntansi($payload, $tanggal);
-
-            // ── Atau: Dispatch job untuk proses background ────────────────────
-            // \App\Jobs\CreateJurnalRotaryJob::dispatch($payload, $tanggal);
+            // ── Kirim ke web akuntansi ────────────────────────────────────────
+            $this->sendToAkuntansi($payload, $tanggal);
 
         } catch (\Throwable $e) {
             Log::error("ValidasiObserver: Error saat trigger jurnal check: " . $e->getMessage());
@@ -87,33 +61,39 @@ class ValidasiHasilRotaryObserver
         }
     }
 
-    /**
-     * Kirim payload ke web akuntansi (siap digunakan setelah endpoint akuntansi ready)
-     */
     private function sendToAkuntansi(array $payload, string $tanggal): void
     {
-        $akuntansiUrl = config('services.akuntansi.url', 'https://akuntansi.wijayaplywoods.com');
-        $apiKey       = config('services.akuntansi.key', '');
+        $url    = rtrim(config('services.akuntansi.url', 'http://192.168.1.2:5000'), '/')
+                  . '/api/jurnal/rotary/create';
+        $apiKey = config('services.akuntansi.key', '');
 
         try {
             /** @var \Illuminate\Http\Client\Response $response */
-            $response = Http::withHeaders([
-                'Authorization' => "Bearer {$apiKey}",
-                'Accept'        => 'application/json',
-            ])
-            ->timeout(30)
-            ->post("{$akuntansiUrl}/api/jurnal/rotary/create", $payload);
+            $response = Http::timeout(30)
+                ->withoutVerifying()        // lokal: skip SSL
+                ->withHeaders([
+                    'X-API-KEY'    => $apiKey,
+                    'Accept'       => 'application/json',
+                ])
+                ->post($url, $payload);
 
             if ($response->successful()) {
                 Log::info("ValidasiObserver: Jurnal berhasil dikirim ke akuntansi (tanggal={$tanggal}).", [
-                    'response' => $response->json(),
+                    'jurnal'        => $response->json('data.jurnal'),
+                    'jumlah_header' => $response->json('data.jumlah_header'),
+                    'jumlah_items'  => $response->json('data.jumlah_items'),
                 ]);
+
+            } elseif ($response->status() === 409) {
+                Log::warning("ValidasiObserver: Jurnal {$tanggal} sudah ada di akuntansi (duplikasi). Dilewati.");
+
             } else {
                 Log::error("ValidasiObserver: Gagal kirim jurnal ke akuntansi (tanggal={$tanggal}).", [
                     'status'   => $response->status(),
                     'response' => $response->body(),
                 ]);
             }
+
         } catch (\Throwable $e) {
             Log::error("ValidasiObserver: HTTP error kirim ke akuntansi: " . $e->getMessage());
         }
