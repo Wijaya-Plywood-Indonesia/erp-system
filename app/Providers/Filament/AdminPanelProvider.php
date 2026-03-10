@@ -121,6 +121,11 @@ class AdminPanelProvider extends PanelProvider
                     ->icon('heroicon-o-ellipsis-horizontal-circle')->collapsed(),
 
                 //Laporan 
+
+                NavigationGroup::make('Hpp')
+                    ->icon('heroicon-o-calculator')
+                    ->collapsed(),
+
                 NavigationGroup::make('Laporan')
                     ->icon('heroicon-o-clipboard-document-list')
                     ->collapsed(),
