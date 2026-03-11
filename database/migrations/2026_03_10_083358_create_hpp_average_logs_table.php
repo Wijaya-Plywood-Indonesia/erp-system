@@ -17,8 +17,8 @@ return new class extends Migration
                 ->constrained('jenis_kayus')
                 ->cascadeOnDelete();
 
-            $table->string('grade', 5); // Casting to A,B,C
-            $table->integer('panjang'); // cm
+            $table->string('grade', 5)->nullable(); // Casting to A,B,C
+            $table->integer('panjang')->nullable(); // cm
 
             // ── Waktu & tipe ──────────────────────────────────────────────────
             $table->date('tanggal');               // dari KayuMasuk.tgl_kayu_masuk
@@ -26,11 +26,11 @@ return new class extends Migration
             $table->string('keterangan')->nullable(); // "Nota #N101 · KayuMasuk #5"
             $table->nullableMorphs('referensi');
 
-            $table->integer('total_batang');
-            $table->decimal('total_kubikasi', 15, 4); // hasil rumus (p×d²×qty×0.785)/1jt
+            $table->integer('total_batang')->nullable();
+            $table->decimal('total_kubikasi', 15, 4)->nullable(); // hasil rumus (p×d²×qty×0.785)/1jt
 
-            $table->decimal('harga', 20, 2);
-            $table->decimal('nilai_stok', 20, 2); // qty_kubikasi × harga_satuan
+            $table->decimal('harga', 20, 2)->nullable();
+            $table->decimal('nilai_stok', 20, 2)->nullable(); // qty_kubikasi × harga_satuan
 
             // ── Snapshot SEBELUM ──────────────────────────────────────────────
             $table->integer('stok_batang_before')->default(0)->nullable();
