@@ -3,7 +3,7 @@
 
     {{-- Filter bar --}}
     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 mb-5 flex items-center gap-3 flex-wrap">
-        <span class="text-sm font-medium text-gray-600 dark:text-gray-400">Filter:</span>
+        <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Filter:</span>
 
         <select wire:model.live="filterJenisKayu"
             class="text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-1.5 outline-none focus:border-primary-500">
@@ -16,7 +16,7 @@
         <select wire:model.live="filterPanjang"
             class="text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-1.5 outline-none focus:border-primary-500">
             <option value="">Semua Ukuran</option>
-            @foreach(\App\Models\HppAverageLog::distinct()->orderBy('panjang')->pluck('panjang') as $p)
+            @foreach(\App\Models\HppAverageLog::whereNull('grade')->distinct()->orderBy('panjang')->pluck('panjang') as $p)
             <option value="{{ $p }}">{{ $p }} cm</option>
             @endforeach
         </select>
@@ -24,143 +24,152 @@
         <span class="ml-auto text-xs font-mono text-gray-400">{{ $this->logs->count() }} entri</span>
     </div>
 
-    {{-- Grade nav + tabel --}}
+    {{-- Tabel log --}}
     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
 
-        {{-- Grade sub-nav --}}
-        <div class="flex border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-4 gap-1">
-            @foreach([
-            'A' => ['label' => 'Grade A', 'active' => 'border-green-500 text-green-700 dark:text-green-400', 'badge' => 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'],
-            'B' => ['label' => 'Grade B', 'active' => 'border-amber-500 text-amber-700 dark:text-amber-400', 'badge' => 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'],
-            ] as $g => $conf)
-            @php $cnt = $this->logCounts[$g]; @endphp
-            <button wire:click="$set('logGrade', '{{ $g }}')"
-                @class(['px-5 py-3 text-sm font-medium border-b-2 -mb-px transition flex items-center gap-2',
-                $conf['active']=> $logGrade === $g,
-                'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300' => $logGrade !== $g])>
-                {{ $conf['label'] }}
-                <span @class(['text-[10px] font-mono px-1.5 py-0.5 rounded-full',
-                    $conf['badge']=> $logGrade === $g,
-                    'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400' => $logGrade !== $g])>{{ $cnt }}</span>
-            </button>
-            @endforeach
-        </div>
-
-        {{-- Summary chips --}}
+        {{-- Summary bar --}}
         @php
-        $gradeLogs = $this->logs->where('grade', $logGrade)->values();
-        $totalMasuk = $gradeLogs->where('tipe_transaksi', 'masuk')->sum('total_batang');
-        $totalKeluar = $gradeLogs->where('tipe_transaksi', 'keluar')->sum('total_batang');
-        $saldoAkhir = $totalMasuk - $totalKeluar;
-        $lastLog = $gradeLogs->last();
+        $logs = $this->logs;
+        $totalMasuk = $logs->where('tipe_transaksi', 'masuk')->sum('total_batang');
+        $totalKeluar = $logs->where('tipe_transaksi', 'keluar')->sum('total_batang');
+        $saldoBtg = $totalMasuk - $totalKeluar;
+        $lastLog = $logs->last();
         @endphp
-        <div @class(['px-4 py-2.5 border-b flex items-center gap-3 flex-wrap', 'bg-green-50/60 dark:bg-green-900/10 border-green-100 dark:border-green-900'=> $logGrade === 'A',
-            'bg-amber-50/60 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900' => $logGrade === 'B'])>
-            <span class="text-xs text-gray-500 dark:text-gray-400">Ringkasan Grade {{ $logGrade }}:</span>
+
+        <div class="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center gap-3 flex-wrap">
             <span class="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 text-xs font-mono px-2.5 py-1 rounded-full font-semibold">
-                ↑ {{ number_format($totalMasuk) }} batang masuk
+                ↑ {{ number_format($totalMasuk) }} masuk
             </span>
             <span class="inline-flex items-center gap-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 text-xs font-mono px-2.5 py-1 rounded-full font-semibold">
-                ↓ {{ number_format($totalKeluar) }} batang keluar
+                ↓ {{ number_format($totalKeluar) }} keluar
             </span>
-            <span class="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-mono px-2.5 py-1 rounded-full font-semibold">
-                = {{ number_format($saldoAkhir) }} batang saldo
+            <span class="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-mono px-2.5 py-1 rounded-full font-semibold">
+                = {{ number_format($saldoBtg) }} saldo
             </span>
             @if($lastLog)
             <span class="ml-auto inline-flex items-center gap-1 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700 text-violet-700 dark:text-violet-300 text-xs font-mono px-2.5 py-1 rounded-full">
-                Harga rata-rata terakhir: Rp {{ number_format($lastLog->hpp_average, 0, ',', '.') }}/m³
+                HPP terakhir: Rp {{ number_format($lastLog->hpp_average, 0, ',', '.') }}/m³
             </span>
             @endif
         </div>
 
-        {{-- Tabel buku besar --}}
+        {{-- Tabel --}}
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead>
                     <tr class="bg-gray-50 dark:bg-gray-900 text-[10.5px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                        <th class="px-4 py-2.5 text-left">Tanggal</th>
-                        <th class="px-4 py-2.5 text-left">Jenis Kayu</th>
-                        <th class="px-4 py-2.5 text-right">Ukuran</th>
-                        <th class="px-4 py-2.5 text-left">Tipe</th>
+                        <th class="px-4 py-2.5 text-left whitespace-nowrap">Tanggal</th>
+                        <th class="px-4 py-2.5 text-left whitespace-nowrap">Jenis Kayu</th>
+                        <th class="px-4 py-2.5 text-right whitespace-nowrap">Ukuran</th>
+                        <th class="px-4 py-2.5 text-left whitespace-nowrap">Tipe</th>
                         <th class="px-4 py-2.5 text-left">Keterangan</th>
-                        <th class="px-4 py-2.5 text-right border-l border-gray-200 dark:border-gray-700">Qty</th>
-                        <th class="px-4 py-2.5 text-right bg-blue-50/50 dark:bg-blue-900/10">
-                            <div>Stok</div>
-                            <div class="text-[9px] font-normal normal-case text-gray-400">Sebelum → Sesudah</div>
+
+                        {{-- Kuantitas --}}
+                        <th class="px-4 py-2.5 text-right border-l border-gray-200 dark:border-gray-700 whitespace-nowrap">
+                            Qty<div class="text-[9px] font-normal normal-case text-gray-400">batang</div>
                         </th>
-                        <th class="px-4 py-2.5 text-right border-l border-gray-200 dark:border-gray-700">
-                            <div>M³</div>
-                            <div class="text-[9px] font-normal normal-case text-gray-400">Sebelum → Sesudah</div>
+
+                        {{-- Stok before → after --}}
+                        <th class="px-4 py-2.5 text-right border-l border-gray-200 dark:border-gray-700 bg-blue-50/50 dark:bg-blue-900/10 whitespace-nowrap">
+                            Stok Batang<div class="text-[9px] font-normal normal-case text-gray-400">Sebelum → Sesudah</div>
                         </th>
-                        <th class="px-4 py-2.5 text-right border-l border-gray-200 dark:border-gray-700">
-                            <div>Poin</div>
-                            <div class="text-[9px] font-normal normal-case text-gray-400">Sebelum → Sesudah</div>
+
+                        {{-- Kubikasi before → after --}}
+                        <th class="px-4 py-2.5 text-right border-l border-gray-200 dark:border-gray-700 whitespace-nowrap">
+                            Kubikasi (m³)<div class="text-[9px] font-normal normal-case text-gray-400">Sebelum → Sesudah</div>
                         </th>
-                        <th class="px-4 py-2.5 text-right bg-violet-50/50 dark:bg-violet-900/10">Harga Rata-rata</th>
+
+                        {{-- Poin/Nilai before → after --}}
+                        <th class="px-4 py-2.5 text-right border-l border-gray-200 dark:border-gray-700 whitespace-nowrap">
+                            Total Poin<div class="text-[9px] font-normal normal-case text-gray-400">Sebelum → Sesudah</div>
+                        </th>
+
+                        {{-- HPP --}}
+                        <th class="px-4 py-2.5 text-right border-l border-gray-200 dark:border-gray-700 bg-violet-50/50 dark:bg-violet-900/10 whitespace-nowrap">
+                            HPP Average<div class="text-[9px] font-normal normal-case text-gray-400">per m³</div>
+                        </th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                    @forelse($gradeLogs as $log)
+                    @forelse($logs as $log)
                     @php $isM = $log->tipe_transaksi === 'masuk'; @endphp
-                    <tr @class(['transition', 'hover:bg-green-50/40 dark:hover:bg-green-900/10'=> $isM,
-                        'hover:bg-red-50/40 dark:hover:bg-red-900/10' => !$isM])>
+                    <tr @class(['transition', 'hover:bg-green-50/30 dark:hover:bg-green-900/10'=> $isM,
+                        'hover:bg-red-50/30 dark:hover:bg-red-900/10' => !$isM])>
 
+                        {{-- Tanggal --}}
                         <td class="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                             {{ $log->tanggal->format('d/m/Y') }}
                         </td>
+
+                        {{-- Jenis Kayu --}}
                         <td class="px-4 py-3 font-semibold text-gray-900 dark:text-white whitespace-nowrap">
                             {{ $log->jenisKayu?->nama_kayu ?? '-' }}
                         </td>
-                        <td class="px-4 py-3 text-right font-mono text-gray-600 dark:text-gray-400 whitespace-nowrap">
+
+                        {{-- Ukuran --}}
+                        <td class="px-4 py-3 text-right font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                             {{ $log->panjang }} cm
                         </td>
-                        <td class="px-4 py-3">
+
+                        {{-- Tipe --}}
+                        <td class="px-4 py-3 whitespace-nowrap">
                             <span @class(['inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold', 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'=> $isM,
                                 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' => !$isM])>
                                 {{ $isM ? '↑ Masuk' : '↓ Keluar' }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 max-w-[160px] truncate">
+
+                        {{-- Keterangan --}}
+                        <td class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 max-w-[180px] truncate">
                             {{ $log->keterangan }}
                         </td>
 
-                        {{-- Qty --}}
-                        <td @class(['px-4 py-3 text-right font-mono font-bold border-l border-gray-100 dark:border-gray-700 whitespace-nowrap', 'text-green-600 dark:text-green-400'=> $isM,
+                        {{-- Qty batang --}}
+                        <td @class(['px-4 py-3 text-right font-mono font-bold text-sm border-l border-gray-100 dark:border-gray-700 whitespace-nowrap', 'text-green-600 dark:text-green-400'=> $isM,
                             'text-red-600 dark:text-red-400' => !$isM])>
                             {{ $isM ? '+' : '-' }}{{ number_format($log->total_batang) }}
                         </td>
 
-                        {{-- Stok before → after --}}
-                        <td class="px-4 py-3 bg-blue-50/30 dark:bg-blue-900/5">
-                            <div class="flex items-center justify-end gap-1.5 font-mono text-xs whitespace-nowrap">
+                        {{-- Stok batang before → after --}}
+                        <td class="px-4 py-3 border-l border-gray-100 dark:border-gray-700 bg-blue-50/20 dark:bg-blue-900/5 whitespace-nowrap">
+                            <div class="flex items-center justify-end gap-1.5 font-mono text-xs">
                                 <span class="text-gray-400 dark:text-gray-500">{{ number_format($log->stok_batang_before) }}</span>
                                 <span class="text-gray-300 dark:text-gray-600">→</span>
-                                <span class="font-bold text-gray-900 dark:text-white">{{ number_format($log->stok_batang_after) }}</span>
-                                <span class="text-[10px] text-gray-400">btg</span>
+                                <span @class(['font-bold', 'text-green-600 dark:text-green-400'=> $isM,
+                                    'text-red-600 dark:text-red-400' => !$isM])>
+                                    {{ number_format($log->stok_batang_after) }}
+                                </span>
+                                <span class="text-[9px] text-gray-400">btg</span>
                             </div>
                         </td>
 
-                        {{-- M³ before → after --}}
-                        <td class="px-4 py-3 border-l border-gray-100 dark:border-gray-700">
-                            <div class="flex items-center justify-end gap-1.5 font-mono text-xs whitespace-nowrap">
+                        {{-- Kubikasi before → after --}}
+                        <td class="px-4 py-3 border-l border-gray-100 dark:border-gray-700 whitespace-nowrap">
+                            <div class="flex items-center justify-end gap-1.5 font-mono text-xs">
                                 <span class="text-gray-400 dark:text-gray-500">{{ number_format($log->stok_kubikasi_before, 4) }}</span>
                                 <span class="text-gray-300 dark:text-gray-600">→</span>
-                                <span class="font-semibold text-gray-800 dark:text-gray-200">{{ number_format($log->stok_kubikasi_after, 4) }}</span>
+                                <span @class(['font-semibold', 'text-blue-600 dark:text-blue-400'=> $isM,
+                                    'text-orange-600 dark:text-orange-400' => !$isM])>
+                                    {{ number_format($log->stok_kubikasi_after, 4) }}
+                                </span>
+                                <span class="text-[9px] text-gray-400">m³</span>
                             </div>
                         </td>
 
-                        {{-- Poin before → after --}}
-                        <td class="px-4 py-3 border-l border-gray-100 dark:border-gray-700">
-                            <div class="flex items-center justify-end gap-1.5 font-mono text-xs whitespace-nowrap">
+                        {{-- Poin/Nilai before → after --}}
+                        <td class="px-4 py-3 border-l border-gray-100 dark:border-gray-700 whitespace-nowrap">
+                            <div class="flex items-center justify-end gap-1.5 font-mono text-xs">
                                 <span class="text-gray-400 dark:text-gray-500">{{ number_format($log->nilai_stok_before, 0, ',', '.') }}</span>
                                 <span class="text-gray-300 dark:text-gray-600">→</span>
                                 <span @class(['font-semibold', 'text-green-600 dark:text-green-400'=> $isM,
-                                    'text-red-600 dark:text-red-400' => !$isM])>{{ number_format($log->nilai_stok_after, 0, ',', '.') }}</span>
+                                    'text-red-600 dark:text-red-400' => !$isM])>
+                                    {{ number_format($log->nilai_stok_after, 0, ',', '.') }}
+                                </span>
                             </div>
                         </td>
 
-                        {{-- Harga rata-rata / HPP --}}
-                        <td class="px-4 py-3 text-right bg-violet-50/30 dark:bg-violet-900/5 whitespace-nowrap">
+                        {{-- HPP Average --}}
+                        <td class="px-4 py-3 text-right border-l border-gray-100 dark:border-gray-700 bg-violet-50/20 dark:bg-violet-900/5 whitespace-nowrap">
                             <span class="font-mono text-xs font-semibold text-violet-700 dark:text-violet-300">
                                 {{ number_format($log->hpp_average, 0, ',', '.') }}
                             </span>
@@ -170,28 +179,36 @@
                     @empty
                     <tr>
                         <td colspan="10" class="px-4 py-12 text-center text-sm text-gray-400 dark:text-gray-500">
-                            Tidak ada log untuk Grade {{ $logGrade }}
+                            Belum ada log transaksi
                         </td>
                     </tr>
                     @endforelse
                 </tbody>
 
-                {{-- Footer saldo akhir --}}
-                @if($gradeLogs->count())
+                {{-- Footer --}}
+                @if($logs->count())
                 @php
-                $m3Saldo = $gradeLogs->where('tipe_transaksi','masuk')->sum('total_kubikasi')
-                - $gradeLogs->where('tipe_transaksi','keluar')->sum('total_kubikasi');
-                $poinSaldo = $gradeLogs->where('tipe_transaksi','masuk')->sum('nilai_stok')
-                - $gradeLogs->where('tipe_transaksi','keluar')->sum('nilai_stok');
+                $m3Saldo = $logs->where('tipe_transaksi','masuk')->sum('total_kubikasi')
+                - $logs->where('tipe_transaksi','keluar')->sum('total_kubikasi');
+                $poinSaldo = $logs->where('tipe_transaksi','masuk')->sum('nilai_stok')
+                - $logs->where('tipe_transaksi','keluar')->sum('nilai_stok');
                 @endphp
                 <tfoot>
-                    <tr @class(['text-xs font-bold border-t-2', 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-800 dark:text-green-300'=> $logGrade === 'A',
-                        'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300' => $logGrade === 'B'])>
-                        <td colspan="5" class="px-4 py-2.5 uppercase tracking-wide">Saldo Akhir Grade {{ $logGrade }}</td>
-                        <td class="px-4 py-2.5 text-right font-mono">—</td>
-                        <td class="px-4 py-2.5 text-right font-mono bg-blue-50/50 dark:bg-blue-900/10">{{ number_format($saldoAkhir) }} btg</td>
-                        <td class="px-4 py-2.5 text-right font-mono">{{ number_format(max(0, $m3Saldo), 4) }} m³</td>
-                        <td class="px-4 py-2.5 text-right font-mono">{{ number_format(max(0, $poinSaldo), 0, ',', '.') }}</td>
+                    <tr class="text-xs font-bold border-t-2 bg-gray-50 dark:bg-gray-900/60 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300">
+                        <td colspan="5" class="px-4 py-2.5 uppercase tracking-wide text-gray-500">Saldo Akhir</td>
+                        <td @class(['px-4 py-2.5 text-right font-mono', 'text-green-700 dark:text-green-400'=> $saldoBtg >= 0,
+                            'text-red-600 dark:text-red-400' => $saldoBtg < 0])>
+                                {{ number_format($saldoBtg) }} btg
+                        </td>
+                        <td class="px-4 py-2.5 text-right font-mono bg-blue-50/50 dark:bg-blue-900/10">
+                            {{ $lastLog ? number_format($lastLog->stok_batang_after) : '—' }} btg
+                        </td>
+                        <td class="px-4 py-2.5 text-right font-mono text-blue-600 dark:text-blue-400">
+                            {{ number_format(max(0, $m3Saldo), 4) }} m³
+                        </td>
+                        <td class="px-4 py-2.5 text-right font-mono">
+                            {{ number_format(max(0, $poinSaldo), 0, ',', '.') }}
+                        </td>
                         <td class="px-4 py-2.5 text-right font-mono bg-violet-50/50 dark:bg-violet-900/10 text-violet-700 dark:text-violet-300">
                             {{ $lastLog ? number_format($lastLog->hpp_average, 0, ',', '.').' /m³' : '—' }}
                         </td>

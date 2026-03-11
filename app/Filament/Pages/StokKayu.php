@@ -9,7 +9,6 @@ use App\Services\HppAverageService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use UnitEnum;
-
 use Filament\Pages\Page;
 
 class StokKayu extends Page
@@ -22,13 +21,11 @@ class StokKayu extends Page
     protected static ?int    $navigationSort = 10;
 
     // ── State ──────────────────────────────────────────────────
-    public ?int   $activeLahanId = null;   // null = semua lahan (global)
+    public ?int   $activeLahanId = null;
     public string $filterPanjang = '';
-    public string $filterGrade   = '';
     public string $filterJenis   = '';
     public string $lahanSearch   = '';
 
-    // ── Mount: default = global (null) ─────────────────────────
     public function mount(): void
     {
         $this->activeLahanId = null;
@@ -57,6 +54,7 @@ class StokKayu extends Page
     public function getStokPerLahanProperty()
     {
         return HppAverageSummarie::with('jenisKayu')
+            ->whereNull('grade')
             ->where('stok_batang', '>', 0)
             ->get()
             ->groupBy('id_lahan')
@@ -70,9 +68,9 @@ class StokKayu extends Page
     public function getSummariesProperty()
     {
         return HppAverageSummarie::with(['lahan', 'jenisKayu'])
+            ->whereNull('grade')
             ->when($this->activeLahanId, fn($q) => $q->where('id_lahan', $this->activeLahanId))
             ->when($this->filterPanjang, fn($q) => $q->where('panjang', $this->filterPanjang))
-            ->when($this->filterGrade,   fn($q) => $q->where('grade',   $this->filterGrade))
             ->when(
                 $this->filterJenis,
                 fn($q) =>
@@ -89,7 +87,7 @@ class StokKayu extends Page
     // ── Computed: daftar panjang unik (untuk filter chip) ──────
     public function getPanjangListProperty()
     {
-        return HppAverageSummarie::query()
+        return HppAverageSummarie::whereNull('grade')
             ->when($this->activeLahanId, fn($q) => $q->where('id_lahan', $this->activeLahanId))
             ->where('stok_batang', '>', 0)
             ->distinct()
@@ -101,6 +99,7 @@ class StokKayu extends Page
     public function getJenisListProperty()
     {
         return HppAverageSummarie::with('jenisKayu')
+            ->whereNull('grade')
             ->when($this->activeLahanId, fn($q) => $q->where('id_lahan', $this->activeLahanId))
             ->where('stok_batang', '>', 0)
             ->get()
@@ -120,17 +119,17 @@ class StokKayu extends Page
     }
 
     // ── Computed: lahan yang memiliki stok per kombinasi ───────
-    // Dipakai di card "Ada di: HA OA" saat mode global
     public function getLahanPerKombinasiProperty()
     {
         if ($this->activeLahanId) {
-            return collect(); // tidak perlu saat per-lahan
+            return collect();
         }
 
         return HppAverageSummarie::with('lahan')
+            ->whereNull('grade')
             ->where('stok_batang', '>', 0)
             ->get()
-            ->groupBy(fn($r) => $r->id_jenis_kayu . '_' . $r->grade . '_' . $r->panjang)
+            ->groupBy(fn($r) => $r->id_jenis_kayu . '_' . $r->panjang)
             ->map(
                 fn($rows) =>
                 $rows->pluck('lahan.kode_lahan')->filter()->unique()->sort()->values()
@@ -141,9 +140,7 @@ class StokKayu extends Page
     public function selectLahan(?int $lahanId): void
     {
         $this->activeLahanId = $lahanId;
-        // reset filter saat ganti lahan
         $this->filterPanjang = '';
-        $this->filterGrade   = '';
         $this->filterJenis   = '';
     }
 
@@ -151,7 +148,7 @@ class StokKayu extends Page
     {
         $service = app(HppAverageService::class);
 
-        if (\App\Models\HppAverageLog::count() === 0) {
+        if (\App\Models\HppAverageLog::whereNull('grade')->count() === 0) {
             $service->seedFromNotaKayu();
         } else {
             $service->recalculateAll();

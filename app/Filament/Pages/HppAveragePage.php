@@ -3,8 +3,6 @@
 namespace App\Filament\Pages;
 
 use App\Models\HppAverageLog;
-use App\Models\JenisKayu;
-use App\Services\HppAverageService;
 use Filament\Pages\Page;
 use UnitEnum;
 
@@ -18,31 +16,18 @@ class HppAveragePage extends Page
     protected static ?int    $navigationSort = 10;
 
     // ── State ──────────────────────────────────────────────────
-    public string $filterPanjang    = '';
-    public string $filterJenisKayu  = '';
-    public string $logGrade         = 'A';   // sub-tab: 'A' | 'B'
+    public string $filterPanjang   = '';
+    public string $filterJenisKayu = '';
 
-    // ── Computed: Log transaksi (ascending — buku besar) ───────
+    // ── Computed: log transaksi ascending (buku besar) ─────────
     public function getLogsProperty()
     {
         return HppAverageLog::with('jenisKayu')
+            ->whereNull('grade')
             ->when($this->filterPanjang,   fn($q) => $q->where('panjang',       $this->filterPanjang))
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
-            ->orderBy('tanggal')
-            ->orderBy('id')
+            ->orderByDesc('tanggal')
+            ->orderByDesc('id')
             ->get();
-    }
-
-    // ── Computed: Badge count per grade (ikut filter) ──────────
-    public function getLogCountsProperty(): array
-    {
-        $base = HppAverageLog::query()
-            ->when($this->filterPanjang,   fn($q) => $q->where('panjang',       $this->filterPanjang))
-            ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu));
-
-        return [
-            'A' => (clone $base)->where('grade', 'A')->count(),
-            'B' => (clone $base)->where('grade', 'B')->count(),
-        ];
     }
 }
