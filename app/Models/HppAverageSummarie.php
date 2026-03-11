@@ -49,7 +49,7 @@ class HppAverageSummarie extends Model
 
     // App\Models\HppAverageSummarie.php
 
-    public static function forKombinasi(int $lahanId, int $jenisKayuId, string $grade, int $panjang): ?self
+    public static function forKombinasi(int $lahanId, int $jenisKayuId, int $panjang): ?self
     {
         // ← Guard di sini, SEBELUM firstOrCreate
         if (! \App\Models\JenisKayu::where('id', $jenisKayuId)->exists()) {
@@ -63,8 +63,8 @@ class HppAverageSummarie extends Model
             [
                 'id_lahan'      => $lahanId,
                 'id_jenis_kayu' => $jenisKayuId,
-                'grade'         => $grade,
                 'panjang'       => $panjang,
+                'grade'         => null,
             ],
             [
                 'stok_batang'   => 0,
