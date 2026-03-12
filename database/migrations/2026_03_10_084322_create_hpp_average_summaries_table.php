@@ -23,19 +23,19 @@ return new class extends Migration
                 ->constrained('jenis_kayus')
                 ->cascadeOnDelete();
 
-            $table->string('grade', 5); // Casting to char A, B, Etc
+            $table->string('grade', 5)->nullable(); // Casting to char A, B, Etc
 
-            $table->integer('panjang');
+            $table->integer('panjang')->nullable();
 
-            $table->integer('stok_batang')->default(0);
+            $table->integer('stok_batang')->default(0)->nullable();
 
-            $table->decimal('stok_kubikasi', 15, 4)->default(0);
+            $table->decimal('stok_kubikasi', 15, 4)->default(0)->nullable();
 
             // Nilai stok dalam Rupiah (presisi 4 untuk hasil perkalian floating)
-            $table->decimal('nilai_stok', 20, 2)->default(0);
+            $table->decimal('nilai_stok', 20, 2)->default(0)->nullable();
 
             // HPP Average per m³ — diupdate setiap ada masuk
-            $table->decimal('hpp_average', 20, 2)->default(0);
+            $table->decimal('hpp_average', 20, 2)->default(0)->nullable();
 
             // ── Referensi ke log terakhir ─────────────────────────────────────
             $table->foreignId('id_last_log')

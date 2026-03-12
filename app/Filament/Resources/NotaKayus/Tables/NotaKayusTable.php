@@ -2,8 +2,12 @@
 
 namespace App\Filament\Resources\NotaKayus\Tables;
 
+use App\Filament\Resources\NotaKayus\NotaKayuResource;
 use App\Models\DetailKayuMasuk;
 use App\Models\DetailTurusanKayu;
+use App\Models\HppAverageLog;
+use App\Models\NotaKayu;
+use App\Services\HppAverageService;
 use App\Services\JurnalSyncService;
 use App\Services\NotaKayuJurnalPayloadService;
 use Filament\Actions\Action;
@@ -152,17 +156,51 @@ class NotaKayusTable
                         return $batangSama && $kubikasiSama;
                     })
                     ->requiresConfirmation()
-                    ->action(function ($record) {
+                    ->action(function ($record, $livewire) {
                         $user = Auth::user();
+
+                        // Ubah status — ini trigger NotaKayuObserver::updated()
+                        // Observer akan memanggil HppAverageService::prosesNotaKayuMasuk()
                         $record->status = "Sudah Diperiksa oleh {$user->name}";
                         $record->save();
 
+                        // Fallback manual — jika observer tidak terpasang atau
+                        // withoutObservers() dipakai di tempat lain
+                        $sudahAdaLog = HppAverageLog::where('referensi_type', NotaKayu::class)
+                            ->where('referensi_id', $record->id)
+                            ->whereNull('grade')
+                            ->exists();
+
+                        if (! $sudahAdaLog) {
+                            try {
+                                app(HppAverageService::class)->prosesNotaKayuMasuk($record);
+                                Log::info('[HPP] Fallback manual berhasil dari action cek', [
+                                    'nota_id' => $record->id,
+                                ]);
+                            } catch (\Throwable $e) {
+                                Log::error('[HPP] Fallback manual GAGAL dari action cek', [
+                                    'nota_id' => $record->id,
+                                    'error'   => $e->getMessage(),
+                                ]);
+                            }
+                        }
+
+                        // Sync jurnal (terpisah dari HPP)
                         self::jalankanSync($record);
 
                         Notification::make()
                             ->success()
                             ->title('Berhasil Diperiksa')
+                            ->body('Data HPP Average diperbarui otomatis.')
                             ->send();
+
+                        // Redirect ke halaman view nota setelah diperiksa
+                        // Sesuaikan nama resource jika berbeda
+                        $redirectUrl = NotaKayuResource::getUrl('view', [
+                            'record' => $record->id,
+                        ]);
+
+                        $livewire->redirect($redirectUrl, navigate: true);
                     }),
 
                 // --- LOGIKA OTORISASI ---
