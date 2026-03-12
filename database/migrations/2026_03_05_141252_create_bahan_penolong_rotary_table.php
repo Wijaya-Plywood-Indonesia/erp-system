@@ -17,7 +17,10 @@ return new class extends Migration
                 ->constrained('produksi_rotaries')
                 ->cascadeOnUpdate()
                 ->restrictOnDelete();
-            $table->string('nama_bahan');
+            $table->foreignId('bahan_penolong_id')
+                    ->constrained('bahan_penolong_produksi')
+                    ->cascadeOnUpdate()
+                    ->restrictOnDelete();
             $table->integer('jumlah');
             $table->timestamps();
         });

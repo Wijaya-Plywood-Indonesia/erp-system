@@ -20,16 +20,12 @@ class BahanPenolongRotariesTable
         $bahanOptions = BahanPenolongRotaryForm::getBahanOptions();
         return $table
             ->columns([
-                TextColumn::make('nama_bahan')
-                    ->label('Nama bahan')
-                    ->searchable()
-                    ->formatStateUsing(function ($state) {
-                        $bahan = BahanPenolongProduksi::where('nama_bahan_penolong', $state)->first();
-
-                        return $bahan
-                            ? $bahan->nama_bahan_penolong . ' (' . $bahan->satuan . ')'
-                            : $state;
-                    }),
+                TextColumn::make('bahanPenolong.nama_bahan_penolong')
+    ->label('Nama Bahan')
+    ->formatStateUsing(fn ($state, $record) =>
+        $record->bahanPenolong->nama_bahan_penolong .
+        ' (' . $record->bahanPenolong->satuan . ')'
+    ),
 
                 TextColumn::make('jumlah')
                     ->label('Banyaknya'),

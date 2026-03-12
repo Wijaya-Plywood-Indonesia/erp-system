@@ -10,7 +10,7 @@ class BahanPenolongRotary extends Model
 
     protected $fillable = [
         'id_produksi',
-        'nama_bahan',
+        'bahan_penolong_id',
         'jumlah',
     ];
 
@@ -18,4 +18,9 @@ class BahanPenolongRotary extends Model
     {
         return $this->belongsTo(ProduksiRotary::class, 'id_produksi');
     }
+
+    public function bahanPenolong()
+{
+    return $this->belongsTo(BahanPenolongProduksi::class, 'bahan_penolong_id');
+}
 }

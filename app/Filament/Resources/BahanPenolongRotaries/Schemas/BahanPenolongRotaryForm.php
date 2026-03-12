@@ -19,15 +19,14 @@ class BahanPenolongRotaryForm
     {
         return $schema
             ->components([
-                Select::make('nama_bahan')
+                Select::make('bahan_penolong_id')
                     ->label('Nama Bahan')
                     ->options(
                         fn() =>
                         BahanPenolongProduksi::where('kategori_produksi', 'rotary')
-                            ->orderBy('nama_bahan_penolong')
                             ->get()
                             ->mapWithKeys(fn($item) => [
-                                $item->nama_bahan_penolong =>
+                                $item->id =>
                                 $item->nama_bahan_penolong . ' (' . $item->satuan . ')'
                             ])
                             ->toArray()
