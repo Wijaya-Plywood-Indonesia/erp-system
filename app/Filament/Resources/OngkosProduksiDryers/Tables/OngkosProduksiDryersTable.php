@@ -22,10 +22,15 @@ class OngkosProduksiDryersTable
     {
         return $table
             ->columns([
-                TextColumn::make('produksi.tanggal_produksi')
+                TextColumn::make('tanggal_produksi_sort')
                     ->label('Tanggal')
+                    ->getStateUsing(fn($record) => $record->produksi?->tanggal_produksi)
                     ->date('d/m/Y')
-                    ->sortable(),
+                    ->sortable(query: function (Builder $query, string $direction) {
+                        $query->join('produksi_press_dryers as ppd', 'ppd.id', '=', 'ongkos_produksi_dryers.id_produksi_dryer')
+                            ->orderBy('ppd.tanggal_produksi', $direction)
+                            ->select('ongkos_produksi_dryers.*');
+                    }),
                 TextColumn::make('produksi.shift')
                     ->label('Shift')
                     ->badge()
@@ -65,7 +70,7 @@ class OngkosProduksiDryersTable
                     ->boolean()
                     ->alignCenter(),
             ])
-            ->defaultSort('produksi.tanggal_produksi', 'desc')
+            ->defaultSort('ongkos_produksi_dryers.id', 'desc')
             ->filters([
                 Filter::make('belum_final')
                     ->label('Belum Final')

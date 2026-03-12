@@ -11,8 +11,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Illuminate\Database\Eloquent\Builder;
-
 class OngkosProduksiDryerForm
 {
     public static function configure(Schema $schema): Schema
@@ -23,12 +21,17 @@ class OngkosProduksiDryerForm
                     ->schema([
                         Select::make('id_produksi_dryer')
                             ->label('Sesi Produksi')
-                            ->relationship(
-                                'produksi',
-                                'id',
-                                fn(Builder $q) => $q->orderByDesc('tanggal_produksi')
-                            )
-                            ->getOptionLabelFromRecordUsing(fn($r) => $r->label)
+                            ->options(function () {
+                                // Ambil id produksi yang sudah punya ongkos
+                                $sudahAda = \App\Models\OngkosProduksiDryer::pluck('id_produksi_dryer')->toArray();
+
+                                return \App\Models\ProduksiPressDryer::orderByDesc('tanggal_produksi')
+                                    ->whereNotIn('id', $sudahAda)
+                                    ->get()
+                                    ->mapWithKeys(fn($p) => [
+                                        $p->id => $p->tanggal_produksi->format('d/m/Y') . ' | ' . $p->shift
+                                    ]);
+                            })
                             ->searchable()
                             ->required()
                             ->disabled(fn($record) => $record?->is_final),
