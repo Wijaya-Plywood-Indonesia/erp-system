@@ -4,6 +4,9 @@ namespace App\Services\Akuntansi;
 
 use App\Models\ProduksiRotary;
 use App\Models\PenggunaanLahanRotary;
+use App\Models\HargaPegawai;
+use App\Models\HppAverageSummarie;
+use App\Models\HppAverageLog;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -78,7 +81,8 @@ class RotaryJurnalService
             'detailLahanRotary.jenisKayu',
             'detailPaletRotary.ukuran',
             'detailPaletRotary.penggunaanLahan.lahan',
-            'bahanPenolongRotary',
+            'bahanPenolongRotary.bahanPenolong',
+            'detailKayuPecah.penggunaanLahan',
         ])
             ->whereDate('tgl_produksi', $tgl)
             ->get();
@@ -151,6 +155,13 @@ class RotaryJurnalService
                 $isKayu130 = str_contains($namaLahan, '130');
                 $poin      = $this->getPoinKayuFromLahan($lahan);
 
+                // Ambil stok_kubikasi & hpp_average dari summarie untuk item detail
+                $summaries = HppAverageSummarie::where('id_lahan', $lahan->id_lahan)
+                    ->where('stok_kubikasi', '>', 0)
+                    ->get();
+                $stokKubikasi = $summaries->sum('stok_kubikasi');
+                $hppAvgLahan  = $stokKubikasi > 0 ? round($poin / $stokKubikasi, 2) : 0;
+
                 $detailKayuPerProduksi[$produksi->id][] = [
                     'id_lahan'      => $lahan->id_lahan,
                     'nama_lahan'    => $lahan->lahan->nama_lahan    ?? '-',
@@ -158,6 +169,8 @@ class RotaryJurnalService
                     'nama_kayu'     => $lahan->jenisKayu->nama_kayu ?? '-',
                     'nama_mesin'    => $produksi->mesin->nama_mesin,
                     'jumlah_batang' => $lahan->jumlah_batang,
+                    'stok_kubikasi' => round($stokKubikasi, 4),
+                    'hpp_average'   => $hppAvgLahan,
                     'poin'          => $poin,
                     'is_kayu_130'   => $isKayu130,
                 ];
@@ -178,23 +191,20 @@ class RotaryJurnalService
         $nilaiVeneerCore = $kubikasiTotalCore  * $hargaVeneer;
 
         // ── Upah tenaga kerja ─────────────────────────────────────────────────
-        // Total upah = ongkos_mesin per produksi
-        // Items jurnal = per pegawai (jenis_pihak=karyawan, nama_pihak=nama_pegawai)
-        $totalUpah             = 0.0;
-        $detailUpahPerProduksi = [];  // untuk hitung total
-        $detailPegawaiUpah     = [];  // untuk items jurnal
+        // totalHargaPekerja = HargaPegawai::first()->harga × jumlah_pegawai
+        // upahPerPegawai    = totalHargaPekerja / jumlah_pegawai
+        //                   = HargaPegawai::first()->harga (tiap pegawai dapat sama rata)
+        $masterHargaPkj    = (float) (HargaPegawai::first()->harga ?? 0);
+        $totalUpah         = 0.0;
+        $detailPegawaiUpah = [];  // untuk items jurnal
 
         foreach ($produksiList as $produksi) {
-            $ongkos    = (float) ($produksi->mesin->ongkos_mesin ?? 0);
-            $totalUpah += $ongkos;
-            $detailUpahPerProduksi[$produksi->id] = [
-                'nama_mesin'   => $produksi->mesin->nama_mesin,
-                'ongkos_mesin' => $ongkos,
-            ];
+            $jumlahPegawai     = $produksi->detailPegawaiRotary->count();
+            $totalHargaPekerja = $masterHargaPkj * $jumlahPegawai;
+            $upahPerPegawai    = $jumlahPegawai > 0 ? round($totalHargaPekerja / $jumlahPegawai, 4) : 0;
+            // = masterHargaPkj per pegawai
 
-            // Per pegawai: bagi rata ongkos mesin ke semua pegawai di mesin ini
-            $jumlahPegawai  = $produksi->detailPegawaiRotary->count();
-            $upahPerPegawai = $jumlahPegawai > 0 ? round($ongkos / $jumlahPegawai, 4) : 0;
+            $totalUpah += $totalHargaPekerja;
 
             foreach ($produksi->detailPegawaiRotary as $pr) {
                 $detailPegawaiUpah[] = [
@@ -211,7 +221,10 @@ class RotaryJurnalService
 
         foreach ($produksiList as $produksi) {
             foreach ($produksi->bahanPenolongRotary as $bahan) {
-                $namaBahanLower = strtolower(trim($bahan->nama_bahan));
+                $master         = $bahan->bahanPenolong;
+                $namaBahanLower = strtolower(trim($master->nama_bahan_penolong ?? ''));
+                $hargaSatuan    = (float) ($master->harga ?? 0);
+                $nilaiTotal     = $hargaSatuan * (float) ($bahan->jumlah ?? 0);
                 $mappedAkun     = null;
 
                 foreach (self::BAHAN_PENOLONG_MAP as $keyword => $akun) {
@@ -228,11 +241,15 @@ class RotaryJurnalService
                     $bahanPenolong[$kode] = ['kode' => $kode, 'nama' => $mappedAkun['nama'], 'nilai' => 0.0, 'detail' => []];
                 }
 
-                $bahanPenolong[$kode]['nilai']    += (float) ($bahan->jumlah ?? 0);
+                $bahanPenolong[$kode]['nilai']    += $nilaiTotal;
                 $bahanPenolong[$kode]['detail'][] = [
-                    'nama_mesin' => $produksi->mesin->nama_mesin,
-                    'nama_bahan' => $bahan->nama_bahan,
-                    'jumlah'     => (float) ($bahan->jumlah ?? 0),
+                    'nama_mesin'        => $produksi->mesin->nama_mesin,
+                    'nama_bahan'        => $master->nama_bahan_penolong ?? '-',
+                    'satuan'            => $master->satuan ?? '-',
+                    'jumlah'            => (float) ($bahan->jumlah ?? 0),
+                    'harga_satuan'      => $hargaSatuan,
+                    'nilai_total'       => $nilaiTotal,
+                    'bahan_penolong_id' => $bahan->bahan_penolong_id,
                 ];
             }
         }
@@ -260,40 +277,135 @@ class RotaryJurnalService
             'poinKayu130', 'poinKayu260', 'totalPoin',
             'totalUpah', 'bahanPenolong',
             'selisih', 'akunSelisih', 'totalDebit', 'totalKredit',
-            'kubikasiPerMesin', 'detailKayuPerProduksi', 'detailUpahPerProduksi', 'detailPegawaiUpah'
+            'kubikasiPerMesin', 'detailKayuPerProduksi', 'detailPegawaiUpah'
         );
     }
 
     /**
-     * Ambil poin kayu dari lahan via JOIN harga_kayu
-     * Rumus: harga_beli × (p × d² × jml_batang × 0.785 / 1.000.000) × 1000
+     * Hitung poin kayu dari lahan menggunakan HPP Average.
+     *
+     * Konsep: lahan yang tercatat di penggunaan_lahan_rotaries berarti
+     * seluruh stoknya dipakai. Poin = SUM(hpp_average × stok_kubikasi)
+     * untuk semua kombinasi (grade+panjang+jenis_kayu) di lahan tersebut.
      */
     private function getPoinKayuFromLahan(PenggunaanLahanRotary $lahan): float
     {
         try {
-            $poin = DB::table('penggunaan_lahan_rotaries as plr')
-                ->join('riwayat_kayus as rk', 'rk.id_rotary', '=', 'plr.id_produksi')
-                ->join('detail_kayu_masuks as dkm', 'dkm.id_lahan', '=', 'plr.id_lahan')
-                ->leftJoin('harga_kayus as hk', function ($join) {
-                    $join->on('hk.id_jenis_kayu', '=', 'dkm.id_jenis_kayu')
-                         ->on('hk.grade', '=', 'dkm.grade')
-                         ->on('hk.panjang', '=', 'dkm.panjang')
-                         ->whereRaw('dkm.diameter BETWEEN hk.diameter_terkecil AND hk.diameter_terbesar');
-                })
-                ->where('plr.id', $lahan->id)
-                ->selectRaw('
-                    SUM(
-                        hk.harga_beli
-                        * (dkm.panjang * dkm.diameter * dkm.diameter * dkm.jumlah_batang * 0.785 / 1000000)
-                        * 1000
-                    ) as total_poin
-                ')
-                ->value('total_poin');
+            $summaries = HppAverageSummarie::where('id_lahan', $lahan->id_lahan)
+                ->where('stok_kubikasi', '>', 0)
+                ->get();
 
-            return (float) ($poin ?? 0);
+            if ($summaries->isEmpty()) {
+                Log::info("RotaryJurnal: Lahan #{$lahan->id_lahan} tidak punya stok HPP.");
+                return 0.0;
+            }
+
+            $totalPoin = 0.0;
+            foreach ($summaries as $summarie) {
+                $totalPoin += (float) $summarie->hpp_average * (float) $summarie->stok_kubikasi;
+            }
+
+            return round($totalPoin, 4);
+
         } catch (\Throwable $e) {
             Log::warning("RotaryJurnal: Gagal ambil poin kayu lahan #{$lahan->id}: " . $e->getMessage());
             return 0.0;
+        }
+    }
+
+    /**
+     * Kurangi stok HPP Average di HppAverageSummarie setelah jurnal dikirim.
+     *
+     * Konsep: jika lahan A tercatat di penggunaan_lahan_rotaries berarti
+     * seluruh kayu di lahan itu sudah habis dipakai produksi.
+     * → Habiskan semua kombinasi (grade+panjang) di HppAverageSummarie untuk lahan tersebut.
+     * → Catat HppAverageLog tipe='keluar' per kombinasi.
+     */
+    public function kurangiStokHpp(Collection $produksiList, string $tanggal): void
+    {
+        $lahanDiproses = [];
+        $tglFormatLog  = \Carbon\Carbon::parse($tanggal)->format('d/m/Y');
+
+        foreach ($produksiList as $produksi) {
+            foreach ($produksi->detailLahanRotary as $lahan) {
+                $idLahan = $lahan->id_lahan;
+
+                if (isset($lahanDiproses[$idLahan])) continue;
+                $lahanDiproses[$idLahan] = true;
+
+                // Label lahan untuk keterangan log
+                $namaLahan  = $lahan->lahan->nama_lahan ?? "Lahan #{$idLahan}";
+                $kodeLahan  = $lahan->lahan->kode_lahan ?? '';
+                $labelLahan = $kodeLahan ? "{$kodeLahan} - {$namaLahan}" : $namaLahan;
+
+                // ── Cari kayu pecah di lahan ini ──────────────────────────────
+                // KayuPecahRotary → id_penggunaan_lahan → PenggunaanLahanRotary.id_lahan
+                $kayuPecahList = $produksi->detailKayuPecah
+                    ->filter(fn($kp) => $kp->penggunaanLahan?->id_lahan === $idLahan);
+
+                $jumlahPecah   = $kayuPecahList->count();
+                $ukuranPecah   = $kayuPecahList->pluck('ukuran')->filter()->unique()->implode(', ');
+                $keteranganPecah = $jumlahPecah > 0
+                    ? " · Kayu pecah/hilang: {$jumlahPecah} btg" . ($ukuranPecah ? " ({$ukuranPecah})" : '')
+                    : '';
+
+                // ── Ambil semua kombinasi di lahan ini yang masih punya stok ──
+                // Grade diabaikan — group per panjang + jenis_kayu
+                $summaries = HppAverageSummarie::where('id_lahan', $idLahan)
+                    ->where('stok_batang', '>', 0)
+                    ->get();
+
+                if ($summaries->isEmpty()) {
+                    Log::info("RotaryJurnal: Lahan #{$idLahan} tidak punya stok di HPP summarie. Dilewati.");
+                    continue;
+                }
+
+                foreach ($summaries as $summarie) {
+                    $hppAverage     = (float) $summarie->hpp_average;
+                    $batangBefore   = (int)   $summarie->stok_batang;
+                    $kubikasiBefore = (float) $summarie->stok_kubikasi;
+                    $nilaiBefore    = (float) $summarie->nilai_stok;
+                    $nilaiKeluar    = round($hppAverage * $kubikasiBefore, 2);
+
+                    $keterangan = "Digunakan produksi rotary tgl {$tglFormatLog} · Lahan {$labelLahan}{$keteranganPecah}";
+
+                    $log = HppAverageLog::create([
+                        'id_jenis_kayu'        => $summarie->id_jenis_kayu,
+                        'grade'                => $summarie->grade,
+                        'panjang'              => $summarie->panjang,
+                        'tanggal'              => $tanggal,
+                        'tipe_transaksi'       => 'keluar',
+                        'keterangan'           => $keterangan,
+                        'referensi_type'       => ProduksiRotary::class,
+                        'referensi_id'         => $produksi->id,
+                        'total_batang'         => $batangBefore,
+                        'total_kubikasi'       => round($kubikasiBefore, 4),
+                        'harga'                => $hppAverage,
+                        'nilai_stok'           => $nilaiKeluar,
+                        'stok_batang_before'   => $batangBefore,
+                        'stok_kubikasi_before' => round($kubikasiBefore, 4),
+                        'nilai_stok_before'    => $nilaiBefore,
+                        'stok_batang_after'    => 0,
+                        'stok_kubikasi_after'  => 0,
+                        'nilai_stok_after'     => 0,
+                        'hpp_average'          => $hppAverage,
+                    ]);
+
+                    $summarie->update([
+                        'stok_batang'   => 0,
+                        'stok_kubikasi' => 0,
+                        'nilai_stok'    => 0,
+                        'id_last_log'   => $log->id,
+                    ]);
+
+                    Log::info("RotaryJurnal: Stok habis - lahan #{$idLahan} jenis#{$summarie->id_jenis_kayu} p{$summarie->panjang}", [
+                        'batang_keluar'   => $batangBefore,
+                        'kubikasi_keluar' => round($kubikasiBefore, 4),
+                        'nilai_keluar'    => $nilaiKeluar,
+                        'kayu_pecah'      => $jumlahPecah,
+                    ]);
+                }
+            }
         }
     }
 
@@ -513,7 +625,7 @@ class RotaryJurnalService
                 'ukuran'      => '-',
                 'banyak'      => null,
                 'm3'          => null,
-                'harga'       => null,
+                'harga'       => round((float) $detail['jumlah'], 4),
                 'hit_kbk'     => null,
                 'jumlah'      => round((float) $detail['jumlah'], 4),
             ];
@@ -542,11 +654,11 @@ class RotaryJurnalService
                     'nama_barang' => 'Kayu',
                     'keterangan'  => $lahan['nama_kayu'] . ' - ' . $lahan['nama_mesin'] . ' - ' . $lahan['jumlah_batang'] . ' batang',
                     'ukuran'      => '-',
-                    'banyak'      => $lahan['jumlah_batang'],
-                    'm3'          => null,
-                    'harga'       => null,
+                    'banyak'      => $lahan['jumlah_batang'],   // jumlah batang
+                    'm3'          => $lahan['stok_kubikasi'],   // kubikasi m³
+                    'harga'       => $lahan['hpp_average'],     // Rp per m³
                     'hit_kbk'     => null,
-                    'jumlah'      => round($lahan['poin'], 4),
+                    'jumlah'      => round($lahan['poin'], 2),  // kubikasi × hpp
                 ];
             }
         }
@@ -573,7 +685,7 @@ class RotaryJurnalService
                 'ukuran'      => '-',
                 'banyak'      => null,
                 'm3'          => null,
-                'harga'       => null,
+                'harga'       => round((float) $d['jumlah'], 4),
                 'hit_kbk'     => null,
                 'jumlah'      => round((float) $d['jumlah'], 4),
             ];
@@ -597,7 +709,7 @@ class RotaryJurnalService
             'ukuran'      => '-',
             'banyak'      => null,
             'm3'          => null,
-            'harga'       => null,
+            'harga'       => round($nilai, 4),
             'hit_kbk'     => null,
             'jumlah'      => round($nilai, 4),
         ]];
@@ -611,7 +723,7 @@ class RotaryJurnalService
      * Kirim payload ke endpoint akuntansi
      * Dipanggil dari Observer setelah semua mesin tervalidasi
      */
-    public function sendToAkuntansi(array $payload, string $tanggal): void
+    public function sendToAkuntansi(array $payload, string $tanggal, ?Collection $produksiList = null): void
     {
         $url    = config('services.akuntansi.url') . '/api/jurnal/rotary/create';
         $apiKey = config('services.akuntansi.key');
@@ -632,6 +744,11 @@ class RotaryJurnalService
                     'tanggal'  => $tanggal,
                     'response' => $response->json(),
                 ]);
+
+                // Kurangi stok HPP setelah jurnal berhasil dikirim
+                if ($produksiList) {
+                    $this->kurangiStokHpp($produksiList, $tanggal);
+                }
             } elseif ($response->status() === 409) {
                 // Duplikasi — jurnal sudah pernah dibuat, tidak perlu panic
                 Log::warning('[RotaryJurnal] Jurnal sudah ada di akuntansi (duplikasi)', [

@@ -29,7 +29,7 @@ return new class extends Migration
 
             $table->integer('stok_batang')->default(0)->nullable();
 
-            $table->decimal('stok_kubikasi', 15, 4)->default(0)->nullable();
+            $table->decimal('stok_kubikasi', 15, 6)->default(0)->nullable();
 
             // Nilai stok dalam Rupiah (presisi 4 untuk hasil perkalian floating)
             $table->decimal('nilai_stok', 20, 2)->default(0)->nullable();

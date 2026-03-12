@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\BahanPenolongRotaries\Tables;
 
 use App\Filament\Resources\BahanPenolongRotaries\Schemas\BahanPenolongRotaryForm;
+use App\Models\BahanPenolongProduksi;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -19,14 +20,14 @@ class BahanPenolongRotariesTable
         $bahanOptions = BahanPenolongRotaryForm::getBahanOptions();
         return $table
             ->columns([
-                TextColumn::make('nama_bahan')
-                    ->searchable()
-                    ->label('Nama bahan')
-                    // Gunakan formatStateUsing untuk menampilkan label panjang
-                    ->formatStateUsing(fn (string $state): string => 
-                        $bahanOptions[$state] ?? $state 
+                TextColumn::make('bahanPenolong.nama_bahan_penolong')
+                    ->label('Nama Bahan')
+                    ->formatStateUsing(
+                        fn($state, $record) =>
+                        $record->bahanPenolong->nama_bahan_penolong .
+                            ' (' . $record->bahanPenolong->satuan . ')'
                     ),
-                    
+
                 TextColumn::make('jumlah')
                     ->label('Banyaknya'),
             ])

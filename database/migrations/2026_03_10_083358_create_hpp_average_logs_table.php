@@ -27,19 +27,19 @@ return new class extends Migration
             $table->nullableMorphs('referensi');
 
             $table->integer('total_batang')->nullable();
-            $table->decimal('total_kubikasi', 15, 4)->nullable(); // hasil rumus (p×d²×qty×0.785)/1jt
+            $table->decimal('total_kubikasi', 15, 6)->nullable(); // hasil rumus (p×d²×qty×0.785)/1jt
 
             $table->decimal('harga', 20, 2)->nullable();
             $table->decimal('nilai_stok', 20, 2)->nullable(); // qty_kubikasi × harga_satuan
 
             // ── Snapshot SEBELUM ──────────────────────────────────────────────
             $table->integer('stok_batang_before')->default(0)->nullable();
-            $table->decimal('stok_kubikasi_before', 15, 4)->default(0)->nullable();
+            $table->decimal('stok_kubikasi_before', 15, 6)->default(0)->nullable();
             $table->decimal('nilai_stok_before',    20, 2)->default(0)->nullable();
 
             // ── Snapshot SESUDAH ──────────────────────────────────────────────
             $table->integer('stok_batang_after')->default(0)->nullable();
-            $table->decimal('stok_kubikasi_after', 16, 6)->default(0)->nullable();
+            $table->decimal('stok_kubikasi_after', 15, 6)->default(0)->nullable();
             $table->decimal('nilai_stok_after',    20, 4)->default(0)->nullable();
 
             $table->decimal('hpp_average', 20, 2)->default(0);
