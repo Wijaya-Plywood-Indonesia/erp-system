@@ -81,7 +81,7 @@ class RotaryJurnalService
             'detailLahanRotary.jenisKayu',
             'detailPaletRotary.ukuran',
             'detailPaletRotary.penggunaanLahan.lahan',
-            'bahanPenolongRotary',
+            'bahanPenolongRotary.bahanPenolong',
             'detailKayuPecah.penggunaanLahan',
         ])
             ->whereDate('tgl_produksi', $tgl)
@@ -221,7 +221,10 @@ class RotaryJurnalService
 
         foreach ($produksiList as $produksi) {
             foreach ($produksi->bahanPenolongRotary as $bahan) {
-                $namaBahanLower = strtolower(trim($bahan->nama_bahan));
+                $master         = $bahan->bahanPenolong;
+                $namaBahanLower = strtolower(trim($master->nama_bahan_penolong ?? ''));
+                $hargaSatuan    = (float) ($master->harga ?? 0);
+                $nilaiTotal     = $hargaSatuan * (float) ($bahan->jumlah ?? 0);
                 $mappedAkun     = null;
 
                 foreach (self::BAHAN_PENOLONG_MAP as $keyword => $akun) {
@@ -238,11 +241,15 @@ class RotaryJurnalService
                     $bahanPenolong[$kode] = ['kode' => $kode, 'nama' => $mappedAkun['nama'], 'nilai' => 0.0, 'detail' => []];
                 }
 
-                $bahanPenolong[$kode]['nilai']    += (float) ($bahan->jumlah ?? 0);
+                $bahanPenolong[$kode]['nilai']    += $nilaiTotal;
                 $bahanPenolong[$kode]['detail'][] = [
-                    'nama_mesin' => $produksi->mesin->nama_mesin,
-                    'nama_bahan' => $bahan->nama_bahan,
-                    'jumlah'     => (float) ($bahan->jumlah ?? 0),
+                    'nama_mesin'        => $produksi->mesin->nama_mesin,
+                    'nama_bahan'        => $master->nama_bahan_penolong ?? '-',
+                    'satuan'            => $master->satuan ?? '-',
+                    'jumlah'            => (float) ($bahan->jumlah ?? 0),
+                    'harga_satuan'      => $hargaSatuan,
+                    'nilai_total'       => $nilaiTotal,
+                    'bahan_penolong_id' => $bahan->bahan_penolong_id,
                 ];
             }
         }

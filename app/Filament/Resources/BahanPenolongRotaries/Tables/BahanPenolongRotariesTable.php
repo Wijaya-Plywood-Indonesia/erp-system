@@ -21,11 +21,12 @@ class BahanPenolongRotariesTable
         return $table
             ->columns([
                 TextColumn::make('bahanPenolong.nama_bahan_penolong')
-    ->label('Nama Bahan')
-    ->formatStateUsing(fn ($state, $record) =>
-        $record->bahanPenolong->nama_bahan_penolong .
-        ' (' . $record->bahanPenolong->satuan . ')'
-    ),
+                    ->label('Nama Bahan')
+                    ->formatStateUsing(
+                        fn($state, $record) =>
+                        $record->bahanPenolong->nama_bahan_penolong .
+                            ' (' . $record->bahanPenolong->satuan . ')'
+                    ),
 
                 TextColumn::make('jumlah')
                     ->label('Banyaknya'),
