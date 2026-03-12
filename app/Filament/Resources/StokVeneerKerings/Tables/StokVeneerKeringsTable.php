@@ -103,11 +103,15 @@ class StokVeneerKeringsTable
                     ->form([
                         Select::make('id_ukuran')
                             ->label('Ukuran')
-                            ->relationship('ukuran', 'nama_ukuran')
+                            ->options(fn() => \App\Models\Ukuran::all()->mapWithKeys(
+                                fn($u) => [$u->id => "{$u->panjang}mm x {$u->lebar}mm x {$u->tebal}mm"]
+                            ))
+                            ->searchable()
                             ->required(),
                         Select::make('id_jenis_kayu')
                             ->label('Jenis Kayu')
-                            ->relationship('jenisKayu', 'nama_kayu')
+                            ->options(fn() => \App\Models\JenisKayu::all()->pluck('nama_kayu', 'id'))
+                            ->searchable()
                             ->required(),
                         TextInput::make('kw')
                             ->label('Kualitas (KW)')

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\StokVeneerKerings\Schemas;
 
+use App\Models\Ukuran;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -16,12 +17,19 @@ class StokVeneerKeringForm
             ->components([
                 TextInput::make('id_produksi_dryer')
                     ->numeric(),
-                TextInput::make('id_ukuran')
-                    ->required()
-                    ->numeric(),
-                TextInput::make('id_jenis_kayu')
-                    ->required()
-                    ->numeric(),
+                Select::make('id_ukuran')
+                    ->label('Ukuran')
+                    ->options(fn() => Ukuran::all()->mapWithKeys(
+                        fn($u) => [$u->id => $u->nama_ukuran]
+                    ))
+                    ->searchable()
+                    ->required(),
+
+                Select::make('id_jenis_kayu')
+                    ->label('Jenis Kayu')
+                    ->relationship('jenisKayu', 'nama_kayu')
+                    ->searchable()
+                    ->required(),
                 TextInput::make('kw')
                     ->required(),
                 Select::make('jenis_transaksi')
