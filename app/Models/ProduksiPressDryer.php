@@ -69,4 +69,15 @@ class ProduksiPressDryer extends Model
             }
         });
     }
+
+    //relasi stok dan log
+    public function ongkosDryer()
+    {
+        return $this->hasOne(OngkosProduksiDryer::class, 'id_produksi_dryer');
+    }
+
+    public function stokVeneerKerings()
+    {
+        return $this->hasMany(StokVeneerKering::class, 'id_produksi_dryer');
+    }
 }

@@ -20,18 +20,18 @@ class HppAveragePage extends Page
 
     protected static ?string $navigationLabel = 'HPP Kayu';
     protected static string|UnitEnum|null $navigationGroup = 'Hpp';
-    protected static ?string $title           = 'Ringkasan HPP Average';
-    protected static ?int    $navigationSort  = 10;
+    protected static ?string $title = 'Ringkasan HPP Average';
+    protected static ?int $navigationSort = 10;
 
     // ── State (reactive via Livewire) ──────────────────────────
-    public string $activeTab    = 'stok';      // 'stok' | 'log'
-    public ?int   $activeLahanId = null;
-    public string $activeJenis  = '';
-    public string $filterGrade  = '';
+    public string $activeTab = 'stok';      // 'stok' | 'log'
+    public ?int $activeLahanId = null;
+    public string $activeJenis = '';
+    public string $filterGrade = '';
     public string $filterPanjang = '';
-    public string $filterJenis  = '';
-    public string $logTab       = 'semua';     // 'semua' | 'masuk' | 'keluar'
-    public string $lahanSearch  = '';
+    public string $filterJenis = '';
+    public string $logTab = 'semua';     // 'semua' | 'masuk' | 'keluar'
+    public string $lahanSearch = '';
 
     // ── Mount: set lahan default ───────────────────────────────
     public function mount(): void
@@ -88,9 +88,9 @@ class HppAveragePage extends Page
             ->get()
             ->groupBy('id_lahan')
             ->map(fn($rows) => [
-                'btg'   => $rows->sum('stok_batang'),
-                'jenis' => $rows->pluck('jenisKayu.nama')->unique()->sort()->values(),
-                'kom'   => $rows->count(),
+                'btg' => $rows->sum('stok_batang'),
+                'jenis' => $rows->pluck('jenisKayu.nama_kayu')->unique()->sort()->values(),
+                'kom' => $rows->count(),
             ]);
     }
 
@@ -101,7 +101,7 @@ class HppAveragePage extends Page
             ->where('id_lahan', $this->activeLahanId)
             ->where('stok_kubikasi', '>', 0)
             ->get()
-            ->pluck('jenisKayu.nama')
+            ->pluck('jenisKayu.nama_kayu')
             ->unique()
             ->sort()
             ->values();
@@ -110,7 +110,7 @@ class HppAveragePage extends Page
     public function getLogsProperty()
     {
         return HppAverageLog::with(['jenisKayu'])
-            ->when($this->filterGrade,   fn($q) => $q->where('grade',   $this->filterGrade))
+            ->when($this->filterGrade, fn($q) => $q->where('grade', $this->filterGrade))
             ->when($this->filterPanjang, fn($q) => $q->where('panjang', $this->filterPanjang))
             ->when(
                 $this->filterJenis,
@@ -135,8 +135,8 @@ class HppAveragePage extends Page
     {
         $base = HppAverageLog::query();
         return [
-            'semua'  => (clone $base)->count(),
-            'masuk'  => (clone $base)->where('tipe_transaksi', 'masuk')->count(),
+            'semua' => (clone $base)->count(),
+            'masuk' => (clone $base)->where('tipe_transaksi', 'masuk')->count(),
             'keluar' => (clone $base)->where('tipe_transaksi', 'keluar')->count(),
         ];
     }
@@ -146,7 +146,7 @@ class HppAveragePage extends Page
     public function selectLahan(int $lahanId): void
     {
         $this->activeLahanId = $lahanId;
-        $this->activeJenis   = '';
+        $this->activeJenis = '';
     }
 
     public function selectJenis(string $jenis): void
