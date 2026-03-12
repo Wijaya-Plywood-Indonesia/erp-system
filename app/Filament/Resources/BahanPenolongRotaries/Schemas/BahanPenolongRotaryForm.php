@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\BahanPenolongRotaries\Schemas;
 
+use App\Models\BahanPenolongProduksi;
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -20,11 +21,19 @@ class BahanPenolongRotaryForm
             ->components([
                 Select::make('nama_bahan')
                     ->label('Nama Bahan')
-                    // Menggunakan method static untuk options
-                    ->options(self::getBahanOptions())
-                    ->required()
-                    ->native(false)
-                    ->searchable(),
+                    ->options(
+                        fn() =>
+                        BahanPenolongProduksi::where('kategori_produksi', 'rotary')
+                            ->orderBy('nama_bahan_penolong')
+                            ->get()
+                            ->mapWithKeys(fn($item) => [
+                                $item->nama_bahan_penolong =>
+                                $item->nama_bahan_penolong . ' (' . $item->satuan . ')'
+                            ])
+                            ->toArray()
+                    )
+                    ->searchable()
+                    ->required(),
 
                 TextInput::make('jumlah')
                     ->label('Banyak')
