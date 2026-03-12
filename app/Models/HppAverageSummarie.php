@@ -27,7 +27,7 @@ class HppAverageSummarie extends Model
         'grade'         => 'string',  // 'A', 'B', 'C' — sesuai migration varchar(5)
         'panjang'       => 'integer',
         'stok_batang'   => 'integer',
-        'stok_kubikasi' => 'decimal:4',
+        'stok_kubikasi' => 'decimal:6',
         'nilai_stok'    => 'decimal:2',
         'hpp_average'   => 'decimal:2',
     ];

@@ -34,14 +34,14 @@ class HppAverageLog extends Model
     protected $casts = [
         'tanggal'              => 'date',
         'total_batang'         => 'integer',
-        'total_kubikasi'       => 'decimal:4',
+        'total_kubikasi'       => 'decimal:6',
         'harga'                => 'decimal:2',
         'nilai_stok'           => 'decimal:2',
         'stok_batang_before'   => 'integer',
-        'stok_kubikasi_before' => 'decimal:4',
+        'stok_kubikasi_before' => 'decimal:6',
         'nilai_stok_before'    => 'decimal:2',
         'stok_batang_after'    => 'integer',
-        'stok_kubikasi_after'  => 'decimal:4',
+        'stok_kubikasi_after'  => 'decimal:6',
         'nilai_stok_after'     => 'decimal:2',
         'hpp_average'          => 'decimal:4',
     ];

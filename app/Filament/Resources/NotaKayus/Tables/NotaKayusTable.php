@@ -193,14 +193,6 @@ class NotaKayusTable
                             ->title('Berhasil Diperiksa')
                             ->body('Data HPP Average diperbarui otomatis.')
                             ->send();
-
-                        // Redirect ke halaman view nota setelah diperiksa
-                        // Sesuaikan nama resource jika berbeda
-                        $redirectUrl = NotaKayuResource::getUrl('view', [
-                            'record' => $record->id,
-                        ]);
-
-                        $livewire->redirect($redirectUrl, navigate: true);
                     }),
 
                 // --- LOGIKA OTORISASI ---
