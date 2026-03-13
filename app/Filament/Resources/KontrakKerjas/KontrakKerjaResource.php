@@ -22,7 +22,7 @@ class KontrakKerjaResource extends Resource
     protected static ?string $model = KontrakKerja::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentCheck;
-    protected static string|UnitEnum|null $navigationGroup = 'Pegawai & Kontrak';
+    protected static string|UnitEnum|null $navigationGroup = 'Kontrak';
     protected static ?string $recordTitleAttribute = 'no_kontrak';
     protected static ?string $navigationLabel = 'Kontrak Kerja';
     protected static ?string $pluralModelLabel = 'Kontrak Kerja';
