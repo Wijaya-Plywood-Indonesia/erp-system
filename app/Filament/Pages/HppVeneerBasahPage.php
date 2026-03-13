@@ -12,7 +12,7 @@ class HppVeneerBasahPage extends Page
     protected string $view = 'filament.pages.hpp-veneer-basah-page';
 
     protected static ?string $navigationLabel = 'Log HPP Veneer Basah';
-    protected static string|UnitEnum|null $navigationGroup = 'HPP Average';
+    protected static string|UnitEnum|null $navigationGroup = 'HPP';
     protected static ?string $title          = 'Log HPP Veneer Basah';
     protected static ?int    $navigationSort = 20;
 

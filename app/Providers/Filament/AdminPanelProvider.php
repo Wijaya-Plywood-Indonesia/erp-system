@@ -138,6 +138,10 @@ class AdminPanelProvider extends PanelProvider
                     ->icon('heroicon-o-cube')
                     ->collapsed(),
 
+                NavigationGroup::make('HPP')
+                    ->icon('heroicon-o-banknotes')
+                    ->collapsed(),
+
                 NavigationGroup::make('Laporan')
                     ->icon('heroicon-o-clipboard-document-list')
                     ->collapsed(),
