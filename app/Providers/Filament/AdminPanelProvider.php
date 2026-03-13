@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\DashboardHppDryer;
 use App\Http\Middleware\RunDailyScheduler;
 use App\Livewire\GradingWizard;
 use Filament\Http\Middleware\Authenticate;
@@ -58,6 +59,7 @@ class AdminPanelProvider extends PanelProvider
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([
                 Dashboard::class,
+                DashboardHppDryer::class,
             ])
             ->brandName('Wijaya')
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
