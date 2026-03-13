@@ -6,6 +6,7 @@ use App\Events\ProductionUpdated;
 use App\Services\HppDryerService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Support\Facades\Log;
 
 class HitungHppDryerListener implements ShouldQueue
 {
@@ -19,18 +20,18 @@ class HitungHppDryerListener implements ShouldQueue
 
     public function handle(ProductionUpdated $event): void
     {
-        // Hanya proses event dari dryer, bukan departemen lain
-        if ($event->tipe !== 'dryer') {
+        // Sesuai property di ProductionUpdated: $type dan $productionId
+        if ($event->type !== 'dryer') {
             return;
         }
 
-        $this->service->prosesProduksi($event->idProduksi);
+        $this->service->prosesProduksi($event->productionId);
     }
 
     public function failed(ProductionUpdated $event, \Throwable $exception): void
     {
-        \Log::error(
-            "Gagal hitung HPP dryer untuk produksi #{$event->idProduksi}: "
+        Log::error(
+            "Gagal hitung HPP dryer untuk produksi #{$event->productionId}: "
             . $exception->getMessage()
         );
     }
