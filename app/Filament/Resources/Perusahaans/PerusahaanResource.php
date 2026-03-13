@@ -25,7 +25,7 @@ class PerusahaanResource extends Resource
     protected static ?string $pluralModelLabel = 'Perusahaan';
     protected static ?string $modelLabel = 'Perusahaan';
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingOffice2;
-    protected static string|UnitEnum|null $navigationGroup = 'Pegawai & Kontrak';
+    protected static string|UnitEnum|null $navigationGroup = 'Kontrak';
 
     public static function form(Schema $schema): Schema
     {
@@ -45,7 +45,7 @@ class PerusahaanResource extends Resource
     public static function getRelations(): array
     {
         return [
-                //
+            //
             JabatanRelationManager::class,
         ];
     }

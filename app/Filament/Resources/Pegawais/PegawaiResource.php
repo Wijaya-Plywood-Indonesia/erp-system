@@ -24,7 +24,7 @@ class PegawaiResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
     //Ngelompokin.
-    protected static string|UnitEnum|null $navigationGroup = 'Pegawai & Kontrak';
+    protected static string|UnitEnum|null $navigationGroup = 'Kontrak';
     protected static ?string $navigationLabel = 'Pegawai';
     protected static ?string $pluralModelLabel = 'Pegawai';
     protected static ?string $modelLabel = 'Pegawai';
