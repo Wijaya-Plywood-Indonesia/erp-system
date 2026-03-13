@@ -6,6 +6,9 @@ use App\Models\ProduksiRotary;
 use App\Models\PenggunaanLahanRotary;
 use App\Models\HargaPegawai;
 use App\Models\HppAverageSummarie;
+use App\Models\HppVeneerBasahLog;
+use App\Models\HppVeneerBasahSummary;
+use App\Models\HppVeneerBasahBahanPenolong;
 use App\Models\HppAverageLog;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -410,6 +413,232 @@ class RotaryJurnalService
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    //  STOK VENEER BASAH
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Tambah stok veneer basah setelah jurnal sukses dikirim ke akuntansi.
+     *
+     * Stok digabung per tanggal (semua mesin jadi 1 transaksi masuk per kombinasi ukuran+jenis_kayu).
+     *
+     * HPP per m³ = hpp_kayu + hpp_pekerja + hpp_mesin + hpp_bahan_penolong
+     *   - hpp_kayu          = totalPoinKayu / kubikasiTotal65%
+     *   - hpp_pekerja       = totalUpah / kubikasiTotal
+     *   - hpp_mesin         = SUM(ongkos_mesin per mesin) / kubikasiTotal
+     *   - hpp_bahan_penolong= totalNilaiBahan / kubikasiTotal
+     */
+    public function tambahStokVeneerBasah(Collection $produksiList, string $tanggal): void
+    {
+        try {
+            // ── Kumpulkan data per kombinasi ukuran+jenis_kayu ────────────────
+            // Key: "jenis_kayu_id|panjang|lebar|tebal"
+            $grouped = []; // stok lembar & kubikasi per kombinasi ukuran
+
+            $totalKubikasi   = 0.0;
+            $totalUpah       = 0.0;
+            $totalMesin      = 0.0;
+            $totalPoinKayu   = 0.0;
+            $kubikasiTotal65 = 0.0;
+
+            // Bahan penolong: key=bahan_penolong_id, value=[id, nama, satuan, jumlah, harga, nilai]
+            $bahanMap = [];
+
+            foreach ($produksiList as $produksi) {
+                $jenisMesin = strtolower($produksi->mesin->jenis_mesin ?? '');
+                $ongkosMesin = (float) ($produksi->mesin->ongkos_mesin ?? 0);
+                $totalMesin += $ongkosMesin;
+
+                // Kubikasi per mesin dari detail palet (ukuran via relasi ukuran)
+                foreach ($produksi->detailPaletRotary as $palet) {
+                    $ukuran = $palet->ukuran;
+                    $p = (float) ($ukuran->panjang ?? 0);
+                    $l = (float) ($ukuran->lebar   ?? 0);
+                    $t = (float) ($ukuran->tebal   ?? 0);
+                    $lembar = (int) ($palet->total_lembar ?? 0);
+
+                    if ($p <= 0 || $l <= 0 || $t <= 0 || $lembar <= 0) continue;
+
+                    // kubikasi m³: p × l × t × lembar / 10.000.000
+                    $kubikasi = ($p * $l * $t * $lembar) / 10_000_000;
+
+                    // Jenis kayu dari lahan pertama produksi ini
+                    $idJenisKayu = $produksi->detailLahanRotary->first()?->jenisKayu?->id ?? 1;
+
+                    $key = "{$idJenisKayu}|{$p}|{$l}|{$t}";
+                    if (!isset($grouped[$key])) {
+                        $grouped[$key] = [
+                            'id_jenis_kayu' => $idJenisKayu,
+                            'panjang'       => $p,
+                            'lebar'         => $l,
+                            'tebal'         => $t,
+                            'total_lembar'  => 0,
+                            'total_kubikasi'=> 0.0,
+                        ];
+                    }
+                    $grouped[$key]['total_lembar']   += $lembar;
+                    $grouped[$key]['total_kubikasi'] += $kubikasi;
+                    $totalKubikasi += $kubikasi;
+                }
+
+                // Upah
+                foreach ($produksi->detailPegawaiRotary as $pegawai) {
+                    $totalUpah += (float) ($pegawai->total_harga ?? 0);
+                }
+
+                // Bahan penolong
+                foreach ($produksi->bahanPenolongRotary as $bahan) {
+                    $master = $bahan->bahanPenolong;
+                    if (!$master) continue;
+
+                    $id          = $bahan->bahan_penolong_id;
+                    $harga       = (float) ($master->harga ?? 0);
+                    $jumlah      = (float) ($bahan->jumlah ?? 0);
+                    $nilaiTotal  = $harga * $jumlah;
+
+                    if (!isset($bahanMap[$id])) {
+                        $bahanMap[$id] = [
+                            'bahan_penolong_id' => $id,
+                            'nama_bahan'        => $master->nama_bahan_penolong,
+                            'satuan'            => $master->satuan,
+                            'jumlah'            => 0.0,
+                            'harga_satuan'      => $harga,
+                            'nilai_total'       => 0.0,
+                        ];
+                    }
+                    $bahanMap[$id]['jumlah']      += $jumlah;
+                    $bahanMap[$id]['nilai_total'] += $nilaiTotal;
+                }
+
+                // Poin kayu
+                foreach ($produksi->detailLahanRotary as $lahan) {
+                    $totalPoinKayu += $this->getPoinKayuFromLahan($lahan);
+                }
+            }
+
+            if ($totalKubikasi <= 0 || empty($grouped)) {
+                Log::warning('[VeneerBasah] Tidak ada kubikasi veneer, stok tidak ditambah.');
+                return;
+            }
+
+            // Kubikasi 65% untuk hpp_kayu
+            $kubikasiTotal65 = $totalKubikasi * 0.65;
+
+            // ── Hitung komponen HPP per m³ ────────────────────────────────────
+            $hppKayu    = $kubikasiTotal65 > 0 ? round($totalPoinKayu   / $kubikasiTotal65, 2) : 0;
+            $hppPekerja = $totalKubikasi   > 0 ? round($totalUpah       / $totalKubikasi,   2) : 0;
+            $hppMesin   = $totalKubikasi   > 0 ? round($totalMesin      / $totalKubikasi,   2) : 0;
+
+            $totalNilaiBahan = array_sum(array_column($bahanMap, 'nilai_total'));
+            $hppBahan        = $totalKubikasi > 0 ? round($totalNilaiBahan / $totalKubikasi, 2) : 0;
+
+            $hppAverage = $hppKayu + $hppPekerja + $hppMesin + $hppBahan;
+
+            $tglFormatLog = \Carbon\Carbon::parse($tanggal)->format('d/m/Y');
+
+            // ── Insert per kombinasi ukuran+jenis_kayu ────────────────────────
+            foreach ($grouped as $key => $item) {
+                $kubikasi    = round($item['total_kubikasi'], 6);
+                $nilaiMasuk  = round($hppAverage * $kubikasi, 2);
+                $idJenisKayu = $item['id_jenis_kayu'];
+
+                // Ambil summarie saat ini
+                $summarie = HppVeneerBasahSummary::firstOrNew([
+                    'id_jenis_kayu' => $idJenisKayu,
+                    'panjang'       => $item['panjang'],
+                    'lebar'         => $item['lebar'],
+                    'tebal'         => $item['tebal'],
+                ]);
+
+                $lembarBefore   = (int)   ($summarie->stok_lembar   ?? 0);
+                $kubikasiBefore = (float) ($summarie->stok_kubikasi ?? 0);
+                $nilaiBefore    = (float) ($summarie->nilai_stok    ?? 0);
+                $hppLama        = (float) ($summarie->hpp_average   ?? 0);
+
+                // Moving average HPP
+                $nilaiLama       = $hppLama * $kubikasiBefore;
+                $hppAverageBaru  = ($kubikasiBefore + $kubikasi) > 0
+                    ? round(($nilaiLama + $nilaiMasuk) / ($kubikasiBefore + $kubikasi), 2)
+                    : $hppAverage;
+
+                $lembarAfter   = $lembarBefore   + $item['total_lembar'];
+                $kubikasiAfter = round($kubikasiBefore + $kubikasi, 6);
+                $nilaiAfter    = round($hppAverageBaru * $kubikasiAfter, 2);
+
+                // Catat log masuk
+                $log = HppVeneerBasahLog::create([
+                    'id_jenis_kayu'        => $idJenisKayu,
+                    'panjang'              => $item['panjang'],
+                    'lebar'                => $item['lebar'],
+                    'tebal'                => $item['tebal'],
+                    'tanggal'              => $tanggal,
+                    'tipe_transaksi'       => 'masuk',
+                    'keterangan'           => "Produksi rotary tgl {$tglFormatLog}",
+                    'referensi_type'       => null,
+                    'referensi_id'         => null,
+                    'total_lembar'         => $item['total_lembar'],
+                    'total_kubikasi'       => $kubikasi,
+                    'hpp_kayu'             => $hppKayu,
+                    'hpp_pekerja'          => $hppPekerja,
+                    'hpp_mesin'            => $hppMesin,
+                    'hpp_bahan_penolong'   => $hppBahan,
+                    'hpp_average'          => $hppAverageBaru,
+                    'nilai_stok'           => $nilaiMasuk,
+                    'stok_lembar_before'   => $lembarBefore,
+                    'stok_kubikasi_before' => round($kubikasiBefore, 6),
+                    'nilai_stok_before'    => $nilaiBefore,
+                    'stok_lembar_after'    => $lembarAfter,
+                    'stok_kubikasi_after'  => $kubikasiAfter,
+                    'nilai_stok_after'     => $nilaiAfter,
+                ]);
+
+                // Catat breakdown bahan penolong per log
+                foreach ($bahanMap as $bahan) {
+                    $hppBahanPerM3 = $totalKubikasi > 0
+                        ? round($bahan['nilai_total'] / $totalKubikasi, 4)
+                        : 0;
+
+                    HppVeneerBasahBahanPenolong::create([
+                        'id_log'            => $log->id,
+                        'bahan_penolong_id' => $bahan['bahan_penolong_id'],
+                        'nama_bahan'        => $bahan['nama_bahan'],
+                        'satuan'            => $bahan['satuan'],
+                        'jumlah'            => $bahan['jumlah'],
+                        'harga_satuan'      => $bahan['harga_satuan'],
+                        'nilai_total'       => $bahan['nilai_total'],
+                        'hpp_per_m3'        => $hppBahanPerM3,
+                    ]);
+                }
+
+                // Update summarie
+                $summarie->fill([
+                    'stok_lembar'            => $lembarAfter,
+                    'stok_kubikasi'          => $kubikasiAfter,
+                    'nilai_stok'             => $nilaiAfter,
+                    'hpp_average'            => $hppAverageBaru,
+                    'hpp_kayu_last'          => $hppKayu,
+                    'hpp_pekerja_last'       => $hppPekerja,
+                    'hpp_mesin_last'         => $hppMesin,
+                    'hpp_bahan_penolong_last'=> $hppBahan,
+                    'id_last_log'            => $log->id,
+                ])->save();
+
+                Log::info("[VeneerBasah] Stok masuk - {$item['panjang']}×{$item['lebar']}×{$item['tebal']}", [
+                    'lembar'       => $item['total_lembar'],
+                    'kubikasi'     => $kubikasi,
+                    'hpp_average'  => $hppAverageBaru,
+                    'nilai_masuk'  => $nilaiMasuk,
+                ]);
+            }
+
+        } catch (\Throwable $e) {
+            Log::error('[VeneerBasah] Gagal tambah stok veneer basah: ' . $e->getMessage(), [
+                'tanggal' => $tanggal,
+                'trace'   => $e->getTraceAsString(),
+            ]);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     //  BUILD STRUKTUR PAYLOAD
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -745,9 +974,10 @@ class RotaryJurnalService
                     'response' => $response->json(),
                 ]);
 
-                // Kurangi stok HPP setelah jurnal berhasil dikirim
+                // Kurangi stok HPP & tambah stok veneer basah setelah jurnal berhasil dikirim
                 if ($produksiList) {
                     $this->kurangiStokHpp($produksiList, $tanggal);
+                    $this->tambahStokVeneerBasah($produksiList, $tanggal);
                 }
             } elseif ($response->status() === 409) {
                 // Duplikasi — jurnal sudah pernah dibuat, tidak perlu panic
