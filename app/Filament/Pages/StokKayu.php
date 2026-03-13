@@ -16,7 +16,7 @@ class StokKayu extends Page
     protected string $view = 'filament.pages.stok-kayu';
 
     protected static ?string $navigationLabel = 'Stok Kayu';
-    protected static string|UnitEnum|null $navigationGroup = 'Stok Kayu';
+    protected static string|UnitEnum|null $navigationGroup = 'Stok';
     protected static ?string $title          = 'Stok Kayu';
     protected static ?int    $navigationSort = 10;
 
