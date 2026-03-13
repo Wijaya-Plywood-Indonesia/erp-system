@@ -32,6 +32,5 @@ class HitungHppDryerListener implements ShouldQueue
     {
         Log::error(
             "Gagal hitung HPP dryer untuk produksi #{$event->productionId}: "
-        );
     }
 }
