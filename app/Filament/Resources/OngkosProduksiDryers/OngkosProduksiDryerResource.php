@@ -15,7 +15,6 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 class OngkosProduksiDryerResource extends Resource
@@ -26,7 +25,6 @@ class OngkosProduksiDryerResource extends Resource
     protected static ?string $navigationLabel = 'Ongkos Produksi Dryer';
     protected static ?string $modelLabel = 'Ongkos Produksi Dryer';
     protected static ?int $navigationSort = 1;
-
     public static function form(Schema $schema): Schema
     {
         return OngkosProduksiDryerForm::configure($schema);
