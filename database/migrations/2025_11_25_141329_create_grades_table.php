@@ -11,16 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('grades', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('id_kategori_barang')
-                ->nullable()
-                ->constrained('kategori_barang')
-                ->cascadeOnUpdate()
-                ->restrictOnDelete();
-            $table->string('nama_grade');
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('grades')) {
+            Schema::create('grades', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('id_kategori_barang')
+                    ->nullable()
+                    ->constrained('kategori_barang')
+                    ->cascadeOnUpdate()
+                    ->restrictOnDelete();
+                $table->string('nama_grade');
+                $table->timestamps();
+            });
+        }
     }
 
     /**
@@ -28,6 +30,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('grade');
+        Schema::disableForeignKeyConstraints();
+
+        Schema::dropIfExists('grades');
+
+        Schema::enableForeignKeyConstraints();
     }
 };

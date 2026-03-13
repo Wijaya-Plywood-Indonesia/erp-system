@@ -30,6 +30,15 @@ return new class extends Migration {
      */
     public function down(): void
     {
+
+        Schema::disableForeignKeyConstraints();
+
+        if (Schema::hasTable('produksi_sandings')) {
+            Schema::table('produksi_sandings', function (Blueprint $table) {
+                // Menghapus foreign key secara eksplisit untuk membersihkan memori database
+                $table->dropForeign(['id_mesin']);
+            });
+        }
         Schema::dropIfExists('produksi_sandings');
     }
 };

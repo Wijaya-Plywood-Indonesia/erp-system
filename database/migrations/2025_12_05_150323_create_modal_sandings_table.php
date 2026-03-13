@@ -10,26 +10,28 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        Schema::create('modal_sandings', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('id_produksi_sanding')
-                ->nullable()
-                ->constrained('produksi_sandings')
-                ->cascadeOnUpdate()
-                ->restrictOnDelete();
-            $table->foreignId('id_barang_setengah_jadi')
-                ->nullable()
-                ->constrained('barang_setengah_jadi_hp')
-                ->cascadeOnUpdate()
-                ->restrictOnDelete();
-            $table->integer('kuantitas');
-            $table->integer('jumlah_sanding_face');
-            $table->integer('jumlah_sanding_back');
-            $table->integer('no_palet');
+        if (!Schema::hasTable('modal_sandings')) {
+            Schema::create('modal_sandings', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('id_produksi_sanding')
+                    ->nullable()
+                    ->constrained('produksi_sandings')
+                    ->cascadeOnUpdate()
+                    ->restrictOnDelete();
+                $table->foreignId('id_barang_setengah_jadi')
+                    ->nullable()
+                    ->constrained('barang_setengah_jadi_hp')
+                    ->cascadeOnUpdate()
+                    ->restrictOnDelete();
+                $table->integer('kuantitas');
+                $table->integer('jumlah_sanding_face');
+                $table->integer('jumlah_sanding_back');
+                $table->integer('no_palet');
 
 
-            $table->timestamps();
-        });
+                $table->timestamps();
+            });
+        }
     }
 
     /**
@@ -37,6 +39,8 @@ return new class extends Migration {
      */
     public function down(): void
     {
+        Schema::disableForeignKeyConstraints();
         Schema::dropIfExists('modal_sanding');
+        Schema::enableForeignKeyConstraints();
     }
 };
