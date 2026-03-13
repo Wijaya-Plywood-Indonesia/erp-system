@@ -14,9 +14,11 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
+use UnitEnum;
 
 class GradingWizard extends Component
 {
+
     public string  $step             = 'start';
     public int     $currentIndex     = 0;
     public int     $idKategoriBarang = 0;
