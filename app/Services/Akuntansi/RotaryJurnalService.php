@@ -480,10 +480,10 @@ class RotaryJurnalService
                     $totalKubikasi += $kubikasi;
                 }
 
-                // Upah
-                foreach ($produksi->detailPegawaiRotary as $pegawai) {
-                    $totalUpah += (float) ($pegawai->total_harga ?? 0);
-                }
+                // Upah — sama dengan hitungNominal: masterHargaPkj × jumlah_pegawai
+                $masterHargaPkj = (float) (\App\Models\HargaPegawai::first()->harga ?? 0);
+                $jumlahPegawai  = $produksi->detailPegawaiRotary->count();
+                $totalUpah     += $masterHargaPkj * $jumlahPegawai;
 
                 // Bahan penolong
                 foreach ($produksi->bahanPenolongRotary as $bahan) {
