@@ -22,8 +22,17 @@ class PenggunaanLahanRotariesTable
                         fn($record) =>
                         "{$record->lahan->kode_lahan} - {$record->lahan->nama_lahan}"
                     )
-                    ->sortable(['lahan.kode_lahan']) // optional
-                    ->searchable(['lahan.kode_lahan', 'lahan.nama_lahan']),
+                    ->sortable(query: function ($query, string $direction) {
+                        $query->join('lahans', 'penggunaan_lahan_rotaries.id_lahan', '=', 'lahans.id')
+                            ->orderBy('lahans.kode_lahan', $direction)
+                            ->select('penggunaan_lahan_rotaries.*');
+                    }) // optional
+                    ->searchable(query: function ($query, string $search) {
+                        $query->whereHas('lahan', function ($q) use ($search) {
+                            $q->where('kode_lahan', 'like', "%{$search}%")
+                            ->orWhere('nama_lahan', 'like', "%{$search}%");
+                        });
+                    }),
 
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')

@@ -14,6 +14,7 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -163,17 +164,32 @@ class DetailPegawaiRotaryRelationManager extends RelationManager
             ->recordActions([
 
                 Action::make('aturIjin')
-                    ->label(fn($record) => $record->ijin ? 'Edit Ijin' : 'Tambah Ijin')
+                    ->label(fn($record) => $record->izin ? 'Edit Izin' : 'Tambah Izin')
                     ->icon('heroicon-o-pencil-square')
+                    ->modalHeading('Pengaturan Izin & Keterangan')
+                    // MENGISI DATA AWAL (PRE-FILL)
+                    ->mountUsing(fn (Schema $form, $record) => $form->fill([
+                        'izin' => $record->izin,
+                        'keterangan' => $record->keterangan,
+                    ]))
                     ->form([
-                        TextInput::make('izin')->label('Izin'),
-                        Textarea::make('ket')->label('Keterangan'),
+                        TextInput::make('izin')
+                            ->label('Jenis Izin')
+                            ->placeholder('Contoh: Sakit, Izin Setengah Hari'),
+                        Textarea::make('keterangan')
+                            ->label('Keterangan Detail')
+                            ->placeholder('Berikan alasan atau catatan tambahan...'),
                     ])
                     ->action(function ($record, array $data) {
                         $record->update([
                             'izin' => $data['izin'],
-                            'keterangan' => $data['ket'],
+                            'keterangan' => $data['keterangan'], // Pastikan nama key sesuai dengan field form
                         ]);
+
+                        Notification::make()
+                            ->title('Data Izin Diperbarui')
+                            ->success()
+                            ->send();
                     }),
                 EditAction::make(),
                 DeleteAction::make(),

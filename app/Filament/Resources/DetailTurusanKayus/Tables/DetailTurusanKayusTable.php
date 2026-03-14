@@ -25,12 +25,15 @@ class DetailTurusanKayusTable
     {
         // 1. LOGIKA LOCK: Cek status Nota melalui Owner Record (KayuMasuk)
         $isLocked = false;
-        $ownerRecord = null;
         if ($livewire && method_exists($livewire, 'getOwnerRecord')) {
             $ownerRecord = $livewire->getOwnerRecord();
             $isLocked = $ownerRecord &&
                 $ownerRecord->notaKayu &&
                 $ownerRecord->notaKayu->status !== 'Belum Diperiksa';
+        }
+        $ownerRecord = null;
+        if ($livewire && method_exists($livewire, 'getOwnerRecord')) {
+            $ownerRecord = $livewire->getOwnerRecord();
         }
 
         return $table
@@ -55,13 +58,19 @@ class DetailTurusanKayusTable
                         };
                         return "{$namaKayu} {$panjang} ({$grade})";
                     })
-                    ->sortable(['jenisKayu.nama_kayu', 'panjang', 'grade'])
-                    ->searchable(['jenisKayu.nama_kayu', 'panjang']),
+                    ->searchable(['panjang', 'grade']) 
+                    // Jika ingin mencari nama kayu (relasi), gunakan:
+                    ->searchable(query: function ($query, string $search) {
+                        $query->where('panjang', 'like', "%{$search}%")
+                              ->orWhere('grade', 'like', "%{$search}%")
+                              ->orWhereHas('jenisKayu', fn($q) => $q->where('nama_kayu', 'like', "%{$search}%"));
+                    }),
 
                 TextColumn::make('diameter')
                     ->label('D')
                     ->numeric()
-                    ->sortable(),
+                    ->sortable()
+                    ->searchable(),
 
                 // Update Kolom Kubikasi: Menambahkan variabel panjang ke dalam rumus
                 TextColumn::make('kubikasi')

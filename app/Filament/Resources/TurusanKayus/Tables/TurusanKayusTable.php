@@ -13,11 +13,26 @@ use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 
 class TurusanKayusTable
 {
     public static function configure(Table $table): Table
     {
+        $isAdmin = Auth::user()->hasRole('admin');
+
+        $isLocked = function ($record) use ($isAdmin) {
+            // Jika Admin, jangan pernah kunci (selalu bisa edit)
+            if ($isAdmin) return false;
+
+            // Jika record kosong (menghindari error null)
+            if (!$record) return false;
+
+            // Kunci jika nota sudah diperiksa/final
+            // Gunakan ?-> untuk keamanan jika relasi notaKayu kosong
+            return $record->notaKayu?->status !== 'Belum Diperiksa' && $record->notaKayu !== null;
+        };
+
         return $table
 
             ->defaultSort('created_at', 'desc') // urutkan dari yang terbaru
@@ -46,11 +61,14 @@ class TurusanKayusTable
                 //
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    // Hanya muncul jika tidak terkunci ATAU user adalah Admin
+                    ->visible(fn ($record) => !$isLocked($record)),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->visible(fn ($record) => !$isLocked($record)),
                 ]),
             ]);
     }
