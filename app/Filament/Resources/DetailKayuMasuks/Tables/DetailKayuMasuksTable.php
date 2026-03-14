@@ -69,7 +69,11 @@ class DetailKayuMasuksTable
                         };
                         return "{$namaKayu} {$panjang} ({$grade})";
                     })
-                    ->searchable()
+                    ->searchable(query: function ($query, string $search) {
+                        $query->whereHas('jenisKayu', fn ($q) => $q->where('nama_kayu', 'like', "%{$search}%"))
+                            ->orWhere('panjang', 'like', "%{$search}%")
+                            ->orWhere('grade', 'like', "%{$search}%");
+                    })
                     ->sortable(),
 
                 TextColumn::make('diameter')
