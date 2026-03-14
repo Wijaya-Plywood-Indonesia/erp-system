@@ -40,7 +40,7 @@ return new class extends Migration {
     public function down(): void
     {
         Schema::disableForeignKeyConstraints();
-        Schema::dropIfExists('modal_sanding');
+        Schema::dropIfExists('modal_sandings');
         Schema::enableForeignKeyConstraints();
     }
 };
