@@ -14,10 +14,13 @@ use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -216,10 +219,29 @@ class NotaKayusTable
                     ->visible(fn() => Auth::user()->hasRole(['admin', 'super_admin'])),
             ])
             ->filters([
-                SelectFilter::make('seri')
-                    ->relationship('kayuMasuk', 'seri')
-                    ->searchable()
-                    ->label('Pilih Seri'),
+                    Filter::make('seri_kayu')
+                    ->form([
+                        TextInput::make('nomor_seri')
+                            ->label('Cari Seri Kayu')
+                            ->placeholder('Contoh: 123')
+                            ->numeric(), // Memastikan hanya angka yang bisa diinput
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        // Kita gunakan whereHas karena 'seri' ada di tabel kayu_masuks
+                        return $query->when(
+                            $data['nomor_seri'],
+                            fn (Builder $query, $seri): Builder => $query->whereHas(
+                                'kayuMasuk', 
+                                fn (Builder $q) => $q->where('seri', 'like', "%{$seri}%")
+                            )
+                        );
+                    })
+                    ->indicateUsing(function (array $data): ?string {
+                        if (! $data['nomor_seri']) {
+                            return null;
+                        }
+                        return 'Seri Kayu: ' . $data['nomor_seri'];
+                    }),
             ]);
     }
 
