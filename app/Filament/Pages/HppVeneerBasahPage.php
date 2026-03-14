@@ -12,24 +12,26 @@ class HppVeneerBasahPage extends Page
     protected string $view = 'filament.pages.hpp-veneer-basah-page';
 
     protected static ?string $navigationLabel = 'Log HPP Veneer Basah';
-    protected static string|UnitEnum|null $navigationGroup = 'HPP Average';
-    protected static ?string $title          = 'Log HPP Veneer Basah';
-    protected static ?int    $navigationSort = 20;
+
+    protected static string|UnitEnum|null $navigationGroup = 'HPP';
+
+    protected static ?string $title = 'Log HPP Veneer Basah';
+    protected static ?int $navigationSort = 20;
 
     // ── State ──────────────────────────────────────────────────
     public string $filterJenisKayu = '';
-    public string $filterPanjang   = '';
-    public string $filterLebar     = '';
-    public string $filterTebal     = '';
+    public string $filterPanjang = '';
+    public string $filterLebar = '';
+    public string $filterTebal = '';
 
     // ── Computed: log transaksi ────────────────────────────────
     public function getLogsProperty()
     {
         return HppVeneerBasahLog::with('jenisKayu')
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
-            ->when($this->filterPanjang,   fn($q) => $q->where('panjang', $this->filterPanjang))
-            ->when($this->filterLebar,     fn($q) => $q->where('lebar',   $this->filterLebar))
-            ->when($this->filterTebal,     fn($q) => $q->where('tebal',   $this->filterTebal))
+            ->when($this->filterPanjang, fn($q) => $q->where('panjang', $this->filterPanjang))
+            ->when($this->filterLebar, fn($q) => $q->where('lebar', $this->filterLebar))
+            ->when($this->filterTebal, fn($q) => $q->where('tebal', $this->filterTebal))
             ->orderByDesc('tanggal')
             ->orderByDesc('id')
             ->get();

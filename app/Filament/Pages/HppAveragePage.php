@@ -10,9 +10,10 @@ class HppAveragePage extends Page
 {
     protected string $view = 'filament.pages.hpp-average-page';
 
-    protected static ?string $navigationLabel = 'Log HPP Average';
-    protected static string|UnitEnum|null $navigationGroup = 'HPP Average';
-    protected static ?string $title = 'Log HPP Average';
+    protected static ?string $navigationLabel = 'Log HPP Kayu';
+    protected static string|UnitEnum|null $navigationGroup = 'HPP';
+    protected static ?string $title = 'Log HPP Kayu';
+
     protected static ?int $navigationSort = 10;
 
     // ── State ──────────────────────────────────────────────────

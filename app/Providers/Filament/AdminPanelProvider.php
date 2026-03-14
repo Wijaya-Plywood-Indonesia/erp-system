@@ -95,6 +95,12 @@ class AdminPanelProvider extends PanelProvider
             ->navigationGroups([
                 //Kategori Menu Produksi
 
+                NavigationGroup::make('Kontrak')
+                    ->icon('heroicon-o-clipboard-document-check')->collapsed(),
+
+                NavigationGroup::make('Grade')
+                    ->icon('heroicon-o-check-badge')->collapsed(),
+
                 NavigationGroup::make('BK-BM')
                     ->icon('heroicon-o-adjustments-horizontal')
                     ->collapsed(),
@@ -132,6 +138,10 @@ class AdminPanelProvider extends PanelProvider
                     ->icon('heroicon-o-cube')
                     ->collapsed(),
 
+                NavigationGroup::make('HPP')
+                    ->icon('heroicon-o-banknotes')
+                    ->collapsed(),
+
                 NavigationGroup::make('Laporan')
                     ->icon('heroicon-o-clipboard-document-list')
                     ->collapsed(),
@@ -156,6 +166,7 @@ class AdminPanelProvider extends PanelProvider
 
                 NavigationGroup::make('Akses Pengguna')
                     ->icon('heroicon-o-lock-closed')->collapsed(),
+
             ])
         ;
     }

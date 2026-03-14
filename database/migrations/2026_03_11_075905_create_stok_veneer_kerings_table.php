@@ -69,6 +69,5 @@ return new class extends Migration {
 
             $table->dropIndex('idx_stok_produk_tanggal');
         });
-        Schema::dropIfExists('stok_veneer_kerings');
-    }
+
 };
