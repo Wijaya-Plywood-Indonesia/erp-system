@@ -13,13 +13,16 @@ class UkuranForm
             ->components([
                 TextInput::make('panjang')
                     ->label('Panjang (cm)')
-                    ->required(),
+                    ->required()
+                    ->numeric(),
                 TextInput::make('lebar')
                     ->label('Lebar (cm)')
-                    ->required(),
+                    ->required()
+                    ->numeric(),
                 TextInput::make('tebal')
                     ->label('Tebal (cm)')
-                    ->required(),
+                    ->required()
+                    ->numeric(),
             ]);
     }
 }
