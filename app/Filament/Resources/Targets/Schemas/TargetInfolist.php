@@ -11,11 +11,11 @@ class TargetInfolist
     {
         return $schema
             ->components([
-                TextEntry::make('id_mesin')
+                TextEntry::make('mesin.nama_mesin')
                     ->numeric(),
-                TextEntry::make('id_ukuran')
+                TextEntry::make('ukuranModel.dimensi')
                     ->numeric(),
-                TextEntry::make('id_jenis_kayu')
+                TextEntry::make('jenisKayu.nama_kayu')
                     ->numeric(),
                 TextEntry::make('ukuran'),
                 TextEntry::make('target')

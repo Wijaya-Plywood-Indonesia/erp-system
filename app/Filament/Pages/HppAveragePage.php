@@ -15,7 +15,7 @@ class HppAveragePage extends Page
     protected static ?int $navigationSort = 10;
 
     // ── State ──────────────────────────────────────────────────
-    public string $filterPanjang   = '';
+    public string $filterPanjang = '';
     public string $filterJenisKayu = '';
 
     // ── Computed: log transaksi ascending (buku besar) ─────────
@@ -23,7 +23,7 @@ class HppAveragePage extends Page
     {
         return HppAverageLog::with('jenisKayu')
             ->whereNull('grade')
-            ->when($this->filterPanjang,   fn($q) => $q->where('panjang',       $this->filterPanjang))
+            ->when($this->filterPanjang, fn($q) => $q->where('panjang', $this->filterPanjang))
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->orderByDesc('tanggal')
             ->orderByDesc('id')
