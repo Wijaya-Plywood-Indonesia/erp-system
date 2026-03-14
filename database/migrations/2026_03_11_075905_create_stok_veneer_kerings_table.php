@@ -62,6 +62,13 @@ return new class extends Migration {
      */
     public function down(): void
     {
+        Schema::table('stok_veneer_kerings', function (Blueprint $table) {
+            $table->dropForeign(['id_produksi_dryer']);
+            $table->dropForeign(['id_ukuran']);
+            $table->dropForeign(['id_jenis_kayu']);
+
+            $table->dropIndex('idx_stok_produk_tanggal');
+        });
         Schema::dropIfExists('stok_veneer_kerings');
     }
 };
