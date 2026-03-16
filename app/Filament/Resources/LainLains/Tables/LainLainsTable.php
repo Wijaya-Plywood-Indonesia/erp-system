@@ -16,16 +16,21 @@ class LainLainsTable
     {
         return $table
             ->columns([
-                TextColumn::make('pegawai')
+                TextColumn::make('pegawai.nama_pegawai')
                     ->label('Pegawai')
-                    ->getStateUsing(
+                    ->formatStateUsing(
                         fn($record) =>
                         $record->pegawai
-                            ? "{$record->pegawai->kode_pegawai} - {$record->pegawai->nama_pegawai}"
-                            : '-'
+                        ? "{$record->pegawai->kode_pegawai} - {$record->pegawai->nama_pegawai}"
+                        : '-'
                     )
                     ->sortable()
-                    ->searchable(),
+                    ->searchable(query: function ($query, $search) {
+                        $query->whereHas('pegawai', function ($q) use ($search) {
+                            $q->where('nama_pegawai', 'like', "%{$search}%")
+                                ->orWhere('kode_pegawai', 'like', "%{$search}%");
+                        });
+                    }),
 
                 // Menampilkan jam saja (format 24 jam)
                 TextColumn::make('masuk')

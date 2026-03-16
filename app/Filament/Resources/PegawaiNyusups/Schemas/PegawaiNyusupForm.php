@@ -7,6 +7,7 @@ use Carbon\CarbonPeriod;
 use App\Models\Pegawai;
 use App\Models\PegawaiNyusup;
 use Filament\Forms\Components\Select;
+use Illuminate\Validation\Rule;
 use Filament\Forms\Components\TextInput;
 
 class PegawaiNyusupForm
@@ -53,34 +54,24 @@ class PegawaiNyusupForm
                 // --- ID PEGAWAI (Relation: pegawai) ---
                 Select::make('id_pegawai')
                     ->label('Pegawai')
-                    ->options(
-                        Pegawai::query()
-                            ->get()
-                            ->mapWithKeys(fn($pegawai) => [
-                                $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
-                            ])
+                    ->relationship('pegawai', 'nama_pegawai')
+                    ->getOptionLabelFromRecordUsing(
+                        fn($record) => "{$record->kode_pegawai} - {$record->nama_pegawai}"
                     )
-                    ->rule(function ($livewire) {
-                        return function (string $attribute, $value, $fail) use ($livewire) {
-
-                            $produksiId = $livewire->ownerRecord->id ?? null;
-
-                            if (! $produksiId) {
-                                return;
-                            }
-
-                            $exists = PegawaiNyusup::query()
-                                ->where('id_produksi_nyusup', $produksiId)
-                                ->where('id_pegawai', $value)
-                                ->exists();
-
-                            if ($exists) {
-                                $fail('Pegawai ini sudah terdaftar pada produksi nyusup ini.');
-                            }
-                        };
-                    })
-                    ->searchable()
-                    ->required(),
+                    ->searchable(['kode_pegawai', 'nama_pegawai'])
+                    ->preload()
+                    ->required()
+                    ->unique(
+                        table: 'pegawai_nyusup',
+                        column: 'id_pegawai',
+                        ignorable: fn($record) => $record,
+                        modifyRuleUsing: function ($rule, $livewire) {
+                            return $rule->where(
+                                'id_produksi_nyusup',
+                                $livewire->ownerRecord->id
+                            );
+                        }
+                    ),
             ]);
     }
 }
