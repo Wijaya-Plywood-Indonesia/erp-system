@@ -203,14 +203,14 @@ jobs:
           rm -rf "$BUILD_DIR"
           mkdir -p "$BUILD_DIR"
           rsync -a --delete \
-            --exclude '.git/' \
-            --exclude '.github/' \
-            --exclude 'node_modules/' \
-            --exclude 'tests/' \
-            --exclude '.env' \
-            --exclude 'storage/' \
-            --exclude 'build_deploy/' \  # ✅ TAMBAHKAN INI
-            ./ "$BUILD_DIR/" || [ $? -eq 24 ]
+          --exclude '.git/' \
+          --exclude '.github/' \
+          --exclude 'node_modules/' \
+          --exclude 'tests/' \
+          --exclude '.env' \
+          --exclude 'storage/' \
+          --exclude 'build_deploy/' \
+          ./ "$BUILD_DIR/" || [ $? -eq 24 ]
           (cd "$BUILD_DIR" && zip -r ../deploy.zip . -q)
           
       # --- Setup SSH
