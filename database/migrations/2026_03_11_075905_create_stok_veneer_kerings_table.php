@@ -69,5 +69,5 @@ return new class extends Migration {
 
             $table->dropIndex('idx_stok_produk_tanggal');
         });
-
+    }
 };
