@@ -71,14 +71,14 @@ class PegawaiGrajiStikForm
 
                             // 2. Ambil ID Record yang sedang diedit (jika ada)
                             // Cara aman di Relation Manager adalah memeriksa model record dari livewire
-                            $mountedTableActionRecord = $livewire->getMountedTableActionRecord();
+                            $record = $livewire->getMountedTableActionRecord();
+                            $recordId = $record?->id;
 
                             $exists = PegawaiGrajiStik::query()
                                 ->where('id_graji_stiks', $produksiId)
                                 ->where('id_pegawai', $value)
-                                // Jika sedang edit (ada action record), abaikan ID tersebut agar tidak dianggap duplikat
-                                ->when($mountedTableActionRecord, function ($query, $recordId) {
-                                    return $query->where('id', '!=', $recordId);
+                                ->when($recordId, function ($query) use ($recordId) {
+                                    $query->where('id', '!=', $recordId);
                                 })
                                 ->exists();
 

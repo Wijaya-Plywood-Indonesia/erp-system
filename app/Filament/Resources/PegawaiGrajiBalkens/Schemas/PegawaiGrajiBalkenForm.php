@@ -45,7 +45,7 @@ class PegawaiGrajiBalkenForm
 
             TextInput::make('tugas')
                 ->label('Tugas')
-                ->default('Pegawai Guellotine')
+                ->default('Pegawai Graji Balken')
                 ->readOnly(),
 
             // 👷 PEGAWAI — VALIDASI DUPLIKAT (FIX TOTAL)

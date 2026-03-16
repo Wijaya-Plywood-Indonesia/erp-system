@@ -100,7 +100,7 @@ class DetailHasilStikRelationManager extends RelationManager
 
                 TextColumn::make('ukuran.nama_ukuran')
                     ->label('Ukuran')
-                    ->searchable()
+                    ->searchable(['panjang', 'lebar', 'tebal'])
                     ->sortable()
                     ->placeholder('N/A'),
 
