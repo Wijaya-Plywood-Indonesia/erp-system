@@ -21,7 +21,14 @@ class HasilGrajiStiksTable
                 TextColumn::make('modalGrajiStik.ukuran.dimensi')
                     ->label('Ukuran')
                     ->sortable()
-                    ->searchable()
+                    ->searchable(query: function ($query, string $search) {
+                        return $query->whereHas('modalGrajiStik.ukuran', function ($q) use ($search) {
+                            $q->whereRaw(
+                                "CONCAT(panjang, ' x ', lebar, ' x ', tebal) LIKE ?",
+                                ["%{$search}%"]
+                            );
+                        });
+                    })
                     ->placeholder('-'),
 
                 // Menampilkan Bahan Awal sebagai referensi
