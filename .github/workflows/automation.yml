@@ -230,7 +230,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             # Definisi Daftar Website
-            SITES=("kayu.wijayaplywoods.com" "wahana.wijayaplywoods.com" "dwidaya.wijayaplywoods.com")
+            SITES=("kayu.wijayaplywoods.com" "wahana.wijayaplywoods.com")
 
             # Loop untuk setiap website
             for SITE in "${SITES[@]}"; do
