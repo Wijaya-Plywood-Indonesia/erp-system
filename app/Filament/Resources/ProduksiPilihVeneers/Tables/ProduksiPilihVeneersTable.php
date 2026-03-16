@@ -33,7 +33,7 @@ class ProduksiPilihVeneersTable
                     ->label('Kendala')
                     ->limit(50)
                     ->placeholder('Tidak ada kendala')
-                    ->tooltip(fn ($record) => $record->kendala)
+                    ->tooltip(fn($record) => $record->kendala)
                     ->toggleable(),
 
                 TextColumn::make('created_at')
@@ -54,28 +54,29 @@ class ProduksiPilihVeneersTable
                         return $query
                             ->when(
                                 $data['from'],
-                                fn ($q, $date) =>
-                                    $q->whereDate('tanggal_produksi', '>=', $date)
+                                fn($q, $date) =>
+                                $q->whereDate('tanggal_produksi', '>=', $date)
                             )
                             ->when(
                                 $data['until'],
-                                fn ($q, $date) =>
-                                    $q->whereDate('tanggal_produksi', '<=', $date)
+                                fn($q, $date) =>
+                                $q->whereDate('tanggal_produksi', '<=', $date)
                             );
                     }),
             ])
             ->recordActions([
                 Action::make('kelola_kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
+                    ->label(fn($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
                     ->icon('heroicon-m-chat-bubble-left-right')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'gray')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'gray')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Catatan Kendala Produksi')
                             ->required()
                             ->rows(4),
                     ])
-                    ->mountUsing(fn ($form, $record) =>
+                    ->mountUsing(
+                        fn($form, $record) =>
                         $form->fill(['kendala' => $record->kendala])
                     )
                     ->action(function (array $data, $record): void {
@@ -92,18 +93,18 @@ class ProduksiPilihVeneersTable
                     ->modalWidth('lg'),
 
                 EditAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
                 ViewAction::make(),
 
                 DeleteAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->before(function ($record) {
 
                         $hasRelation =
-                            $record->pegawaiGuellotine()->exists()
-                            || $record->hasilGuellotine()->exists()
-                            || $record->validasiGuellotine()->exists();
+                            $record->pegawaiPilihVeneer()->exists()
+                            || $record->hasilPilihVeneer()->exists()
+                            || $record->validasiPilihVeneer()->exists();
 
                         if ($hasRelation) {
                             Notification::make()
@@ -120,9 +121,10 @@ class ProduksiPilihVeneersTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->visible(fn ($records) =>
+                        ->visible(
+                            fn($records) =>
                             $records->every(
-                                fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi'
+                                fn($r) => $r->validasiTerakhir?->status !== 'divalidasi'
                             )
                         )
                         ->before(function ($records) {
