@@ -8,9 +8,20 @@ use Filament\Forms\Components\TimePicker;
 use Filament\Schemas\Schema; // PAKAI Form, bukan Schema!
 use App\Models\Pegawai;
 use App\Models\RencanaPegawai;
+use Carbon\CarbonPeriod;
 
 class RencanaPegawaiForm
 {
+
+    public static function timeOptions(): array
+    {
+        return collect(
+            CarbonPeriod::create('00:00', '1 hour', '23:00')->toArray()
+        )->mapWithKeys(fn($time) => [
+            $time->format('H:i') => $time->format('H.i'),
+        ])->toArray();
+    }
+
     public static function configure(Schema $form, $record = null): Schema
     {
         // Ambil ID produksi dari owner (RelationManager) atau dari record
@@ -30,17 +41,24 @@ class RencanaPegawaiForm
 
         return $form->schema([
 
-            TimePicker::make('jam_masuk')
+            Select::make('jam_masuk')
                 ->label('Jam Masuk')
+                ->options(self::timeOptions())
                 ->default('06:00')
-                ->seconds(false)
-                ->required(),
+                ->required()
+                ->searchable()
+                ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
-            TimePicker::make('jam_pulang')
+            // --- JAM PULANG ---
+            Select::make('jam_pulang')
                 ->label('Jam Pulang')
+                ->options(self::timeOptions())
                 ->default('16:00')
-                ->seconds(false)
-                ->required(),
+                ->required()
+                ->searchable()
+                ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
             Select::make('id_pegawai')
                 ->label('Pegawai')

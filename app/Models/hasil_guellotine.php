@@ -46,6 +46,10 @@ class hasil_guellotine extends Model
     protected static function booted()
     {
         // Menggunakan static::saved mencakup Created dan Updated
+        static::deleting(function ($model) {
+            $model->pegawaiGuellotines()->detach();
+        });
+
         static::saved(function ($model) {
             if ($model->id_produksi_guellotine) {
                 \App\Events\ProductionUpdated::dispatch($model->id_produksi_guellotine, 'guellotine');
