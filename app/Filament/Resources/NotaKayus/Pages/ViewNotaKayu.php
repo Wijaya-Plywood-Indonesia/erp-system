@@ -16,23 +16,19 @@ class ViewNotaKayu extends ViewRecord
         return [
             EditAction::make()
                 ->visible(function () {
-                    $record = $this->getRecord(); // Mengambil data yang sedang dibuka
+                    $record = $this->getRecord();
                     $user = Auth::user();
 
-                    // 1. Jika Admin, tombol edit SELALU muncul
-                    if ($user->hasRole('admin')) {
+                    // 1. AKSES SPESIAL (Admin/Super Admin): Selalu bisa edit untuk revisi darurat
+                    if ($user->hasRole(['admin', 'super_admin'])) {
                         return true;
                     }
 
-                    // 2. Cek status Nota melalui relasi
-                    $nota = $record->notaKayu;
-
-                    // Jika nota sudah ada dan statusnya bukan 'Belum Diperiksa', sembunyikan tombol
-                    if ($nota && $nota->status !== 'Belum Diperiksa') {
+                    // 2. AKSES PETUGAS (Non-Admin):
+                    // Jika status sudah "Sudah Diperiksa", kunci akses edit (tombol hilang)
+                    if (str_contains($record->status ?? '', 'Sudah Diperiksa')) {
                         return false;
                     }
-
-                    return true;
                 }),
         ];
     }
