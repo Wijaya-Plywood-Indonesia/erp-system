@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('kayu_pecah_rotaries', function (Blueprint $table) {
-            $table->string('foto')->nullable()->after('ukuran');
+            if (!Schema::hasColumn('kayu_pecah_rotaries', 'foto')) {
+                $table->string('foto')->nullable()->after('ukuran');
+            }
         });
     }
 
@@ -22,7 +24,9 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('kayu_pecah_rotaries', function (Blueprint $table) {
-            $table->dropColumn('foto');
+            if (Schema::hasColumn('kayu_pecah_rotaries', 'foto')) {
+                $table->dropColumn('foto');
+            }
         });
     }
 };

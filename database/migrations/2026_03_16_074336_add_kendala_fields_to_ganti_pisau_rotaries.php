@@ -12,8 +12,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('ganti_pisau_rotaries', function (Blueprint $table) {
-            $table->string('jenis_kendala')->after('id_produksi');
-            $table->text('keterangan')->nullable()->after('jenis_kendala');
+            if (!Schema::hasColumn('ganti_pisau_rotaries', 'jenis_kendala')) {
+                $table->string('jenis_kendala')->nullable()->after('id_produksi');
+            }
+
+            // Cek dan tambah kolom keterangan
+            if (!Schema::hasColumn('ganti_pisau_rotaries', 'keterangan')) {
+                $table->text('keterangan')->nullable()->after('jenis_kendala');
+            }
         });
     }
 
@@ -23,7 +29,13 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('ganti_pisau_rotaries', function (Blueprint $table) {
-            $table->dropColumn(['jenis_kendala','keterangan']);
+            if (Schema::hasColumn('ganti_pisau_rotaries', 'jenis_kendala')) {
+                $table->dropColumn('jenis_kendala');
+            }
+
+            if (Schema::hasColumn('ganti_pisau_rotaries', 'keterangan')) {
+                $table->dropColumn('keterangan');
+            }
         });
     }
 };
