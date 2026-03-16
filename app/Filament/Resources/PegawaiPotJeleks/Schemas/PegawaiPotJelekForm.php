@@ -8,6 +8,7 @@ use App\Models\Pegawai;
 use Filament\Forms\Components\TextInput;
 use Carbon\CarbonPeriod;
 use Filament\Forms\Components\Select;
+use Illuminate\Database\Eloquent\Model;
 
 class PegawaiPotJelekForm
 {
@@ -52,29 +53,55 @@ class PegawaiPotJelekForm
                     ->label('Pegawai')
                     ->searchable()
                     ->required()
-                    ->options(
-                        Pegawai::query()
+                    ->options(function ($livewire, ?Model $record) {
+                        $produksiId = $livewire->getOwnerRecord()?->id;
+
+                        // Dalam RelationManager modal, $record biasanya di-inject otomatis oleh Filament
+                        // Jika null, kita coba ambil dari mounted table action record
+                        $currentRecord = $record ?? (method_exists($livewire, 'getMountedTableActionRecord') ? $livewire->getMountedTableActionRecord() : null);
+
+                        if (!$produksiId) {
+                            return [];
+                        }
+
+                        // Ambil ID pegawai yang sudah terdaftar di produksi ini
+                        $excludeIds = PegawaiPotJelek::where('id_produksi_pot_jelek', $produksiId)
+                            ->when($currentRecord, function ($query, $currentRecord) {
+                                // Jangan exclude pegawai yang sedang kita edit sekarang
+                                return $query->where('id', '!=', $currentRecord->id);
+                            })
+                            ->pluck('id_pegawai')
+                            ->toArray();
+
+                        // Tampilkan hanya pegawai yang belum terdaftar (atau sedang diedit)
+                        return Pegawai::query()
+                            ->whereNotIn('id', $excludeIds)
                             ->get()
                             ->mapWithKeys(fn($pegawai) => [
                                 $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
-                            ])
-                    )
-                    ->rule(function ($livewire) {
-                        return function (string $attribute, $value, $fail) use ($livewire) {
+                            ]);
+                    })
+                    ->rule(function ($livewire, ?Model $record) {
+                        return function (string $attribute, $value, $fail) use ($livewire, $record) {
+                            $produksiId = $livewire->getOwnerRecord()?->id;
 
-                            $produksiId = $livewire->ownerRecord->id ?? null;
+                            // Identifikasi record yang sedang diedit
+                            $currentRecord = $record ?? (method_exists($livewire, 'getMountedTableActionRecord') ? $livewire->getMountedTableActionRecord() : null);
 
-                            if (! $produksiId) {
-                                return;
-                            }
+                            if (!$produksiId) return;
 
+                            // Cek apakah pegawai sudah terdaftar di produksi yang sama
                             $exists = PegawaiPotJelek::query()
                                 ->where('id_produksi_pot_jelek', $produksiId)
                                 ->where('id_pegawai', $value)
+                                ->when($currentRecord, function ($query, $currentRecord) {
+                                    // Jika sedang edit, abaikan pengecekan terhadap record diri sendiri
+                                    return $query->where('id', '!=', $currentRecord->id);
+                                })
                                 ->exists();
 
                             if ($exists) {
-                                $fail('Pegawai ini sudah terdaftar pada produksi pot siku.');
+                                $fail('Pegawai ini sudah terdaftar pada produksi ini.');
                             }
                         };
                     }),

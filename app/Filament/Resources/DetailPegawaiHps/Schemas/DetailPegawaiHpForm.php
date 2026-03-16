@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DetailPegawaiHps\Schemas;
 
+use App\Models\DetailPegawaiHp;
 use Filament\Schemas\Schema;
 use App\Models\Pegawai;
 use App\Models\Mesin;
@@ -75,25 +76,52 @@ class DetailPegawaiHpForm
             // --- PEGAWAI (MODIFIKASI DISINI) ---
             Select::make('id_pegawai')
                 ->label('Pegawai')
-                ->options(function () {
-                    return Pegawai::query()
-                        // 1. Filter Nama tidak boleh '-'
-                        ->where('nama_pegawai', '!=', '-')
-                        // 2. Filter Nama tidak boleh string kosong
-                        ->where('nama_pegawai', '!=', '')
-                        // 3. Pastikan tidak null
-                        ->whereNotNull('nama_pegawai')
+                ->required()
+                ->searchable()
+                ->preload()
+                ->options(function ($livewire) {
+                    $produksiId = $livewire->getOwnerRecord()?->id;
+                    $currentId = $livewire->getMountedTableActionRecord()?->id;
 
+                    if (!$produksiId) return [];
+
+                    // Ambil ID pegawai yang sudah terdaftar di sesi produksi HP ini
+                    $excludeIds = DetailPegawaiHp::where('id_produksi_hp', $produksiId)
+                        ->when($currentId, fn($query) => $query->where('id', '!=', $currentId))
+                        ->pluck('id_pegawai')
+                        ->toArray();
+
+                    return Pegawai::query()
+                        ->where('nama_pegawai', '!=', '-')
+                        ->where('nama_pegawai', '!=', '')
+                        ->whereNotNull('nama_pegawai')
+                        ->whereNotIn('id', $excludeIds) // Hilangkan pegawai yang sudah masuk list
                         ->orderBy('nama_pegawai')
                         ->get()
-                        // Format tampilan: "KODE - NAMA"
                         ->mapWithKeys(fn($pegawai) => [
                             $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
                         ]);
                 })
-                ->searchable()
-                ->preload() // Bagus untuk kinerja user experience
-                ->required(),
+                ->rule(function ($livewire) {
+                    return function (string $attribute, $value, $fail) use ($livewire) {
+                        $produksiId = $livewire->ownerRecord->id ?? null;
+                        if (!$produksiId) return;
+
+                        // Ambil ID record saat ini jika sedang dalam mode EDIT
+                        $currentId = $livewire->getMountedTableActionRecord()?->id;
+
+                        $exists = DetailPegawaiHp::query()
+                            ->where('id_produksi_hp', $produksiId)
+                            ->where('id_pegawai', $value)
+                            // Jika sedang edit, jangan cek diri sendiri agar tidak dianggap duplikat
+                            ->when($currentId, fn($q) => $q->where('id', '!=', $currentId))
+                            ->exists();
+
+                        if ($exists) {
+                            $fail('Pegawai ini sudah terdaftar pada sesi produksi Hotpress ini.');
+                        }
+                    };
+                }),
         ]);
     }
 }
