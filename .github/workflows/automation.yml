@@ -202,7 +202,6 @@ jobs:
           BUILD_DIR=./build_deploy
           rm -rf "$BUILD_DIR"
           mkdir -p "$BUILD_DIR"
-
           rsync -a --delete \
             --exclude '.git/' \
             --exclude '.github/' \
@@ -210,10 +209,10 @@ jobs:
             --exclude 'tests/' \
             --exclude '.env' \
             --exclude 'storage/' \
+            --exclude 'build_deploy/' \  # ✅ TAMBAHKAN INI
             ./ "$BUILD_DIR/" || [ $? -eq 24 ]
-
           (cd "$BUILD_DIR" && zip -r ../deploy.zip . -q)
-
+          
       # --- Setup SSH
       - name: Setup SSH Key
         run: |
