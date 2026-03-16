@@ -11,19 +11,21 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('bahan_penolong_rotary', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('id_produksi')
-                ->constrained('produksi_rotaries')
-                ->cascadeOnUpdate()
-                ->restrictOnDelete();
-            $table->foreignId('bahan_penolong_id')
+        if (!Schema::hasTable('bahan_penolong_rotary')) {
+            Schema::create('bahan_penolong_rotary', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('id_produksi')
+                    ->constrained('produksi_rotaries')
+                    ->cascadeOnUpdate()
+                    ->restrictOnDelete();
+                $table->foreignId('bahan_penolong_id')
                     ->constrained('bahan_penolong_produksi')
                     ->cascadeOnUpdate()
                     ->restrictOnDelete();
-            $table->integer('jumlah');
-            $table->timestamps();
-        });
+                $table->integer('jumlah');
+                $table->timestamps();
+            });
+        }
     }
 
     /**
