@@ -165,6 +165,15 @@ jobs:
         with:
           php-version: "8.4"
 
+      - name: Create temporary .env
+        run: |
+          echo "APP_KEY=base64:dummykeydummykeydummykeydummykey=" > .env
+          echo "BROADCAST_CONNECTION=log" >> .env
+          echo "PUSHER_APP_KEY=123" >> .env
+          echo "PUSHER_APP_SECRET=123" >> .env
+          echo "PUSHER_APP_ID=123" >> .env
+          echo "PUSHER_APP_CLUSTER=ap1" >> .env
+
       - name: Install Composer Dependencies (Prod)
         run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction
 
