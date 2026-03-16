@@ -12,6 +12,7 @@ class BahanPenolongRotary extends Model
         'id_produksi',
         'bahan_penolong_id',
         'jumlah',
+        'nama_bahan'
     ];
 
     public function produksiRotary()
@@ -20,7 +21,7 @@ class BahanPenolongRotary extends Model
     }
 
     public function bahanPenolong()
-{
-    return $this->belongsTo(BahanPenolongProduksi::class, 'bahan_penolong_id');
-}
+    {
+        return $this->belongsTo(BahanPenolongProduksi::class, 'bahan_penolong_id');
+    }
 }

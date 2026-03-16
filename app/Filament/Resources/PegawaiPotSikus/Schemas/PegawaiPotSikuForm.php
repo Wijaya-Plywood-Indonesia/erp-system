@@ -50,28 +50,48 @@ class PegawaiPotSikuForm
                 // 👷 PEGAWAI (DENGAN VALIDASI DUPLIKAT)
                 Select::make('id_pegawai')
                     ->label('Pegawai')
-                    ->options(
-                        Pegawai::query()
+                    ->searchable()
+                    ->required()
+                    ->options(function ($livewire) {
+                        $produksiId = $livewire->getOwnerRecord()?->id;
+
+                        // Identifikasi record yang sedang diedit (khusus Relation Manager)
+                        $currentId = $livewire->getMountedTableActionRecord()?->id;
+
+                        if (!$produksiId) {
+                            return [];
+                        }
+
+                        // Ambil ID pegawai yang sudah terdaftar di produksi ini
+                        $excludeIds = PegawaiPotSiku::where('id_produksi_pot_siku', $produksiId)
+                            ->when($currentId, fn($query) => $query->where('id', '!=', $currentId))
+                            ->pluck('id_pegawai')
+                            ->toArray();
+
+                        // Tampilkan hanya pegawai yang belum terdaftar agar dropdown tetap rapi
+                        return Pegawai::query()
+                            ->whereNotIn('id', $excludeIds)
                             ->get()
                             ->mapWithKeys(fn($pegawai) => [
                                 $pegawai->id => "{$pegawai->kode_pegawai} - {$pegawai->nama_pegawai}",
-                            ])
-                    )
+                            ]);
+                    })
                     ->rule(function ($livewire) {
                         return function (string $attribute, $value, $fail) use ($livewire) {
-
+                            // Gunakan ownerRecord dari Livewire Relation Manager
                             $produksiId = $livewire->ownerRecord->id ?? null;
 
                             if (!$produksiId) {
                                 return;
                             }
 
-                            // ✅ KHUSUS RELATION MANAGER
+                            // ✅ KHUSUS RELATION MANAGER: Ambil ID baris yang sedang diedit
                             $currentId = $livewire->getMountedTableActionRecord()?->id;
 
                             $exists = PegawaiPotSiku::query()
                                 ->where('id_produksi_pot_siku', $produksiId)
                                 ->where('id_pegawai', $value)
+                                // Jika sedang edit, abaikan pengecekan terhadap record diri sendiri
                                 ->when($currentId, fn($q) => $q->where('id', '!=', $currentId))
                                 ->exists();
 
@@ -79,9 +99,7 @@ class PegawaiPotSikuForm
                                 $fail('Pegawai ini sudah terdaftar pada produksi pot siku ini.');
                             }
                         };
-                    })
-                    ->searchable()
-                    ->required(),
+                    }),
             ]);
     }
 }
