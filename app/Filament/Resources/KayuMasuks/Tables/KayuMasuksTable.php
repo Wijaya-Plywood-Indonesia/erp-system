@@ -49,7 +49,7 @@ class KayuMasuksTable
                     ->color(fn($state) => $state ? 'success' : 'danger'),
                 TextColumn::make('tgl_kayu_masuk')->dateTime()->sortable(),
                 
-                TextColumn::make('seri')->numeric()->sortable(),
+                TextColumn::make('seri')->numeric()->sortable()->searchable(),
                 
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
                 
