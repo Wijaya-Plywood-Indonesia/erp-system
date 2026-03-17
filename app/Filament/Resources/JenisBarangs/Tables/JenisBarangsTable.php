@@ -16,9 +16,12 @@ class JenisBarangsTable
         return $table
             ->columns([
                 TextColumn::make('kode_jenis_barang')
-                    ->label('Kode Jenis Barang'),
+                    ->label('Kode Jenis Barang')
+                    ->searchable(),
+
                 TextColumn::make('nama_jenis_barang')
-                    ->label('Nama Jenis Barang'),
+                    ->label('Nama Jenis Barang')
+                    ->searchable(),
             ])
             ->filters([
                 //

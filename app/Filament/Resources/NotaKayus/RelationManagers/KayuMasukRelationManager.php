@@ -46,8 +46,7 @@ class KayuMasukRelationManager extends RelationManager
 
                         return "{$jk->nama_kayu}";
                     })
-                    ->sortable()
-                    ->searchable(),
+                    ->sortable(),
                 TextColumn::make('lahan_label')
                     ->label('Lahan')
                     ->getStateUsing(function ($record) {
@@ -59,8 +58,7 @@ class KayuMasukRelationManager extends RelationManager
 
                         return "{$jk->kode_lahan}";
                     })
-                    ->sortable()
-                    ->searchable(),
+                    ->sortable(),
                 TextColumn::make('panjang'),
                 // TextColumn::make('grade'),
                 TextColumn::make('grade')
