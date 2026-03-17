@@ -30,15 +30,17 @@ class ProduksiKedisTable
 
                 TextColumn::make('status')
                     ->label('Status')
-                    ->formatStateUsing(fn ($state) => ucfirst($state)),
+                    ->formatStateUsing(fn($state) => ucfirst($state)),
 
                 TextColumn::make('kendala')
                     ->label('Kendala Produksi')
-                    ->getStateUsing(fn ($record) =>
+                    ->getStateUsing(
+                        fn($record) =>
                         blank($record->getRawOriginal('kendala'))
                             ? 'Tidak ada kendala'
                             : $record->getRawOriginal('kendala')
-                    ),
+                    )
+                    ->wrap(),
 
                 BadgeColumn::make('validasiTerakhir.status')
                     ->label('Validasi')
@@ -76,29 +78,30 @@ class ProduksiKedisTable
                         return $query
                             ->when(
                                 $data['from'],
-                                fn (Builder $q, $date) =>
-                                    $q->whereDate('tanggal', '>=', $date)
+                                fn(Builder $q, $date) =>
+                                $q->whereDate('tanggal', '>=', $date)
                             )
                             ->when(
                                 $data['until'],
-                                fn (Builder $q, $date) =>
-                                    $q->whereDate('tanggal', '<=', $date)
+                                fn(Builder $q, $date) =>
+                                $q->whereDate('tanggal', '<=', $date)
                             );
                     }),
             ])
 
             ->recordActions([
                 Action::make('kelola_kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn ($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'warning')
+                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Kendala')
                             ->required()
                             ->rows(4),
                     ])
-                    ->mountUsing(fn ($form, $record) =>
+                    ->mountUsing(
+                        fn($form, $record) =>
                         $form->fill(['kendala' => $record->kendala ?? ''])
                     )
                     ->action(function (array $data, $record): void {
@@ -111,18 +114,19 @@ class ProduksiKedisTable
                             ->success()
                             ->send();
                     })
-                    ->modalHeading(fn ($record) =>
+                    ->modalHeading(
+                        fn($record) =>
                         $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala'
                     )
                     ->modalSubmitActionLabel('Simpan'),
 
                 EditAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
                 ViewAction::make(),
 
                 DeleteAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->before(function ($record) {
 
                         $hasRelation =
@@ -147,7 +151,7 @@ class ProduksiKedisTable
                 Group::make('status')
                     ->label('Status')
                     ->collapsible()
-                    ->getTitleFromRecordUsing(fn ($record) => ucfirst($record->status)),
+                    ->getTitleFromRecordUsing(fn($record) => ucfirst($record->status)),
             ])
             ->defaultGroup('status')
             ->groupingSettingsHidden()
@@ -155,9 +159,10 @@ class ProduksiKedisTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->visible(fn ($records) =>
+                        ->visible(
+                            fn($records) =>
                             $records->every(
-                                fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi'
+                                fn($r) => $r->validasiTerakhir?->status !== 'divalidasi'
                             )
                         )
                         ->before(function ($records) {
