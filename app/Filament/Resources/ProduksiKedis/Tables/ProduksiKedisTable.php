@@ -8,6 +8,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
@@ -65,27 +66,49 @@ class ProduksiKedisTable
             ->defaultSort('tanggal', 'desc')
 
             ->filters([
-                Filter::make('tanggal')
-                    ->form([
-                        \Filament\Forms\Components\DatePicker::make('from')
-                            ->placeholder('Dari Tanggal'),
-                        \Filament\Forms\Components\DatePicker::make('until')
-                            ->placeholder('Sampai Tanggal'),
-                    ])
-                    ->query(function (Builder $query, array $data): Builder {
-                        return $query
-                            ->when(
-                                $data['from'],
-                                fn (Builder $q, $date) =>
-                                    $q->whereDate('tanggal', '>=', $date)
-                            )
-                            ->when(
-                                $data['until'],
-                                fn (Builder $q, $date) =>
-                                    $q->whereDate('tanggal', '<=', $date)
-                            );
-                    }),
-            ])
+
+    // ✅ FILTER STATUS
+    Filter::make('status')
+        ->form([
+            Select::make('status')
+                ->label('Status')
+                ->options([
+                    'masuk'   => 'Masuk',
+                    'bongkar' => 'Bongkar',
+                ])
+                ->placeholder('Semua Status'),
+        ])
+        ->query(function (Builder $query, array $data): Builder {
+            return $query->when(
+                $data['status'],
+                fn (Builder $q, $status) =>
+                    $q->where('status', $status)
+            );
+        }),
+
+    // ✅ FILTER TANGGAL (punyamu, tetap dipakai)
+    Filter::make('tanggal')
+        ->form([
+            \Filament\Forms\Components\DatePicker::make('from')
+                ->placeholder('Dari Tanggal'),
+            \Filament\Forms\Components\DatePicker::make('until')
+                ->placeholder('Sampai Tanggal'),
+        ])
+        ->query(function (Builder $query, array $data): Builder {
+            return $query
+                ->when(
+                    $data['from'],
+                    fn (Builder $q, $date) =>
+                        $q->whereDate('tanggal', '>=', $date)
+                )
+                ->when(
+                    $data['until'],
+                    fn (Builder $q, $date) =>
+                        $q->whereDate('tanggal', '<=', $date)
+                );
+        }),
+
+])
 
             ->recordActions([
                 Action::make('kelola_kendala')
