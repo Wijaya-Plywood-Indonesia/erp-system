@@ -7,6 +7,8 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use App\Models\KategoriBarang;
 
 class GradesTable
 {
@@ -22,8 +24,12 @@ class GradesTable
                     ->label('Nama Grade'),
             ])
             ->filters([
-                //
-            ])
+    SelectFilter::make('id_kategori_barang')
+        ->label('Kategori Barang')
+        ->relationship('kategoriBarang', 'nama_kategori')
+        ->searchable()
+        ->preload()
+])
             ->recordActions([
                 EditAction::make(),
             ])
