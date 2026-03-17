@@ -13,6 +13,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class DetailHasilsRelationManager extends RelationManager
 {
@@ -101,7 +102,15 @@ class DetailHasilsRelationManager extends RelationManager
 
                 TextColumn::make('ukuran.nama_ukuran')
                     ->label('Ukuran')
-                    ->searchable()
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->whereHas('ukuran', function (Builder $q) use ($search) {
+                            $q->where('panjang', 'like', "%{$search}%")
+                                ->orWhere('lebar', 'like', "%{$search}%")
+                                ->orWhere('tebal', 'like', "%{$search}%")
+                                // Mendukung pencarian format "12 x 12"
+                                ->orWhereRaw("CONCAT(panjang, ' x ', lebar, ' x ', tebal) LIKE ?", ["%{$search}%"]);
+                        });
+                    })
                     ->sortable()
                     ->placeholder('N/A'),
 

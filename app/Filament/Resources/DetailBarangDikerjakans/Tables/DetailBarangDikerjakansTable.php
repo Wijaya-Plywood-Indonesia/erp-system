@@ -15,6 +15,7 @@ use Filament\Actions\DeleteBulkAction;
 
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Illuminate\Database\Eloquent\Builder;
 
 class DetailBarangDikerjakansTable
 {
@@ -30,9 +31,10 @@ class DetailBarangDikerjakansTable
             ->groups([
                 Group::make('id_pegawai_nyusup')
                     ->label('Pegawai')
-                    ->getTitleFromRecordUsing(fn ($record) =>
+                    ->getTitleFromRecordUsing(
+                        fn($record) =>
                         $record->pegawaiNyusup?->pegawai?->nama_pegawai
-                        ?? 'Pegawai Tidak Diketahui'
+                            ?? 'Pegawai Tidak Diketahui'
                     )
                     ->collapsible(true), // default tertutup
             ])
@@ -61,7 +63,22 @@ class DetailBarangDikerjakansTable
                         return "{$kategori} | {$ukuran} | {$grade} | {$jenis}";
                     })
                     ->wrap()
-                    ->searchable(),
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->whereHas('barangSetengahJadiHp', function (Builder $q) use ($search) {
+                            $q->whereHas('ukuran', function ($qu) use ($search) {
+                                // Mencari di dimensi fisik (panjang, lebar, tebal)
+                                $qu->where('panjang', 'like', "%{$search}%")
+                                    ->orWhere('lebar', 'like', "%{$search}%")
+                                    ->orWhere('tebal', 'like', "%{$search}%")
+                                    ->orWhereRaw("CONCAT(panjang, ' x ', lebar, ' x ', tebal) LIKE ?", ["%{$search}%"]);
+                            })
+                                ->orWhereHas('grade', function ($qg) use ($search) {
+                                    $qg->where('nama_grade', 'like', "%{$search}%")
+                                        ->orWhereHas('kategoriBarang', fn($qk) => $qk->where('nama_kategori', 'like', "%{$search}%"));
+                                })
+                                ->orWhereHas('jenisBarang', fn($qj) => $qj->where('nama_jenis_barang', 'like', "%{$search}%"));
+                        });
+                    }),
 
                 TextColumn::make('modal')
                     ->label('Modal')
@@ -82,7 +99,8 @@ class DetailBarangDikerjakansTable
             */
             ->headerActions([
                 CreateAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
@@ -94,12 +112,14 @@ class DetailBarangDikerjakansTable
             */
             ->recordActions([
                 EditAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
 
                 DeleteAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])

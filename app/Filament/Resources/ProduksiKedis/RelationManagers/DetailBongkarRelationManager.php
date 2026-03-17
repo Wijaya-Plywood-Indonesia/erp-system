@@ -17,6 +17,7 @@ use Filament\Tables\Columns\BadgeColumn;
 use App\Models\JenisKayu;
 use App\Models\Ukuran;
 use App\Models\Mesin;
+use Illuminate\Database\Eloquent\Builder;
 
 class DetailBongkarRelationManager extends RelationManager
 {
@@ -111,11 +112,19 @@ class DetailBongkarRelationManager extends RelationManager
 
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
-                    ->searchable(),
+                    ->searchable(), 
 
                 TextColumn::make('ukuran.nama_ukuran')
                     ->label('Ukuran')
-                    ->searchable()
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->whereHas('ukuran', function (Builder $q) use ($search) {
+                            $q->where('panjang', 'like', "%{$search}%")
+                                ->orWhere('lebar', 'like', "%{$search}%")
+                                ->orWhere('tebal', 'like', "%{$search}%")
+                                // Mendukung format pencarian "12 x 12"
+                                ->orWhereRaw("CONCAT(panjang, ' x ', lebar, ' x ', tebal) LIKE ?", ["%{$search}%"]);
+                        });
+                    })
                     ->sortable()
                     ->placeholder('N/A'),
 

@@ -32,9 +32,9 @@ class BahanPenolongRotariesTable
                     ->label('Banyaknya'),
             ])
             ->filters([
-                SelectFilter::make('nama_bahan')
-                    ->options($bahanOptions)
-                    ->multiple(),
+                // SelectFilter::make('nama_bahan')
+                //     ->options($bahanOptions)
+                //     ->multiple(),
             ])
             ->headerActions([
                 CreateAction::make()

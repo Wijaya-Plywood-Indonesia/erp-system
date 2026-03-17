@@ -15,24 +15,38 @@ class ListPekerjaanMenumpukForm
             ->components([
                 Select::make('id_hasil_pilih_plywood')
                     ->label('Pilih Bahan Reparasi')
-                    ->options(function () {
+                    ->getOptionLabelUsing(function ($value) {
+                        $item = HasilPilihPlywood::with(['barangSetengahJadiHp.jenisBarang', 'barangSetengahJadiHp.ukuran', 'barangSetengahJadiHp.grade'])
+                            ->find($value);
+
+                        if (!$item) return '-';
+
+                        return ($item->barangSetengahJadiHp->jenisBarang->nama_jenis_barang ?? '-') . " | " .
+                            ($item->barangSetengahJadiHp->ukuran->nama_ukuran ?? '-') . " | " .
+                            ($item->barangSetengahJadiHp->grade->nama_grade ?? '-') . " — " .
+                            $item->jenis_cacat;
+                    })
+                    ->options(function (Select $component) {
+                        // AMBIL RECORD SECARA DINAMIS
+                        $record = $component->getRecord();
+
                         return HasilPilihPlywood::query()
                             ->where('kondisi', 'reparasi')
                             ->with(['barangSetengahJadiHp.jenisBarang', 'barangSetengahJadiHp.ukuran', 'barangSetengahJadiHp.grade'])
                             ->get()
-                            ->mapWithKeys(function ($item) {
-                                // 1. Hitung total yang SUDAH dikerjakan untuk barang ini di tabel ListPekerjaanMenumpuk
+                            ->mapWithKeys(function ($item) use ($record) {
+                                // Hitung total yang SUDAH dikerjakan
                                 $totalSelesai = ListPekerjaanMenumpuk::where('id_hasil_pilih_plywood', $item->id)
+                                    // Menggunakan $record hasil tangkapan closure
+                                    ->when($record, fn($q) => $q->where('id', '!=', $record->id))
                                     ->sum('jumlah_selesai');
 
-                                // 2. Hitung sisa riil yang tersedia
                                 $sisaTersedia = $item->jumlah - $totalSelesai;
 
-                                // 3. Hanya tampilkan jika sisa masih lebih dari 0
-                                if ($sisaTersedia > 0) {
+                                // Tampilkan jika sisa > 0 ATAU ini adalah item yang sedang dipilih
+                                if ($sisaTersedia > 0 || ($record && $record->id_hasil_pilih_plywood == $item->id)) {
                                     return [
-                                        $item->id => 
-                                            ($item->barangSetengahJadiHp->jenisBarang->nama_jenis_barang ?? '-') . " | " .
+                                        $item->id => ($item->barangSetengahJadiHp->jenisBarang->nama_jenis_barang ?? '-') . " | " .
                                             ($item->barangSetengahJadiHp->ukuran->nama_ukuran ?? '-') . " | " .
                                             ($item->barangSetengahJadiHp->grade->nama_grade ?? '-') . " — " .
                                             $item->jenis_cacat . " (Sisa: {$sisaTersedia} Lbr)"
@@ -41,20 +55,20 @@ class ListPekerjaanMenumpukForm
 
                                 return [];
                             })
-                            ->filter(); // Menghapus baris kosong
+                            ->filter();
                     })
                     ->required()
                     ->searchable()
-                    ->reactive()
+                    ->preload()
+                    ->live()
                     ->afterStateUpdated(function ($state, callable $set) {
                         if (!$state) return;
 
                         $item = HasilPilihPlywood::find($state);
-                        
-                        // Hitung sisa riil untuk mengisi input jumlah_asal
+
                         $totalSelesai = ListPekerjaanMenumpuk::where('id_hasil_pilih_plywood', $state)
                             ->sum('jumlah_selesai');
-                        
+
                         $sisaReal = ($item?->jumlah ?? 0) - $totalSelesai;
 
                         $set('jumlah_asal', $sisaReal);
@@ -76,14 +90,14 @@ class ListPekerjaanMenumpukForm
                     ->required()
                     ->reactive()
                     ->minValue(1)
-                    ->maxValue(fn ($get) => $get('jumlah_asal')) // Mencegah input melebihi sisa
+                    ->maxValue(fn($get) => $get('jumlah_asal')) // Mencegah input melebihi sisa
                     ->afterStateUpdated(function ($state, $get, $set) {
                         $asal = (int) $get('jumlah_asal');
                         $selesai = (int) $state;
                         $sisa = $asal - $selesai;
-                        
+
                         $set('jumlah_belum_selesai', $sisa < 0 ? 0 : $sisa);
-                        
+
                         // Otomatis set status selesai jika input sama dengan sisa tersedia
                         if ($selesai >= $asal && $asal > 0) {
                             $set('status', 'selesai');

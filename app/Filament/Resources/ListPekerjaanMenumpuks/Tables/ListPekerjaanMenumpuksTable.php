@@ -23,14 +23,14 @@ class ListPekerjaanMenumpuksTable
                     ->formatStateUsing(function ($record) {
                         $barang = $record->hasilPilihPlywood->barangSetengahJadiHp;
                         return ($barang->jenisBarang->nama_jenis_barang ?? '-') . ' | ' .
-                               ($barang->ukuran->nama_ukuran ?? '-') . ' | ' .
-                               ($barang->grade->nama_grade ?? '-');
+                            ($barang->ukuran->nama_ukuran ?? '-') . ' | ' .
+                            ($barang->grade->nama_grade ?? '-');
                     })
                     ->description(function ($record) {
                         // REVISI: Menggunakan 'tanggal_produksi' sesuai Model ProduksiPilihPlywood
                         $tanggal = $record->hasilPilihPlywood->produksiPilihPlywood->tanggal_produksi ?? null;
-                        
-                        return $tanggal 
+
+                        return $tanggal
                             ? "Sumber: Hasil Pilih Plywood (" . \Carbon\Carbon::parse($tanggal)->format('d M Y') . ")"
                             : "Sumber: Tanggal tidak ditemukan";
                     })
@@ -57,7 +57,7 @@ class ListPekerjaanMenumpuksTable
 
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'selesai' => 'success',
                         'belum selesai' => 'danger',
                         default => 'gray',
