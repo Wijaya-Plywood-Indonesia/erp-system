@@ -173,4 +173,18 @@ class StokKayu extends Page
                 ->action(fn() => $this->recalculate()),
         ];
     }
+
+    public function getAllLahansWithStokProperty()
+    {
+        return Lahan::query()
+            ->whereHas('summaries', fn($q) => $q->where('stok_batang', '>', 0))
+            ->orderBy('kode_lahan')
+            ->get();
+    }
+
+    // Tambahkan relasi detail ke summaries agar grouping di blade lebih ringan
+    public function getSummariesByLahanProperty()
+    {
+        return $this->summaries->groupBy('id_lahan');
+    }
 }
