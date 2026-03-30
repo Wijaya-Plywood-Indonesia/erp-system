@@ -21,6 +21,14 @@
             @endforeach
         </select>
 
+        <select wire:model.live="filterLahan"
+            class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
+            <option value="">Semua Lahan</option>
+            @foreach(\App\Models\Lahan::orderBy('kode_lahan')->get() as $lahan)
+            <option value="{{ $lahan->id }}">{{ $lahan->kode_lahan }}</option>
+            @endforeach
+        </select>
+
         <span class="ml-auto text-[10px] font-black uppercase tracking-widest text-gray-400">{{ $this->logs->count() }} entri log</span>
     </div>
 
@@ -61,6 +69,7 @@
                 <thead>
                     <tr class="bg-gray-50 dark:bg-gray-900 text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
                         <th class="px-4 py-3 text-left whitespace-nowrap">Tanggal</th>
+                        <th class="px-4 py-3 text-left whitespace-nowrap">Lahan</th>
                         <th class="px-4 py-3 text-left whitespace-nowrap">Jenis Kayu</th>
                         <th class="px-4 py-3 text-right whitespace-nowrap">Ukuran</th>
                         <th class="px-4 py-3 text-left whitespace-nowrap">Tipe</th>
@@ -102,6 +111,8 @@
                         <td class="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                             {{ $log->tanggal->format('d/m/Y') }}
                         </td>
+
+                        <td class="px-4 py-3 font-bold">{{ $log->lahan?->kode_lahan ?? 'N/A' }}</td>
 
                         <td class="px-4 py-3 font-black text-gray-900 dark:text-white whitespace-nowrap">
                             {{ $log->jenisKayu?->nama_kayu ?? '-' }}
@@ -190,41 +201,6 @@
                     </tr>
                     @endforelse
                 </tbody>
-
-                @if($logs->count())
-                @php
-                $m3Saldo = $logs->where('tipe_transaksi','masuk')->sum('total_kubikasi')
-                - $logs->where('tipe_transaksi','keluar')->sum('total_kubikasi');
-                $poinSaldo = $logs->where('tipe_transaksi','masuk')->sum('nilai_stok')
-                - $logs->where('tipe_transaksi','keluar')->sum('nilai_stok');
-                @endphp
-                <tfoot>
-                    <tr class="text-[10px] font-black border-t-2 bg-gray-50 dark:bg-gray-900/60 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 uppercase tracking-widest">
-                        <td colspan="5" class="px-4 py-3 text-gray-500">Saldo Akhir</td>
-                        <td @class(['px-4 py-3 text-right tabular-nums', 'text-green-700 dark:text-green-400'=> $saldoBtg >= 0,
-                            'text-red-600 dark:text-red-400' => $saldoBtg < 0])>
-                                {{ number_format($saldoBtg) }} btg
-                        </td>
-                        <td class="px-4 py-3 text-right tabular-nums bg-blue-50/30 dark:bg-blue-900/10">
-                            {{ $lastLog ? number_format($lastLog->stok_batang_after) : '—' }} btg
-                        </td>
-                        {{-- Footer untuk TRX --}}
-                        <td class="px-4 py-3 text-right text-gray-400 font-mono tracking-tighter">
-                            —
-                        </td>
-                        <td class="px-4 py-3 text-right tabular-nums text-blue-600 dark:text-blue-400">
-                            {{ number_format(max(0, $m3Saldo), 4) }} m³
-                        </td>
-                        <td class="px-4 py-3 text-right tabular-nums">
-                            Rp {{ number_format(max(0, $poinSaldo), 0, ',', '.') }}
-                        </td>
-                        {{-- Footer HPP Color - Amber --}}
-                        <td class="px-4 py-3 text-right tabular-nums bg-amber-50/50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 font-black">
-                            {{ $lastLog ? number_format($lastLog->hpp_average, 0, ',', '.').' /m³' : '—' }}
-                        </td>
-                    </tr>
-                </tfoot>
-                @endif
             </table>
         </div>
     </div>

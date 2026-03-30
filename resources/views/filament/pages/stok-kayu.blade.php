@@ -112,10 +112,11 @@
                                 <th class="px-6 py-5 text-center border-b border-gray-100 dark:border-gray-800 w-32">Batang</th>
                                 <th class="px-6 py-5 text-right border-b border-gray-100 dark:border-gray-800 w-40">Volume (m³)</th>
                                 <th class="px-6 py-5 text-right border-b border-gray-100 dark:border-gray-800 w-48">Poin Estimasi</th>
+                                <th class="px-6 py-5 text-right border-b border-gray-100 dark:border-gray-800 w-48">Hpp/Lahan</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-50 dark:divide-gray-800 font-sans">
-                            @php $globalIdx = 1; @endphp
+                            @php $globalIdx = 1; $summariesByLahan = $this->summariesByLahan;@endphp
                             @foreach($allLahans as $lahan)
                             @php $lahanSummaries = $summariesByLahan->get($lahan->id); @endphp
 
@@ -131,7 +132,7 @@
                                 </td>
                                 <td class="px-6 py-5">
                                     <div class="flex items-center gap-2">
-                                        <span class="font-black text-gray-900 dark:text-gray-100 text-lg tabular-nums leading-none">{{ $row->panjang }}</span>
+                                        <span class="font-black text-gray-900 dark:text-gray-100 text-sm tabular-nums leading-none">{{ $row->panjang }}</span>
                                         <span class="text-gray-300 dark:text-gray-400 font-light">—</span>
                                         <span @class([ 'text-sm font-bold uppercase tracking-wide' , 'text-emerald-600 dark:text-emerald-400'=> str_contains(strtolower($row->jenisKayu->nama_kayu), 'sengon'),
                                             'text-amber-600 dark:text-amber-400' => !str_contains(strtolower($row->jenisKayu->nama_kayu), 'sengon'),
@@ -149,10 +150,16 @@
                                     {{ number_format($row->stok_kubikasi, 4) }}
                                 </td>
                                 <td class="px-6 py-5 text-right">
-                                    <span class="font-black text-gray-800 dark:text-gray-200 text-lg tabular-nums">
+                                    <span class="font-black text-gray-800 dark:text-gray-200 text-sm tabular-nums">
                                         Rp {{ number_format($row->nilai_stok, 0, ',', '.') }}
                                     </span>
                                 </td>
+                                <td class="px-6 py-5 text-right">
+                                    <span class="font-black text-gray-800 dark:text-gray-200 text-sm tabular-nums">
+                                        Rp {{ number_format($row->hpp_average, 0, ',', '.') }}
+                                    </span>
+                                </td>
+
                             </tr>
                             @endforeach
                             @else
@@ -169,7 +176,8 @@
                                 </td>
                                 <td class="px-6 py-5 text-center text-red-500 dark:text-red-400 font-black font-mono">0</td>
                                 <td class="px-6 py-5 text-right text-red-500 dark:text-red-400 font-black font-mono">0.0000</td>
-                                <td class="px-6 py-5 text-right text-red-500 dark:text-red-400 font-black font-mono">Rp 0</td>
+                                <td class="px-6 py-5 text-center text-red-500 dark:text-red-400 font-black font-mono">0</td>
+                                <td class="px-6 py-5 text-right text-red-500 dark:text-red-400 font-black font-mono">0</td>
                             </tr>
                             @endif
                             @endforeach

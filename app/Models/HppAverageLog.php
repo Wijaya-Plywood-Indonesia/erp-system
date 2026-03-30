@@ -10,6 +10,7 @@ class HppAverageLog extends Model
 {
     protected $fillable = [
         // Migration hpp_average_logs tidak punya lahan_id
+        'id_lahan',
         'id_jenis_kayu',
         'grade',
         'panjang',
@@ -45,6 +46,11 @@ class HppAverageLog extends Model
         'nilai_stok_after'     => 'decimal:2',
         'hpp_average'          => 'decimal:4',
     ];
+
+    public function lahan(): BelongsTo
+    {
+        return $this->belongsTo(Lahan::class, 'id_lahan');
+    }
 
     public function jenisKayu(): BelongsTo
     {
