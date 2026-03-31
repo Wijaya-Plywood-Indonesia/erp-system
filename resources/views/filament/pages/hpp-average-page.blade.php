@@ -274,7 +274,7 @@
                 </div>
             </div>
             @empty
-            <div class="px-4 py-20 text-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-sm bg-gray-50/50">
+            <div class=" px-4 py-20 text-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-sm bg-gray-50/50">
                 <span class="text-xs font-black uppercase tracking-[0.3em] text-gray-400">Belum ada log transaksi untuk lahan ini</span>
             </div>
             @endforelse

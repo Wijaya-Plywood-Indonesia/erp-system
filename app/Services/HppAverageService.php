@@ -342,6 +342,63 @@ class HppAverageService
     }
 
     // =========================================================================
+    // CATAT PROSES KAYU KELUAR JIKA TERDAPAT BATCH YANG KELUAR (PENGGUNAAN LAHAN ROTARY)
+    // =========================================================================
+    public function prosesKeluarRotary(int $lahanId, int $jenisKayuId, mixed $referensi = null): void
+    {
+        DB::transaction(function () use ($lahanId, $jenisKayuId, $referensi) {
+
+            // 1. Cari semua ringkasan stok yang masih tersisa di lahan & jenis kayu ini (semua panjang)
+            $summaries = HppAverageSummarie::where('id_lahan', $lahanId)
+                ->where('id_jenis_kayu', $jenisKayuId)
+                ->where('stok_batang', '>', 0)
+                ->get();
+
+            if ($summaries->isEmpty()) {
+                return;
+            }
+
+            foreach ($summaries as $summary) {
+                $qtyKeluar   = (int)   $summary->stok_batang;
+                $m3Keluar    = (float) $summary->stok_kubikasi;
+                $nilaiKeluar = (float) $summary->nilai_stok;
+                $hppSemasa   = (float) $summary->hpp_average;
+
+                // 2. Buat Log Transaksi Keluar (Memaksa After menjadi 0)
+                HppAverageLog::create([
+                    'id_lahan'             => $lahanId,
+                    'id_jenis_kayu'        => $jenisKayuId,
+                    'panjang'              => $summary->panjang,
+                    'tanggal'              => now(),
+                    'tipe_transaksi'       => 'keluar',
+                    'keterangan'           => 'PENGGUNAAN ROTARY: RESET STOK LAHAN',
+                    'referensi_id'         => $referensi?->id,
+                    'referensi_type'       => $referensi ? get_class($referensi) : null,
+                    'total_batang'         => $qtyKeluar,
+                    'total_kubikasi'       => $m3Keluar,
+                    'harga'                => $hppSemasa,
+                    'nilai_stok'           => $nilaiKeluar,
+                    'stok_batang_before'   => $qtyKeluar,
+                    'stok_kubikasi_before' => $m3Keluar,
+                    'nilai_stok_before'    => $nilaiKeluar,
+                    'stok_batang_after'    => 0,
+                    'stok_kubikasi_after'  => 0,
+                    'nilai_stok_after'     => 0,
+                    'hpp_average'          => 0,
+                ]);
+
+                // 3. Reset Summary menjadi 0
+                $summary->update([
+                    'stok_batang'   => 0,
+                    'stok_kubikasi' => 0,
+                    'nilai_stok'    => 0,
+                    'hpp_average'   => 0,
+                ]);
+            }
+        });
+    }
+
+    // =========================================================================
     // CATAT TRANSAKSI KELUAR (public — dipanggil manual)
     // =========================================================================
 
