@@ -245,9 +245,7 @@ class HppAverageService
             'val' => round($before['val'] + $totalNilai,   2),
         ];
 
-        $hppAverage = $after['m3'] > 0
-            ? round($after['val'] / $after['m3'], 2)
-            : 0.0;
+        $hppAverage = $after['m3'] > 0 ? round($after['val'] / $after['m3'], 2) : 0.0;
 
         $hargaSatuan = $totalKubikasi > 0
             ? round($totalNilai / $totalKubikasi, 2)
@@ -516,7 +514,6 @@ class HppAverageService
     public function recalculateAll(): void
     {
         DB::transaction(function () {
-            // 1. Reset Summary
             HppAverageSummarie::query()->update([
                 'stok_batang' => 0,
                 'stok_kubikasi' => 0,
@@ -528,23 +525,18 @@ class HppAverageService
             $state = [];
 
             foreach ($logs as $log) {
-                /** * PERBAIKAN KRUSIAL: 
-                 * Kita tambahkan id_lahan ke dalam key.
-                 * Dengan begini, CA (Lahan 1) dan OA (Lahan 2) punya "kantong" sendiri-sendiri.
-                 */
-                $key = "Lahan_{$log->id_lahan}_Kayu_{$log->id_jenis_kayu}_Pjg_{$log->panjang}";
+                // KUNCI ISOLASI: id_lahan wajib masuk agar kantong saldo terpisah
+                $key = "L{$log->id_lahan}_J{$log->id_jenis_kayu}_P{$log->panjang}";
 
                 if (!isset($state[$key])) {
-                    // Jika kunci ini baru (Lahan baru/Ukuran baru di lahan tersebut), mulai dari 0
                     $state[$key] = ['btg' => 0, 'm3' => 0.0, 'val' => 0.0, 'hpp' => 0.0];
                 }
 
                 $current = &$state[$key];
 
-                // Set saldo Sebelum (Sekarang CA 260cm akan mulai dari 0 jika belum ada data sebelumnya di CA)
-                $log->stok_batang_before = $current['btg'];
+                $log->stok_batang_before   = $current['btg'];
                 $log->stok_kubikasi_before = $current['m3'];
-                $log->nilai_stok_before = $current['val'];
+                $log->nilai_stok_before    = $current['val'];
 
                 if ($log->tipe_transaksi === 'masuk') {
                     $current['btg'] += $log->total_batang;
@@ -552,27 +544,24 @@ class HppAverageService
                     $current['val'] = round($current['val'] + $log->nilai_stok, 2);
                     $current['hpp'] = $current['m3'] > 0 ? round($current['val'] / $current['m3'], 2) : 0;
                 } else {
-                    $log->harga = $current['hpp'];
+                    $log->harga      = $current['hpp'];
                     $log->nilai_stok = round($log->total_kubikasi * $current['hpp'], 2);
-
                     $current['btg'] -= $log->total_batang;
                     $current['m3']  = round($current['m3'] - $log->total_kubikasi, 4);
                     $current['val'] = round($current['val'] - $log->nilai_stok, 2);
                 }
 
-                // Simpan saldo Sesudah
-                $log->stok_batang_after = $current['btg'];
+                $log->stok_batang_after   = $current['btg'];
                 $log->stok_kubikasi_after = $current['m3'];
-                $log->nilai_stok_after = $current['val'];
-                $log->hpp_average = $current['hpp'];
+                $log->nilai_stok_after    = $current['val'];
+                $log->hpp_average         = $current['hpp'];
 
                 $log->saveQuietly();
-
-                // Update Summary (Agar di halaman stok juga terpisah per lahan)
                 $this->syncToSummary($log, $current);
             }
         });
     }
+
     private function syncToSummary($log, $currentState): void
     {
         \App\Models\HppAverageSummarie::updateOrCreate(
