@@ -72,7 +72,6 @@ class DetailMasukKediForm
 
                 TextInput::make('kw')
                     ->label('KW (Kualitas)')
-                    ->numeric()
                     ->required(),
 
 
