@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\ModalSanding;
 use App\Models\NotaKayu;
+use App\Models\PenggunaanLahanRotary;
 use App\Observers\ModalSandingObserver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
@@ -13,6 +14,7 @@ use App\Observers\RencanaKerjaHpObserver;
 use Filament\Support\Facades\FilamentView;
 use Illuminate\Support\Facades\Blade;
 use App\Models\ValidasiHasilRotary;
+use App\Observers\RotaryObserver;
 use App\Observers\ValidasiHasilRotaryObserver;
 
 class AppServiceProvider extends ServiceProvider
@@ -35,6 +37,7 @@ class AppServiceProvider extends ServiceProvider
         RencanaKerjaHp::observe(RencanaKerjaHpObserver::class);
         ValidasiHasilRotary::observe(ValidasiHasilRotaryObserver::class);
         NotaKayu::observe(NotaKayuObserver::class);
+        PenggunaanLahanRotary::observe(RotaryObserver::class);
         // PlatformHasilHp::observe(PlatformHasilHpObserver::class);
         // TriplekHasilHp::observe(TriplekHasilHpObserver::class);
 
