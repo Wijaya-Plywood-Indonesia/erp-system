@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class ProduksiKedi extends Model
 {
@@ -38,5 +39,17 @@ class ProduksiKedi extends Model
     public function validasiTerakhir()
     {
         return $this->hasOne(ValidasiKedi::class, 'id_produksi_kedi')->latestOfMany();
+    }
+
+    public function serahTerima(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            SerahTerimaPivot::class,
+            DetailHasilPaletRotary::class,
+            'id_produksi',
+            'id_detail_hasil_palet_rotary',
+            'id',
+            'id'
+        );
     }
 }

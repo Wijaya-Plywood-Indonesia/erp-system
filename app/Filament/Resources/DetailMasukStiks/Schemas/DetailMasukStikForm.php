@@ -43,7 +43,6 @@ class DetailMasukStikForm
 
                 TextInput::make('kw')
                     ->label('KW (Kualitas)')
-                    ->numeric()
                     ->required()
                     ->maxLength(255)
                     ->placeholder('Cth: 1, 2, 3,dll.'),

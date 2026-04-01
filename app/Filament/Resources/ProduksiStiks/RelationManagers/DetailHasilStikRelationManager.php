@@ -74,7 +74,6 @@ class DetailHasilStikRelationManager extends RelationManager
 
                 TextInput::make('kw')
                     ->label('Kualitas (KW)')
-
                     ->required()
                     ->placeholder('Cth: 1, 2, 3 dll.'),
 
