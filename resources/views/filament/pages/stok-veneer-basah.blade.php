@@ -3,7 +3,7 @@
 
     @php
         $summaries = $this->summaries;
-        $grouped   = $this->groupedSummaries;
+        $grouped   = $this->groupedSummaries; // grouped per tebal
     @endphp
 
     {{-- Filter bar --}}
@@ -23,6 +23,14 @@
             <option value="">Semua Tebal</option>
             @foreach($this->tebalList as $t)
                 <option value="{{ $t }}">{{ $t }} mm</option>
+            @endforeach
+        </select>
+
+        <select wire:model.live="filterKw"
+            class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
+            <option value="">Semua KW</option>
+            @foreach($this->kwList as $kw)
+                <option value="{{ $kw }}">KW {{ $kw }}</option>
             @endforeach
         </select>
 
@@ -59,6 +67,7 @@
                                 <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800 w-12">No</th>
                                 <th class="px-6 py-3 border-b border-gray-100 dark:border-gray-800">Jenis Kayu</th>
                                 <th class="px-6 py-3 border-b border-gray-100 dark:border-gray-800">Ukuran (p×l×t)</th>
+                                <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">KW</th>
                                 <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">Stok Lembar</th>
                                 <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800">Kubikasi (m³)</th>
                                 <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800 bg-blue-50/30 dark:bg-blue-900/5">
@@ -91,6 +100,12 @@
 
                                 <td class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400 tabular-nums">
                                     {{ $row->panjang }}×{{ $row->lebar }}×{{ $row->tebal }}
+                                </td>
+
+                                <td class="px-6 py-4 text-center">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                        KW{{ $row->kw ?? '-' }}
+                                    </span>
                                 </td>
 
                                 <td class="px-6 py-4 text-center">
@@ -141,7 +156,7 @@
                         </tbody>
                         <tfoot>
                             <tr class="text-[10px] font-black border-t bg-gray-50 dark:bg-gray-900/60 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 uppercase tracking-widest">
-                                <td colspan="3" class="px-6 py-3 text-gray-500">Subtotal tebal {{ $tebal }} mm</td>
+                                <td colspan="4" class="px-6 py-3 text-gray-500">Subtotal tebal {{ $tebal }} mm</td>
                                 <td class="px-6 py-3 text-center tabular-nums text-gray-700 dark:text-gray-300">
                                     {{ number_format($rows->sum('stok_lembar')) }} lbr
                                 </td>

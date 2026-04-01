@@ -98,9 +98,8 @@ class ValidasiHasilRotaryObserver
                     'jumlah_items'  => $response->json('data.jumlah_items'),
                 ]);
 
-                // ── Tambah stok veneer basah DULU (butuh stok kayu untuk hitung HPP)
-                // ── Baru kurangi stok HPP kayu setelahnya ────────────────────
-                $service->tambahStokVeneerBasah($produksiList, $tanggal);
+                // ── Kurangi stok HPP kayu setelah jurnal berhasil ────────────────
+                // NB: tambahStokVeneerBasah() dipanggil dari modul serah terima
                 $service->kurangiStokHpp($produksiList, $tanggal);
 
             } elseif ($response->status() === 409) {

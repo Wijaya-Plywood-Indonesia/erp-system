@@ -29,6 +29,9 @@
             @endforeach
         </select>
 
+        <input wire:model.live="filterKw" placeholder="Filter KW (1,2,3...)"
+            class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500 w-36" />
+
         <span class="ml-auto text-[10px] font-black uppercase tracking-widest text-gray-400">{{ $this->logs->count() }} entri log</span>
     </div>
 
@@ -68,6 +71,7 @@
                         <th class="px-4 py-3 text-left whitespace-nowrap">Tanggal</th>
                         <th class="px-4 py-3 text-left whitespace-nowrap">Jenis Kayu</th>
                         <th class="px-4 py-3 text-right whitespace-nowrap">Ukuran</th>
+                        <th class="px-4 py-3 text-center whitespace-nowrap">KW</th>
                         <th class="px-4 py-3 text-left whitespace-nowrap">Tipe</th>
                         <th class="px-4 py-3 text-left">Keterangan</th>
                         <th class="px-4 py-3 text-right border-l border-gray-100 dark:border-gray-700 whitespace-nowrap">
@@ -107,6 +111,12 @@
 
                         <td class="px-4 py-3 text-right font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap tabular-nums">
                             {{ $log->panjang }}×{{ $log->lebar }}×{{ $log->tebal }}
+                        </td>
+
+                        <td class="px-4 py-3 text-center whitespace-nowrap">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                KW{{ $log->kw ?? '-' }}
+                            </span>
                         </td>
 
                         <td class="px-4 py-3 whitespace-nowrap">
@@ -193,7 +203,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="11" class="px-4 py-12 text-center text-sm text-gray-400 dark:text-gray-500">
+                        <td colspan="12" class="px-4 py-12 text-center text-sm text-gray-400 dark:text-gray-500">
                             Belum ada log transaksi veneer basah
                         </td>
                     </tr>
@@ -209,7 +219,7 @@
                 @endphp
                 <tfoot>
                     <tr class="text-[10px] font-black border-t-2 bg-gray-50 dark:bg-gray-900/60 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 uppercase tracking-widest">
-                        <td colspan="5" class="px-4 py-3 text-gray-500">Saldo Akhir</td>
+                        <td colspan="6" class="px-4 py-3 text-gray-500">Saldo Akhir</td>
                         <td @class(['px-4 py-3 text-right tabular-nums',
                             'text-green-700 dark:text-green-400' => $saldoLembar >= 0,
                             'text-red-600 dark:text-red-400'     => $saldoLembar < 0])>

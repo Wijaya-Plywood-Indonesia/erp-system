@@ -11,6 +11,7 @@ class HppVeneerBasahBahanPenolong extends Model
 
     protected $fillable = [
         'id_log',
+        'kw',
         'bahan_penolong_id',
         'nama_bahan',
         'satuan',
