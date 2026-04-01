@@ -5,6 +5,7 @@ namespace App\Models;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\QueryException;
 
 class ProduksiRotary extends Model
@@ -60,6 +61,19 @@ class ProduksiRotary extends Model
     {
         return $this->hasMany(RiwayatKayu::class, 'id_rotary');
     }
+
+    public function serahTerima(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            SerahTerimaPivot::class,             // model pivot (anonymous — lihat poin 5)
+            DetailHasilPaletRotary::class,
+            'id_produksi',                       // FK di detail_hasil_palet_rotaries
+            'id_detail_hasil_palet_rotary',      // FK di pivot
+            'id',
+            'id'
+        );
+    }
+
     protected static function booted()
     {
         static::deleting(function ($record) {
