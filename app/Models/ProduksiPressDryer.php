@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class ProduksiPressDryer extends Model
 {
@@ -48,6 +49,18 @@ class ProduksiPressDryer extends Model
     public function detailPegawais()
     {
         return $this->hasMany(DetailPegawai::class, 'id_produksi_dryer');
+    }
+
+    public function serahTerima(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            SerahTerimaPivot::class,
+            DetailHasilPaletRotary::class,
+            'id_produksi',
+            'id_detail_hasil_palet_rotary',
+            'id',
+            'id'
+        );
     }
 
     public function getLabelAttribute()
