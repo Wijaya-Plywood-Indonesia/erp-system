@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ProduksiStik extends Model
 {
@@ -36,6 +37,13 @@ class ProduksiStik extends Model
     public function validasiTerakhir()
     {
         return $this->hasOne(ValidasiStik::class, 'id_produksi_stik')->latestOfMany();
+    }
+
+    public function serahTerima(): HasMany
+    {
+        // Dummy — query asli di-override penuh di RelationManager
+        return $this->hasMany(SerahTerimaPivot::class, 'id', 'id')
+            ->whereRaw('1 = 0');
     }
 
     protected static function booted()
