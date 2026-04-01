@@ -13,7 +13,7 @@
     "bezhansalleh/filament-shield": "^4.0",
     "doctrine/dbal": "^4.3",
     "filament/actions": "^4.0",
-    "filament/filament": "4.0",
+   "filament/filament": "^4.9",
     "intervention/image": "^3.11",
     "intervention/image-laravel": "^1.5",
     "laravel/framework": "^12.0",
