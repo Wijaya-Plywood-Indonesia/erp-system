@@ -40,16 +40,4 @@ class ProduksiKedi extends Model
     {
         return $this->hasOne(ValidasiKedi::class, 'id_produksi_kedi')->latestOfMany();
     }
-
-    public function serahTerima(): HasManyThrough
-    {
-        return $this->hasManyThrough(
-            SerahTerimaPivot::class,
-            DetailHasilPaletRotary::class,
-            'id_produksi',
-            'id_detail_hasil_palet_rotary',
-            'id',
-            'id'
-        );
-    }
 }

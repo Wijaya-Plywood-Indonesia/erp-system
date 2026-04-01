@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiStiks;
 
+use App\Filament\Resources\ProduksiRotaries\RelationManagers\SerahTerimaRelationManager;
 use App\Filament\Resources\ProduksiStiks\Pages\CreateProduksiStik;
 use App\Filament\Resources\ProduksiStiks\Pages\EditProduksiStik;
 use App\Filament\Resources\ProduksiStiks\Pages\ListProduksiStiks;
@@ -45,6 +46,7 @@ class ProduksiStikResource extends Resource
     public static function getRelations(): array
     {
         return [
+            SerahTerimaRelationManager::class,
             RelationManagers\DetailPegawaiStikRelationManager::class,
             RelationManagers\DetailMasukStikRelationManager::class,
             RelationManagers\DetailHasilStikRelationManager::class,
