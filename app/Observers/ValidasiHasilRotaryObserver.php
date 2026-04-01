@@ -67,6 +67,9 @@ class ValidasiHasilRotaryObserver
                 'detailKayuPecah.penggunaanLahan',
             ])->whereDate('tgl_produksi', $tanggal)->get();
 
+            // ── Hitung HPP veneer basah langsung (tidak bergantung jurnal) ──────
+            $service->hitungHppVeneerBasah($produksiList, $tanggal);
+
             // ── Kirim ke web akuntansi ────────────────────────────────────────
             $this->sendToAkuntansi($payload, $tanggal, $produksiList, $service);
 

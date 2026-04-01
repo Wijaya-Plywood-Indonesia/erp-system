@@ -3,12 +3,14 @@
 namespace App\Filament\Resources\DetailHasilPaletRotaries\Tables;
 
 use App\Filament\Resources\ProduksiRotaries\ProduksiRotaryResource;
+use App\Services\Akuntansi\RotaryJurnalService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
@@ -26,7 +28,7 @@ class DetailHasilPaletRotariesTable
                     ->dateTime()
                     ->sortable()
                     ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true), // <--- Hidden by default
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('lahan_display')
                     ->label('Lahan')
@@ -54,14 +56,9 @@ class DetailHasilPaletRotariesTable
                     ->sortable()
                     ->searchable(query: function ($query, string $search) {
                         $query->whereHas('setoranPaletUkuran', function ($q) use ($search) {
-                            // Asumsi: Anda ingin mencari berdasarkan kolom dimensi asli 
-                            // atau gabungan tebal, lebar, panjang
                             $q->where('tebal', 'like', "%{$search}%")
                                 ->orWhere('lebar', 'like', "%{$search}%")
                                 ->orWhere('panjang', 'like', "%{$search}%");
-
-                            // ATAU jika kolomnya memang bernama 'dimensi' tapi error, 
-                            // pastikan ejaannya benar di database.
                         });
                     }),
 
@@ -114,6 +111,7 @@ class DetailHasilPaletRotariesTable
                             ->exists()
                     )
                     ->action(function ($record) {
+                        // 1. Catat serah terima
                         DB::table('detail_hasil_palet_rotary_serah_terima_pivot')->insert([
                             'id_detail_hasil_palet_rotary' => $record->id,
                             'diserahkan_oleh'              => Auth::user()->name,
@@ -123,8 +121,16 @@ class DetailHasilPaletRotariesTable
                             'created_at'                   => now(),
                             'updated_at'                   => now(),
                         ]);
-                    })
-                    ->successNotificationTitle('Palet berhasil diserahkan'),
+
+                        // 2. Tambah stok veneer basah (HPP = 0, diisi saat validasi)
+                        $record->loadMissing(['ukuran', 'penggunaanLahan.lahan', 'produksi']);
+                        app(RotaryJurnalService::class)->serahPalet($record);
+
+                        Notification::make()
+                            ->title('Palet berhasil diserahkan')
+                            ->success()
+                            ->send();
+                    }),
                 EditAction::make(),
                 DeleteAction::make(),
             ])

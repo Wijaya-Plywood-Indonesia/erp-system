@@ -413,6 +413,293 @@ class RotaryJurnalService
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    //  SERAH PALET — tambah stok tanpa HPP (HPP dihitung saat validasi)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Dipanggil saat tombol Serah ditekan pada 1 palet.
+     * Hanya menambah stok lembar & kubikasi — HPP belum dihitung (= 0).
+     * HPP akan diisi oleh hitungHppVeneerBasah() saat semua mesin divalidasi.
+     */
+    public function serahPalet(\App\Models\DetailHasilPaletRotary $palet): void
+    {
+        try {
+            $ukuran = $palet->ukuran;
+            if (!$ukuran) {
+                Log::warning("[SerahPalet] Palet #{$palet->id} tidak punya ukuran.");
+                return;
+            }
+
+            $p      = (float) $ukuran->panjang;
+            $l      = (float) $ukuran->lebar;
+            $t      = (float) $ukuran->tebal;
+            $lembar = (int)   $palet->total_lembar;
+            $kw     = $palet->kw ?? '1';
+
+            if ($p <= 0 || $l <= 0 || $t <= 0 || $lembar <= 0) {
+                Log::warning("[SerahPalet] Palet #{$palet->id} ukuran tidak valid.");
+                return;
+            }
+
+            // Jenis kayu dari penggunaan lahan
+            $idJenisKayu = $palet->penggunaanLahan?->id_jenis_kayu ?? 1;
+            $kubikasi    = round(($p * $l * $t * $lembar) / 10_000_000, 6);
+            $tanggal     = $palet->produksi?->tgl_produksi ?? now()->format('Y-m-d');
+
+            // Ambil summarie saat ini
+            $summarie = HppVeneerBasahSummary::firstOrNew([
+                'id_jenis_kayu' => $idJenisKayu,
+                'panjang'       => $p,
+                'lebar'         => $l,
+                'tebal'         => $t,
+                'kw'            => $kw,
+            ]);
+
+            $lembarBefore   = (int)   ($summarie->stok_lembar   ?? 0);
+            $kubikasiBefore = (float) ($summarie->stok_kubikasi ?? 0);
+            $nilaiBefore    = (float) ($summarie->nilai_stok    ?? 0);
+
+            $lembarAfter   = $lembarBefore + $lembar;
+            $kubikasiAfter = round($kubikasiBefore + $kubikasi, 6);
+
+            // Catat log masuk — HPP semua 0, akan diisi saat validasi
+            $log = HppVeneerBasahLog::create([
+                'id_jenis_kayu'        => $idJenisKayu,
+                'panjang'              => $p,
+                'lebar'                => $l,
+                'tebal'                => $t,
+                'kw'                   => $kw,
+                'tanggal'              => $tanggal,
+                'tipe_transaksi'       => 'masuk',
+                'keterangan'           => "Serah palet #{$palet->id} - produksi tgl " . \Carbon\Carbon::parse($tanggal)->format('d/m/Y'),
+                'referensi_type'       => \App\Models\DetailHasilPaletRotary::class,
+                'referensi_id'         => $palet->id,
+                'total_lembar'         => $lembar,
+                'total_kubikasi'       => $kubikasi,
+                'hpp_kayu'             => 0,
+                'hpp_pekerja'          => 0,
+                'hpp_mesin'            => 0,
+                'hpp_bahan_penolong'   => 0,
+                'hpp_average'          => 0,
+                'nilai_stok'           => 0,
+                'stok_lembar_before'   => $lembarBefore,
+                'stok_kubikasi_before' => $kubikasiBefore,
+                'nilai_stok_before'    => $nilaiBefore,
+                'stok_lembar_after'    => $lembarAfter,
+                'stok_kubikasi_after'  => $kubikasiAfter,
+                'nilai_stok_after'     => 0, // diisi saat hitungHpp
+            ]);
+
+            // Update summarie — nilai_stok belum diupdate (HPP belum ada)
+            $summarie->fill([
+                'stok_lembar'   => $lembarAfter,
+                'stok_kubikasi' => $kubikasiAfter,
+                'id_last_log'   => $log->id,
+            ])->save();
+
+            Log::info("[SerahPalet] Stok masuk palet #{$palet->id} - {$p}×{$l}×{$t} KW{$kw}", [
+                'lembar'   => $lembar,
+                'kubikasi' => $kubikasi,
+            ]);
+
+        } catch (\Throwable $e) {
+            Log::error("[SerahPalet] Gagal: " . $e->getMessage(), [
+                'palet_id' => $palet->id,
+                'trace'    => $e->getTraceAsString(),
+            ]);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  HITUNG HPP VENEER BASAH — dipanggil saat semua mesin divalidasi
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Hitung & isi HPP untuk semua log veneer basah pada tanggal tersebut
+     * yang hpp_average = 0 (belum dihitung).
+     *
+     * HPP Kayu    = rata-rata hpp_average semua lahan yang dipakai
+     * HPP Pekerja = (harga_per_hari / jam_target) × jam_kerja_pegawai
+     * HPP Mesin   = ongkos_mesin / kubikasi_total_mesin
+     * HPP Bahan   = total_nilai_bahan / kubikasi_total_mesin
+     */
+    public function hitungHppVeneerBasah(Collection $produksiList, string $tanggal): void
+    {
+        try {
+            // Cek ada log veneer basah pada tanggal ini yang hpp = 0
+            $logsHariIni = HppVeneerBasahLog::whereDate('tanggal', $tanggal)
+                ->where('hpp_average', 0)
+                ->where('tipe_transaksi', 'masuk')
+                ->get();
+
+            if ($logsHariIni->isEmpty()) {
+                Log::info("[HitungHpp] Tidak ada log veneer basah hpp=0 pada tanggal {$tanggal}.");
+                return;
+            }
+
+            // ── Hitung komponen HPP dari produksiList ─────────────────────────
+            $totalKubikasi      = 0.0;
+            $totalUpah          = 0.0;
+            $totalMesin         = 0.0;
+            $hppKayuLahanList   = [];
+            $bahanMap           = [];
+
+            foreach ($produksiList as $produksi) {
+                $idMesin     = $produksi->mesin->id ?? null;
+                $ongkosMesin = (float) ($produksi->mesin->ongkos_mesin ?? 0);
+                $totalMesin += $ongkosMesin;
+
+                // HPP Kayu — rata-rata hpp_average semua lahan
+                foreach ($produksi->detailLahanRotary as $lahan) {
+                    $summaries = HppAverageSummarie::where('id_lahan', $lahan->id_lahan)
+                        ->where('stok_kubikasi', '>', 0)->get();
+                    if ($summaries->isNotEmpty()) {
+                        $totalKub = $summaries->sum('stok_kubikasi');
+                        $hppKayuLahanList[] = $totalKub > 0
+                            ? $summaries->sum(fn($s) => $s->hpp_average * $s->stok_kubikasi) / $totalKub
+                            : 0;
+                    }
+                }
+
+                // HPP Pekerja — per jam
+                $jamTarget = (int) (\App\Models\Target::where('id_mesin', $idMesin)->value('jam') ?? 8);
+                $hargaPerHari = (float) (\App\Models\HargaPegawai::first()->harga ?? 0);
+                foreach ($produksi->detailPegawaiRotary as $pegawai) {
+                    $jamMasuk   = $pegawai->jam_masuk  ?? '07:00:00';
+                    $jamPulang  = $pegawai->jam_pulang ?? '15:00:00';
+                    $jamKerja   = max(0, (strtotime($jamPulang) - strtotime($jamMasuk)) / 3600);
+                    $hargaPerJam = $jamTarget > 0 ? $hargaPerHari / $jamTarget : 0;
+                    $totalUpah  += round($hargaPerJam * $jamKerja, 2);
+                }
+
+                // Kubikasi total
+                foreach ($produksi->detailPaletRotary as $palet) {
+                    $ukuran = $palet->ukuran;
+                    if (!$ukuran) continue;
+                    $kubikasi = ((float)$ukuran->panjang * (float)$ukuran->lebar * (float)$ukuran->tebal * (int)$palet->total_lembar) / 10_000_000;
+                    $totalKubikasi += $kubikasi;
+                }
+
+                // Bahan penolong
+                foreach ($produksi->bahanPenolongRotary as $bahan) {
+                    $master = $bahan->bahanPenolong;
+                    if (!$master) continue;
+                    $id         = $bahan->bahan_penolong_id;
+                    $harga      = (float) ($master->harga ?? 0);
+                    $jumlah     = (float) ($bahan->jumlah ?? 0);
+                    if (!isset($bahanMap[$id])) {
+                        $bahanMap[$id] = [
+                            'bahan_penolong_id' => $id,
+                            'nama_bahan'        => $master->nama_bahan_penolong,
+                            'satuan'            => $master->satuan,
+                            'jumlah'            => 0.0,
+                            'harga_satuan'      => $harga,
+                            'nilai_total'       => 0.0,
+                        ];
+                    }
+                    $bahanMap[$id]['jumlah']      += $jumlah;
+                    $bahanMap[$id]['nilai_total'] += $harga * $jumlah;
+                }
+            }
+
+            if ($totalKubikasi <= 0) {
+                Log::warning("[HitungHpp] Kubikasi total = 0, HPP tidak bisa dihitung.");
+                return;
+            }
+
+            // ── HPP per m³ global ─────────────────────────────────────────────
+            $hppKayu    = count($hppKayuLahanList) > 0
+                ? round(array_sum($hppKayuLahanList) / count($hppKayuLahanList), 2)
+                : 0;
+            $hppPekerja  = round($totalUpah / $totalKubikasi, 2);
+            $hppMesin    = round($totalMesin / $totalKubikasi, 2);
+            $totalBahan  = array_sum(array_column($bahanMap, 'nilai_total'));
+            $hppBahan    = round($totalBahan / $totalKubikasi, 2);
+            $hppAverage  = $hppKayu + $hppPekerja + $hppMesin + $hppBahan;
+
+            // ── Update setiap log yang hpp = 0 ────────────────────────────────
+            foreach ($logsHariIni as $log) {
+                $kubikasi   = (float) $log->total_kubikasi;
+                $nilaiMasuk = round($hppAverage * $kubikasi, 2);
+
+                // Ambil summarie & hitung moving average
+                $summarie = HppVeneerBasahSummary::where('id_jenis_kayu', $log->id_jenis_kayu)
+                    ->where('panjang', $log->panjang)
+                    ->where('lebar',   $log->lebar)
+                    ->where('tebal',   $log->tebal)
+                    ->where('kw',      $log->kw)
+                    ->first();
+
+                if (!$summarie) continue;
+
+                // Nilai stok sebelum log ini (dari stok_before di log)
+                $kubikasiBefore = (float) $log->stok_kubikasi_before;
+                $nilaiBefore    = (float) $log->nilai_stok_before;
+                $hppLama        = $kubikasiBefore > 0 ? $nilaiBefore / $kubikasiBefore : 0;
+
+                $hppAverageBaru = ($kubikasiBefore + $kubikasi) > 0
+                    ? round(($nilaiBefore + $nilaiMasuk) / ($kubikasiBefore + $kubikasi), 2)
+                    : $hppAverage;
+
+                $nilaiAfter = round($hppAverageBaru * (float) $log->stok_kubikasi_after, 2);
+
+                // Update log
+                $log->update([
+                    'hpp_kayu'           => $hppKayu,
+                    'hpp_pekerja'        => $hppPekerja,
+                    'hpp_mesin'          => $hppMesin,
+                    'hpp_bahan_penolong' => $hppBahan,
+                    'hpp_average'        => $hppAverageBaru,
+                    'nilai_stok'         => $nilaiMasuk,
+                    'nilai_stok_after'   => $nilaiAfter,
+                ]);
+
+                // Update summarie
+                $summarie->update([
+                    'nilai_stok'             => round($hppAverageBaru * (float) $summarie->stok_kubikasi, 2),
+                    'hpp_average'            => $hppAverageBaru,
+                    'hpp_kayu_last'          => $hppKayu,
+                    'hpp_pekerja_last'       => $hppPekerja,
+                    'hpp_mesin_last'         => $hppMesin,
+                    'hpp_bahan_penolong_last'=> $hppBahan,
+                    'id_last_log'            => $log->id,
+                ]);
+
+                // Catat breakdown bahan penolong
+                foreach ($bahanMap as $bahan) {
+                    $hppBahanPerM3 = $kubikasi > 0 ? round($bahan['nilai_total'] / $totalKubikasi, 4) : 0;
+                    HppVeneerBasahBahanPenolong::updateOrCreate(
+                        ['id_log' => $log->id, 'bahan_penolong_id' => $bahan['bahan_penolong_id']],
+                        [
+                            'kw'           => $log->kw,
+                            'nama_bahan'   => $bahan['nama_bahan'],
+                            'satuan'       => $bahan['satuan'],
+                            'jumlah'       => round($bahan['jumlah'], 4),
+                            'harga_satuan' => $bahan['harga_satuan'],
+                            'nilai_total'  => round($bahan['nilai_total'], 2),
+                            'hpp_per_m3'   => $hppBahanPerM3,
+                        ]
+                    );
+                }
+
+                Log::info("[HitungHpp] HPP diisi - {$log->panjang}×{$log->lebar}×{$log->tebal} KW{$log->kw}", [
+                    'hpp_kayu'    => $hppKayu,
+                    'hpp_pekerja' => $hppPekerja,
+                    'hpp_mesin'   => $hppMesin,
+                    'hpp_bahan'   => $hppBahan,
+                    'hpp_average' => $hppAverageBaru,
+                ]);
+            }
+
+        } catch (\Throwable $e) {
+            Log::error("[HitungHpp] Gagal hitung HPP veneer basah: " . $e->getMessage(), [
+                'tanggal' => $tanggal,
+                'trace'   => $e->getTraceAsString(),
+            ]);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     //  STOK VENEER BASAH
     // ─────────────────────────────────────────────────────────────────────────
 
