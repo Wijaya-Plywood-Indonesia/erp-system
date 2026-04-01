@@ -15,6 +15,7 @@ return new class extends Migration
             // 1. Tambahkan id_lahan (gunakan nullable agar tidak error constraint data seperti sebelumnya)
             $table->foreignId('id_lahan')
                 ->after('id')
+                ->nullable()
                 ->constrained('lahans')
                 ->cascadeOnDelete();
 
