@@ -50,11 +50,11 @@ class ProduksiPressDryerResource extends Resource
     public static function getRelations(): array
     {
         return [
+            SerahTerimaRelationManager::class,
             RelationManagers\DetailMesinsRelationManager::class,
             RelationManagers\DetailPegawaisRelationManager::class,
             RelationManagers\DetailMasuksRelationManager::class,
             RelationManagers\DetailHasilsRelationManager::class,
-            SerahTerimaRelationManager::class,
             RelationManagers\ValidasiPressDryersRelationManager::class,
         ];
     }

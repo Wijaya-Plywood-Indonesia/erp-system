@@ -82,4 +82,20 @@ class DetailHasilPaletRotary extends Model
             'id_detail_hasil_palet_rotary'
         );
     }
+
+    // Untuk Mapping Mesin Kebutuhan Nomor Palet
+    private static array $kodeMapping = [
+        'Spindless' => 'SP',
+        'Meranti'    => 'MR',
+        'Sanji' => 'SJ',
+        'Yequen' => 'YQ'
+    ];
+
+    public function getKodePaletAttribute(): string
+    {
+        $namaMesin = $this->produksi?->mesin?->nama_mesin;
+        $kode      = self::$kodeMapping[$namaMesin] ?? strtoupper(substr($namaMesin ?? 'XX', 0, 2));
+
+        return "{$kode}-{$this->palet}";
+    }
 }

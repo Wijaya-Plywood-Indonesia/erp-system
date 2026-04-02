@@ -18,7 +18,21 @@ class DetailMasukStiksTable
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
-                    ->searchable(),
+                    ->searchable()->formatStateUsing(function ($state) {
+
+                        if (!$state) return '-';
+
+                        if (str_contains((string) $state, '-')) return $state;
+
+                        $palet = \App\Models\DetailHasilPaletRotary::with('produksi.mesin')->find($state);
+
+                        \Illuminate\Support\Facades\Log::channel('single')->info('no_palet resolve', [
+                            'find_result'  => $palet?->id,
+                            'kode_palet'   => $palet?->kode_palet,
+                        ]);
+
+                        return $palet ? $palet->kode_palet : $state;
+                    }),
 
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
