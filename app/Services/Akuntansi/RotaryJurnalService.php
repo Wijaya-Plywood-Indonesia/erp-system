@@ -471,7 +471,7 @@ class RotaryJurnalService
                 'kw'                   => $kw,
                 'tanggal'              => $tanggal,
                 'tipe_transaksi'       => 'masuk',
-                'keterangan'           => "Serah palet #{$palet->id} - produksi tgl " . \Carbon\Carbon::parse($tanggal)->format('d/m/Y'),
+                'keterangan'           => "Serah palet no.{$palet->palet} - produksi tgl " . \Carbon\Carbon::parse($tanggal)->format('d/m/Y'),
                 'referensi_type'       => \App\Models\DetailHasilPaletRotary::class,
                 'referensi_id'         => $palet->id,
                 'total_lembar'         => $lembar,

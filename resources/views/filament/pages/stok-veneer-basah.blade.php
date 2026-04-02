@@ -47,7 +47,7 @@
             <div class="space-y-3">
                 <div class="flex items-center gap-3">
                     <span class="bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900 text-[10px] font-black px-4 py-1.5 rounded uppercase tracking-widest shadow-sm">
-                        Tebal {{ $tebal }} mm
+                        Tebal {{ (float)$tebal }} mm
                     </span>
                     @php
                         $labelJenis = $tebal <= 1 ? 'F/B (Face/Back)' : 'Core';
@@ -99,12 +99,12 @@
                                 </td>
 
                                 <td class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-                                    {{ $row->panjang }}×{{ $row->lebar }}×{{ $row->tebal }}
+                                    {{ (float)$row->panjang }}×{{ (float)$row->lebar }}×{{ (float)$row->tebal }}
                                 </td>
 
                                 <td class="px-6 py-4 text-center">
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                                        KW{{ $row->kw ?? '-' }}
+                                        {{ $row->kw ?? '-' }}
                                     </span>
                                 </td>
 
@@ -156,7 +156,7 @@
                         </tbody>
                         <tfoot>
                             <tr class="text-[10px] font-black border-t bg-gray-50 dark:bg-gray-900/60 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 uppercase tracking-widest">
-                                <td colspan="4" class="px-6 py-3 text-gray-500">Subtotal tebal {{ $tebal }} mm</td>
+                                <td colspan="4" class="px-6 py-3 text-gray-500">Subtotal tebal {{ (float)$tebal }} mm</td>
                                 <td class="px-6 py-3 text-center tabular-nums text-gray-700 dark:text-gray-300">
                                     {{ number_format($rows->sum('stok_lembar')) }} lbr
                                 </td>

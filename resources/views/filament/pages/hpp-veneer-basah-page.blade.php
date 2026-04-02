@@ -110,12 +110,12 @@
                         </td>
 
                         <td class="px-4 py-3 text-right font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap tabular-nums">
-                            {{ $log->panjang }}×{{ $log->lebar }}×{{ $log->tebal }}
+                            {{ (float)$log->panjang }}×{{ (float)$log->lebar }}×{{ (float)$log->tebal }}
                         </td>
 
                         <td class="px-4 py-3 text-center whitespace-nowrap">
                             <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                                KW{{ $log->kw ?? '-' }}
+                                {{ $log->kw ?? '-' }}
                             </span>
                         </td>
 
@@ -127,7 +127,7 @@
                             </span>
                         </td>
 
-                        <td class="px-4 py-3 text-[11px] font-black uppercase text-gray-700 dark:text-gray-300 max-w-[180px] truncate">
+                        <td class="px-4 py-3 text-[11px] font-black uppercase text-gray-700 dark:text-gray-300 whitespace-nowrap">
                             {{ $log->keterangan ?? '—' }}
                         </td>
 
