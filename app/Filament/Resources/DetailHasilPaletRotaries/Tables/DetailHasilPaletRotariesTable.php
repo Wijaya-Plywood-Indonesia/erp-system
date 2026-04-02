@@ -72,6 +72,7 @@ class DetailHasilPaletRotariesTable
 
                 TextColumn::make('palet')
                     ->label('Palet')
+                    ->getStateUsing(fn($record) => $record->kode_palet)
                     ->sortable()
                     ->searchable(),
 

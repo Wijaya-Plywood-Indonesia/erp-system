@@ -20,7 +20,8 @@ class DetailMasukStikRelationManager extends RelationManager
 
     public function form(Schema $schema): Schema
     {
-        return DetailMasukStikForm::configure($schema);
+        $idProduksiStik = $this->getOwnerRecord()->id;
+        return DetailMasukStikForm::configure($schema, $idProduksiStik);
     }
 
     public function table(Table $table): Table
