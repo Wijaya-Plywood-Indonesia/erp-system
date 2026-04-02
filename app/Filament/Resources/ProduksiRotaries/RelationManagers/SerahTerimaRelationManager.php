@@ -134,6 +134,7 @@ class SerahTerimaRelationManager extends RelationManager
 
                 TextColumn::make('detailHasilPalet.palet')
                     ->label('Nomor Palet')
+                    ->getStateUsing(fn($record) => $record->detailHasilPalet?->kode_palet ?? '-')
                     ->searchable(),
 
                 TextColumn::make('detailHasilPalet.total_lembar')
