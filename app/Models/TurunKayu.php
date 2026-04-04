@@ -25,10 +25,10 @@ class TurunKayu extends Model
     {
         return $this->hasMany(DetailTurunKayu::class, 'id_turun_kayu');
     }
-    public function tempatKayu(): HasMany
-    {
-        return $this->hasMany(TempatKayu::class, 'id_turun_kayu');
-    }
+    // public function tempatKayu(): HasMany
+    // {
+    //     return $this->hasMany(TempatKayu::class, 'id_turun_kayu');
+    // }
     public function pegawaiTurunKayu()
     {
         return $this->hasMany(PegawaiTurunKayu::class, 'id_turun_kayu');
