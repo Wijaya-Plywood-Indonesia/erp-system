@@ -339,6 +339,65 @@ class HppAverageService
             'stok_kubikasi' => $summary->fresh()->stok_kubikasi,
             'hpp_average'   => $hppAverage,
         ]);
+
+        $this->syncTempatKayu(
+            lahanId: $lahanId,
+            jenisKayuId: $jenisKayuId,
+            panjang: $panjang,
+            stokBatang: $summary->fresh()->stok_batang,
+            stokKubikasi: $summary->fresh()->stok_kubikasi,
+        );
+    }
+
+    // =========================================================================
+    // SYNC TEMPAT KAYU — dipanggil setiap kali stok masuk
+    // =========================================================================
+    private function syncTempatKayu(
+        int   $lahanId,
+        int   $jenisKayuId,
+        int   $panjang,
+        int   $stokBatang,
+        float $stokKubikasi,
+    ): void {
+        // Cari KayuMasuk terbaru yang punya detail dengan kombinasi ini
+        $kayuMasuk = \App\Models\KayuMasuk::whereHas('detailTurusanKayus', function ($q) use ($lahanId, $jenisKayuId, $panjang) {
+            $q->where('lahan_id',      $lahanId)
+                ->where('jenis_kayu_id', $jenisKayuId)
+                ->where('panjang',       $panjang);
+        })
+            ->latest()
+            ->first();
+
+        if (! $kayuMasuk) {
+            Log::warning('[HPP] syncTempatKayu SKIP — kayuMasuk tidak ditemukan', [
+                'lahan_id'      => $lahanId,
+                'jenis_kayu_id' => $jenisKayuId,
+                'panjang'       => $panjang,
+            ]);
+            return;
+        }
+
+        // updateOrCreate berdasarkan id_lahan + id_kayu_masuk
+        // sehingga tidak duplikat jika nota masuk lebih dari sekali
+        $tempatKayu = \App\Models\TempatKayu::updateOrCreate(
+            [
+                'id_lahan'      => $lahanId,
+                'id_kayu_masuk' => $kayuMasuk->id,
+            ],
+            [
+                'jumlah_batang' => $stokBatang,
+                // kubikasi dihitung via accessor di model, tidak disimpan langsung
+                // poin tidak diisi karena TempatKayu tidak pakai HPP
+            ]
+        );
+
+        Log::info('[HPP] syncTempatKayu selesai', [
+            'tempat_kayu_id' => $tempatKayu->id,
+            'id_lahan'       => $lahanId,
+            'id_kayu_masuk'  => $kayuMasuk->id,
+            'jumlah_batang'  => $stokBatang,
+            'stok_kubikasi'  => $stokKubikasi,
+        ]);
     }
 
     // =========================================================================
