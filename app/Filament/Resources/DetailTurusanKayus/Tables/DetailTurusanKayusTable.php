@@ -58,12 +58,12 @@ class DetailTurusanKayusTable
                         };
                         return "{$namaKayu} {$panjang} ({$grade})";
                     })
-                    ->searchable(['panjang', 'grade']) 
+                    ->searchable(['panjang', 'grade'])
                     // Jika ingin mencari nama kayu (relasi), gunakan:
                     ->searchable(query: function ($query, string $search) {
                         $query->where('panjang', 'like', "%{$search}%")
-                              ->orWhere('grade', 'like', "%{$search}%")
-                              ->orWhereHas('jenisKayu', fn($q) => $q->where('nama_kayu', 'like', "%{$search}%"));
+                            ->orWhere('grade', 'like', "%{$search}%")
+                            ->orWhereHas('jenisKayu', fn($q) => $q->where('nama_kayu', 'like', "%{$search}%"));
                     }),
 
                 TextColumn::make('diameter')
@@ -92,7 +92,7 @@ class DetailTurusanKayusTable
                     ->suffix(' m³')
                     ->alignRight()
                     ->toggleable(isToggledHiddenByDefault: true),
-                    
+
                 TextColumn::make('createdBy.name')
                     ->label('Dibuat Oleh')
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -171,7 +171,8 @@ class DetailTurusanKayusTable
                         ->schema([
                             Select::make('lahan_id')->options(Lahan::pluck('kode_lahan', 'id'))->required(),
                         ])
-                        ->action(fn(array $data, Collection $records) => $records->each->update(['lahan_id' => $data['lahan_id']])),
+                        ->action(fn(array $data, Collection $records) => $records->each->update(['lahan_id' => $data['lahan_id']]))
+                        ->deselectRecordsAfterCompletion(),
 
                     BulkAction::make('update_panjang')
                         ->label('Update Panjang')
@@ -180,6 +181,23 @@ class DetailTurusanKayusTable
                             Select::make('panjang')->label('Panjang Baru')->options([130 => '130', 260 => '260'])->required(),
                         ])
                         ->action(fn(array $data, Collection $records) => $records->each->update(['panjang' => $data['panjang']]))
+                        ->deselectRecordsAfterCompletion(),
+
+                    BulkAction::make('update_jenis_kayu')
+                        ->label('Update Jenis Kayu')
+                        ->icon('heroicon-o-tag')
+                        ->schema([
+                            Select::make('jenis_kayu_id')
+                                ->label('Jenis Kayu Baru')
+                                ->options(JenisKayu::pluck('nama_kayu', 'id'))
+                                ->searchable()
+                                ->required(),
+                        ])
+                        ->action(function (array $data, Collection $records) {
+                            $records->each->update([
+                                'jenis_kayu_id' => $data['jenis_kayu_id'],
+                            ]);
+                        })
                         ->deselectRecordsAfterCompletion(),
                 ])->visible(!$isLocked),
             ]);

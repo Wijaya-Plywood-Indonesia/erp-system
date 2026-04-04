@@ -70,7 +70,7 @@ class DetailKayuMasuksTable
                         return "{$namaKayu} {$panjang} ({$grade})";
                     })
                     ->searchable(query: function ($query, string $search) {
-                        $query->whereHas('jenisKayu', fn ($q) => $q->where('nama_kayu', 'like', "%{$search}%"))
+                        $query->whereHas('jenisKayu', fn($q) => $q->where('nama_kayu', 'like', "%{$search}%"))
                             ->orWhere('panjang', 'like', "%{$search}%")
                             ->orWhere('grade', 'like', "%{$search}%");
                     })
@@ -222,6 +222,23 @@ class DetailKayuMasuksTable
                             Select::make('panjang')->label('Panjang Baru')->options([130 => '130', 260 => '260'])->required(),
                         ])
                         ->action(fn(array $data, Collection $records) => $records->each->update(['panjang' => $data['panjang']]))
+                        ->deselectRecordsAfterCompletion(),
+                        
+                    BulkAction::make('update_jenis_kayu')
+                        ->label('Update Jenis Kayu')
+                        ->icon('heroicon-o-tag')
+                        ->schema([
+                            Select::make('jenis_kayu_id')
+                                ->label('Jenis Kayu Baru')
+                                ->options(JenisKayu::pluck('nama_kayu', 'id'))
+                                ->searchable()
+                                ->required(),
+                        ])
+                        ->action(function (array $data, Collection $records) {
+                            $records->each->update([
+                                'jenis_kayu_id' => $data['jenis_kayu_id'],
+                            ]);
+                        })
                         ->deselectRecordsAfterCompletion(),
                 ])->visible(!$isLocked),
             ]);
