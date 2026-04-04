@@ -617,31 +617,44 @@ class RotaryJurnalService
             $hppBahan    = round($totalBahan / $totalKubikasi, 2);
             $hppAverage  = $hppKayu + $hppPekerja + $hppMesin + $hppBahan;
 
-            // ── Update setiap log yang hpp = 0 ────────────────────────────────
-            foreach ($logsHariIni as $log) {
-                $kubikasi   = (float) $log->total_kubikasi;
-                $nilaiMasuk = round($hppAverage * $kubikasi, 2);
+            // ── Update setiap log yang hpp = 0, per kombinasi ukuran+kw ─────────
+            // Group logs per kombinasi agar moving average dihitung berurutan
+            $logsPerKombinasi = $logsHariIni->groupBy(fn($l) => $l->id_jenis_kayu.'|'.$l->panjang.'|'.$l->lebar.'|'.$l->tebal.'|'.$l->kw);
 
-                // Ambil summarie & hitung moving average
-                $summarie = HppVeneerBasahSummary::where('id_jenis_kayu', $log->id_jenis_kayu)
-                    ->where('panjang', $log->panjang)
-                    ->where('lebar',   $log->lebar)
-                    ->where('tebal',   $log->tebal)
-                    ->where('kw',      $log->kw)
+            foreach ($logsPerKombinasi as $kombiKey => $kombiLogs) {
+                // Ambil summarie kombinasi ini
+                $firstLog = $kombiLogs->first();
+                $summarie = HppVeneerBasahSummary::where('id_jenis_kayu', $firstLog->id_jenis_kayu)
+                    ->where('panjang', $firstLog->panjang)
+                    ->where('lebar',   $firstLog->lebar)
+                    ->where('tebal',   $firstLog->tebal)
+                    ->where('kw',      $firstLog->kw)
                     ->first();
 
                 if (!$summarie) continue;
 
-                // Nilai stok sebelum log ini (dari stok_before di log)
-                $kubikasiBefore = (float) $log->stok_kubikasi_before;
-                $nilaiBefore    = (float) $log->nilai_stok_before;
-                $hppLama        = $kubikasiBefore > 0 ? $nilaiBefore / $kubikasiBefore : 0;
+                // Hitung HPP average kombinasi ini dari awal (stok sebelum hari ini)
+                // Ambil nilai stok sebelum log pertama hari ini
+                $sortedLogs     = $kombiLogs->sortBy('id');
+                $kubikasiBefore = (float) $sortedLogs->first()->stok_kubikasi_before;
+                $nilaiBefore    = $kubikasiBefore > 0
+                    ? $kubikasiBefore * (float) ($summarie->hpp_average > 0 ? $summarie->hpp_average : 0)
+                    : 0.0;
 
-                $hppAverageBaru = ($kubikasiBefore + $kubikasi) > 0
-                    ? round(($nilaiBefore + $nilaiMasuk) / ($kubikasiBefore + $kubikasi), 2)
+                // Hitung running moving average untuk semua log kombinasi ini
+                $runningKubikasi = $kubikasiBefore;
+                $runningNilai    = $nilaiBefore;
+
+            foreach ($sortedLogs as $log) {
+                $kubikasi   = (float) $log->total_kubikasi;
+                $nilaiMasuk = round($hppAverage * $kubikasi, 2);
+
+                $hppAverageBaru = ($runningKubikasi + $kubikasi) > 0
+                    ? round(($runningNilai + $nilaiMasuk) / ($runningKubikasi + $kubikasi), 2)
                     : $hppAverage;
 
-                $nilaiAfter = round($hppAverageBaru * (float) $log->stok_kubikasi_after, 2);
+                $kubikasiAfter = round($runningKubikasi + $kubikasi, 6);
+                $nilaiAfter    = round($hppAverageBaru * $kubikasiAfter, 2);
 
                 // Update log
                 $log->update([
@@ -654,15 +667,20 @@ class RotaryJurnalService
                     'nilai_stok_after'   => $nilaiAfter,
                 ]);
 
-                // Update summarie
+                // Update running state untuk log berikutnya
+                $runningKubikasi = $kubikasiAfter;
+                $runningNilai    = $nilaiAfter;
+            }
+
+                // Update summarie dengan nilai akhir
                 $summarie->update([
-                    'nilai_stok'             => round($hppAverageBaru * (float) $summarie->stok_kubikasi, 2),
-                    'hpp_average'            => $hppAverageBaru,
+                    'nilai_stok'             => $runningNilai,
+                    'hpp_average'            => $hppAverageBaru ?? $hppAverage,
                     'hpp_kayu_last'          => $hppKayu,
                     'hpp_pekerja_last'       => $hppPekerja,
                     'hpp_mesin_last'         => $hppMesin,
                     'hpp_bahan_penolong_last'=> $hppBahan,
-                    'id_last_log'            => $log->id,
+                    'id_last_log'            => $sortedLogs->last()->id,
                 ]);
 
                 // Catat breakdown bahan penolong
