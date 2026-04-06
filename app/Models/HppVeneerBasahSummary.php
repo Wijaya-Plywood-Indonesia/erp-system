@@ -14,6 +14,7 @@ class HppVeneerBasahSummary extends Model
         'panjang',
         'lebar',
         'tebal',
+        'kw',
         'stok_lembar',
         'stok_kubikasi',
         'nilai_stok',

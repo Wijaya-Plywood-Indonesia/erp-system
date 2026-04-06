@@ -16,6 +16,7 @@ class HppVeneerBasahLog extends Model
         'panjang',
         'lebar',
         'tebal',
+        'kw',
         'tanggal',
         'tipe_transaksi',
         'keterangan',

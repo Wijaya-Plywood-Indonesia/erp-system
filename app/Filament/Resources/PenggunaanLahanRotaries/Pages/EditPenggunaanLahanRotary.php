@@ -20,15 +20,15 @@ class EditPenggunaanLahanRotary extends EditRecord
 
     protected function afterSave(): void
     {
-        $record = $this->record;
+        // $record = $this->record;
 
-        // Logika yang sama: jika jumlah batang tidak nol
-        if ($record->jumlah_batang != 0) {
-            app(HppAverageService::class)->prosesKeluarRotary(
-                lahanId: $record->id_lahan,
-                jenisKayuId: $record->id_jenis_kayu,
-                referensi: $record
-            );
-        }
+        // // Logika yang sama: jika jumlah batang tidak nol
+        // if ($record->jumlah_batang != 0) {
+        //     app(HppAverageService::class)->prosesKeluarRotary(
+        //         lahanId: $record->id_lahan,
+        //         jenisKayuId: $record->id_jenis_kayu,
+        //         referensi: $record
+        //     );
+        // }
     }
 }
