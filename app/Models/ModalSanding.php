@@ -35,6 +35,6 @@ class ModalSanding extends Model
      */
     public function barangSetengahJadi()
     {
-        return $this->belongsTo(BarangSetengahJadiHP::class, 'id_barang_setengah_jadi');
+        return $this->belongsTo(BarangSetengahJadiHp::class, 'id_barang_setengah_jadi');
     }
 }
