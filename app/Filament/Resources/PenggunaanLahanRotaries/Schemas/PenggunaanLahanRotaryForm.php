@@ -8,6 +8,7 @@ use App\Models\PenggunaanLahanRotary;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use App\Models\TempatKayu;
 
 use Filament\Notifications\Notification;
 
@@ -19,13 +20,21 @@ class PenggunaanLahanRotaryForm
             ->components([
                 Select::make('id_lahan')
                     ->label('Lahan')
-                    ->options(
-                        Lahan::query()
+                    ->options(function () {
+                        // Ambil semua id_lahan dari tempat kayu yang status diterima
+                        $lahanIds = TempatKayu::query()
+                            ->where('status', 'sudah diterima')
+                            ->pluck('id_lahan')
+                            ->unique();
+
+                        // Ambil data lahan berdasarkan id tersebut
+                        return Lahan::query()
+                            ->whereIn('id', $lahanIds)
                             ->get()
                             ->mapWithKeys(fn($lahan) => [
                                 $lahan->id => "{$lahan->kode_lahan} - {$lahan->nama_lahan}",
-                            ])
-                    )
+                            ]);
+                    })
                     ->searchable()
                     ->required()
                     ->live()
