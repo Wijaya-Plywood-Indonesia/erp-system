@@ -35,55 +35,60 @@ class DetailMasukForm
 
         return $schema
             ->schema([
-                Select::make('no_palet')
+                 TextInput::make('no_palet')
                     ->label('Nomor Palet')
-                    ->options($paletDiterima)
-                    ->searchable()
-                    ->required()
-                    ->live()
-                    ->disabled(empty($paletDiterima))
-                    ->helperText(
-                        empty($paletDiterima)
-                            ? 'Belum ada palet yang diterima oleh produksi dryer ini.'
-                            : 'Pilih palet untuk mengisi form otomatis.'
-                    )
-                    ->afterStateUpdated(function (Set $set, ?string $state) {
-                        if (!$state) return;
+                    ->numeric()
+                    //->required()
+                    ,
+                // Select::make('no_palet')
+                //     ->label('Nomor Palet')
+                //     ->options($paletDiterima)
+                //     ->searchable()
+                //     ->required()
+                //     ->live()
+                //     ->disabled(empty($paletDiterima))
+                //     ->helperText(
+                //         empty($paletDiterima)
+                //             ? 'Belum ada palet yang diterima oleh produksi dryer ini.'
+                //             : 'Pilih palet untuk mengisi form otomatis.'
+                //     )
+                //     ->afterStateUpdated(function (Set $set, ?string $state) {
+                //         if (!$state) return;
 
-                        $palet = DetailHasilPaletRotary::with([
-                            'produksi.mesin',    // <-- tambah eager load mesin
-                            'penggunaanLahan',
-                            'setoranPaletUkuran',
-                        ])->find($state);
+                //         $palet = DetailHasilPaletRotary::with([
+                //             'produksi.mesin',    // <-- tambah eager load mesin
+                //             'penggunaanLahan',
+                //             'setoranPaletUkuran',
+                //         ])->find($state);
 
-                        if (!$palet) return;
+                //         if (!$palet) return;
 
-                        // Simpan kode unik SP-1 bukan angka 1
-                        $set('no_palet', $palet->kode_palet);
-                        $set('kw', $palet->kw);
-                        $set('isi', $palet->total_lembar);
+                //         // Simpan kode unik SP-1 bukan angka 1
+                //         $set('no_palet', $palet->kode_palet);
+                //         $set('kw', $palet->kw);
+                //         $set('isi', $palet->total_lembar);
 
-                        $idJenisKayu = $palet->penggunaanLahan?->id_jenis_kayu;
-                        if ($idJenisKayu) {
-                            $set('id_jenis_kayu', $idJenisKayu);
-                            session(['last_jenis_kayu' => $idJenisKayu]);
-                        }
+                //         $idJenisKayu = $palet->penggunaanLahan?->id_jenis_kayu;
+                //         if ($idJenisKayu) {
+                //             $set('id_jenis_kayu', $idJenisKayu);
+                //             session(['last_jenis_kayu' => $idJenisKayu]);
+                //         }
 
-                        $ukuran = $palet->setoranPaletUkuran;
-                        if ($ukuran) {
-                            $idUkuran = DB::table('ukurans')
-                                ->where('tebal', $ukuran->tebal)
-                                ->where('lebar', $ukuran->lebar)
-                                ->where('panjang', $ukuran->panjang)
-                                ->value('id');
+                //         $ukuran = $palet->setoranPaletUkuran;
+                //         if ($ukuran) {
+                //             $idUkuran = DB::table('ukurans')
+                //                 ->where('tebal', $ukuran->tebal)
+                //                 ->where('lebar', $ukuran->lebar)
+                //                 ->where('panjang', $ukuran->panjang)
+                //                 ->value('id');
 
-                            if ($idUkuran) {
-                                $set('id_ukuran', $idUkuran);
-                                session(['last_ukuran' => $idUkuran]);
-                            }
-                        }
-                    })
-                    ->columnSpanFull(),
+                //             if ($idUkuran) {
+                //                 $set('id_ukuran', $idUkuran);
+                //                 session(['last_ukuran' => $idUkuran]);
+                //             }
+                //         }
+                //     })
+                //     ->columnSpanFull(),
 
                 Select::make('id_jenis_kayu')
                     ->label('Jenis Kayu')
