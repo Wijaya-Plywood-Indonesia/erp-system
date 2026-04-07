@@ -24,7 +24,7 @@ class StokVeneerBasah extends Page
     // ── Computed: semua summaries ──────────────────────────────
     public function getSummariesProperty()
     {
-        return HppVeneerBasahSummary::with('jenisKayu')
+        return HppVeneerBasahSummary::with(['jenisKayu', 'lastLog'])
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->when($this->filterTebal,     fn($q) => $q->where('tebal', $this->filterTebal))
             ->when($this->filterKw,        fn($q) => $q->where('kw',    $this->filterKw))
