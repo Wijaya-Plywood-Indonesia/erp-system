@@ -2,11 +2,13 @@
 
 namespace App\Filament\Resources\ModalRepairs\Tables;
 
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Textarea;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -49,6 +51,8 @@ class ModalRepairsTable
                     ->label('Nomor Palet')
                     ->numeric()
                     ->sortable(),
+                TextColumn::make('keterangan')
+                    ->label('Kehilangan/Kelebihan'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -67,6 +71,17 @@ class ModalRepairsTable
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make(),
+                Action::make('aturIjin')
+                    ->label('Keterangan')
+                    ->icon('heroicon-o-pencil-square')
+                    ->form([
+                        Textarea::make('keterangan')->label('Kehilangan/Kelebihan'),
+                    ])
+                    ->action(function ($record, array $data) {
+                        $record->update([
+                            'keterangan'  => $data['keterangan'],
+                        ]);
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

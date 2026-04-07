@@ -6,6 +6,7 @@ use App\Filament\Resources\ProduksiRepairs\Pages\CreateProduksiRepair;
 use App\Filament\Resources\ProduksiRepairs\Pages\EditProduksiRepair;
 use App\Filament\Resources\ProduksiRepairs\Pages\ListProduksiRepairs;
 use App\Filament\Resources\ProduksiRepairs\Pages\ViewProduksiRepair;
+use App\Filament\Resources\ProduksiRepairs\RelationManagers\BahanPenolongRepairRelationManager;
 use App\Filament\Resources\ProduksiRepairs\Schemas\ProduksiRepairForm;
 use App\Filament\Resources\ProduksiRepairs\Schemas\ProduksiRepairInfolist;
 use App\Filament\Resources\ProduksiRepairs\Tables\ProduksiRepairsTable;
@@ -23,6 +24,7 @@ use App\Filament\Resources\ProduksiRepairs\RelationManagers\RencanaRepairRelatio
 use App\Filament\Resources\ProduksiRepairs\RelationManagers\HasilRepairRelationManager;
 use App\Filament\Resources\ProduksiRepairs\RelationManagers\ModalRepairRelationManager;
 use App\Filament\Resources\ProduksiRepairs\RelationManagers\ValidasiRepairRelationManager;
+use App\Models\BahanPenolongRepair;
 
 class ProduksiRepairResource extends Resource
 {
@@ -54,6 +56,7 @@ class ProduksiRepairResource extends Resource
             DetailRencanaPegawaiRelationManager::class,
             RencanaRepairRelationManager::class,
             HasilRepairRelationManager::class,
+            BahanPenolongRepairRelationManager::class,
             ValidasiRepairRelationManager::class,
         ];
     }
