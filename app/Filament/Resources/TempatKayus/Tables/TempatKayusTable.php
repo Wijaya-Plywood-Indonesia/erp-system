@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\TempatKayus\Tables;
 
 use App\Models\HppAverageSummarie;
+use App\Models\ProduksiRotary;
+use App\Models\PenggunaanLahanRotary;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -19,6 +21,11 @@ class TempatKayusTable
     private const ROLE_GRADER   = ['Grader Kayu 1', 'Grader Kayu 2'];
     private const ROLE_PENGAWAS = ['pengawas_rotary_1', 'pengawas_rotary_2'];
     private const ROLE_ADMIN    = ['super_admin', 'Super Admin'];
+
+    public const MESIN_MAP = [
+        130 => ['SANJI', 'YUEQUN'],
+        260 => ['SPINDLESS', 'MERANTI'],
+    ];
 
     public static function configure(Table $table): Table
     {
@@ -115,7 +122,7 @@ class TempatKayusTable
                 EditAction::make()
                     ->visible($isGrader || $isAdmin),
 
-                // TOMBOL SERAH — hanya mencatat, tidak menyentuh stok
+                // TOMBOL SERAH — Grader: hilang setelah diserahkan | Admin: selalu ada
                 Action::make('serah_kayu')
                     ->label('Serah Kayu')
                     ->icon('heroicon-o-paper-airplane')
@@ -125,7 +132,8 @@ class TempatKayusTable
                     ->modalDescription(
                         fn($record) =>
                         "Kayu dari lahan {$record->lahan?->kode_lahan} " .
-                            "({$record->jumlah_batang} batang) akan diserahkan ke rotary."
+                            "({$record->jumlah_batang} batang) akan langsung diserahkan " .
+                            "ke produksi rotary berdasarkan panjang kayu."
                     )
                     ->modalSubmitActionLabel('Ya, Serahkan')
                     ->visible(function ($record) use ($bisaSerah, $isAdmin) {
@@ -136,16 +144,38 @@ class TempatKayusTable
                             ->where('tipe', 'lahan_rotary')
                             ->exists();
 
+                        // Admin selalu bisa lihat tombol serah
                         if ($isAdmin) return true;
 
+                        // Grader: tombol hilang setelah diserahkan
                         return !$sudahDiserahkan;
                     })
                     ->action(function ($record) {
-                        $idLahan  = $record->id_lahan;
+                        $idLahan = $record->id_lahan;
+
                         $kubikasi = HppAverageSummarie::where('id_lahan', $idLahan)
                             ->sum('stok_kubikasi');
 
+                        $panjang = (int) HppAverageSummarie::where('id_lahan', $idLahan)
+                            ->value('panjang');
+
+                        $namaMesins = self::MESIN_MAP[$panjang] ?? [];
+
+                        $idJenisKayu = $record->kayuMasuk
+                            ?->detailMasukanKayu
+                            ->first()
+                            ?->id_jenis_kayu;
+
+                        if (empty($namaMesins)) {
+                            Notification::make()
+                                ->title('Panjang kayu tidak dikenali')
+                                ->warning()
+                                ->send();
+                            return;
+                        }
+
                         try {
+                            // Jika admin menekan lagi setelah diserahkan, update pivot yang ada
                             $pivotAda = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
                                 ->where('id_lahan', $idLahan)
                                 ->where('tipe', 'lahan_rotary')
@@ -157,8 +187,8 @@ class TempatKayusTable
                                     ->where('tipe', 'lahan_rotary')
                                     ->update([
                                         'diserahkan_oleh' => Auth::user()->name,
-                                        'diterima_oleh'   => '-',
                                         'status'          => 'Lahan Siap',
+                                        'diterima_oleh'   => '-',
                                         'updated_at'      => now(),
                                     ]);
                             } else {
@@ -184,21 +214,40 @@ class TempatKayusTable
                             ]);
 
                             Log::channel('single')->info('Serah Kayu', [
-                                'id_lahan'        => $idLahan,
+                                'id_lahan'       => $idLahan,
                                 'diserahkan_oleh' => Auth::user()->name,
                             ]);
                         } catch (\Throwable $e) {
-                            Log::channel('single')->error('Serah Kayu FAILED', [
+                            Log::channel('single')->error('Insert FAILED', [
                                 'message' => $e->getMessage(),
                                 'code'    => $e->getCode(),
                             ]);
 
                             Notification::make()
-                                ->title('Gagal menyerahkan kayu')
+                                ->title('Gagal')
                                 ->body($e->getMessage())
                                 ->danger()
                                 ->send();
                             return;
+                        }
+
+                        foreach ($namaMesins as $namaMesin) {
+                            $produksi = ProduksiRotary::whereHas(
+                                'mesin',
+                                fn($q) =>
+                                $q->where('nama_mesin', $namaMesin)
+                            )
+                                ->latest()
+                                ->first();
+
+                            if (!$produksi) continue;
+
+                            PenggunaanLahanRotary::create([
+                                'id_lahan'      => $idLahan,
+                                'id_produksi'   => $produksi->id,
+                                'id_jenis_kayu' => $idJenisKayu,
+                                'jumlah_batang' => $record->jumlah_batang,
+                            ]);
                         }
 
                         Notification::make()
@@ -207,7 +256,7 @@ class TempatKayusTable
                             ->send();
                     }),
 
-                // TOMBOL TERIMA — hanya mencatat, tidak menyentuh stok
+                // TOMBOL TERIMA — Pengawas: hilang setelah diterima | Admin: selalu ada
                 Action::make('terima_kayu')
                     ->label('Terima Kayu')
                     ->icon('heroicon-o-check-circle')
@@ -222,6 +271,21 @@ class TempatKayusTable
                     )
                     ->modalSubmitActionLabel('Ya, Terima')
                     ->visible(function ($record) use ($bisaTerima, $isAdmin) {
+                        $user = Auth::user();
+
+                        // Debug log
+                        Log::channel('single')->info('DEBUG visible terima_kayu', [
+                            'user'        => $user->name,
+                            'roles'       => $user->getRoleNames(),
+                            'bisaTerima'  => $bisaTerima,
+                            'isAdmin'     => $isAdmin,
+                            'id_lahan'    => $record->id_lahan,
+                            'pivot'       => DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
+                                ->where('id_lahan', $record->id_lahan)
+                                ->where('tipe', 'lahan_rotary')
+                                ->first(),
+                        ]);
+
                         if (!$bisaTerima) return false;
 
                         $pivot = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
