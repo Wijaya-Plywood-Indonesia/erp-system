@@ -39,6 +39,11 @@ class ProduksiRepair extends Model
         return $this->hasMany(ModalRepair::class, 'id_produksi_repair');
     }
 
+    public function bahanPenolongRepair()
+    {
+        return $this->hasMany(BahanPenolongRepair::class, 'id_produksi_repair');
+    }
+
     public function validasiRepairs(): HasMany
     {
         return $this->hasMany(ValidasiRepair::class, 'id_produksi_repair');
