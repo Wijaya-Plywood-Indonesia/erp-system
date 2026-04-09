@@ -157,7 +157,7 @@ class NotaKayusTable
                 Action::make('set_lunas')
                     ->label('Tandai Lunas')
                     ->icon('heroicon-o-banknotes')
-                    ->color('success')
+                    ->color('danger')
                     ->requiresConfirmation()
                     ->modalHeading('Konfirmasi Pelunasan & Sinkronisasi Data')
                     ->modalDescription('Menandai nota sebagai Lunas akan memicu: 1. Penambahan Stok Lahan, 2. Update Data Tempat Kayu, dan 3. Pengiriman Jurnal ke Akuntansi. Lanjutkan?')
