@@ -160,8 +160,9 @@ class NotaKayusTable
                     ->modalHeading('Konfirmasi Pelunasan & Sinkronisasi')
                     ->modalDescription('Menandai nota sebagai Lunas akan memicu perhitungan HPP (Stok Masuk) dan mengirim data Jurnal ke Akuntansi. Lanjutkan?')
                     ->action(function ($record) {
-                        // 1. Update status pelunasan
-                        $record->status_pelunasan = 'Lunas';
+                        // 1. Update status pelunasan dengan TANGGAL dan JAM
+                        $timestamp = now()->format('d/m/Y H:i');
+                        $record->status_pelunasan = "Lunas - {$timestamp}";
                         $record->save();
 
                         // 2. TRIGGER HPP: Cek apakah log HPP sudah ada (mencegah duplikasi)
@@ -188,14 +189,14 @@ class NotaKayusTable
 
                         Notification::make()
                             ->title('Nota Lunas & Sinkron')
-                            ->body('Status Lunas diperbarui. Stok HPP dan Jurnal telah diproses.')
+                            ->body("Status diperbarui menjadi: Lunas - {$timestamp}")
                             ->success()
                             ->send();
                     })
                     ->visible(
                         fn($record) =>
                         str_contains($record->status ?? '', 'Sudah Diperiksa') &&
-                            $record->status_pelunasan !== 'Lunas'
+                            !str_contains($record->status_pelunasan ?? '', 'Lunas')
                     ),
 
                 // --- ACTION: TANDAI SUDAH DIPERIKSA (HANYA VERIFIKASI FISIK) ---
