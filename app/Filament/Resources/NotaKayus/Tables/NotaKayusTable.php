@@ -111,9 +111,9 @@ class NotaKayusTable
                     ->badge()
                     ->colors([
                         'secondary' => 'Belum Diperiksa',
-                        'success'   => fn($state) => str_contains($state, 'Sudah Diperiksa'),
-                        'warning'   => fn($state) => str_contains($state, 'Menunggu'),
-                        'danger'    => fn($state) => str_contains($state, 'Ditolak'),
+                        'success'   => fn($state) => str_contains($state ?? '', 'Sudah Diperiksa'),
+                        'warning'   => fn($state) => str_contains($state ?? '', 'Menunggu'),
+                        'danger'    => fn($state) => str_contains($state ?? '', 'Ditolak'),
                     ]),
 
                 TextColumn::make('status_pelunasan')
@@ -121,13 +121,15 @@ class NotaKayusTable
                     ->badge()
                     ->colors([
                         'danger' => 'Belum Lunas',
-                        'success' => 'Lunas',
+                        // Tetap hijau jika teks mengandung kata 'Lunas' (termasuk yang ada jam/usernya)
+                        'success' => fn($state) => str_starts_with($state ?? '', 'Lunas'),
                         'warning' => 'Sebagian',
                     ])
                     ->searchable(),
 
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d/m/Y H:i')
+                    ->label('Tgl Nota')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -151,55 +153,66 @@ class NotaKayusTable
                     ->openUrlInNewTab()
                     ->visible(fn($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
 
-                // --- ACTION: TANDAI LUNAS (TRIGGER UTAMA HPP & JURNAL) ---
+                // --- ACTION: TANDAI LUNAS (UTAMA: UPDATE STOK, TEMPAT KAYU & JURNAL) ---
                 Action::make('set_lunas')
                     ->label('Tandai Lunas')
                     ->icon('heroicon-o-banknotes')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->modalHeading('Konfirmasi Pelunasan & Sinkronisasi')
-                    ->modalDescription('Menandai nota sebagai Lunas akan memicu perhitungan HPP (Stok Masuk) dan mengirim data Jurnal ke Akuntansi. Lanjutkan?')
+                    ->modalHeading('Konfirmasi Pelunasan & Sinkronisasi Data')
+                    ->modalDescription('Menandai nota sebagai Lunas akan memicu: 1. Penambahan Stok Lahan, 2. Update Data Tempat Kayu, dan 3. Pengiriman Jurnal ke Akuntansi. Lanjutkan?')
                     ->action(function ($record) {
-                        // 1. Update status pelunasan dengan TANGGAL dan JAM
+                        $user = Auth::user();
                         $timestamp = now()->format('d/m/Y H:i');
-                        $record->status_pelunasan = "Lunas - {$timestamp}";
+
+                        // 1. Update status pelunasan dengan Audit Trail (Siapa & Kapan)
+                        $record->status_pelunasan = "Lunas - {$timestamp} ({$user->name})";
                         $record->save();
 
-                        // 2. TRIGGER HPP: Cek apakah log HPP sudah ada (mencegah duplikasi)
+                        // 2. TRIGGER PEMBARUAN STOK & TEMPAT KAYU:
+                        // Cek apakah log HPP sudah ada untuk mencegah data ganda (Double Entry)
                         $sudahAdaLog = HppAverageLog::where('referensi_type', NotaKayu::class)
                             ->where('referensi_id', $record->id)
                             ->exists();
 
                         if (! $sudahAdaLog) {
                             try {
+                                // Service ini secara otomatis mengupdate:
+                                // - HppAverageLog (Riwayat)
+                                // - HppAverageSummaries (Saldo Stok)
+                                // - TempatKayu (Sinkronisasi Lahan untuk Produksi)
                                 app(HppAverageService::class)->prosesNotaKayuMasuk($record);
-                                Log::info('[HPP] Proses stok berhasil dijalankan saat Pelunasan', [
+
+                                Log::info('[NotaKayu] Stok & Tempat Kayu berhasil diperbarui', [
                                     'nota_id' => $record->id,
+                                    'user' => $user->name
                                 ]);
                             } catch (\Throwable $e) {
-                                Log::error('[HPP] GAGAL proses stok saat Pelunasan', [
+                                Log::error('[NotaKayu] GAGAL update stok & tempat kayu', [
                                     'nota_id' => $record->id,
                                     'error'   => $e->getMessage(),
                                 ]);
                             }
                         }
 
-                        // 3. TRIGGER JURNAL: Sync jurnal ke Perusahaan 2
+                        // 3. TRIGGER JURNAL: Sinkronisasi data ke Perusahaan 2
                         self::jalankanSync($record);
 
                         Notification::make()
-                            ->title('Nota Lunas & Sinkron')
-                            ->body("Status diperbarui menjadi: Lunas - {$timestamp}")
+                            ->title('Pelunasan Berhasil')
+                            ->body("Stok dan Tempat Kayu telah diperbarui.")
                             ->success()
                             ->send();
                     })
                     ->visible(
                         fn($record) =>
+                        // Tombol muncul hanya jika nota sudah diperiksa fisiknya 
+                        // dan statusnya masih 'Belum Lunas'
                         str_contains($record->status ?? '', 'Sudah Diperiksa') &&
-                            !str_contains($record->status_pelunasan ?? '', 'Lunas')
+                            $record->status_pelunasan === 'Belum Lunas'
                     ),
 
-                // --- ACTION: TANDAI SUDAH DIPERIKSA (HANYA VERIFIKASI FISIK) ---
+                // --- ACTION: TANDAI SUDAH DIPERIKSA ---
                 Action::make('cek')
                     ->label('Tandai Sudah Diperiksa')
                     ->icon('heroicon-o-check')
@@ -219,15 +232,13 @@ class NotaKayusTable
                     ->requiresConfirmation()
                     ->action(function ($record) {
                         $user = Auth::user();
-
-                        // HANYA mengubah status fisik. Stok dan Jurnal belum diproses di sini.
                         $record->status = "Sudah Diperiksa oleh {$user->name}";
                         $record->save();
 
                         Notification::make()
                             ->success()
-                            ->title('Verifikasi Berhasil')
-                            ->body('Data fisik telah diverifikasi. Stok akan bertambah saat nota ditandai Lunas.')
+                            ->title('Verifikasi Fisik Berhasil')
+                            ->body('Status fisik telah diperbarui. Silakan lanjut ke proses Pelunasan untuk menambah stok.')
                             ->send();
                     }),
 
@@ -281,6 +292,15 @@ class NotaKayusTable
                         'Lunas' => 'Lunas',
                         'Sebagian' => 'Sebagian',
                     ])
+                    ->query(function (Builder $query, array $data) {
+                        if (empty($data['value'])) return $query;
+
+                        if ($data['value'] === 'Lunas') {
+                            return $query->where('status_pelunasan', 'LIKE', 'Lunas%');
+                        }
+
+                        return $query->where('status_pelunasan', $data['value']);
+                    })
             ]);
     }
 

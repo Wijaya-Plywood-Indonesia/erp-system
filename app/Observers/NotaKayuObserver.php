@@ -45,12 +45,11 @@ class NotaKayuObserver
         }
 
         // Lewati jika status bukan Sudah Lunas
-        if ($nota->status_pelunasan !== 'Lunas') {
+        if (! str_contains($nota->status_pelunasan ?? '', 'Lunas')) {
             return;
         }
 
         // Guard duplikasi: cek apakah nota ini sudah pernah masuk ke HPP log
-        // Mencegah proses ganda jika admin edit & save ulang nota yang sudah diperiksa
         $sudahDiproses = HppAverageLog::where('referensi_type', NotaKayu::class)
             ->where('referensi_id', $nota->id)
             ->whereNull('grade')
