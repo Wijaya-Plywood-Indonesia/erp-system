@@ -77,7 +77,9 @@ class PenggunaanLahanRotaryForm
                 TextInput::make('jumlah_batang')
                     ->required()
                     ->numeric()
-                    ->default(0),
+                    ->default(0)
+                    ->readOnly()
+                    ->dehydrated(),
             ]);
     }
 }
