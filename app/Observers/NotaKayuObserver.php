@@ -40,12 +40,12 @@ class NotaKayuObserver
     public function updated(NotaKayu $nota): void
     {
         // Lewati jika status tidak berubah
-        if (! $nota->wasChanged('status')) {
+        if (! $nota->wasChanged('status_pelunasan')) {
             return;
         }
 
-        // Lewati jika status bukan Sudah Diperiksa
-        if (! str_contains($nota->status ?? '', 'Sudah Diperiksa')) {
+        // Lewati jika status bukan Sudah Lunas
+        if ($nota->status_pelunasan !== 'Lunas') {
             return;
         }
 
@@ -90,23 +90,26 @@ class NotaKayuObserver
 
     public function deleting(NotaKayu $nota): void
     {
-        // Hanya batalkan jika nota sudah pernah diperiksa (berarti HPP sudah diproses)
-        if (! str_contains($nota->status ?? '', 'Sudah Diperiksa')) {
-            Log::info('[HPP] Observer deleting SKIP — nota belum diperiksa', [
+        // Cek apakah nota ini memiliki log HPP (artinya sudah pernah diproses/Lunas)
+        $punyaLog = HppAverageLog::where('referensi_type', NotaKayu::class)
+            ->where('referensi_id', $nota->id)
+            ->exists();
+
+        if (! $punyaLog) {
+            Log::info('[HPP] Observer deleting SKIP — nota belum memiliki log HPP', [
                 'nota_id' => $nota->id,
-                'status'  => $nota->status,
+                'status_pelunasan' => $nota->status_pelunasan,
             ]);
             return;
         }
 
-        Log::info('[HPP] Observer deleting — batalkan HPP', [
+        Log::info('[HPP] Observer deleting — membatalkan HPP karena nota dihapus', [
             'nota_id' => $nota->id,
             'no_nota' => $nota->no_nota,
         ]);
 
         try {
-            // Gunakan deleting (bukan deleted) agar relasi kayuMasuk.detailTurusanKayus
-            // masih bisa diakses oleh batalkanNotaKayuMasuk()
+            // Mengurangi stok kembali jika nota yang sudah lunas dihapus
             $this->hppService->batalkanNotaKayuMasuk($nota);
         } catch (\Throwable $e) {
             // Error HPP tidak menggagalkan delete nota

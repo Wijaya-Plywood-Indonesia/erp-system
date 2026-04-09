@@ -20,10 +20,10 @@ class TempatKayusTable
     private const ROLE_PENGAWAS = ['pengawas_rotary_1', 'pengawas_rotary_2'];
     private const ROLE_ADMIN    = ['super_admin', 'Super Admin'];
 
-    public const MESIN_MAP = [
-        130 => ['SANJI', 'YUEQUN'],
-        260 => ['SPINDLESS', 'MERANTI'],
-    ];
+    /**
+     * CATATAN: MESIN_MAP telah dihapus agar semua mesin dapat menerima kayu 
+     * tanpa batasan panjang (130/260).
+     */
 
     public static function configure(Table $table): Table
     {
@@ -111,7 +111,7 @@ class TempatKayusTable
                 EditAction::make()
                     ->visible($isGrader || $isAdmin),
 
-                // TOMBOL SERAH — Grader: hilang setelah diserahkan | Admin: selalu ada
+                // TOMBOL SERAH
                 Action::make('serah_kayu')
                     ->label('Serah Kayu')
                     ->icon('heroicon-o-paper-airplane')
@@ -126,50 +126,32 @@ class TempatKayusTable
                     ->modalSubmitActionLabel('Ya, Serahkan')
                     ->visible(function ($record) use ($bisaSerah, $isAdmin) {
                         if (!$bisaSerah) return false;
-
-                        // Admin selalu bisa lihat tombol serah
                         if ($isAdmin) return true;
-
-                        // Grader: hanya muncul jika belum diserahkan
                         return $record->status === 'belum serah' || $record->status === null;
                     })
                     ->action(function ($record) {
                         $idLahan  = $record->id_lahan;
-                        $kubikasi = HppAverageSummarie::where('id_lahan', $idLahan)
-                            ->sum('stok_kubikasi');
+                        $kubikasi = HppAverageSummarie::where('id_lahan', $idLahan)->sum('stok_kubikasi');
 
                         try {
-                            $pivotAda = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
-                                ->where('id_lahan', $idLahan)
-                                ->where('tipe', 'lahan_rotary')
-                                ->exists();
-
-                            if ($pivotAda) {
-                                DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
-                                    ->where('id_lahan', $idLahan)
-                                    ->where('tipe', 'lahan_rotary')
-                                    ->update([
-                                        'diserahkan_oleh' => Auth::user()->name,
-                                        'diterima_oleh'   => '-',
-                                        'status'          => 'Lahan Siap',
-                                        'updated_at'      => now(),
-                                    ]);
-                            } else {
-                                DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
-                                    ->insert([
-                                        'id_detail_hasil_palet_rotary' => null,
-                                        'id_lahan'                     => $idLahan,
-                                        'id_produksi'                  => null,
-                                        'jumlah_batang'                => $record->jumlah_batang,
-                                        'kubikasi'                     => $kubikasi,
-                                        'diserahkan_oleh'              => Auth::user()->name,
-                                        'diterima_oleh'                => '-',
-                                        'tipe'                         => 'lahan_rotary',
-                                        'status'                       => 'Lahan Siap',
-                                        'created_at'                   => now(),
-                                        'updated_at'                   => now(),
-                                    ]);
-                            }
+                            // Update atau Insert ke pivot serah terima
+                            DB::table('detail_hasil_palet_rotary_serah_terima_pivot')->updateOrInsert(
+                                [
+                                    'id_lahan' => $idLahan,
+                                    'tipe'     => 'lahan_rotary',
+                                ],
+                                [
+                                    'id_detail_hasil_palet_rotary' => null,
+                                    'id_produksi'     => null,
+                                    'jumlah_batang'   => $record->jumlah_batang,
+                                    'kubikasi'        => $kubikasi,
+                                    'diserahkan_oleh' => Auth::user()->name,
+                                    'diterima_oleh'   => '-',
+                                    'status'          => 'Lahan Siap',
+                                    'updated_at'      => now(),
+                                    'created_at'      => now(),
+                                ]
+                            );
 
                             $record->update([
                                 'diserahkan_oleh' => Auth::user()->name,
@@ -177,31 +159,14 @@ class TempatKayusTable
                                 'status'          => 'sudah diserahkan',
                             ]);
 
-                            Log::channel('single')->info('Serah Kayu', [
-                                'id_lahan'        => $idLahan,
-                                'diserahkan_oleh' => Auth::user()->name,
-                            ]);
+                            Notification::make()->title('Kayu berhasil diserahkan')->success()->send();
                         } catch (\Throwable $e) {
-                            Log::channel('single')->error('Serah Kayu FAILED', [
-                                'message' => $e->getMessage(),
-                                'code'    => $e->getCode(),
-                            ]);
-
-                            Notification::make()
-                                ->title('Gagal menyerahkan kayu')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                            return;
+                            Log::error('Serah Kayu FAILED: ' . $e->getMessage());
+                            Notification::make()->title('Gagal menyerahkan kayu')->danger()->send();
                         }
-
-                        Notification::make()
-                            ->title('Kayu berhasil diserahkan')
-                            ->success()
-                            ->send();
                     }),
 
-                // TOMBOL TERIMA — Pengawas: hilang setelah diterima | Admin: selalu ada
+                // TOMBOL TERIMA
                 Action::make('terima_kayu')
                     ->label('Terima Kayu')
                     ->icon('heroicon-o-check-circle')
@@ -211,26 +176,16 @@ class TempatKayusTable
                     ->modalDescription(
                         fn($record) =>
                         "Kayu dari lahan {$record->lahan?->kode_lahan} " .
-                            "({$record->jumlah_batang} batang) akan diterima atas nama " .
-                            Auth::user()->name . "."
+                            "({$record->jumlah_batang} batang) akan diterima tanpa batasan mesin."
                     )
                     ->modalSubmitActionLabel('Ya, Terima')
-                    ->visible(function ($record) use ($bisaTerima, $isAdmin) {
-                        if (!$bisaTerima) return false;
-
-                        // Admin selalu bisa lihat tombol terima selama sudah diserahkan
-                        if ($isAdmin) return $record->status === 'sudah diserahkan';
-
-                        // Pengawas: hanya muncul jika status sudah diserahkan
-                        return $record->status === 'sudah diserahkan';
-                    })
+                    ->visible(fn($record) => $bisaTerima && $record->status === 'sudah diserahkan')
                     ->action(function ($record) {
                         try {
                             DB::transaction(function () use ($record) {
                                 DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
                                     ->where('id_lahan', $record->id_lahan)
                                     ->where('tipe', 'lahan_rotary')
-                                    ->where('status', 'Lahan Siap')
                                     ->update([
                                         'diterima_oleh' => Auth::user()->name,
                                         'status'        => 'Sudah Diterima',
@@ -241,38 +196,18 @@ class TempatKayusTable
                                     'diterima_oleh' => Auth::user()->name,
                                     'status'        => 'sudah diterima',
                                 ]);
-
-                                Log::channel('single')->info('Kayu Diterima', [
-                                    'id_tempat_kayu' => $record->id,
-                                    'id_lahan'       => $record->id_lahan,
-                                    'diterima_oleh'  => Auth::user()->name,
-                                ]);
                             });
 
-                            Notification::make()
-                                ->title('Kayu berhasil diterima')
-                                ->body('Status lahan diperbarui menjadi Sudah Diterima.')
-                                ->success()
-                                ->send();
+                            Notification::make()->title('Kayu berhasil diterima')->success()->send();
                         } catch (\Throwable $e) {
-                            Log::channel('single')->error('Terima Kayu FAILED', [
-                                'message' => $e->getMessage(),
-                                'code'    => $e->getCode(),
-                                'trace'   => $e->getTraceAsString(),
-                            ]);
-
-                            Notification::make()
-                                ->title('Gagal menerima kayu')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
+                            Log::error('Terima Kayu FAILED: ' . $e->getMessage());
+                            Notification::make()->title('Gagal menerima kayu')->danger()->send();
                         }
                     }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make()
-                        ->visible($isGrader || $isAdmin),
+                    DeleteBulkAction::make()->visible($isGrader || $isAdmin),
                 ]),
             ]);
     }
