@@ -147,7 +147,7 @@ class TempatKayusTable
             ->filters([])
             ->recordActions([
                 EditAction::make()
-                    ->visible($isGrader || $isAdmin),
+                    ->visible($isAdmin),
                 // ACTION SERAH
                 Action::make('serah_kayu')
                     ->label('Serah Kayu')
