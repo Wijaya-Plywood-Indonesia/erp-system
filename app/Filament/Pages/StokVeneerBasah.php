@@ -29,7 +29,8 @@ class StokVeneerBasah extends Page
     public string $filterKw        = '';
 
     /**
-     * HEADER ACTION: Input Stok Manual Menggunakan Select Ukuran & Input Kubikasi Manual
+     * HEADER ACTION: Input Stok Manual
+     * Ditambahkan field 'harga_satuan' untuk memperbaiki error undefined index.
      */
     protected function getHeaderActions(): array
     {
@@ -50,19 +51,18 @@ class StokVeneerBasah extends Page
 
                             TextInput::make('kw')
                                 ->label('Kualitas (KW)')
-                                ->integer()
+                                ->numeric()
+                                ->default(1)
                                 ->required(),
 
                             Select::make('id_ukuran')
                                 ->label('Ukuran Dimensi')
                                 ->options(
                                     Ukuran::get()->mapWithKeys(fn($u) => [
-                                        $u->id => $u->dimensi
+                                        $u->id => "{$u->dimensi}"
                                     ])
                                 )
-                                ->default(
-                                    fn() => Ukuran::latest()->first()?->id
-                                )
+                                ->default(fn() => Ukuran::latest()->first()?->id)
                                 ->searchable()
                                 ->required(),
 
@@ -72,17 +72,28 @@ class StokVeneerBasah extends Page
                                 ->minValue(1)
                                 ->required(),
 
-                            // INPUT KUBIKASI MANUAL (Sesuai Permintaan)
+                            // INPUT KUBIKASI MANUAL
                             TextInput::make('stok_kubikasi')
                                 ->label('Kubikasi (m³)')
                                 ->numeric()
                                 ->step('0.0001')
-                                ->helperText('Masukkan volume dalam m³ secara manual.')
+                                ->placeholder('0.0000')
+                                ->required(),
+
+                            /**
+                             * [PERBAIKAN] Menambahkan field harga_satuan 
+                             * agar tidak terjadi error "Undefined array key" saat action dijalankan.
+                             */
+                            TextInput::make('harga_satuan')
+                                ->label('Harga per m³ (HPP)')
+                                ->numeric()
+                                ->prefix('Rp')
+                                ->placeholder('Contoh: 1500000')
                                 ->required(),
                         ])
                 ])
                 ->action(function (array $data) {
-                    // 1. Ambil data dimensi dari model Ukuran (tetap diperlukan untuk identifikasi baris)
+                    // 1. Ambil data dimensi dari model Ukuran
                     $ukuranRecord = Ukuran::find($data['id_ukuran']);
 
                     if (!$ukuranRecord) {
@@ -97,11 +108,11 @@ class StokVeneerBasah extends Page
                     // 2. Gunakan Kubikasi dari Input Manual
                     $stokKubikasi = round((float) $data['stok_kubikasi'], 4);
 
-                    // 3. Hitung Nilai Stok Otomatis (Kubikasi * Harga per m3)
-                    $nilaiStok = round($stokKubikasi * (float) $data['harga_satuan'], 2);
+                    // 3. Ambil Harga Satuan (sudah aman karena ada di form)
+                    $hargaSatuan = (float) ($data['harga_satuan'] ?? 0);
 
-                    // 4. Hitung HPP Average (Karena inisialisasi, HPP = Harga per m3)
-                    $hppAverage = (int) round($data['harga_satuan']);
+                    // 4. Hitung Nilai Stok Otomatis (Kubikasi * Harga per m3)
+                    $nilaiStok = round($stokKubikasi * $hargaSatuan, 2);
 
                     // 5. Simpan dengan updateOrCreate
                     HppVeneerBasahSummary::updateOrCreate(
@@ -116,14 +127,14 @@ class StokVeneerBasah extends Page
                             'stok_lembar'   => $data['stok_lembar'],
                             'stok_kubikasi' => $stokKubikasi,
                             'nilai_stok'    => $nilaiStok,
-                            'hpp_average'   => $hppAverage,
+                            'hpp_average'   => (int) round($hargaSatuan),
                         ]
                     );
 
                     Notification::make()
                         ->success()
                         ->title('Stok Berhasil Disimpan')
-                        ->body("Data veneer {$panjang}×{$lebar}×{$tebal} (KW {$data['kw']}) telah diperbarui dengan volume {$stokKubikasi} m³.")
+                        ->body("Data veneer {$panjang}×{$lebar}×{$tebal} (KW {$data['kw']}) telah diperbarui.")
                         ->send();
                 }),
         ];
@@ -132,7 +143,7 @@ class StokVeneerBasah extends Page
     // ── Computed: semua summaries ──────────────────────────────
     public function getSummariesProperty()
     {
-        return HppVeneerBasahSummary::with(['jenisKayu', 'lastLog'])
+        return HppVeneerBasahSummary::with(['jenisKayu'])
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->when($this->filterTebal,     fn($q) => $q->where('tebal',     $this->filterTebal))
             ->when($this->filterKw,        fn($q) => $q->where('kw',        $this->filterKw))
