@@ -17,7 +17,6 @@ use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Table;
 use Filament\Tables\Filters\Filter;
 use Illuminate\Database\Eloquent\Builder;
-use Filament\Tables\Grouping\Group;
 
 class ProduksiKedisTable
 {
@@ -29,8 +28,15 @@ class ProduksiKedisTable
                     ->date()
                     ->sortable(),
 
+                // Menggunakan Badge agar status 'Masuk' & 'Bongkar' kontras
                 TextColumn::make('status')
                     ->label('Status')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'masuk' => 'success',
+                        'bongkar' => 'info',
+                        default => 'gray',
+                    })
                     ->formatStateUsing(fn($state) => ucfirst($state)),
 
                 TextColumn::make('kendala')
@@ -64,54 +70,28 @@ class ProduksiKedisTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-
             ->defaultSort('tanggal', 'desc')
-
             ->filters([
-
-    // ✅ FILTER STATUS
-    Filter::make('status')
-        ->form([
-            Select::make('status')
-                ->label('Status')
-                ->options([
-                    'masuk'   => 'Masuk',
-                    'bongkar' => 'Bongkar',
-                ])
-                ->placeholder('Semua Status'),
-        ])
-        ->query(function (Builder $query, array $data): Builder {
-            return $query->when(
-                $data['status'],
-                fn (Builder $q, $status) =>
-                    $q->where('status', $status)
-            );
-        }),
-
-    // ✅ FILTER TANGGAL (punyamu, tetap dipakai)
-    Filter::make('tanggal')
-        ->form([
-            \Filament\Forms\Components\DatePicker::make('from')
-                ->placeholder('Dari Tanggal'),
-            \Filament\Forms\Components\DatePicker::make('until')
-                ->placeholder('Sampai Tanggal'),
-        ])
-        ->query(function (Builder $query, array $data): Builder {
-            return $query
-                ->when(
-                    $data['from'],
-                    fn (Builder $q, $date) =>
-                        $q->whereDate('tanggal', '>=', $date)
-                )
-                ->when(
-                    $data['until'],
-                    fn (Builder $q, $date) =>
-                        $q->whereDate('tanggal', '<=', $date)
-                );
-        }),
-
-])
-
+                // Filter tanggal dipertahankan untuk pencarian spesifik
+                Filter::make('tanggal')
+                    ->form([
+                        \Filament\Forms\Components\DatePicker::make('from')
+                            ->placeholder('Dari Tanggal'),
+                        \Filament\Forms\Components\DatePicker::make('until')
+                            ->placeholder('Sampai Tanggal'),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when(
+                                $data['from'],
+                                fn (Builder $q, $date) => $q->whereDate('tanggal', '>=', $date)
+                            )
+                            ->when(
+                                $data['until'],
+                                fn (Builder $q, $date) => $q->whereDate('tanggal', '<=', $date)
+                            );
+                    }),
+            ])
             ->recordActions([
                 Action::make('kelola_kendala')
                     ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
@@ -151,7 +131,6 @@ class ProduksiKedisTable
                 DeleteAction::make()
                     ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->before(function ($record) {
-
                         $hasRelation =
                             $record->detailMasukKedi()->exists()
                             || $record->detailBongkarKedi()->exists()
@@ -161,7 +140,7 @@ class ProduksiKedisTable
                         if ($hasRelation) {
                             Notification::make()
                                 ->title('Data tidak dapat dihapus')
-                                ->body('Produksi Kedi ini masih memiliki data didalamnya yang terkait.')
+                                ->body('Produksi Kedi ini masih memiliki data terkait.')
                                 ->danger()
                                 ->send();
 
@@ -169,16 +148,7 @@ class ProduksiKedisTable
                         }
                     }),
             ])
-
-            ->groups([
-                Group::make('status')
-                    ->label('Status')
-                    ->collapsible()
-                    ->getTitleFromRecordUsing(fn($record) => ucfirst($record->status)),
-            ])
-            ->defaultGroup('status')
-            ->groupingSettingsHidden()
-
+            // Grouping dihapus agar tidak bentrok dengan Tabs
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
@@ -189,7 +159,6 @@ class ProduksiKedisTable
                             )
                         )
                         ->before(function ($records) {
-
                             foreach ($records as $record) {
                                 $hasRelation =
                                     $record->detailMasukKedi()->exists()
@@ -199,11 +168,9 @@ class ProduksiKedisTable
 
                                 if ($hasRelation) {
                                     Notification::make()
-                                        ->title('Gagal menghapus data terpilih')
-                                        ->body('Salah satu Produksi Kedi masih memiliki relasi.')
+                                        ->title('Gagal menghapus data')
                                         ->danger()
                                         ->send();
-
                                     throw new Halt();
                                 }
                             }
