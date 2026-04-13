@@ -85,7 +85,7 @@ class Ukuran extends Model
     }
 
 
-    protected $appends = ['kubikasi', 'nama_ukuran'];
+    protected $appends = ['kubikasi', 'nama_ukuran', 'dimensi'];
     public function getKubikasiAttribute()
     {
         $panjang = (float) $this->panjang;
