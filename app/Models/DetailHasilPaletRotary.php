@@ -85,16 +85,17 @@ class DetailHasilPaletRotary extends Model
 
     // Untuk Mapping Mesin Kebutuhan Nomor Palet
     private static array $kodeMapping = [
-        'Spindless' => 'SP',
-        'Meranti'    => 'MR',
-        'Sanji' => 'SJ',
-        'Yequen' => 'YQ'
+        'SPINDLESS' => 'SP',
+        'MERANTI'   => 'MR',
+        'SANJI'     => 'SJ',
+        'YUEQUN'    => 'YQ', // ✅ Fix ejaan: YUEQUN bukan Yequen
     ];
 
     public function getKodePaletAttribute(): string
     {
         $namaMesin = $this->produksi?->mesin?->nama_mesin;
-        $kode      = self::$kodeMapping[$namaMesin] ?? strtoupper(substr($namaMesin ?? 'XX', 0, 2));
+        $kode      = self::$kodeMapping[strtoupper($namaMesin ?? '')]
+            ?? strtoupper(substr($namaMesin ?? 'XX', 0, 2));
 
         return "{$kode}-{$this->palet}";
     }

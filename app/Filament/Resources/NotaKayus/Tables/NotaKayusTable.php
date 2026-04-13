@@ -135,23 +135,6 @@ class NotaKayusTable
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
-                // --- ACTION: CETAK NOTA ---
-                Action::make('print')
-                    ->label('Cetak Nota')
-                    ->icon('heroicon-o-printer')
-                    ->color('success')
-                    ->url(fn($record) => route('nota-kayu.show', $record))
-                    ->openUrlInNewTab()
-                    ->visible(fn($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
-
-                // --- ACTION: CETAK TURUS ---
-                Action::make('print_turus')
-                    ->label('Cetak Turus')
-                    ->icon('heroicon-o-clipboard-document-list')
-                    ->color('info')
-                    ->url(fn($record) => route('nota-kayu.turus', $record))
-                    ->openUrlInNewTab()
-                    ->visible(fn($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
 
                 // --- ACTION: TANDAI LUNAS (UTAMA: UPDATE STOK, TEMPAT KAYU & JURNAL) ---
                 Action::make('set_lunas')
@@ -211,6 +194,24 @@ class NotaKayusTable
                         str_contains($record->status ?? '', 'Sudah Diperiksa') &&
                             $record->status_pelunasan === 'Belum Lunas'
                     ),
+
+                // --- ACTION: CETAK NOTA ---
+                Action::make('print')
+                    ->label('Cetak Nota')
+                    ->icon('heroicon-o-printer')
+                    ->color('success')
+                    ->url(fn($record) => route('nota-kayu.show', $record))
+                    ->openUrlInNewTab()
+                    ->visible(fn($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
+
+                // --- ACTION: CETAK TURUS ---
+                Action::make('print_turus')
+                    ->label('Cetak Turus')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->color('info')
+                    ->url(fn($record) => route('nota-kayu.turus', $record))
+                    ->openUrlInNewTab()
+                    ->visible(fn($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
 
                 // --- ACTION: TANDAI SUDAH DIPERIKSA ---
                 Action::make('cek')
