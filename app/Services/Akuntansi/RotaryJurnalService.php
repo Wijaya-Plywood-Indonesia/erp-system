@@ -131,10 +131,10 @@ class RotaryJurnalService
                 $ukuran = $palet->ukuran;
                 if (!$ukuran) continue;
                 $vol = ($ukuran->panjang ?? 0)
-                     * ($ukuran->lebar   ?? 0)
-                     * ($ukuran->tebal   ?? 0)
-                     * ($palet->total_lembar ?? 0)
-                     / 10_000_000;
+                    * ($ukuran->lebar   ?? 0)
+                    * ($ukuran->tebal   ?? 0)
+                    * ($palet->total_lembar ?? 0)
+                    / 10_000_000;
                 $kubikasi += $vol;
             }
 
@@ -275,12 +275,24 @@ class RotaryJurnalService
         }
 
         return compact(
-            'kubikasiTotalFB', 'kubikasiTotalCore', 'kubikasiTotal65',
-            'hargaVeneer', 'nilaiVeneerFB', 'nilaiVeneerCore',
-            'poinKayu130', 'poinKayu260', 'totalPoin',
-            'totalUpah', 'bahanPenolong',
-            'selisih', 'akunSelisih', 'totalDebit', 'totalKredit',
-            'kubikasiPerMesin', 'detailKayuPerProduksi', 'detailPegawaiUpah'
+            'kubikasiTotalFB',
+            'kubikasiTotalCore',
+            'kubikasiTotal65',
+            'hargaVeneer',
+            'nilaiVeneerFB',
+            'nilaiVeneerCore',
+            'poinKayu130',
+            'poinKayu260',
+            'totalPoin',
+            'totalUpah',
+            'bahanPenolong',
+            'selisih',
+            'akunSelisih',
+            'totalDebit',
+            'totalKredit',
+            'kubikasiPerMesin',
+            'detailKayuPerProduksi',
+            'detailPegawaiUpah'
         );
     }
 
@@ -309,7 +321,6 @@ class RotaryJurnalService
             }
 
             return round($totalPoin, 4);
-
         } catch (\Throwable $e) {
             Log::warning("RotaryJurnal: Gagal ambil poin kayu lahan #{$lahan->id}: " . $e->getMessage());
             return 0.0;
@@ -501,7 +512,6 @@ class RotaryJurnalService
                 'lembar'   => $lembar,
                 'kubikasi' => $kubikasi,
             ]);
-
         } catch (\Throwable $e) {
             Log::error("[SerahPalet] Gagal: " . $e->getMessage(), [
                 'palet_id' => $palet->id,
@@ -619,23 +629,31 @@ class RotaryJurnalService
 
             // ── Update setiap log yang hpp = 0, per kombinasi ukuran+kw ─────────
             // Group logs per kombinasi agar moving average dihitung berurutan
-            $logsPerKombinasi = $logsHariIni->groupBy(fn($l) => $l->id_jenis_kayu.'|'.$l->panjang.'|'.$l->lebar.'|'.$l->tebal.'|'.$l->kw);
+            $logsPerKombinasi = $logsHariIni->groupBy(fn($l) => $l->id_jenis_kayu . '|' . $l->panjang . '|' . $l->lebar . '|' . $l->tebal . '|' . $l->kw);
 
             foreach ($logsPerKombinasi as $kombiKey => $kombiLogs) {
-                // Ambil summarie kombinasi ini
-                $firstLog = $kombiLogs->first();
-                $summarie = HppVeneerBasahSummary::where('id_jenis_kayu', $firstLog->id_jenis_kayu)
-                    ->where('panjang', $firstLog->panjang)
-                    ->where('lebar',   $firstLog->lebar)
-                    ->where('tebal',   $firstLog->tebal)
-                    ->where('kw',      $firstLog->kw)
-                    ->first();
+                $firstLog   = $kombiLogs->first();
+                $sortedLogs = $kombiLogs->sortBy('id'); // ← pindah ke sini
 
-                if (!$summarie) continue;
+                $summarie = HppVeneerBasahSummary::firstOrCreate(
+                    [
+                        'id_jenis_kayu' => $firstLog->id_jenis_kayu,
+                        'panjang'       => $firstLog->panjang,
+                        'lebar'         => $firstLog->lebar,
+                        'tebal'         => $firstLog->tebal,
+                        'kw'            => $firstLog->kw,
+                    ],
+                    [
+                        'stok_lembar'   => $sortedLogs->sum('total_lembar'),
+                        'stok_kubikasi' => round($sortedLogs->sum('total_kubikasi'), 6),
+                        'nilai_stok'    => 0,
+                        'hpp_average'   => 0,
+                    ]
+                );
 
                 // Hitung HPP average kombinasi ini dari awal (stok sebelum hari ini)
                 // Ambil nilai stok sebelum log pertama hari ini
-                $sortedLogs     = $kombiLogs->sortBy('id');
+                // $sortedLogs = $kombiLogs->sortBy('id'); ← hapus baris ini
                 $kubikasiBefore = (float) $sortedLogs->first()->stok_kubikasi_before;
                 $nilaiBefore    = $kubikasiBefore > 0
                     ? $kubikasiBefore * (float) ($summarie->hpp_average > 0 ? $summarie->hpp_average : 0)
@@ -645,32 +663,32 @@ class RotaryJurnalService
                 $runningKubikasi = $kubikasiBefore;
                 $runningNilai    = $nilaiBefore;
 
-            foreach ($sortedLogs as $log) {
-                $kubikasi   = (float) $log->total_kubikasi;
-                $nilaiMasuk = round($hppAverage * $kubikasi, 2);
+                foreach ($sortedLogs as $log) {
+                    $kubikasi   = (float) $log->total_kubikasi;
+                    $nilaiMasuk = round($hppAverage * $kubikasi, 2);
 
-                $hppAverageBaru = ($runningKubikasi + $kubikasi) > 0
-                    ? round(($runningNilai + $nilaiMasuk) / ($runningKubikasi + $kubikasi), 2)
-                    : $hppAverage;
+                    $hppAverageBaru = ($runningKubikasi + $kubikasi) > 0
+                        ? round(($runningNilai + $nilaiMasuk) / ($runningKubikasi + $kubikasi), 2)
+                        : $hppAverage;
 
-                $kubikasiAfter = round($runningKubikasi + $kubikasi, 6);
-                $nilaiAfter    = round($hppAverageBaru * $kubikasiAfter, 2);
+                    $kubikasiAfter = round($runningKubikasi + $kubikasi, 6);
+                    $nilaiAfter    = round($hppAverageBaru * $kubikasiAfter, 2);
 
-                // Update log
-                $log->update([
-                    'hpp_kayu'           => $hppKayu,
-                    'hpp_pekerja'        => $hppPekerja,
-                    'hpp_mesin'          => $hppMesin,
-                    'hpp_bahan_penolong' => $hppBahan,
-                    'hpp_average'        => $hppAverageBaru,
-                    'nilai_stok'         => $nilaiMasuk,
-                    'nilai_stok_after'   => $nilaiAfter,
-                ]);
+                    // Update log
+                    $log->update([
+                        'hpp_kayu'           => $hppKayu,
+                        'hpp_pekerja'        => $hppPekerja,
+                        'hpp_mesin'          => $hppMesin,
+                        'hpp_bahan_penolong' => $hppBahan,
+                        'hpp_average'        => $hppAverageBaru,
+                        'nilai_stok'         => $nilaiMasuk,
+                        'nilai_stok_after'   => $nilaiAfter,
+                    ]);
 
-                // Update running state untuk log berikutnya
-                $runningKubikasi = $kubikasiAfter;
-                $runningNilai    = $nilaiAfter;
-            }
+                    // Update running state untuk log berikutnya
+                    $runningKubikasi = $kubikasiAfter;
+                    $runningNilai    = $nilaiAfter;
+                }
 
                 // Update summarie dengan nilai akhir
                 $summarie->update([
@@ -679,7 +697,7 @@ class RotaryJurnalService
                     'hpp_kayu_last'          => $hppKayu,
                     'hpp_pekerja_last'       => $hppPekerja,
                     'hpp_mesin_last'         => $hppMesin,
-                    'hpp_bahan_penolong_last'=> $hppBahan,
+                    'hpp_bahan_penolong_last' => $hppBahan,
                     'id_last_log'            => $sortedLogs->last()->id,
                 ]);
 
@@ -708,7 +726,6 @@ class RotaryJurnalService
                     'hpp_average' => $hppAverageBaru,
                 ]);
             }
-
         } catch (\Throwable $e) {
             Log::error("[HitungHpp] Gagal hitung HPP veneer basah: " . $e->getMessage(), [
                 'tanggal' => $tanggal,
@@ -1002,7 +1019,6 @@ class RotaryJurnalService
                     'nilai_masuk' => $nilaiMasuk,
                 ]);
             }
-
         } catch (\Throwable $e) {
             Log::error('[VeneerBasah] Gagal tambah stok veneer basah: ' . $e->getMessage(), [
                 'tanggal' => $tanggal,
@@ -1027,8 +1043,12 @@ class RotaryJurnalService
         // ── DEBIT: Veneer F/B ─────────────────────────────────────────────────
         if ($c['nilaiVeneerFB'] > 0) {
             $rows[] = $this->makeRow(
-                $urut++, 'd', '115-07', 'Veneer Basah F/B',
-                $c['nilaiVeneerFB'], $keterangan,
+                $urut++,
+                'd',
+                '115-07',
+                'Veneer Basah F/B',
+                $c['nilaiVeneerFB'],
+                $keterangan,
                 $this->itemsVeneer($produksiList, $c['kubikasiPerMesin'], 'f/b', $c['hargaVeneer'])
             );
         }
@@ -1036,8 +1056,12 @@ class RotaryJurnalService
         // ── DEBIT: Veneer CORE ────────────────────────────────────────────────
         if ($c['nilaiVeneerCore'] > 0) {
             $rows[] = $this->makeRow(
-                $urut++, 'd', '115-08', 'Veneer Basah CORE',
-                $c['nilaiVeneerCore'], $keterangan,
+                $urut++,
+                'd',
+                '115-08',
+                'Veneer Basah CORE',
+                $c['nilaiVeneerCore'],
+                $keterangan,
                 $this->itemsVeneer($produksiList, $c['kubikasiPerMesin'], 'core', $c['hargaVeneer'])
             );
         }
@@ -1045,8 +1069,12 @@ class RotaryJurnalService
         // ── DEBIT: Upah Tenaga Kerja ──────────────────────────────────────────
         if ($c['totalUpah'] > 0) {
             $rows[] = $this->makeRow(
-                $urut++, 'd', '510-01', 'Upah Tenaga Kerja',
-                $c['totalUpah'], $keterangan,
+                $urut++,
+                'd',
+                '510-01',
+                'Upah Tenaga Kerja',
+                $c['totalUpah'],
+                $keterangan,
                 $this->itemsUpah($c['detailPegawaiUpah'], $keterangan)
             );
         }
@@ -1054,8 +1082,12 @@ class RotaryJurnalService
         // ── DEBIT: Beban Kerugian (selisih negatif) ───────────────────────────
         if ($c['akunSelisih'] && $c['akunSelisih']['map'] === 'd') {
             $rows[] = $this->makeRow(
-                $urut++, 'd', $c['akunSelisih']['kode'], $c['akunSelisih']['nama'],
-                $c['akunSelisih']['nilai'], $keterangan,
+                $urut++,
+                'd',
+                $c['akunSelisih']['kode'],
+                $c['akunSelisih']['nama'],
+                $c['akunSelisih']['nilai'],
+                $keterangan,
                 $this->itemsSelisih($c['akunSelisih']['nilai'], $keterangan)
             );
         }
@@ -1063,8 +1095,12 @@ class RotaryJurnalService
         // ── KREDIT: Persediaan Kayu 260 ───────────────────────────────────────
         if ($c['poinKayu260'] > 0) {
             $rows[] = $this->makeRow(
-                $urut++, 'k', '115-02', 'Persediaan Kayu 260',
-                $c['poinKayu260'], $keterangan,
+                $urut++,
+                'k',
+                '115-02',
+                'Persediaan Kayu 260',
+                $c['poinKayu260'],
+                $keterangan,
                 $this->itemsKayu($c['detailKayuPerProduksi'], false, $keterangan)
             );
         }
@@ -1072,8 +1108,12 @@ class RotaryJurnalService
         // ── KREDIT: Persediaan Kayu 130 ───────────────────────────────────────
         if ($c['poinKayu130'] > 0) {
             $rows[] = $this->makeRow(
-                $urut++, 'k', '115-01', 'Persediaan Kayu 130',
-                $c['poinKayu130'], $keterangan,
+                $urut++,
+                'k',
+                '115-01',
+                'Persediaan Kayu 130',
+                $c['poinKayu130'],
+                $keterangan,
                 $this->itemsKayu($c['detailKayuPerProduksi'], true, $keterangan)
             );
         }
@@ -1081,8 +1121,12 @@ class RotaryJurnalService
         // ── KREDIT: Bahan Penolong ────────────────────────────────────────────
         foreach ($c['bahanPenolong'] as $bp) {
             $rows[] = $this->makeRow(
-                $urut++, 'k', $bp['kode'], $bp['nama'],
-                $bp['nilai'], $keterangan,
+                $urut++,
+                'k',
+                $bp['kode'],
+                $bp['nama'],
+                $bp['nilai'],
+                $keterangan,
                 $this->itemsBahanPenolong($bp['detail'], $keterangan)
             );
         }
@@ -1090,8 +1134,12 @@ class RotaryJurnalService
         // ── KREDIT: Hutang Gaji ───────────────────────────────────────────────
         if ($c['totalUpah'] > 0) {
             $rows[] = $this->makeRow(
-                $urut++, 'k', '210-02', 'Hutang Gaji',
-                $c['totalUpah'], $keterangan,
+                $urut++,
+                'k',
+                '210-02',
+                'Hutang Gaji',
+                $c['totalUpah'],
+                $keterangan,
                 $this->itemsUpah($c['detailPegawaiUpah'], $keterangan)
             );
         }
@@ -1099,8 +1147,12 @@ class RotaryJurnalService
         // ── KREDIT: Keuntungan Produksi (selisih positif) ─────────────────────
         if ($c['akunSelisih'] && $c['akunSelisih']['map'] === 'k') {
             $rows[] = $this->makeRow(
-                $urut++, 'k', $c['akunSelisih']['kode'], $c['akunSelisih']['nama'],
-                $c['akunSelisih']['nilai'], $keterangan,
+                $urut++,
+                'k',
+                $c['akunSelisih']['kode'],
+                $c['akunSelisih']['nama'],
+                $c['akunSelisih']['nilai'],
+                $keterangan,
                 $this->itemsSelisih($c['akunSelisih']['nilai'], $keterangan)
             );
         }
@@ -1177,10 +1229,10 @@ class RotaryJurnalService
                 if (!$ukuran) continue;
 
                 $vol = ($ukuran->panjang ?? 0)
-                     * ($ukuran->lebar   ?? 0)
-                     * ($ukuran->tebal   ?? 0)
-                     * ($palet->total_lembar ?? 0)
-                     / 10_000_000;
+                    * ($ukuran->lebar   ?? 0)
+                    * ($ukuran->tebal   ?? 0)
+                    * ($palet->total_lembar ?? 0)
+                    / 10_000_000;
 
                 $namaLahan = $palet->penggunaanLahan->lahan->nama_lahan ?? '-';
                 $ukuranStr = "{$ukuran->panjang}x{$ukuran->lebar}x{$ukuran->tebal}";
