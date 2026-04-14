@@ -96,28 +96,6 @@ class PenggunaanLahanRotariesTable
                             }
 
                             $totalBatang   = $stoks->sum('stok_batang');
-                            $totalKubikasi = $stoks->sum('stok_kubikasi');
-
-                            // ❌ TIDAK ADA UPDATE STOK LAGI DI SINI
-
-                            // Optional: tetap bikin log tapi TANPA ubah stok
-                            foreach ($stoks as $stok) {
-                                HppAverageLog::create([
-                                    'id_lahan'       => $idLahan,
-                                    'id_jenis_kayu'  => $idJenisKayu,
-                                    'grade'          => $stok->grade,
-                                    'panjang'        => $stok->panjang,
-                                    'tanggal'        => now()->toDateString(),
-                                    'tipe_transaksi' => 'info', // 🔥 ganti dari 'keluar'
-                                    'keterangan'     => "Lahan selesai (belum potong stok)",
-                                    'referensi_id'   => $record->id,
-                                    'referensi_type' => \App\Models\PenggunaanLahanRotary::class,
-                                    'total_batang'   => $stok->stok_batang,
-                                    'total_kubikasi' => $stok->stok_kubikasi,
-                                    'harga'          => $stok->hpp_average,
-                                    'nilai_stok'     => $stok->nilai_stok,
-                                ]);
-                            }
 
                             // ✅ Update hanya jumlah batang di penggunaan lahan
                             $record->update([

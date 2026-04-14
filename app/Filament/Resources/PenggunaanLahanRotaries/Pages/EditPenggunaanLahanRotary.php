@@ -17,18 +17,4 @@ class EditPenggunaanLahanRotary extends EditRecord
             DeleteAction::make(),
         ];
     }
-
-    protected function afterSave(): void
-    {
-        // $record = $this->record;
-
-        // // Logika yang sama: jika jumlah batang tidak nol
-        // if ($record->jumlah_batang != 0) {
-        //     app(HppAverageService::class)->prosesKeluarRotary(
-        //         lahanId: $record->id_lahan,
-        //         jenisKayuId: $record->id_jenis_kayu,
-        //         referensi: $record
-        //     );
-        // }
-    }
 }

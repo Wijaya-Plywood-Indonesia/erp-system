@@ -66,10 +66,20 @@
         @forelse($logsByLahan as $lahanId => $lahanLogs)
         @php
         $lahan = \App\Models\Lahan::find($lahanId);
+
+        $summaries = \App\Models\HppAverageSummarie::where('id_lahan', $lahanId)->get();
+
+        $saldoBtg = $summaries->sum('stok_batang');
+        $saldoKubikasi = $summaries->sum('stok_kubikasi');
+        $saldoNilai = $summaries->sum('nilai_stok');
+        $hppAvgLahan = $saldoKubikasi > 0
+        ? round($summaries->sum(fn($s) => $s->hpp_average * $s->stok_kubikasi) / $saldoKubikasi, 2)
+        : 0;
+
+        $lastLogLahan = $lahanLogs->last();
+
         $totalMasuk = $lahanLogs->where('tipe_transaksi', 'masuk')->sum('total_batang');
         $totalKeluar = $lahanLogs->where('tipe_transaksi', 'keluar')->sum('total_batang');
-        $saldoBtg = $totalMasuk - $totalKeluar;
-        $lastLogLahan = $lahanLogs->last();
         @endphp
 
         <div class="bg-white dark:bg-gray-800 rounded-sm border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm transition-all">
@@ -218,21 +228,39 @@
                     {{-- FOOTER PER LAHAN --}}
                     <tfoot>
                         <tr class="text-[10px] font-black border-t-2 bg-gray-50 dark:bg-gray-900/60 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 uppercase tracking-widest sticky bottom-0 backdrop-blur-md">
-                            <td colspan="5" class="px-4 py-4 text-gray-500 italic">Saldo Akhir Lahan {{ $lahan?->kode_lahan }}</td>
-                            <td class="px-4 py-4 text-right border-l border-gray-100 dark:border-gray-700 font-black">{{ number_format($saldoBtg) }} btg</td>
-                            <td class="px-4 py-4 text-right border-l border-gray-100 dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 font-black">
-                                {{ number_format($lastLogLahan->stok_batang_after ?? 0) }} btg
+
+                            <td colspan="5" class="px-4 py-4 text-gray-500 italic">
+                                Saldo Akhir Lahan {{ $lahan?->kode_lahan }}
                             </td>
-                            <td class="px-4 py-4 border-l border-gray-100 dark:border-gray-700"></td>
-                            <td class="px-4 py-4 text-right border-l border-gray-100 dark:border-gray-700 text-blue-600 dark:text-blue-400 font-black">
-                                {{ number_format($lastLogLahan->stok_kubikasi_after ?? 0, 4) }} m³
-                            </td>
+
+                            {{-- Qty — kosong karena bukan transaksi --}}
                             <td class="px-4 py-4 text-right border-l border-gray-100 dark:border-gray-700 font-black">
-                                Rp {{ number_format($lastLogLahan->nilai_stok_after ?? 0, 0, ',', '.') }}
+                                —
                             </td>
+
+                            {{-- ✅ Stok Batang — dari summarie, bukan lastLog --}}
+                            <td class="px-4 py-4 text-right border-l border-gray-100 dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 font-black">
+                                {{ number_format($saldoBtg) }} btg
+                            </td>
+
+                            {{-- Kubikasi transaksi — kosong di footer --}}
+                            <td class="px-4 py-4 border-l border-gray-100 dark:border-gray-700"></td>
+
+                            {{-- ✅ Stok Kubikasi — dari summarie, bukan lastLog --}}
+                            <td class="px-4 py-4 text-right border-l border-gray-100 dark:border-gray-700 text-blue-600 dark:text-blue-400 font-black">
+                                {{ number_format($saldoKubikasi, 4) }} m³
+                            </td>
+
+                            {{-- ✅ Nilai Stok — dari summarie, bukan lastLog --}}
+                            <td class="px-4 py-4 text-right border-l border-gray-100 dark:border-gray-700 font-black">
+                                Rp {{ number_format($saldoNilai, 0, ',', '.') }}
+                            </td>
+
+                            {{-- ✅ HPP Average — weighted average dari summarie, bukan lastLog --}}
                             <td class="px-4 py-4 text-right border-l border-gray-100 dark:border-gray-800 bg-amber-50/50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 font-black text-xs whitespace-nowrap">
-                                Rp {{ number_format($lastLogLahan->hpp_average ?? 0, 0, ',', '.') }} /m³
+                                Rp {{ number_format($hppAvgLahan, 0, ',', '.') }} /m³
                             </td>
+
                         </tr>
                     </tfoot>
                 </table>
