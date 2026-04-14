@@ -170,7 +170,7 @@
                                 </span>
                             </td>
 
-                            <td class="px-4 py-3 text-[11px] font-black uppercase text-gray-700 dark:text-gray-300 truncate max-w-[200px]">
+                            <td class="px-4 py-3 text-[11px] font-black uppercase text-gray-700 dark:text-gray-300 max-w-[200px]">
                                 @if($log->referensi instanceof \App\Models\NotaKayu && $log->referensi->kayuMasuk?->seri)
                                 SERI: {{ $log->referensi->kayuMasuk->seri }}
                                 @else
