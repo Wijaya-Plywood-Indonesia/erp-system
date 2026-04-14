@@ -38,6 +38,7 @@ class TempatKayusTable
         $bisaTerima = $isPengawas || $isAdmin;
 
         return $table
+            ->paginated(false)
             ->modifyQueryUsing(function (Builder $query) {
                 return $query
                     // ✅ Sertakan id agar Filament bisa identifikasi record

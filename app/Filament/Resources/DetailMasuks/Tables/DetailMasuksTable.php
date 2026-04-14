@@ -12,8 +12,11 @@ use Filament\Tables\Table;
 
 class DetailMasuksTable
 {
-    public static function configure(Table $table): Table
-    {
+    public static function configure(
+        Table $table,
+        bool $adaPaletDiterima = false,
+        string $tipe = 'dryer' // ✅ parameter tipe (untuk keperluan masa depan)
+    ): Table {
         return $table
             ->modifyQueryUsing(fn($query) => $query->with([
                 'jenisKayu',
@@ -21,7 +24,6 @@ class DetailMasuksTable
                 'detailPaletRotary.produksi.mesin',
             ]))
             ->columns([
-
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
                     ->badge()
@@ -36,12 +38,16 @@ class DetailMasuksTable
                     ->searchable()
                     ->placeholder('N/A'),
 
-                // ✅ FIX: getDimensi adalah accessor → pakai getStateUsing
                 TextColumn::make('ukuran_display')
                     ->label('Ukuran')
-                    ->getStateUsing(fn($record) => $record->ukuran?->getNamaUkuran ?? '-')
-                    ->searchable(false)
-                    ->placeholder('-'),
+                    ->getStateUsing(fn($record) => $record->ukuran?->dimensi ?? '-')
+                    ->searchable(query: function ($query, string $search) {
+                        $query->whereHas('ukuran', function ($q) use ($search) {
+                            $q->where('panjang', 'like', "%{$search}%")
+                                ->orWhere('lebar', 'like', "%{$search}%")
+                                ->orWhere('tebal', 'like', "%{$search}%");
+                        });
+                    }),
 
                 TextColumn::make('kw')
                     ->label('Kualitas (KW)')

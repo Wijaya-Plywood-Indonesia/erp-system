@@ -145,7 +145,8 @@ class SerahTerimaRelationManager extends RelationManager
                 // 🔥 UKURAN
                 TextColumn::make('ukuran')
                     ->label('Ukuran')
-                    ->getStateUsing(fn($record) =>
+                    ->getStateUsing(
+                        fn($record) =>
                         $record->detailHasilPalet?->ukuran
                             ? "{$record->detailHasilPalet->ukuran->panjang} x {$record->detailHasilPalet->ukuran->lebar} x {$record->detailHasilPalet->ukuran->tebal}"
                             : '-'
@@ -159,7 +160,8 @@ class SerahTerimaRelationManager extends RelationManager
                 // 🔥 JENIS KAYU
                 TextColumn::make('jenis_kayu')
                     ->label('Jenis Kayu')
-                    ->getStateUsing(fn($record) =>
+                    ->getStateUsing(
+                        fn($record) =>
                         $record->detailHasilPalet?->penggunaanLahan?->jenisKayu?->nama_kayu ?? '-'
                     ),
 

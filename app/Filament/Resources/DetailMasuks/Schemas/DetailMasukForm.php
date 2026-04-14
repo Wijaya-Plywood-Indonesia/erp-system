@@ -4,6 +4,7 @@ namespace App\Filament\Resources\DetailMasuks\Schemas;
 
 use App\Models\DetailHasilPaletRotary;
 use App\Models\DetailMasuk;
+use App\Models\DetailMasukStik;
 use App\Models\JenisKayu;
 use App\Models\Ukuran;
 use Filament\Forms\Components\Hidden;
@@ -17,13 +18,16 @@ use Illuminate\Support\Facades\DB;
 
 class DetailMasukForm
 {
-    public static function configure(Schema $schema, ?int $idProduksiDryer = null): Schema
-    {
+    public static function configure(
+        Schema $schema,
+        ?int $idProduksi = null,
+        string $tipe = 'dryer'
+    ): Schema {
         $paletDiterima = [];
 
-        if ($idProduksiDryer) {
+        if ($idProduksi) {
             $idPaletDiterima = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
-                ->where('tipe', 'dryer')
+                ->where('tipe', $tipe) // ✅ dinamis
                 ->whereNotNull('id_detail_hasil_palet_rotary')
                 ->pluck('id_detail_hasil_palet_rotary')
                 ->toArray();
@@ -31,13 +35,14 @@ class DetailMasukForm
             $paletDiterima = DetailHasilPaletRotary::whereIn('id', $idPaletDiterima)
                 ->with('produksi.mesin')
                 ->get()
-                ->mapWithKeys(fn($d) => [
-                    $d->id => $d->kode_palet
-                ])
+                ->mapWithKeys(fn($d) => [$d->id => $d->kode_palet])
                 ->toArray();
         }
 
         $opsiDropdown = ['AF' => '— Palet AF (Manual) —'] + $paletDiterima;
+
+        // ✅ Tentukan model mana yang dipakai untuk nextAfNumber
+        $modelClass = $tipe === 'stik' ? DetailMasukStik::class : DetailMasuk::class;
 
         return $schema->schema([
 
@@ -48,17 +53,18 @@ class DetailMasukForm
                 ->required()
                 ->live()
                 ->disabled(empty($paletDiterima))
-                ->dehydrated(false) // ✅ field UI, tidak perlu disimpan ke DB
+                ->dehydrated(false)
                 ->helperText(
                     empty($paletDiterima)
-                        ? 'Belum ada palet yang diterima oleh produksi dryer ini.'
+                        ? 'Belum ada palet yang diterima.'
                         : 'Pilih palet untuk mengisi form otomatis, atau pilih AF untuk input manual.'
                 )
-                ->afterStateUpdated(function (Get $get, Set $set, ?string $state) {
+                ->afterStateUpdated(function (Get $get, Set $set, ?string $state) use ($modelClass) {
                     if (!$state) return;
 
                     if ($state === 'AF') {
-                        $set('no_palet', DetailMasuk::nextAfNumber());
+                        // ✅ Pakai model yang sesuai untuk generate AF number
+                        $set('no_palet', $modelClass::nextAfNumber());
                         $set('kw', null);
                         $set('isi', null);
                         $set('id_ukuran', null);
@@ -115,7 +121,7 @@ class DetailMasukForm
                     fn(Get $get) =>
                     $get('no_palet_select') !== 'AF' && $get('no_palet_select') !== null
                 )
-                ->dehydrated(true) // ✅ tetap simpan meski disabled
+                ->dehydrated(true)
                 ->required(),
 
             Select::make('id_ukuran')
@@ -128,7 +134,7 @@ class DetailMasukForm
                     fn(Get $get) =>
                     $get('no_palet_select') !== 'AF' && $get('no_palet_select') !== null
                 )
-                ->dehydrated(true) // ✅ tetap simpan meski disabled
+                ->dehydrated(true)
                 ->required(),
 
             TextInput::make('kw')
@@ -140,7 +146,7 @@ class DetailMasukForm
                     fn(Get $get) =>
                     $get('no_palet_select') !== 'AF' && $get('no_palet_select') !== null
                 )
-                ->dehydrated(true), // ✅ tetap simpan meski readOnly
+                ->dehydrated(true),
 
             TextInput::make('isi')
                 ->label('Isi')
@@ -151,7 +157,7 @@ class DetailMasukForm
                     fn(Get $get) =>
                     $get('no_palet_select') !== 'AF' && $get('no_palet_select') !== null
                 )
-                ->dehydrated(true), // ✅ tetap simpan meski readOnly
+                ->dehydrated(true),
         ]);
     }
 }
