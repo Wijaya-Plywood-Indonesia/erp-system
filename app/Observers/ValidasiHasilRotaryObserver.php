@@ -72,7 +72,6 @@ class ValidasiHasilRotaryObserver
 
             // ── Kirim ke web akuntansi ────────────────────────────────────────
             $this->sendToAkuntansi($payload, $tanggal, $produksiList, $service);
-
         } catch (\Throwable $e) {
             Log::error("ValidasiObserver: Error saat trigger jurnal check: " . $e->getMessage());
             Log::error($e->getTraceAsString());
@@ -81,8 +80,8 @@ class ValidasiHasilRotaryObserver
 
     private function sendToAkuntansi(array $payload, string $tanggal, $produksiList, $service): void
     {
-        $url    = rtrim(config('services.akuntansi.url', 'http://192.168.1.2:5000'), '/')
-                  . '/api/jurnal/rotary/create';
+        $url    = rtrim(config('services.akuntansi.url', 'http://192.168.1.23:5000'), '/')
+            . '/api/jurnal/rotary/create';
         $apiKey = config('services.akuntansi.key', '');
 
         try {
@@ -104,17 +103,14 @@ class ValidasiHasilRotaryObserver
                 // ── Kurangi stok HPP kayu setelah jurnal berhasil ────────────────
                 // NB: tambahStokVeneerBasah() dipanggil dari modul serah terima
                 $service->kurangiStokHpp($produksiList, $tanggal);
-
             } elseif ($response->status() === 409) {
                 Log::warning("ValidasiObserver: Jurnal {$tanggal} sudah ada di akuntansi (duplikasi). Dilewati.");
-
             } else {
                 Log::error("ValidasiObserver: Gagal kirim jurnal ke akuntansi (tanggal={$tanggal}).", [
                     'status'   => $response->status(),
                     'response' => $response->body(),
                 ]);
             }
-
         } catch (\Throwable $e) {
             Log::error("ValidasiObserver: HTTP error kirim ke akuntansi: " . $e->getMessage());
         }

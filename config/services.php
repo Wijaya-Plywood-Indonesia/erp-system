@@ -44,13 +44,13 @@ return [
         'token' => env('AKUNTANSI_API_TOKEN')
     ],
 
-    'akuntansi' => [
-    'url' => env('AKUNTANSI_URL', 'http://192.168.1.2:5000'),
-    'key' => env('AKUNTANSI_API_KEY', ''),
-],
+    // 'akuntansi' => [
+    //     'url' => env('AKUNTANSI_URL', 'http://192.168.1.2:5000'),
+    //     'key' => env('AKUNTANSI_API_KEY', ''),
+    // ],
 
     'webhook_test' => [
-    'url' => env('WEBHOOK_TEST_URL', 'https://webhook.site/0a08a904-09c6-4893-9e19-f9a1c87e740d'),
-],
+        'url' => env('WEBHOOK_TEST_URL', 'https://webhook.site/0a08a904-09c6-4893-9e19-f9a1c87e740d'),
+    ],
 
 ];
