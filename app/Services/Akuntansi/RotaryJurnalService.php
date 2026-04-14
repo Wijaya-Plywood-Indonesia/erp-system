@@ -679,20 +679,28 @@ class RotaryJurnalService
             $logsPerKombinasi = $logsHariIni->groupBy(fn($l) => $l->id_jenis_kayu . '|' . $l->panjang . '|' . $l->lebar . '|' . $l->tebal . '|' . $l->kw);
 
             foreach ($logsPerKombinasi as $kombiKey => $kombiLogs) {
-                // Ambil summarie kombinasi ini
-                $firstLog = $kombiLogs->first();
-                $summarie = HppVeneerBasahSummary::where('id_jenis_kayu', $firstLog->id_jenis_kayu)
-                    ->where('panjang', $firstLog->panjang)
-                    ->where('lebar',   $firstLog->lebar)
-                    ->where('tebal',   $firstLog->tebal)
-                    ->where('kw',      $firstLog->kw)
-                    ->first();
+                $firstLog   = $kombiLogs->first();
+                $sortedLogs = $kombiLogs->sortBy('id'); // ← pindah ke sini
 
-                if (!$summarie) continue;
+                $summarie = HppVeneerBasahSummary::firstOrCreate(
+                    [
+                        'id_jenis_kayu' => $firstLog->id_jenis_kayu,
+                        'panjang'       => $firstLog->panjang,
+                        'lebar'         => $firstLog->lebar,
+                        'tebal'         => $firstLog->tebal,
+                        'kw'            => $firstLog->kw,
+                    ],
+                    [
+                        'stok_lembar'   => $sortedLogs->sum('total_lembar'),
+                        'stok_kubikasi' => round($sortedLogs->sum('total_kubikasi'), 6),
+                        'nilai_stok'    => 0,
+                        'hpp_average'   => 0,
+                    ]
+                );
 
                 // Hitung HPP average kombinasi ini dari awal (stok sebelum hari ini)
                 // Ambil nilai stok sebelum log pertama hari ini
-                $sortedLogs     = $kombiLogs->sortBy('id');
+                // $sortedLogs = $kombiLogs->sortBy('id'); ← hapus baris ini
                 $kubikasiBefore = (float) $sortedLogs->first()->stok_kubikasi_before;
                 $nilaiBefore    = $kubikasiBefore > 0
                     ? $kubikasiBefore * (float) ($summarie->hpp_average > 0 ? $summarie->hpp_average : 0)
