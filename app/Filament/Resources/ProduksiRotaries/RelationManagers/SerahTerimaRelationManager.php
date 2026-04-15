@@ -17,6 +17,7 @@ use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\Builder;
 
 class SerahTerimaRelationManager extends RelationManager
 {
@@ -89,11 +90,10 @@ class SerahTerimaRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         $tipe = $this->getTipePenerima();
+        $ownerId = $this->getOwnerRecord()->getKey();
 
         return $table
             ->modifyQueryUsing(function ($query) use ($tipe) {
-
-                // 🔥 EAGER LOADING (BIAR CEPAT)
                 $query->with([
                     'detailHasilPalet.ukuran',
                     'detailHasilPalet.penggunaanLahan.jenisKayu',
@@ -103,31 +103,21 @@ class SerahTerimaRelationManager extends RelationManager
                     return $query->where('tipe', 'rotary');
                 }
 
-                $query->getQuery()->wheres   = [];
-                $query->getQuery()->bindings = [
-                    'select'     => [],
-                    'from'       => [],
-                    'join'       => [],
-                    'where'      => [],
-                    'groupBy'    => [],
-                    'having'     => [],
-                    'order'      => [],
-                    'union'      => [],
-                    'unionOrder' => [],
-                ];
+                $ownerId = $this->getOwnerRecord()->id;
 
-                $query
-                    ->from('detail_hasil_palet_rotary_serah_terima_pivot')
-                    ->select('detail_hasil_palet_rotary_serah_terima_pivot.*')
-                    ->where(function ($q) {
-                        $q->where('tipe', 'rotary')
-                            ->where('diterima_oleh', '-');
+                // Reset agar data dari Rotary (tipe lain) bisa masuk ke tabel ini
+                $query->getQuery()->wheres = [];
+                $query->getQuery()->bindings['where'] = [];
+
+                // Ambil semua yang berpotensi relevan (nanti disaring oleh Filter)
+                return $query->where(function ($mainQuery) use ($tipe, $ownerId) {
+                    $mainQuery->where(function ($q) {
+                        $q->where('tipe', 'rotary')->where('diterima_oleh', '-');
                     })
-                    ->orWhere(function ($q) use ($tipe) {
-                        $q->where('tipe', $tipe);
-                    });
-
-                return $query;
+                        ->orWhere(function ($q) use ($tipe, $ownerId) {
+                            $q->where('tipe', $tipe)->where('id_produksi', $ownerId);
+                        });
+                });
             })
             ->columns([
 
@@ -189,6 +179,23 @@ class SerahTerimaRelationManager extends RelationManager
                 CreateAction::make()
                     ->label('Serahkan Palet')
                     ->visible(fn() => $this->getTipePenerima() === 'rotary'),
+            ])
+            ->filters([
+                \Filament\Tables\Filters\Filter::make('tampilkan_log')
+                    ->label('Lihat Palet Sudah Diterima')
+                    ->toggle() // Membuat bentuk toggle switch
+                    ->default(false) // Secara default disembunyikan (false)
+                    ->query(function (Builder $query, array $data) use ($tipe, $ownerId) {
+                        // Jika toggle MATI (default), hanya tampilkan yang belum diterima
+                        if (! $data['isActive']) {
+                            return $query->where('tipe', 'rotary')
+                                ->where('diterima_oleh', '-');
+                        }
+
+                        // Jika toggle AKTIF, biarkan Base Query di atas bekerja 
+                        // (Base Query sudah mencakup log yang sudah diterima)
+                        return $query;
+                    })
             ])
             ->actions([
                 Action::make('terima')

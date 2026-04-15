@@ -41,21 +41,21 @@ class TempatKayusTable
             ->paginated(false)
             ->modifyQueryUsing(function (Builder $query) {
                 return $query
-                    // ✅ Sertakan id agar Filament bisa identifikasi record
+                    // Join ke summary agar kita bisa group berdasarkan data asli stok
+                    ->join('hpp_average_summaries', 'tempat_kayus.id_lahan', '=', 'hpp_average_summaries.id_lahan')
                     ->select(
                         DB::raw('MIN(tempat_kayus.id) as id'),
                         'tempat_kayus.id_lahan',
-                        DB::raw('SUM(tempat_kayus.jumlah_batang) as jumlah_batang'), // ✅ total semua nota
+                        'hpp_average_summaries.panjang as group_panjang', // Ambil langsung dari tabel stok
+                        'hpp_average_summaries.grade as group_grade',     // Ambil langsung dari tabel stok
                         'tempat_kayus.status',
                         'tempat_kayus.diserahkan_oleh',
                         'tempat_kayus.diterima_oleh',
-                        DB::raw('(SELECT panjang FROM hpp_average_summaries 
-              WHERE id_lahan = tempat_kayus.id_lahan 
-              AND grade IS NULL 
-              LIMIT 1) as group_panjang')
                     )
                     ->groupBy(
                         'tempat_kayus.id_lahan',
+                        'hpp_average_summaries.panjang', // GROUPING UTAMA
+                        'hpp_average_summaries.grade',   // GROUPING UTAMA
                         'tempat_kayus.status',
                         'tempat_kayus.diserahkan_oleh',
                         'tempat_kayus.diterima_oleh',
@@ -92,7 +92,7 @@ class TempatKayusTable
                             0,
                             HppAverageSummarie::where('id_lahan', $record->id_lahan)
                                 ->where('panjang', $record->group_panjang)
-                                ->whereNull('grade')
+                                ->where('grade', $record->group_grade)
                                 ->sum('stok_batang')
                         );
                     })
