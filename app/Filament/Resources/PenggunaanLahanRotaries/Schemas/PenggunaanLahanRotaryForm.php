@@ -21,20 +21,15 @@ class PenggunaanLahanRotaryForm
                 Select::make('id_lahan')
                     ->label('Lahan')
                     ->options(function () {
-                        $lahanSudahDiterima = TempatKayu::query()
+                        // Ambil semua id_lahan dari tempat kayu yang status diterima
+                        $lahanIds = TempatKayu::query()
                             ->where('status', 'sudah diterima')
                             ->pluck('id_lahan')
                             ->unique();
 
-                        $lahanMasihAktif = PenggunaanLahanRotary::query()
-                            ->where('jumlah_batang', '!=', 0)
-                            ->pluck('id_lahan')
-                            ->unique();
-
-                        $lahanTersedia = $lahanSudahDiterima->diff($lahanMasihAktif);
-
+                        // Ambil data lahan berdasarkan id tersebut
                         return Lahan::query()
-                            ->whereIn('id', $lahanTersedia)
+                            ->whereIn('id', $lahanIds)
                             ->get()
                             ->mapWithKeys(fn($lahan) => [
                                 $lahan->id => "{$lahan->kode_lahan} - {$lahan->nama_lahan}",
@@ -44,7 +39,10 @@ class PenggunaanLahanRotaryForm
                     ->required()
                     ->live()
                     ->afterStateUpdated(function ($state, callable $get, callable $set, $livewire) {
-                        if (!$state) return;
+
+                        if (!$state) {
+                            return;
+                        }
 
                         $produksiId = $livewire->ownerRecord->id;
 
@@ -80,6 +78,7 @@ class PenggunaanLahanRotaryForm
                     ->required()
                     ->numeric()
                     ->default(0)
+                    ->readOnly()
                     ->dehydrated(),
             ]);
     }
