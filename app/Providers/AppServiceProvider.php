@@ -16,6 +16,9 @@ use Illuminate\Support\Facades\Blade;
 use App\Models\ValidasiHasilRotary;
 use App\Observers\RotaryObserver;
 use App\Observers\ValidasiHasilRotaryObserver;
+use App\Models\ValidasiPressDryer;
+use App\Models\ValidasiStik;
+use App\Observers\ProductionValidationObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -38,6 +41,8 @@ class AppServiceProvider extends ServiceProvider
         ValidasiHasilRotary::observe(ValidasiHasilRotaryObserver::class);
         NotaKayu::observe(NotaKayuObserver::class);
         PenggunaanLahanRotary::observe(RotaryObserver::class);
+        ValidasiPressDryer::observe(ProductionValidationObserver::class);
+        ValidasiStik::observe(ProductionValidationObserver::class);
         // PlatformHasilHp::observe(PlatformHasilHpObserver::class);
         // TriplekHasilHp::observe(TriplekHasilHpObserver::class);
 
