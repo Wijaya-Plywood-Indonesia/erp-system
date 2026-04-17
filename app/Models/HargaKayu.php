@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class HargaKayu extends Model
 {
@@ -26,6 +27,20 @@ class HargaKayu extends Model
         'diameter_terbesar' => 'decimal:2',
         'harga_beli' => 'integer',
     ];
+
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    /**
+     * RELASI: approver
+     * Menghubungkan kolom approved_by ke model User.
+     */
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
     //
     public function jenisKayu()
     {
