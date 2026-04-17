@@ -14,6 +14,7 @@ use UnitEnum;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Auth;
 
 class StokKayu extends Page
 {
@@ -23,6 +24,9 @@ class StokKayu extends Page
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
     protected static ?string $title          = 'Stok Kayu';
     protected static ?int    $navigationSort = 10;
+
+    // Role untuk membuat super admin yang bisa akses untuk edit dan delete
+    private const ROLE_ADMIN    = ['super_admin', 'Super Admin'];
 
     // ── State ──────────────────────────────────────────────────
     public ?int   $activeLahanId = null;
@@ -44,11 +48,15 @@ class StokKayu extends Page
      */
     public function editStokAction(): Action
     {
+        // Deklarasi variable untuk membuat visible 
+        $isAdmin = Auth::user()?->hasAnyRole(self::ROLE_ADMIN) ?? false;
+
         return Action::make('editStok')
             ->label('Edit')
             ->icon('heroicon-m-pencil-square')
             ->color('warning')
             ->size('xs')
+            ->visible($isAdmin)
             ->modalHeading(fn(array $arguments) => isset($arguments['id']) ? 'Update Stok Lahan' : 'Inisialisasi Stok Lahan Baru')
             ->mountUsing(function (Schema $schema, array $arguments) {
                 // Jika mengedit data yang sudah ada (summary id tersedia)
@@ -134,11 +142,14 @@ class StokKayu extends Page
      */
     public function deleteStokAction(): Action
     {
+        $isAdmin = Auth::user()?->hasAnyRole(self::ROLE_ADMIN) ?? false;
+
         return Action::make('deleteStok')
             ->label('Hapus')
             ->icon('heroicon-m-trash')
             ->color('danger')
             ->size('xs')
+            ->visible(fn(array $arguments) => isset($arguments['id']) && $isAdmin)
             ->requiresConfirmation()
             ->modalHeading('Hapus Data Stok?')
             ->modalDescription('Tindakan ini akan menghapus data ringkasan stok pada baris ini. Data ini dapat muncul kembali jika Anda melakukan Hitung Ulang HPP.')

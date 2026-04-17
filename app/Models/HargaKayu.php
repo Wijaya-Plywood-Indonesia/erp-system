@@ -15,6 +15,10 @@ class HargaKayu extends Model
         'harga_beli',
         'grade',
         'id_jenis_kayu',
+        'harga_baru',
+        'updated_by',
+        'approved_by',
+        'status'
     ];
     protected $casts = [
         'panjang' => 'integer',
