@@ -98,6 +98,10 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Kontrak')
                     ->icon('heroicon-o-clipboard-document-check')->collapsed(),
 
+                NavigationGroup::make('Stok')
+                    ->icon('heroicon-o-cube')
+                    ->collapsed(),
+
                 NavigationGroup::make('Grade')
                     ->icon('heroicon-o-check-badge')->collapsed(),
 
@@ -134,9 +138,7 @@ class AdminPanelProvider extends PanelProvider
                     ->icon('heroicon-o-calculator')
                     ->collapsed(),
 
-                NavigationGroup::make('Stok')
-                    ->icon('heroicon-o-cube')
-                    ->collapsed(),
+                
 
                 NavigationGroup::make('HPP')
                     ->icon('heroicon-o-banknotes')

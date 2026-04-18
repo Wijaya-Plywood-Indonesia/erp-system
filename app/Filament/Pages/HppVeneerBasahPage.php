@@ -12,9 +12,9 @@ class HppVeneerBasahPage extends Page
     protected string $view = 'filament.pages.hpp-veneer-basah-page';
 
     protected static ?string $navigationLabel = 'Log HPP Veneer Basah';
-    protected static string|UnitEnum|null $navigationGroup = 'Stok Veneer Basah';
+    protected static string|UnitEnum|null $navigationGroup = 'Log';
     protected static ?string $title          = 'Log HPP Veneer Basah';
-    protected static ?int    $navigationSort = 20;
+    protected static ?int    $navigationSort = 11;
 
     // ── State ──────────────────────────────────────────────────
     public string $filterJenisKayu = '';
