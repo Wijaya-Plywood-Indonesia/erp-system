@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Auth;
 
 class HargaKayusTable
 {
+    private const ROLE_ADMIN = ['admin', 'super_admin', 'Super Admin'];
+
     public static function configure(Table $table): Table
     {
         return $table
@@ -129,7 +131,19 @@ class HargaKayusTable
                     ->icon('heroicon-m-check-badge')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->visible(fn(Model $record) => $record->harga_baru > 0)
+                    /**
+                     * [PENYESUAIAN LOGIKA OTORISASI]
+                     * Tombol muncul jika ada harga baru DAN (User adalah Admin ATAU User bukan pengusul harga)
+                     */
+                    ->visible(function (Model $record) {
+                        $user = Auth::user();
+                        if (!$user) return false;
+
+                        $isAdmin = $user->hasAnyRole(self::ROLE_ADMIN);
+                        $isBukanPengusul = $user->name !== $record->updated_by;
+
+                        return $record->harga_baru > 0 && ($isAdmin || $isBukanPengusul);
+                    })
                     ->action(function (Model $record) {
                         $hargaLama = $record->harga_beli;
                         $hargaBaru = $record->harga_baru;
@@ -143,7 +157,7 @@ class HargaKayusTable
                             'aksi'          => 'Persetujuan Harga',
                         ]);
 
-                        // 2. UPDATE TABEL MASTER (Current State)
+                        // 2. UPDATE TABEL MASTER
                         $record->update([
                             'harga_beli'  => $hargaBaru,
                             'harga_baru'  => null,
@@ -156,16 +170,26 @@ class HargaKayusTable
 
                 /**
                  * ACTION: TOLAK
-                 * Tetap mencatat penolakan ke log sebagai bukti audit.
                  */
                 Action::make('reject')
                     ->label('Tolak')
                     ->icon('heroicon-m-x-circle')
                     ->color('danger')
                     ->requiresConfirmation()
-                    ->visible(fn(Model $record) => $record->harga_baru > 0)
+                    /**
+                     * [PENYESUAIAN LOGIKA OTORISASI]
+                     * Logika sama dengan approve: Admin bebas, User lain dilarang menolak ajuan sendiri.
+                     */
+                    ->visible(function (Model $record) {
+                        $user = Auth::user();
+                        if (!$user) return false;
+
+                        $isAdmin = $user->hasAnyRole(self::ROLE_ADMIN);
+                        $isBukanPengusul = $user->name !== $record->updated_by;
+
+                        return $record->harga_baru > 0 && ($isAdmin || $isBukanPengusul);
+                    })
                     ->action(function (Model $record) {
-                        // Tetap catat log bahwa ada pengajuan yang ditolak
                         HargaKayuLog::create([
                             'id_harga_kayu' => $record->id,
                             'harga_lama'    => $record->harga_beli,
@@ -177,7 +201,7 @@ class HargaKayusTable
                         $record->update([
                             'harga_baru'  => null,
                             'status'      => 'ditolak',
-                            'approved_by' =>  Auth::user()->name,
+                            'approved_by' => Auth::user()->name,
                         ]);
 
                         Notification::make()->title('Pengajuan Harga Ditolak')->danger()->send();
