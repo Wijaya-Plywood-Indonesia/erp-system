@@ -30,6 +30,11 @@ class DetailHasil extends Model
         return $this->belongsTo(ProduksiPressDryer::class, 'id_produksi_dryer');
     }
 
+    public function stokMasuk()
+{
+    return $this->hasOne(StokVeneerKering::class, 'id_detail_hasil_dryer');
+}
+
     protected static function booted()
     {
         // Menggunakan static::saved mencakup Created dan Updated

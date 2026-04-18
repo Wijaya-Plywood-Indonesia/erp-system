@@ -100,32 +100,6 @@ class ProduksiPressDryersTable
             ])
             ->recordActions([
                 // ⭐ INI TOMBOL KIRIM DATA KE API
-                Action::make('kirimData')
-                    ->label('Kirim Data')
-                    ->icon('heroicon-o-paper-airplane')
-                    ->color('success')
-                    ->requiresConfirmation()               // muncul dialog konfirmasi dulu
-                    ->modalHeading('Kirim Data Produksi?')
-                    ->modalDescription('Data produksi ini akan dikirim ke sistem tujuan. Lanjutkan?')
-                    ->modalSubmitActionLabel('Ya, Kirim!')
-                    ->action(function (ProduksiPressDryer $record) {
-                        $service = app(ProduksiDryerApiService::class);
-                        $result = $service->kirimData($record->id);
-
-                        if ($result['success']) {
-                            Notification::make()
-                                ->title('Berhasil!')
-                                ->body('Data produksi berhasil dikirim ke sistem tujuan.')
-                                ->success()
-                                ->send();
-                        } else {
-                            Notification::make()
-                                ->title('Gagal Mengirim!')
-                                ->body($result['error'] ?? 'Terjadi kesalahan saat mengirim data.')
-                                ->danger()
-                                ->send();
-                        }
-                    }),
                 Action::make('kelola_kendala')
                     ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
                     ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
