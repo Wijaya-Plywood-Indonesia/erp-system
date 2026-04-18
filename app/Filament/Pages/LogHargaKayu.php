@@ -2,7 +2,7 @@
 
 namespace App\Filament\Pages;
 
-use App\Models\HargaKayu;
+use App\Models\HargaKayuLog;
 use BackedEnum;
 use Filament\Pages\Page;
 use Illuminate\Support\Collection;
@@ -17,13 +17,12 @@ class LogHargaKayu extends Page
 
     protected string $view = 'filament.pages.log-harga-kayu';
 
-    public function getLogsProperty(): Collection
+    public function getLogsProperty(): \Illuminate\Support\Collection
     {
-        // Eloquent Collection secara otomatis kompatibel dengan Illuminate\Support\Collection
-        return HargaKayu::with(['jenisKayu', 'updater', 'approver'])
-            ->whereNotNull('updated_by') // Hanya ambil data yang pernah diinteraksi petugas
-            ->latest('updated_at')      // Urutkan dari yang terbaru
+        // Pastikan relasi hargaKayu.jenisKayu sudah ada di model HargaKayuLog
+        return HargaKayuLog::with(['hargaKayu.jenisKayu'])
+            ->latest() // Mengurutkan dari yang terbaru (berdasarkan id/created_at)
             ->get()
-            ->groupBy(fn($record) => $record->updated_at->format('Y-m-d'));
+            ->groupBy(fn($record) => $record->created_at->format('Y-m-d'));
     }
 }

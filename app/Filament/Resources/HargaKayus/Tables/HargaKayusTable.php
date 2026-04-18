@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\HargaKayus\Tables;
 
+use App\Models\HargaKayuLog;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -16,6 +17,8 @@ use Illuminate\Support\Facades\Auth;
 
 class HargaKayusTable
 {
+    private const ROLE_ADMIN = ['admin', 'super_admin', 'Super Admin'];
+
     public static function configure(Table $table): Table
     {
         return $table
@@ -128,54 +131,80 @@ class HargaKayusTable
                     ->icon('heroicon-m-check-badge')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->modalHeading('Setujui Perubahan Harga?')
-                    ->modalDescription(function (Model $record) {
-                        $baru = number_format($record->harga_baru, 0, ',', '.');
-                        return "Harga akan diaktifkan menjadi Rp {$baru}. Persetujuan ini dilakukan atas nama " . Auth::user()->name . ".";
+                    /**
+                     * [PENYESUAIAN LOGIKA OTORISASI]
+                     * Tombol muncul jika ada harga baru DAN (User adalah Admin ATAU User bukan pengusul harga)
+                     */
+                    ->visible(function (Model $record) {
+                        $user = Auth::user();
+                        if (!$user) return false;
+
+                        $isAdmin = $user->hasAnyRole(self::ROLE_ADMIN);
+                        $isBukanPengusul = $user->name !== $record->updated_by;
+
+                        return $record->harga_baru > 0 && ($isAdmin || $isBukanPengusul);
                     })
-                    ->modalSubmitActionLabel('Ya, Setujui')
-                    // Hanya muncul jika ada usulan harga baru
-                    ->visible(fn(Model $record) => $record->harga_baru > 0)
                     ->action(function (Model $record) {
-                        $record->update([
-                            'harga_beli'  => $record->harga_baru, // Harga baru jadi utama
-                            'harga_baru'  => null,               // Kosongkan bayangan
-                            'status'      => 'disetujui',
-                            'approved_by' => Auth::user()->name,         // Simpan ID User Login
+                        $hargaLama = $record->harga_beli;
+                        $hargaBaru = $record->harga_baru;
+
+                        // 1. BUAT BARIS BARU DI LOG (Historical Record)
+                        HargaKayuLog::create([
+                            'id_harga_kayu' => $record->id,
+                            'harga_lama'    => $hargaLama,
+                            'harga_baru'    => $hargaBaru,
+                            'petugas'       => Auth::user()->name,
+                            'aksi'          => 'Persetujuan Harga',
                         ]);
 
-                        Notification::make()
-                            ->title('Harga Berhasil Disetujui')
-                            ->success()
-                            ->send();
+                        // 2. UPDATE TABEL MASTER
+                        $record->update([
+                            'harga_beli'  => $hargaBaru,
+                            'harga_baru'  => null,
+                            'status'      => 'disetujui',
+                            'approved_by' => Auth::user()->name,
+                        ]);
+
+                        Notification::make()->title('Harga disetujui & riwayat dicatat')->success()->send();
                     }),
 
                 /**
-                 * ACTION: TOLAK (REJECT)
+                 * ACTION: TOLAK
                  */
                 Action::make('reject')
                     ->label('Tolak')
                     ->icon('heroicon-m-x-circle')
                     ->color('danger')
                     ->requiresConfirmation()
-                    ->modalHeading('Tolak Pengajuan Harga?')
-                    ->modalDescription(function () {
-                        return "Harga usulan akan dibatalkan. Penolakan ini dilakukan atas nama " . Auth::user()->name . ".";
+                    /**
+                     * [PENYESUAIAN LOGIKA OTORISASI]
+                     * Logika sama dengan approve: Admin bebas, User lain dilarang menolak ajuan sendiri.
+                     */
+                    ->visible(function (Model $record) {
+                        $user = Auth::user();
+                        if (!$user) return false;
+
+                        $isAdmin = $user->hasAnyRole(self::ROLE_ADMIN);
+                        $isBukanPengusul = $user->name !== $record->updated_by;
+
+                        return $record->harga_baru > 0 && ($isAdmin || $isBukanPengusul);
                     })
-                    ->modalSubmitActionLabel('Ya, Tolak')
-                    // Hanya muncul jika ada usulan harga baru
-                    ->visible(fn(Model $record) => $record->harga_baru > 0)
                     ->action(function (Model $record) {
-                        $record->update([
-                            'harga_baru'  => null,      // Batalkan usulan
-                            'status'      => 'ditolak',
-                            'approved_by' => Auth::user()->name, // Simpan ID User Login
+                        HargaKayuLog::create([
+                            'id_harga_kayu' => $record->id,
+                            'harga_lama'    => $record->harga_beli,
+                            'harga_baru'    => $record->harga_baru,
+                            'petugas'       => Auth::user()->name,
+                            'aksi'          => 'Penolakan Harga',
                         ]);
 
-                        Notification::make()
-                            ->title('Pengajuan Harga Ditolak')
-                            ->danger()
-                            ->send();
+                        $record->update([
+                            'harga_baru'  => null,
+                            'status'      => 'ditolak',
+                            'approved_by' => Auth::user()->name,
+                        ]);
+
+                        Notification::make()->title('Pengajuan Harga Ditolak')->danger()->send();
                     }),
 
                 EditAction::make(),

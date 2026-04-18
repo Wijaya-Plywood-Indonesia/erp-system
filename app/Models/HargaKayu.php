@@ -14,6 +14,7 @@ class HargaKayu extends Model
         'diameter_terkecil',
         'diameter_terbesar',
         'harga_beli',
+        'harga_terakhir',
         'grade',
         'id_jenis_kayu',
         'harga_baru',

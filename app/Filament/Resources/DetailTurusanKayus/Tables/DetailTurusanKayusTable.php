@@ -72,6 +72,16 @@ class DetailTurusanKayusTable
                     ->sortable()
                     ->searchable(),
 
+                TextColumn::make('harga')
+                    ->label('Harga')
+                    ->numeric()
+                    ->sortable()
+                    ->alignRight()
+                    ->color('primary')
+                    ->weight('bold')
+                    ->formatStateUsing(fn($state) => $state > 0 ? number_format($state, 0, ',', '.') : '-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 // Update Kolom Kubikasi: Menambahkan variabel panjang ke dalam rumus
                 TextColumn::make('kubikasi')
                     ->label('Kubikasi')
