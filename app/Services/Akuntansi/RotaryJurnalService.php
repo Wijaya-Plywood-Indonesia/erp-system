@@ -345,170 +345,170 @@ class RotaryJurnalService
      *   4. hpp_average di-reset ke 0 saat stok habis
      *   5. Notifikasi warning jika stok sudah kosong
      */
-    public function kurangiStokHpp(Collection $produksiList, string $tanggal): void
-    {
-        $lahanDiproses = [];
-        $tglFormatLog  = \Carbon\Carbon::parse($tanggal)->format('d/m/Y');
+    // public function kurangiStokHpp(Collection $produksiList, string $tanggal): void
+    // {
+    //     $lahanDiproses = [];
+    //     $tglFormatLog  = \Carbon\Carbon::parse($tanggal)->format('d/m/Y');
 
-        DB::transaction(function () use ($produksiList, $tanggal, $tglFormatLog, &$lahanDiproses) {
+    //     DB::transaction(function () use ($produksiList, $tanggal, $tglFormatLog, &$lahanDiproses) {
 
-            foreach ($produksiList as $produksi) {
-                foreach ($produksi->detailLahanRotary as $lahan) {
-                    $idLahan = $lahan->id_lahan;
+    //         foreach ($produksiList as $produksi) {
+    //             foreach ($produksi->detailLahanRotary as $lahan) {
+    //                 $idLahan = $lahan->id_lahan;
 
-                    // ── Guard #1: skip lahan yang sudah diproses di iterasi ini ──
-                    if (isset($lahanDiproses[$idLahan])) {
-                        Log::info("[kurangiStokHpp] SKIP lahan #{$idLahan} — sudah diproses di iterasi ini.");
-                        continue;
-                    }
+    //                 // ── Guard #1: skip lahan yang sudah diproses di iterasi ini ──
+    //                 if (isset($lahanDiproses[$idLahan])) {
+    //                     Log::info("[kurangiStokHpp] SKIP lahan #{$idLahan} — sudah diproses di iterasi ini.");
+    //                     continue;
+    //                 }
 
-                    // ── Guard #2: skip jika sudah ada log keluar hari ini ─────────
-                    $sudahDiproses = HppAverageLog::where('id_lahan', $idLahan)
-                        ->where('tipe_transaksi', 'keluar')
-                        ->whereDate('tanggal', $tanggal)
-                        ->where('keterangan', 'like', '%produksi rotary%')
-                        ->exists();
+    //                 // ── Guard #2: skip jika sudah ada log keluar hari ini ─────────
+    //                 $sudahDiproses = HppAverageLog::where('id_lahan', $idLahan)
+    //                     ->where('tipe_transaksi', 'keluar')
+    //                     ->whereDate('tanggal', $tanggal)
+    //                     ->where('keterangan', 'like', '%produksi rotary%')
+    //                     ->exists();
 
-                    if ($sudahDiproses) {
-                        Log::warning("[kurangiStokHpp] SKIP lahan #{$idLahan} — sudah diproses pada tanggal {$tanggal}.");
-                        $lahanDiproses[$idLahan] = true;
-                        continue;
-                    }
+    //                 if ($sudahDiproses) {
+    //                     Log::warning("[kurangiStokHpp] SKIP lahan #{$idLahan} — sudah diproses pada tanggal {$tanggal}.");
+    //                     $lahanDiproses[$idLahan] = true;
+    //                     continue;
+    //                 }
 
-                    $lahanDiproses[$idLahan] = true;
+    //                 $lahanDiproses[$idLahan] = true;
 
-                    // ── Label lahan ───────────────────────────────────────────────
-                    $namaLahan   = $lahan->lahan->nama_lahan ?? "Lahan #{$idLahan}";
-                    $kodeLahan   = $lahan->lahan->kode_lahan ?? '';
-                    $labelLahan  = $kodeLahan ? "{$kodeLahan} - {$namaLahan}" : $namaLahan;
+    //                 // ── Label lahan ───────────────────────────────────────────────
+    //                 $namaLahan   = $lahan->lahan->nama_lahan ?? "Lahan #{$idLahan}";
+    //                 $kodeLahan   = $lahan->lahan->kode_lahan ?? '';
+    //                 $labelLahan  = $kodeLahan ? "{$kodeLahan} - {$namaLahan}" : $namaLahan;
 
-                    // ── Kayu pecah ────────────────────────────────────────────────
-                    $kayuPecahList = $produksi->detailKayuPecah
-                        ->filter(fn($kp) => $kp->penggunaanLahan?->id_lahan === $idLahan);
+    //                 // ── Kayu pecah ────────────────────────────────────────────────
+    //                 $kayuPecahList = $produksi->detailKayuPecah
+    //                     ->filter(fn($kp) => $kp->penggunaanLahan?->id_lahan === $idLahan);
 
-                    $jumlahPecah     = $kayuPecahList->count();
-                    $ukuranPecah     = $kayuPecahList->pluck('ukuran')->filter()->unique()->implode(', ');
-                    $keteranganPecah = $jumlahPecah > 0
-                        ? " · Kayu pecah/hilang: {$jumlahPecah} btg" . ($ukuranPecah ? " ({$ukuranPecah})" : '')
-                        : '';
+    //                 $jumlahPecah     = $kayuPecahList->count();
+    //                 $ukuranPecah     = $kayuPecahList->pluck('ukuran')->filter()->unique()->implode(', ');
+    //                 $keteranganPecah = $jumlahPecah > 0
+    //                     ? " · Kayu pecah/hilang: {$jumlahPecah} btg" . ($ukuranPecah ? " ({$ukuranPecah})" : '')
+    //                     : '';
 
-                    // ── Ambil semua kombinasi di lahan ini yang masih ada stok ────
-                    $summaries = HppAverageSummarie::where('id_lahan', $idLahan)
-                        ->where('stok_batang', '>', 0)
-                        ->get();
+    //                 // ── Ambil semua kombinasi di lahan ini yang masih ada stok ────
+    //                 $summaries = HppAverageSummarie::where('id_lahan', $idLahan)
+    //                     ->where('stok_batang', '>', 0)
+    //                     ->get();
 
-                    if ($summaries->isEmpty()) {
-                        Log::warning("[kurangiStokHpp] Lahan #{$idLahan} tidak punya stok. Dilewati.", [
-                            'tanggal'     => $tanggal,
-                            'label_lahan' => $labelLahan,
-                        ]);
-                        continue;
-                    }
+    //                 if ($summaries->isEmpty()) {
+    //                     Log::warning("[kurangiStokHpp] Lahan #{$idLahan} tidak punya stok. Dilewati.", [
+    //                         'tanggal'     => $tanggal,
+    //                         'label_lahan' => $labelLahan,
+    //                     ]);
+    //                     continue;
+    //                 }
 
-                    // ── Proses per kombinasi (panjang + jenis_kayu) ───────────────
-                    foreach ($summaries as $summarie) {
-                        $hppAverage     = (float) $summarie->hpp_average;
-                        $batangBefore   = (int)   $summarie->stok_batang;
-                        $kubikasiBefore = (float) $summarie->stok_kubikasi;
-                        $nilaiBefore    = (float) $summarie->nilai_stok;
-                        $nilaiKeluar    = round($hppAverage * $kubikasiBefore, 2);
+    //                 // ── Proses per kombinasi (panjang + jenis_kayu) ───────────────
+    //                 foreach ($summaries as $summarie) {
+    //                     $hppAverage     = (float) $summarie->hpp_average;
+    //                     $batangBefore   = (int)   $summarie->stok_batang;
+    //                     $kubikasiBefore = (float) $summarie->stok_kubikasi;
+    //                     $nilaiBefore    = (float) $summarie->nilai_stok;
+    //                     $nilaiKeluar    = round($hppAverage * $kubikasiBefore, 2);
 
-                        $keterangan = "Digunakan produksi rotary tgl {$tglFormatLog} · Lahan {$labelLahan}{$keteranganPecah}";
+    //                     $keterangan = "Digunakan produksi rotary tgl {$tglFormatLog} · Lahan {$labelLahan}{$keteranganPecah}";
 
-                        // ── Catat log keluar ──────────────────────────────────────
-                        $log = HppAverageLog::create([
-                            'id_lahan'             => $idLahan,           // ✅ FIX: id_lahan diisi
-                            'id_jenis_kayu'        => $summarie->id_jenis_kayu,
-                            'grade'                => $summarie->grade,
-                            'panjang'              => $summarie->panjang,
-                            'tanggal'              => $tanggal,
-                            'tipe_transaksi'       => 'keluar',
-                            'keterangan'           => $keterangan,
-                            'referensi_type'       => ProduksiRotary::class,
-                            'referensi_id'         => $produksi->id,
-                            'total_batang'         => $batangBefore,
-                            'total_kubikasi'       => round($kubikasiBefore, 4),
-                            'harga'                => $hppAverage,
-                            'nilai_stok'           => $nilaiKeluar,
-                            'stok_batang_before'   => $batangBefore,
-                            'stok_kubikasi_before' => round($kubikasiBefore, 4),
-                            'nilai_stok_before'    => $nilaiBefore,
-                            'stok_batang_after'    => 0,
-                            'stok_kubikasi_after'  => 0,
-                            'nilai_stok_after'     => 0,
-                            'hpp_average'          => 0,
-                        ]);
+    //                     // ── Catat log keluar ──────────────────────────────────────
+    //                     $log = HppAverageLog::create([
+    //                         'id_lahan'             => $idLahan,           // ✅ FIX: id_lahan diisi
+    //                         'id_jenis_kayu'        => $summarie->id_jenis_kayu,
+    //                         'grade'                => $summarie->grade,
+    //                         'panjang'              => $summarie->panjang,
+    //                         'tanggal'              => $tanggal,
+    //                         'tipe_transaksi'       => 'keluar',
+    //                         'keterangan'           => $keterangan,
+    //                         'referensi_type'       => ProduksiRotary::class,
+    //                         'referensi_id'         => $produksi->id,
+    //                         'total_batang'         => $batangBefore,
+    //                         'total_kubikasi'       => round($kubikasiBefore, 4),
+    //                         'harga'                => $hppAverage,
+    //                         'nilai_stok'           => $nilaiKeluar,
+    //                         'stok_batang_before'   => $batangBefore,
+    //                         'stok_kubikasi_before' => round($kubikasiBefore, 4),
+    //                         'nilai_stok_before'    => $nilaiBefore,
+    //                         'stok_batang_after'    => 0,
+    //                         'stok_kubikasi_after'  => 0,
+    //                         'nilai_stok_after'     => 0,
+    //                         'hpp_average'          => 0,
+    //                     ]);
 
-                        // ── Reset summary ke 0 ────────────────────────────────────
-                        $summarie->update([
-                            'stok_batang'   => 0,
-                            'stok_kubikasi' => 0,
-                            'nilai_stok'    => 0,
-                            'hpp_average'   => 0,
-                            'id_last_log'   => $log->id,
-                        ]);
+    //                     // ── Reset summary ke 0 ────────────────────────────────────
+    //                     $summarie->update([
+    //                         'stok_batang'   => 0,
+    //                         'stok_kubikasi' => 0,
+    //                         'nilai_stok'    => 0,
+    //                         'hpp_average'   => 0,
+    //                         'id_last_log'   => $log->id,
+    //                     ]);
 
-                        Log::info("[kurangiStokHpp] Stok habis — lahan #{$idLahan} jenis#{$summarie->id_jenis_kayu} p{$summarie->panjang}", [
-                            'batang_keluar'   => $batangBefore,
-                            'kubikasi_keluar' => round($kubikasiBefore, 4),
-                            'nilai_keluar'    => $nilaiKeluar,
-                            'hpp_average'     => $hppAverage,
-                            'kayu_pecah'      => $jumlahPecah,
-                            'log_id'          => $log->id,
-                        ]);
-                    }
+    //                     Log::info("[kurangiStokHpp] Stok habis — lahan #{$idLahan} jenis#{$summarie->id_jenis_kayu} p{$summarie->panjang}", [
+    //                         'batang_keluar'   => $batangBefore,
+    //                         'kubikasi_keluar' => round($kubikasiBefore, 4),
+    //                         'nilai_keluar'    => $nilaiKeluar,
+    //                         'hpp_average'     => $hppAverage,
+    //                         'kayu_pecah'      => $jumlahPecah,
+    //                         'log_id'          => $log->id,
+    //                     ]);
+    //                 }
 
-                    // ════════════════════════════════════════════════════════════
-                    // STEP BARU #1 — Reset TempatKayu → status 'siap_diisi'
-                    // Dipanggil SETELAH semua kombinasi di lahan ini selesai
-                    // ════════════════════════════════════════════════════════════
-                    $jumlahTempatKayuDireset = DB::table('tempat_kayus')
-                        ->where('id_lahan', $idLahan)
-                        ->update([
-                            'jumlah_batang'   => 0,
-                            'status'          => 'siap_diisi',
-                            'diserahkan_oleh' => null,  // ✅ dikosongkan
-                            'diterima_oleh'   => null,  // ✅ dikosongkan
-                            'updated_at'      => now(),
-                        ]);
+    //                 // ════════════════════════════════════════════════════════════
+    //                 // STEP BARU #1 — Reset TempatKayu → status 'siap_diisi'
+    //                 // Dipanggil SETELAH semua kombinasi di lahan ini selesai
+    //                 // ════════════════════════════════════════════════════════════
+    //                 $jumlahTempatKayuDireset = DB::table('tempat_kayus')
+    //                     ->where('id_lahan', $idLahan)
+    //                     ->update([
+    //                         'jumlah_batang'   => 0,
+    //                         'status'          => 'siap_diisi',
+    //                         'diserahkan_oleh' => null,  // ✅ dikosongkan
+    //                         'diterima_oleh'   => null,  // ✅ dikosongkan
+    //                         'updated_at'      => now(),
+    //                     ]);
 
-                    Log::info("[kurangiStokHpp] TempatKayu direset", [
-                        'id_lahan'      => $idLahan,
-                        'label_lahan'   => $labelLahan,
-                        'rows_affected' => $jumlahTempatKayuDireset,
-                    ]);
+    //                 Log::info("[kurangiStokHpp] TempatKayu direset", [
+    //                     'id_lahan'      => $idLahan,
+    //                     'label_lahan'   => $labelLahan,
+    //                     'rows_affected' => $jumlahTempatKayuDireset,
+    //                 ]);
 
-                    // ════════════════════════════════════════════════════════════
-                    // STEP BARU #2 — Reset pivot serah terima
-                    // Update record yang ada → jangan dihapus agar riwayat terjaga
-                    // ════════════════════════════════════════════════════════════
-                    $jumlahPivotDireset = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
-                        ->where('id_lahan', $idLahan)
-                        ->where('tipe', 'lahan_rotary')
-                        ->update([
-                            'jumlah_batang'   => 0,
-                            'kubikasi'        => 0,
-                            'diserahkan_oleh' => null,  // ✅ dikosongkan
-                            'diterima_oleh'   => null,  // ✅ dikosongkan
-                            'status'          => 'Lahan Siap',
-                            'updated_at'      => now(),
-                        ]);
+    //                 // ════════════════════════════════════════════════════════════
+    //                 // STEP BARU #2 — Reset pivot serah terima
+    //                 // Update record yang ada → jangan dihapus agar riwayat terjaga
+    //                 // ════════════════════════════════════════════════════════════
+    //                 $jumlahPivotDireset = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
+    //                     ->where('id_lahan', $idLahan)
+    //                     ->where('tipe', 'lahan_rotary')
+    //                     ->update([
+    //                         'jumlah_batang'   => 0,
+    //                         'kubikasi'        => 0,
+    //                         'diserahkan_oleh' => null,  // ✅ dikosongkan
+    //                         'diterima_oleh'   => null,  // ✅ dikosongkan
+    //                         'status'          => 'Lahan Siap',
+    //                         'updated_at'      => now(),
+    //                     ]);
 
-                    Log::info("[kurangiStokHpp] Pivot serah terima direset", [
-                        'id_lahan'      => $idLahan,
-                        'label_lahan'   => $labelLahan,
-                        'rows_affected' => $jumlahPivotDireset,
-                    ]);
-                }
-            }
-        }); // ── end DB::transaction
+    //                 Log::info("[kurangiStokHpp] Pivot serah terima direset", [
+    //                     'id_lahan'      => $idLahan,
+    //                     'label_lahan'   => $labelLahan,
+    //                     'rows_affected' => $jumlahPivotDireset,
+    //                 ]);
+    //             }
+    //         }
+    //     }); // ── end DB::transaction
 
-        Log::info("[kurangiStokHpp] Selesai", [
-            'tanggal'        => $tanggal,
-            'lahan_diproses' => array_keys($lahanDiproses),
-            'jumlah_lahan'   => count($lahanDiproses),
-        ]);
-    }
+    //     Log::info("[kurangiStokHpp] Selesai", [
+    //         'tanggal'        => $tanggal,
+    //         'lahan_diproses' => array_keys($lahanDiproses),
+    //         'jumlah_lahan'   => count($lahanDiproses),
+    //     ]);
+    // }
 
     // ─────────────────────────────────────────────────────────────────────────
     //  SERAH PALET — tambah stok tanpa HPP (HPP dihitung saat validasi)
@@ -1488,7 +1488,7 @@ class RotaryJurnalService
 
                 // Kurangi stok HPP & tambah stok veneer basah setelah jurnal berhasil dikirim
                 if ($produksiList) {
-                    $this->kurangiStokHpp($produksiList, $tanggal);
+                    // $this->kurangiStokHpp($produksiList, $tanggal);
                     $this->tambahStokVeneerBasah($produksiList, $tanggal);
                 }
             } elseif ($response->status() === 409) {

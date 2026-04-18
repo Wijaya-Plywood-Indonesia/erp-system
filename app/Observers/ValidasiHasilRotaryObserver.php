@@ -95,9 +95,9 @@ class ValidasiHasilRotaryObserver
 
             if ($response->successful()) {
                 Log::info("ValidasiObserver: Jurnal berhasil dikirim ke akuntansi (tanggal={$tanggal}).", [
-                    'jurnal'        => $response->json('data.jurnal'),
-                    'jumlah_header' => $response->json('data.jumlah_header'),
-                    'jumlah_items'  => $response->json('data.jumlah_items'),
+                    // 'jurnal'        => $response->json('data.jurnal'),
+                    // 'jumlah_header' => $response->json('data.jumlah_header'),
+                    // 'jumlah_items'  => $response->json('data.jumlah_items'),
                 ]);
 
                 // ── Kurangi stok HPP kayu setelah jurnal berhasil ────────────────

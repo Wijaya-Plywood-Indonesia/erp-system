@@ -10,9 +10,9 @@ use UnitEnum;
 class HargaKayu extends Page
 {
     protected string $view = 'filament.pages.harga-kayu';
-    protected static ?string $navigationLabel = 'Harga Kayu ';
-    protected static string|UnitEnum|null $navigationGroup = 'Laporan';
-    protected static ?string $title = 'Harga Kayu';
+    protected static ?string $navigationLabel = 'Table Harga Kayu';
+    protected static string|UnitEnum|null $navigationGroup = 'Kayu';
+    protected static ?string $title = 'Tabel Harga Kayu';
 
     public Collection $prices;
 
