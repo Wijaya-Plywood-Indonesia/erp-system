@@ -21,6 +21,7 @@ class DetailTurusanKayu extends Model
         'grade',
         'diameter',
         'kuantitas',
+        'harga',
         'created_by',
         'updated_by',
     ];
@@ -41,8 +42,29 @@ class DetailTurusanKayu extends Model
                 $model->updated_by = Auth::id();
             }
         });
+
+
+        // Penyesuaian Harga Kayu secara otomatis
+        static::creating(function ($model) {
+            $model->harga = self::cariHargaMaster($model);
+        });
+
+        // Berjalan saat data diubah (Update)
+        static::updating(function ($model) {
+            $model->harga = self::cariHargaMaster($model);
+        });
     }
 
+    // Fungsi Pencarian Harga ke Harga Kayu
+    protected static function cariHargaMaster($model): int
+    {
+        return HargaKayu::where('id_jenis_kayu', $model->jenis_kayu_id)
+            ->where('panjang', $model->panjang)
+            ->where('grade', $model->grade)
+            ->where('diameter_terkecil', '<=', $model->diameter)
+            ->where('diameter_terbesar', '>=', $model->diameter)
+            ->value('harga_beli') ?? 0;
+    }
 
 
     public function kayuMasuk()
