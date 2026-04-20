@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Pages\LaporanHarian\Transformers;
+namespace App\Filament\Resources\ProduksiHps\Transformers; // Pastikan namespace sesuai folder Anda
 
 use Carbon\Carbon;
 
@@ -11,8 +11,14 @@ class HotpressWorkerMap
         $results = [];
 
         foreach ($collection as $produksi) {
-            // Label hasil sekarang dibuat statis tanpa detail barang
-            $labelHasil = "HOT PRESS";
+            /** * 1. DETEKSI SHIFT
+             * Asumsi: tabel produksi_hps memiliki kolom 'shift' (isi: pagi/malam).
+             * Jika nama kolomnya berbeda (misal: 'is_malam'), silakan sesuaikan logikanya.
+             */
+            $shift = (strtoupper($produksi->shift ?? '') === 'MALAM') ? 'MALAM' : 'PAGI';
+
+            // Gabungkan menjadi "HOT PRESS PAGI" atau "HOT PRESS MALAM"
+            $labelHasil = "HOTPRESS {$shift}";
 
             // Mapping Pegawai
             if ($produksi->detailPegawaiHp) {
@@ -27,7 +33,7 @@ class HotpressWorkerMap
                         'nama' => $dp->pegawaiHp->nama_pegawai ?? 'TANPA NAMA',
                         'masuk' => $jamMasuk,
                         'pulang' => $jamPulang,
-                        'hasil' => $labelHasil, // Mengirim teks "HOT PRESS" saja
+                        'hasil' => $labelHasil, // Sekarang berisi "HOT PRESS PAGI" atau "HOT PRESS MALAM"
                         'ijin' => $dp->ijin ?? '-',
                         'potongan_targ' => 0,
                         'keterangan' => $dp->ket ?? $produksi->kendala ?? '',
