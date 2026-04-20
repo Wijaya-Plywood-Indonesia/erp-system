@@ -10,6 +10,7 @@ class StokVeneerKering extends Model
 
     protected $fillable = [
         'id_produksi_dryer',
+        'id_detail_hasil_dryer',
         'id_ukuran',
         'id_jenis_kayu',
         'kw',

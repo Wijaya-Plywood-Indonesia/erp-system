@@ -31,9 +31,9 @@ class DetailHasil extends Model
     }
 
     public function stokMasuk()
-{
-    return $this->hasOne(StokVeneerKering::class, 'id_detail_hasil_dryer');
-}
+    {
+        return $this->hasOne(StokVeneerKering::class, 'id_detail_hasil_dryer');
+    }
 
     protected static function booted()
     {
