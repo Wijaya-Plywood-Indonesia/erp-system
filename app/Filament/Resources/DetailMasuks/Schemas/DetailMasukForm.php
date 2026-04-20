@@ -35,15 +35,10 @@ class DetailMasukForm
                 ->required()
                 ->dehydrated(true),
 
-            // ✅ Simpan ID Palet asli ke kolom 'no_palet'
-            Hidden::make('no_palet')
-                ->required()
-                ->dehydrated(true),
-
             Select::make('no_palet_select')
                 ->label('Nomor Palet')
                 ->options(function ($record, $livewire) use ($tipe, $modelClass) {
-                    // 1. Ambil ID palet yang sudah terpakai secara GLOBAL
+                    // Ambil ID palet yang sudah terpakai
                     $usedPallets = DB::table($modelClass::make()->getTable())
                         ->whereNotNull('no_palet')
                         ->where('no_palet', '>', 0)
@@ -51,57 +46,82 @@ class DetailMasukForm
                         ->map(fn($id) => (int) $id)
                         ->toArray();
 
-                    // 2. Ambil ID palet yang sudah diterima dari Rotary (Pivot)
                     $idDiterima = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
                         ->where('tipe', $tipe)
                         ->whereNotNull('id_detail_hasil_palet_rotary')
                         ->pluck('id_detail_hasil_palet_rotary')
                         ->toArray();
 
-                    // 3. Ambil data palet asli
                     $palets = DetailHasilPaletRotary::whereIn('id', $idDiterima)->get();
 
-                    // 4. Proses Filter berdasarkan "Status Bayangan"
                     $options = [];
                     foreach ($palets as $p) {
                         $isUsed = in_array($p->id, $usedPallets);
 
-                        // Logika Edit: Jika ini palet milik data ini sendiri, anggap TIDAK terpakai agar tetap muncul
                         if ($record && (int)$record->getRawOriginal('no_palet') === $p->id) {
                             $isUsed = false;
                         }
 
-                        // JIKA STATUSNYA "TERSEDIA" (TIDAK DIGUNAKAN), BARU MASUKKAN KE DAFTAR
                         if (!$isUsed) {
                             $options[$p->id] = $p->kode_palet ?? $p->palet;
                         }
                     }
 
-                    return ['AF' => '— Palet AF (Manual) —'] + $options;
+                    return ['AF' => 'Palet AF'] + $options;
                 })
                 ->searchable()
                 ->required()
                 ->live()
                 ->disabled(fn($record) => $record !== null)
                 ->dehydrated(false)
-                ->afterStateUpdated(function (Set $set, ?string $state) {
-                    if (!$state || $state === 'AF') return;
+                ->afterStateUpdated(function (Set $set, ?string $state, $livewire) use ($tipe, $modelClass) {
+                    // ✅ PERBAIKAN: Handle AF dengan generate ID negatif
+                    if ($state === 'AF') {
+                        // Generate nomor AF baru (menggunakan nilai negatif)
+                        $lastAF = DB::table($modelClass::make()->getTable())
+                            ->where('no_palet', '<', 0)
+                            ->min('no_palet'); // Cari nilai negatif terkecil
 
-                    $set('no_palet', (int) $state);
+                        // Generate ID baru: -1, -2, -3, ...
+                        $newAFId = $lastAF ? $lastAF - 1 : -1;
 
-                    $palet = DetailHasilPaletRotary::with(['penggunaanLahan', 'ukuran'])->find($state);
-                    if ($palet) {
-                        $set('kw', $palet->kw);
-                        $set('isi', $palet->total_lembar);
-                        $set('id_jenis_kayu', $palet->penggunaanLahan?->id_jenis_kayu);
-                        $set('id_ukuran', $palet->id_ukuran);
+                        $set('no_palet', $newAFId);
+                        $set('af_generated_id', $newAFId);
+
+                        // Reset fields untuk input manual
+                        $set('id_jenis_kayu', null);
+                        $set('id_ukuran', null);
+                        $set('kw', null);
+                        $set('isi', null);
+
+                        return;
+                    }
+
+                    // Handle palet biasa
+                    if ($state && $state !== 'AF') {
+                        $set('no_palet', (int) $state);
+
+                        $palet = DetailHasilPaletRotary::with(['penggunaanLahan', 'ukuran'])->find($state);
+                        if ($palet) {
+                            $set('kw', $palet->kw);
+                            $set('isi', $palet->total_lembar);
+                            $set('id_jenis_kayu', $palet->penggunaanLahan?->id_jenis_kayu);
+                            $set('id_ukuran', $palet->id_ukuran);
+                        }
                     }
                 })
                 ->columnSpanFull(),
 
-            // Pastikan Hidden field ini tetap ada untuk menyimpan ID ke DB
-            Hidden::make('no_palet')->required()->dehydrated(true),
+            // =========================================================
+            // PERBAIKAN: Hidden field untuk no_palet (hanya 1)
+            // =========================================================
+            Hidden::make('no_palet')
+                ->required()
+                ->dehydrated(true),
 
+            // =========================================================
+            // PERBAIKAN: Placeholder untuk AF Preview
+            // =========================================================
             Placeholder::make('af_preview')
                 ->label('Nomor AF yang akan digunakan')
                 ->content(function (Get $get) {
@@ -111,7 +131,7 @@ class DetailMasukForm
                     }
                     return '-';
                 })
-                ->hidden(fn(Get $get) => $get('no_palet_select') !== 'AF')
+                ->visible(fn(Get $get) => $get('no_palet_select') === 'AF')
                 ->columnSpanFull(),
 
             Select::make('id_jenis_kayu')

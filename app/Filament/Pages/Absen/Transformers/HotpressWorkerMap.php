@@ -10,9 +10,10 @@ class HotpressWorkerMap
     {
         $results = [];
 
+        $shift = (strtoupper($produksi->shift ?? '') === 'MALAM') ? 'MALAM' : 'PAGI';
         foreach ($collection as $produksi) {
             // Label hasil sekarang dibuat statis tanpa detail barang
-            $labelHasil = "HOT PRESS";
+            $labelHasil = "HOT PRESS {$shift}";
 
             // Mapping Pegawai
             if ($produksi->detailPegawaiHp) {
