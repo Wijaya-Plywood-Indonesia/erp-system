@@ -17,29 +17,15 @@ use Illuminate\Support\Facades\Log;
  *   - Stok summary dihitung PER LAHAN per (lahan + jenis_kayu + panjang)
  *   - Grade diabaikan di level HPP (grade = null di log & summary)
  *
- * TRIGGER:
- *   - Masuk  → NotaKayuObserver::updated() saat status → "Sudah Diperiksa"
- *   - Keluar → catatTransaksiKeluar() dipanggil manual
- *   - Hapus  → batalkanNotaKayuMasuk() via NotaKayuObserver::deleting()
- *
- * ALUR DATA:
- *   NotaKayu → KayuMasuk (tgl_kayu_masuk)
- *                → DetailTurusanKayu (lahan_id, jenis_kayu_id, panjang, diameter, kuantitas, grade)
+ * PERUBAHAN:
+ *   - NOTA LUNAS: Langsung update ke HppAverageSummarie & TempatKayu (TANPA LOG)
+ *   - Log HPP hanya untuk keperluan histori MANUAL (bukan dari nota otomatis)
  */
 class HppAverageService
 {
     // =========================================================================
     // HELPERS PRIVATE
     // =========================================================================
-
-    private function mapGrade(int $grade): string
-    {
-        return match ($grade) {
-            1       => 'A',
-            2       => 'B',
-            default => 'C',
-        };
-    }
 
     /**
      * Hitung kubikasi per baris — dibulatkan 4 desimal per baris
@@ -60,7 +46,7 @@ class HppAverageService
      */
     private function getHargaBeli(int $jenisKayuId, int $gradeInt, int $panjang, float $diameter): float
     {
-        $harga = HargaKayu::where('id_jenis_kayu',     $jenisKayuId)
+        $harga = HargaKayu::where('id_jenis_kayu', $jenisKayuId)
             ->where('grade',             $gradeInt)
             ->where('panjang',           $panjang)
             ->where('diameter_terkecil', '<=', $diameter)
@@ -80,30 +66,21 @@ class HppAverageService
     }
 
     // =========================================================================
-    // PROSES NOTA KAYU MASUK
-    // Dipanggil dari observer saat status berubah ke "Sudah Diperiksa"
+    // PROSES NOTA KAYU LUNAS (TANPA LOG HPP)
+    // Dipanggil dari observer saat status_pelunasan berubah ke "Lunas"
     // =========================================================================
 
-    public function prosesNotaKayuMasuk(NotaKayu $nota): void
+    public function prosesNotaKayuLunas(NotaKayu $nota): void
     {
-        Log::info('[HPP] prosesNotaKayuMasuk mulai', [
+        Log::info('[STOK] prosesNotaKayuLunas mulai (TANPA LOG HPP)', [
             'nota_id' => $nota->id,
             'no_nota' => $nota->no_nota,
-            'status'  => $nota->status,
         ]);
-
-        if (! str_contains($nota->status ?? '', 'Sudah Diperiksa')) {
-            Log::warning('[HPP] SKIP — status bukan Sudah Diperiksa', [
-                'nota_id' => $nota->id,
-                'status'  => $nota->status,
-            ]);
-            return;
-        }
 
         $kayuMasuk = $nota->kayuMasuk;
 
         if (! $kayuMasuk) {
-            Log::warning('[HPP] SKIP — kayuMasuk null', ['nota_id' => $nota->id]);
+            Log::warning('[STOK] SKIP — kayuMasuk null', ['nota_id' => $nota->id]);
             return;
         }
 
@@ -111,51 +88,36 @@ class HppAverageService
         $details = $kayuMasuk->detailTurusanKayus;
 
         if ($details->isEmpty()) {
-            Log::warning('[HPP] SKIP — detail kosong', [
+            Log::warning('[STOK] SKIP — detail kosong', [
                 'nota_id'       => $nota->id,
                 'kayu_masuk_id' => $kayuMasuk->id,
             ]);
             return;
         }
 
-        $tanggal    = \Carbon\Carbon::parse($kayuMasuk->tgl_kayu_masuk)->format('Y-m-d');
-        $keterangan = "Nota #{$nota->no_nota}";
-
-        Log::info('[HPP] mulai grouping detail', [
-            'nota_id'      => $nota->id,
-            'detail_count' => $details->count(),
-            'tanggal'      => $tanggal,
-        ]);
-
-        DB::transaction(function () use ($nota, $tanggal, $keterangan, $details) {
-
-            // Grouping: per lahan + jenis_kayu + panjang (grade diabaikan di HPP)
+        DB::transaction(function () use ($nota, $details) {
+            // Grouping: per lahan + jenis_kayu + panjang
             $grouped = $details->groupBy(
                 fn($d) => "{$d->lahan_id}_{$d->jenis_kayu_id}_{$d->panjang}"
             );
 
-            Log::info('[HPP] grouped kombinasi', [
-                'nota_id' => $nota->id,
-                'count'   => $grouped->count(),
-                'keys'    => $grouped->keys()->toArray(),
-            ]);
+            $lahanTerpengaruh = collect();
 
             foreach ($grouped as $key => $rows) {
                 $lahanId     = (int) $rows->first()->lahan_id;
                 $jenisKayuId = (int) $rows->first()->jenis_kayu_id;
                 $panjang     = (int) $rows->first()->panjang;
 
-                // Akumulasi batang
                 $totalBatang = (int) $rows->sum('kuantitas');
 
-                // Kubikasi: round per baris dulu, lalu dijumlahkan (ikut nota cetak)
+                // Hitung kubikasi
                 $totalKubikasi = (float) $rows->sum(fn($d) => $this->hitungKubikasi(
                     (float) $d->panjang,
                     (float) $d->diameter,
                     (float) $d->kuantitas
                 ));
 
-                // Nilai masuk = Σ (kubikasi_per_baris × harga × 1000)
+                // Hitung nilai stok
                 $totalNilai = (float) round(
                     $rows->sum(function ($d) use ($jenisKayuId, $panjang) {
                         $kub   = $this->hitungKubikasi(
@@ -174,8 +136,32 @@ class HppAverageService
                     2
                 );
 
-                Log::info('[HPP] kombinasi dihitung', [
-                    'key'            => $key,
+                if ($totalBatang === 0 || $lahanId === 0 || $jenisKayuId === 0) {
+                    Log::warning('[STOK] kombinasi SKIP — data tidak lengkap', [
+                        'nota_id' => $nota->id,
+                        'key'     => $key,
+                    ]);
+                    continue;
+                }
+
+                // UPDATE LANGSUNG KE SUMMARY (TANPA LOG)
+                $summary = HppAverageSummarie::forKombinasi($lahanId, $jenisKayuId, $panjang);
+
+                if (!$summary) {
+                    Log::error('[STOK] summary NULL — kombinasi tidak ditemukan', [
+                        'lahan_id'      => $lahanId,
+                        'jenis_kayu_id' => $jenisKayuId,
+                        'panjang'       => $panjang,
+                    ]);
+                    continue;
+                }
+
+                // Gunakan method tambahStok dari model
+                $summary->tambahStok($totalBatang, $totalKubikasi, $totalNilai);
+
+                $lahanTerpengaruh->push($lahanId);
+
+                Log::info('[STOK] kombinasi diupdate (TANPA LOG)', [
                     'lahan_id'       => $lahanId,
                     'jenis_kayu_id'  => $jenisKayuId,
                     'panjang'        => $panjang,
@@ -183,282 +169,23 @@ class HppAverageService
                     'total_kubikasi' => $totalKubikasi,
                     'total_nilai'    => $totalNilai,
                 ]);
+            }
 
-                if ($totalBatang === 0 || $lahanId === 0 || $jenisKayuId === 0) {
-                    Log::warning('[HPP] kombinasi SKIP — data tidak lengkap', [
-                        'nota_id' => $nota->id,
-                        'key'     => $key,
-                    ]);
-                    continue;
+            // Sync TempatKayu (method syncTempatKayu sudah otomatis dipanggil di model)
+            // Tapi kita panggil sekali lagi untuk memastikan
+            $lahanTerpengaruh->unique()->each(function (int $lahanId) {
+                $summary = HppAverageSummarie::where('id_lahan', $lahanId)->first();
+                if ($summary) {
+                    $summary->syncTempatKayu();
                 }
-
-                $this->catatTransaksiMasuk(
-                    lahanId: $lahanId,
-                    jenisKayuId: $jenisKayuId,
-                    panjang: $panjang,
-                    tanggal: $tanggal,
-                    totalBatang: $totalBatang,
-                    totalKubikasi: $totalKubikasi,
-                    totalNilai: $totalNilai,
-                    keterangan: $keterangan,
-                    referensi: $nota,
-                );
-            }
+            });
         });
 
-        Log::info('[HPP] prosesNotaKayuMasuk selesai', ['nota_id' => $nota->id]);
+        Log::info('[STOK] prosesNotaKayuLunas selesai (TANPA LOG HPP)', ['nota_id' => $nota->id]);
     }
 
     // =========================================================================
-    // CATAT TRANSAKSI MASUK (private)
-    // =========================================================================
-
-    private function catatTransaksiMasuk(
-        int    $lahanId,
-        int    $jenisKayuId,
-        int    $panjang,
-        string $tanggal,
-        int    $totalBatang,
-        float  $totalKubikasi,
-        float  $totalNilai,
-        string $keterangan = '',
-        mixed  $referensi  = null,
-    ): HppAverageLog {
-
-        $lastLog = HppAverageLog::where('id_lahan', $lahanId) // TAMBAHKAN INI
-            ->where('id_jenis_kayu', $jenisKayuId)
-            ->where('panjang', $panjang)
-            ->whereNull('grade')
-            ->orderByDesc('tanggal')
-            ->orderByDesc('id')
-            ->first();
-
-        $before = [
-            'btg' => (int)   ($lastLog?->stok_batang_after  ?? 0),
-            'm3'  => (float) ($lastLog?->stok_kubikasi_after ?? 0),
-            'val' => (float) ($lastLog?->nilai_stok_after    ?? 0),
-        ];
-
-        $after = [
-            'btg' => $before['btg'] + $totalBatang,
-            'm3'  => round($before['m3'] + $totalKubikasi, 4),
-            'val' => round($before['val'] + $totalNilai,   2),
-        ];
-
-        $hppAverage = $after['m3'] > 0 ? round($after['val'] / $after['m3'], 2) : 0.0;
-
-        $hargaSatuan = $totalKubikasi > 0
-            ? round($totalNilai / $totalKubikasi, 2)
-            : 0.0;
-
-        Log::info('[HPP] catatTransaksiMasuk snapshot', [
-            'lahan_id'      => $lahanId,
-            'jenis_kayu_id' => $jenisKayuId,
-            'panjang'       => $panjang,
-            'before'        => $before,
-            'after'         => $after,
-            'hpp_average'   => $hppAverage,
-        ]);
-
-        $log = HppAverageLog::create([
-            'id_lahan'             => $lahanId,
-            'id_jenis_kayu'        => $jenisKayuId,
-            'grade'                => null,
-            'panjang'              => $panjang,
-            'tanggal'              => $tanggal,
-            'tipe_transaksi'       => 'masuk',
-            'keterangan'           => $keterangan,
-            'referensi_id'         => $referensi?->id,
-            'referensi_type'       => $referensi ? get_class($referensi) : null,
-            'total_batang'         => $totalBatang,
-            'total_kubikasi'       => $totalKubikasi,
-            'harga'                => $hargaSatuan,
-            'nilai_stok'           => $totalNilai,
-            'stok_batang_before'   => $before['btg'],
-            'stok_kubikasi_before' => $before['m3'],
-            'nilai_stok_before'    => $before['val'],
-            'stok_batang_after'    => $after['btg'],
-            'stok_kubikasi_after'  => $after['m3'],
-            'nilai_stok_after'     => $after['val'],
-            'hpp_average'          => $hppAverage,
-        ]);
-
-        Log::info('[HPP] log dibuat', ['log_id' => $log->id]);
-
-        $this->updateSummaryMasuk(
-            lahanId: $lahanId,
-            jenisKayuId: $jenisKayuId,
-            panjang: $panjang,
-            totalBatang: $totalBatang,
-            totalKubikasi: $totalKubikasi,
-            totalNilai: $totalNilai,
-            hppAverage: $hppAverage,
-            logId: $log->id,
-        );
-
-        return $log;
-    }
-
-    // =========================================================================
-    // UPDATE SUMMARY PER LAHAN — MASUK
-    // =========================================================================
-
-    private function updateSummaryMasuk(
-        int   $lahanId,
-        int   $jenisKayuId,
-        int   $panjang,
-        int   $totalBatang,
-        float $totalKubikasi,
-        float $totalNilai,
-        float $hppAverage,
-        int   $logId,
-    ): void {
-        $summary = HppAverageSummarie::forKombinasi($lahanId, $jenisKayuId, $panjang);
-
-        if (! $summary) {
-            Log::error('[HPP] summary NULL — kombinasi tidak ditemukan', [
-                'lahan_id'      => $lahanId,
-                'jenis_kayu_id' => $jenisKayuId,
-                'panjang'       => $panjang,
-            ]);
-            return;
-        }
-
-        $summary->update([
-            'stok_batang'   => $summary->stok_batang   + $totalBatang,
-            'stok_kubikasi' => round($summary->stok_kubikasi + $totalKubikasi, 4),
-            'nilai_stok'    => round($summary->nilai_stok    + $totalNilai,    2),
-            'hpp_average'   => $hppAverage,
-            'id_last_log'   => $logId,
-        ]);
-
-        Log::info('[HPP] summary diupdate (masuk)', [
-            'summary_id'    => $summary->id,
-            'lahan_id'      => $lahanId,
-            'stok_batang'   => $summary->fresh()->stok_batang,
-            'stok_kubikasi' => $summary->fresh()->stok_kubikasi,
-            'hpp_average'   => $hppAverage,
-        ]);
-
-        $this->syncTempatKayu(
-            lahanId: $lahanId,
-            jenisKayuId: $jenisKayuId,
-            panjang: $panjang,
-            stokBatang: $summary->fresh()->stok_batang,
-            stokKubikasi: $summary->fresh()->stok_kubikasi,
-        );
-    }
-
-    // =========================================================================
-    // SYNC TEMPAT KAYU — dipanggil setiap kali stok masuk
-    // =========================================================================
-    private function syncTempatKayu(
-        int   $lahanId,
-        int   $jenisKayuId,
-        int   $panjang,
-        int   $stokBatang,
-        float $stokKubikasi,
-    ): void {
-        // Cari KayuMasuk terbaru yang punya detail dengan kombinasi ini
-        $kayuMasuk = \App\Models\KayuMasuk::whereHas('detailTurusanKayus', function ($q) use ($lahanId, $jenisKayuId, $panjang) {
-            $q->where('lahan_id',      $lahanId)
-                ->where('jenis_kayu_id', $jenisKayuId)
-                ->where('panjang',       $panjang);
-        })
-            ->latest()
-            ->first();
-
-        if (! $kayuMasuk) {
-            Log::warning('[HPP] syncTempatKayu SKIP — kayuMasuk tidak ditemukan', [
-                'lahan_id'      => $lahanId,
-                'jenis_kayu_id' => $jenisKayuId,
-                'panjang'       => $panjang,
-            ]);
-            return;
-        }
-
-        // updateOrCreate berdasarkan id_lahan + id_kayu_masuk
-        // sehingga tidak duplikat jika nota masuk lebih dari sekali
-        $tempatKayu = \App\Models\TempatKayu::updateOrCreate(
-            [
-                'id_lahan'      => $lahanId,
-                'id_kayu_masuk' => $kayuMasuk->id,
-            ],
-            [
-                'jumlah_batang' => $stokBatang,
-                // kubikasi dihitung via accessor di model, tidak disimpan langsung
-                // poin tidak diisi karena TempatKayu tidak pakai HPP
-            ]
-        );
-
-        Log::info('[HPP] syncTempatKayu selesai', [
-            'tempat_kayu_id' => $tempatKayu->id,
-            'id_lahan'       => $lahanId,
-            'id_kayu_masuk'  => $kayuMasuk->id,
-            'jumlah_batang'  => $stokBatang,
-            'stok_kubikasi'  => $stokKubikasi,
-        ]);
-    }
-
-    // =========================================================================
-    // CATAT PROSES KAYU KELUAR JIKA TERDAPAT BATCH YANG KELUAR (PENGGUNAAN LAHAN ROTARY)
-    // =========================================================================
-    public function prosesKeluarRotary(int $lahanId, int $jenisKayuId, mixed $referensi = null): void
-    {
-        DB::transaction(function () use ($lahanId, $jenisKayuId, $referensi) {
-
-            // 1. Cari semua ringkasan stok yang masih tersisa di lahan & jenis kayu ini (semua panjang)
-            $summaries = HppAverageSummarie::where('id_lahan', $lahanId)
-                ->where('id_jenis_kayu', $jenisKayuId)
-                ->where('stok_batang', '>', 0)
-                ->get();
-
-            if ($summaries->isEmpty()) {
-                return;
-            }
-
-            foreach ($summaries as $summary) {
-                $qtyKeluar   = (int)   $summary->stok_batang;
-                $m3Keluar    = (float) $summary->stok_kubikasi;
-                $nilaiKeluar = (float) $summary->nilai_stok;
-                $hppSemasa   = (float) $summary->hpp_average;
-
-                // 2. Buat Log Transaksi Keluar (Memaksa After menjadi 0)
-                HppAverageLog::create([
-                    'id_lahan'             => $lahanId,
-                    'id_jenis_kayu'        => $jenisKayuId,
-                    'panjang'              => $summary->panjang,
-                    'tanggal'              => now(),
-                    'tipe_transaksi'       => 'keluar',
-                    'keterangan'           => 'PENGGUNAAN ROTARY: RESET STOK LAHAN',
-                    'referensi_id'         => $referensi?->id,
-                    'referensi_type'       => $referensi ? get_class($referensi) : null,
-                    'total_batang'         => $qtyKeluar,
-                    'total_kubikasi'       => $m3Keluar,
-                    'harga'                => $hppSemasa,
-                    'nilai_stok'           => $nilaiKeluar,
-                    'stok_batang_before'   => $qtyKeluar,
-                    'stok_kubikasi_before' => $m3Keluar,
-                    'nilai_stok_before'    => $nilaiKeluar,
-                    'stok_batang_after'    => 0,
-                    'stok_kubikasi_after'  => 0,
-                    'nilai_stok_after'     => 0,
-                    'hpp_average'          => 0,
-                ]);
-
-                // 3. Reset Summary menjadi 0
-                $summary->update([
-                    'stok_batang'   => 0,
-                    'stok_kubikasi' => 0,
-                    'nilai_stok'    => 0,
-                    'hpp_average'   => 0,
-                ]);
-            }
-        });
-    }
-
-    // =========================================================================
-    // CATAT TRANSAKSI KELUAR (public — dipanggil manual)
+    // PROSES TRANSAKSI KELUAR (MANUAL) - DENGAN LOG
     // =========================================================================
 
     public function catatTransaksiKeluar(
@@ -499,7 +226,7 @@ class HppAverageService
         ];
 
         return DB::transaction(function () use ($lahanId, $jenisKayuId, $panjang, $tanggal, $totalBatang, $totalKubikasi, $keterangan, $referensi, $hppAverage, $nilaiKeluar, $before, $after, $summary) {
-            // 4. Catat Log dengan snapshot yang sudah terisolasi per lahan
+            // 4. Catat Log dengan snapshot
             $log = HppAverageLog::create([
                 'id_lahan'             => $lahanId,
                 'id_jenis_kayu'        => $jenisKayuId,
@@ -523,66 +250,168 @@ class HppAverageService
                 'hpp_average'          => $hppAverage,
             ]);
 
-            // 5. Update Summary langsung dari perhitungan tadi
-            $summary->update([
-                'stok_batang'   => $after['btg'],
-                'stok_kubikasi' => $after['m3'],
-                'nilai_stok'    => $after['val'],
-                'id_last_log'   => $log->id,
-            ]);
+            // 5. Update Summary
+            $summary->kurangiStok($totalBatang, $totalKubikasi, $nilaiKeluar, $log->id);
 
             return $log;
         });
     }
 
     // =========================================================================
-    // BATALKAN NOTA KAYU MASUK
-    // Dipanggil dari observer::deleting() sebelum nota dihapus
+    // ROLLBACK NOTA KAYU (jika nota dihapus setelah Lunas)
     // =========================================================================
 
-    public function batalkanNotaKayuMasuk(NotaKayu $nota): void
+    public function rollbackNotaKayuLunas(NotaKayu $nota): void
     {
-        Log::info('[HPP] batalkanNotaKayuMasuk mulai', [
+        Log::info('[STOK] rollbackNotaKayuLunas mulai', [
             'nota_id' => $nota->id,
             'no_nota' => $nota->no_nota,
         ]);
 
-        $logs = HppAverageLog::where('referensi_type', NotaKayu::class)
-            ->where('referensi_id', $nota->id)
-            ->whereNull('grade')
-            ->get();
+        // NOTE: Karena nota Lunas TIDAK membuat log HPP,
+        // kita perlu rollback berdasarkan data dari nota itu sendiri
 
-        if ($logs->isEmpty()) {
-            Log::info('[HPP] batalkanNotaKayuMasuk SKIP — tidak ada log', ['nota_id' => $nota->id]);
+        $kayuMasuk = $nota->kayuMasuk;
+
+        if (!$kayuMasuk) {
+            Log::warning('[STOK] rollbackNotaKayuLunas SKIP — kayuMasuk null', ['nota_id' => $nota->id]);
             return;
         }
 
-        Log::info('[HPP] batalkanNotaKayuMasuk — hapus log', [
-            'nota_id'   => $nota->id,
-            'log_count' => $logs->count(),
-            'log_ids'   => $logs->pluck('id')->toArray(),
-        ]);
+        $kayuMasuk->loadMissing(['detailTurusanKayus']);
+        $details = $kayuMasuk->detailTurusanKayus;
 
-        DB::transaction(function () use ($nota) {
-            HppAverageLog::where('referensi_type', NotaKayu::class)
-                ->where('referensi_id', $nota->id)
-                ->whereNull('grade')
-                ->delete();
+        if ($details->isEmpty()) {
+            Log::warning('[STOK] rollbackNotaKayuLunas SKIP — detail kosong', ['nota_id' => $nota->id]);
+            return;
+        }
 
-            $this->recalculateAll();
+        DB::transaction(function () use ($details) {
+            $grouped = $details->groupBy(
+                fn($d) => "{$d->lahan_id}_{$d->jenis_kayu_id}_{$d->panjang}"
+            );
+
+            $lahanTerpengaruh = collect();
+
+            foreach ($grouped as $rows) {
+                $lahanId     = (int) $rows->first()->lahan_id;
+                $jenisKayuId = (int) $rows->first()->jenis_kayu_id;
+                $panjang     = (int) $rows->first()->panjang;
+                $totalBatang = (int) $rows->sum('kuantitas');
+
+                $totalKubikasi = (float) $rows->sum(fn($d) => $this->hitungKubikasi(
+                    (float) $d->panjang,
+                    (float) $d->diameter,
+                    (float) $d->kuantitas
+                ));
+
+                $totalNilai = (float) round(
+                    $rows->sum(function ($d) use ($jenisKayuId, $panjang) {
+                        $kub   = $this->hitungKubikasi(
+                            (float) $d->panjang,
+                            (float) $d->diameter,
+                            (float) $d->kuantitas
+                        );
+                        $harga = $this->getHargaBeli(
+                            $jenisKayuId,
+                            (int) $d->grade,
+                            $panjang,
+                            (float) $d->diameter
+                        );
+                        return $kub * $harga * 1000;
+                    }),
+                    2
+                );
+
+                $summary = HppAverageSummarie::forKombinasi($lahanId, $jenisKayuId, $panjang);
+
+                if ($summary) {
+                    $summary->kurangiStok($totalBatang, $totalKubikasi, $totalNilai);
+                    $lahanTerpengaruh->push($lahanId);
+                }
+            }
+
+            // Sync TempatKayu
+            $lahanTerpengaruh->unique()->each(function (int $lahanId) {
+                $summary = HppAverageSummarie::where('id_lahan', $lahanId)->first();
+                if ($summary) {
+                    $summary->syncTempatKayu();
+                }
+            });
         });
 
-        Log::info('[HPP] batalkanNotaKayuMasuk selesai', ['nota_id' => $nota->id]);
+        Log::info('[STOK] rollbackNotaKayuLunas selesai', ['nota_id' => $nota->id]);
     }
 
     // =========================================================================
-    // SEED DATA HISTORIS
+    // MANUAL LOG HPP (UNTUK KEPERLUAN KHUSUS)
+    // Method ini bisa digunakan jika ingin mencatat log secara manual
+    // =========================================================================
+
+    public function createManualLogMasuk(
+        int    $lahanId,
+        int    $jenisKayuId,
+        int    $panjang,
+        string $tanggal,
+        int    $totalBatang,
+        float  $totalKubikasi,
+        float  $totalNilai,
+        string $keterangan = '',
+        mixed  $referensi  = null,
+    ): HppAverageLog {
+        $summary = HppAverageSummarie::forKombinasi($lahanId, $jenisKayuId, $panjang);
+
+        if (!$summary) {
+            throw new \Exception("Kombinasi tidak ditemukan");
+        }
+
+        $before = [
+            'btg' => $summary->stok_batang,
+            'm3'  => $summary->stok_kubikasi,
+            'val' => $summary->nilai_stok,
+        ];
+
+        $summary->tambahStok($totalBatang, $totalKubikasi, $totalNilai);
+
+        $after = [
+            'btg' => $summary->stok_batang,
+            'm3'  => $summary->stok_kubikasi,
+            'val' => $summary->nilai_stok,
+        ];
+
+        return HppAverageLog::create([
+            'id_lahan'             => $lahanId,
+            'id_jenis_kayu'        => $jenisKayuId,
+            'grade'                => null,
+            'panjang'              => $panjang,
+            'tanggal'              => $tanggal,
+            'tipe_transaksi'       => 'masuk',
+            'keterangan'           => $keterangan,
+            'referensi_id'         => $referensi?->id,
+            'referensi_type'       => $referensi ? get_class($referensi) : null,
+            'total_batang'         => $totalBatang,
+            'total_kubikasi'       => $totalKubikasi,
+            'harga'                => $totalKubikasi > 0 ? round($totalNilai / $totalKubikasi, 2) : 0,
+            'nilai_stok'           => $totalNilai,
+            'stok_batang_before'   => $before['btg'],
+            'stok_kubikasi_before' => $before['m3'],
+            'nilai_stok_before'    => $before['val'],
+            'stok_batang_after'    => $after['btg'],
+            'stok_kubikasi_after'  => $after['m3'],
+            'nilai_stok_after'     => $after['val'],
+            'hpp_average'          => $summary->hpp_average,
+        ]);
+    }
+
+    // =========================================================================
+    // SEED & RECALCULATE (BERDASARKAN LOG YANG ADA)
     // =========================================================================
 
     public function seedFromNotaKayu(): void
     {
         Log::info('[HPP] seedFromNotaKayu MULAI');
 
+        // Reset semua data
         HppAverageLog::whereNull('grade')->delete();
         HppAverageSummarie::whereNull('grade')->update([
             'stok_batang'   => 0,
@@ -592,21 +421,20 @@ class HppAverageService
             'id_last_log'   => null,
         ]);
 
-        Log::info('[HPP] reset selesai, mulai loop nota');
-
         $processed = 0;
         $skipped   = 0;
 
+        // Proses ulang semua nota yang sudah Lunas (TANPA membuat log baru)
         NotaKayu::with(['kayuMasuk.detailTurusanKayus'])
             ->whereHas('kayuMasuk')
-            ->where('status', 'like', '%Sudah Diperiksa%')
+            ->where('status_pelunasan', 'like', '%Lunas%')
             ->join('kayu_masuks', 'nota_kayus.id_kayu_masuk', '=', 'kayu_masuks.id')
             ->orderBy('kayu_masuks.tgl_kayu_masuk')
             ->orderBy('nota_kayus.id')
             ->select('nota_kayus.*')
             ->each(function (NotaKayu $nota) use (&$processed, &$skipped) {
                 try {
-                    $this->prosesNotaKayuMasuk($nota);
+                    $this->prosesNotaKayuLunas($nota);
                     $processed++;
                 } catch (\Throwable $e) {
                     $skipped++;
@@ -623,13 +451,10 @@ class HppAverageService
         ]);
     }
 
-    // =========================================================================
-    // RECALCULATE ALL
-    // =========================================================================
-
     public function recalculateAll(): void
     {
         DB::transaction(function () {
+            // Reset semua summary
             HppAverageSummarie::query()->update([
                 'stok_batang' => 0,
                 'stok_kubikasi' => 0,
@@ -637,11 +462,15 @@ class HppAverageService
                 'hpp_average' => 0
             ]);
 
-            $logs = HppAverageLog::orderBy('tanggal')->orderBy('id')->get();
+            // Proses ulang semua log yang ADA (bukan dari nota)
+            $logs = HppAverageLog::whereNull('grade')
+                ->orderBy('tanggal')
+                ->orderBy('id')
+                ->get();
+
             $state = [];
 
             foreach ($logs as $log) {
-                // KUNCI ISOLASI: id_lahan wajib masuk agar kantong saldo terpisah
                 $key = "L{$log->id_lahan}_J{$log->id_jenis_kayu}_P{$log->panjang}";
 
                 if (!isset($state[$key])) {
@@ -650,42 +479,43 @@ class HppAverageService
 
                 $current = &$state[$key];
 
-                $log->stok_batang_before   = $current['btg'];
-                $log->stok_kubikasi_before = $current['m3'];
-                $log->nilai_stok_before    = $current['val'];
-
                 if ($log->tipe_transaksi === 'masuk') {
                     $current['btg'] += $log->total_batang;
                     $current['m3']  = round($current['m3'] + $log->total_kubikasi, 4);
                     $current['val'] = round($current['val'] + $log->nilai_stok, 2);
                     $current['hpp'] = $current['m3'] > 0 ? round($current['val'] / $current['m3'], 2) : 0;
                 } else {
-                    $log->harga      = $current['hpp'];
-                    $log->nilai_stok = round($log->total_kubikasi * $current['hpp'], 2);
-                    $current['btg'] -= $log->total_batang;
-                    $current['m3']  = round($current['m3'] - $log->total_kubikasi, 4);
-                    $current['val'] = round($current['val'] - $log->nilai_stok, 2);
+                    $current['btg'] = max(0, $current['btg'] - $log->total_batang);
+                    $current['m3']  = max(0, round($current['m3'] - $log->total_kubikasi, 4));
+                    $current['val'] = max(0, round($current['val'] - $log->nilai_stok, 2));
                 }
 
-                $log->stok_batang_after   = $current['btg'];
-                $log->stok_kubikasi_after = $current['m3'];
-                $log->nilai_stok_after    = $current['val'];
-                $log->hpp_average         = $current['hpp'];
-
-                $log->saveQuietly();
+                // Update summary
                 $this->syncToSummary($log, $current);
+            }
+
+            // Sync semua TempatKayu setelah recalculate
+            $allLahan = HppAverageSummarie::where('stok_batang', '>', 0)
+                ->distinct()
+                ->pluck('id_lahan');
+
+            foreach ($allLahan as $lahanId) {
+                $summary = HppAverageSummarie::where('id_lahan', $lahanId)->first();
+                if ($summary) {
+                    $summary->syncTempatKayu();
+                }
             }
         });
     }
 
     private function syncToSummary($log, $currentState): void
     {
-        \App\Models\HppAverageSummarie::updateOrCreate(
+        HppAverageSummarie::updateOrCreate(
             [
                 'id_lahan'      => $log->id_lahan,
                 'id_jenis_kayu' => $log->id_jenis_kayu,
                 'panjang'       => $log->panjang,
-                'grade'         => null // Sesuaikan dengan desainmu
+                'grade'         => null
             ],
             [
                 'stok_batang'   => $currentState['btg'],
@@ -695,22 +525,5 @@ class HppAverageService
                 'id_last_log'   => $log->id
             ]
         );
-    }
-
-    public function fixMissingLahanIds()
-    {
-        $logs = HppAverageLog::where('id_lahan', 0)->orWhereNull('id_lahan')->get();
-
-        foreach ($logs as $log) {
-            if ($log->referensi_type === 'App\Models\NotaKayu') {
-                $nota = NotaKayu::find($log->referensi_id);
-                if ($nota) {
-                    $log->update(['id_lahan' => $nota->id_lahan]);
-                }
-            }
-            // Tambahkan pengecekan untuk tipe referensi lain jika ada (misal: KayuKeluar)
-        }
-
-        return "Data id_lahan telah disinkronkan.";
     }
 }

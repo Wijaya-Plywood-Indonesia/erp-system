@@ -76,11 +76,10 @@ class PenggunaanLahanRotariesTable
                     ->modalHeading('Konfirmasi Pengosongan Lahan & Stok')
                     ->modalDescription(function ($record) {
                         $namaKayu = $record->jenisKayu?->nama_kayu ?? 'N/A';
-                        return "Apakah Anda yakin lahan {$record->lahan->kode_lahan} sudah kosong?\n\n" .
-                            "Sistem akan:\n" .
-                            "1. Menghabiskan stok {$namaKayu} di lahan ini (Reset 0).\n" .
-                            "2. Mencatat Log HPP Keluar sebagai 'Digunakan Produksi'.\n" .
-                            "3. Meriset status Tempat Kayu menjadi 'Siap Diisi'.";
+                        return "**Konfirmasi Penyelesaian Lahan**\n\n" .
+                            "Lahan: **{$record->lahan->kode_lahan}**\n" .
+                            "Jenis Kayu: **{$namaKayu}**\n\n" .
+                            "Apakah Anda yakin lahan ini sudah selesai digunakan?";
                     })
                     ->action(function (PenggunaanLahanRotary $record) {
                         $idLahan     = $record->id_lahan;
@@ -103,96 +102,72 @@ class PenggunaanLahanRotariesTable
                                 ->where('id_jenis_kayu', $idJenisKayu)
                                 ->get();
 
-                            Log::debug('lahan_selesai summaries', [
-                                'id_lahan'      => $idLahan,
-                                'id_jenis_kayu' => $idJenisKayu,
-                                'total_rows'    => $summaries->count(),
-                                'rows'          => $summaries->toArray(),
-                            ]);
-
                             // Filter yang benar-benar punya stok > 0
                             $summariesBerstok = $summaries->where('stok_batang', '>', 0);
 
-                            if ($summariesBerstok->isEmpty()) {
-                                Notification::make()
-                                    ->title('Gagal: Stok Sudah Kosong')
-                                    ->body('Tidak ada stok aktif ditemukan untuk lahan ini di tabel HPP Summary.')
-                                    ->warning()
-                                    ->send();
-                                return;
-                            }
-
                             $grandTotalBatangKeluar = 0;
+
                             foreach ($summariesBerstok as $item) {
-                                // ✅ Snapshot nilai SEBELUM apapun diubah
-                                $batangKeluar   = (int)   $item->stok_batang;
-                                $kubikasiKeluar = (float) $item->stok_kubikasi;
-                                $nilaiKeluar    = (float) $item->nilai_stok;
-                                $hppSaatIni     = (float) $item->hpp_average;
+                                // Simpan total batang yang akan dikeluarkan
+                                $batangKeluar = (int) $item->stok_batang;
 
-                                // Safeguard double-trigger: skip jika ternyata sudah 0
-                                if ($batangKeluar <= 0) {
-                                    Log::warning('lahan_selesai: skip item stok sudah 0', [
-                                        'summary_id'    => $item->id,
-                                        'id_lahan'      => $idLahan,
-                                        'id_jenis_kayu' => $idJenisKayu,
-                                        'panjang'       => $item->panjang,
-                                        'grade'         => $item->grade,
-                                    ]);
-                                    continue;
-                                }
-
-                                // A. Catat Log HPP DULU sebelum summary di-reset
-                                $log = HppAverageLog::create([
-                                    'id_lahan'             => $idLahan,
-                                    'id_jenis_kayu'        => $idJenisKayu,
-                                    'grade'                => $item->grade ?? '-',
-                                    'panjang'              => $item->panjang,
-                                    'tanggal'              => now(),
-                                    'tipe_transaksi'       => 'keluar',
-                                    'keterangan'           => "Digunakan produksi rotary (Lahan Selesai) - Seri Lahan: {$record->lahan->kode_lahan}",
-                                    'referensi_type'       => PenggunaanLahanRotary::class,
-                                    'referensi_id'         => $record->id,
-                                    'total_batang'         => $batangKeluar,
-                                    'total_kubikasi'       => round($kubikasiKeluar, 4),
-                                    'harga'                => $hppSaatIni,
-                                    'nilai_stok'           => $nilaiKeluar,
-                                    // Before = snapshot sebelum reset
-                                    'stok_batang_before'   => $batangKeluar,
-                                    'stok_kubikasi_before' => round($kubikasiKeluar, 4),
-                                    'nilai_stok_before'    => $nilaiKeluar,
-                                    // After = 0 karena direset habis
-                                    'stok_batang_after'    => 0,
-                                    'stok_kubikasi_after'  => 0,
-                                    'nilai_stok_after'     => 0,
-                                    'hpp_average'          => 0,
-                                ]);
-
-                                // B. Reset summary SETELAH log berhasil dibuat
+                                // LANGSUNG RESET SUMMARY (TANPA LOG HPP)
                                 $item->update([
                                     'stok_batang'   => 0,
                                     'stok_kubikasi' => 0,
                                     'nilai_stok'    => 0,
                                     'hpp_average'   => 0,
-                                    'id_last_log'   => $log->id,
                                 ]);
 
                                 $grandTotalBatangKeluar += $batangKeluar;
+
+                                Log::info('Stok direset (tanpa log HPP)', [
+                                    'id_lahan' => $idLahan,
+                                    'id_jenis_kayu' => $idJenisKayu,
+                                    'panjang' => $item->panjang,
+                                    'batang_direset' => $batangKeluar,
+                                ]);
                             }
 
+                            // Update record penggunaan lahan
                             $record->update([
                                 'jumlah_batang' => $grandTotalBatangKeluar,
                             ]);
 
-                            DB::table('tempat_kayus')
+                            // =========================================================
+                            // RESET TEMPAT KAYU (TIDAK DIHAPUS)
+                            // =========================================================
+
+                            // Update TempatKayu yang sudah ada
+                            $updatedCount = DB::table('tempat_kayus')
                                 ->where('id_lahan', $idLahan)
                                 ->update([
                                     'jumlah_batang'   => 0,
-                                    'status'          => 'siap_diisi',
+                                    'status'          => 'belum serah',
                                     'diserahkan_oleh' => null,
                                     'diterima_oleh'   => null,
                                     'updated_at'      => now(),
                                 ]);
+
+                            // Jika belum ada TempatKayu untuk lahan ini, buat baru
+                            if ($updatedCount === 0) {
+                                $kayuMasuk = \App\Models\KayuMasuk::whereHas('detailTurusanKayus', function ($q) use ($idLahan) {
+                                    $q->where('lahan_id', $idLahan);
+                                })->first();
+
+                                if ($kayuMasuk) {
+                                    DB::table('tempat_kayus')->insert([
+                                        'id_lahan'      => $idLahan,
+                                        'id_kayu_masuk' => $kayuMasuk->id,
+                                        'jumlah_batang' => 0,
+                                        'status'        => 'belum serah',
+                                        'created_at'    => now(),
+                                        'updated_at'    => now(),
+                                    ]);
+                                }
+                            }
+
+                            // Reset pivot serah terima
                             DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
                                 ->where('id_lahan', $idLahan)
                                 ->where('tipe', 'lahan_rotary')
@@ -204,11 +179,17 @@ class PenggunaanLahanRotariesTable
                                     'diterima_oleh'   => null,
                                     'updated_at'      => now(),
                                 ]);
+
+                            Log::info('Lahan selesai direset (tanpa log HPP)', [
+                                'id_lahan' => $idLahan,
+                                'kode_lahan' => $record->lahan->kode_lahan,
+                                'total_stok_dikeluarkan' => $grandTotalBatangKeluar,
+                            ]);
                         });
 
                         Notification::make()
-                            ->title('Lahan Berhasil Diselesaikan')
-                            ->body('Stok telah di-reset ke 0, Log HPP dicatat, dan Tempat Kayu siap diisi kembali.')
+                            ->title('✅ Lahan Berhasil Diselesaikan')
+                            ->body('Stok telah di-reset ke 0, Tempat Kayu tetap ada dengan status "Belum Diserahkan" dan siap digunakan kembali. (Tidak ada log HPP yang dicatat)')
                             ->success()
                             ->send();
                     }),

@@ -46,9 +46,10 @@ class StokKayu extends Page
      * Mendefinisikan logika edit data untuk summary stok.
      * Dipanggil di Blade dengan passing ID record.
      */
+    // ─── ACTION EDIT ──────────────────────────────────────────
+
     public function editStokAction(): Action
     {
-        // Deklarasi variable untuk membuat visible 
         $isAdmin = Auth::user()?->hasAnyRole(self::ROLE_ADMIN) ?? false;
 
         return Action::make('editStok')
@@ -57,35 +58,35 @@ class StokKayu extends Page
             ->color('warning')
             ->size('xs')
             ->visible($isAdmin)
-            ->modalHeading(fn(array $arguments) => isset($arguments['id']) ? 'Update Stok Lahan' : 'Inisialisasi Stok Lahan Baru')
+            ->modalHeading(
+                fn(array $arguments) => isset($arguments['id'])
+                    ? 'Update Stok Lahan'
+                    : 'Inisialisasi Stok Lahan Baru'
+            )
             ->mountUsing(function (Schema $schema, array $arguments) {
-                // Jika mengedit data yang sudah ada (summary id tersedia)
                 if (isset($arguments['id'])) {
                     $record = HppAverageSummarie::find($arguments['id']);
                     return $schema->fill($record?->toArray() ?? []);
                 }
 
-                // Jika baris kosong (inisialisasi), siapkan id_lahan dari parameter blade
                 return $schema->fill([
-                    'id_lahan' => $arguments['lahan_id'] ?? null,
-                    'stok_batang' => 0,
+                    'id_lahan'      => $arguments['lahan_id'] ?? null,
+                    'stok_batang'   => 0,
                     'stok_kubikasi' => 0,
-                    'nilai_stok' => 0,
-                    'panjang' => 130, // Default panjang kayu
+                    'nilai_stok'    => 0,
+                    'panjang'       => 130,
                 ]);
             })
             ->form([
                 Grid::make()
                     ->schema([
-                        // ID Lahan: Wajib ada agar updateOrCreate tahu lahan mana yang dituju
                         Select::make('id_lahan')
                             ->label('Lahan')
                             ->options(Lahan::pluck('kode_lahan', 'id'))
-                            ->disabled() // Dikunci agar tidak salah input
-                            ->dehydrated() // WAJIB: Agar nilai tetap terkirim ke database saat save
+                            ->disabled()
+                            ->dehydrated()
                             ->required(),
 
-                        // Jenis Kayu: Wajib diisi untuk baris baru
                         Select::make('id_jenis_kayu')
                             ->label('Jenis Kayu')
                             ->options(JenisKayu::pluck('nama_kayu', 'id'))
@@ -109,37 +110,40 @@ class StokKayu extends Page
                             ->required(),
 
                         TextInput::make('nilai_stok')
-                            ->label('Total Poin ')
+                            ->label('Total Poin')
                             ->numeric()
                             ->required(),
                     ])
             ])
             ->action(function (array $data, array $arguments) {
-                // Gunakan updateOrCreate untuk fleksibilitas antara update record lama atau insert baru
+                $service = app(HppAverageService::class);
+
+                // Simpan perubahan stok
                 $record = HppAverageSummarie::updateOrCreate(
                     ['id' => $arguments['id'] ?? null],
                     $data
                 );
 
-                // Auto kalkulasi HPP Average setelah simpan manual
+                // Auto kalkulasi HPP Average
                 if ($record && $record->stok_kubikasi > 0) {
                     $record->update([
-                        'hpp_average' => (int) round($record->nilai_stok / $record->stok_kubikasi)
+                        'hpp_average' => round($record->nilai_stok / $record->stok_kubikasi, 2)
                     ]);
+                } else {
+                    $record->update(['hpp_average' => 0]);
                 }
+
+                // ✅ Sync TempatKayu otomatis setelah stok berubah
+                $record->syncTempatKayu();
 
                 Notification::make()
                     ->success()
                     ->title('Data Stok Berhasil Diperbarui')
-                    ->body('HPP Average telah dihitung ulang secara otomatis.')
+                    ->body('Tempat Kayu telah diperbarui secara otomatis.')
                     ->send();
             });
     }
 
-    /**
-     * Action Hapus Stok (Baru)
-     * Digunakan untuk menghapus baris summary (mengosongkan stok lahan)
-     */
     public function deleteStokAction(): Action
     {
         $isAdmin = Auth::user()?->hasAnyRole(self::ROLE_ADMIN) ?? false;
@@ -149,23 +153,42 @@ class StokKayu extends Page
             ->icon('heroicon-m-trash')
             ->color('danger')
             ->size('xs')
-            ->visible(fn(array $arguments) => isset($arguments['id']) && $isAdmin)
             ->requiresConfirmation()
             ->modalHeading('Hapus Data Stok?')
-            ->modalDescription('Tindakan ini akan menghapus data ringkasan stok pada baris ini. Data ini dapat muncul kembali jika Anda melakukan Hitung Ulang HPP.')
+            ->modalDescription('Tindakan ini akan menghapus data ringkasan stok pada baris ini.')
             ->action(function (array $arguments) {
-                if (isset($arguments['id'])) {
-                    HppAverageSummarie::find($arguments['id'])?->delete();
+                if (! isset($arguments['id'])) return;
 
-                    Notification::make()
-                        ->success()
-                        ->title('Stok Berhasil Dihapus')
-                        ->body('Data ringkasan telah dihapus dari sistem.')
-                        ->send();
+                $record = HppAverageSummarie::find($arguments['id']);
+
+                if ($record) {
+                    $lahanId = $record->id_lahan;
+
+                    // Hapus record
+                    $record->delete();
+
+                    // Cek apakah masih ada stok lain untuk lahan ini
+                    $remainingStok = HppAverageSummarie::where('id_lahan', $lahanId)
+                        ->where('stok_batang', '>', 0)
+                        ->exists();
+
+                    if (!$remainingStok) {
+                        // Hapus semua TempatKayu untuk lahan ini
+                        \App\Models\TempatKayu::where('id_lahan', $lahanId)->delete();
+                    } else {
+                        // Update TempatKayu dengan stok terbaru
+                        $service = app(HppAverageService::class);
+                        $service->syncTempatKayuByLahan($lahanId);
+                    }
                 }
+
+                Notification::make()
+                    ->success()
+                    ->title('Stok Berhasil Dihapus')
+                    ->body('Tempat Kayu telah diperbarui secara otomatis.')
+                    ->send();
             })
-            // Hanya muncul jika data memang ada di database
-            ->visible(fn(array $arguments) => isset($arguments['id']));
+            ->visible(fn(array $arguments) => isset($arguments['id']) && $isAdmin);
     }
 
     // ── Computed: semua lahan ──────────────────────────────────
