@@ -123,7 +123,6 @@ class PenggunaanLahanRotariesTable
                             }
 
                             $grandTotalBatangKeluar = 0;
-
                             foreach ($summariesBerstok as $item) {
                                 // ✅ Snapshot nilai SEBELUM apapun diubah
                                 $batangKeluar   = (int)   $item->stok_batang;
@@ -181,12 +180,10 @@ class PenggunaanLahanRotariesTable
                                 $grandTotalBatangKeluar += $batangKeluar;
                             }
 
-                            // Update jumlah_batang di record penggunaan lahan
                             $record->update([
                                 'jumlah_batang' => $grandTotalBatangKeluar,
                             ]);
 
-                            // Reset Tempat Kayu (status fisik)
                             DB::table('tempat_kayus')
                                 ->where('id_lahan', $idLahan)
                                 ->update([
@@ -196,8 +193,6 @@ class PenggunaanLahanRotariesTable
                                     'diterima_oleh'   => null,
                                     'updated_at'      => now(),
                                 ]);
-
-                            // Reset Pivot Serah Terima
                             DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
                                 ->where('id_lahan', $idLahan)
                                 ->where('tipe', 'lahan_rotary')
