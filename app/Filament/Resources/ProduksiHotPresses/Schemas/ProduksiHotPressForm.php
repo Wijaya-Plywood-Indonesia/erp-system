@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ProduksiHotPresses\Schemas;
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\DatePicker;
 use App\Models\ProduksiHp;
+use Filament\Forms\Components\Select;
 
 class ProduksiHotPressForm
 {
@@ -14,22 +15,39 @@ class ProduksiHotPressForm
             ->components([
                 DatePicker::make('tanggal_produksi')
                     ->label('Tanggal Produksi')
-                    ->default(fn () => now()->addDay())
+                    ->default(fn() => now()->addDay())
                     ->displayFormat('d F Y')
                     ->required()
+                    ->reactive() // 🔥 penting
 
-                    // ✅ VALIDASI TANGGAL TIDAK BOLEH SAMA
+                    // ✅ VALIDASI TANGGAL + SHIFT
                     ->rules([
-                        function () {
-                            return function (string $attribute, $value, $fail) {
-                                $exists = ProduksiHp::whereDate('tanggal_produksi', $value)->exists();
+                        function ($get, $record) {
+                            return function (string $attribute, $value, $fail) use ($get, $record) {
 
-                                if ($exists) {
-                                    $fail('Tanggal ini sudah digunakan. Pilih tanggal lain.');
+                                $query = ProduksiHp::whereDate('tanggal_produksi', $value)
+                                    ->where('shift', $get('shift'));
+
+                                // ⛔ skip saat edit
+                                if ($record) {
+                                    $query->where('id', '!=', $record->id);
+                                }
+
+                                if ($query->exists()) {
+                                    $fail('Tanggal dan shift ini sudah ada.');
                                 }
                             };
                         },
+                    ]),
+
+                Select::make('shift')
+                    ->label('Shift')
+                    ->options([
+                        'pagi' => 'Pagi',
+                        'malam' => 'Malam',
                     ])
+                    ->required()
+                    ->reactive(), // 🔥 penting
             ]);
     }
 }
