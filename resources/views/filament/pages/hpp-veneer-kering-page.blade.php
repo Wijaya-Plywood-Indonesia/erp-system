@@ -138,13 +138,15 @@
 
                         <td class="px-4 py-3 border-l border-gray-50 dark:border-gray-800 whitespace-nowrap">
                             <div class="flex items-center justify-end gap-1.5 font-mono text-xs tabular-nums">
-                                <span class="text-gray-400 dark:text-gray-500">{{ $log->stok_qty_sebelum ?? '-' }}</span>
-                                <span class="text-gray-300 dark:text-gray-700 text-[10px]">→</span>
-                                <span @class(['font-black',
-                                    'text-green-600 dark:text-green-400' => $isM,
-                                    'text-red-600 dark:text-red-400'     => !$isM])>
-                                    {{ $log->stok_qty_sesudah ?? '-' }}
-                                </span>
+                                <span class="text-gray-400 dark:text-gray-500">
+    {{ $log->stok_lembar_sebelum !== null ? number_format($log->stok_lembar_sebelum) : '-' }}
+</span>
+<span class="text-gray-300 dark:text-gray-700 text-[10px]">→</span>
+<span @class(['font-black',
+    'text-green-600 dark:text-green-400' => $isM,
+    'text-red-600 dark:text-red-400'     => !$isM])>
+    {{ $log->stok_lembar_sesudah !== null ? number_format($log->stok_lembar_sesudah) : '-' }}
+</span>
                             </div>
                         </td>
 

@@ -17,6 +17,11 @@ class DetailHasil extends Model
         'id_produksi_dryer',
     ];
 
+    public function produksiDryer()
+{
+    return $this->belongsTo(ProduksiPressDryer::class, 'id_produksi_dryer');
+}
+
     public function ukuran()
     {
         return $this->belongsTo(Ukuran::class, 'id_ukuran');

@@ -18,6 +18,8 @@ class StokVeneerKering extends Model
         'tanggal_transaksi',
         'qty',
         'm3',
+        'stok_lembar_sebelum',
+        'stok_lembar_sesudah',
         'hpp_veneer_basah_per_m3',
         'ongkos_dryer_per_m3',
         'hpp_kering_per_m3',
@@ -62,6 +64,8 @@ class StokVeneerKering extends Model
         return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu');
     }
 
+    
+
     // ─── Scope ───────────────────────────────────────────────────────────────
 
     /**
@@ -74,6 +78,19 @@ class StokVeneerKering extends Model
             ->where('id_ukuran', $idUkuran)
             ->where('id_jenis_kayu', $idJenisKayu)
             ->where('kw', $kw);
+    }
+
+    public static function saldoLembarTerakhir(int $idUkuran, int $idJenisKayu, string $kw): int
+    {
+        $masuk = static::forProduk($idUkuran, $idJenisKayu, $kw)
+            ->where('jenis_transaksi', 'masuk')
+            ->sum('qty');
+
+        $keluar = static::forProduk($idUkuran, $idJenisKayu, $kw)
+            ->where('jenis_transaksi', 'keluar')
+            ->sum('qty');
+
+        return (int) ($masuk - $keluar);
     }
 
     // ─── Static Helper ───────────────────────────────────────────────────────
