@@ -30,6 +30,15 @@ class ProduksiHotPressesTable
                     ->date('d/m/Y')
                     ->sortable(),
 
+                TextColumn::make('shift')
+    ->label('Shift')
+    ->badge()
+    ->formatStateUsing(fn ($state) => ucfirst($state))
+    ->colors([
+        'warning' => 'pagi',
+        'info' => 'malam',
+    ]),
+
                 TextColumn::make('kendala')
                     ->label('Kendala')
                     ->limit(40)

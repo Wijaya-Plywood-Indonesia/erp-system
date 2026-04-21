@@ -10,6 +10,7 @@ class ProduksiHp extends Model
 
     protected $fillable = [
         'tanggal_produksi',
+        'shift',
         'kendala',
     ];
 

@@ -73,7 +73,7 @@
                                 <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">{{ $row->kw ?? '-' }}</span>
                             </td>
                             <td class="px-6 py-4 text-center font-black text-gray-700 dark:text-gray-300 tabular-nums">
-                                {{ number_format($row->qty, 0) }}
+                                {{ number_format($row->total_lembar, 0) }}
                             </td>
                             <td class="px-6 py-4 text-right font-mono font-black text-blue-600 dark:text-blue-400 tabular-nums">
                                 {{ number_format($row->stok_m3_sesudah, 4) }} <span class="text-[9px] font-normal uppercase">m³</span>
