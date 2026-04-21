@@ -46,14 +46,14 @@ class SerahHasilDryerService
             $lembarSesudah = $lembarSebelum + (int) $record->isi;
 
             Log::info('DEBUG serah palet', [
-    'id_ukuran'      => $record->id_ukuran,
-    'id_jenis_kayu'  => $record->id_jenis_kayu,
-    'kw'             => $record->kw,
-    'kw_type'        => gettype($record->kw),
-    'lembar_sebelum' => $lembarSebelum,
-    'lembar_sesudah' => $lembarSesudah,
-    'isi'            => $record->isi,
-]);
+                'id_ukuran'      => $record->id_ukuran,
+                'id_jenis_kayu'  => $record->id_jenis_kayu,
+                'kw'             => $record->kw,
+                'kw_type'        => gettype($record->kw),
+                'lembar_sebelum' => $lembarSebelum,
+                'lembar_sesudah' => $lembarSesudah,
+                'isi'            => $record->isi,
+            ]);
 
             // ── 4. Bangun keterangan lengkap ──────────────────────────────────
             $shift           = $record->produksiDryer?->shift ?? '-';
