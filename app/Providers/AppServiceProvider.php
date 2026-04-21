@@ -164,7 +164,7 @@ class AppServiceProvider extends ServiceProvider
                                 jenis_kayu_id: localStorage.getItem('sticky_turus_jenis_' + config.parentId) || config.jenisDefault || '',
                                 panjang: localStorage.getItem('sticky_turus_panjang_' + config.parentId) || '130',
                                 grade: localStorage.getItem('sticky_turus_grade_' + config.parentId) || '1',
-                                kuantitas: '1',
+                                kuantitas: localStorage.getItem('sticky_turus_kuantitas_' + config.parentId) || '1',
                                 diameter: ''
                             },
                             
