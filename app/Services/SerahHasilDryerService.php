@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\DetailHasil;
+use App\Models\DetailMasuk;
+use App\Models\HppAverageSummarie;
 use App\Models\HppLogHarian;
 use App\Models\StokVeneerKering;
 use Carbon\Carbon;
@@ -45,17 +47,10 @@ class SerahHasilDryerService
             );
             $lembarSesudah = $lembarSebelum + (int) $record->isi;
 
-            Log::info('DEBUG serah palet', [
-                'id_ukuran'      => $record->id_ukuran,
-                'id_jenis_kayu'  => $record->id_jenis_kayu,
-                'kw'             => $record->kw,
-                'kw_type'        => gettype($record->kw),
-                'lembar_sebelum' => $lembarSebelum,
-                'lembar_sesudah' => $lembarSesudah,
-                'isi'            => $record->isi,
-            ]);
+            // ── 4. Hitung HPP veneer basah (Opsi C: weighted average modal) ───
+            $hppVeneerBasah = $this->hitungHppVeneerBasah($record);
 
-            // ── 4. Bangun keterangan lengkap ──────────────────────────────────
+            // ── 5. Bangun keterangan lengkap ──────────────────────────────────
             $shift           = $record->produksiDryer?->shift ?? '-';
             $tanggalProduksi = $record->produksiDryer?->tanggal_produksi
                 ? Carbon::parse($record->produksiDryer->tanggal_produksi)->format('d/m/Y')
@@ -63,29 +58,35 @@ class SerahHasilDryerService
 
             $keterangan = "MASUK DARI DRYER: No. Palet {$record->no_palet} | Shift: {$shift} | Tgl Produksi: {$tanggalProduksi}";
 
-            // ── 5. Insert ke stok_veneer_kerings (log per palet) ──────────────
+            // ── 6. Insert ke stok_veneer_kerings (log per palet) ──────────────
             StokVeneerKering::create([
-                'id_detail_hasil_dryer' => $record->id,
-                'id_ukuran'             => $record->id_ukuran,
-                'id_jenis_kayu'         => $record->id_jenis_kayu,
-                'kw'                    => $record->kw,
-                'jenis_transaksi'       => 'masuk',
-                'tanggal_transaksi'     => now(),
-                'qty'                   => $record->isi,
-                'm3'                    => round($m3Masuk, 6),
-                // ✅ Saldo lembar sebelum → sesudah
-                'stok_lembar_sebelum'   => $lembarSebelum,
-                'stok_lembar_sesudah'   => $lembarSesudah,
+                'id_detail_hasil_dryer'   => $record->id,
+                'id_ukuran'               => $record->id_ukuran,
+                'id_jenis_kayu'           => $record->id_jenis_kayu,
+                'kw'                      => $record->kw,
+                'jenis_transaksi'         => 'masuk',
+                'tanggal_transaksi'       => now(),
+                'qty'                     => $record->isi,
+                'm3'                      => round($m3Masuk, 6),
+                // ✅ HPP basah dari weighted average modal
+                'hpp_veneer_basah_per_m3' => $hppVeneerBasah,
+                // Ongkos dryer & HPP kering = 0 dulu, diisi saat validasi
+                'ongkos_dryer_per_m3'     => 0,
+                'hpp_kering_per_m3'       => 0,
+                'nilai_transaksi'         => 0,
+                // Saldo lembar
+                'stok_lembar_sebelum'     => $lembarSebelum,
+                'stok_lembar_sesudah'     => $lembarSesudah,
                 // Saldo m3
-                'stok_m3_sebelum'       => round($m3Sebelum, 6),
-                'stok_m3_sesudah'       => round($m3Sebelum + $m3Masuk, 6),
-                'nilai_stok_sebelum'    => $nilaiSebelum,
-                'nilai_stok_sesudah'    => $nilaiSebelum,
-                'hpp_average'           => $hppAverage,
-                'keterangan'            => $keterangan,
+                'stok_m3_sebelum'         => round($m3Sebelum, 6),
+                'stok_m3_sesudah'         => round($m3Sebelum + $m3Masuk, 6),
+                'nilai_stok_sebelum'      => $nilaiSebelum,
+                'nilai_stok_sesudah'      => $nilaiSebelum, // belum ada nilai, diisi saat validasi
+                'hpp_average'             => 0,             // diisi saat validasi
+                'keterangan'              => $keterangan,
             ]);
 
-            // ── 6. UpdateOrCreate hpp_log_veneer_kering (ringkasan harian) ────
+            // ── 7. UpdateOrCreate hpp_log_veneer_kering (ringkasan harian) ────
             $logHariIni = HppLogHarian::where('id_ukuran', $record->id_ukuran)
                 ->where('id_jenis_kayu', $record->id_jenis_kayu)
                 ->where('kw', $record->kw)
@@ -125,5 +126,63 @@ class SerahHasilDryerService
                 ]);
             }
         });
+    }
+
+    // =========================================================================
+    // PRIVATE HELPER
+    // =========================================================================
+
+    /**
+     * Hitung HPP veneer basah menggunakan weighted average dari semua modal
+     * (DetailMasuk) dalam produksi dryer yang sama, per kombinasi
+     * id_ukuran + id_jenis_kayu.
+     *
+     * Formula:
+     *   weighted_avg = SUM(isi × hpp_basah) / SUM(isi)
+     */
+    private function hitungHppVeneerBasah(DetailHasil $record): float
+    {
+        // Ambil semua modal dari produksi ini dengan ukuran + jenis kayu sama
+        $modals = DetailMasuk::where('id_produksi_dryer', $record->id_produksi_dryer)
+            ->where('id_ukuran', $record->id_ukuran)
+            ->where('id_jenis_kayu', $record->id_jenis_kayu)
+            ->with('ukuran')
+            ->get();
+
+        if ($modals->isEmpty()) {
+            Log::warning('SerahHasilDryerService: tidak ada modal ditemukan', [
+                'id_produksi_dryer' => $record->id_produksi_dryer,
+                'id_ukuran'         => $record->id_ukuran,
+                'id_jenis_kayu'     => $record->id_jenis_kayu,
+            ]);
+            return 0.0;
+        }
+
+        $totalIsi    = 0;
+        $totalNilai  = 0.0;
+
+        foreach ($modals as $modal) {
+            $panjang = $modal->ukuran?->panjang ?? 0;
+
+            // Ambil HPP dari hpp_average_summaries
+            // berdasarkan id_jenis_kayu + panjang + grade (kw modal)
+            $summary = HppAverageSummarie::where('id_jenis_kayu', $modal->id_jenis_kayu)
+                ->where('panjang', $panjang)
+                ->where('grade', (string) $modal->kw)
+                ->orderByDesc('updated_at')
+                ->first();
+
+            $hppBasah = $summary ? (float) $summary->hpp_average : 0.0;
+            $isi      = (int) $modal->isi;
+
+            $totalIsi   += $isi;
+            $totalNilai += $isi * $hppBasah;
+        }
+
+        if ($totalIsi <= 0) {
+            return 0.0;
+        }
+
+        return round($totalNilai / $totalIsi, 4);
     }
 }

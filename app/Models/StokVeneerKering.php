@@ -64,6 +64,11 @@ class StokVeneerKering extends Model
         return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu');
     }
 
+    public function detailHasil()
+{
+    return $this->belongsTo(\App\Models\DetailHasil::class, 'id_detail_hasil_dryer');
+}
+
     
 
     // ─── Scope ───────────────────────────────────────────────────────────────

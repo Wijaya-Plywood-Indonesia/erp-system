@@ -23,16 +23,21 @@ class HppVeneerKeringPage extends Page
     public string $filterKw        = '';
 
     public function getLogsProperty()
-    {
-        return StokVeneerKering::with(['ukuran', 'jenisKayu'])
-            ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
-            ->when($this->filterPanjang,   fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('panjang', $this->filterPanjang)))
-            ->when($this->filterTebal,     fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('tebal', $this->filterTebal)))
-            ->when($this->filterKw,        fn($q) => $q->where('kw', $this->filterKw))
-            ->orderByDesc('tanggal_transaksi')
-            ->orderByDesc('id')
-            ->get();
-    }
+{
+    return StokVeneerKering::with([
+        'ukuran',
+        'jenisKayu',
+        // ✅ Preload relasi ke detail hasil → produksi → ongkos
+        'detailHasil.produksiDryer.ongkosDryer',
+    ])
+        ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
+        ->when($this->filterPanjang,   fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('panjang', $this->filterPanjang)))
+        ->when($this->filterTebal,     fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('tebal', $this->filterTebal)))
+        ->when($this->filterKw,        fn($q) => $q->where('kw', $this->filterKw))
+        ->orderByDesc('tanggal_transaksi')
+        ->orderByDesc('id')
+        ->get();
+}
 
     public function getUkuranListProperty()
     {
