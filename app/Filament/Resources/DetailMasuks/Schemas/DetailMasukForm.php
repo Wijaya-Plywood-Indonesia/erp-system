@@ -52,7 +52,13 @@ class DetailMasukForm
                         ->pluck('id_detail_hasil_palet_rotary')
                         ->toArray();
 
-                    $palets = DetailHasilPaletRotary::whereIn('id', $idDiterima)->get();
+                    $palets = DetailHasilPaletRotary::with([
+                        'ukuran',
+                        'penggunaanLahan.jenisKayu', // Penting: Load relasi jenisKayu di dalam penggunaanLahan
+                        'produksi.mesin' // Untuk kode palet (SP/MR/SJ)
+                    ])
+                        ->whereIn('id', $idDiterima)
+                        ->get();
 
                     $options = [];
                     foreach ($palets as $p) {
@@ -63,7 +69,27 @@ class DetailMasukForm
                         }
 
                         if (!$isUsed) {
-                            $options[$p->id] = $p->kode_palet ?? $p->palet;
+                            // Ambil data untuk label
+                            $nomor = $p->kode_palet; // Memanggil accessor dari model
+                            $isi = $p->total_lembar ?? 0;
+                            $ukuran = $p->ukuran?->nama_ukuran ?? 'Ukuran N/A';
+
+                            /**
+                             * LOGIKA DEBUGGING JENIS KAYU:
+                             * Kita cek satu per satu di mana rantai relasi terputus.
+                             */
+                            $lahan = $p->penggunaanLahan;
+                            $kayuModel = $lahan?->jenisKayu; // <--- Cek apakah di model PenggunaanLahanRotary namanya 'jenisKayu' atau 'jenis_kayu'
+
+                            if (!$lahan) {
+                                $kayu = "Lahan Kosong";
+                            } elseif (!$kayuModel) {
+                                $kayu = "Kayu Belum Set";
+                            } else {
+                                $kayu = $kayuModel->nama_kayu;
+                            }
+
+                            $options[$p->id] = "{$nomor} | {$kayu} | {$ukuran} | Isi: {$isi} lbr";
                         }
                     }
 
