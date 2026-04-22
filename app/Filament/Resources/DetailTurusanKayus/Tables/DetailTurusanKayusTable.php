@@ -18,9 +18,16 @@ use Filament\Tables\Grouping\Group;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth; // Tambahkan ini
 
 class DetailTurusanKayusTable
 {
+    /**
+     * Role yang memiliki hak akses bypass LOCK
+     */
+    private const ROLE_ADMIN = ['super_admin', 'Super Admin'];
+
     public static function configure(Table $table, $livewire = null): Table
     {
         // 1. LOGIKA LOCK: Cek status Nota melalui Owner Record (KayuMasuk)
@@ -31,6 +38,16 @@ class DetailTurusanKayusTable
                 $ownerRecord->notaKayu &&
                 $ownerRecord->notaKayu->status !== 'Belum Diperiksa';
         }
+
+        // 2. LOGIKA ADMIN: Cek apakah user yang login adalah admin
+        $isAdmin = Auth::user()?->hasAnyRole(self::ROLE_ADMIN) ?? false;
+
+        /**
+         * 3. LOGIKA IZIN AKSI: 
+         * Tombol muncul jika (TIDAK TERKUNCI) ATAU (USER ADALAH ADMIN)
+         */
+        $canPerformAction = !$isLocked || $isAdmin;
+
         $ownerRecord = null;
         if ($livewire && method_exists($livewire, 'getOwnerRecord')) {
             $ownerRecord = $livewire->getOwnerRecord();
@@ -58,8 +75,6 @@ class DetailTurusanKayusTable
                         };
                         return "{$namaKayu} {$panjang} ({$grade})";
                     })
-                    ->searchable(['panjang', 'grade'])
-                    // Jika ingin mencari nama kayu (relasi), gunakan:
                     ->searchable(query: function ($query, string $search) {
                         $query->where('panjang', 'like', "%{$search}%")
                             ->orWhere('grade', 'like', "%{$search}%")
@@ -82,23 +97,15 @@ class DetailTurusanKayusTable
                     ->formatStateUsing(fn($state) => $state > 0 ? number_format($state, 0, ',', '.') : '-')
                     ->toggleable(isToggledHiddenByDefault: true),
 
-                // Update Kolom Kubikasi: Menambahkan variabel panjang ke dalam rumus
                 TextColumn::make('kubikasi')
                     ->label('Kubikasi')
                     ->getStateUsing(function ($record) {
                         $panjang = (int) ($record->panjang ?? 0);
                         $diameter = (int) ($record->diameter ?? 0);
                         $kuantitas = (int) ($record->kuantitas ?? 1);
-
-                        // Kembalikan angka MURNI (float), jangan di number_format di sini
                         return ($panjang * $diameter * $diameter * $kuantitas * 0.785) / 1_000_000;
                     })
-                    // Gunakan fungsi bawaan Filament untuk format tampilan agar tidak merusak data asli
-                    ->numeric(
-                        decimalPlaces: 6,
-                        decimalSeparator: ',',
-                        thousandsSeparator: '.',
-                    )
+                    ->numeric(decimalPlaces: 6)
                     ->suffix(' m³')
                     ->alignRight()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -122,17 +129,14 @@ class DetailTurusanKayusTable
                         $nama = $record->lahan?->nama_lahan ?? '-';
                         $jenis_kayu = $record->jenisKayu?->nama_kayu ?? '-';
 
-                        // Perhitungan Total dalam Group: Menggunakan rumus yang menyertakan panjang
                         if ($records instanceof Collection && $records->isNotEmpty()) {
                             $totalBatang = $records->count();
                             $totalKubikasi = $records->sum(fn($r) => (float) (($r->panjang ?? 0) * ($r->diameter ?? 0) * ($r->diameter ?? 0) * ($r->kuantitas ?? 1) * 0.785 / 1_000_000));
                         } else {
                             $parentId = $record->id_kayu_masuk ?? $record->kayu_masuk_id;
-
                             $query = DetailTurusanKayu::where('id_kayu_masuk', $parentId)
                                 ->where('lahan_id', $record->lahan_id)
                                 ->get();
-
                             $totalBatang = $query->count();
                             $totalKubikasi = $query->sum(fn($r) => (float) (($r->panjang ?? 0) * ($r->diameter ?? 0) * ($r->diameter ?? 0) * ($r->kuantitas ?? 1) * 0.785 / 1_000_000));
                         }
@@ -146,7 +150,10 @@ class DetailTurusanKayusTable
                 CreateAction::make()
                     ->label('Tambah Kayu')
                     ->createAnother(true)
-                    ->visible(!$isLocked)
+                    /**
+                     * Gunakan variable $canPerformAction untuk bypass Lock jika admin
+                     */
+                    ->visible($canPerformAction)
                     ->after(function ($record) {
                         Notification::make()
                             ->title("Batang D: {$record->diameter} cm | No {$record->nomer_urut} ditambahkan")
@@ -157,7 +164,7 @@ class DetailTurusanKayusTable
                     ->label('Mode Offline')
                     ->icon('heroicon-m-signal-slash')
                     ->color('warning')
-                    ->visible(!$isLocked)
+                    ->visible($canPerformAction)
                     ->modalHeading('Input Turusan (Tanpa Sinyal)')
                     ->modalWidth('2xl')
                     ->modalContent(fn() => view('filament.components.offline-turusan-modal', [
@@ -169,8 +176,8 @@ class DetailTurusanKayusTable
                     ->modalCancelAction(false),
             ])
             ->recordActions([
-                EditAction::make()->visible(!$isLocked),
-                DeleteAction::make()->visible(!$isLocked),
+                EditAction::make()->visible($canPerformAction),
+                DeleteAction::make()->visible($canPerformAction),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -209,7 +216,7 @@ class DetailTurusanKayusTable
                             ]);
                         })
                         ->deselectRecordsAfterCompletion(),
-                ])->visible(!$isLocked),
+                ])->visible($canPerformAction),
             ]);
     }
 }

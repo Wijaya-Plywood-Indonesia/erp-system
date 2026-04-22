@@ -15,10 +15,30 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidths, WithTitle
 {
     protected array $data;
+    protected int $originalPrecision;          // ← Simpan nilai asli sebelum diubah
+    protected int $originalSerializePrecision; // ← Simpan nilai asli sebelum diubah
 
     public function __construct(array $data)
     {
         $this->data = $data;
+
+        // Simpan nilai precision asli agar bisa dikembalikan setelah export selesai
+        $this->originalPrecision = (int) ini_get('precision');
+        $this->originalSerializePrecision = (int) ini_get('serialize_precision');
+
+        // Paksa presisi float ke 16 digit selama proses export
+        ini_set('precision', 16);
+        ini_set('serialize_precision', -1);
+    }
+
+    /**
+     * Destructor — kembalikan precision ke nilai semula setelah export selesai
+     * agar tidak mempengaruhi proses lain di aplikasi
+     */
+    public function __destruct()
+    {
+        ini_set('precision', $this->originalPrecision);
+        ini_set('serialize_precision', $this->originalSerializePrecision);
     }
 
     /**
@@ -28,20 +48,16 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
     {
         $result = [];
         foreach ($this->data as $row) {
-            // Pembersihan Nama Divisi agar rapi di Excel
             $divisiRaw = is_array($row['hasil']) ? $row['hasil'] : explode(', ', $row['hasil'] ?? '');
 
             $cleanDivisi = collect($divisiRaw)->map(function ($item) {
                 $itemUpper = strtoupper(trim($item));
 
-                // LOGIKA KHUSUS UNTUK LAIN-LAIN (Agar detail muncul di samping label)
                 if (str_contains($itemUpper, 'LAIN-LAIN')) {
-                    // Membersihkan label agar menyisakan keterangan saja
                     $detail = trim(str_ireplace(['LAIN-LAIN', ':', '-'], '', $item));
                     return !empty($detail) ? "LAIN-LAIN ($detail)" : "LAIN-LAIN";
                 }
 
-                // Logika standar untuk divisi lainnya (Pembersihan angka/detail produksi)
                 $name = trim(explode(':', explode('(', $item)[0])[0]);
                 return strtoupper($name);
             })->unique()->implode(', ');
@@ -68,6 +84,8 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
 
     /**
      * Konversi string waktu (HH:mm:ss) ke Serial Number Excel.
+     * Menggunakan totalSeconds / 86400 agar hanya 1x operasi divisi
+     * sehingga floating point error tidak menumpuk.
      */
     protected function convertTimeToExcel($time)
     {
@@ -81,7 +99,9 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
             $m = (int) ($parts[1] ?? 0);
             $s = (int) ($parts[2] ?? 0);
 
-            return ($h / 24) + ($m / 1440) + ($s / 86400);
+            // 1 operasi divisi saja — lebih presisi dari 3 operasi terpisah
+            $totalSeconds = ($h * 3600) + ($m * 60) + $s;
+            return $totalSeconds / 86400;
         } catch (\Exception $e) {
             return null;
         }
@@ -137,7 +157,7 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
         $sheet->getStyle("C2:F{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("H2:H{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        // Bungkus teks (Wrap Text) untuk kolom Divisi & Keterangan agar detail muncul semua
+        // Wrap Text untuk kolom Divisi & Keterangan
         $sheet->getStyle("G2:G{$lastRow}")->getAlignment()->setWrapText(true);
         $sheet->getStyle("I2:I{$lastRow}")->getAlignment()->setWrapText(true);
 
@@ -164,7 +184,7 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
             'D' => 15,
             'E' => 15,
             'F' => 15,
-            'G' => 40, // Diperlebar untuk menampung detail Lain-lain
+            'G' => 40,
             'H' => 10,
             'I' => 45
         ];

@@ -14,6 +14,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Database\Eloquent\Builder; // Tambahkan ini
 
 class HargaKayusTable
 {
@@ -22,14 +23,39 @@ class HargaKayusTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->paginated(false)
+            /**
+             * LOGIKA PENGURUTAN (SORTING) MULTI-KOLOM
+             * Urutan: Jenis Kayu (A-Z) -> Panjang -> Diameter Min -> Diameter Max -> Grade
+             */
+            ->modifyQueryUsing(function (Builder $query) {
+                return $query
+                    ->join('jenis_kayus', 'harga_kayus.id_jenis_kayu', '=', 'jenis_kayus.id')
+                    ->orderBy('harga_kayus.grade', 'asc') // Grade 1 (A) muncul pertama
+                    ->orderBy('jenis_kayus.nama_kayu', 'asc')
+                    ->orderBy('harga_kayus.panjang', 'asc')
+                    ->orderBy('harga_kayus.diameter_terkecil', 'asc')
+                    ->orderBy('harga_kayus.diameter_terbesar', 'asc')
+                    ->select('harga_kayus.*');
+            })
             ->columns([
                 TextColumn::make('jenisKayu.nama_kayu')
-                    ->searchable()
-                    ->sortable(),
+                    ->label('Jenis Kayu')
+                    ->searchable(),
 
                 TextColumn::make('panjang')
-                    ->numeric()
-                    ->searchable()
+                    ->label('Panjang')
+                    ->badge()
+                    /**
+                     * PEMBERIAN WARNA BADGE PANJANG:
+                     * 130 menggunakan warna abu-abu (gray)
+                     * 260 menggunakan warna hijau (success)
+                     */
+                    ->color(fn($state): string => match ((int) $state) {
+                        130 => 'gray',
+                        260 => 'success',
+                        default => 'info',
+                    })
                     ->sortable(),
 
                 TextColumn::make('diameter_terkecil')
@@ -68,16 +94,10 @@ class HargaKayusTable
                     ->color('warning')
                     ->weight('bold'),
 
-                /**
-                 * PENYELARASAN: Menampilkan Siapa yang Mengusulkan (Update)
-                 */
                 TextColumn::make('updated_by')
                     ->label('Diperbarui Oleh')
                     ->placeholder('-'),
 
-                /**
-                 * PENYELARASAN: Menampilkan Siapa yang Menyetujui/Menolak
-                 */
                 TextColumn::make('approved_by')
                     ->label('Disetujui/Ditolak Oleh')
                     ->placeholder('-'),
@@ -123,32 +143,22 @@ class HargaKayusTable
                     ]),
             ])
             ->recordActions([
-                /**
-                 * ACTION: SETUJUI (APPROVE)
-                 */
                 Action::make('approve')
                     ->label('Setujui')
                     ->icon('heroicon-m-check-badge')
                     ->color('success')
                     ->requiresConfirmation()
-                    /**
-                     * [PENYESUAIAN LOGIKA OTORISASI]
-                     * Tombol muncul jika ada harga baru DAN (User adalah Admin ATAU User bukan pengusul harga)
-                     */
                     ->visible(function (Model $record) {
                         $user = Auth::user();
                         if (!$user) return false;
-
                         $isAdmin = $user->hasAnyRole(self::ROLE_ADMIN);
                         $isBukanPengusul = $user->name !== $record->updated_by;
-
                         return $record->harga_baru > 0 && ($isAdmin || $isBukanPengusul);
                     })
                     ->action(function (Model $record) {
                         $hargaLama = $record->harga_beli;
                         $hargaBaru = $record->harga_baru;
 
-                        // 1. BUAT BARIS BARU DI LOG (Historical Record)
                         HargaKayuLog::create([
                             'id_harga_kayu' => $record->id,
                             'harga_lama'    => $hargaLama,
@@ -157,7 +167,6 @@ class HargaKayusTable
                             'aksi'          => 'Persetujuan Harga',
                         ]);
 
-                        // 2. UPDATE TABEL MASTER
                         $record->update([
                             'harga_beli'  => $hargaBaru,
                             'harga_baru'  => null,
@@ -165,28 +174,19 @@ class HargaKayusTable
                             'approved_by' => Auth::user()->name,
                         ]);
 
-                        Notification::make()->title('Harga disetujui & riwayat dicatat')->success()->send();
+                        Notification::make()->title('Harga disetujui')->success()->send();
                     }),
 
-                /**
-                 * ACTION: TOLAK
-                 */
                 Action::make('reject')
                     ->label('Tolak')
                     ->icon('heroicon-m-x-circle')
                     ->color('danger')
                     ->requiresConfirmation()
-                    /**
-                     * [PENYESUAIAN LOGIKA OTORISASI]
-                     * Logika sama dengan approve: Admin bebas, User lain dilarang menolak ajuan sendiri.
-                     */
                     ->visible(function (Model $record) {
                         $user = Auth::user();
                         if (!$user) return false;
-
                         $isAdmin = $user->hasAnyRole(self::ROLE_ADMIN);
                         $isBukanPengusul = $user->name !== $record->updated_by;
-
                         return $record->harga_baru > 0 && ($isAdmin || $isBukanPengusul);
                     })
                     ->action(function (Model $record) {
@@ -208,7 +208,6 @@ class HargaKayusTable
                     }),
 
                 EditAction::make(),
-                ViewAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

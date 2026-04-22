@@ -239,7 +239,7 @@ class HppDryerService
             if ($snapshot['stok_m3'] < $m3Keluar) {
                 throw new \Exception(
                     "Stok tidak cukup. Tersedia: {$snapshot['stok_m3']} m³, "
-                    . "Diminta: {$m3Keluar} m³"
+                        . "Diminta: {$m3Keluar} m³"
                 );
             }
 

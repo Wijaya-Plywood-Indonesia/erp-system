@@ -18,6 +18,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 class DetailHasilsRelationManager extends RelationManager
 {
@@ -89,7 +90,7 @@ class DetailHasilsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-        ->modifyQueryUsing(fn($query) => $query->with(['stokMasuk', 'ukuran', 'jenisKayu', 'produksiDryer']))
+            ->modifyQueryUsing(fn($query) => $query->with(['stokMasuk', 'ukuran', 'jenisKayu', 'produksiDryer']))
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
@@ -141,29 +142,39 @@ class DetailHasilsRelationManager extends RelationManager
                     ->icon('heroicon-o-paper-airplane')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->modalHeading('Serahkan Palet ke Gudang Kering?')
-                    ->modalDescription('Setelah diserahkan, data ini akan masuk ke stok gudang dan tombol serah akan hilang.')
-                    ->modalSubmitActionLabel('Ya, Serahkan Sekarang')
-                    ->visible(fn($record) => is_null($record->stokMasuk))
+                    /**
+                     * SOLUSI PALING AMAN: Direct DB Check.
+                     * Kita cek langsung ke tabel 'stok_veneer_kerings' menggunakan kueri SQL mentah.
+                     * Ini 100% akurat karena tidak bergantung pada cache model Eloquent.
+                     */
+                    ->visible(function (DetailHasil $record) {
+                        return ! DB::table('stok_veneer_kerings')
+                            ->where('id_detail_hasil_dryer', $record->id)
+                            ->exists();
+                    })
                     ->action(function (DetailHasil $record) {
                         try {
                             app(SerahHasilDryerService::class)->serahkan($record);
 
+                            /**
+                             * Bersihkan memori objek setelah aksi
+                             */
+                            $record->unsetRelation('stokMasuk');
+                            $record->refresh();
+
                             Notification::make()
                                 ->title('Penyerahan Berhasil')
-                                ->body("Palet {$record->no_palet} telah dipindahkan ke stok gudang.")
                                 ->success()
                                 ->send();
-
                         } catch (\Throwable $e) {
                             Notification::make()
-                                ->title('Terjadi Kesalahan Sistem')
+                                ->title('Gagal')
                                 ->body($e->getMessage())
                                 ->danger()
-                                ->persistent()
                                 ->send();
                         }
                     }),
+
 
                 EditAction::make()
                     ->hidden(
