@@ -19,14 +19,22 @@ class HitungHppDryerListener implements ShouldQueue
     }
 
     public function handle(ProductionUpdated $event): void
-    {
-        // Sesuai property di ProductionUpdated: $type dan $productionId
-        if ($event->type !== 'dryer') {
-            return;
-        }
-
-        $this->service->prosesProduksi($event->productionId);
+{
+    if ($event->type !== 'dryer') {
+        return;
     }
+
+    // ✅ Hanya proses jika produksi sudah divalidasi
+    $sudahValidasi = \App\Models\ValidasiPressDryer::where('id_produksi_dryer', $event->productionId)
+        ->where('status', 'divalidasi')
+        ->exists();
+
+    if (!$sudahValidasi) {
+        return;
+    }
+
+    $this->service->prosesProduksi($event->productionId);
+}
 
     public function failed(ProductionUpdated $event, \Throwable $exception): void
     {

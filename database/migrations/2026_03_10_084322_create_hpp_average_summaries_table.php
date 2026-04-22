@@ -18,7 +18,7 @@ return new class extends Migration
             $table->foreignId('id_lahan')
                 ->constrained('lahans')
                 ->cascadeOnDelete();
-
+    
             $table->foreignId('id_jenis_kayu')
                 ->constrained('jenis_kayus')
                 ->cascadeOnDelete();

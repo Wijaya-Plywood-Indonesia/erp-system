@@ -174,20 +174,33 @@
                         </td>
 
                         {{-- Komponen HPP Kering --}}
-                        <td class="px-4 py-3 border-l border-gray-50 dark:border-gray-800 bg-blue-50/10 dark:bg-blue-900/5 whitespace-nowrap">
-                            @if($isM)
-                                <div class="flex flex-col items-end gap-0.5 text-[10px] tabular-nums">
-                                    <span class="text-blue-600 dark:text-blue-400 font-semibold">
-                                        Bsh: {{ number_format($log->hpp_veneer_basah_per_m3, 0, ',', '.') }}
-                                    </span>
-                                    <span class="text-orange-600 dark:text-orange-400 font-semibold">
-                                        Dry: {{ number_format($log->ongkos_dryer_per_m3, 0, ',', '.') }}
-                                    </span>
-                                </div>
-                            @else
-                                <div class="text-right text-[10px] text-gray-400">—</div>
-                            @endif
-                        </td>
+<td class="px-4 py-3 border-l border-gray-50 dark:border-gray-800 bg-blue-50/10 dark:bg-blue-900/5 whitespace-nowrap">
+    @if($isM)
+        @php
+            $ongkos  = $log->detailHasil?->produksiDryer?->ongkosDryer;
+            $totalM3 = $ongkos && $ongkos->total_m3 > 0 ? (float) $ongkos->total_m3 : 0;
+            $ongkosPegawaiPerM3 = $totalM3 > 0
+                ? round((float) $ongkos->ongkos_pekerja / $totalM3, 0)
+                : 0;
+            $ongkosMesinPerM3 = $totalM3 > 0
+                ? round((float) $ongkos->ongkos_mesin / $totalM3, 0)
+                : 0;
+        @endphp
+        <div class="flex flex-col items-end gap-0.5 text-[10px] tabular-nums">
+            <span class="text-blue-600 dark:text-blue-400 font-semibold">
+                Bsh: {{ number_format($log->hpp_veneer_basah_per_m3, 0, ',', '.') }}
+            </span>
+            <span class="text-green-600 dark:text-green-400 font-semibold">
+                Pgw: {{ $ongkos ? number_format($ongkosPegawaiPerM3, 0, ',', '.') : '-' }}
+            </span>
+            <span class="text-orange-600 dark:text-orange-400 font-semibold">
+                Msin: {{ $ongkos ? number_format($ongkosMesinPerM3, 0, ',', '.') : '-' }}
+            </span>
+        </div>
+    @else
+        <div class="text-right text-[10px] text-gray-400">—</div>
+    @endif
+</td>
 
                         {{-- HPP Average --}}
                         <td class="px-4 py-3 text-right border-l border-gray-50 dark:border-gray-800 bg-amber-50/20 dark:bg-amber-900/5 whitespace-nowrap">

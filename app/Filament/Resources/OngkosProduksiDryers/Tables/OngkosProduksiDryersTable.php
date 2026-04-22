@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\OngkosProduksiDryers\Tables;
 
-use App\Services\HppDryerService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -31,40 +30,43 @@ class OngkosProduksiDryersTable
                             ->orderBy('ppd.tanggal_produksi', $direction)
                             ->select('ongkos_produksi_dryers.*');
                     }),
+
                 TextColumn::make('produksi.shift')
                     ->label('Shift')
                     ->badge()
                     ->color(fn($state) => match ($state) {
-                        'pagi' => 'warning',
+                        'pagi'  => 'warning',
                         'malam' => 'info',
                         default => 'gray',
                     }),
+
                 TextColumn::make('total_m3')
                     ->label('Total M3')
                     ->numeric(decimalPlaces: 4)
                     ->suffix(' m³'),
-                TextColumn::make('ttl_pekerja')
-                    ->label('Pekerja')
-                    ->alignCenter(),
-                TextColumn::make('jumlah_mesin')
-                    ->label('Mesin')
-                    ->alignCenter(),
+
+                TextColumn::make('ongkos_pekerja')
+                    ->label('Ongkos Pekerja')
+                    ->money('IDR')
+                    ->alignRight(),
+
+                TextColumn::make('ongkos_mesin')
+                    ->label('Ongkos Mesin')
+                    ->money('IDR')
+                    ->alignRight(),
+
                 TextColumn::make('total_ongkos')
                     ->label('Total Ongkos')
                     ->money('IDR')
                     ->alignRight(),
+
                 TextColumn::make('ongkos_per_m3')
-                    ->label('Ongkos / M3')
-                    ->money('IDR')
-                    ->alignRight()
-                    ->weight(FontWeight::SemiBold),
-                TextColumn::make('hpp_kering_per_m3')
-                    ->label('HPP Kering / M3')
-                    ->getStateUsing(fn($record) => HppDryerService::HPP_VENEER_BASAH_PER_M3 + $record->ongkos_per_m3)
+                    ->label('Ongkos Dryer / M3')
                     ->money('IDR')
                     ->alignRight()
                     ->weight(FontWeight::Bold)
                     ->color('primary'),
+
                 IconColumn::make('is_final')
                     ->label('Final')
                     ->boolean()
@@ -75,12 +77,12 @@ class OngkosProduksiDryersTable
                 Filter::make('belum_final')
                     ->label('Belum Final')
                     ->query(fn(Builder $q) => $q->where('is_final', false)),
+
                 Filter::make('bulan_ini')
                     ->label('Bulan Ini')
                     ->query(fn(Builder $q) => $q->whereHas(
                         'produksi',
-                        fn($s) =>
-                        $s->whereMonth('tanggal_produksi', now()->month)
+                        fn($s) => $s->whereMonth('tanggal_produksi', now()->month)
                             ->whereYear('tanggal_produksi', now()->year)
                     )),
             ])
@@ -92,9 +94,15 @@ class OngkosProduksiDryersTable
                     ->visible(fn($record) => !$record->is_final)
                     ->requiresConfirmation()
                     ->action(function ($record) {
-                        $record->recalculate();
-                        Notification::make()->title('Kalkulasi diperbarui')->success()->send();
+                        app(\App\Services\HppDryerService::class)
+                            ->prosesProduksi($record->id_produksi_dryer);
+
+                        Notification::make()
+                            ->title('Kalkulasi diperbarui')
+                            ->success()
+                            ->send();
                     }),
+
                 ViewAction::make(),
                 EditAction::make()->visible(fn($record) => !$record->is_final),
             ])
