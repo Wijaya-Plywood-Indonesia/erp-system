@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\HargaKayus\Tables;
 
+use App\Models\DetailTurusanKayu;
 use App\Models\HargaKayuLog;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -15,6 +16,7 @@ use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Builder; // Tambahkan ini
+use Illuminate\Support\Facades\DB;
 
 class HargaKayusTable
 {
@@ -151,30 +153,60 @@ class HargaKayusTable
                     ->visible(function (Model $record) {
                         $user = Auth::user();
                         if (!$user) return false;
+
                         $isAdmin = $user->hasAnyRole(self::ROLE_ADMIN);
                         $isBukanPengusul = $user->name !== $record->updated_by;
+
                         return $record->harga_baru > 0 && ($isAdmin || $isBukanPengusul);
                     })
                     ->action(function (Model $record) {
-                        $hargaLama = $record->harga_beli;
-                        $hargaBaru = $record->harga_baru;
+                        // Bungkus dalam Transaction agar jika salah satu gagal, semua batal (Data tetap konsisten)
+                        DB::transaction(function () use ($record) {
+                            $hargaLama = $record->harga_beli;
+                            $hargaBaru = $record->harga_baru;
 
-                        HargaKayuLog::create([
-                            'id_harga_kayu' => $record->id,
-                            'harga_lama'    => $hargaLama,
-                            'harga_baru'    => $hargaBaru,
-                            'petugas'       => Auth::user()->name,
-                            'aksi'          => 'Persetujuan Harga',
-                        ]);
+                            // 1. BUAT BARIS BARU DI LOG (Riwayat Audit)
+                            HargaKayuLog::create([
+                                'id_harga_kayu' => $record->id,
+                                'harga_lama'    => $hargaLama,
+                                'harga_baru'    => $hargaBaru,
+                                'petugas'       => Auth::user()->name,
+                                'aksi'          => 'Persetujuan Harga',
+                            ]);
 
-                        $record->update([
-                            'harga_beli'  => $hargaBaru,
-                            'harga_baru'  => null,
-                            'status'      => 'disetujui',
-                            'approved_by' => Auth::user()->name,
-                        ]);
+                            // 2. UPDATE TABEL MASTER (Status Aktif)
+                            $record->update([
+                                'harga_beli'  => $hargaBaru,
+                                'harga_baru'  => null,
+                                'status'      => 'disetujui',
+                                'approved_by' => Auth::user()->name,
+                            ]);
 
-                        Notification::make()->title('Harga disetujui')->success()->send();
+                            /**
+                             * 3. LOGIKA SINKRONISASI (Update Seri 7-10 yang Belum Lock)
+                             * Kita mencari data di detail turusan yang speknya sama 
+                             * tapi nota-nya masih "Belum Diperiksa".
+                             */
+                            $updatedCount = DetailTurusanKayu::query()
+                                ->where('jenis_kayu_id', $record->id_jenis_kayu)
+                                ->where('panjang', $record->panjang)
+                                ->where('grade', $record->grade)
+                                ->whereBetween('diameter', [$record->diameter_terkecil, $record->diameter_terbesar])
+                                ->whereHas('kayuMasuk', function ($q) {
+                                    // PENGUNCI (GATEKEEPER): Hanya menyentuh yang belum permanen harganya
+                                    $q->whereDoesntHave('notaKayu') // Jika belum dibuat nota
+                                        ->orWhereHas('notaKayu', function ($nq) {
+                                            $nq->where('status', 'Belum Diperiksa'); // Jika nota belum divalidasi
+                                        });
+                                })
+                                ->update(['harga' => $hargaBaru]);
+
+                            Notification::make()
+                                ->title('Harga Disetujui')
+                                ->body("Berhasil memperbarui harga Master dan {$updatedCount} batang kayu pada data yang belum divalidasi.")
+                                ->success()
+                                ->send();
+                        });
                     }),
 
                 Action::make('reject')
