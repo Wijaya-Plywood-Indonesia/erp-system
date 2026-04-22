@@ -106,7 +106,6 @@
                     <table class="w-full text-sm text-left border-separate border-spacing-0">
                         <thead>
                             <tr class="text-gray-500 dark:text-gray-400 uppercase text-[10px] tracking-[0.2em] font-black bg-gray-50/50 dark:bg-gray-800/50">
-                                <th class="px-6 py-5 text-center border-b border-gray-100 dark:border-gray-800 w-24">Aksi</th>
                                 <th class="px-6 py-5 text-center border-b border-gray-100 dark:border-gray-800 w-16">No</th>
                                 <th class="px-6 py-5 border-b border-gray-100 dark:border-gray-800 w-40">Lahan</th>
                                 <th class="px-6 py-5 border-b border-gray-100 dark:border-gray-800">Kombinasi Ukuran — Jenis</th>
@@ -125,9 +124,6 @@
                             {{-- Jika Lahan ada isinya, loop setiap kombinasi --}}
                             @foreach($lahanSummaries as $row)
                             <tr class="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                <td class="px-6 py-5 text-center border-b border-gray-50 dark:border-gray-800">
-                                    {{ ($this->editStokAction)(['id' => $row->id]) }} {{ ($this->deleteStokAction)(['id' => $row->id]) }}
-                                </td>
                                 <td class="px-6 py-5 text-center text-gray-300 dark:text-gray-600 font-mono text-xs">{{ $globalIdx++ }}</td>
                                 <td class="px-6 py-5">
                                     <div class="flex items-center gap-2.5">
@@ -169,9 +165,6 @@
                             @else
                             {{-- Jika Lahan Kosong --}}
                             <tr class="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                <td class="px-6 py-5 text-center border-b border-gray-50 dark:border-gray-800">
-                                    {{ ($this->editStokAction)(['lahan_id' => $lahan->id]) }}
-                                </td>
                                 <td class="px-6 py-5 text-center text-gray-300 dark:text-gray-600 font-mono text-xs">{{ $globalIdx++ }}</td>
                                 <td class="px-6 py-5">
                                     <div class="flex items-center gap-2.5">
