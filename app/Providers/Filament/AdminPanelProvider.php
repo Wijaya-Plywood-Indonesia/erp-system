@@ -100,8 +100,15 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Kontrak')
                     ->icon('heroicon-o-clipboard-document-check')->collapsed(),
 
+                NavigationGroup::make('Opname')
+                    ->icon('heroicon-o-clipboard-document-check')->collapsed(),
+
                 NavigationGroup::make('Stok')
                     ->icon('heroicon-o-cube')
+                    ->collapsed(),
+
+                NavigationGroup::make('Log')
+                    ->icon('heroicon-o-cog')
                     ->collapsed(),
 
                 NavigationGroup::make('Grade')
