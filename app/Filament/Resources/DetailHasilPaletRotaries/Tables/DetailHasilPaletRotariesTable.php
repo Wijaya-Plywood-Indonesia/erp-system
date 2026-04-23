@@ -18,6 +18,9 @@ use Illuminate\Support\Facades\DB;
 
 class DetailHasilPaletRotariesTable
 {
+
+    private const ADMIN_ROLES = ['admin', 'super_admin', 'Super Admin'];
+
     public static function configure(Table $table): Table
     {
         return $table
@@ -133,12 +136,40 @@ class DetailHasilPaletRotariesTable
                             ->success()
                             ->send();
                     }),
-                EditAction::make(),
-                DeleteAction::make(),
+                EditAction::make()
+                    ->visible(function ($record) {
+                        $user = Auth::user();
+                        $isAdmin = $user && $user->hasAnyRole(self::ADMIN_ROLES);
+
+                        // Jika admin, selalu terlihat
+                        if ($isAdmin) return true;
+
+                        // Jika bukan admin, hanya terlihat jika data BELUM ada di pivot serah terima
+                        $isLocked = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
+                            ->where('id_detail_hasil_palet_rotary', $record->id)
+                            ->exists();
+
+                        return !$isLocked;
+                    }),
+
+                DeleteAction::make()
+                    ->visible(function ($record) {
+                        $user = Auth::user();
+                        $isAdmin = $user && $user->hasAnyRole(self::ADMIN_ROLES);
+
+                        if ($isAdmin) return true;
+
+                        $isLocked = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
+                            ->where('id_detail_hasil_palet_rotary', $record->id)
+                            ->exists();
+
+                        return !$isLocked;
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->visible(fn() => Auth::user()->hasAnyRole(self::ADMIN_ROLES)),
                 ])
             ]);
     }
