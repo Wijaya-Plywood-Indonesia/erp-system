@@ -125,7 +125,41 @@ class SerahTerimaRelationManager extends RelationManager
                 TextColumn::make('detailHasilPalet.palet')
                     ->label('Nomor Palet')
                     ->getStateUsing(fn($record) => $record->detailHasilPalet?->kode_palet ?? '-')
-                    ->searchable(),
+                    ->searchable(query: function ($query, string $search) {
+
+                        $kodeMapping = [
+                            'SP' => 'SPINDLESS',
+                            'MR' => 'MERANTI',
+                            'SJ' => 'SANJI',
+                            'YQ' => 'YUEQUN',
+                        ];
+
+                        $parts      = explode('-', strtoupper(trim($search)));
+                        $kodeInput  = $parts[0] ?? null;
+                        $nomorPalet = isset($parts[1]) && is_numeric($parts[1]) ? (int) $parts[1] : null;
+                        $namaMesin  = $kodeMapping[$kodeInput] ?? null;
+
+                        $query->whereHas('detailHasilPalet', function ($q) use ($search, $namaMesin, $nomorPalet) {
+                            // Join ke produksi dan mesin untuk bisa filter nama mesin
+                            $q->join('produksi_rotaries', 'detail_hasil_palet_rotaries.id_produksi', '=', 'produksi_rotaries.id')
+                                ->join('mesins', 'produksi_rotaries.id_mesin', '=', 'mesins.id');
+
+                            if ($namaMesin && $nomorPalet !== null) {
+                                // Input: "SP-1"
+                                $q->where('mesins.nama_mesin', 'like', "%{$namaMesin}%")
+                                    ->where('detail_hasil_palet_rotaries.palet', $nomorPalet);
+                            } elseif ($namaMesin) {
+                                // Input: "SP"
+                                $q->where('mesins.nama_mesin', 'like', "%{$namaMesin}%");
+                            } elseif (is_numeric($search)) {
+                                // Input: "25" (nomor palet saja)
+                                $q->where('detail_hasil_palet_rotaries.palet', (int) $search);
+                            } else {
+                                // Input: "SPINDLESS" (nama mesin langsung)
+                                $q->where('mesins.nama_mesin', 'like', "%{$search}%");
+                            }
+                        });
+                    }),
 
                 // JUMLAH
                 TextColumn::make('detailHasilPalet.total_lembar')
