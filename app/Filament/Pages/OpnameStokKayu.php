@@ -31,7 +31,7 @@ class OpnameStokKayu extends Page implements HasForms
 
     // protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-list';
     protected static ?string $navigationLabel = 'Opname Stok Kayu';
-    protected static UnitEnum|string|null $navigationGroup = 'Stok';
+    protected static UnitEnum|string|null $navigationGroup = 'Opname';
     protected static ?string $title = 'Opname Stok Kayu';
     protected static ?int $navigationSort = 14;
 
