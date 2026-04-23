@@ -2,9 +2,10 @@
 
 namespace App\Filament\Resources\DetailHasilPaletRotaries\Schemas;
 
+use App\Models\DetailHasilPaletRotary;
 use App\Models\PenggunaanLahanRotary;
 use App\Models\Ukuran;
-use Filament\Forms\Components\Hidden; // <--- Ubah import ini
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -16,7 +17,6 @@ class DetailHasilPaletRotaryForm
     {
         return $schema->components([
 
-            // Ubah DateTimePicker menjadi Hidden
             Hidden::make('timestamp_laporan')
                 ->default(
                     fn(RelationManager $livewire) =>
@@ -30,7 +30,6 @@ class DetailHasilPaletRotaryForm
 
             Select::make('id_ukuran')
                 ->label('Ukuran')
-                // ... (kode lainnya tetap sama)
                 ->options(
                     Ukuran::get()->mapWithKeys(fn($u) => [
                         $u->id => $u->dimensi
@@ -85,15 +84,19 @@ class DetailHasilPaletRotaryForm
                 ->required(),
 
             TextInput::make('palet')
-                ->default(
-                    fn(RelationManager $livewire) =>
-                    optional(
-                        $livewire->getOwnerRecord()
-                            ->detailPaletRotary()
-                            ->latest()
-                            ->first()
-                    )->palet
-                )
+                ->label('Nomor Palet')
+                ->default(function (RelationManager $livewire) {
+                    $produksi = $livewire->getOwnerRecord();
+
+                    $idMesin = $produksi->id_mesin;
+
+                    $paletTerakhir = DetailHasilPaletRotary::whereHas('produksi', function ($q) use ($idMesin) {
+                        $q->where('id_mesin', $idMesin);
+                    })
+                        ->max('palet');
+
+                    return $paletTerakhir ? $paletTerakhir + 1 : 1;
+                })
                 ->required(),
 
             TextInput::make('total_lembar')

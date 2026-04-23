@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Pegawai extends Model
 {
@@ -12,6 +13,7 @@ class Pegawai extends Model
     protected $fillable = [
         'kode_pegawai',
         'nama_pegawai',
+        'panggilan',
         'alamat',
         'no_telepon_pegawai',
         'jenis_kelamin_pegawai',
@@ -93,4 +95,16 @@ class Pegawai extends Model
     }
 
 
+    // Pivot table pegawai dengan menggunakan detail hasil palet rotary
+    public function detailHasilPaletRotaries(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            DetailHasilPaletRotary::class,
+            'detail_hasil_palet_rotary_serah_terima_pivot',
+            'id_pegawai',                                   // FK di tabel pivot untuk model ini (dibalik)
+            'id_detail_hasil_palet_rotary'                  // FK di tabel pivot untuk model tujuan
+        )
+            ->withPivot('status')
+            ->withTimestamps();
+    }
 }

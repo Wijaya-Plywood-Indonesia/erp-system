@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class ProduksiPressDryer extends Model
 {
@@ -48,6 +50,13 @@ class ProduksiPressDryer extends Model
     public function detailPegawais()
     {
         return $this->hasMany(DetailPegawai::class, 'id_produksi_dryer');
+    }
+
+    public function serahTerima(): HasMany
+    {
+        // Dummy — query asli di-override penuh di RelationManager
+        return $this->hasMany(SerahTerimaPivot::class, 'id', 'id')
+            ->whereRaw('1 = 0');
     }
 
     public function getLabelAttribute()

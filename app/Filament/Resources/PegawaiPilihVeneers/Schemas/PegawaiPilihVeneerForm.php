@@ -45,7 +45,7 @@ class PegawaiPilihVeneerForm
 
             TextInput::make('tugas')
                 ->label('Tugas')
-                ->default('Pegawai Guellotine')
+                ->default('Pegawai Pilih Veneer')
                 ->readOnly(),
 
             // 👷 PEGAWAI — VALIDASI DUPLIKAT (FIX TOTAL)

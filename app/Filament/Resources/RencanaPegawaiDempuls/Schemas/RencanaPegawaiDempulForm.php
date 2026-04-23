@@ -44,28 +44,41 @@ class RencanaPegawaiDempulForm
                     ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null), // Tampilkan hanya HH:MM,
 
                 Select::make('id_pegawai')
-                    ->label('Pegawai')
-                    ->options(function () use ($usedPegawaiIds) {
-                        return Pegawai::whereNotIn('id', $usedPegawaiIds)
-                            ->orderBy('kode_pegawai')
-                            ->get()
-                            ->mapWithKeys(fn($p) => [
-                                $p->id => "{$p->kode_pegawai} - {$p->nama_pegawai}"
-                            ])
-                            ->toArray();
-                    })
-                    ->searchable()
-                    ->preload()
-                    ->required()
-                    ->placeholder('Pilih pegawai...')
-                    ->reactive()
-                    ->rules([
-                        fn() => function ($attribute, $value, $fail) use ($usedPegawaiIds) {
-                            if (in_array($value, $usedPegawaiIds)) {
-                                $fail('Pegawai ini sudah ditugaskan hari ini!');
-                            }
-                        }
-                    ]),
+    ->label('Pegawai')
+    ->searchable()
+    ->preload()
+    ->required()
+    ->options(
+        Pegawai::query()
+            ->get()
+            ->mapWithKeys(fn($p) => [
+                $p->id => "{$p->kode_pegawai} - {$p->nama_pegawai}"
+            ])
+    )
+    ->rule(function ($livewire) {
+        return function (string $attribute, $value, $fail) use ($livewire) {
+
+            $produksiId = $livewire->ownerRecord->id ?? null;
+
+            $currentRecord = method_exists($livewire, 'getMountedTableActionRecord')
+                ? $livewire->getMountedTableActionRecord()
+                : null;
+
+            if (! $produksiId) return;
+
+            $query = \App\Models\RencanaPegawaiDempul::query()
+                ->where('id_produksi_dempul', $produksiId)
+                ->where('id_pegawai', $value);
+
+            if ($currentRecord) {
+                $query->where('id', '!=', $currentRecord->id);
+            }
+
+            if ($query->exists()) {
+                $fail('Pegawai ini sudah ditugaskan!');
+            }
+        };
+    })
             ]);
     }
 

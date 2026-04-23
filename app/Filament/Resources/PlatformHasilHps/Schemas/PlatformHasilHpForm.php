@@ -5,7 +5,7 @@ namespace App\Filament\Resources\PlatformHasilHps\Schemas;
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Hidden; 
+use Filament\Forms\Components\Hidden;
 use App\Models\BarangSetengahJadiHp;
 use App\Models\JenisBarang;
 use App\Models\Grade;
@@ -18,12 +18,12 @@ class PlatformHasilHpForm
     public static function configure(Schema $schema): Schema
     {
         // Fungsi pembantu untuk mengambil Rencana Kerja terakhir
-        $getLastRencana = fn($livewire) => 
-            $livewire->ownerRecord
-                ?->rencanaKerjaHp()
-                ->latest()
-                ->with('barangSetengahJadiHp')
-                ->first();
+        $getLastRencana = fn($livewire) =>
+        $livewire->ownerRecord
+            ?->rencanaKerjaHp()
+            ->latest()
+            ->with('barangSetengahJadiHp')
+            ->first();
 
         return $schema
             ->columns(2)
@@ -32,7 +32,7 @@ class PlatformHasilHpForm
                 // =========================================================================
                 // 1. FILTER GRADE (OPSIONAL) - TIDAK DEHYDRATED
                 // =========================================================================
-                Select::make('grade_id') 
+                Select::make('grade_id')
                     ->label('Filter Grade')
                     ->options(
                         Grade::with('kategoriBarang')
@@ -47,12 +47,12 @@ class PlatformHasilHpForm
                     ->reactive()
                     ->searchable()
                     ->placeholder('Semua Grade')
-                    ->dehydrated(false), 
+                    ->dehydrated(false),
 
                 // =========================================================================
                 // 2. FILTER JENIS BARANG (OPSIONAL) - TIDAK DEHYDRATED
                 // =========================================================================
-                Select::make('jenis_barang_id_filter') 
+                Select::make('jenis_barang_id_filter')
                     ->label('Filter Jenis Barang')
                     ->options(
                         JenisBarang::orderBy('nama_jenis_barang')
@@ -61,7 +61,7 @@ class PlatformHasilHpForm
                     ->reactive()
                     ->searchable()
                     ->placeholder('Semua Jenis Barang')
-                    ->dehydrated(false), 
+                    ->dehydrated(false),
 
                 // =========================================================================
                 // 3. BARANG SETENGAH JADI (SELECT UTAMA) - DEHYDRATED (Disimpan)
@@ -87,7 +87,7 @@ class PlatformHasilHpForm
 
                         // Batasi hasil jika tidak ada filter untuk performa
                         if (!$get('grade_id') && !$get('jenis_barang_id_filter')) {
-                             $query->limit(50);
+                            $query->limit(50);
                         }
 
                         return $query
@@ -107,7 +107,7 @@ class PlatformHasilHpForm
                     })
                     // LOGIKA DEFAULT VALUE DARI RENCANA KERJA TERAKHIR
                     ->afterStateHydrated(function (callable $set, callable $get, $livewire) use ($getLastRencana) {
-                         // Hanya set default jika field saat ini masih kosong
+                        // Hanya set default jika field saat ini masih kosong
                         if ($get('id_barang_setengah_jadi')) return;
 
                         $last = $getLastRencana($livewire);
@@ -116,7 +116,7 @@ class PlatformHasilHpForm
                             $set('id_barang_setengah_jadi', $last->barangSetengahJadiHp->id);
                         }
                     })
-                    ->columnSpanFull(), 
+                    ->columnSpanFull(),
 
                 // =========================================================================
                 // 4. FIELD LAIN
@@ -124,11 +124,13 @@ class PlatformHasilHpForm
                 Select::make('id_mesin')
                     ->label('Mesin Hotpress')
                     ->options(
-                        Mesin::whereHas('kategoriMesin', fn ($q) =>
+                        Mesin::whereHas(
+                            'kategoriMesin',
+                            fn($q) =>
                             $q->where('nama_kategori_mesin', 'HOTPRESS')
                         )
-                        ->orderBy('nama_mesin')
-                        ->pluck('nama_mesin', 'id')
+                            ->orderBy('nama_mesin')
+                            ->pluck('nama_mesin', 'id')
                     )
                     ->searchable()
                     ->required(),

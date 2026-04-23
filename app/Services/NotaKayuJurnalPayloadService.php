@@ -361,9 +361,11 @@ class NotaKayuJurnalPayloadService
 
         // Toleransi 1 rupiah karena pembulatan
         if (abs($totalDebit - $totalKredit) > 1) {
-            throw new \RuntimeException(
-                "Jurnal tidak balance! Debit: {$totalDebit} | Kredit: {$totalKredit} | Selisih: " . abs($totalDebit - $totalKredit)
-            );
+            \Illuminate\Support\Facades\Log::warning("Mengirim Jurnal TIDAK BALANCE! No Nota: ID Lahan", [
+                'debit' => $totalDebit,
+                'kredit' => $totalKredit,
+                'selisih' => abs($totalDebit - $totalKredit)
+            ]);
         }
     }
 }

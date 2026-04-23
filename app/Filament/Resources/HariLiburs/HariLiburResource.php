@@ -23,7 +23,7 @@ class HariLiburResource extends Resource
     //protected int $defaultPaginationPageSize = 50;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
-    protected static string|UnitEnum|null $navigationGroup = 'Pegawai & Kontrak';
+    protected static string|UnitEnum|null $navigationGroup = 'Kontrak';
     protected static ?string $navigationLabel = 'Hari Libur';
     protected static ?string $pluralModelLabel = 'Hari Libur';
     protected static ?string $modelLabel = 'Hari Libur';

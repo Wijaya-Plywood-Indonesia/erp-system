@@ -10,6 +10,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Actions\DeleteAction;
+use Illuminate\Database\Eloquent\Builder;
 
 class KayuPecahRotariesTable
 {
@@ -30,10 +31,12 @@ class KayuPecahRotariesTable
                     ->sortable([
                         'penggunaanLahan.lahan.kode_lahan'
                     ])
-                    ->searchable([
-                        'penggunaanLahan.lahan.kode_lahan',
-                        'penggunaanLahan.lahan.nama_lahan',
-                    ]),
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->whereHas('penggunaanLahan.lahan', function (Builder $q) use ($search) {
+                            $q->where('kode_lahan', 'like', "%{$search}%")
+                                ->orWhere('nama_lahan', 'like', "%{$search}%");
+                        });
+                    }),
                 TextColumn::make('ukuran')
                     ->label('ukuran')
                     ->numeric()

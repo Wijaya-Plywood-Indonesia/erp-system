@@ -14,10 +14,13 @@ use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -108,18 +111,90 @@ class NotaKayusTable
                     ->badge()
                     ->colors([
                         'secondary' => 'Belum Diperiksa',
-                        'success'   => fn($state) => str_contains($state, 'Sudah Diperiksa'),
-                        'warning'   => fn($state) => str_contains($state, 'Menunggu'),
-                        'danger'    => fn($state) => str_contains($state, 'Ditolak'),
+                        'success'   => fn($state) => str_contains($state ?? '', 'Sudah Diperiksa'),
+                        'warning'   => fn($state) => str_contains($state ?? '', 'Menunggu'),
+                        'danger'    => fn($state) => str_contains($state ?? '', 'Ditolak'),
                     ]),
 
+                TextColumn::make('status_pelunasan')
+                    ->label('Pelunasan')
+                    ->badge()
+                    ->colors([
+                        'danger' => 'Belum Lunas',
+                        // Tetap hijau jika teks mengandung kata 'Lunas' (termasuk yang ada jam/usernya)
+                        'success' => fn($state) => str_starts_with($state ?? '', 'Lunas'),
+                        'warning' => 'Sebagian',
+                    ])
+                    ->searchable(),
+
                 TextColumn::make('created_at')
-                    ->dateTime()
+                    ->dateTime('d/m/Y H:i')
+                    ->label('Tgl Nota')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
+
+                // --- ACTION: TANDAI LUNAS (UTAMA: UPDATE STOK, TEMPAT KAYU & JURNAL) ---
+                Action::make('set_lunas')
+                    ->label('Tandai Lunas')
+                    ->icon('heroicon-o-banknotes')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalHeading('Konfirmasi Pelunasan & Sinkronisasi Data')
+                    ->modalDescription('Menandai nota sebagai Lunas akan memicu: 1. Penambahan Stok Lahan, 2. Update Data Tempat Kayu, dan 3. Pengiriman Jurnal ke Akuntansi. Lanjutkan?')
+                    ->action(function ($record) {
+                        $user = Auth::user();
+                        $timestamp = now()->format('d/m/Y H:i');
+
+                        // 1. Update status pelunasan dengan Audit Trail (Siapa & Kapan)
+                        $record->status_pelunasan = "Lunas - {$timestamp} ({$user->name})";
+                        $record->save();
+
+                        // 2. TRIGGER PEMBARUAN STOK & TEMPAT KAYU:
+                        // Cek apakah log HPP sudah ada untuk mencegah data ganda (Double Entry)
+                        $sudahAdaLog = HppAverageLog::where('referensi_type', NotaKayu::class)
+                            ->where('referensi_id', $record->id)
+                            ->exists();
+
+                        if (! $sudahAdaLog) {
+                            try {
+                                // Service ini secara otomatis mengupdate:
+                                // - HppAverageLog (Riwayat)
+                                // - HppAverageSummaries (Saldo Stok)
+                                // - TempatKayu (Sinkronisasi Lahan untuk Produksi)
+                                app(HppAverageService::class)->prosesNotaKayuMasuk($record);
+
+                                Log::info('[NotaKayu] Stok & Tempat Kayu berhasil diperbarui', [
+                                    'nota_id' => $record->id,
+                                    'user' => $user->name
+                                ]);
+                            } catch (\Throwable $e) {
+                                Log::error('[NotaKayu] GAGAL update stok & tempat kayu', [
+                                    'nota_id' => $record->id,
+                                    'error'   => $e->getMessage(),
+                                ]);
+                            }
+                        }
+
+                        // 3. TRIGGER JURNAL: Sinkronisasi data ke Perusahaan 2
+                        self::jalankanSync($record);
+
+                        Notification::make()
+                            ->title('Pelunasan Berhasil')
+                            ->body("Stok dan Tempat Kayu telah diperbarui.")
+                            ->success()
+                            ->send();
+                    })
+                    ->visible(
+                        fn($record) =>
+                        // Tombol muncul hanya jika nota sudah diperiksa fisiknya 
+                        // dan statusnya masih 'Belum Lunas'
+                        str_contains($record->status ?? '', 'Sudah Diperiksa') &&
+                            $record->status_pelunasan === 'Belum Lunas'
+                    ),
+
                 // --- ACTION: CETAK NOTA ---
                 Action::make('print')
                     ->label('Cetak Nota')
@@ -156,42 +231,15 @@ class NotaKayusTable
                         return $batangSama && $kubikasiSama;
                     })
                     ->requiresConfirmation()
-                    ->action(function ($record, $livewire) {
+                    ->action(function ($record) {
                         $user = Auth::user();
-
-                        // Ubah status — ini trigger NotaKayuObserver::updated()
-                        // Observer akan memanggil HppAverageService::prosesNotaKayuMasuk()
                         $record->status = "Sudah Diperiksa oleh {$user->name}";
                         $record->save();
 
-                        // Fallback manual — jika observer tidak terpasang atau
-                        // withoutObservers() dipakai di tempat lain
-                        $sudahAdaLog = HppAverageLog::where('referensi_type', NotaKayu::class)
-                            ->where('referensi_id', $record->id)
-                            ->whereNull('grade')
-                            ->exists();
-
-                        if (! $sudahAdaLog) {
-                            try {
-                                app(HppAverageService::class)->prosesNotaKayuMasuk($record);
-                                Log::info('[HPP] Fallback manual berhasil dari action cek', [
-                                    'nota_id' => $record->id,
-                                ]);
-                            } catch (\Throwable $e) {
-                                Log::error('[HPP] Fallback manual GAGAL dari action cek', [
-                                    'nota_id' => $record->id,
-                                    'error'   => $e->getMessage(),
-                                ]);
-                            }
-                        }
-
-                        // Sync jurnal (terpisah dari HPP)
-                        self::jalankanSync($record);
-
                         Notification::make()
                             ->success()
-                            ->title('Berhasil Diperiksa')
-                            ->body('Data HPP Average diperbarui otomatis.')
+                            ->title('Verifikasi Fisik Berhasil')
+                            ->body('Status fisik telah diperbarui. Silakan lanjut ke proses Pelunasan untuk menambah stok.')
                             ->send();
                     }),
 
@@ -216,10 +264,44 @@ class NotaKayusTable
                     ->visible(fn() => Auth::user()->hasRole(['admin', 'super_admin'])),
             ])
             ->filters([
-                SelectFilter::make('seri')
-                    ->relationship('kayuMasuk', 'seri')
-                    ->searchable()
-                    ->label('Pilih Seri'),
+                Filter::make('seri_kayu')
+                    ->form([
+                        TextInput::make('nomor_seri')
+                            ->label('Cari Seri Kayu')
+                            ->placeholder('Contoh: 123')
+                            ->numeric(),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query->when(
+                            $data['nomor_seri'],
+                            fn(Builder $query, $seri): Builder => $query->whereHas(
+                                'kayuMasuk',
+                                fn(Builder $q) => $q->where('seri', 'like', "%{$seri}%")
+                            )
+                        );
+                    })
+                    ->indicateUsing(function (array $data): ?string {
+                        if (! $data['nomor_seri']) {
+                            return null;
+                        }
+                        return 'Seri Kayu: ' . $data['nomor_seri'];
+                    }),
+
+                SelectFilter::make('status_pelunasan')
+                    ->options([
+                        'Belum Lunas' => 'Belum Lunas',
+                        'Lunas' => 'Lunas',
+                        'Sebagian' => 'Sebagian',
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        if (empty($data['value'])) return $query;
+
+                        if ($data['value'] === 'Lunas') {
+                            return $query->where('status_pelunasan', 'LIKE', 'Lunas%');
+                        }
+
+                        return $query->where('status_pelunasan', $data['value']);
+                    })
             ]);
     }
 

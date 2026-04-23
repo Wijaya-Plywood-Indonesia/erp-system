@@ -23,22 +23,22 @@ class ModalSandingForm
             |--------------------------------------------------------------------------
             */
             Select::make('grade_id')
-    ->label('Grade')
-    ->default(fn(callable $get) => self::lastValue($get, 'grade_id'))
-    ->options(
-        Grade::with('kategoriBarang')
-            ->whereHas('kategoriBarang', function ($q) {
-                $q->whereIn('nama_kategori', ['PLATFORM', 'PLYWOOD']);
-            })
-            ->get()
-            ->mapWithKeys(fn($g) => [
-                $g->id => ($g->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
-                    . ' - ' . $g->nama_grade
-            ])
-    )
-    ->reactive()
-    ->searchable()
-    ->placeholder('Semua Grade'),
+                ->label('Grade')
+                ->default(fn(callable $get) => self::lastValue($get, 'grade_id'))
+                ->options(
+                    Grade::with('kategoriBarang')
+                        ->whereHas('kategoriBarang', function ($q) {
+                            $q->whereIn('nama_kategori', ['PLATFORM', 'PLYWOOD']);
+                        })
+                        ->get()
+                        ->mapWithKeys(fn($g) => [
+                            $g->id => ($g->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
+                                . ' - ' . $g->nama_grade
+                        ])
+                )
+                ->reactive()
+                ->searchable()
+                ->placeholder('Semua Grade'),
 
 
             /*
@@ -65,10 +65,10 @@ class ModalSandingForm
                 // OPTIONS saat create / filter
                 ->options(function (callable $get) {
                     $query = BarangSetengahJadiHp::query()
-    ->with(['ukuran', 'jenisBarang', 'grade.kategoriBarang'])
-    ->whereHas('grade.kategoriBarang', function ($q) {
-        $q->whereIn('nama_kategori', ['PLATFORM', 'PLYWOOD']);
-    });
+                        ->with(['ukuran', 'jenisBarang', 'grade.kategoriBarang'])
+                        ->whereHas('grade.kategoriBarang', function ($q) {
+                            $q->whereIn('nama_kategori', ['PLATFORM', 'PLYWOOD']);
+                        });
 
 
                     if ($get('grade_id')) {
@@ -105,7 +105,7 @@ class ModalSandingForm
 
                     if (!$b)
                         return $value; // fallback ID
-        
+
                     $kategori = $b->grade?->kategoriBarang?->nama_kategori ?? 'Kategori?';
                     $ukuran = $b->ukuran?->dimensi ?? 'Ukuran?';
                     $jenis = $b->jenisBarang?->nama_jenis_barang ?? 'Jenis?';
@@ -156,16 +156,16 @@ class ModalSandingForm
                 ->label('No Palet')
                 ->numeric()
                 ->required()
-                ->rule(function ($livewire, $component) {
-                    $parent = $livewire->getOwnerRecord(); // parent relation manager
-        
-                    // Ambil ID record yang sedang diedit dari state (Filament 4 way)
-                    $editingId = $component->getState()['id'] ?? null;
+                ->rule(function ($livewire) {
+
+                    $parent = $livewire->getOwnerRecord();
+
+                    $record = $livewire->getMountedTableActionRecord(); // record yang diedit
 
                     return Rule::unique('modal_sandings', 'no_palet')
                         ->where('id_produksi_sanding', $parent->id)
-                        ->ignore($editingId);
-                }),
+                        ->ignore($record?->id);
+                })
         ]);
     }
 

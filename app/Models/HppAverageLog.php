@@ -10,6 +10,7 @@ class HppAverageLog extends Model
 {
     protected $fillable = [
         // Migration hpp_average_logs tidak punya lahan_id
+        'id_lahan',
         'id_jenis_kayu',
         'grade',
         'panjang',
@@ -46,6 +47,11 @@ class HppAverageLog extends Model
         'hpp_average'          => 'decimal:4',
     ];
 
+    public function lahan(): BelongsTo
+    {
+        return $this->belongsTo(Lahan::class, 'id_lahan');
+    }
+
     public function jenisKayu(): BelongsTo
     {
         return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu');
@@ -55,6 +61,13 @@ class HppAverageLog extends Model
     {
         return $this->morphTo();
     }
+
+    // Atau tambahkan mapping morph map
+    protected $morphMap = [
+        'NotaKayu' => NotaKayu::class,
+        'PenggunaanLahanRotary' => PenggunaanLahanRotary::class,
+        // 'StokOpnameKayu' => OpnameStokKayu::class, // Hapus jika tidak diperlukan
+    ];
 
     public function scopeKombinasi($query, int $jenisKayuId, string $grade, int $panjang)
     {

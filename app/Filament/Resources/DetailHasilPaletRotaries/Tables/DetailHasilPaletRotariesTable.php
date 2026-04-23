@@ -2,13 +2,19 @@
 
 namespace App\Filament\Resources\DetailHasilPaletRotaries\Tables;
 
+use App\Filament\Resources\ProduksiRotaries\ProduksiRotaryResource;
+use App\Services\Akuntansi\RotaryJurnalService;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class DetailHasilPaletRotariesTable
 {
@@ -22,7 +28,7 @@ class DetailHasilPaletRotariesTable
                     ->dateTime()
                     ->sortable()
                     ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true), // <--- Hidden by default
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('lahan_display')
                     ->label('Lahan')
@@ -32,13 +38,29 @@ class DetailHasilPaletRotariesTable
                             ? "{$record->penggunaanLahan->lahan->kode_lahan} - {$record->penggunaanLahan->lahan->nama_lahan}"
                             : '-'
                     )
-                    ->sortable()
-                    ->searchable(),
+                    ->sortable(query: function ($query, string $direction) {
+                        $query->join('penggunaan_lahan_rotaries', 'detail_hasil_palet_rotaries.id_penggunaan_lahan', '=', 'penggunaan_lahan_rotaries.id')
+                            ->join('lahans', 'penggunaan_lahan_rotaries.id_lahan', '=', 'lahans.id')
+                            ->orderBy('lahans.kode_lahan', $direction)
+                            ->select('detail_hasil_palet_rotaries.*');
+                    })
+                    ->searchable(query: function ($query, string $search) {
+                        $query->whereHas('penggunaanLahan.lahan', function ($q) use ($search) {
+                            $q->where('kode_lahan', 'like', "%{$search}%")
+                                ->orWhere('nama_lahan', 'like', "%{$search}%");
+                        });
+                    }),
 
                 TextColumn::make('setoranPaletUkuran.dimensi')
                     ->label('Ukuran')
                     ->sortable()
-                    ->searchable(),
+                    ->searchable(query: function ($query, string $search) {
+                        $query->whereHas('setoranPaletUkuran', function ($q) use ($search) {
+                            $q->where('tebal', 'like', "%{$search}%")
+                                ->orWhere('lebar', 'like', "%{$search}%")
+                                ->orWhere('panjang', 'like', "%{$search}%");
+                        });
+                    }),
 
                 TextColumn::make('kw')
                     ->label('KW')
@@ -47,6 +69,7 @@ class DetailHasilPaletRotariesTable
 
                 TextColumn::make('palet')
                     ->label('Palet')
+                    ->getStateUsing(fn($record) => $record->kode_palet)
                     ->sortable()
                     ->searchable(),
 
@@ -73,6 +96,43 @@ class DetailHasilPaletRotariesTable
                 CreateAction::make(),
             ])
             ->recordActions([
+                Action::make('serah')
+                    ->label('Serah')
+                    ->icon('heroicon-o-paper-airplane')
+                    ->color('warning')
+                    ->tooltip('Serahkan palet ini')
+                    ->requiresConfirmation()
+                    ->modalHeading('Serahkan Palet?')
+                    ->modalDescription(fn($record) => "Palet {$record->palet} ({$record->total_lembar} lembar) akan diserahkan atas nama " . Auth::user()->name . ".")
+                    ->modalSubmitActionLabel('Ya, Serahkan')
+                    ->visible(
+                        fn($record) => !DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
+                            ->where('id_detail_hasil_palet_rotary', $record->id)
+                            ->where('tipe', 'rotary')
+                            ->exists()
+                    )
+                    ->action(function ($record) {
+                        // 1. Catat serah terima
+                        DB::table('detail_hasil_palet_rotary_serah_terima_pivot')->insert([
+                            'id_detail_hasil_palet_rotary' => $record->id,
+                            'diserahkan_oleh'              => Auth::user()->name,
+                            'diterima_oleh'                => '-',
+                            'tipe'                         => 'rotary',
+                            'status'                       => 'Serah Barang',
+                            'created_at'                   => now(),
+                            'updated_at'                   => now(),
+                        ]);
+
+
+                        // 2. Tambah stok veneer basah (HPP = 0, diisi saat validasi)
+                        $record->loadMissing(['ukuran', 'penggunaanLahan.lahan', 'produksi']);
+                        app(RotaryJurnalService::class)->serahPalet($record);
+
+                        Notification::make()
+                            ->title('Palet berhasil diserahkan')
+                            ->success()
+                            ->send();
+                    }),
                 EditAction::make(),
                 DeleteAction::make(),
             ])

@@ -74,7 +74,6 @@ class DetailHasilStikRelationManager extends RelationManager
 
                 TextInput::make('kw')
                     ->label('Kualitas (KW)')
-
                     ->required()
                     ->placeholder('Cth: 1, 2, 3 dll.'),
 
@@ -100,7 +99,7 @@ class DetailHasilStikRelationManager extends RelationManager
 
                 TextColumn::make('ukuran.nama_ukuran')
                     ->label('Ukuran')
-                    ->searchable()
+                    ->searchable(['panjang', 'lebar', 'tebal'])
                     ->sortable()
                     ->placeholder('N/A'),
 

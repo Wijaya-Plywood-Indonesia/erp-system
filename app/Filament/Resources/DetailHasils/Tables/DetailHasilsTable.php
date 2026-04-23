@@ -2,93 +2,85 @@
 
 namespace App\Filament\Resources\DetailHasils\Tables;
 
+use App\Models\DetailHasil;
+use App\Services\SerahHasilDryerService;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\SelectFilter;
-
-use App\Models\DetailHasil;
+use Filament\Notifications\Notification;
 
 class DetailHasilsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
-            ->query(DetailHasil::query())
+            ->query(
+                DetailHasil::query()->with(['stokMasuk', 'ukuran', 'jenisKayu', 'produksiDryer'])
+            )
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
                     ->searchable()
-                    ->sortable()
-                    ->weight('medium'),
+                    ->badge()
+                    ->color(fn($record) => $record->stokMasuk ? 'success' : 'gray')
+                    ->description(fn($record) => $record->stokMasuk
+                        ? 'Sudah Serah (' . $record->stokMasuk->tanggal_transaksi->format('d/m/Y') . ')'
+                        : 'Belum Serah'),
 
                 TextColumn::make('kw')
                     ->label('KW')
-                    ->searchable()
                     ->sortable(),
 
                 TextColumn::make('isi')
-                    ->label('Isi')
-                    ->searchable()
+                    ->label('Isi (Lbr)')
                     ->sortable(),
 
-                TextColumn::make('kayuMasuk.seri')
-                    ->label('Seri Kayu')
-                    ->placeholder('-')
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-
                 TextColumn::make('jenisKayu.nama_kayu')
-                    ->label('Jenis Kayu')
-                    ->placeholder('-')
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->label('Jenis Kayu'),
 
                 TextColumn::make('produksiDryer.tanggal_produksi')
-                    ->label('Tanggal Produksi')
-                    ->date('d M Y')
-                    ->sortable()
-                    ->searchable(),
-
-                TextColumn::make('produksiDryer.shift')
-                    ->label('Shift')
-                    ->badge()
-                    ->color(fn(string $state): string => match ($state) {
-                        'PAGI' => 'success',
-                        'MALAM' => 'warning',
-                        default => 'gray',
-                    })
-                    ->formatStateUsing(fn(string $state): string => $state),
-
-                TextColumn::make('created_at')
-                    ->label('Dibuat')
-                    ->dateTime('d M Y H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
-            ->filters([
-                SelectFilter::make('id_produksi_dryer')
-                    ->label('Produksi Dryer')
-                    ->relationship('produksiDryer', 'tanggal_produksi')
-                    ->getOptionLabelFromRecordUsing(
-                        fn($record) =>
-                        $record->tanggal_produksi->format('d M Y') . ' | ' . $record->shift
-                    )
-                    ->searchable()
-                    ->preload(),
-
-                SelectFilter::make('id_jenis_kayu')
-                    ->label('Jenis Kayu')
-                    ->relationship('jenisKayu', 'nama_kayu')
-                    ->searchable()
-                    ->preload(),
+                    ->label('Tgl Produksi')
+                    ->date('d/m/Y'),
             ])
             ->recordActions([
-                EditAction::make(),
+                Action::make('serahKeGudang')
+                    ->label('Serahkan Hasil')
+                    ->icon('heroicon-o-paper-airplane')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->modalHeading('Serahkan Palet ke Gudang Kering?')
+                    ->modalDescription('Setelah diserahkan, data ini akan masuk ke stok gudang dan saldo lembar/m3 akan bertambah.')
+                    ->modalSubmitActionLabel('Ya, Serahkan Sekarang')
+                    ->visible(fn($record) => is_null($record->stokMasuk))
+                    ->action(function (DetailHasil $record) {
+                        try {
+                            app(SerahHasilDryerService::class)->serahkan($record);
+
+                            Notification::make()
+                                ->title('Penyerahan Berhasil')
+                                ->body("Palet {$record->no_palet} telah dipindahkan ke stok gudang.")
+                                ->success()
+                                ->send();
+
+                        } catch (\Throwable $e) {
+                            Notification::make()
+                                ->title('Terjadi Kesalahan Sistem')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->persistent()
+                                ->send();
+                        }
+                    }),
+
+                EditAction::make()
+                    ->hidden(fn($record) => !is_null($record->stokMasuk)),
+
+                DeleteAction::make()
+                    ->hidden(fn($record) => !is_null($record->stokMasuk)),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

@@ -6,6 +6,7 @@ use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use App\Models\ProduksiKedi;
 use App\Models\DetailBongkarKedi;
+use App\Models\DetailMasukKedi; // Tambahkan import model Masuk
 use App\Models\DetailPegawaiKedi;
 
 class ProduksiKediSummaryWidget extends Widget
@@ -18,16 +19,13 @@ class ProduksiKediSummaryWidget extends Widget
 
     public array $summary = [];
 
-    /**
-     * LANGKAH 1: Listener untuk menangkap sinyal 'kedi'
-     */
     public function getListeners(): array
     {
         $id = $this->record?->id;
-
         if (!$id) return [];
 
         return [
+            // Mendengarkan sinyal update produksi kedi secara real-time
             "echo:production.kedi.{$id},.ProductionUpdated" => 'refreshSummary',
         ];
     }
@@ -38,59 +36,69 @@ class ProduksiKediSummaryWidget extends Widget
         $this->refreshSummary();
     }
 
-    /**
-     * LANGKAH 2: Fungsi refresh untuk update data real-time
-     */
     public function refreshSummary(): void
     {
         if (!$this->record) return;
 
         $produksiId = $this->record->id;
 
-        // 1. TOTAL HASIL PRODUKSI
-        $totalAll = DetailBongkarKedi::where('id_produksi_kedi', $produksiId)
+        // 1. STATISTIK GLOBAL (TOTAL LEMBAR)
+        $totalMasuk = DetailMasukKedi::where('id_produksi_kedi', $produksiId)
             ->sum(DB::raw('CAST(jumlah AS UNSIGNED)'));
 
-        // 2. TOTAL PEGAWAI UNIK
+        $totalBongkar = DetailBongkarKedi::where('id_produksi_kedi', $produksiId)
+            ->sum(DB::raw('CAST(jumlah AS UNSIGNED)'));
+
         $totalPegawai = DetailPegawaiKedi::where('id_produksi_kedi', $produksiId)
             ->distinct('id_pegawai')
             ->count('id_pegawai');
 
-        // Query Dasar
-        $baseQuery = DetailBongkarKedi::query()
-            ->where('id_produksi_kedi', $produksiId)
-            ->join('ukurans', 'ukurans.id', '=', 'detail_bongkar_kedi.id_ukuran')
-            ->selectRaw('
-                CONCAT(
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
-                    TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
-                ) AS ukuran
-            ');
+        // 2. QUERY DASAR UNTUK DIMENSI UKURAN (Agar format string seragam)
+        $selectUkuranRaw = '
+            CONCAT(
+                TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
+                TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
+                TRIM(TRAILING "0" FROM TRIM(TRAILING "." FROM CAST(ukurans.tebal AS CHAR)))
+            ) AS ukuran
+        ';
 
-        // 3. GLOBAL UKURAN + KW
-        $globalUkuranKw = (clone $baseQuery)
-            ->selectRaw('
-                detail_bongkar_kedi.kw,
-                SUM(CAST(detail_bongkar_kedi.jumlah AS UNSIGNED)) AS total
-            ')
-            ->groupBy('ukuran', 'detail_bongkar_kedi.kw')
+        // 3. LOGIKA RINGKASAN MASUK (DETAIL PER UKURAN)
+        $summaryMasuk = DetailMasukKedi::query()
+            ->where('id_produksi_kedi', $produksiId)
+            ->join('ukurans', 'ukurans.id', '=', 'detail_masuk_kedi.id_ukuran')
+            ->selectRaw($selectUkuranRaw)
+            ->selectRaw('SUM(CAST(detail_masuk_kedi.jumlah AS UNSIGNED)) AS total')
+            ->groupBy('ukuran')
             ->orderBy('ukuran')
-            ->orderBy('detail_bongkar_kedi.kw')
             ->get();
 
-        // 4. GLOBAL UKURAN (SEMUA KW)
-        $globalUkuran = (clone $baseQuery)
+        // 4. LOGIKA RINGKASAN BONGKAR (DETAIL PER UKURAN)
+        $summaryBongkar = DetailBongkarKedi::query()
+            ->where('id_produksi_kedi', $produksiId)
+            ->join('ukurans', 'ukurans.id', '=', 'detail_bongkar_kedi.id_ukuran')
+            ->selectRaw($selectUkuranRaw)
             ->selectRaw('SUM(CAST(detail_bongkar_kedi.jumlah AS UNSIGNED)) AS total')
             ->groupBy('ukuran')
             ->orderBy('ukuran')
             ->get();
 
+        // 5. BREAKDOWN MASUK PER KW (Jika ingin ditampilkan mendetail)
+        $masukByKw = DetailMasukKedi::query()
+            ->where('id_produksi_kedi', $produksiId)
+            ->join('ukurans', 'ukurans.id', '=', 'detail_masuk_kedi.id_ukuran')
+            ->selectRaw($selectUkuranRaw)
+            ->selectRaw('detail_masuk_kedi.kw, SUM(CAST(detail_masuk_kedi.jumlah AS UNSIGNED)) AS total')
+            ->groupBy('ukuran', 'detail_masuk_kedi.kw')
+            ->get();
+
         $this->summary = [
-            'totalAll'       => $totalAll,
+            'totalMasuk'     => $totalMasuk,
+            'totalBongkar'   => $totalBongkar,
             'totalPegawai'   => $totalPegawai,
-            'globalUkuranKw' => $globalUkuranKw,
-            'globalUkuran'   => $globalUkuran,
+            'summaryMasuk'   => $summaryMasuk,
+            'summaryBongkar' => $summaryBongkar,
+            'masukByKw'      => $masukByKw,
+            'selisih'        => $totalMasuk - $totalBongkar, // Kayu yang masih di dalam kedi/proses
         ];
     }
 }

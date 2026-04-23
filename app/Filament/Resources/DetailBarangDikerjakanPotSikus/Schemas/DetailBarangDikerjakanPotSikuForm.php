@@ -9,6 +9,7 @@ use Filament\Forms\Components\Select;
 use App\Models\JenisKayu;
 use App\Models\Ukuran;
 use Filament\Forms\Components\TextInput;
+use Filament\Resources\RelationManagers\RelationManager;
 
 class DetailBarangDikerjakanPotSikuForm
 {
@@ -39,15 +40,22 @@ class DetailBarangDikerjakanPotSikuForm
                     ->columnSpanFull(),
                 Select::make('id_ukuran')
                     ->label('Ukuran')
-                    ->searchable()
+                    // ... (kode lainnya tetap sama)
                     ->options(
-                        Ukuran::whereIn(
-                            'id',
-                            Target::where('id_mesin', 16)->pluck('id_ukuran')
-                        )
-                            ->get()
-                            ->pluck('dimensi', 'id')
+                        Ukuran::get()->mapWithKeys(fn($u) => [
+                            $u->id => $u->dimensi
+                        ])
                     )
+                    ->default(
+                        fn(RelationManager $livewire) =>
+                        optional(
+                            $livewire->getOwnerRecord()
+                                ->detailBarangDikerjakanPotSiku()
+                                ->latest()
+                                ->first()
+                        )->id_ukuran
+                    )
+                    ->searchable()
                     ->required(),
 
                 Select::make('id_jenis_kayu')

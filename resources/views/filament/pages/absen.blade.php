@@ -146,7 +146,7 @@
                                                 @elseif(str_contains($divisi, 'HOT PRESS'))
                                                 {{-- Penyesuaian Warna Hot Press: Indigo untuk Malam, Red untuk Pagi/Standar --}}
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold {{ $isMalam ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-500/30' : 'bg-red-100 text-red-800 ring-1 ring-red-500/30' }} uppercase">
-                                                    HOT PRESS {{ $isMalam ? 'MALAM' : '' }}
+                                                    HOT PRESS {{ $isMalam ? 'MALAM' : ($isPagi ? 'PAGI' : '') }}
                                                 </span>
                                                 @elseif(str_contains($divisi, 'POT SIKU'))
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800 ring-1 ring-purple-500/30 uppercase">POT SIKU</span>

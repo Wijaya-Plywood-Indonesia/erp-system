@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\ModalSanding;
 use App\Models\NotaKayu;
+use App\Models\PenggunaanLahanRotary;
 use App\Observers\ModalSandingObserver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
@@ -13,7 +14,11 @@ use App\Observers\RencanaKerjaHpObserver;
 use Filament\Support\Facades\FilamentView;
 use Illuminate\Support\Facades\Blade;
 use App\Models\ValidasiHasilRotary;
+use App\Observers\RotaryObserver;
 use App\Observers\ValidasiHasilRotaryObserver;
+use App\Models\ValidasiPressDryer;
+use App\Models\ValidasiStik;
+use App\Observers\ProductionValidationObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -35,6 +40,9 @@ class AppServiceProvider extends ServiceProvider
         RencanaKerjaHp::observe(RencanaKerjaHpObserver::class);
         ValidasiHasilRotary::observe(ValidasiHasilRotaryObserver::class);
         NotaKayu::observe(NotaKayuObserver::class);
+        PenggunaanLahanRotary::observe(RotaryObserver::class);
+        ValidasiPressDryer::observe(ProductionValidationObserver::class);
+        ValidasiStik::observe(ProductionValidationObserver::class);
         // PlatformHasilHp::observe(PlatformHasilHpObserver::class);
         // TriplekHasilHp::observe(TriplekHasilHpObserver::class);
 
@@ -156,7 +164,7 @@ class AppServiceProvider extends ServiceProvider
                                 jenis_kayu_id: localStorage.getItem('sticky_turus_jenis_' + config.parentId) || config.jenisDefault || '',
                                 panjang: localStorage.getItem('sticky_turus_panjang_' + config.parentId) || '130',
                                 grade: localStorage.getItem('sticky_turus_grade_' + config.parentId) || '1',
-                                kuantitas: '1',
+                                kuantitas: localStorage.getItem('sticky_turus_kuantitas_' + config.parentId) || '1',
                                 diameter: ''
                             },
                             

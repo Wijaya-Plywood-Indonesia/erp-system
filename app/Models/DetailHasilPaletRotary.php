@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class DetailHasilPaletRotary extends Model
 {
@@ -30,7 +31,7 @@ class DetailHasilPaletRotary extends Model
     {
         return $this->belongsTo(Ukuran::class, 'id_ukuran');
     }
-    
+
     public function penggunaanLahan()
     {
         return $this->belongsTo(PenggunaanLahanRotary::class, 'id_penggunaan_lahan', 'id');
@@ -72,5 +73,30 @@ class DetailHasilPaletRotary extends Model
                 \App\Events\ProductionUpdated::dispatch($model->id_produksi, 'rotary');
             }
         });
+    }
+
+    public function serahTerimas()
+    {
+        return $this->hasMany(
+            SerahTerimaPivot::class,
+            'id_detail_hasil_palet_rotary'
+        );
+    }
+
+    // Untuk Mapping Mesin Kebutuhan Nomor Palet
+    private static array $kodeMapping = [
+        'SPINDLESS' => 'SP',
+        'MERANTI'   => 'MR',
+        'SANJI'     => 'SJ',
+        'YUEQUN'    => 'YQ', // ✅ Fix ejaan: YUEQUN bukan Yequen
+    ];
+
+    public function getKodePaletAttribute(): string
+    {
+        $namaMesin = $this->produksi?->mesin?->nama_mesin;
+        $kode      = self::$kodeMapping[strtoupper($namaMesin ?? '')]
+            ?? strtoupper(substr($namaMesin ?? 'XX', 0, 2));
+
+        return "{$kode}-{$this->palet}";
     }
 }

@@ -50,8 +50,8 @@ class ProduksiRotaryResource extends Resource
     public static function getRelations(): array
     {
         return [
-                //
-
+            //
+            RelationManagers\SerahTerimaRelationManager::class,
             RelationManagers\DetailPegawaiRotaryRelationManager::class,
             RelationManagers\DetailLahanRotaryRelationManager::class,
             RelationManagers\DetailPaletRotaryRelationManager::class,
@@ -59,6 +59,7 @@ class ProduksiRotaryResource extends Resource
             RelationManagers\DetailgantiPisauRotaryRelationManager::class,
             RelationManagers\BahanPenolongRotaryRelationManager::class,
             RelationManagers\DetailValidasiHasilRotaryRelationManager::class,
+
 
         ];
     }

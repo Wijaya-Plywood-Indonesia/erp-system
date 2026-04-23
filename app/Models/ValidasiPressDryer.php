@@ -23,7 +23,7 @@ class ValidasiPressDryer extends Model
     {
         static::saved(function ($model) {
             // Hanya trigger kalau status = 'disetujui' (sesuaikan dengan nilai status di sistemmu)
-            if ($model->id_produksi_dryer && $model->status === 'disetujui') {
+            if ($model->id_produksi_dryer && $model->status === 'divalidasi') {
                 \App\Events\ProductionUpdated::dispatch(
                     $model->id_produksi_dryer,
                     'dryer'

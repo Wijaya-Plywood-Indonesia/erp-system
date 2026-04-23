@@ -3,7 +3,7 @@
 
     @php
         $summaries = $this->summaries;
-        $grouped   = $this->groupedSummaries;
+        $grouped   = $this->groupedSummaries; // grouped per tebal
     @endphp
 
     {{-- Filter bar --}}
@@ -26,6 +26,14 @@
             @endforeach
         </select>
 
+        <select wire:model.live="filterKw"
+            class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
+            <option value="">Semua KW</option>
+            @foreach($this->kwList as $kw)
+                <option value="{{ $kw }}">KW {{ $kw }}</option>
+            @endforeach
+        </select>
+
         <span class="ml-auto text-[10px] font-black uppercase tracking-widest text-gray-400">
             {{ $summaries->count() }} kombinasi · {{ number_format($this->totalLembar) }} lbr · Rp {{ number_format($this->totalNilaiStok, 0, ',', '.') }}
         </span>
@@ -39,7 +47,7 @@
             <div class="space-y-3">
                 <div class="flex items-center gap-3">
                     <span class="bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900 text-[10px] font-black px-4 py-1.5 rounded uppercase tracking-widest shadow-sm">
-                        Tebal {{ $tebal }} mm
+                        Tebal {{ (float)$tebal }} mm
                     </span>
                     @php
                         $labelJenis = $tebal <= 1 ? 'F/B (Face/Back)' : 'Core';
@@ -59,15 +67,12 @@
                                 <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800 w-12">No</th>
                                 <th class="px-6 py-3 border-b border-gray-100 dark:border-gray-800">Jenis Kayu</th>
                                 <th class="px-6 py-3 border-b border-gray-100 dark:border-gray-800">Ukuran (p×l×t)</th>
+                                <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">KW</th>
                                 <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">Stok Lembar</th>
                                 <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800">Kubikasi (m³)</th>
-                                <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800 bg-blue-50/30 dark:bg-blue-900/5">
-                                    Komponen HPP/m³
-                                    <div class="text-[9px] font-medium normal-case tracking-normal text-gray-500">kayu · pekerja · mesin · bahan</div>
-                                </th>
                                 <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800 bg-amber-50/50 dark:bg-amber-900/10">
                                     HPP Average
-                                    <div class="text-[9px] font-medium normal-case tracking-normal text-amber-500">per m³</div>
+                                    <div class="text-[9px] font-medium normal-case tracking-normal text-amber-500">Sebelum → Sekarang</div>
                                 </th>
                                 <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800">Nilai Stok</th>
                             </tr>
@@ -90,7 +95,13 @@
                                 </td>
 
                                 <td class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-                                    {{ $row->panjang }}×{{ $row->lebar }}×{{ $row->tebal }}
+                                    {{ (float)$row->panjang }}×{{ (float)$row->lebar }}×{{ (float)$row->tebal }}
+                                </td>
+
+                                <td class="px-6 py-4 text-center">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                        {{ $row->kw ?? '-' }}
+                                    </span>
                                 </td>
 
                                 <td class="px-6 py-4 text-center">
@@ -105,28 +116,24 @@
                                     <span class="text-xs text-gray-400 font-normal">m³</span>
                                 </td>
 
-                                {{-- Komponen HPP --}}
-                                <td class="px-6 py-4 text-right bg-blue-50/10 dark:bg-blue-900/5">
-                                    <div class="flex flex-col items-end gap-0.5 text-[10px] tabular-nums">
-                                        <span class="text-emerald-600 dark:text-emerald-400 font-semibold">
-                                            K: Rp {{ number_format($row->hpp_kayu_last ?? 0, 0, ',', '.') }}
-                                        </span>
-                                        <span class="text-blue-600 dark:text-blue-400 font-semibold">
-                                            P: Rp {{ number_format($row->hpp_pekerja_last ?? 0, 0, ',', '.') }}
-                                        </span>
-                                        <span class="text-purple-600 dark:text-purple-400 font-semibold">
-                                            M: Rp {{ number_format($row->hpp_mesin_last ?? 0, 0, ',', '.') }}
-                                        </span>
-                                        <span class="text-orange-600 dark:text-orange-400 font-semibold">
-                                            B: Rp {{ number_format($row->hpp_bahan_penolong_last ?? 0, 0, ',', '.') }}
-                                        </span>
-                                    </div>
-                                </td>
-
-                                {{-- HPP Average --}}
+                                {{-- HPP Average Sebelum → Sekarang --}}
+                                @php
+                                    $hppSekarang  = (float) ($row->hpp_average ?? 0);
+                                    $lastLog      = $row->lastLog;
+                                    $hppSebelum   = $lastLog ? (float) ($lastLog->stok_kubikasi_before > 0
+                                        ? ($lastLog->nilai_stok_before / $lastLog->stok_kubikasi_before)
+                                        : 0)
+                                        : 0;
+                                @endphp
                                 <td class="px-6 py-4 text-right bg-amber-50/20 dark:bg-amber-900/5">
+                                    @if($hppSebelum > 0)
+                                        <div class="flex items-center justify-end gap-1.5 font-mono text-xs tabular-nums mb-0.5">
+                                            <span class="text-gray-400 dark:text-gray-500">Rp {{ number_format($hppSebelum, 0, ',', '.') }}</span>
+                                            <span class="text-gray-300 dark:text-gray-700 text-[10px]">→</span>
+                                        </div>
+                                    @endif
                                     <span class="font-black text-amber-700 dark:text-amber-400 tabular-nums text-base">
-                                        Rp {{ number_format($row->hpp_average ?? 0, 0, ',', '.') }}
+                                        Rp {{ number_format($hppSekarang, 0, ',', '.') }}
                                     </span>
                                     <div class="text-[9px] text-gray-400 uppercase tracking-tight">/m³</div>
                                 </td>
@@ -139,22 +146,7 @@
                             </tr>
                             @endforeach
                         </tbody>
-                        <tfoot>
-                            <tr class="text-[10px] font-black border-t bg-gray-50 dark:bg-gray-900/60 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 uppercase tracking-widest">
-                                <td colspan="3" class="px-6 py-3 text-gray-500">Subtotal tebal {{ $tebal }} mm</td>
-                                <td class="px-6 py-3 text-center tabular-nums text-gray-700 dark:text-gray-300">
-                                    {{ number_format($rows->sum('stok_lembar')) }} lbr
-                                </td>
-                                <td class="px-6 py-3 text-right tabular-nums text-blue-600 dark:text-blue-400">
-                                    {{ number_format($rows->sum('stok_kubikasi'), 4) }} m³
-                                </td>
-                                <td class="px-6 py-3 bg-blue-50/10 dark:bg-blue-900/5"></td>
-                                <td class="px-6 py-3 bg-amber-50/20 dark:bg-amber-900/5"></td>
-                                <td class="px-6 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
-                                    Rp {{ number_format($rows->sum('nilai_stok'), 0, ',', '.') }}
-                                </td>
-                            </tr>
-                        </tfoot>
+
                     </table>
                 </div>
             </div>

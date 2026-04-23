@@ -29,7 +29,7 @@ class PegawaiGrajiTripleksTable
                     ->badge()
                     ->searchable(
                         query: fn($query, $search) => $query->whereHas(
-                            'pegawai',
+                            'pegawaiGrajiTriplek',
                             fn($q) => $q
                                 ->where('nama_pegawai', 'like', "%{$search}%")
                                 ->orWhere('kode_pegawai', 'like', "%{$search}%")

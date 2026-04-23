@@ -4,6 +4,7 @@ namespace App\Filament\Resources\HargaKayus\Schemas;
 
 use App\Models\HargaKayu;
 use App\Models\JenisKayu;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -81,12 +82,13 @@ class HargaKayuForm
                                 $fail('Range diameter ini bertumpukan dengan data harga yang sudah ada.');
                             }
                         };
-                    })
-                ,
+                    }),
                 TextInput::make('harga_beli')
                     ->label('Harga Beli Per m³')
-                    ->required()
-                    //    ->formatStateUsing(fn($state) => 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->numeric(),
+
+                TextInput::make('harga_baru')
+                    ->label('Harga Baru')
                     ->numeric(),
 
                 Select::make('grade')
@@ -116,6 +118,21 @@ class HargaKayuForm
                     // ->default(4)
                     ->placeholder('Pilih Jenis Kayu')
                     ->required(),
+
+                TextInput::make('updated_by')
+                    ->label('Diperbarui Oleh')
+                    // Simpan ID User yang sedang login ke database
+                    ->default(fn() => Filament::auth()->id())
+                    // Tampilkan Nama Role + Nama User sebagai label bantuan (Visual Saja)
+                    ->formatStateUsing(function () {
+                        $user = Filament::auth()->user();
+                        if (!$user) return 'Tidak diketahui';
+
+                        // Langsung mengambil nama user agar lebih mudah dicek
+                        return $user->name;
+                    })
+                    ->disabled()
+                    ->dehydrated(),
             ]);
     }
 }

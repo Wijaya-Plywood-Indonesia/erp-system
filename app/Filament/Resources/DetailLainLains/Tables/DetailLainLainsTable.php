@@ -18,7 +18,7 @@ class DetailLainLainsTable
             ->defaultSort('tanggal', 'desc')
             ->columns([
                 TextColumn::make('tanggal')
-                    ->label('Tanggal Repair')
+                    ->label('Tanggal ')
                     ->formatStateUsing(function ($state) {
                         if (!$state)
                             return '-';

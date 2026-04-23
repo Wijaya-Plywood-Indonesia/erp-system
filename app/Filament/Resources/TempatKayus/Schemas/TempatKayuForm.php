@@ -16,9 +16,12 @@ class TempatKayuForm
                 TextInput::make('jumlah_batang')
                     ->required()
                     ->numeric(),
-                TextInput::make('poin')
+                TextInput::make('kubikasi')
+                    ->label('Kubikasi (m³)')
                     ->required()
-                    ->numeric(),
+                    ->numeric()
+                    ->placeholder('0.0000'),
+
                 Select::make('id_kayu_masuk')
                     ->label('Kayu Masuk')
                     ->options(function () {

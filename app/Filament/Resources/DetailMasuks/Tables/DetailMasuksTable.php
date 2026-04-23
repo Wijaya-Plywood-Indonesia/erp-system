@@ -3,46 +3,62 @@
 namespace App\Filament\Resources\DetailMasuks\Tables;
 
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
-use Filament\Tables\Table;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
 
 class DetailMasuksTable
 {
-    public static function configure(Table $table): Table
-    {
+    public static function configure(
+        Table $table,
+        bool $adaPaletDiterima = false,
+        string $tipe = 'dryer' // ✅ parameter tipe (untuk keperluan masa depan)
+    ): Table {
         return $table
+            ->modifyQueryUsing(fn($query) => $query->with([
+                'jenisKayu',
+                'ukuran',
+                'detailPaletRotary.produksi.mesin',
+            ]))
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
-                    ->searchable(),
+                    ->badge()
+                    ->color(
+                        fn($record) =>
+                        $record->getRawOriginal('no_palet') < 0 ? 'warning' : 'primary'
+                    )
+                    ->searchable(false),
 
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
                     ->searchable()
                     ->placeholder('N/A'),
 
-                TextColumn::make('Ukuran.nama_ukuran')
+                TextColumn::make('ukuran_display')
                     ->label('Ukuran')
-                    ->searchable(false)
-                    ->placeholder('Ukuran'),
+                    ->getStateUsing(fn($record) => $record->ukuran?->dimensi ?? '-')
+                    ->searchable(query: function ($query, string $search) {
+                        $query->whereHas('ukuran', function ($q) use ($search) {
+                            $q->where('panjang', 'like', "%{$search}%")
+                                ->orWhere('lebar', 'like', "%{$search}%")
+                                ->orWhere('tebal', 'like', "%{$search}%");
+                        });
+                    }),
 
                 TextColumn::make('kw')
                     ->label('Kualitas (KW)')
                     ->searchable(),
 
                 TextColumn::make('isi')
-                    ->label('Isi'),
-
+                    ->label('Isi')
+                    ->numeric(),
             ])
-            ->filters([
-                // Tempat filter jika Anda membutuhkannya
-            ])
+            ->filters([])
             ->headerActions([
-                // Create Action — HILANG jika status sudah divalidasi
                 CreateAction::make()
                     ->hidden(
                         fn($livewire) =>
@@ -50,14 +66,11 @@ class DetailMasuksTable
                     ),
             ])
             ->recordActions([
-                // Edit Action — HILANG jika status sudah divalidasi
                 EditAction::make()
                     ->hidden(
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
-
-                // Delete Action — HILANG jika status sudah divalidasi
                 DeleteAction::make()
                     ->hidden(
                         fn($livewire) =>

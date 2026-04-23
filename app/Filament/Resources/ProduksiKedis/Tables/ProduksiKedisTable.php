@@ -8,6 +8,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
@@ -16,7 +17,6 @@ use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Table;
 use Filament\Tables\Filters\Filter;
 use Illuminate\Database\Eloquent\Builder;
-use Filament\Tables\Grouping\Group;
 
 class ProduksiKedisTable
 {
@@ -28,17 +28,26 @@ class ProduksiKedisTable
                     ->date()
                     ->sortable(),
 
+                // Menggunakan Badge agar status 'Masuk' & 'Bongkar' kontras
                 TextColumn::make('status')
                     ->label('Status')
-                    ->formatStateUsing(fn ($state) => ucfirst($state)),
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'masuk' => 'success',
+                        'bongkar' => 'info',
+                        default => 'gray',
+                    })
+                    ->formatStateUsing(fn($state) => ucfirst($state)),
 
                 TextColumn::make('kendala')
                     ->label('Kendala Produksi')
-                    ->getStateUsing(fn ($record) =>
+                    ->getStateUsing(
+                        fn($record) =>
                         blank($record->getRawOriginal('kendala'))
                             ? 'Tidak ada kendala'
                             : $record->getRawOriginal('kendala')
-                    ),
+                    )
+                    ->wrap(),
 
                 BadgeColumn::make('validasiTerakhir.status')
                     ->label('Validasi')
@@ -61,10 +70,9 @@ class ProduksiKedisTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-
             ->defaultSort('tanggal', 'desc')
-
             ->filters([
+                // Filter tanggal dipertahankan untuk pencarian spesifik
                 Filter::make('tanggal')
                     ->form([
                         \Filament\Forms\Components\DatePicker::make('from')
@@ -76,29 +84,27 @@ class ProduksiKedisTable
                         return $query
                             ->when(
                                 $data['from'],
-                                fn (Builder $q, $date) =>
-                                    $q->whereDate('tanggal', '>=', $date)
+                                fn (Builder $q, $date) => $q->whereDate('tanggal', '>=', $date)
                             )
                             ->when(
                                 $data['until'],
-                                fn (Builder $q, $date) =>
-                                    $q->whereDate('tanggal', '<=', $date)
+                                fn (Builder $q, $date) => $q->whereDate('tanggal', '<=', $date)
                             );
                     }),
             ])
-
             ->recordActions([
                 Action::make('kelola_kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn ($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'warning')
+                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Kendala')
                             ->required()
                             ->rows(4),
                     ])
-                    ->mountUsing(fn ($form, $record) =>
+                    ->mountUsing(
+                        fn($form, $record) =>
                         $form->fill(['kendala' => $record->kendala ?? ''])
                     )
                     ->action(function (array $data, $record): void {
@@ -111,20 +117,20 @@ class ProduksiKedisTable
                             ->success()
                             ->send();
                     })
-                    ->modalHeading(fn ($record) =>
+                    ->modalHeading(
+                        fn($record) =>
                         $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala'
                     )
                     ->modalSubmitActionLabel('Simpan'),
 
                 EditAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
                 ViewAction::make(),
 
                 DeleteAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->before(function ($record) {
-
                         $hasRelation =
                             $record->detailMasukKedi()->exists()
                             || $record->detailBongkarKedi()->exists()
@@ -134,7 +140,7 @@ class ProduksiKedisTable
                         if ($hasRelation) {
                             Notification::make()
                                 ->title('Data tidak dapat dihapus')
-                                ->body('Produksi Kedi ini masih memiliki data didalamnya yang terkait.')
+                                ->body('Produksi Kedi ini masih memiliki data terkait.')
                                 ->danger()
                                 ->send();
 
@@ -142,26 +148,17 @@ class ProduksiKedisTable
                         }
                     }),
             ])
-
-            ->groups([
-                Group::make('status')
-                    ->label('Status')
-                    ->collapsible()
-                    ->getTitleFromRecordUsing(fn ($record) => ucfirst($record->status)),
-            ])
-            ->defaultGroup('status')
-            ->groupingSettingsHidden()
-
+            // Grouping dihapus agar tidak bentrok dengan Tabs
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->visible(fn ($records) =>
+                        ->visible(
+                            fn($records) =>
                             $records->every(
-                                fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi'
+                                fn($r) => $r->validasiTerakhir?->status !== 'divalidasi'
                             )
                         )
                         ->before(function ($records) {
-
                             foreach ($records as $record) {
                                 $hasRelation =
                                     $record->detailMasukKedi()->exists()
@@ -171,11 +168,9 @@ class ProduksiKedisTable
 
                                 if ($hasRelation) {
                                     Notification::make()
-                                        ->title('Gagal menghapus data terpilih')
-                                        ->body('Salah satu Produksi Kedi masih memiliki relasi.')
+                                        ->title('Gagal menghapus data')
                                         ->danger()
                                         ->send();
-
                                     throw new Halt();
                                 }
                             }

@@ -13,6 +13,7 @@ use App\Filament\Resources\ProduksiKedis\RelationManagers\YesRelationManager;
 use App\Filament\Resources\ProduksiKedis\Schemas\ProduksiKediForm;
 use App\Filament\Resources\ProduksiKedis\Schemas\ProduksiKediInfolist;
 use App\Filament\Resources\ProduksiKedis\Tables\ProduksiKedisTable;
+use App\Filament\Resources\ProduksiRotaries\RelationManagers\SerahTerimaRelationManager;
 use App\Models\DetailPegawaiKedi;
 use App\Models\ProduksiKedi;
 use BackedEnum;

@@ -82,6 +82,7 @@ Route::middleware(['web', 'auth'])->group(function () {
             'items.*.panjang' => 'required|numeric',
             'items.*.grade' => 'required',
             'items.*.diameter' => 'required|numeric',
+            'items.*.kuantitas'     => 'required|numeric|min:1', // ← tambah ini
         ]);
 
         if ($validator->fails()) {
@@ -100,7 +101,7 @@ Route::middleware(['web', 'auth'])->group(function () {
                     'panjang' => $item['panjang'],
                     'grade' => $item['grade'],
                     'diameter' => $item['diameter'],
-                    'kuantitas' => 1,
+                    'kuantitas' => $item['kuantitas'],
                     'keterangan' => 'Offline Input',
                 ]);
             }

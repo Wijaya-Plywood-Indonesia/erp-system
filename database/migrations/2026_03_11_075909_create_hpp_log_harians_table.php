@@ -47,6 +47,6 @@ return new class extends Migration {
      */
     public function down(): void
     {
-        Schema::dropIfExists('hpp_log_harians');
+        Schema::dropIfExists('hpp_log_veneer_kering');
     }
 };

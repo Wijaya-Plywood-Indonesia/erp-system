@@ -18,22 +18,37 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Grouping\Group;
 use Illuminate\Support\Collection;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Auth; // Tambahkan ini
 
 class DetailKayuMasuksTable
 {
+    /**
+     * Role yang memiliki hak akses bypass LOCK
+     */
+    private const ROLE_ADMIN = ['super_admin', 'Super Admin'];
+
     public static function configure(Table $table, $livewire = null): Table
     {
         // 1. LOGIKA LOCK: Cek status Nota melalui Owner Record
         $isLocked = false;
         if ($livewire && method_exists($livewire, 'getOwnerRecord')) {
             $ownerRecord = $livewire->getOwnerRecord();
-
-            // Gunakan relasi notakayu (pastikan huruf kecil/besarnya sama dengan di model)
             $nota = $ownerRecord->notakayu;
-
-            // Jika nota adalah Collection (hasMany), Anda harus menggunakan ->first()
-            // Tapi jika sudah diubah ke hasOne di model, kode ini sudah benar:
             $isLocked = $nota && $nota->status !== 'Belum Diperiksa';
+        }
+
+        // 2. LOGIKA ADMIN: Cek apakah user yang login adalah admin
+        $isAdmin = Auth::user()?->hasAnyRole(self::ROLE_ADMIN) ?? false;
+
+        /**
+         * 3. LOGIKA IZIN AKSI (BYPASS): 
+         * Tombol muncul jika (TIDAK TERKUNCI) ATAU (USER ADALAH ADMIN)
+         */
+        $canPerformAction = !$isLocked || $isAdmin;
+
+        $ownerRecord = null;
+        if ($livewire && method_exists($livewire, 'getOwnerRecord')) {
+            $ownerRecord = $livewire->getOwnerRecord();
         }
 
         return $table
@@ -69,7 +84,11 @@ class DetailKayuMasuksTable
                         };
                         return "{$namaKayu} {$panjang} ({$grade})";
                     })
-                    ->searchable()
+                    ->searchable(query: function ($query, string $search) {
+                        $query->whereHas('jenisKayu', fn($q) => $q->where('nama_kayu', 'like', "%{$search}%"))
+                            ->orWhere('panjang', 'like', "%{$search}%")
+                            ->orWhere('grade', 'like', "%{$search}%");
+                    })
                     ->sortable(),
 
                 TextColumn::make('diameter')
@@ -143,15 +162,12 @@ class DetailKayuMasuksTable
             ->groupingSettingsHidden()
             ->defaultSort('created_at', 'desc')
             ->headerActions([
-                // 1. CREATE ONLINE
                 CreateAction::make()
-                    ->visible(!$isLocked),
+                    ->visible($canPerformAction), // Bypass Lock jika Admin
 
-                // 2. TOTAL KUBIKASI (Pindahkan logika penghitungan ke sini)
                 Action::make('total_kubikasi')
                     ->label(function () use ($ownerRecord) {
-                        if (!$ownerRecord)
-                            return 'Total: 0 m³';
+                        if (!$ownerRecord) return 'Total: 0 m³';
                         $total = DetailKayuMasuk::where('id_kayu_masuk', $ownerRecord->id)
                             ->get()
                             ->sum(fn($item) => (($item->panjang ?? 0) * ($item->diameter ?? 0) * ($item->diameter ?? 0) * ($item->jumlah_batang ?? 0) * 0.785) / 1000000);
@@ -161,14 +177,13 @@ class DetailKayuMasuksTable
                     ->icon('heroicon-o-cube')
                     ->color('gray'),
 
-                // 3. INPUT MODE OFFLINE
                 Action::make('offlineInput')
                     ->label('Input Mode Offline')
                     ->icon('heroicon-m-signal-slash')
                     ->color('warning')
                     ->modalHeading('Input Kayu (Mode Offline)')
                     ->modalWidth('2xl')
-                    ->visible(!$isLocked)
+                    ->visible($canPerformAction) // Bypass Lock jika Admin
                     ->modalContent(fn() => view('filament.components.offline-detail-kayu-modal', [
                         'parentId' => $ownerRecord?->id,
                         'optionsLahan' => Lahan::all()->mapWithKeys(fn($l) => [$l->id => "{$l->kode_lahan} - {$l->nama_lahan}"]),
@@ -184,7 +199,7 @@ class DetailKayuMasuksTable
                     ->color('danger')
                     ->button()
                     ->size('sm')
-                    ->visible(!$isLocked)
+                    ->visible($canPerformAction) // Bypass Lock jika Admin
                     ->action(fn(DetailKayuMasuk $record) => $record->jumlah_batang > 0 ? $record->decrement('jumlah_batang') : null),
 
                 Action::make('tambahBatang')
@@ -193,11 +208,11 @@ class DetailKayuMasuksTable
                     ->color('success')
                     ->button()
                     ->size('sm')
-                    ->visible(!$isLocked)
+                    ->visible($canPerformAction) // Bypass Lock jika Admin
                     ->action(fn(DetailKayuMasuk $record) => $record->increment('jumlah_batang')),
 
-                EditAction::make()->visible(!$isLocked),
-                DeleteAction::make()->visible(!$isLocked),
+                EditAction::make()->visible($canPerformAction), // Bypass Lock jika Admin
+                DeleteAction::make()->visible($canPerformAction), // Bypass Lock jika Admin
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -219,7 +234,24 @@ class DetailKayuMasuksTable
                         ])
                         ->action(fn(array $data, Collection $records) => $records->each->update(['panjang' => $data['panjang']]))
                         ->deselectRecordsAfterCompletion(),
-                ])->visible(!$isLocked),
+
+                    BulkAction::make('update_jenis_kayu')
+                        ->label('Update Jenis Kayu')
+                        ->icon('heroicon-o-tag')
+                        ->schema([
+                            Select::make('jenis_kayu_id')
+                                ->label('Jenis Kayu Baru')
+                                ->options(JenisKayu::pluck('nama_kayu', 'id'))
+                                ->searchable()
+                                ->required(),
+                        ])
+                        ->action(function (array $data, Collection $records) {
+                            $records->each->update([
+                                'jenis_kayu_id' => $data['jenis_kayu_id'],
+                            ]);
+                        })
+                        ->deselectRecordsAfterCompletion(),
+                ])->visible($canPerformAction), // Bypass Lock jika Admin untuk semua Bulk Action
             ]);
     }
 }

@@ -16,6 +16,7 @@ class HppVeneerBasahLog extends Model
         'panjang',
         'lebar',
         'tebal',
+        'kw',
         'tanggal',
         'tipe_transaksi',
         'keterangan',
@@ -39,6 +40,7 @@ class HppVeneerBasahLog extends Model
 
     protected $casts = [
         'tanggal'              => 'date',
+        'total_lembar'         => 'integer',
         'total_kubikasi'       => 'float',
         'hpp_kayu'             => 'float',
         'hpp_pekerja'          => 'float',

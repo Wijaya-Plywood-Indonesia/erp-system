@@ -24,7 +24,7 @@ class JurnalUmumResource extends Resource
     protected static ?string $navigationLabel = 'Jurnal Umum--view';
     protected static ?string $pluralModelLabel = 'Jurnal Umum--view';
     protected static ?string $modelLabel = 'Jurnal Umum--view';
-    protected static bool $shouldRegisterNavigation = true;
+    protected static bool $shouldRegisterNavigation = false;
 
     public static function form(Schema $schema): Schema
     {

@@ -53,7 +53,14 @@ class TriplekHasilHpsTable
                  */
                 TextColumn::make('barangSetengahJadi.ukuran.nama_ukuran')
                     ->label('Ukuran')
-                    ->searchable()
+                    ->searchable(query: function ($query, string $search) {
+                        return $query->whereHas('barangSetengahJadi.ukuran', function ($q) use ($search) {
+                            $q->whereRaw(
+                                "CONCAT(panjang, 'mm x ', lebar, 'mm x ', tebal, 'mm') LIKE ?",
+                                ["%{$search}%"]
+                            );
+                        });
+                    })
                     ->placeholder('-'),
 
                 /*
@@ -65,19 +72,22 @@ class TriplekHasilHpsTable
 
             ->headerActions([
                 CreateAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
 
             ->recordActions([
                 EditAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
 
                 DeleteAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
@@ -85,7 +95,8 @@ class TriplekHasilHpsTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(fn ($livewire) =>
+                        ->hidden(
+                            fn($livewire) =>
                             $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                         ),
                 ]),

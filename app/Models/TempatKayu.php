@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+
 class TempatKayu extends Model
 {
     //
@@ -20,7 +21,9 @@ class TempatKayu extends Model
         'poin',
         'id_kayu_masuk',
         'id_lahan',
-        'id_turun_kayu'
+        'diserahkan_oleh',
+        'diterima_oleh',
+        'status'
     ];
 
     public function kayuMasuk(): BelongsTo
@@ -38,10 +41,10 @@ class TempatKayu extends Model
         return $this->belongsTo(Lahan::class, 'id_lahan');
     }
 
-    public function turunKayu(): BelongsTo
-    {
-        return $this->belongsTo(TurunKayu::class, 'id_turun_kayu');
-    }
+    // public function turunKayu(): BelongsTo
+    // {
+    //     return $this->belongsTo(TurunKayu::class, 'id_turun_kayu');
+    // }
 
     // Detail kayu
     protected function detailKayu(): Attribute
@@ -63,24 +66,10 @@ class TempatKayu extends Model
     {
         return Attribute::make(
             get: function () {
-                $detail = $this->detailKayu; // Panggil helper
-    
-                // Cek data
-                if (!$detail || !$this->jumlah_batang) {
-                    return 0;
-                }
+                $stok = \App\Models\HppAverageSummarie::where('id_lahan', $this->id_lahan)
+                    ->first();
 
-                // Asumsi 'diameter' dalam CM dan 'panjang' dalam M
-                $diameter_cm = $detail->diameter ?? 0;
-                $panjang_m = $detail->panjang ?? 0; // Pastikan 'panjang' ada di 'detailTurunKayu'
-                $jumlah_batang = $this->jumlah_batang;
-
-                // --- Hitung Volume ---
-                $diameter_m = $diameter_cm / 100;
-                $volume_satu_batang = 0.7854 * pow($diameter_m, 2) * $panjang_m;
-                $total_kubikasi = $volume_satu_batang * $jumlah_batang;
-
-                return round($total_kubikasi, 2);
+                return $stok?->stok_kubikasi ?? 0;
             }
         );
     }
@@ -92,11 +81,10 @@ class TempatKayu extends Model
                 $kode_lahan = $this->lahan?->kode_lahan ?? '[Tanpa Lahan]';
 
                 $kubikasi = $this->kubikasi; // Ini akan memanggil kubikasi()
-    
+
                 // Format label yang akan muncul di tabel dan dropdown
                 return "{$kode_lahan} | {$this->jumlah_batang} btg | {$kubikasi} cm³";
             }
         );
     }
-
 }

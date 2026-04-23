@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\ValidasiHasilRotary;
+use App\Models\ProduksiRotary;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -27,7 +28,7 @@ class ValidasiHasilRotaryObserver
     {
         try {
             $service  = app(\App\Services\Akuntansi\RotaryJurnalService::class);
-            $produksi = \App\Models\ProduksiRotary::find($idProduksi);
+            $produksi = ProduksiRotary::find($idProduksi);
 
             if (!$produksi) {
                 Log::warning("ValidasiObserver: id_produksi={$idProduksi} tidak ditemukan.");
@@ -52,48 +53,64 @@ class ValidasiHasilRotaryObserver
                 'is_balance'   => $payload['jurnal_header']['is_balance'],
             ]);
 
-            // ── Kirim ke web akuntansi ────────────────────────────────────────
-            $this->sendToAkuntansi($payload, $tanggal);
+            // ── Ambil produksiList dengan eager load lengkap ──────────────────
+            // (buildJurnalPayload sudah load ini, tapi kita butuh untuk tambahStok)
+            $produksiList = ProduksiRotary::with([
+                'mesin',
+                'detailValidasiHasilRotary',
+                'detailPegawaiRotary.pegawai',
+                'detailLahanRotary.lahan',
+                'detailLahanRotary.jenisKayu',
+                'detailPaletRotary.ukuran',
+                'detailPaletRotary.penggunaanLahan.lahan',
+                'bahanPenolongRotary.bahanPenolong',
+                'detailKayuPecah.penggunaanLahan',
+            ])->whereDate('tgl_produksi', $tanggal)->get();
 
+            // ── Hitung HPP veneer basah langsung (tidak bergantung jurnal) ──────
+            $service->hitungHppVeneerBasah($produksiList, $tanggal);
+
+            // ── Kirim ke web akuntansi ────────────────────────────────────────
+            $this->sendToAkuntansi($payload, $tanggal, $produksiList, $service);
         } catch (\Throwable $e) {
             Log::error("ValidasiObserver: Error saat trigger jurnal check: " . $e->getMessage());
             Log::error($e->getTraceAsString());
         }
     }
 
-    private function sendToAkuntansi(array $payload, string $tanggal): void
+    private function sendToAkuntansi(array $payload, string $tanggal, $produksiList, $service): void
     {
-        $url    = rtrim(config('services.akuntansi.url', 'http://192.168.1.2:5000'), '/')
-                  . '/api/jurnal/rotary/create';
+        $url    = rtrim(config('services.akuntansi.url', 'http://192.168.1.23:5000'), '/')
+            . '/api/jurnal/rotary/create';
         $apiKey = config('services.akuntansi.key', '');
 
         try {
-            /** @var \Illuminate\Http\Client\Response $response */
             $response = Http::timeout(30)
-                ->withoutVerifying()        // lokal: skip SSL
+                ->withoutVerifying()
                 ->withHeaders([
-                    'X-API-KEY'    => $apiKey,
-                    'Accept'       => 'application/json',
+                    'X-API-KEY' => $apiKey,
+                    'Accept'    => 'application/json',
                 ])
                 ->post($url, $payload);
 
             if ($response->successful()) {
                 Log::info("ValidasiObserver: Jurnal berhasil dikirim ke akuntansi (tanggal={$tanggal}).", [
-                    'jurnal'        => $response->json('data.jurnal'),
-                    'jumlah_header' => $response->json('data.jumlah_header'),
-                    'jumlah_items'  => $response->json('data.jumlah_items'),
+                    // 'jurnal'        => $response->json('data.jurnal'),
+                    // 'jumlah_header' => $response->json('data.jumlah_header'),
+                    // 'jumlah_items'  => $response->json('data.jumlah_items'),
                 ]);
 
+                // ── Kurangi stok HPP kayu setelah jurnal berhasil ────────────────
+                // NB: tambahStokVeneerBasah() dipanggil dari modul serah terima
+                $service->kurangiStokHpp($produksiList, $tanggal);
             } elseif ($response->status() === 409) {
                 Log::warning("ValidasiObserver: Jurnal {$tanggal} sudah ada di akuntansi (duplikasi). Dilewati.");
-
             } else {
                 Log::error("ValidasiObserver: Gagal kirim jurnal ke akuntansi (tanggal={$tanggal}).", [
                     'status'   => $response->status(),
                     'response' => $response->body(),
                 ]);
             }
-
         } catch (\Throwable $e) {
             Log::error("ValidasiObserver: HTTP error kirim ke akuntansi: " . $e->getMessage());
         }

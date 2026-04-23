@@ -8,6 +8,7 @@ use Filament\Schemas\Schema;
 use App\Models\ModalRepair;
 use App\Models\RencanaPegawai;
 use App\Models\RencanaRepair;
+use Filament\Schemas\Components\Utilities\Get;
 
 class RencanaRepairForm
 {
@@ -68,6 +69,43 @@ class RencanaRepairForm
                 ->searchable()
                 ->preload()
                 ->required()
+                ->live()
+                // --- LOGIKA VALIDASI ANTI-DUPLIKAT ---
+                ->rules([
+                    fn(Get $get) => function (string $attribute, $value, $fail) use ($get, $record) {
+                        $modalId = $get('id_modal_repair');
+
+                        if (!$modalId || !$value) return;
+
+                        $exists = RencanaRepair::where('id_modal_repair', $modalId)
+                            ->where('id_rencana_pegawai', $value)
+                            // Jika sedang edit, abaikan pengecekan terhadap record diri sendiri
+                            ->when($record, fn($q) => $q->where('id', '!=', $record->id))
+                            ->exists();
+
+                        if ($exists) {
+                            $fail('Pegawai ini sudah ditugaskan untuk kayu/palet yang sama.');
+                        }
+                    },
+                ])
+                // --- HELPER TEXT DINAMIS ---
+                ->helperText(function (Get $get) use ($record) {
+                    $modalId = $get('id_modal_repair');
+                    $rencanaPegawaiId = $get('id_rencana_pegawai');
+
+                    if ($modalId && $rencanaPegawaiId) {
+                        $isDuplicate = RencanaRepair::where('id_modal_repair', $modalId)
+                            ->where('id_rencana_pegawai', $rencanaPegawaiId)
+                            ->when($record, fn($q) => $q->where('id', '!=', $record->id))
+                            ->exists();
+
+                        if ($isDuplicate) {
+                            return new \Illuminate\Support\HtmlString(
+                                '<span class="text-danger-400 font-bold">Pegawai sudah mengerjakan kayu ini di meja lain!</span>'
+                            );
+                        }
+                    }
+                })
                 ->placeholder('Pilih meja & pegawai...'),
 
 

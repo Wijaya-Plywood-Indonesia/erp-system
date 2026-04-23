@@ -12,15 +12,16 @@ class HppVeneerBasahPage extends Page
     protected string $view = 'filament.pages.hpp-veneer-basah-page';
 
     protected static ?string $navigationLabel = 'Log HPP Veneer Basah';
-    protected static string|UnitEnum|null $navigationGroup = 'HPP Average';
+    protected static string|UnitEnum|null $navigationGroup = 'Log';
     protected static ?string $title          = 'Log HPP Veneer Basah';
-    protected static ?int    $navigationSort = 20;
+    protected static ?int    $navigationSort = 11;
 
     // ── State ──────────────────────────────────────────────────
     public string $filterJenisKayu = '';
     public string $filterPanjang   = '';
     public string $filterLebar     = '';
     public string $filterTebal     = '';
+    public string $filterKw        = '';
 
     // ── Computed: log transaksi ────────────────────────────────
     public function getLogsProperty()
@@ -30,6 +31,7 @@ class HppVeneerBasahPage extends Page
             ->when($this->filterPanjang,   fn($q) => $q->where('panjang', $this->filterPanjang))
             ->when($this->filterLebar,     fn($q) => $q->where('lebar',   $this->filterLebar))
             ->when($this->filterTebal,     fn($q) => $q->where('tebal',   $this->filterTebal))
+            ->when($this->filterKw,        fn($q) => $q->where('kw',      $this->filterKw))
             ->orderByDesc('tanggal')
             ->orderByDesc('id')
             ->get();

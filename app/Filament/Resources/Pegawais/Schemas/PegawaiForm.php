@@ -41,6 +41,10 @@ class PegawaiForm
                             ->required()
                             ->live(onBlur: true),
 
+                        TextInput::make('panggilan')
+                            ->label('Nama Panggilan')
+                        ,
+
                         Textarea::make('alamat')
                             ->label('Alamat')
                             ->columnSpanFull(),

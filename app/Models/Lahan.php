@@ -14,8 +14,7 @@ class Lahan extends Model
     protected $fillable = [
         'kode_lahan',
         'nama_lahan',
-        'panjang',
-        'diameter',
+        'detail',
 
 
     ];
@@ -36,5 +35,9 @@ class Lahan extends Model
     {
         return $this->hasMany(DetailTurusanKayu::class, 'lahan_id');
     }
-
+    public function summaries(): HasMany
+    {
+        // Pastikan nama model dan foreign key sudah sesuai dengan database kamu
+        return $this->hasMany(HppAverageSummarie::class, 'id_lahan');
+    }
 }

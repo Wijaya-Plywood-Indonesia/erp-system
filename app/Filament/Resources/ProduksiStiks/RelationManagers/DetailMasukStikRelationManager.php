@@ -2,11 +2,12 @@
 
 namespace App\Filament\Resources\ProduksiStiks\RelationManagers;
 
-use App\Filament\Resources\DetailMasukStiks\Schemas\DetailMasukStikForm;
-use App\Filament\Resources\DetailMasukStiks\Tables\DetailMasukStiksTable;
+use App\Filament\Resources\DetailMasuks\Schemas\DetailMasukForm;
+use App\Filament\Resources\DetailMasuks\Tables\DetailMasuksTable;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\DB;
 
 class DetailMasukStikRelationManager extends RelationManager
 {
@@ -20,11 +21,33 @@ class DetailMasukStikRelationManager extends RelationManager
 
     public function form(Schema $schema): Schema
     {
-        return DetailMasukStikForm::configure($schema);
+        $idProduksiStik = $this->getOwnerRecord()->id;
+        return DetailMasukForm::configure($schema, $idProduksiStik, 'stik');
     }
 
     public function table(Table $table): Table
     {
-        return DetailMasukStiksTable::configure($table);
+
+        $adaPaletDiterima = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
+            ->where('tipe', 'stik')
+            ->exists();
+
+        return DetailMasuksTable::configure($table, $adaPaletDiterima, 'stik');
+    }
+
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        unset($data['no_palet_select']);
+        unset($data['af_preview']);
+        $data['no_palet'] = (int) ($data['no_palet'] ?? 0);
+        return $data;
+    }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        unset($data['no_palet_select']);
+        unset($data['af_preview']);
+        $data['no_palet'] = (int) ($data['no_palet'] ?? 0);
+        return $data;
     }
 }

@@ -22,9 +22,9 @@ class BahanPenolongHpForm
             'solasi_putih' => 'Solasi Putih (roll)',
             'solasi_coklat' => 'Solasi Coklat (roll)',
             'pewarna' => 'Pewarna (gr)',
-            'kalsium' => 'Kalsium (gram)',
+            'kalsium' => 'Kalsium (kg)',
             'semen' => 'Semen (kg)',
-            'lem_pvac' => 'Lem PVAC (gr)',
+            'lem_pvac' => 'Lem PVAC (kg)',
             'tepung_anggrek' => 'Tepung Anggrek (kg)',
         ];
     }

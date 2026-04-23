@@ -14,7 +14,8 @@ class NotaKayu extends Model
         'penanggung_jawab',
         'penerima',
         'satpam',
-        'status'
+        'status',
+        'status_pelunasan'
     ];
     public function kayuMasuk()
     {

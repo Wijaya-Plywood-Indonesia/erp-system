@@ -22,17 +22,17 @@ class ViewProduksiGuellotine extends ViewRecord
     {
         return [
             EditAction::make()
-            ->hidden(function () {
-                $record = $this->getRecord();
+                ->hidden(function () {
+                    $record = $this->getRecord();
 
-                // Jika tidak ada validasi → tombol tetap muncul
-                if (!$record->validasiTerakhir) {
-                    return false;
-                }
+                    // Jika tidak ada validasi → tombol tetap muncul
+                    if (!$record->validasiTerakhir) {
+                        return false;
+                    }
 
-                // Jika status terakhir = divalidasi → sembunyikan tombol
-                return $record->validasiTerakhir->status === 'divalidasi';
-            }),
+                    // Jika status terakhir = divalidasi → sembunyikan tombol
+                    return $record->validasiTerakhir->status === 'divalidasi';
+                }),
         ];
     }
 }

@@ -5,10 +5,13 @@ namespace App\Filament\Pages;
 use App\Models\GradingSession;
 use BackedEnum;
 use Filament\Pages\Page;
+use UnitEnum;
 
 class GradingPage extends Page
 {
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-check';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Grade';
 
     protected static ?string $navigationLabel = 'Konfirmasi Grade';
 

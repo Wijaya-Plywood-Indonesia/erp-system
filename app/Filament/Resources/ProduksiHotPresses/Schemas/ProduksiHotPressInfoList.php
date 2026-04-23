@@ -13,6 +13,7 @@ class ProduksiHotPressInfoList
             ->components([
                 TextEntry::make('tanggal_produksi')
                     ->date(),
+                    TextEntry::make('shift'),
                 TextEntry::make('kendala'),
             ]);
     }
