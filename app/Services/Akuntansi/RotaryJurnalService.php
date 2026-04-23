@@ -2,6 +2,7 @@
 
 namespace App\Services\Akuntansi;
 
+use App\Models\DetailHasilPaletRotary;
 use App\Models\ProduksiRotary;
 use App\Models\PenggunaanLahanRotary;
 use App\Models\HargaPegawai;
@@ -519,92 +520,83 @@ class RotaryJurnalService
      * Hanya menambah stok lembar & kubikasi — HPP belum dihitung (= 0).
      * HPP akan diisi oleh hitungHppVeneerBasah() saat semua mesin divalidasi.
      */
-    public function serahPalet(\App\Models\DetailHasilPaletRotary $palet): void
+    public function serahPalet(DetailHasilPaletRotary $palet, string $keteranganTambahan = ''): void
     {
-        try {
+        // 1. CEK STATUS PIVOT (GUARD)
+        // Stok HANYA boleh bertambah jika sudah ada record dengan status 'Terima Barang'
+        $isReceived = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
+            ->where('id_detail_hasil_palet_rotary', $palet->id)
+            ->where('status', 'Terima Barang')
+            ->exists();
+
+        if (!$isReceived) {
+            Log::info("RotaryJurnalService: Palet #{$palet->kode_palet} diabaikan karena status belum 'Terima Barang'.");
+            return;
+        }
+
+        // 2. CEK DUPLIKASI LOG
+        $exists = HppVeneerBasahLog::where('referensi_type', get_class($palet))
+            ->where('referensi_id', $palet->id)
+            ->where('tipe_transaksi', 'Masuk')
+            ->exists();
+
+        if ($exists) {
+            return;
+        }
+
+        DB::transaction(function () use ($palet, $keteranganTambahan) {
             $ukuran = $palet->ukuran;
-            if (!$ukuran) {
-                Log::warning("[SerahPalet] Palet #{$palet->id} tidak punya ukuran.");
-                return;
-            }
+            $lahan = $palet->penggunaanLahan;
 
-            $p      = (float) $ukuran->panjang;
-            $l      = (float) $ukuran->lebar;
-            $t      = (float) $ukuran->tebal;
-            $lembar = (int)   $palet->total_lembar;
-            $kw     = $palet->kw ?? '1';
+            $summary = HppVeneerBasahSummary::firstOrCreate(
+                [
+                    'id_jenis_kayu' => $lahan->id_jenis_kayu,
+                    'panjang'       => $ukuran->panjang,
+                    'lebar'         => $ukuran->lebar,
+                    'tebal'         => $ukuran->tebal,
+                    'kw'            => $palet->kw,
+                ],
+                [
+                    'stok_lembar'   => 0,
+                    'stok_kubikasi' => 0,
+                    'nilai_stok'    => 0,
+                    'hpp_average'   => 0,
+                ]
+            );
 
-            if ($p <= 0 || $l <= 0 || $t <= 0 || $lembar <= 0) {
-                Log::warning("[SerahPalet] Palet #{$palet->id} ukuran tidak valid.");
-                return;
-            }
-
-            // Jenis kayu dari penggunaan lahan
-            $idJenisKayu = $palet->penggunaanLahan?->id_jenis_kayu ?? 1;
-            $kubikasi    = round(($p * $l * $t * $lembar) / 10_000_000, 6);
-            $tanggal     = $palet->produksi?->tgl_produksi ?? now()->format('Y-m-d');
-
-            // Ambil summarie saat ini
-            $summarie = HppVeneerBasahSummary::firstOrNew([
-                'id_jenis_kayu' => $idJenisKayu,
-                'panjang'       => $p,
-                'lebar'         => $l,
-                'tebal'         => $t,
-                'kw'            => $kw,
-            ]);
-
-            $lembarBefore   = (int)   ($summarie->stok_lembar   ?? 0);
-            $kubikasiBefore = (float) ($summarie->stok_kubikasi ?? 0);
-            $nilaiBefore    = (float) ($summarie->nilai_stok    ?? 0);
-
-            $lembarAfter   = $lembarBefore + $lembar;
-            $kubikasiAfter = round($kubikasiBefore + $kubikasi, 6);
-
-            // Catat log masuk — HPP semua 0, akan diisi saat validasi
             $log = HppVeneerBasahLog::create([
-                'id_jenis_kayu'        => $idJenisKayu,
-                'panjang'              => $p,
-                'lebar'                => $l,
-                'tebal'                => $t,
-                'kw'                   => $kw,
-                'tanggal'              => $tanggal,
-                'tipe_transaksi'       => 'masuk',
-                'keterangan'           => "Serah palet no.{$palet->palet} - produksi tgl " . \Carbon\Carbon::parse($tanggal)->format('d/m/Y'),
-                'referensi_type'       => \App\Models\DetailHasilPaletRotary::class,
+                'id_jenis_kayu'        => $lahan->id_jenis_kayu,
+                'panjang'              => $ukuran->panjang,
+                'lebar'                => $ukuran->lebar,
+                'tebal'                => $ukuran->tebal,
+                'kw'                   => $palet->kw,
+                'tanggal'              => now(),
+                'tipe_transaksi'       => 'Masuk',
+                'keterangan'           => "Terima Palet: {$palet->kode_palet} " . ($keteranganTambahan ? "| {$keteranganTambahan}" : ""),
+                'referensi_type'       => get_class($palet),
                 'referensi_id'         => $palet->id,
-                'total_lembar'         => $lembar,
-                'total_kubikasi'       => $kubikasi,
+                'total_lembar'         => $palet->total_lembar,
+                'total_kubikasi'       => $palet->total_kubikasi,
                 'hpp_kayu'             => 0,
                 'hpp_pekerja'          => 0,
                 'hpp_mesin'            => 0,
                 'hpp_bahan_penolong'   => 0,
                 'hpp_average'          => 0,
                 'nilai_stok'           => 0,
-                'stok_lembar_before'   => $lembarBefore,
-                'stok_kubikasi_before' => $kubikasiBefore,
-                'nilai_stok_before'    => $nilaiBefore,
-                'stok_lembar_after'    => $lembarAfter,
-                'stok_kubikasi_after'  => $kubikasiAfter,
-                'nilai_stok_after'     => 0, // diisi saat hitungHpp
+                'stok_lembar_before'   => $summary->stok_lembar,
+                'stok_kubikasi_before' => $summary->stok_kubikasi,
+                'nilai_stok_before'    => $summary->nilai_stok,
+                'stok_lembar_after'    => $summary->stok_lembar + $palet->total_lembar,
+                'stok_kubikasi_after'  => $summary->stok_kubikasi + $palet->total_kubikasi,
+                'nilai_stok_after'     => $summary->nilai_stok,
             ]);
 
-            // Update summarie — nilai_stok belum diupdate (HPP belum ada)
-            $summarie->fill([
-                'stok_lembar'   => $lembarAfter,
-                'stok_kubikasi' => $kubikasiAfter,
+            $summary->update([
+                'stok_lembar'   => $log->stok_lembar_after,
+                'stok_kubikasi' => $log->stok_kubikasi_after,
                 'id_last_log'   => $log->id,
-            ])->save();
-
-            Log::info("[SerahPalet] Stok masuk palet #{$palet->id} - {$p}×{$l}×{$t} KW{$kw}", [
-                'lembar'   => $lembar,
-                'kubikasi' => $kubikasi,
             ]);
-        } catch (\Throwable $e) {
-            Log::error("[SerahPalet] Gagal: " . $e->getMessage(), [
-                'palet_id' => $palet->id,
-                'trace'    => $e->getTraceAsString(),
-            ]);
-        }
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
