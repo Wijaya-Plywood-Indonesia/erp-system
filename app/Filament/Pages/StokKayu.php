@@ -48,148 +48,148 @@ class StokKayu extends Page
      */
     // ─── ACTION EDIT ──────────────────────────────────────────
 
-    public function editStokAction(): Action
-    {
-        $isAdmin = Auth::user()?->hasAnyRole(self::ROLE_ADMIN) ?? false;
+    // public function editStokAction(): Action
+    // {
+    //     $isAdmin = Auth::user()?->hasAnyRole(self::ROLE_ADMIN) ?? false;
 
-        return Action::make('editStok')
-            ->label('Edit')
-            ->icon('heroicon-m-pencil-square')
-            ->color('warning')
-            ->size('xs')
-            ->visible($isAdmin)
-            ->modalHeading(
-                fn(array $arguments) => isset($arguments['id'])
-                    ? 'Update Stok Lahan'
-                    : 'Inisialisasi Stok Lahan Baru'
-            )
-            ->mountUsing(function (Schema $schema, array $arguments) {
-                if (isset($arguments['id'])) {
-                    $record = HppAverageSummarie::find($arguments['id']);
-                    return $schema->fill($record?->toArray() ?? []);
-                }
+    //     return Action::make('editStok')
+    //         ->label('Edit')
+    //         ->icon('heroicon-m-pencil-square')
+    //         ->color('warning')
+    //         ->size('xs')
+    //         ->visible($isAdmin)
+    //         ->modalHeading(
+    //             fn(array $arguments) => isset($arguments['id'])
+    //                 ? 'Update Stok Lahan'
+    //                 : 'Inisialisasi Stok Lahan Baru'
+    //         )
+    //         ->mountUsing(function (Schema $schema, array $arguments) {
+    //             if (isset($arguments['id'])) {
+    //                 $record = HppAverageSummarie::find($arguments['id']);
+    //                 return $schema->fill($record?->toArray() ?? []);
+    //             }
 
-                return $schema->fill([
-                    'id_lahan'      => $arguments['lahan_id'] ?? null,
-                    'stok_batang'   => 0,
-                    'stok_kubikasi' => 0,
-                    'nilai_stok'    => 0,
-                    'panjang'       => 130,
-                ]);
-            })
-            ->form([
-                Grid::make()
-                    ->schema([
-                        Select::make('id_lahan')
-                            ->label('Lahan')
-                            ->options(Lahan::pluck('kode_lahan', 'id'))
-                            ->disabled()
-                            ->dehydrated()
-                            ->required(),
+    //             return $schema->fill([
+    //                 'id_lahan'      => $arguments['lahan_id'] ?? null,
+    //                 'stok_batang'   => 0,
+    //                 'stok_kubikasi' => 0,
+    //                 'nilai_stok'    => 0,
+    //                 'panjang'       => 130,
+    //             ]);
+    //         })
+    //         ->form([
+    //             Grid::make()
+    //                 ->schema([
+    //                     Select::make('id_lahan')
+    //                         ->label('Lahan')
+    //                         ->options(Lahan::pluck('kode_lahan', 'id'))
+    //                         ->disabled()
+    //                         ->dehydrated()
+    //                         ->required(),
 
-                        Select::make('id_jenis_kayu')
-                            ->label('Jenis Kayu')
-                            ->options(JenisKayu::pluck('nama_kayu', 'id'))
-                            ->searchable()
-                            ->required(),
+    //                     Select::make('id_jenis_kayu')
+    //                         ->label('Jenis Kayu')
+    //                         ->options(JenisKayu::pluck('nama_kayu', 'id'))
+    //                         ->searchable()
+    //                         ->required(),
 
-                        TextInput::make('panjang')
-                            ->label('Panjang (cm)')
-                            ->numeric()
-                            ->required(),
+    //                     TextInput::make('panjang')
+    //                         ->label('Panjang (cm)')
+    //                         ->numeric()
+    //                         ->required(),
 
-                        TextInput::make('stok_batang')
-                            ->label('Jumlah Batang')
-                            ->numeric()
-                            ->required(),
+    //                     TextInput::make('stok_batang')
+    //                         ->label('Jumlah Batang')
+    //                         ->numeric()
+    //                         ->required(),
 
-                        TextInput::make('stok_kubikasi')
-                            ->label('Volume (m³)')
-                            ->numeric()
-                            ->step('0.0001')
-                            ->required(),
+    //                     TextInput::make('stok_kubikasi')
+    //                         ->label('Volume (m³)')
+    //                         ->numeric()
+    //                         ->step('0.0001')
+    //                         ->required(),
 
-                        TextInput::make('nilai_stok')
-                            ->label('Total Poin')
-                            ->numeric()
-                            ->required(),
-                    ])
-            ])
-            ->action(function (array $data, array $arguments) {
-                $service = app(HppAverageService::class);
+    //                     TextInput::make('nilai_stok')
+    //                         ->label('Total Poin')
+    //                         ->numeric()
+    //                         ->required(),
+    //                 ])
+    //         ])
+    //         ->action(function (array $data, array $arguments) {
+    //             $service = app(HppAverageService::class);
 
-                // Simpan perubahan stok
-                $record = HppAverageSummarie::updateOrCreate(
-                    ['id' => $arguments['id'] ?? null],
-                    $data
-                );
+    //             // Simpan perubahan stok
+    //             $record = HppAverageSummarie::updateOrCreate(
+    //                 ['id' => $arguments['id'] ?? null],
+    //                 $data
+    //             );
 
-                // Auto kalkulasi HPP Average
-                if ($record && $record->stok_kubikasi > 0) {
-                    $record->update([
-                        'hpp_average' => round($record->nilai_stok / $record->stok_kubikasi, 2)
-                    ]);
-                } else {
-                    $record->update(['hpp_average' => 0]);
-                }
+    //             // Auto kalkulasi HPP Average
+    //             if ($record && $record->stok_kubikasi > 0) {
+    //                 $record->update([
+    //                     'hpp_average' => round($record->nilai_stok / $record->stok_kubikasi, 2)
+    //                 ]);
+    //             } else {
+    //                 $record->update(['hpp_average' => 0]);
+    //             }
 
-                // ✅ Sync TempatKayu otomatis setelah stok berubah
-                $record->syncTempatKayu();
+    //             // ✅ Sync TempatKayu otomatis setelah stok berubah
+    //             $record->syncTempatKayu();
 
-                Notification::make()
-                    ->success()
-                    ->title('Data Stok Berhasil Diperbarui')
-                    ->body('Tempat Kayu telah diperbarui secara otomatis.')
-                    ->send();
-            });
-    }
+    //             Notification::make()
+    //                 ->success()
+    //                 ->title('Data Stok Berhasil Diperbarui')
+    //                 ->body('Tempat Kayu telah diperbarui secara otomatis.')
+    //                 ->send();
+    //         });
+    // }
 
-    public function deleteStokAction(): Action
-    {
-        $isAdmin = Auth::user()?->hasAnyRole(self::ROLE_ADMIN) ?? false;
+    // public function deleteStokAction(): Action
+    // {
+    //     $isAdmin = Auth::user()?->hasAnyRole(self::ROLE_ADMIN) ?? false;
 
-        return Action::make('deleteStok')
-            ->label('Hapus')
-            ->icon('heroicon-m-trash')
-            ->color('danger')
-            ->size('xs')
-            ->requiresConfirmation()
-            ->modalHeading('Hapus Data Stok?')
-            ->modalDescription('Tindakan ini akan menghapus data ringkasan stok pada baris ini.')
-            ->action(function (array $arguments) {
-                if (! isset($arguments['id'])) return;
+    //     return Action::make('deleteStok')
+    //         ->label('Hapus')
+    //         ->icon('heroicon-m-trash')
+    //         ->color('danger')
+    //         ->size('xs')
+    //         ->requiresConfirmation()
+    //         ->modalHeading('Hapus Data Stok?')
+    //         ->modalDescription('Tindakan ini akan menghapus data ringkasan stok pada baris ini.')
+    //         ->action(function (array $arguments) {
+    //             if (! isset($arguments['id'])) return;
 
-                $record = HppAverageSummarie::find($arguments['id']);
+    //             $record = HppAverageSummarie::find($arguments['id']);
 
-                if ($record) {
-                    $lahanId = $record->id_lahan;
+    //             if ($record) {
+    //                 $lahanId = $record->id_lahan;
 
-                    // Hapus record
-                    $record->delete();
+    //                 // Hapus record
+    //                 $record->delete();
 
-                    // Cek apakah masih ada stok lain untuk lahan ini
-                    $remainingStok = HppAverageSummarie::where('id_lahan', $lahanId)
-                        ->where('stok_batang', '>', 0)
-                        ->exists();
+    //                 // Cek apakah masih ada stok lain untuk lahan ini
+    //                 $remainingStok = HppAverageSummarie::where('id_lahan', $lahanId)
+    //                     ->where('stok_batang', '>', 0)
+    //                     ->exists();
 
-                    if (!$remainingStok) {
-                        // Hapus semua TempatKayu untuk lahan ini
-                        \App\Models\TempatKayu::where('id_lahan', $lahanId)->delete();
-                    } else {
-                        // Update TempatKayu dengan stok terbaru
-                        $service = app(HppAverageService::class);
-                        $service->syncTempatKayuByLahan($lahanId);
-                    }
-                }
+    //                 if (!$remainingStok) {
+    //                     // Hapus semua TempatKayu untuk lahan ini
+    //                     \App\Models\TempatKayu::where('id_lahan', $lahanId)->delete();
+    //                 } else {
+    //                     // Update TempatKayu dengan stok terbaru
+    //                     $service = app(HppAverageService::class);
+    //                     $service->syncTempatKayuByLahan($lahanId);
+    //                 }
+    //             }
 
-                Notification::make()
-                    ->success()
-                    ->title('Stok Berhasil Dihapus')
-                    ->body('Tempat Kayu telah diperbarui secara otomatis.')
-                    ->send();
-            })
-            ->visible(fn(array $arguments) => isset($arguments['id']) && $isAdmin);
-    }
+    //             Notification::make()
+    //                 ->success()
+    //                 ->title('Stok Berhasil Dihapus')
+    //                 ->body('Tempat Kayu telah diperbarui secara otomatis.')
+    //                 ->send();
+    //         })
+    //         ->visible(fn(array $arguments) => isset($arguments['id']) && $isAdmin);
+    // }
 
     // ── Computed: semua lahan ──────────────────────────────────
     public function getLahansProperty()
@@ -302,36 +302,6 @@ class StokKayu extends Page
         $this->activeLahanId = $lahanId;
         $this->filterPanjang = '';
         $this->filterJenis   = '';
-    }
-
-    public function recalculate(): void
-    {
-        $service = app(HppAverageService::class);
-
-        if (\App\Models\HppAverageLog::whereNull('grade')->count() === 0) {
-            $service->seedFromNotaKayu();
-        } else {
-            $service->recalculateAll();
-        }
-
-        Notification::make()
-            ->title('HPP Average berhasil dihitung ulang')
-            ->success()
-            ->send();
-    }
-
-    protected function getHeaderActions(): array
-    {
-        return [
-            Action::make('recalculate')
-                ->label('Hitung Ulang HPP')
-                ->icon('heroicon-o-arrow-path')
-                ->color('warning')
-                ->requiresConfirmation()
-                ->modalHeading('Hitung Ulang HPP Average?')
-                ->modalDescription('Seluruh snapshot akan dihitung ulang dari awal. Pastikan semua nota kayu sudah benar.')
-                ->action(fn() => $this->recalculate()),
-        ];
     }
 
     public function getAllLahansWithStokProperty()

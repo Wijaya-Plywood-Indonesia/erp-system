@@ -62,6 +62,13 @@ class HppAverageLog extends Model
         return $this->morphTo();
     }
 
+    // Atau tambahkan mapping morph map
+    protected $morphMap = [
+        'NotaKayu' => NotaKayu::class,
+        'PenggunaanLahanRotary' => PenggunaanLahanRotary::class,
+        // 'StokOpnameKayu' => OpnameStokKayu::class, // Hapus jika tidak diperlukan
+    ];
+
     public function scopeKombinasi($query, int $jenisKayuId, string $grade, int $panjang)
     {
         return $query
