@@ -192,7 +192,7 @@ class PenggunaanLahanRotariesTable
                                 // Keterangan log mencatat semua info penting
                                 // termasuk HPP terakhir agar mudah dilacak
                                 $keteranganLog = sprintf(
-                                    'SELESAI LAHAN | Lahan: %s - %s | Jenis Kayu: %s | Mesin: %s | Tgl Produksi: %s | HPP Terakhir: Rp %s',
+                                    'SELESAI LAHAN | Lahan: %s - %s | Jenis Kayu: %s  | HPP Terakhir: Rp %s',
                                     $kodeLahan,
                                     $namaLahan,
                                     $namaKayu,
