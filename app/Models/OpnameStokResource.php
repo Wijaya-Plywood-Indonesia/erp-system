@@ -10,11 +10,10 @@ use Filament\Tables\Table;
 use Filament\Schemas\Schema;
 use BackedEnum;
 use UnitEnum;
-use App\Models\OpnameStok;
 
 class OpnameStokResource extends Resource
 {
-    protected static ?string $model = OpnameStok::class;
+    protected static ?string $model = BarangSetengahJadiHp::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-check';
     protected static ?string $navigationLabel = 'Opname Stok';
