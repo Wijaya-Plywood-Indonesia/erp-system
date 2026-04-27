@@ -22,17 +22,17 @@ class StokKayu extends Page
 
     protected static ?string $navigationLabel = 'Stok Kayu';
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
-    protected static ?string $title          = 'Stok Kayu';
-    protected static ?int    $navigationSort = 10;
+    protected static ?string $title = 'Stok Kayu';
+    protected static ?int $navigationSort = 10;
 
     // Role untuk membuat super admin yang bisa akses untuk edit dan delete
     private const ROLE_ADMIN    = ['super_admin', 'Super Admin'];
 
     // ── State ──────────────────────────────────────────────────
-    public ?int   $activeLahanId = null;
+    public ?int $activeLahanId = null;
     public string $filterPanjang = '';
-    public string $filterJenis   = '';
-    public string $lahanSearch   = '';
+    public string $filterJenis = '';
+    public string $lahanSearch = '';
 
     public function mount(): void
     {
@@ -219,7 +219,7 @@ class StokKayu extends Page
             ->get()
             ->groupBy('id_lahan')
             ->map(fn($rows) => [
-                'btg'   => $rows->sum('stok_batang'),
+                'btg' => $rows->sum('stok_batang'),
                 'jenis' => $rows->pluck('jenisKayu.nama_kayu')->filter()->unique()->sort()->values(),
             ]);
     }
@@ -301,7 +301,7 @@ class StokKayu extends Page
     {
         $this->activeLahanId = $lahanId;
         $this->filterPanjang = '';
-        $this->filterJenis   = '';
+        $this->filterJenis = '';
     }
 
     public function getAllLahansWithStokProperty()
