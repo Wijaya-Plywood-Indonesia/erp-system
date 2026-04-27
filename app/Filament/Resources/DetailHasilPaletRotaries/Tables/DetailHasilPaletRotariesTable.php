@@ -18,6 +18,9 @@ use Illuminate\Support\Facades\DB;
 
 class DetailHasilPaletRotariesTable
 {
+
+    private const ADMIN_ROLES = ['admin', 'super_admin', 'Super Admin'];
+
     public static function configure(Table $table): Table
     {
         return $table
@@ -133,12 +136,61 @@ class DetailHasilPaletRotariesTable
                             ->success()
                             ->send();
                     }),
-                EditAction::make(),
-                DeleteAction::make(),
+                EditAction::make()
+                    /**
+                     * LOGIKA VALIDASI EDIT:
+                     * 1. Admin/Super Admin selalu bisa edit.
+                     * 2. User biasa bisa edit jika: Data belum diserahkan ATAU statusnya masih 'Serah Barang'.
+                     * 3. User biasa TIDAK BISA edit jika status sudah 'Terima Barang'.
+                     */
+                    ->visible(function ($record) {
+                        $user = Auth::user();
+                        $isAdmin = $user && $user->hasAnyRole(self::ADMIN_ROLES);
+
+                        // Admin memiliki akses bypass, selalu bisa edit
+                        if ($isAdmin) return true;
+
+                        // Ambil status terbaru dari tabel pivot
+                        $statusPivot = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
+                            ->where('id_detail_hasil_palet_rotary', $record->id)
+                            ->value('status');
+
+                        // Jika status adalah 'Terima Barang', maka kunci akses (return false)
+                        if ($statusPivot === 'Terima Barang') {
+                            return false;
+                        }
+
+                        // Selain itu (Belum Serah atau baru Serah Barang), masih boleh edit
+                        return true;
+                    }),
+
+                DeleteAction::make()
+                    /**
+                     * LOGIKA VALIDASI DELETE:
+                     * Sama dengan edit, data dikunci jika sudah divalidasi/diterima oleh logistik.
+                     */
+                    ->visible(function ($record) {
+                        $user = Auth::user();
+                        $isAdmin = $user && $user->hasAnyRole(self::ADMIN_ROLES);
+
+                        if ($isAdmin) return true;
+
+                        $statusPivot = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
+                            ->where('id_detail_hasil_palet_rotary', $record->id)
+                            ->value('status');
+
+                        // Kunci jika barang sudah benar-benar diterima pihak tujuan
+                        if ($statusPivot === 'Terima Barang') {
+                            return false;
+                        }
+
+                        return true;
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->visible(fn() => Auth::user()->hasAnyRole(self::ADMIN_ROLES)),
                 ])
             ]);
     }
