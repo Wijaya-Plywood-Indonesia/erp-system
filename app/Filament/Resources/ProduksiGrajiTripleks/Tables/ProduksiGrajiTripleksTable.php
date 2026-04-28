@@ -30,13 +30,23 @@ class ProduksiGrajiTripleksTable
                     ->date('d/m/Y')
                     ->sortable(),
 
+                TextColumn::make('shift')
+                    ->label('Shift')
+                    ->badge()
+                    ->formatStateUsing(fn($state) => ucfirst($state))
+                    ->colors([
+                        'warning' => 'pagi',
+                        'info' => 'malam',
+                    ]),
+
                 TextColumn::make('status')
                     ->label('Status Produksi')
-                    ->formatStateUsing(fn ($state) => ucfirst($state)),
+                    ->formatStateUsing(fn($state) => ucfirst($state)),
 
                 TextColumn::make('kendala')
                     ->label('Kendala Produksi')
-                    ->getStateUsing(fn ($record) =>
+                    ->getStateUsing(
+                        fn($record) =>
                         blank($record->kendala) ? 'Tidak ada kendala' : $record->kendala
                     )
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -71,10 +81,11 @@ class ProduksiGrajiTripleksTable
                         DatePicker::make('from')->label('Dari Tanggal')->native(false),
                         DatePicker::make('until')->label('Sampai Tanggal')->native(false),
                     ])
-                    ->query(fn (Builder $query, array $data) =>
+                    ->query(
+                        fn(Builder $query, array $data) =>
                         $query
-                            ->when($data['from'] ?? null, fn ($q, $d) => $q->whereDate('tanggal_produksi', '>=', $d))
-                            ->when($data['until'] ?? null, fn ($q, $d) => $q->whereDate('tanggal_produksi', '<=', $d))
+                            ->when($data['from'] ?? null, fn($q, $d) => $q->whereDate('tanggal_produksi', '>=', $d))
+                            ->when($data['until'] ?? null, fn($q, $d) => $q->whereDate('tanggal_produksi', '<=', $d))
                     ),
 
                 SelectFilter::make('status')
@@ -87,17 +98,18 @@ class ProduksiGrajiTripleksTable
 
             ->recordActions([
                 Action::make('kelola_kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
+                    ->label(fn($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
                     ->icon('heroicon-m-chat-bubble-left-right')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'gray')
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'gray')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Kendala Produksi')
                             ->required()
                             ->rows(4),
                     ])
-                    ->mountUsing(fn ($form, $record) =>
+                    ->mountUsing(
+                        fn($form, $record) =>
                         $form->fill(['kendala' => $record->kendala])
                     )
                     ->action(function (array $data, $record) {
@@ -112,13 +124,13 @@ class ProduksiGrajiTripleksTable
                     }),
 
                 EditAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
                 ViewAction::make(),
 
                 // 🗑️ DELETE — SAMA DENGAN PRODUKSI STIK
                 DeleteAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->before(function ($record) {
 
                         $hasRelation =
@@ -143,9 +155,10 @@ class ProduksiGrajiTripleksTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->visible(fn ($records) =>
+                        ->visible(
+                            fn($records) =>
                             $records->every(
-                                fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi'
+                                fn($r) => $r->validasiTerakhir?->status !== 'divalidasi'
                             )
                         )
                         ->before(function ($records) {

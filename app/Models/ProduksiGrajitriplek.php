@@ -13,6 +13,7 @@ class ProduksiGrajitriplek extends Model
         'tanggal_produksi',
         'status',
         'kendala',
+        'shift'
     ];
 
     public function pegawaiGrajiTriplek()

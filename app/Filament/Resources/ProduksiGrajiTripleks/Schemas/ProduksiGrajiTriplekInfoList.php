@@ -12,9 +12,10 @@ class ProduksiGrajiTriplekInfoList
         return $schema
             ->components([
                 TextEntry::make('tanggal_produksi')
-                ->date(),
+                    ->date(),
                 TextEntry::make('status'),
                 TextEntry::make('kendala'),
+                TextEntry::make('shift')
             ]);
     }
 }

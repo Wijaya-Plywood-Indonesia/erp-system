@@ -15,7 +15,7 @@ class ProduksiGrajiTriplekForm
             ->components([
                 DatePicker::make('tanggal_produksi')
                     ->label('Tanggal Produksi')
-                    ->default(fn () => now()->addDay())
+                    ->default(fn() => now()->addDay())
                     ->displayFormat('d F Y')
                     ->required()
 
@@ -42,6 +42,17 @@ class ProduksiGrajiTriplekForm
                     ->validationMessages([
                         'required' => 'Status produksi wajib dipilih.',
                     ]),
+
+                Select::make('shift')
+                    ->label('Shift')
+                    ->options([
+                        'pagi' => 'Pagi',
+                        'malam' => 'Malam',
+                    ])
+                    ->required()
+                    ->reactive(), // 🔥 penting
+
+
             ]);
     }
 }
