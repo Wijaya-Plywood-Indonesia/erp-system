@@ -18,6 +18,7 @@ use App\Observers\RotaryObserver;
 use App\Observers\ValidasiHasilRotaryObserver;
 use App\Models\ValidasiPressDryer;
 use App\Models\ValidasiStik;
+use App\Models\ValidasiKedi;
 use App\Observers\ProductionValidationObserver;
 
 class AppServiceProvider extends ServiceProvider
@@ -43,6 +44,7 @@ class AppServiceProvider extends ServiceProvider
         PenggunaanLahanRotary::observe(RotaryObserver::class);
         ValidasiPressDryer::observe(ProductionValidationObserver::class);
         ValidasiStik::observe(ProductionValidationObserver::class);
+        ValidasiKedi::observe(ProductionValidationObserver::class);
         // PlatformHasilHp::observe(PlatformHasilHpObserver::class);
         // TriplekHasilHp::observe(TriplekHasilHpObserver::class);
 
