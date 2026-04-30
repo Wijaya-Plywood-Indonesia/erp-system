@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\BahanPenolongHps\Schemas;
 
+use App\Models\BahanPenolongProduksi;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
@@ -11,22 +12,12 @@ class BahanPenolongHpForm
     // --- Method untuk mendefinisikan Options Bahan ---
     public static function getBahanOptions(): array
     {
-        return [
-            'lem_pai' => 'Lem Pai (kg)',
-            'lem_dover' => 'Lem Dover (kg)',
-            'air' => 'Air',
-            'hdr' => 'HDR (gr)',
-            'tepung_bgs' => 'Tepung BGS (kg)',
-            'tepung_pjp' => 'Tepung PJP (kg)',
-            'isi_steples' => 'Isi Steples (pack)',
-            'solasi_putih' => 'Solasi Putih (roll)',
-            'solasi_coklat' => 'Solasi Coklat (roll)',
-            'pewarna' => 'Pewarna (gr)',
-            'kalsium' => 'Kalsium (gram)',
-            'semen' => 'Semen (kg)',
-            'lem_pvac' => 'Lem PVAC (gr)',
-            'tepung_anggrek' => 'Tepung Anggrek (kg)',
-        ];
+        return BahanPenolongProduksi::where('kategori_produksi', 'hot_press')
+            ->get()
+            ->mapWithKeys(fn($item) => [
+                $item->id => "{$item->nama_bahan_penolong} ({$item->satuan})"
+            ])
+            ->toArray();
     }
 
     public static function configure(Schema $schema): Schema

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\BahanDempuls\Schemas;
 
+use App\Models\BahanPenolongProduksi;
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -11,12 +12,12 @@ class BahanDempulForm
 
     public static function getBahanOptions(): array
     {
-        return [
-            'kalsium' => 'Kalsium (gram)',
-            'semen' => 'Semen (kg)',
-            'lem_pvac' => 'Lem PVAC (gr)',
-            'tepung_anggrek' => 'Tepung Anggrek (kg)',
-        ];
+        return BahanPenolongProduksi::where('kategori_produksi', 'dempul')
+            ->get()
+            ->mapWithKeys(fn($item) => [
+                $item->id => "{$item->nama_bahan_penolong} ({$item->satuan})"
+            ])
+            ->toArray();
     }
     public static function configure(Schema $schema): Schema
     {

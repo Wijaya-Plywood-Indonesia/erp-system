@@ -18,4 +18,9 @@ class BahanProduksi extends Model
     {
         return $this->belongsTo(ProduksiJoint::class, 'id_produksi_joint');
     }
+
+    public function masterBahan()
+    {
+        return $this->belongsTo(BahanPenolongProduksi::class, 'nama_bahan');
+    }
 }

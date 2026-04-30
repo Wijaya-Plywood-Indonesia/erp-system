@@ -18,4 +18,9 @@ class BahanDempul extends Model
     {
         return $this->belongsTo(ProduksiDempul::class, 'id_produksi_dempul');
     }
+
+    public function masterBahan()
+    {
+        return $this->belongsTo(BahanPenolongProduksi::class, 'nama_bahan');
+    }
 }

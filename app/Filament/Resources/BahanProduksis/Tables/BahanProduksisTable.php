@@ -22,15 +22,29 @@ class BahanProduksisTable
             ->columns([
                 TextColumn::make('nama_bahan')
                     ->searchable()
-                    ->label('Nama bahan')
-                    // Gunakan formatStateUsing untuk menampilkan label panjang
-                    ->formatStateUsing(
-                        fn(string $state): string =>
-                        $bahanOptions[$state] ?? $state
-                    ),
-
+                    ->label('Nama Bahan')
+                    ->formatStateUsing(function ($state, $record) use ($bahanOptions) {
+                        if ($record->masterBahan) {
+                            return $record->masterBahan->nama_bahan_penolong;
+                        }
+                        $label = $bahanOptions[$state] ?? $state;
+                        if (preg_match('/^(.*)\s\(.*\)$/', $label, $matches)) {
+                            return $matches[1];
+                        }
+                        return $label;
+                    }),
                 TextColumn::make('jumlah')
-                    ->label('Banyaknya'),
+                    ->label('Banyaknya')
+                    ->formatStateUsing(function ($state, $record) use ($bahanOptions) {
+                        if ($record->masterBahan) {
+                            return $state . ' ' . $record->masterBahan->satuan;
+                        }
+                        $label = $bahanOptions[$record->nama_bahan] ?? '';
+                        if (preg_match('/^.*\s\((.*)\)$/', $label, $matches)) {
+                            return $state . ' ' . $matches[1];
+                        }
+                        return $state;
+                    }),
             ])
             ->filters([
                 SelectFilter::make('nama_bahan')

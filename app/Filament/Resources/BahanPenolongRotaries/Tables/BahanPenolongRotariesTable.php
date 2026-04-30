@@ -24,12 +24,14 @@ class BahanPenolongRotariesTable
                     ->label('Nama Bahan')
                     ->formatStateUsing(
                         fn($state, $record) =>
-                        $record->bahanPenolong->nama_bahan_penolong .
-                            ' (' . $record->bahanPenolong->satuan . ')'
+                        $record->bahanPenolong->nama_bahan_penolong ?? $record->nama_bahan
                     ),
-
                 TextColumn::make('jumlah')
-                    ->label('Banyaknya'),
+                    ->label('Banyaknya')
+                    ->formatStateUsing(
+                        fn($state, $record) =>
+                        $state . ' ' . ($record->bahanPenolong->satuan ?? '')
+                    ),
             ])
             ->filters([
                 // SelectFilter::make('nama_bahan')

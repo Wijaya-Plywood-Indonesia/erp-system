@@ -52,9 +52,9 @@ class ProduksiHotPressResource extends Resource
             RelationManagers\VeneerBahanHpRelationManager::class,
             RelationManagers\PlatformBahanHpRelationManager::class,
             RelationManagers\BahanHotPressRelationManager::class,
+            RelationManagers\BahanPenolongHpRelationManager::class,
             RelationManagers\PlatformHasilHpRelationManager::class,
             RelationManagers\TriplekHasilHpRelationManager::class,
-            RelationManagers\BahanPenolongHpRelationManager::class,
             RelationManagers\ValidasiHpRelationManager::class,
         ];
     }
