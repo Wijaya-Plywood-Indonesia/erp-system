@@ -34,42 +34,48 @@
                                 <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800">HPP Average</th>
                             </tr>
                         </thead>
+                        {{-- Ganti bagian <tbody> Anda dengan ini --}}
                         <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
-                            {{-- Kita kelompokkan lagi berdasarkan id_jenis_kayu untuk menggabung hasil --}}
-                            @foreach($rows->groupBy('id_jenis_kayu') as $jenisId => $items)
+                            {{-- Kita mengambil data dari computed property globalSummaries --}}
+                            @foreach($this->globalSummaries[$panjang] ?? [] as $item)
                             @php
-                            $firstRow = $items->first();
-                            $mergedBatang = $items->sum('stok_batang');
-                            $mergedKubikasi = $items->sum('stok_kubikasi');
-                            $mergedNilai = $items->sum('nilai_stok');
-
-                            // HPP Average Gabungan (Weighted Average)
-                            $mergedHpp = $mergedKubikasi > 0 ? $mergedNilai / $mergedKubikasi : 0;
+                            // HPP tetap dihitung di sini agar mendapatkan presisi pembagian terbaru
+                            $mergedHpp = $item->total_kubikasi > 0 ? $item->total_nilai / $item->total_kubikasi : 0;
                             @endphp
+
                             <tr class="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                <td class="px-6 py-4 text-center text-gray-300 dark:text-gray-600 font-mono text-xs">{{ $loop->iteration }}</td>
-                                <td class="px-6 py-4">
-                                    <span class="font-black text-gray-800 dark:text-gray-200 text-base">{{ $panjang }}</span>
+                                <td class="px-6 py-4 text-center text-gray-300 dark:text-gray-600 font-mono text-xs">
+                                    {{ $loop->iteration }}
                                 </td>
+
+                                <td class="px-6 py-4">
+                                    <span class="font-black text-gray-800 dark:text-gray-200 text-base">
+                                        {{ $item->panjang }}
+                                    </span>
+                                </td>
+
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-2">
-                                        <div @class([ 'w-2 h-2 rounded-sm' , 'bg-emerald-500'=> str_contains(strtolower($firstRow->jenisKayu->nama_kayu), 'sengon'),
-                                            'bg-amber-500' => !str_contains(strtolower($firstRow->jenisKayu->nama_kayu), 'sengon'),
+                                        <div @class([ 'w-2 h-2 rounded-sm' , 'bg-emerald-500'=> str_contains(strtolower($item->jenisKayu->nama_kayu), 'sengon'),
+                                            'bg-amber-500' => !str_contains(strtolower($item->jenisKayu->nama_kayu), 'sengon'),
                                             ])></div>
                                         <span class="font-bold text-gray-700 dark:text-gray-300 uppercase tracking-tight">
-                                            {{ $firstRow->jenisKayu->nama_kayu }}
+                                            {{ $item->jenisKayu->nama_kayu }}
                                         </span>
                                     </div>
                                 </td>
+
                                 <td class="px-6 py-4 text-center">
                                     <span class="font-black text-gray-700 dark:text-gray-300 tabular-nums text-lg">
-                                        {{ number_format($mergedBatang) }}
+                                        {{ number_format($item->total_batang) }}
                                     </span>
                                 </td>
+
                                 <td class="px-6 py-4 text-right font-mono font-black text-blue-600 dark:text-blue-400 text-base">
-                                    {{ number_format($mergedKubikasi, 4) }}
+                                    {{ number_format($item->total_kubikasi, 4) }}
                                     <span class="text-sm text-gray-500 dark:text-gray-400 font-normal uppercase">m³</span>
                                 </td>
+
                                 <td class="px-6 py-4 text-right">
                                     <span class="font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
                                         Rp {{ number_format($mergedHpp, 0, ',', '.') }}

@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\ProduksiRotaries\RelationManagers;
 
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
 use App\Models\DetailHasilPaletRotary;
 use App\Models\ProduksiPressDryer;
 use App\Models\ProduksiRotary;
@@ -22,6 +24,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class SerahTerimaRelationManager extends RelationManager
 {
+
+    private const ROLE_ADMIN    = ['super_admin', 'Super Admin', 'admin_kayu'];
+
     protected static string $relationship = 'serahTerima';
 
     protected function getTipePenerima(): string
@@ -31,6 +36,17 @@ class SerahTerimaRelationManager extends RelationManager
             ProduksiPressDryer::class => 'dryer',
             ProduksiStik::class       => 'stik',
             default                   => 'unknown',
+        };
+    }
+
+    protected function getTipeOwner(): string
+    {
+        $owner = $this->getOwnerRecord();
+
+        return match (get_class($owner)) {
+            ProduksiRotary::class     => 'rotary',
+            ProduksiPressDryer::class => 'dryer',
+            default                   => 'umum',
         };
     }
 
@@ -171,7 +187,8 @@ class SerahTerimaRelationManager extends RelationManager
 
                 TextColumn::make('detailHasilPalet.total_lembar')
                     ->label('Lembar')
-                    ->numeric(),
+                    ->numeric()
+                    ->searchable(),
 
                 TextColumn::make('ukuran')
                     ->label('Ukuran')
@@ -184,7 +201,24 @@ class SerahTerimaRelationManager extends RelationManager
 
                 TextColumn::make('detailHasilPalet.kw')
                     ->label('KW')
-                    ->alignCenter(),
+                    ->alignCenter()
+                    ->searchable(),
+
+                TextColumn::make('jenis_kayu')
+                    ->label('Jenis Kayu')
+                    ->getStateUsing(function ($record) {
+                        $palet = $record->detailHasilPalet;
+                        if (!$palet) return '-';
+
+                        $jenisKayu = $palet->penggunaanLahan?->jenisKayu?->nama_kayu;
+
+                        if (!$jenisKayu) {
+                            $jenisKayu = $palet->produksi?->detailLahanRotary?->first()?->jenisKayu?->nama_kayu;
+                        }
+
+                        return $jenisKayu ?? '-';
+                    })
+                    ->badge(),
 
                 TextColumn::make('jenis_kayu')
                     ->label('Jenis Kayu')
@@ -221,7 +255,7 @@ class SerahTerimaRelationManager extends RelationManager
 
                 TextColumn::make('created_at')
                     ->label('Waktu')
-                    ->dateTime('d/m/Y H:i')
+                    ->dateTime('d/m/Y H:i:s')
                     ->sortable(),
             ])
             ->headerActions([
@@ -279,6 +313,13 @@ class SerahTerimaRelationManager extends RelationManager
                         });
                         Notification::make()->title('Palet Berhasil Diterima')->success()->send();
                     }),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make()
+                        ->label('Hapus Terpilih')
+                        ->visible(fn() => Auth::user()->hasAnyRole(self::ROLE_ADMIN)),
+                ]),
             ]);
     }
 }

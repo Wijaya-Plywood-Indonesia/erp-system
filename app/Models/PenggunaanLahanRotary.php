@@ -14,8 +14,15 @@ class PenggunaanLahanRotary extends Model
         'id_produksi',
         'id_jenis_kayu',
         'jumlah_batang',
+        'hpp_average',
 
     ];
+
+    protected $casts = [
+        'jumlah_batang' => 'integer',
+        'hpp_average' => 'decimal:2', // ✅ Cast ke decimal
+    ];
+
     public function produksi_rotary()
     {
         return $this->belongsTo(ProduksiRotary::class, 'id_produksi');
@@ -35,5 +42,19 @@ class PenggunaanLahanRotary extends Model
     public function detailKayuPecah()
     {
         return $this->hasMany(KayuPecahRotary::class, 'id_penggunaan_lahan');
+    }
+
+    public function isSelesai(): bool
+    {
+        return $this->jumlah_batang == 0 && $this->hpp_average > 0;
+    }
+
+    /**
+     * ✅ Tandai sebagai selesai dengan HPP tertentu
+     */
+    public function markAsSelesai(float $hppValue): void
+    {
+        $this->hpp_average = $hppValue;
+        $this->save();
     }
 }

@@ -37,8 +37,7 @@ class PenggunaanLahanRotaryForm
                     })
                     ->searchable()
                     ->required()
-                    ->live()
-                    ->afterStateUpdated(function ($state, callable $get, callable $set, $livewire) {
+                    ->live()->afterStateUpdated(function ($state, callable $get, callable $set, $livewire) {
 
                         if (!$state) {
                             return;
@@ -74,12 +73,12 @@ class PenggunaanLahanRotaryForm
                     )
                     ->searchable()
                     ->required(),
-                TextInput::make('jumlah_batang')
-                    ->required()
-                    ->numeric()
-                    ->default(0)
-                    ->readOnly()
-                    ->dehydrated(),
+                // TextInput::make('jumlah_batang')
+                //     ->required()
+                //     ->numeric()
+                //     ->default(0)
+                //     ->readOnly()
+                //     ->dehydrated(),
             ]);
     }
 }
