@@ -3,6 +3,8 @@
 namespace App\Filament\Pages;
 
 use App\Exports\LaporanProduksiExport;
+use App\Exports\LaporanProduksiRotaryCustomExport;
+
 use Filament\Pages\Page;
 use Filament\Forms;
 use Filament\Schemas\Schema;
@@ -57,10 +59,19 @@ class LaporanProduksi extends Page implements HasForms
     {
         return [
             Action::make('export')
-                ->label("Donwload Excel")
+                ->label("Download Excel")
                 ->icon('heroicon-o-arrow-down-tray')
+
                 ->color('success')
                 ->action('exportToExcel'),
+            Action::make('exportRekap')
+                ->label("Download Rekap Produksi")
+                ->icon('heroicon-o-table-cells')
+                ->color('warning')
+                ->action('exportRekapToExcel'),
+
+
+
         ];
     }
 
@@ -174,4 +185,15 @@ class LaporanProduksi extends Page implements HasForms
         $filename = 'Laporan-Produksi-' . Carbon::parse($tanggal)->format('Y-m-d') . '.xlsx';
         return Excel::download(new LaporanProduksiExport($this->dataProduksi), $filename);
     }
+
+    public function exportRekapToExcel()
+    {
+        $tanggal = $this->data['tanggal'] ?? now()->format('Y-m-d');
+        $filename = 'Rekap-Produksi-Rotary-' . Carbon::parse($tanggal)->format('Y-m-d') . '.xlsx';
+        
+        return Excel::download(new LaporanProduksiRotaryCustomExport($tanggal), $filename);
+    }
+
+
 }
+

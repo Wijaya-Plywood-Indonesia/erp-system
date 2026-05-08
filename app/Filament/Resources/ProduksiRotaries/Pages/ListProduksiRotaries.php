@@ -4,13 +4,19 @@ namespace App\Filament\Resources\ProduksiRotaries\Pages;
 
 use App\Filament\Resources\ProduksiRotaries\ProduksiRotaryResource;
 use Filament\Actions\CreateAction;
+use Filament\Forms\Components\Radio;
 use Filament\Resources\Pages\ListRecords;
+
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Http;
 use Filament\Forms\Components\DatePicker;
 use App\Services\Akuntansi\RotaryJurnalService;
 use Filament\Actions\Action;
 use Illuminate\Http\Client\Response;
+use App\Exports\LaporanProduksiRotaryCustomExport;
+use Maatwebsite\Excel\Facades\Excel;
+use Carbon\Carbon;
+
 
 class ListProduksiRotaries extends ListRecords
 {
@@ -20,7 +26,25 @@ class ListProduksiRotaries extends ListRecords
     {
         return [
             CreateAction::make(),
+            Action::make('exportRekap')
+                ->label("Download Rekap Produksi (Excel Custom)")
+                ->icon('heroicon-o-table-cells')
+                ->color('warning')
+                ->form([
+                    DatePicker::make('tanggal')
+                        ->label('Pilih Tanggal')
+                        ->default(now())
+                        ->required(),
+                ])
+                ->action(function (array $data) {
+                    $tanggal = $data['tanggal'];
+                    $filename = 'Rekap-Produksi-Rotary-' . Carbon::parse($tanggal)->format('Y-m-d') . '.xlsx';
+                    return Excel::download(new LaporanProduksiRotaryCustomExport($tanggal), $filename);
+                }),
+
+
             // Action::make('test_kirim_jurnal')
+
             // ->label('🧪 Test Kirim Jurnal')
             // ->color('warning')
             // ->form([
