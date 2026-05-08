@@ -16,7 +16,6 @@ use UnitEnum;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
-// Pastikan mengarah ke namespace Pot Afalan yang baru
 use App\Filament\Pages\LaporanPotAfalanJoin\Queries\LoadLaporanPotAfalan;
 use App\Filament\Pages\LaporanPotAfalanJoin\Transformers\PotAfalanDataMap;
 use Maatwebsite\Excel\Facades\Excel;
@@ -44,8 +43,13 @@ class LaporanPotAfalanJoin extends Page
 
     public function mount(): void
     {
-        $this->data['tanggal'] = now()->format('Y-m-d');
-        $this->form->fill($this->data);
+        $tanggal = now()->format('Y-m-d');
+
+        // FIX: fill form dulu, lalu set ulang $this->data SETELAH fill
+        // karena form->fill() dengan statePath('data') akan overwrite $this->data
+        $this->form->fill(['tanggal' => $tanggal]);
+        $this->data['tanggal'] = $tanggal;
+
         $this->loadData();
     }
 
@@ -95,7 +99,7 @@ class LaporanPotAfalanJoin extends Page
         try {
             if ($state instanceof Carbon) {
                 $tanggal = $state->format('Y-m-d');
-            } elseif (is_string($state)) {
+            } elseif (is_string($state) && $state !== '') {
                 $tanggal = Carbon::parse($state)->format('Y-m-d');
             } else {
                 $tanggal = now()->format('Y-m-d');
@@ -103,6 +107,7 @@ class LaporanPotAfalanJoin extends Page
 
             $this->data['tanggal'] = $tanggal;
             $this->loadData();
+
         } catch (Exception $e) {
             Log::error('Error parsing date Potong Afalan: ' . $e->getMessage());
 
@@ -120,23 +125,24 @@ class LaporanPotAfalanJoin extends Page
     {
         try {
             $this->isLoading = true;
+
+            // FIX: tambah Carbon::parse() sebagai safety net format tanggal
             $tanggal = $this->data['tanggal'] ?? now()->format('Y-m-d');
+            $tanggal = Carbon::parse($tanggal)->format('Y-m-d');
 
             $this->dataProduksi = [];
-            $this->laporan = [];
+            $this->laporan      = [];
 
-            // Memanggil Query Class Potong Afalan
             $raw = LoadLaporanPotAfalan::run($tanggal);
 
             Log::info('Potong Afalan Query executed', [
                 'records_found' => $raw->count(),
-                'tanggal' => $tanggal
+                'tanggal'       => $tanggal,
             ]);
 
             if ($raw->isNotEmpty()) {
-                // Memanggil Transformer PotAfalanDataMap
                 $this->dataProduksi = PotAfalanDataMap::make($raw);
-                $this->laporan = $this->dataProduksi;
+                $this->laporan      = $this->dataProduksi;
             } else {
                 Notification::make()
                     ->warning()
@@ -144,6 +150,7 @@ class LaporanPotAfalanJoin extends Page
                     ->body('Tidak ditemukan data produksi potong afalan untuk tanggal ' . Carbon::parse($tanggal)->format('d/m/Y'))
                     ->send();
             }
+
         } catch (Exception $e) {
             Log::error('Error loading potong afalan data: ' . $e->getMessage());
 
@@ -168,14 +175,11 @@ class LaporanPotAfalanJoin extends Page
         try {
             $tanggal = Carbon::parse($this->data['tanggal'])->format('d-m-Y');
 
-            if (class_exists('App\Exports\LaporanPotAfalanJoinExport')) {
-                return Excel::download(
-                    new LaporanPotAfalanJoinExport($this->laporan),
-                    "laporan-pot-afalan-{$tanggal}.xlsx"
-                );
-            }
+            return Excel::download(
+                new LaporanPotAfalanJoinExport($this->laporan),
+                "laporan-pot-afalan-{$tanggal}.xlsx"
+            );
 
-            throw new Exception("Class Export Excel belum tersedia.");
         } catch (Exception $e) {
             Notification::make()
                 ->danger()
@@ -188,16 +192,16 @@ class LaporanPotAfalanJoin extends Page
     public function getViewData(): array
     {
         return [
-            'laporan' => $this->laporan,
+            'laporan'      => $this->laporan,
             'dataProduksi' => $this->dataProduksi,
-            'isLoading' => $this->isLoading,
-            'summary' => $this->calculateSummary(),
+            'isLoading'    => $this->isLoading,
+            'summary'      => $this->calculateSummary(),
         ];
     }
 
     private function calculateSummary(): array
     {
-        $totalAll = 0;
+        $totalAll      = 0;
         $uniquePegawai = [];
         $globalUkuranKw = [];
 
@@ -212,16 +216,16 @@ class LaporanPotAfalanJoin extends Page
             if (!isset($globalUkuranKw[$key])) {
                 $globalUkuranKw[$key] = (object)[
                     'ukuran' => $row['ukuran'],
-                    'kw' => $row['kw'],
-                    'total' => 0
+                    'kw'     => $row['kw'],
+                    'total'  => 0,
                 ];
             }
             $globalUkuranKw[$key]->total += $row['hasil'];
         }
 
         return [
-            'totalAll' => $totalAll,
-            'totalPegawai' => count($uniquePegawai),
+            'totalAll'       => $totalAll,
+            'totalPegawai'   => count($uniquePegawai),
             'globalUkuranKw' => array_values($globalUkuranKw),
         ];
     }

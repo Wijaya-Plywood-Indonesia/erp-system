@@ -109,7 +109,9 @@ class LaporanProduksiStikSheetPekerja implements FromCollection, WithHeadings, W
 }
 
 // ============================================================
-//  SHEET 2 — "Hasil Stik" (bergaya dryer, merge cell, tanpa ringkasan)
+//  SHEET 2 — "Hasil Stik"
+//  Menggunakan data 'detail_hasil' yang sudah disiapkan
+//  oleh LaporanStik::loadAllData() — sudah digroup & dikw-kan
 // ============================================================
 class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
 {
@@ -133,9 +135,10 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
         }
 
         foreach ($this->dataStik as $produksi) {
-            $tanggal      = $produksi['tanggal']     ?? '-';
-            $pekerja      = $produksi['pekerja']      ?? [];
-            $detailHasil  = $produksi['detail_hasil'] ?? [];
+            $tanggal      = $produksi['tanggal']      ?? '-';
+            $pekerja      = $produksi['pekerja']       ?? [];
+            // ✅ Gunakan 'detail_hasil' sesuai key dari LaporanStik::loadAllData()
+            $detailHasil  = $produksi['detail_hasil']  ?? [];
             $totalPekerja = count($pekerja);
 
             // ── JUDUL SEKSI ──────────────────────────────────────
@@ -152,12 +155,14 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
             $dataStartRow = $rowIndex;
 
             if (empty($detailHasil)) {
-                $rows[] = [$tanggal, '-', '-', '-', '-', '', '', '', '', '', $totalPekerja];
+                // Fallback jika belum ada input hasil
+                $rows[] = [$tanggal, '-', '-', '-', '-', '', '', '', '', $produksi['hasil_harian'] ?? 0, $totalPekerja];
                 $this->styleMap[$rowIndex] = 'data';
                 $rowIndex++;
             } else {
                 foreach ($detailHasil as $i => $detail) {
                     $rows[] = [
+                        // Tanggal dan TTL PKJ hanya di baris pertama, sisanya kosong (akan di-merge)
                         $i === 0 ? $tanggal      : '',
                         $detail['panjang']    ?? '-',
                         $detail['lebar']      ?? '-',
@@ -176,7 +181,7 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
 
                 $dataEndRow = $rowIndex - 1;
 
-                // Merge Tanggal & TTL PKJ hanya jika ada lebih dari 1 baris data
+                // Merge Tanggal (A) & TTL PKJ (K) jika lebih dari 1 baris
                 if (count($detailHasil) > 1) {
                     $this->mergeRanges[] = "A{$dataStartRow}:A{$dataEndRow}";
                     $this->mergeRanges[] = "K{$dataStartRow}:K{$dataEndRow}";
@@ -195,10 +200,10 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
 
     public function styles(Worksheet $sheet)
     {
-        $blueDark  = '1F497D';
+        $blueDark  = '1F4E79';
         $blueLight = '2E75B6';
 
-        // ── MERGE CELL (Tanggal & TTL PKJ) ───────────────────────
+        // ── MERGE CELL ───────────────────────────────────────────
         foreach ($this->mergeRanges as $range) {
             $sheet->mergeCells($range);
             $sheet->getStyle($range)->getAlignment()
@@ -215,8 +220,9 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
                     $sheet->getStyle("A{$rowNum}:K{$rowNum}")->applyFromArray([
                         'font' => [
                             'bold'  => true,
-                            'size'  => 12,
+                            'size'  => 14,
                             'color' => ['rgb' => 'FFFFFF'],
+                            'name'  => 'Arial',
                         ],
                         'fill' => [
                             'fillType'   => Fill::FILL_SOLID,
@@ -225,9 +231,10 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
                         'alignment' => [
                             'horizontal' => Alignment::HORIZONTAL_LEFT,
                             'vertical'   => Alignment::VERTICAL_CENTER,
+                            'indent'     => 1,
                         ],
                     ]);
-                    $sheet->getRowDimension($rowNum)->setRowHeight(22);
+                    $sheet->getRowDimension($rowNum)->setRowHeight(28);
                     break;
 
                 case 'col_header':
@@ -235,6 +242,8 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
                         'font' => [
                             'bold'  => true,
                             'color' => ['rgb' => 'FFFFFF'],
+                            'size'  => 10,
+                            'name'  => 'Arial',
                         ],
                         'fill' => [
                             'fillType'   => Fill::FILL_SOLID,
@@ -251,11 +260,16 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
                             ],
                         ],
                     ]);
-                    $sheet->getRowDimension($rowNum)->setRowHeight(18);
+                    $sheet->getRowDimension($rowNum)->setRowHeight(20);
                     break;
 
                 case 'data':
                     $sheet->getStyle("A{$rowNum}:K{$rowNum}")->applyFromArray([
+                        'font' => ['size' => 10, 'name' => 'Arial'],
+                        'fill' => [
+                            'fillType'   => Fill::FILL_SOLID,
+                            'startColor' => ['rgb' => 'FFFFFF'],
+                        ],
                         'alignment' => [
                             'horizontal' => Alignment::HORIZONTAL_CENTER,
                             'vertical'   => Alignment::VERTICAL_CENTER,
@@ -263,30 +277,27 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
                         'borders' => [
                             'allBorders' => [
                                 'borderStyle' => Border::BORDER_THIN,
-                                'color'       => ['rgb' => 'BFBFBF'],
+                                'color'       => ['rgb' => 'BDD7EE'],
                             ],
                         ],
                     ]);
-                    // Tanggal rata kiri (sebelum di-override merge jika ada)
-                    $sheet->getStyle("A{$rowNum}")
-                        ->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                    $sheet->getRowDimension($rowNum)->setRowHeight(16);
                     break;
             }
         }
 
         // ── LEBAR KOLOM ──────────────────────────────────────────
-        $sheet->getColumnDimension('A')->setWidth(14);
-        $sheet->getColumnDimension('B')->setWidth(8);
-        $sheet->getColumnDimension('C')->setWidth(8);
-        $sheet->getColumnDimension('D')->setWidth(8);
-        $sheet->getColumnDimension('E')->setWidth(10);
-        $sheet->getColumnDimension('F')->setWidth(8);
-        $sheet->getColumnDimension('G')->setWidth(8);
-        $sheet->getColumnDimension('H')->setWidth(8);
-        $sheet->getColumnDimension('I')->setWidth(8);
-        $sheet->getColumnDimension('J')->setWidth(8);
+        $sheet->getColumnDimension('A')->setWidth(13);
+        $sheet->getColumnDimension('B')->setWidth(7);
+        $sheet->getColumnDimension('C')->setWidth(7);
+        $sheet->getColumnDimension('D')->setWidth(7);
+        $sheet->getColumnDimension('E')->setWidth(9);
+        foreach (['F','G','H','I','J'] as $col) {
+            $sheet->getColumnDimension($col)->setWidth(8);
+        }
         $sheet->getColumnDimension('K')->setWidth(10);
+
+        $sheet->freezePane('A3');
 
         return [];
     }

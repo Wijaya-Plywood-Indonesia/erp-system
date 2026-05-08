@@ -30,19 +30,15 @@ use UnitEnum;
 class LaporanPressDryer extends Page implements HasForms
 {
     use HasPageShield;
-
     use Forms\Concerns\InteractsWithForms;
 
-    // Page Resource View
     protected string $view = 'filament.pages.laporan-press-dryer';
 
-    // Navigation Group
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static ?string $title = 'Laporan Produksi Dryer';
     protected static ?int $navigationSort = 3;
 
-    // Form state container (statePath => 'data')
     public array $data = [
         'tanggal' => null,
     ];
@@ -51,33 +47,31 @@ class LaporanPressDryer extends Page implements HasForms
 
     public bool $isLoading = false;
 
-    // ✅ TAMBAH LISTENERS
     protected $listeners = [
         'refreshLaporanPressDryer' => 'loadData',
     ];
 
-    // Inisialisasi Halaman
     public function mount(): void
     {
-        // set default tanggal di state (YYYY-MM-DD)
-        $this->data['tanggal'] = now()->format('Y-m-d');
+        $tanggal = now()->format('Y-m-d');
 
-        // Isi awal form (opsional; InteractsWithForms akan menampilkan form berdasarkan statePath)
-        $this->form->fill($this->data);
+        // FIX: fill form dulu, lalu set ulang $this->data SETELAH fill
+        // karena form->fill() dengan statePath('data') akan overwrite $this->data
+        $this->form->fill(['tanggal' => $tanggal]);
+        $this->data['tanggal'] = $tanggal;
 
         $this->loadData();
     }
 
-    // Fungsi DatePicker
     public function form(Schema $schema): Schema
     {
         return $schema
             ->schema([
                 DatePicker::make('tanggal')
                     ->label('Tanggal')
-                    ->native(false)                    // modern, responsive
-                    ->format('Y-m-d')                     // format penyimpanan
-                    ->displayFormat('d/m/Y')             // tampil di UI
+                    ->native(false)
+                    ->format('Y-m-d')
+                    ->displayFormat('d/m/Y')
                     ->live()
                     ->closeOnDateSelection()
                     ->afterStateUpdated(fn($state) => $this->onTanggalUpdated($state))
@@ -85,25 +79,25 @@ class LaporanPressDryer extends Page implements HasForms
                     ->maxDate(now())
                     ->default(now())
                     ->suffixIcon('heroicon-o-calendar')
-                    ->suffixIconColor('primary'), // tidak boleh pilih tanggal di masa depan
+                    ->suffixIconColor('primary'),
             ])
-            ->statePath('data'); // penting: menyambungkan schema -> $this->data
+            ->statePath('data');
     }
 
-    // Fungsi setelah tanggal diupdate
     public function onTanggalUpdated($state): void
     {
         try {
             if ($state instanceof Carbon) {
                 $tanggal = $state->format('Y-m-d');
-            } elseif (is_string($state)) {
+            } elseif (is_string($state) && $state !== '') {
                 $tanggal = Carbon::parse($state)->format('Y-m-d');
             } else {
                 $tanggal = now()->format('Y-m-d');
             }
-            $this->data['tanggal'] = $tanggal;
 
+            $this->data['tanggal'] = $tanggal;
             $this->loadData();
+
         } catch (Exception $e) {
             Notification::make()
                 ->danger()
@@ -116,22 +110,22 @@ class LaporanPressDryer extends Page implements HasForms
         }
     }
 
-    // Load data produksi berdasarkan tanggal
     public function loadData(): void
     {
         try {
             $this->isLoading = true;
 
+            // FIX: ambil tanggal dari $this->data, fallback ke hari ini
+            // Pastikan tidak null sebelum digunakan
             $tanggal = $this->data['tanggal'] ?? now()->format('Y-m-d');
+            $tanggal = Carbon::parse($tanggal)->format('Y-m-d');
 
             Log::info('Loading produksi data for date: ' . $tanggal, [
                 'timestamp' => now()->toDateTimeString(),
             ]);
 
-            // ✅ FORCE CLEAR STATE
             $this->dataProduksi = [];
 
-            // LoadProduksi::run harus mengembalikan koleksi Eloquent
             $raw = LoadPressDryer::run($tanggal);
 
             Log::info('Found ' . $raw->count() . ' production records');
@@ -145,8 +139,8 @@ class LaporanPressDryer extends Page implements HasForms
                     ->body('Tidak ditemukan data produksi untuk tanggal ' . Carbon::parse($tanggal)->format('d/m/Y'))
                     ->send();
             }
+
         } catch (Exception $e) {
-            // Handle error dengan notification
             Notification::make()
                 ->danger()
                 ->title('Error Memuat Data')
@@ -161,7 +155,6 @@ class LaporanPressDryer extends Page implements HasForms
         }
     }
 
-    // ✅ TAMBAH METHOD REFRESH MANUAL
     public function refresh(): void
     {
         $this->loadData();
@@ -173,11 +166,9 @@ class LaporanPressDryer extends Page implements HasForms
             ->send();
     }
 
-    // Export To Excel Button
     protected function getHeaderActions(): array
     {
         return [
-            // ✅ TAMBAH TOMBOL REFRESH
             Action::make('refresh')
                 ->label('Refresh')
                 ->icon('heroicon-o-arrow-path')
@@ -185,18 +176,18 @@ class LaporanPressDryer extends Page implements HasForms
                 ->action('refresh'),
 
             Action::make('export')
-                ->label("Download Excel")
+                ->label('Download Excel')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
-                ->action('exportToExcel'),
+                ->action('exportToExcel'),  
         ];
     }
 
-    // Export To Excel Function
     public function exportToExcel()
-{
-    $tanggal = $this->data['tanggal'] ?? now()->format('Y-m-d');
-    $filename = 'Laporan-Produksi-Dryer-' . Carbon::parse($tanggal)->format('Y-m-d') . '.xlsx';
-    return Excel::download(new LaporanPressDryerExport($this->dataProduksi), $filename);
-}
+    {
+        $tanggal  = $this->data['tanggal'] ?? now()->format('Y-m-d');
+        $filename = 'Laporan-Produksi-Dryer-' . Carbon::parse($tanggal)->format('Y-m-d') . '.xlsx';
+
+        return Excel::download(new LaporanPressDryerExport($this->dataProduksi), $filename);
+    }
 }

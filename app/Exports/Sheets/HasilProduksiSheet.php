@@ -80,30 +80,36 @@ class HasilProduksiSheet implements FromArray, WithTitle, WithEvents, WithColumn
             $dataStart  = $currentRow;
 
             if ($allDetails->isNotEmpty()) {
+                // Group by ukuran+jenis SAJA (tanpa kw) — kw dijumlah per kolom
                 $subGrouped = $allDetails->groupBy(function ($dh) {
                     $p = $dh['ukuran']['p'] ?? '?';
                     $l = $dh['ukuran']['l'] ?? '?';
                     $t = $dh['ukuran']['t'] ?? '?';
                     $j = $dh['jenis_kayu'] ?? '-';
-                    $k = $dh['kw'] ?? 0;
-                    return "{$p}|{$l}|{$t}|{$j}|{$k}";
+                    return "{$p}|{$l}|{$t}|{$j}";
                 });
 
                 foreach ($subGrouped as $detailGroup) {
-                    $sample   = $detailGroup->first();
-                    $ukuran   = $sample['ukuran'] ?? [];
-                    $kw       = (int) ($sample['kw'] ?? 0);
-                    $totalIsi = $detailGroup->sum('isi');
+                    $sample  = $detailGroup->first();
+                    $ukuran  = $sample['ukuran'] ?? [];
+
+                    // Sum per kw
+                    $kw1 = $detailGroup->where('kw', 1)->sum('isi');
+                    $kw2 = $detailGroup->where('kw', 2)->sum('isi');
+                    $kw3 = $detailGroup->where('kw', 3)->sum('isi');
+                    $kw4 = $detailGroup->where('kw', 4)->sum('isi');
+                    $totalIsi = $kw1 + $kw2 + $kw3 + $kw4;
+
                     $rows[] = [
                         $tanggalItem,
                         $ukuran['p'] ?? '-',
                         $ukuran['l'] ?? '-',
                         $ukuran['t'] ?? '-',
                         $sample['jenis_kayu'] ?? '-',
-                        $kw === 1 ? $totalIsi : '',
-                        $kw === 2 ? $totalIsi : '',
-                        $kw === 3 ? $totalIsi : '',
-                        $kw === 4 ? $totalIsi : '',
+                        $kw1 ?: '',
+                        $kw2 ?: '',
+                        $kw3 ?: '',
+                        $kw4 ?: '',
                         $totalIsi,
                         $totalPekerja,
                         '',
