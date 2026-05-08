@@ -194,9 +194,9 @@ class LaporanPressDryer extends Page implements HasForms
 
     // Export To Excel Function
     public function exportToExcel()
-    {
-        $tanggal = $this->data['tanggal'] ?? now()->format('Y-m-d');
-        $filename = 'Laporan-Produksi-' . Carbon::parse($tanggal)->format('Y-m-d') . '.xlsx';
-        return Excel::download(new LaporanPressDryerExport($this->dataProduksi), $filename);
-    }
+{
+    $tanggal = $this->data['tanggal'] ?? now()->format('Y-m-d');
+    $filename = 'Laporan-Produksi-Dryer-' . Carbon::parse($tanggal)->format('Y-m-d') . '.xlsx';
+    return Excel::download(new LaporanPressDryerExport($this->dataProduksi), $filename);
+}
 }
