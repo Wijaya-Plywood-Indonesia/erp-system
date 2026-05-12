@@ -12,15 +12,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // 1. Add id_mesin to produksi_kedi
-        Schema::table('produksi_kedi', function (Blueprint $table) {
-            $table->foreignId('id_mesin')
-                ->nullable()
-                ->after('tanggal')
-                ->constrained('mesins')
-                ->cascadeOnUpdate()
-                ->restrictOnDelete();
-        });
+        // 1. Add id_mesin to produksi_kedi safely
+        if (!Schema::hasColumn('produksi_kedi', 'id_mesin')) {
+            Schema::table('produksi_kedi', function (Blueprint $table) {
+                $table->foreignId('id_mesin')
+                    ->nullable()
+                    ->after('tanggal')
+                    ->constrained('mesins')
+                    ->cascadeOnUpdate()
+                    ->restrictOnDelete();
+            });
+        }
 
         // 2. Data Migration (Optional: try to fill id_mesin from detail tables if they exist)
         // This is a bit tricky since there could be multiple details with different machines, 
@@ -36,21 +38,45 @@ return new class extends Migration
             }
         }
 
-        // 3. Remove id_mesin from detail tables
-        Schema::table('detail_masuk_kedi', function (Blueprint $table) {
-            $table->dropForeign(['id_mesin']);
-            $table->dropColumn('id_mesin');
-        });
+        // 3. Remove id_mesin from detail tables safely
+        if (Schema::hasColumn('detail_masuk_kedi', 'id_mesin')) {
+            try {
+                Schema::table('detail_masuk_kedi', function (Blueprint $table) {
+                    $table->dropForeign(['id_mesin']);
+                });
+            } catch (\Exception $e) {
+                // Abaikan jika foreign key tidak ditemukan
+            }
+            Schema::table('detail_masuk_kedi', function (Blueprint $table) {
+                $table->dropColumn('id_mesin');
+            });
+        }
 
-        Schema::table('detail_bongkar_kedi', function (Blueprint $table) {
-            $table->dropForeign(['id_mesin']);
-            $table->dropColumn('id_mesin');
-        });
+        if (Schema::hasColumn('detail_bongkar_kedi', 'id_mesin')) {
+            try {
+                Schema::table('detail_bongkar_kedi', function (Blueprint $table) {
+                    $table->dropForeign(['id_mesin']);
+                });
+            } catch (\Exception $e) {
+                // Abaikan jika foreign key tidak ditemukan
+            }
+            Schema::table('detail_bongkar_kedi', function (Blueprint $table) {
+                $table->dropColumn('id_mesin');
+            });
+        }
 
-        Schema::table('detail_pegawai_kedi', function (Blueprint $table) {
-            $table->dropForeign(['id_mesin']);
-            $table->dropColumn('id_mesin');
-        });
+        if (Schema::hasColumn('detail_pegawai_kedi', 'id_mesin')) {
+            try {
+                Schema::table('detail_pegawai_kedi', function (Blueprint $table) {
+                    $table->dropForeign(['id_mesin']);
+                });
+            } catch (\Exception $e) {
+                // Abaikan jika foreign key tidak ditemukan
+            }
+            Schema::table('detail_pegawai_kedi', function (Blueprint $table) {
+                $table->dropColumn('id_mesin');
+            });
+        }
     }
 
     /**
