@@ -16,7 +16,9 @@
             {{-- HEADER --}}
             <div class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
                 <h3 class="text-lg font-bold">
-                    LAPORAN PRODUKSI KEDI - {{ $data['tanggal'] }}
+                    LAPORAN PRODUKSI KEDI - {{ $data['tanggal_masuk'] }} 
+                    <span class="text-sm font-normal text-gray-400 mx-2">s/d</span> 
+                    {{ $data['tanggal_keluar'] }}
                 </h3>
                 <span class="px-3 py-1 text-xs font-semibold rounded bg-blue-600">
                     Status: {{ $data['status'] }}

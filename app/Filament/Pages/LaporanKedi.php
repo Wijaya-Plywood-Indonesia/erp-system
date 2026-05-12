@@ -11,6 +11,8 @@ use App\Exports\LaporanProduksiKediExport;
 use App\Models\ProduksiKedi;
 use Filament\Actions\Action;
 use Carbon\Carbon;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Actions;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
@@ -33,28 +35,35 @@ class LaporanKedi extends Page
 
     public function mount(): void
     {
-        $this->form->fill(['tanggal' => $this->tanggal]);
         $this->tanggal = now()->format('Y-m-d');
+        $this->form->fill([
+            'tanggal' => $this->tanggal,
+        ]);
         $this->loadAllData();
     }
 
     protected function getFormSchema(): array
     {
         return [
-            DatePicker::make('tanggal')
-                ->label('Pilih Tanggal')
-                ->format('Y-m-d')
-                ->displayFormat('d/m/Y')
-                ->reactive()
-                ->live()
-                ->required()
-                ->maxDate(now())
-                ->default(now())
-
-                ->afterStateUpdated(function ($state) {
-                    $this->tanggal = $state;
-                    $this->loadAllData();
-                }),
+            Grid::make(3)
+                ->schema([
+                    DatePicker::make('tanggal')
+                        ->label('Pilih Tanggal')
+                        ->format('Y-m-d')
+                        ->displayFormat('d/m/Y')
+                        ->required()
+                        ->default(now()),
+                    Actions::make([
+                        Action::make('filter')
+                            ->label('Tampilkan Laporan')
+                            ->icon('heroicon-o-magnifying-glass')
+                            ->action(function () {
+                                $data = $this->form->getState();
+                                $this->tanggal = $data['tanggal'];
+                                $this->loadAllData();
+                            }),
+                    ])->alignEnd(),
+                ]),
         ];
     }
 
@@ -73,13 +82,13 @@ class LaporanKedi extends Page
         if (empty($this->dataKedi)) {
             Notification::make()
                 ->title('Gagal Export')
-                ->body('Tidak ada data Produksi Kedi untuk tanggal ini.')
+                ->body('Tidak ada data Produksi Kedi untuk rentang tanggal ini.')
                 ->danger()
                 ->send();
             return;
         }
 
-        $filename = 'Laporan-Produksi-Kedi-' . Carbon::parse($this->tanggal)->format('Y-m-d') . '.xlsx';
+        $filename = 'Laporan-Produksi-Kedi-' . $this->tanggal . '.xlsx';
         return Excel::download(new LaporanProduksiKediExport($this->dataKedi), $filename);
     }
 
@@ -89,14 +98,14 @@ class LaporanKedi extends Page
 
         $produksiList = ProduksiKedi::with([
             'mesin',
-            'detailMasukKedi.ukuran',
-            'detailMasukKedi.jenisKayu',
             'detailBongkarKedi.ukuran',
             'detailBongkarKedi.jenisKayu',
+            'detailPegawaiKedi', // Tambahkan ini
             'validasiTerakhir',
         ])
             ->whereDate('tanggal', $this->tanggal)
             ->whereHas('validasiTerakhir', fn($q) => $q->where('status', 'divalidasi'))
+            ->orderBy('tanggal')
             ->get();
 
         $this->dataKedi = [];
@@ -115,7 +124,7 @@ class LaporanKedi extends Page
             $detailMasuk = $produksi->detailMasukKedi->map(fn($d) => [
                 'no_palet' => $d->no_palet,
                 'mesin' => $produksi->mesin?->nama_mesin ?? '-',
-                'ukuran' => $d->ukuran?->nama_ukuran ?? '-',
+                'ukuran' => $d->ukuran?->dimensi ?? '-',
                 'jenis_kayu' => $d->jenisKayu?->nama_kayu ?? '-',
                 'kw' => $d->kw,
                 'jumlah' => $d->jumlah,
@@ -127,7 +136,7 @@ class LaporanKedi extends Page
             $detailBongkar = $produksi->detailBongkarKedi->map(fn($d) => [
                 'no_palet' => $d->no_palet,
                 'mesin' => $produksi->mesin?->nama_mesin ?? '-',
-                'ukuran' => $d->ukuran?->nama_ukuran ?? '-',
+                'ukuran' => $d->ukuran?->dimensi ?? '-',
                 'jenis_kayu' => $d->jenisKayu?->nama_kayu ?? '-',
                 'kw' => $d->kw,
                 'jumlah' => $d->jumlah,
@@ -135,13 +144,15 @@ class LaporanKedi extends Page
 
             $this->dataKedi[] = [
                 'id' => $produksi->id,
-                'tanggal_produksi' => Carbon::parse($produksi->tanggal)->format('d/m/Y'),
-                'tanggal_bongkar' => $produksi->tanggal_bongkar ? Carbon::parse($produksi->tanggal_bongkar)->format('d/m/Y') : '-',
+                'tanggal_masuk' => Carbon::parse($produksi->tanggal)->format('d/m/Y'),
+                'tanggal_keluar' => $produksi->tanggal_actual_bongkar ? Carbon::parse($produksi->tanggal_actual_bongkar)->format('d/m/Y') : '-',
                 'status' => $produksi->status,
                 'detail_masuk' => $detailMasuk,
                 'detail_bongkar' => $detailBongkar,
                 'validasi_terakhir' => $produksi->validasiTerakhir?->status ?? '-',
                 'validasi_oleh' => $produksi->validasiTerakhir?->role ?? '-',
+                'total_pekerja' => $produksi->detailPegawaiKedi->count(),
+                'ongkos_mesin' => (float) ($produksi->mesin?->ongkos_mesin ?? 0),
             ];
         }
 
