@@ -147,13 +147,67 @@ class TempatKayusTable
             ])
             ->filters([])
             ->recordActions([
+                // ... di dalam recordActions
+                Action::make('cek_detail')
+                    ->label('Cek Detail')
+                    ->icon('heroicon-m-magnifying-glass')
+                    ->color('gray')
+                    ->modalHeading('Detail Seri & Stok Kayu')
+                    ->modalSubmitAction(false)
+                    ->modalWidth('4xl')
+                    // Di dalam modalContent pada file TempatKayusTable.php
+                    ->modalContent(function ($record) {
+                        $kayuMasukIds = \App\Models\TempatKayu::where('id_lahan', $record->id_lahan)
+                            ->whereNotNull('id_kayu_masuk')
+                            ->pluck('id_kayu_masuk');
+
+                        // Ambil total stok riil saat ini
+                        $totalStokRiil = (int) \App\Models\HppAverageSummarie::where('id_lahan', $record->id_lahan)
+                            ->where('panjang', $record->group_panjang)
+                            ->where('grade', $record->group_grade)
+                            ->sum('stok_batang');
+
+                        $details = \App\Models\DetailTurusanKayu::whereIn('id_kayu_masuk', $kayuMasukIds)
+                            ->where('lahan_id', $record->id_lahan)
+                            ->where('panjang', $record->group_panjang)
+                            ->with('kayuMasuk')
+                            ->get();
+
+                        $groupedBySeri = $details
+                            ->groupBy(fn($item) => $item->kayuMasuk->seri ?? 'Tanpa Seri')
+                            ->map(function ($group, $seri) use ($totalStokRiil) {
+                                return [
+                                    'seri'           => $seri,
+                                    'total_batang'   => $group->sum('kuantitas'),
+                                    'total_kubikasi' => $group->sum(fn($item) => (float) $item->kubikasi),
+                                    'tersedia'       => $totalStokRiil > 0, // Indikator ketersediaan
+                                ];
+                            })
+                            // KUNCI: Hanya ambil yang status tersedia-nya TRUE
+                            ->filter(fn($item) => $item['tersedia'])
+                            ->sortBy('seri')
+                            ->values();
+
+                        $totalKubikasiRiil = (float) \App\Models\HppAverageSummarie::where('id_lahan', $record->id_lahan)
+                            ->where('panjang', $record->group_panjang)
+                            ->where('grade', $record->group_grade)
+                            ->sum('stok_kubikasi');
+
+                        return view('filament.components.detail-kayu-modal', [
+                            'record'        => $record,
+                            'details'       => $groupedBySeri,
+                            'totalBatang'   => $totalStokRiil,
+                            'totalKubikasi' => $totalKubikasiRiil,
+                        ]);
+                    }),
+
                 EditAction::make()
                     ->visible($isAdmin),
                 // ACTION SERAH
                 Action::make('serah_kayu')
-                    ->label('Serah Kayu')
+                    ->label('Lahan Penuh')
                     ->icon('heroicon-o-paper-airplane')
-                    ->color('success')
+                    ->color('primary')
                     ->requiresConfirmation()
                     ->modalHeading('Serahkan Kayu?')
                     ->modalDescription(
