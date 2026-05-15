@@ -52,7 +52,12 @@ class LaporanKedi extends Page
                         ->format('Y-m-d')
                         ->displayFormat('d/m/Y')
                         ->required()
-                        ->default(now()),
+                        ->default(now())
+                        ->live()
+                        ->afterStateUpdated(function ($state) {
+                            $this->tanggal = $state;
+                            $this->loadAllData();
+                        }),
                     Actions::make([
                         Action::make('filter')
                             ->label('Tampilkan Laporan')
@@ -98,13 +103,14 @@ class LaporanKedi extends Page
 
         $produksiList = ProduksiKedi::with([
             'mesin',
+            'detailMasukKedi.ukuran',
+            'detailMasukKedi.jenisKayu',
             'detailBongkarKedi.ukuran',
             'detailBongkarKedi.jenisKayu',
-            'detailPegawaiKedi', // Tambahkan ini
+            'detailPegawaiKedi',
             'validasiTerakhir',
         ])
             ->whereDate('tanggal', $this->tanggal)
-            ->whereHas('validasiTerakhir', fn($q) => $q->where('status', 'divalidasi'))
             ->orderBy('tanggal')
             ->get();
 
@@ -113,7 +119,7 @@ class LaporanKedi extends Page
         if ($produksiList->isEmpty()) {
             Notification::make()
                 ->title('Data tidak ditemukan')
-                ->body('Tidak ada data Produksi Kedi yang tervalidasi pada tanggal ini.')
+                ->body('Tidak ada data Produksi Kedi pada tanggal ini.')
                 ->warning()
                 ->send();
         }
