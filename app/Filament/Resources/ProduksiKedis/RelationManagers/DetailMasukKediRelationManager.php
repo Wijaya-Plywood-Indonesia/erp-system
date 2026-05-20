@@ -22,7 +22,7 @@ class DetailMasukKediRelationManager extends RelationManager
 
     public static function canViewForRecord($ownerRecord, $pageClass): bool
     {
-        return $ownerRecord->status === 'masuk';
+        return true;
     }
 
 

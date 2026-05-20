@@ -7,12 +7,14 @@ use App\Models\JurnalUmum;
 use Filament\Pages\Page;
 use Carbon\Carbon;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class BukuBesar extends Page
 {
+    use HasPageShield;
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-book-open';
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
     protected string $view = 'filament.pages.buku-besar';

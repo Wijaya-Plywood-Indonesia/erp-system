@@ -20,13 +20,41 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
 
     public function __construct(array $data)
     {
+        // --- 1. LOGIKA CUSTOM SORTING ---
+        // Kita urutkan data sebelum disimpan ke property $this->data
+        usort($data, function ($a, $b) {
+            $kodeA = (string)($a['kodep'] ?? '');
+            $kodeB = (string)($b['kodep'] ?? '');
+
+            // Menentukan bobot prioritas
+            $getWeight = function ($kode) {
+                if (str_starts_with($kode, '8') || str_starts_with($kode, '9')) {
+                    return 1; // Prioritas pertama (Paling Atas)
+                }
+                if (str_starts_with($kode, '7')) {
+                    return 3; // Prioritas terakhir (Paling Bawah)
+                }
+                return 2; // Kode lainnya (1, 2, 3, 4, 5, 6) ada di tengah
+            };
+
+            $weightA = $getWeight($kodeA);
+            $weightB = $getWeight($kodeB);
+
+            // Jika prioritas grup berbeda, gunakan perbandingan bobot
+            if ($weightA !== $weightB) {
+                return $weightA <=> $weightB;
+            }
+
+            // Jika berada dalam grup yang sama, urutkan berdasarkan nomor secara alami
+            return strnatcasecmp($kodeA, $kodeB);
+        });
+
         $this->data = $data;
 
-        // Simpan nilai precision asli agar bisa dikembalikan setelah export selesai
+        // --- 2. PENGATURAN PRESISI (Tetap Sama) ---
         $this->originalPrecision = (int) ini_get('precision');
         $this->originalSerializePrecision = (int) ini_get('serialize_precision');
 
-        // Paksa presisi float ke 16 digit selama proses export
         ini_set('precision', 16);
         ini_set('serialize_precision', -1);
     }

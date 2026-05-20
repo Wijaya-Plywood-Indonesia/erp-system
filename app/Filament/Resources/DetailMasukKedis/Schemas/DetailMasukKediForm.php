@@ -18,17 +18,6 @@ class DetailMasukKediForm
         return $schema
             ->components([
 
-                Select::make('id_mesin')
-                    ->label('Kode Kedi')
-                    ->options(
-                        Mesin::whereHas('kategoriMesin', function ($query) {
-                            $query->where('nama_kategori_mesin', 'DRYER');
-                        })
-                            ->orderBy('nama_mesin')
-                            ->pluck('nama_mesin', 'id')
-                    )
-                    ->searchable()
-                    ->required(),
 
                 // Relasi ke Jenis Kayu
                 Select::make('id_jenis_kayu')
@@ -81,11 +70,6 @@ class DetailMasukKediForm
                 TextInput::make('no_palet')
                     ->label('Nomor Palet')
                     ->numeric()
-                    ->required(),
-
-
-                DatePicker::make('rencana_bongkar')
-                    ->label('Rencana Bongkar')
                     ->required(),
             ]);
     }

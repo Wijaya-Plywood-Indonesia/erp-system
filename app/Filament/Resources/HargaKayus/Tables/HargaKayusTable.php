@@ -108,7 +108,7 @@ class HargaKayusTable
                     ->label('Status')
                     ->badge()
                     ->getStateUsing(function (Model $record) {
-                        if ($record->harga_baru !== null && $record->harga_baru > 0) {
+                        if ($record->harga_baru !== null && $record->harga_baru >= 0) {
                             return 'pending';
                         }
                         return $record->status ?? 'initial';
@@ -157,7 +157,9 @@ class HargaKayusTable
                         $isAdmin = $user->hasAnyRole(self::ROLE_ADMIN);
                         $isBukanPengusul = $user->name !== $record->updated_by;
 
-                        return $record->harga_baru > 0 && ($isAdmin || $isBukanPengusul);
+                        return filled($record->harga_baru) &&
+                            $record->harga_baru >= 0 &&
+                            ($isAdmin || $isBukanPengusul);
                     })
                     ->action(function (Model $record) {
                         // Bungkus dalam Transaction agar jika salah satu gagal, semua batal (Data tetap konsisten)
@@ -219,7 +221,9 @@ class HargaKayusTable
                         if (!$user) return false;
                         $isAdmin = $user->hasAnyRole(self::ROLE_ADMIN);
                         $isBukanPengusul = $user->name !== $record->updated_by;
-                        return $record->harga_baru > 0 && ($isAdmin || $isBukanPengusul);
+                        return filled($record->harga_baru) &&
+                            $record->harga_baru >= 0 &&
+                            ($isAdmin || $isBukanPengusul);
                     })
                     ->action(function (Model $record) {
                         HargaKayuLog::create([

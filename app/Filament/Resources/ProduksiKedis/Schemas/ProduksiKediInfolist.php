@@ -15,7 +15,8 @@ class ProduksiKediInfolist
                     ->date(),
                 TextEntry::make('status'),
 
-                TextEntry::make('kode_kedi'),
+                TextEntry::make('mesin.nama_mesin')
+                    ->label('Mesin Kedi'),
                 // TextEntry::make('created_at')
                 //     ->dateTime(),
                 // TextEntry::make('updated_at')

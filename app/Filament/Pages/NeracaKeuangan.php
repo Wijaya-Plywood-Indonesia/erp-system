@@ -6,10 +6,12 @@ use App\Models\JurnalUmum;
 use App\Models\IndukAkun;
 use Filament\Pages\Page;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 
 class NeracaKeuangan extends Page
 {
+    use HasPageShield;
     protected string $view = 'filament.pages.neraca-keuangan';
 
     protected static ?string $navigationLabel = 'Neraca Keuangan';
@@ -222,4 +224,3 @@ class NeracaKeuangan extends Page
         }
     }
 }
-

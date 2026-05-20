@@ -13,6 +13,8 @@ class ValidasiKediForm
     {
         return $schema
             ->components([
+                \Filament\Forms\Components\Hidden::make('tipe')
+                    ->default('bongkar'),
                 TextInput::make('role')
                     ->label('Role Login')
                     ->default(function () {

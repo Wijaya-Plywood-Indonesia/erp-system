@@ -10,6 +10,7 @@ class ValidasiKedi extends Model
 
     protected $fillable = [
         'id_produksi_kedi',
+        'tipe',
         'role',
         'status',
     ];

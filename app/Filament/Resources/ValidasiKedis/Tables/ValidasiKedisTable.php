@@ -17,8 +17,17 @@ class ValidasiKedisTable
         return $table
             ->columns([
                 TextColumn::make('role')
+                    ->label('Jabatan')
                     ->searchable(),
                 TextColumn::make('status')
+                    ->badge()
+                    ->color(fn ($state) => match ($state) {
+                        'divalidasi' => 'success',
+                        'disetujui' => 'success',
+                        'ditolak' => 'danger',
+                        'ditangguhkan' => 'warning',
+                        default => 'gray',
+                    })
                     ->searchable(),
                 TextColumn::make('created_at')
                     ->dateTime()
@@ -38,7 +47,7 @@ class ValidasiKedisTable
                 CreateAction::make()
                     ->hidden(
                         fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        $livewire->ownerRecord?->isBongkarDivalidasi()
                     ),
             ])
             ->recordActions([

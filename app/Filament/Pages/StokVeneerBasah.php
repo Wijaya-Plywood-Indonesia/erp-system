@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Models\HppVeneerBasahSummary;
 use App\Models\JenisKayu;
 use App\Models\Ukuran;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
@@ -15,6 +16,8 @@ use UnitEnum;
 
 class StokVeneerBasah extends Page
 {
+    use HasPageShield;
+
     protected string $view = 'filament.pages.stok-veneer-basah';
 
     protected static ?string $navigationLabel = 'Stok Veneer Basah';

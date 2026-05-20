@@ -9,21 +9,14 @@ class DetailMasukKedi extends Model
     protected $table = 'detail_masuk_kedi';
 
     protected $fillable = [
-        'id_mesin',
         'no_palet',
         'kode_kedi',
         'id_ukuran',
         'id_jenis_kayu',
         'kw',
         'jumlah',
-        'rencana_bongkar',
         'id_produksi_kedi',
     ];
-
-    public function mesin()
-    {
-        return $this->belongsTo(Mesin::class, 'id_mesin');
-    }
 
     public function produksi()
     {

@@ -4,11 +4,13 @@ namespace App\Filament\Pages;
 
 use App\Models\HppVeneerBasahLog;
 use App\Models\JenisKayu;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 use UnitEnum;
 
 class HppVeneerBasahPage extends Page
 {
+    use HasPageShield;
     protected string $view = 'filament.pages.hpp-veneer-basah-page';
 
     protected static ?string $navigationLabel = 'Log HPP Veneer Basah';

@@ -30,7 +30,7 @@ class LaporanSandingJoin extends Page
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static ?string $title = 'Laporan Produksi Sanding Join';
-    protected static ?string $navigationLabel = 'Laporan Sanding Join';
+    protected static ?string $navigationLabel = 'Laporan Produksi Sanding Join';
     protected string $view = 'filament.pages.laporan-sanding-join';
     protected static ?int $navigationSort = 8; // Disesuaikan agar di bawah Joint
 
@@ -44,8 +44,8 @@ class LaporanSandingJoin extends Page
 
     public function mount(): void
     {
-        $this->data['tanggal'] = now()->format('Y-m-d');
         $this->form->fill($this->data);
+        $this->data['tanggal'] = now()->format('Y-m-d');
         $this->loadData();
     }
 
@@ -166,16 +166,16 @@ class LaporanSandingJoin extends Page
     public function exportExcel()
     {
         try {
-            $tanggal = Carbon::parse($this->data['tanggal'])->format('d-m-Y');
+            $tanggalQuery = Carbon::parse($this->data['tanggal'])->format('Y-m-d');
+            $tanggalFile  = Carbon::parse($this->data['tanggal'])->format('d-m-Y');
 
-            if (class_exists('App\Exports\LaporanSandingJoinExport')) {
-                return Excel::download(
-                    new LaporanSandingJoinExport($this->laporan),
-                    "laporan-sanding-joint-{$tanggal}.xlsx"
-                );
-            }
-
-            throw new Exception("Class Export Excel belum tersedia.");
+            return Excel::download(
+                new LaporanSandingJoinExport(
+                    $this->laporan, // ← argument 1: detail data
+                    $tanggalQuery   // ← argument 2: tanggal untuk query Sheet 2
+                ),
+                "laporan-sanding-joint-{$tanggalFile}.xlsx"
+            );
         } catch (Exception $e) {
             Notification::make()
                 ->danger()

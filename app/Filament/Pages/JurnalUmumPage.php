@@ -12,6 +12,7 @@ use App\Models\IndukAkun;
 use App\Models\SubAnakAkun;
 use App\Services\Jurnal\JurnalUmumToJurnal1Service;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,7 @@ use UnitEnum;
 class JurnalUmumPage extends Page implements HasActions
 {
     use InteractsWithActions;
+    use HasPageShield;
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
     protected static ?string $title = 'Jurnal Umum';
@@ -74,48 +76,48 @@ class JurnalUmumPage extends Page implements HasActions
     }
 
     protected function loadAkun()
-{
-    $sub = SubAnakAkun::selectRaw("
+    {
+        $sub = SubAnakAkun::selectRaw("
         kode_sub_anak_akun as kode,
         nama_sub_anak_akun as nama,
         1 as urutan
     ");
 
-    $anak = AnakAkun::selectRaw("
+        $anak = AnakAkun::selectRaw("
         kode_anak_akun as kode,
         nama_anak_akun as nama,
         2 as urutan
     ");
 
-    // $induk = IndukAkun::selectRaw("
-    //     kode_induk_akun as kode,
-    //     nama_induk_akun as nama,
-    //     3 as urutan
-    // ");
+        // $induk = IndukAkun::selectRaw("
+        //     kode_induk_akun as kode,
+        //     nama_induk_akun as nama,
+        //     3 as urutan
+        // ");
 
-    $union = $sub->unionAll($anak);
+        $union = $sub->unionAll($anak);
 
-    $this->akunList = DB::query()
-        ->fromSub($union, 'akun')
-        ->orderBy('urutan')
-        ->orderBy('kode')
-        ->get();
-}
+        $this->akunList = DB::query()
+            ->fromSub($union, 'akun')
+            ->orderBy('urutan')
+            ->orderBy('kode')
+            ->get();
+    }
 
     public function updatedFormNoAkun($value)
-{
-    $this->form['nama_akun'] = '';
+    {
+        $this->form['nama_akun'] = '';
 
-    if ($sub = SubAnakAkun::where('kode_sub_anak_akun', $value)->first()) {
-        $this->form['nama_akun'] = $sub->nama_sub_anak_akun;
-        return;
-    }
+        if ($sub = SubAnakAkun::where('kode_sub_anak_akun', $value)->first()) {
+            $this->form['nama_akun'] = $sub->nama_sub_anak_akun;
+            return;
+        }
 
-    if ($anak = AnakAkun::where('kode_anak_akun', $value)->first()) {
-        $this->form['nama_akun'] = $anak->nama_anak_akun;
-        return;
+        if ($anak = AnakAkun::where('kode_anak_akun', $value)->first()) {
+            $this->form['nama_akun'] = $anak->nama_anak_akun;
+            return;
+        }
     }
-}
 
     public function addItem()
     {

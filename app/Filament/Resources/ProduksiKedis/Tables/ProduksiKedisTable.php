@@ -8,6 +8,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -25,19 +26,50 @@ class ProduksiKedisTable
         return $table
             ->columns([
                 TextColumn::make('tanggal')
-                    ->date()
+                    ->label('Tgl Masuk')
+                    ->date('d/m/Y')
                     ->sortable(),
 
-                // Menggunakan Badge agar status 'Masuk' & 'Bongkar' kontras
+                TextColumn::make('rencana_bongkar')
+                    ->label('Rencana Bongkar')
+                    ->date('d/m/Y')
+                    ->sortable()
+                    ->color('gray'),
+
+                TextColumn::make('tanggal_actual_bongkar')
+                    ->label('Realisasi Bongkar')
+                    ->date('d/m/Y')
+                    ->sortable()
+                    ->placeholder('Belum Bongkar')
+                    ->color(fn ($record) => 
+                        (!$record->tanggal_actual_bongkar || !$record->rencana_bongkar) ? 'gray' : (
+                            $record->tanggal_actual_bongkar->lt($record->rencana_bongkar) ? 'info' : (
+                                $record->tanggal_actual_bongkar->eq($record->rencana_bongkar) ? 'success' : 'warning'
+                            )
+                        )
+                    ),
+
+                TextColumn::make('mesin.nama_mesin')
+                    ->label('Mesin Kedi')
+                    ->searchable()
+                    ->sortable(),
+
                 TextColumn::make('status')
-                    ->label('Status')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'masuk' => 'success',
-                        'bongkar' => 'info',
-                        default => 'gray',
+                    ->toggleable()
+                    ->getStateUsing(function ($record) {
+                        if ($record->detailMasukKedi()->doesntExist()) return 'Belum Masuk';
+                        if ($record->detailBongkarKedi()->doesntExist()) return 'Belum Bongkar';
+                        if (!$record->isBongkarDivalidasi()) return 'Belum Validasi';
+                        return 'Sudah Validasi';
                     })
-                    ->formatStateUsing(fn($state) => ucfirst($state)),
+                    ->color(fn ($state) => match ($state) {
+                        'Belum Masuk' => 'gray',
+                        'Belum Bongkar' => 'info',
+                        'Belum Validasi' => 'warning',
+                        'Sudah Validasi' => 'success',
+                        default => 'gray',
+                    }),
 
                 TextColumn::make('kendala')
                     ->label('Kendala Produksi')
@@ -49,20 +81,26 @@ class ProduksiKedisTable
                     )
                     ->wrap(),
 
-                BadgeColumn::make('validasiTerakhir.status')
+                TextColumn::make('validasi')
                     ->label('Validasi')
-                    ->colors([
-                        'success' => 'divalidasi',
-                        'warning' => 'ditangguhkan',
-                        'danger'  => 'ditolak',
-                    ])
+                    ->badge()
+                    ->toggleable()
+                    ->toggledHiddenByDefault()
+                    ->getStateUsing(function ($record) {
+                        return $record->validasiTerakhir?->status ?? 'Belum Validasi';
+                    })
+                    ->color(function ($state) {
+                        return match ($state) {
+                            'divalidasi' => 'success',
+                            'disetujui' => 'success',
+                            'ditolak' => 'danger',
+                            'ditangguhkan' => 'warning',
+                            default => 'gray',
+                        };
+                    })
                     ->icons([
-                        'heroicon-o-check-circle'       => 'divalidasi',
-                        'heroicon-o-x-circle'           => 'ditolak',
-                        'heroicon-o-exclamation-circle' => 'ditangguhkan',
-                    ])
-                    ->sortable()
-                    ->searchable(),
+                        'heroicon-o-check-circle' => fn ($state) => in_array($state, ['divalidasi', 'disetujui']),
+                    ]),
 
                 TextColumn::make('created_at')
                     ->label('Dibuat Pada')
@@ -94,7 +132,7 @@ class ProduksiKedisTable
             ])
             ->recordActions([
                 Action::make('kelola_kendala')
-                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->label('Kendala')
                     ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
                     ->color(fn($record) => $record->kendala ? 'info' : 'warning')
                     ->schema([
@@ -123,13 +161,49 @@ class ProduksiKedisTable
                     )
                     ->modalSubmitActionLabel('Simpan'),
 
+                Action::make('proses_bongkar')
+                    ->label('Bongkar')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('danger')
+                    ->visible(fn($record) => $record->status === 'masuk' && $record->detailMasukKedi()->exists())
+                    ->schema([
+                        DatePicker::make('tanggal_actual_bongkar')
+                            ->label('Tanggal Bongkar Aktual')
+                            ->default(now())
+                            ->required(),
+                    ])
+                    ->action(function (array $data, $record) {
+                        $record->update([
+                            'status' => 'bongkar',
+                            'tanggal_actual_bongkar' => $data['tanggal_actual_bongkar'],
+                            'tanggal_bongkar' => $data['tanggal_actual_bongkar'], // Also update the old one for compatibility
+                        ]);
+
+                        Notification::make()
+                            ->title('Proses bongkar dimulai')
+                            ->success()
+                            ->send();
+
+                        return redirect()->to(\App\Filament\Resources\ProduksiKedis\ProduksiKediResource::getUrl('view', ['record' => $record]) . '?relation=1');
+                    })
+                    ->modalHeading('Mulai Proses Bongkar')
+                    ->modalSubmitActionLabel('Mulai Bongkar'),
+
                 EditAction::make()
-                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn($record) => 
+                        $record->status === 'masuk' && 
+                        !$record->detailMasukKedi()->exists() &&
+                        $record->validasiTerakhir?->status !== 'divalidasi'
+                    ),
 
                 ViewAction::make(),
 
                 DeleteAction::make()
-                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->visible(fn($record) => 
+                        $record->status === 'masuk' && 
+                        !$record->detailMasukKedi()->exists() &&
+                        $record->validasiTerakhir?->status !== 'divalidasi'
+                    )
                     ->before(function ($record) {
                         $hasRelation =
                             $record->detailMasukKedi()->exists()

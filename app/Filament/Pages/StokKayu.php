@@ -6,6 +6,7 @@ use App\Models\HppAverageSummarie;
 use App\Models\JenisKayu;
 use App\Models\Lahan;
 use App\Services\HppAverageService;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -18,6 +19,8 @@ use Illuminate\Support\Facades\Auth;
 
 class StokKayu extends Page
 {
+    use HasPageShield;
+
     protected string $view = 'filament.pages.stok-kayu';
 
     protected static ?string $navigationLabel = 'Stok Kayu';

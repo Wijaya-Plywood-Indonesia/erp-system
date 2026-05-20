@@ -12,12 +12,12 @@ use Filament\Tables\Table;
 
 class YesRelationManager extends RelationManager
 {
-    protected static ?string $title = 'Validasi Hasil';
+    protected static ?string $title = 'Validasi Produksi';
     protected static string $relationship = 'validasiKedi';
 
     public static function canViewForRecord($ownerRecord, $pageClass): bool
     {
-        return true;
+        return $ownerRecord->status !== 'masuk';
     }
 
 

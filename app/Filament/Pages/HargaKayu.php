@@ -3,12 +3,14 @@
 namespace App\Filament\Pages;
 
 use App\Models\HargaKayu as ModelsHargaKayu;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 use Illuminate\Support\Collection;
 use UnitEnum;
 
 class HargaKayu extends Page
 {
+    use HasPageShield;
     protected string $view = 'filament.pages.harga-kayu';
     protected static ?string $navigationLabel = 'Table Harga Kayu';
     protected static string|UnitEnum|null $navigationGroup = 'Kayu';

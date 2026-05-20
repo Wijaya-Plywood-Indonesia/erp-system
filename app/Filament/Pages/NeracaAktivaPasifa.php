@@ -9,10 +9,13 @@ use Carbon\CarbonPeriod;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 
 class NeracaAktivaPasifa extends Page
 {
+    use HasPageShield;
+
     protected string $view = 'filament.pages.neraca-aktiva-pasifa';
 
     protected static ?string $navigationLabel = 'Neraca Aktiva Pasiva';

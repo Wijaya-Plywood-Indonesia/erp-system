@@ -6,9 +6,13 @@ use App\Models\AkunGroup;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
+
 class ManageAkunGroup extends Page
 {
+    use HasPageShield;
+
     protected static ?string $navigationLabel = 'Kelola Grup Akun';
     protected static ?string $title = 'Kelola Struktur Grup Akun';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-scale';

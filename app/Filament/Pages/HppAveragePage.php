@@ -7,9 +7,12 @@ use Filament\Pages\Page;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Auth;
 use UnitEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 
 class HppAveragePage extends Page
 {
+    use HasPageShield;
+
     protected string $view = 'filament.pages.hpp-average-page';
     protected static ?string $navigationLabel = 'Log HPP Kayu';
     protected static string|UnitEnum|null $navigationGroup = 'Log';

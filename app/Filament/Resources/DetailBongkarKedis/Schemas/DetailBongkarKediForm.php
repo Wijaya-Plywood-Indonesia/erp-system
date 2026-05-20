@@ -3,7 +3,10 @@
 namespace App\Filament\Resources\DetailBongkarKedis\Schemas;
 
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Select;
 use Filament\Schemas\Schema;
+use App\Models\JenisKayu;
+use App\Models\Ukuran;
 
 class DetailBongkarKediForm
 {
@@ -12,23 +15,36 @@ class DetailBongkarKediForm
         return $schema
             ->components([
                 TextInput::make('no_palet')
+                    ->label('Nomor Palet')
                     ->required()
                     ->numeric(),
-                TextInput::make('id_jenis_kayu')
-                    ->required()
-                    ->numeric(),
-                TextInput::make('id_ukuran')
-                    ->required()
-                    ->numeric(),
+
+                Select::make('id_jenis_kayu')
+                    ->label('Jenis Kayu')
+                    ->options(
+                        JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id')
+                    )
+                    ->searchable()
+                    ->required(),
+
+                Select::make('id_ukuran')
+                    ->label('Ukuran')
+                    ->options(
+                        Ukuran::all()
+                            ->sortBy(fn($u) => $u->dimensi)
+                            ->mapWithKeys(fn($u) => [$u->id => $u->dimensi])
+                    )
+                    ->searchable()
+                    ->required(),
+
                 TextInput::make('kw')
-                    ->required()
-                    ->numeric(),
+                    ->label('KW (Kualitas)')
+                    ->required(),
+
                 TextInput::make('jumlah')
-                    ->required()
-                    ->numeric(),
-                TextInput::make('id_produksi_kedi')
-                    ->required()
-                    ->numeric(),
+                    ->label('Jumlah')
+                    ->numeric()
+                    ->required(),
             ]);
     }
 }

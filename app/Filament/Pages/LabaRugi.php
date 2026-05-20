@@ -6,11 +6,13 @@ use Filament\Pages\Page;
 use App\Models\JurnalUmum;
 use App\Models\AnakAkun;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 use Filament\Support\Enums\Width;
 
 class LabaRugi extends Page
 {
+    use HasPageShield;
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
     protected Width|string|null $maxContentWidth = Width::Full;

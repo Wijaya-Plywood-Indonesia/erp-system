@@ -28,7 +28,7 @@ class LaporanRepairs extends Page
 
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
-    protected static ?string $title = 'Laporan Repairs';
+    protected static ?string $title = 'Laporan Produksi Repairs';
     protected string $view = 'filament.pages.laporan-repairs';
     protected static ?int $navigationSort = 6;
 
@@ -42,8 +42,8 @@ class LaporanRepairs extends Page
 
     public function mount(): void
     {
-        $this->data['tanggal'] = now()->format('Y-m-d');
         $this->form->fill($this->data);
+        $this->data['tanggal'] = now()->format('Y-m-d');
         $this->loadData();
     }
 
@@ -145,11 +145,12 @@ class LaporanRepairs extends Page
 
             // Transform data menggunakan Transformer
             if ($raw->isNotEmpty()) {
-                $this->dataProduksi = RepairDataMap::make($raw);
-                $this->laporan = $this->dataProduksi;
+                $mapped           = RepairDataMap::make($raw); // returns ['detail' => ..., 'summary' => ...]
+                $this->dataProduksi = $mapped;                 // simpan semua
+                $this->laporan      = $mapped;                 // ← laporan juga simpan semua (nanti export ambil ['detail'])
 
                 Log::info('Data transformed successfully', [
-                    'items_count' => count($this->dataProduksi)
+                    'items_count' => count($mapped['detail'] ?? [])
                 ]);
             } else {
                 Notification::make()
@@ -198,15 +199,43 @@ class LaporanRepairs extends Page
     public function exportExcel()
     {
         try {
-            $tanggal = Carbon::parse($this->data['tanggal'])->format('d-m-Y');
+            $tanggalQuery = Carbon::parse($this->data['tanggal'])->format('Y-m-d');
+            $tanggalFile  = Carbon::parse($this->data['tanggal'])->format('d-m-Y');
+
+            $raw = LoadLaporanRepairs::run($tanggalQuery);
+
+            if ($raw->isEmpty()) {
+                Notification::make()
+                    ->warning()
+                    ->title('Tidak Ada Data')
+                    ->body('Tidak ada data repair untuk tanggal ' . Carbon::parse($tanggalQuery)->format('d/m/Y'))
+                    ->send();
+                return;
+            }
+
+            // ✅ RepairDataMap return flat array langsung, BUKAN ['detail' => ...]
+            $detailData = RepairDataMap::make($raw);
+
+            if (empty($detailData)) {
+                Notification::make()
+                    ->warning()
+                    ->title('Tidak Ada Data Detail')
+                    ->body('Tidak ada data untuk diekspor.')
+                    ->send();
+                return;
+            }
 
             return Excel::download(
-                new LaporanRepairExport($this->laporan),
-                "laporan-repair-{$tanggal}.xlsx"
+                new LaporanRepairExport(
+                    $detailData,   // ← flat array langsung
+                    $tanggalQuery
+                ),
+                "laporan-repair-{$tanggalFile}.xlsx"
             );
         } catch (Exception $e) {
             Log::error('Export Excel gagal', [
                 'message' => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
             ]);
 
             Notification::make()
@@ -216,7 +245,6 @@ class LaporanRepairs extends Page
                 ->send();
         }
     }
-
 
 
     /**

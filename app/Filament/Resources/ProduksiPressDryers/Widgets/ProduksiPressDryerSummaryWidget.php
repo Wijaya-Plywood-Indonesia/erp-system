@@ -93,26 +93,27 @@ class ProduksiPressDryerSummaryWidget extends Widget
             $baseQuery = DetailHasil::query()
                 ->where('detail_hasils.id_produksi_dryer', $produksiId)
                 ->join('ukurans', 'ukurans.id', '=', 'detail_hasils.id_ukuran')
-                ->leftJoin('jenis_kayus', 'jenis_kayus.id', '=', 'detail_hasils.id_jenis_kayu') // ← nama tabel: jenis_kayus
+                ->leftJoin('jenis_kayus', 'jenis_kayus.id', '=', 'detail_hasils.id_jenis_kayu')
                 ->selectRaw('
                     CONCAT(
                         TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
                         TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
                         TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
-                    ) AS ukuran
+                    ) AS ukuran,
+                    jenis_kayus.nama_kayu AS jenis_kayu
                 ');
 
             $globalUkuranKw = (clone $baseQuery)
-                ->selectRaw('
-        detail_hasils.kw,
-        SUM(CAST(detail_hasils.isi AS UNSIGNED)) AS total
-    ')
+                ->addSelect(DB::raw('
+                    detail_hasils.kw,
+                    SUM(CAST(detail_hasils.isi AS UNSIGNED)) AS total
+                '))
                 ->groupBy('ukuran', 'jenis_kayu', 'detail_hasils.kw')
                 ->orderBy('ukuran')
                 ->get();
 
             $globalUkuran = (clone $baseQuery)
-                ->selectRaw('SUM(CAST(detail_hasils.isi AS UNSIGNED)) AS total')
+                ->addSelect(DB::raw('SUM(CAST(detail_hasils.isi AS UNSIGNED)) AS total'))
                 ->groupBy('ukuran', 'jenis_kayu')
                 ->orderBy('ukuran')
                 ->get();

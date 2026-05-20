@@ -43,8 +43,8 @@ class LaporanJoin extends Page
 
     public function mount(): void
     {
-        $this->data['tanggal'] = now()->format('Y-m-d');
         $this->form->fill($this->data);
+        $this->data['tanggal'] = now()->format('Y-m-d');
         $this->loadData();
     }
 
@@ -181,18 +181,46 @@ class LaporanJoin extends Page
     public function exportExcel()
     {
         try {
-            $tanggal = Carbon::parse($this->data['tanggal'])->format('d-m-Y');
+            $tanggalQuery = Carbon::parse($this->data['tanggal'])->format('Y-m-d');
+            $tanggalFile  = Carbon::parse($this->data['tanggal'])->format('d-m-Y');
 
-            // Pastikan Anda sudah membuat class LaporanJoinExport jika ingin menggunakan fitur ini
-            if (class_exists('App\Exports\LaporanJoinExport')) {
-                return Excel::download(
-                    new LaporanJoinExport($this->laporan),
-                    "laporan-joint-{$tanggal}.xlsx"
-                );
+            // Query ulang — tidak bergantung $this->laporan (Livewire state)
+            $raw = LoadLaporanJoin::run($tanggalQuery);
+
+            if ($raw->isEmpty()) {
+                Notification::make()
+                    ->warning()
+                    ->title('Tidak Ada Data')
+                    ->body('Tidak ada data joint untuk tanggal ' . Carbon::parse($tanggalQuery)->format('d/m/Y'))
+                    ->send();
+                return;
             }
 
-            throw new Exception("Class Export Excel belum tersedia.");
+            // JoinDataMap return flat array langsung (bukan ['detail' => ...])
+            $detailData = JoinDataMap::make($raw);
+
+            if (empty($detailData)) {
+                Notification::make()
+                    ->warning()
+                    ->title('Tidak Ada Data Detail')
+                    ->body('Tidak ada data untuk diekspor.')
+                    ->send();
+                return;
+            }
+
+            return Excel::download(
+                new LaporanJoinExport(
+                    $detailData,   // ← Sheet 1: flat array detail per meja
+                    $tanggalQuery  // ← Sheet 2: query ulang dari DB
+                ),
+                "laporan-joint-{$tanggalFile}.xlsx"
+            );
         } catch (Exception $e) {
+            Log::error('Export Join Excel gagal', [
+                'message' => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
+
             Notification::make()
                 ->danger()
                 ->title('Gagal Export Excel')

@@ -5,11 +5,13 @@ namespace App\Filament\Pages;
 use App\Models\StokVeneerKering; // Menggunakan ini karena menyimpan detail transaksi
 use App\Models\JenisKayu;
 use App\Models\Ukuran;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 use UnitEnum;
 
 class HppVeneerKeringPage extends Page
 {
+    use HasPageShield;
     protected string $view = 'filament.pages.hpp-veneer-kering-page';
 
     protected static ?string $navigationLabel = 'Log HPP Veneer Kering';
@@ -23,21 +25,21 @@ class HppVeneerKeringPage extends Page
     public string $filterKw        = '';
 
     public function getLogsProperty()
-{
-    return StokVeneerKering::with([
-        'ukuran',
-        'jenisKayu',
-        // ✅ Preload relasi ke detail hasil → produksi → ongkos
-        'detailHasil.produksiDryer.ongkosDryer',
-    ])
-        ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
-        ->when($this->filterPanjang,   fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('panjang', $this->filterPanjang)))
-        ->when($this->filterTebal,     fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('tebal', $this->filterTebal)))
-        ->when($this->filterKw,        fn($q) => $q->where('kw', $this->filterKw))
-        ->orderByDesc('tanggal_transaksi')
-        ->orderByDesc('id')
-        ->get();
-}
+    {
+        return StokVeneerKering::with([
+            'ukuran',
+            'jenisKayu',
+            // ✅ Preload relasi ke detail hasil → produksi → ongkos
+            'detailHasil.produksiDryer.ongkosDryer',
+        ])
+            ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
+            ->when($this->filterPanjang,   fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('panjang', $this->filterPanjang)))
+            ->when($this->filterTebal,     fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('tebal', $this->filterTebal)))
+            ->when($this->filterKw,        fn($q) => $q->where('kw', $this->filterKw))
+            ->orderByDesc('tanggal_transaksi')
+            ->orderByDesc('id')
+            ->get();
+    }
 
     public function getUkuranListProperty()
     {

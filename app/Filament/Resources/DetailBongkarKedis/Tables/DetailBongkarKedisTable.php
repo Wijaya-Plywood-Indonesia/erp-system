@@ -4,7 +4,9 @@ namespace App\Filament\Resources\DetailBongkarKedis\Tables;
 
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\DeleteAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -15,41 +17,42 @@ class DetailBongkarKedisTable
         return $table
             ->columns([
                 TextColumn::make('no_palet')
-                    ->numeric()
+                    ->label('No. Palet')
+                    ->sortable()
+                    ->searchable(),
+
+                TextColumn::make('jenisKayu.nama_kayu')
+                    ->label('Jenis Kayu')
+                    ->sortable()
+                    ->searchable(),
+
+                TextColumn::make('ukuran.dimensi')
+                    ->label('Ukuran')
                     ->sortable(),
-                TextColumn::make('id_jenis_kayu')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('id_ukuran')
-                    ->numeric()
-                    ->sortable(),
+
                 TextColumn::make('kw')
-                    ->numeric()
+                    ->label('KW')
                     ->sortable(),
+
                 TextColumn::make('jumlah')
+                    ->label('Jumlah')
                     ->numeric()
                     ->sortable(),
-                TextColumn::make('id_produksi_kedi')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->filters([
-                //
+            ->headerActions([
+                CreateAction::make()
+                    ->hidden(fn($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->hidden(fn($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()),
+                DeleteAction::make()
+                    ->hidden(fn($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->hidden(fn($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()),
                 ]),
             ]);
     }

@@ -147,13 +147,126 @@ class TempatKayusTable
             ])
             ->filters([])
             ->recordActions([
+                // ... di dalam recordActions
+                Action::make('cek_detail')
+                    ->label('Cek Detail')
+                    ->icon('heroicon-m-magnifying-glass')
+                    ->color('gray')
+                    ->modalHeading('Detail Seri & Stok Kayu')
+                    ->modalSubmitAction(false)
+                    ->modalWidth('4xl')
+                    // Di dalam modalContent pada file TempatKayusTable.php
+                    ->modalContent(function ($record) {
+                        // Find the latest reset log ID (where stock became 0) for this combination
+                        $lastResetLogId = \App\Models\HppAverageLog::where('id_lahan', $record->id_lahan)
+                            ->where('panjang', $record->group_panjang)
+                            ->where('stok_batang_after', 0)
+                            ->latest('id')
+                            ->value('id');
+
+                        $query = \App\Models\HppAverageLog::where('id_lahan', $record->id_lahan)
+                            ->where('panjang', $record->group_panjang);
+
+                        if ($lastResetLogId) {
+                            $query->where('id', '>', $lastResetLogId);
+                        }
+
+                        $logs = $query->orderBy('tanggal', 'asc')
+                            ->orderBy('id', 'asc')
+                            ->get();
+
+                        $queue = [];
+
+                        foreach ($logs as $log) {
+                            $isM = $log->tipe_transaksi === 'masuk';
+                            
+                            $seri = 'Tanpa Seri';
+                            if ($log->referensi_type === \App\Models\NotaKayu::class || $log->referensi_type === 'NotaKayu') {
+                                if (!$log->relationLoaded('referensi')) {
+                                    $log->load('referensi');
+                                }
+                                if ($log->referensi) {
+                                    $log->referensi->loadMissing('kayuMasuk');
+                                    $seri = $log->referensi->kayuMasuk->seri ?? 'Tanpa Seri';
+                                }
+                            }
+                            
+                            if ($seri === 'Tanpa Seri') {
+                                if (preg_match('/SERI:\s*(\d+)/i', $log->keterangan, $matches)) {
+                                    $seri = $matches[1];
+                                }
+                            }
+                            
+                            if ($isM) {
+                                $queue[] = [
+                                    'seri' => $seri,
+                                    'qty_left' => $log->total_batang,
+                                    'kubikasi_left' => (float)$log->total_kubikasi,
+                                ];
+                            } else {
+                                $qtyKeluar = $log->total_batang;
+                                $kubikasiKeluar = (float)$log->total_kubikasi;
+                                
+                                while ($qtyKeluar > 0 && !empty($queue)) {
+                                    $firstKey = array_key_first($queue);
+                                    $item = &$queue[$firstKey];
+                                    
+                                    if ($item['qty_left'] <= $qtyKeluar) {
+                                        $qtyKeluar -= $item['qty_left'];
+                                        $kubikasiKeluar -= $item['kubikasi_left'];
+                                        unset($queue[$firstKey]);
+                                    } else {
+                                        $fraction = $qtyKeluar / $item['qty_left'];
+                                        $item['qty_left'] -= $qtyKeluar;
+                                        $consumedKubikasi = $item['kubikasi_left'] * $fraction;
+                                        $item['qty_left'] = max(0, $item['qty_left']);
+                                        $item['kubikasi_left'] = max(0.0, $item['kubikasi_left'] - $consumedKubikasi);
+                                        $qtyKeluar = 0;
+                                        $kubikasiKeluar = max(0.0, $kubikasiKeluar - $consumedKubikasi);
+                                    }
+                                }
+                                // Re-index queue
+                                $queue = array_values($queue);
+                            }
+                        }
+
+                        $groupedBySeri = collect($queue)
+                            ->groupBy('seri')
+                            ->map(function ($group, $seri) {
+                                return [
+                                    'seri'           => $seri,
+                                    'total_batang'   => $group->sum('qty_left'),
+                                    'total_kubikasi' => $group->sum('kubikasi_left'),
+                                ];
+                            })
+                            ->sortBy('seri')
+                            ->values();
+
+                        $totalStokRiil = (int) \App\Models\HppAverageSummarie::where('id_lahan', $record->id_lahan)
+                            ->where('panjang', $record->group_panjang)
+                            ->where('grade', $record->group_grade)
+                            ->sum('stok_batang');
+
+                        $totalKubikasiRiil = (float) \App\Models\HppAverageSummarie::where('id_lahan', $record->id_lahan)
+                            ->where('panjang', $record->group_panjang)
+                            ->where('grade', $record->group_grade)
+                            ->sum('stok_kubikasi');
+
+                        return view('filament.components.detail-kayu-modal', [
+                            'record'        => $record,
+                            'details'       => $groupedBySeri,
+                            'totalBatang'   => $totalStokRiil,
+                            'totalKubikasi' => $totalKubikasiRiil,
+                        ]);
+                    }),
+
                 EditAction::make()
                     ->visible($isAdmin),
                 // ACTION SERAH
                 Action::make('serah_kayu')
-                    ->label('Serah Kayu')
+                    ->label('Lahan Penuh')
                     ->icon('heroicon-o-paper-airplane')
-                    ->color('success')
+                    ->color('primary')
                     ->requiresConfirmation()
                     ->modalHeading('Serahkan Kayu?')
                     ->modalDescription(

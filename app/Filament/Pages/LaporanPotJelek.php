@@ -30,7 +30,7 @@ class LaporanPotJelek extends Page
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static ?string $title = 'Laporan Produksi Potong Jelek';
-    protected static ?string $navigationLabel = 'Laporan Potong Jelek';
+    protected static ?string $navigationLabel = 'Laporan Produksi Pot Jelek';
     protected string $view = 'filament.pages.laporan-pot-jelek'; // Sesuaikan dengan nama blade Anda
     protected static ?int $navigationSort = 10;
 
@@ -44,8 +44,8 @@ class LaporanPotJelek extends Page
 
     public function mount(): void
     {
-        $this->data['tanggal'] = now()->format('Y-m-d');
         $this->form->fill($this->data);
+        $this->data['tanggal'] = now()->format('Y-m-d');
         $this->loadData();
     }
 
@@ -171,7 +171,7 @@ class LaporanPotJelek extends Page
             // Ganti ke class export Pot Jelek jika sudah Anda buat
             if (class_exists('App\Exports\LaporanPotJelekExport')) {
                 return Excel::download(
-                    new LaporanPotJelekExport($this->laporan),
+                    new LaporanPotJelekExport($this->laporan, $this->data['tanggal']),
                     "laporan-pot-jelek-{$tanggal}.xlsx"
                 );
             }

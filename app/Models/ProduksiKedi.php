@@ -11,10 +11,46 @@ class ProduksiKedi extends Model
 
     protected $fillable = [
         'tanggal',
+        'rencana_bongkar',
+        'tanggal_bongkar',
+        'tanggal_actual_bongkar',
+        'id_mesin',
         'kendala',
         'kode_kedi',
         'status',
     ];
+
+    protected $casts = [
+        'tanggal' => 'date',
+        'rencana_bongkar' => 'date',
+        'tanggal_bongkar' => 'date',
+        'tanggal_actual_bongkar' => 'date',
+    ];
+
+    public function validasiMasuk()
+    {
+        return $this->hasOne(ValidasiKedi::class, 'id_produksi_kedi')->where('tipe', 'masuk')->latestOfMany();
+    }
+
+    public function validasiBongkar()
+    {
+        return $this->hasOne(ValidasiKedi::class, 'id_produksi_kedi')->where('tipe', 'bongkar')->latestOfMany();
+    }
+
+    public function isMasukDivalidasi()
+    {
+        return $this->validasiMasuk?->status === 'divalidasi';
+    }
+
+    public function isBongkarDivalidasi()
+    {
+        return $this->validasiBongkar?->status === 'divalidasi';
+    }
+
+    public function mesin()
+    {
+        return $this->belongsTo(Mesin::class, 'id_mesin');
+    }
 
     public function detailMasukKedi()
     {

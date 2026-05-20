@@ -37,45 +37,43 @@ class DetailBongkarRelationManager extends RelationManager
         return $schema
             ->schema([
 
-                Select::make('id_mesin')
-                    ->label('Kode Kedi')
-                    ->options(
-                        Mesin::whereHas('kategoriMesin', function ($query) {
-                            $query->where('nama_kategori_mesin', 'DRYER');
-                        })
-                            ->orderBy('nama_mesin')
-                            ->pluck('nama_mesin', 'id')
-                    )
+
+
+                // Pilihan Kayu Gabungan (Jenis Kayu + Ukuran) dari data masuk
+                Select::make('kayu_masuk_composite')
+                    ->label('Pilih Kayu (Dari Data Masuk)')
+                    ->options(function ($livewire) {
+                        return $livewire->ownerRecord->detailMasukKedi()
+                            ->with(['jenisKayu', 'ukuran'])
+                            ->get()
+                            ->mapWithKeys(function ($d) {
+                                $key = "{$d->id_jenis_kayu}-{$d->id_ukuran}";
+                                $label = "{$d->jenisKayu->nama_kayu} | {$d->ukuran->dimensi}";
+                                return [$key => $label];
+                            })
+                            ->unique();
+                    })
                     ->searchable()
+                    ->live()
+                    ->formatStateUsing(fn ($record) => $record ? "{$record->id_jenis_kayu}-{$record->id_ukuran}" : null)
+                    ->afterStateUpdated(function ($state, $set) {
+                        if ($state) {
+                            [$jenisId, $ukuranId] = explode('-', $state);
+                            $set('id_jenis_kayu', $jenisId);
+                            $set('id_ukuran', $ukuranId);
+                        } else {
+                            $set('id_jenis_kayu', null);
+                            $set('id_ukuran', null);
+                        }
+                    })
+                    ->required()
+                    ->dehydrated(false), // Jangan simpan kolom virtual ini ke DB
+
+                \Filament\Forms\Components\Hidden::make('id_jenis_kayu')
                     ->required(),
 
-                // Relasi ke Jenis Kayu
-                Select::make('id_jenis_kayu')
-                    ->label('Jenis Kayu')
-                    ->options(
-                        JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id')
-                    )
-                    ->searchable()
-                    ->afterStateUpdated(function ($state) {
-                        session(['last_jenis_kayu' => $state]);
-                    })
-                    ->default(fn() => session('last_jenis_kayu'))
+                \Filament\Forms\Components\Hidden::make('id_ukuran')
                     ->required(),
-
-                // Relasi ke Kayu Masuk (Optional)
-                Select::make('id_ukuran')
-                    ->label('Ukuran')
-                    ->options(
-                        Ukuran::all()
-                            ->sortBy(fn($u) => $u->dimensi)
-                            ->mapWithKeys(fn($u) => [$u->id => $u->dimensi])
-                    )
-                    ->searchable()
-                    ->afterStateUpdated(function ($state) {
-                        session(['last_ukuran' => $state]);
-                    })
-                    ->default(fn() => session('last_ukuran'))
-                    ->required(), // Sesuai dengan migrasi
 
 
                 TextInput::make('kw')
@@ -105,10 +103,7 @@ class DetailBongkarRelationManager extends RelationManager
                     ->label('No. Palet')
                     ->searchable(),
 
-                TextColumn::make('mesin.nama_mesin')
-                    ->label('Mesin')
-                    ->searchable()
-                    ->placeholder('-'),
+
 
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
@@ -148,7 +143,7 @@ class DetailBongkarRelationManager extends RelationManager
                 CreateAction::make()
                     ->hidden(
                         fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        $livewire->ownerRecord?->isBongkarDivalidasi()
                     ),
             ])
             ->recordActions([
@@ -156,14 +151,14 @@ class DetailBongkarRelationManager extends RelationManager
                 EditAction::make()
                     ->hidden(
                         fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        $livewire->ownerRecord?->isBongkarDivalidasi()
                     ),
 
                 // Delete Action — HILANG jika status sudah divalidasi
                 DeleteAction::make()
                     ->hidden(
                         fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        $livewire->ownerRecord?->isBongkarDivalidasi()
                     ),
             ])
             ->toolbarActions([
@@ -171,13 +166,13 @@ class DetailBongkarRelationManager extends RelationManager
                     DeleteBulkAction::make()
                         ->hidden(
                             fn($livewire) =>
-                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                            $livewire->ownerRecord?->isBongkarDivalidasi()
                         ),
                 ]),
             ]);
     }
     public static function canViewForRecord($ownerRecord, $pageClass): bool
     {
-        return $ownerRecord->status === 'bongkar';
+        return in_array($ownerRecord->status, ['bongkar', 'selesai']);
     }
 }

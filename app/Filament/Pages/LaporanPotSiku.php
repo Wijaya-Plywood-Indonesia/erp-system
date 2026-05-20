@@ -6,6 +6,7 @@ use Filament\Pages\Page;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Components\DatePicker;
 use App\Exports\LaporanPotSikuExport;
 use Maatwebsite\Excel\Facades\Excel;
@@ -16,7 +17,7 @@ use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 
-class LaporanPotSiku extends Page
+class LaporanPotSiku extends Page implements HasForms
 {
     use InteractsWithForms;
     use HasPageShield;
@@ -24,7 +25,7 @@ class LaporanPotSiku extends Page
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected string $view = 'filament.pages.laporan-pot-siku';
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
-    protected static ?string $title = 'Laporan Pot Siku';
+    protected static ?string $title = 'Laporan Produksi Pot Siku';
     protected static ?int $navigationSort = 6;
 
     public $dataSiku = [];
@@ -58,7 +59,7 @@ class LaporanPotSiku extends Page
             $tglFile = Carbon::parse($this->tanggal)->format('d-m-Y');
 
             return Excel::download(
-                new LaporanPotSikuExport($this->dataSiku),
+                new LaporanPotSikuExport($this->dataSiku, $this->tanggal),
                 "laporan-pot-siku-{$tglFile}.xlsx"
             );
         } catch (\Exception $e) {
@@ -70,9 +71,27 @@ class LaporanPotSiku extends Page
         }
     }
 
+    public function getListeners(): array
+    {
+        return [
+            'echo:production.pot_siku,.ProductionUpdated' => 'loadAllData',
+        ];
+    }
+
     public function mount(): void
     {
+        // Default ke hari ini
         $this->tanggal = now()->format('Y-m-d');
+
+        // Jika hari ini kosong, coba cari tanggal terakhir yang ada datanya
+        $existsToday = ProduksiPotSiku::whereDate('tanggal_produksi', $this->tanggal)->exists();
+        if (!$existsToday) {
+            $lastDate = ProduksiPotSiku::latest('tanggal_produksi')->value('tanggal_produksi');
+            if ($lastDate) {
+                $this->tanggal = $lastDate instanceof \Carbon\Carbon ? $lastDate->format('Y-m-d') : $lastDate;
+            }
+        }
+
         $this->form->fill(['tanggal' => $this->tanggal]);
         $this->loadAllData();
     }
@@ -81,15 +100,21 @@ class LaporanPotSiku extends Page
     {
         return [
             DatePicker::make('tanggal')
-                ->label('Pilih Tanggal')
-                ->reactive()
+                ->label('Pilih Tanggal Laporan')
+                ->native(false)
                 ->format('Y-m-d')
                 ->displayFormat('d/m/Y')
                 ->live()
+                ->closeOnDateSelection()
                 ->afterStateUpdated(function ($state) {
                     $this->tanggal = $state;
                     $this->loadAllData();
-                }),
+                })
+                ->required()
+                ->maxDate(now())
+                ->default(now())
+                ->suffixIcon('heroicon-o-calendar')
+                ->suffixIconColor('primary'),
         ];
     }
 
@@ -107,24 +132,45 @@ class LaporanPotSiku extends Page
         return $base + 1000;
     }
 
+    public function onTanggalUpdated($state)
+    {
+        $this->tanggal = $state;
+        $this->loadAllData();
+    }
+
     public function loadAllData()
     {
-        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+        // Pastikan format tanggal selalu Y-m-d untuk query database
+        $tanggal = $this->tanggal ? Carbon::parse($this->tanggal)->format('Y-m-d') : now()->format('Y-m-d');
 
         $produksiList = ProduksiPotSiku::with([
             'pegawaiPotSiku.pegawai',
             'detailBarangDikerjakanPotSiku.jenisKayu',
             'detailBarangDikerjakanPotSiku.ukuran',
         ])
-            ->whereDate('tanggal_produksi', $tanggal)
+            ->where('tanggal_produksi', $tanggal)
             ->get();
+
+        if ($produksiList->isEmpty()) {
+            Notification::make()
+                ->warning()
+                ->title('Data Tidak Ditemukan')
+                ->body('Tidak ada data Produksi Pot Siku untuk tanggal ' . Carbon::parse($tanggal)->format('d/m/Y'))
+                ->send();
+        } else {
+            Notification::make()
+                ->success()
+                ->title('Data Ditemukan')
+                ->body('Ditemukan ' . $produksiList->count() . ' data produksi.')
+                ->send();
+        }
 
         $targetRef = Target::where('kode_ukuran', 'POT SIKU')->first();
 
-        // Target lama (biarkan kalau masih dipakai di laporan lain)
-        $stdTarget = $targetRef->target ?? 150;
-        $stdJam = $targetRef->jam ?? 10;
-        $stdPotonganHarga = $targetRef->potongan ?? 766.67;
+        // Target null-safe fallback
+        $stdTarget = $targetRef?->target ?? 150;
+        $stdJam = $targetRef?->jam ?? 10;
+        $stdPotonganHarga = $targetRef?->potongan ?? 766.67;
 
         // ✅ TARGET BARU PER PEKERJA
         $targetPerPegawai = 300; // cm
@@ -154,6 +200,9 @@ class LaporanPotSiku extends Page
                 foreach ($details as $d) {
                     $detailTabel[] = [
                         'jenis_kayu' => $d->jenisKayu->nama_kayu ?? 'Tidak Terdata',
+                        'p' => $d->ukuran->panjang ?? 0,
+                        'l' => $d->ukuran->lebar ?? 0,
+                        't' => $d->ukuran->tebal ?? 0,
                         'ukuran' => $d->ukuran->nama_ukuran ?? '-',
                         'kw' => $d->kw ?? '-',
                         'tinggi' => $d->tinggi,

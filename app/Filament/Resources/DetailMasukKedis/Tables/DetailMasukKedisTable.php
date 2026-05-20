@@ -22,10 +22,6 @@ class DetailMasukKedisTable
                     ->label('No. Palet')
                     ->searchable(),
 
-                TextColumn::make('mesin.nama_mesin')
-                    ->label('Mesin')
-                    ->searchable()
-                    ->placeholder('-'),
 
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
@@ -43,17 +39,13 @@ class DetailMasukKedisTable
                 TextColumn::make('jumlah')
                     ->label('Jumlah')
                     ->sortable(),
-
-                TextColumn::make('rencana_bongkar')
-                    ->date('d/m/Y')
-                    ->label('Rencana Bongkar'),
             ])
 
             ->headerActions([
                 CreateAction::make()
                     ->hidden(
                         fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        $livewire->ownerRecord?->isMasukDivalidasi()
                     ),
             ])
 
@@ -61,13 +53,13 @@ class DetailMasukKedisTable
                 EditAction::make()
                     ->hidden(
                         fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        $livewire->ownerRecord?->isMasukDivalidasi()
                     ),
 
                 DeleteAction::make()
                     ->hidden(
                         fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        $livewire->ownerRecord?->isMasukDivalidasi()
                     ),
             ])
 
@@ -76,7 +68,7 @@ class DetailMasukKedisTable
                     DeleteBulkAction::make()
                         ->hidden(
                             fn($livewire) =>
-                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                            $livewire->ownerRecord?->isMasukDivalidasi()
                         ),
                 ]),
             ]);

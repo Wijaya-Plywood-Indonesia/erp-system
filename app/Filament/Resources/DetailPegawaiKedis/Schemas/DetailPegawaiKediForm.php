@@ -41,17 +41,6 @@ class DetailPegawaiKediForm
                     ->default('Pegawai Bongkar')
                     ->readOnly(),
 
-                Select::make('id_mesin')
-                    ->label('Ruang Kedi')
-                    ->options(
-                        Mesin::whereHas('kategoriMesin', function ($query) {
-                            $query->where('nama_kategori_mesin', 'DRYER');
-                        })
-                            ->orderBy('nama_mesin')
-                            ->pluck('nama_mesin', 'id')
-                    )
-                    ->searchable()
-                    ->required(),
 
                 // --- ID PEGAWAI (Relation: pegawai) ---
                 Select::make('id_pegawai')

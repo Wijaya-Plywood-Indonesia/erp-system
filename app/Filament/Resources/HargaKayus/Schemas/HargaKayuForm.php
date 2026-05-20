@@ -10,6 +10,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Schema;
 use Filament\Schemas\Components\Utilities\Get;
+use Illuminate\Database\Eloquent\Model;
 
 class HargaKayuForm
 {
@@ -85,11 +86,29 @@ class HargaKayuForm
                     }),
                 TextInput::make('harga_beli')
                     ->label('Harga Beli Per m³')
-                    ->numeric(),
+                    ->numeric()
+                    ->disabled(fn(?Model $record) => $record !== null)
+                    // Agar nilainya tetap terkirim saat Create meskipun nanti di-disable di Edit
+                    ->dehydrated(),
 
                 TextInput::make('harga_baru')
                     ->label('Harga Baru')
-                    ->numeric(),
+                    ->numeric()
+                    ->hidden(fn(?Model $record) => $record === null)
+                    ->rules([
+                        fn($get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
+                            // Kita ambil harga_beli dari form state
+                            $hargaBeli = $get('harga_beli');
+
+                            if (filled($value) && (float) $value === (float) $hargaBeli) {
+                                $fail("Harga baru tidak boleh sama dengan harga beli saat ini.");
+                            }
+                        },
+                    ])
+                    ->live(onBlur: true)
+                    ->validationMessages([
+                        'unique' => 'Harga ini sudah ada.',
+                    ]),
 
                 Select::make('grade')
                     ->label('Grade')

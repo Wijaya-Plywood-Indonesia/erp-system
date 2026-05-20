@@ -32,47 +32,51 @@ class ProductionValidationObserver
 
             // Logika untuk Produksi Press Dryer
             if (isset($validasi->id_produksi_dryer)) {
-                $produksi = $validasi->produksi; // Ambil induk produksi
+                $produksi = $validasi->produksi;
                 $details = $produksi->detailMasuks;
 
                 Log::info("Memproses Stok Dryer. Produksi ID: {$validasi->id_produksi_dryer}, Tanggal: {$produksi->tanggal_produksi}");
 
                 if ($details && $details->count() > 0) {
-                    // Kirim tanggal_produksi sebagai argumen ke-3
-                    $this->inventoryService->kurangiStokDariProduksi($details, 'Press Dryer', $produksi->tanggal_produksi);
+                    $this->inventoryService->kurangiStokDariProduksi($details, 'Press Dryer', $produksi->tanggal_produksi, $produksi->shift);
                 } else {
                     Log::warning("Gagal potong stok: Detail Masuk Dryer tidak ditemukan.");
                 }
             }
 
-            // Logika untuk Produksi Kedi  ← TAMBAHKAN INI
+            // Logika untuk Produksi Kedi
             if (isset($validasi->id_produksi_kedi)) {
                 $produksi = $validasi->produksi;
-                $details = $produksi->detailBongkarKedi;
+                $details = $produksi->detailMasukKedi;
 
-                Log::info("Memproses Stok Kedi. Produksi ID: {$validasi->id_produksi_kedi}, Tanggal: {$produksi->tanggal}");
+                Log::info("Memproses Stok Kedi. Produksi ID: {$validasi->id_produksi_kedi}, Tanggal Masuk: {$produksi->tanggal}, Tanggal Bongkar: {$produksi->tanggal_actual_bongkar}");
 
                 if ($details && $details->count() > 0) {
-                    $this->inventoryService->kurangiStokDariBongkarKedi($details, $produksi->tanggal);
+                    $this->inventoryService->kurangiStokDariBongkarKedi(
+                        $details,
+                        $produksi->tanggal,
+                        $produksi->tanggal_actual_bongkar
+                    );
                 } else {
-                    Log::warning("Gagal potong stok: Detail Bongkar Kedi tidak ditemukan untuk Produksi ID {$validasi->id_produksi_kedi}.");
+                    Log::warning("Gagal potong stok: Detail Masuk Kedi tidak ditemukan untuk Produksi ID {$validasi->id_produksi_kedi}.");
                 }
             }
 
             // Logika untuk Produksi Stik
-            // if (isset($validasi->id_produksi_stik)) {
-            //     $produksi = $validasi->produksi;
-            //     $details = $produksi->detailMasukStik;
+            /*
+            if (isset($validasi->id_produksi_stik)) {
+                $produksi = $validasi->produksi;
+                $details = $produksi->detailMasukStik;
 
-            //     Log::info("Memproses Stok Stik. Produksi ID: {$validasi->id_produksi_stik}, Tanggal: {$produksi->tanggal_produksi}");
+                Log::info("Memproses Stok Stik. Produksi ID: {$validasi->id_produksi_stik}, Tanggal: {$produksi->tanggal_produksi}");
 
-            //     if ($details && $details->count() > 0) {
-            //         // Kirim tanggal_produksi sebagai argumen ke-3
-            //         $this->inventoryService->kurangiStokDariProduksi($details, 'Stik', $produksi->tanggal_produksi);
-            //     } else {
-            //         Log::warning("Gagal potong stok: Detail Masuk Stik tidak ditemukan.");
-            //     }
-            // }
+                if ($details && $details->count() > 0) {
+                    $this->inventoryService->kurangiStokDariProduksi($details, 'Stik', $produksi->tanggal_produksi);
+                } else {
+                    Log::warning("Gagal potong stok: Detail Masuk Stik tidak ditemukan.");
+                }
+            }
+            */
         }
     }
 }

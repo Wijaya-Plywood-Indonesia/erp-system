@@ -158,6 +158,7 @@
     Ketentuan Umum
   </div>
 
+
   <ol style="margin: 0; padding-left: 18px; font-size: 9pt; line-height: 1.15">
     <li>
       Dengan ditanda tanganinya Kontrak Kerja ini berarti PIHAK KEDUA telah
@@ -174,6 +175,7 @@
     Pasal 2
   </div>
 
+
   <div style="
         text-align: center;
         font-weight: bold;
@@ -182,6 +184,7 @@
       ">
     Penunjukan Sebagai Karyawan
   </div>
+
 
   <ol style="margin: 0; padding-left: 18px; font-size: 9pt; line-height: 1.15">
     <li>
@@ -225,6 +228,7 @@
     Pasal 3
   </div>
 
+
   <div style="
         text-align: center;
         font-weight: bold;
@@ -233,6 +237,7 @@
       ">
     Hak dan Kewajiban
   </div>
+
 
   <ol style="margin: 0; padding-left: 18px; font-size: 9pt; line-height: 1.15">
     <li>
@@ -276,6 +281,7 @@
     Pasal 4
   </div>
 
+
   <div style="
         text-align: center;
         font-weight: bold;
@@ -303,6 +309,7 @@
   <div style="text-align: center; font-weight: bold; margin-top: 20px">
     Pasal 5
   </div>
+
   <div style="
         text-align: center;
         font-weight: bold;
@@ -311,6 +318,7 @@
       ">
     Sanksi
   </div>
+
 
   <ol style="margin: 0; padding-left: 18px; font-size: 9pt; line-height: 1.15">
     WAKTU DAN TEMPAT KERJA PIHAK KEDUA wajib mentaati waktu kerja sebagai
@@ -321,6 +329,7 @@
   <div style="text-align: center; font-weight: bold; margin-top: 20px">
     Pasal 6
   </div>
+
   <div style="
         text-align: center;
         font-weight: bold;
@@ -329,6 +338,7 @@
       ">
     Sanksi
   </div>
+
   <ol style="margin: 0; padding-left: 18px; font-size: 9pt; line-height: 1.15">
     <li>
       Bila terjadi perselisihan antara kedua belah pihak dalam melaksanakan
@@ -365,6 +375,7 @@
 
     <!-- Space untuk tanda tangan -->
     <tr>
+
       <!-- TTD PIHAK PERTAMA -->
       <td style="height: 80px; vertical-align: bottom; text-align: left;">
         <img src="{{ asset('storage/ttd/anis.png') }}" style="height:70px;">
@@ -380,6 +391,7 @@
 
     <tr>
       <td style="text-align: left;">
+
 
         <strong>(Anis Rusnaa’ifah)</strong>
       </td>

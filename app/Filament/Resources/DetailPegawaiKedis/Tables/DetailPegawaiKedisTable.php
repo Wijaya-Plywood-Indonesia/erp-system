@@ -19,10 +19,6 @@ class DetailPegawaiKedisTable
     {
         return $table
             ->columns([
-                TextColumn::make('mesin.nama_mesin')
-                    ->label('Mesin')
-                    ->searchable()
-                    ->placeholder('-'),
 
                 TextColumn::make('pegawai.nama_pegawai')
                     ->label('Pegawai')
@@ -61,6 +57,7 @@ class DetailPegawaiKedisTable
                 TextColumn::make('ket')
                     ->label('Keterangan')
                     ->limit(30)
+                    ->tooltip(fn(TextColumn $column): ?string => $column->getState())
                     ->toggleable(isToggledHiddenByDefault: false),
             ])
             ->headerActions([

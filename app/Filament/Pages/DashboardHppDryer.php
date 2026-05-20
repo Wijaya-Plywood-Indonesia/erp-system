@@ -20,7 +20,6 @@ use UnitEnum;
 class DashboardHppDryer extends Page implements HasTable
 {
     use InteractsWithTable;
-
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
     protected static string|UnitEnum|null $navigationGroup = 'HPP & Biaya';
