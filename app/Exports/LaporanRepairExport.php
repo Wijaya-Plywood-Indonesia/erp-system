@@ -39,7 +39,7 @@ class LaporanRepairExport implements WithMultipleSheets
 }
 
 // ============================================================
-// SHEET 1: DETAIL PER MEJA (tidak berubah)
+// SHEET 1: DETAIL PER MEJA (UPDATE: TAMBAH KOLOM KETERANGAN)
 // ============================================================
 class LaporanRepairDetailSheet implements FromCollection, WithHeadings, WithTitle
 {
@@ -67,7 +67,25 @@ class LaporanRepairDetailSheet implements FromCollection, WithHeadings, WithTitl
             $rows->push(['KW',          $first['kw']]);
             $rows->push(['TANGGAL',     $first['tanggal']]);
             $rows->push([]);
-            $rows->push(['ID', 'Nama', 'Masuk', 'Pulang', 'Ijin', 'Potongan Target', 'Keterangan', '', 'Target Harian', 'Jam Kerja', 'Target / Jam', 'Hasil', 'Selisih']);
+
+            // 🚀 UPDATE HEADER TABEL: Menambahkan Keterangan Hasil & Kerja di samping Keterangan Absen lama
+            $rows->push([
+                'ID',
+                'Nama',
+                'Masuk',
+                'Pulang',
+                'Ijin',
+                'Potongan Target',
+                'Keterangan Absen',
+                'Keterangan Hasil', // 👈 Kolom Baru
+                'Keterangan Kerja', // 👈 Kolom Baru
+                '',
+                'Target Harian',
+                'Jam Kerja',
+                'Target / Jam',
+                'Hasil',
+                'Selisih'
+            ]);
 
             foreach ($pekerja as $p) {
                 $rows->push([
@@ -77,7 +95,9 @@ class LaporanRepairDetailSheet implements FromCollection, WithHeadings, WithTitl
                     $p['jam_pulang'] ?? '-',
                     $p['ijin'] ?? '-',
                     ($p['pot_target'] ?? 0) > 0 ? $p['pot_target'] : '-',
-                    $p['keterangan'] ?? '-',
+                    $p['keterangan'] ?? '-',       // Ini Keterangan Absen bawaan array Anda
+                    $p['keterangan_hasil'] ?? '—', // 👈 Diambil langsung dari mapping data hasil pekerja
+                    $p['keterangan_kerja'] ?? '—', // 👈 Diambil langsung dari mapping data rencana kerja pekerja
                     '',
                     $first['target'],
                     $first['jam_kerja'],
@@ -96,6 +116,8 @@ class LaporanRepairDetailSheet implements FromCollection, WithHeadings, WithTitl
                 '',
                 $totalPotongan,
                 '',
+                '', // Kosongkan kolom baru untuk baris TOTAL
+                '', // Kosongkan kolom baru untuk baris TOTAL
                 '',
                 $first['target'],
                 $first['jam_kerja'],
@@ -122,16 +144,12 @@ class LaporanRepairDetailSheet implements FromCollection, WithHeadings, WithTitl
 }
 
 // ============================================================
-// SHEET 2: SUMMARY — Baca langsung dari Eloquent Collection
+// SHEET 2: SUMMARY — Bersih Seperti Semula
 // ============================================================
 class LaporanRepairSummarySheet implements FromCollection, WithHeadings, WithTitle, WithEvents
 {
     private array $summary = [];
 
-    /**
-     * MASTER MAPPING: 
-     * Urutan kolom KW di Excel.
-     */
     private const MASTER_KW = ['1', '2', '3', '4', 'af'];
 
     public function __construct(protected $rawCollection)
@@ -151,8 +169,6 @@ class LaporanRepairSummarySheet implements FromCollection, WithHeadings, WithTit
                 $jenis = strtoupper($modal->jenisKayu->kode_kayu ?? substr($modal->jenisKayu->nama_kayu ?? '-', 0, 1));
                 $kwData = strtolower(trim($modal->kw ?? ''));
 
-                // ✅ PERUBAHAN LOGIKA: Key sekarang menyertakan KW
-                // Dengan begini, jika Ukuran & Jenis sama tapi KW beda, akan jadi baris baru
                 $key = "{$jenis}|{$tanggal}|{$p}|{$l}|{$t}|{$kwData}";
 
                 if (!isset($this->summary[$key])) {
@@ -162,17 +178,15 @@ class LaporanRepairSummarySheet implements FromCollection, WithHeadings, WithTit
                         'l'           => $l,
                         't'           => $t,
                         'jenis'       => $jenis,
-                        'current_kw'  => $kwData, // Menyimpan info KW untuk baris ini
+                        'current_kw'  => $kwData,
                         'pekerja_ids' => [],
                     ];
 
-                    // Tetap inisialisasi kolom MASTER_KW agar struktur kolom Excel tidak geser
                     foreach (self::MASTER_KW as $mKw) {
                         $this->summary[$key]['kw_' . $mKw] = 0;
                     }
                 }
 
-                // Hitung hasil produksi spesifik untuk modal repair ini
                 $hasilModal = 0;
                 foreach ($produksi->rencanaPegawais as $rp) {
                     if (!$rp->pegawai) continue;
@@ -188,7 +202,6 @@ class LaporanRepairSummarySheet implements FromCollection, WithHeadings, WithTit
                     }
                 }
 
-                // Masukkan hasil ke kolom yang sesuai
                 if ($kwData !== '' && $hasilModal > 0) {
                     if (in_array($kwData, self::MASTER_KW)) {
                         $this->summary[$key]['kw_' . $kwData] += $hasilModal;
@@ -197,7 +210,6 @@ class LaporanRepairSummarySheet implements FromCollection, WithHeadings, WithTit
             }
         }
 
-        // Urutkan berdasarkan Jenis Kayu agar data yang sama mengelompok berurutan
         ksort($this->summary);
     }
 
@@ -220,12 +232,11 @@ class LaporanRepairSummarySheet implements FromCollection, WithHeadings, WithTit
 
         $rows->push($grandRow);
 
-        // Row 3+: Data Rows (Satu baris hanya akan terisi satu kolom KW)
+        // Row 3+: Data Rows
         foreach ($this->summary as $s) {
             $row = [$s['tanggal'], $s['p'], $s['l'], $s['t'], $s['jenis']];
 
             foreach (self::MASTER_KW as $mKw) {
-                // Karena grouping sudah pecah per KW, maka di baris ini hanya kw yang sesuai yang ada nilainya
                 $val = $s['kw_' . $mKw] ?? 0;
                 $row[] = $val > 0 ? $val : '';
             }

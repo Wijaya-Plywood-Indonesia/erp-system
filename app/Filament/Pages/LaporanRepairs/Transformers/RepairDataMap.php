@@ -16,6 +16,9 @@ class RepairDataMap
 
             $tanggal = Carbon::parse($produksi->tanggal)->format('d/m/Y');
 
+            // 🔍 AMBIL KENDALA KERJA: Langsung dari properti model ProduksiRepair saat ini
+            $kendalaKerjaHariIni = $produksi->kendala ?? '—';
+
             foreach ($produksi->modalRepairs as $modal) {
 
                 $ukuranModel = $modal->ukuran;
@@ -77,15 +80,21 @@ class RepairDataMap
                         continue;
 
                     // --- FILTER PERBAIKAN: CEK HASIL REPAIR DULU ---
-                    $hasilIndividu = (int) $rp->rencanaRepairs
-                        ->where('id_modal_repair', $modal->id)
-                        ->flatMap->hasilRepairs
-                        ->sum('jumlah');
+                    $rencanaRepairsTerikat = $rp->rencanaRepairs->where('id_modal_repair', $modal->id);
+                    $hasilCollection = $rencanaRepairsTerikat->flatMap->hasilRepairs;
+
+                    $hasilIndividu = (int) $hasilCollection->sum('jumlah');
 
                     // Jika tidak ada hasil produksi, jangan masukkan ke laporan
                     if ($hasilIndividu <= 0) {
                         continue;
                     }
+
+                    // 🔍 EXTRAK KETERANGAN HASIL (Dari model HasilRepair)
+                    $ketHasilTeks = $hasilCollection->where('keterangan', '!=', null)
+                        ->pluck('keterangan')
+                        ->unique()
+                        ->implode(', ');
 
                     $nomorMeja = $rp->nomor_meja ?? '-';
                     $key = $nomorMeja . '|' . $kodeUkuran;
@@ -120,7 +129,12 @@ class RepairDataMap
                             ? Carbon::parse($rp->jam_pulang)->format('H:i')
                             : '-',
                         'ijin' => $rp->ijin ?? '-',
-                        'keterangan' => $rp->keterangan ?? '-',
+                        'keterangan' => $rp->keterangan ?? '-', // Keterangan Absen bawaan RencanaPegawai
+
+                        // 🚀 PERBAIKAN MUTLAK: Menyuntikkan data hasil & kendala dari induk ProduksiRepair
+                        'keterangan_hasil' => !empty($ketHasilTeks) ? $ketHasilTeks : '—',
+                        'keterangan_kerja' => !empty($kendalaKerjaHariIni) ? $kendalaKerjaHariIni : '—',
+
                         'nomor_meja' => $nomorMeja,
                         'hasil' => $hasilIndividu,
                         'pot_target' => 0,
