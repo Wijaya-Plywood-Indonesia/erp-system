@@ -147,8 +147,7 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
     }
 
     /**
-     * Hitung M3 dari koleksi detail menggunakan rumus P x L x T x jumlah / 10,000,000
-     * lebih akurat daripada memakai field m3 yang tersimpan di database
+     * Hitung M3 dari koleksi detail
      */
     private function hitungM3(\Illuminate\Support\Collection $items): float
     {
@@ -163,10 +162,6 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
         return $total;
     }
 
-    /**
-     * Format ukuran lengkap dari array ukuran.
-     * Misal: ['p' => 122, 'l' => 244, 't' => 3.7] → "122 x 244 x 3.7"
-     */
     private function formatUkuran(array $ukuran): string
     {
         $p = $ukuran['p'] ?? ($ukuran['panjang'] ?? '');
@@ -175,14 +170,8 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
         return "{$p} x {$l} x {$t}";
     }
 
-    /**
-     * Mendapatkan nama akun dan nomor akun.
-     * - Nama akun: pakai normalizeJenis (sengon / meranti), bukan nama asli
-     * - Keterangan: pakai nama kayu ASLI (di-expand) — ditangani di luar fungsi ini
-     */
     private function getAkun(string $tipeVeneer, string $jenis, float $tebal, bool $isPpc): array
     {
-        // Nama akun & no akun selalu pakai normalize (sengon atau meranti)
         $jnsAkun    = $this->normalizeJenis($jenis);
         $kelompok   = ($tebal < 1) ? 'faceback' : 'core';
         $tipeUkuran = ($tebal < 1) ? '260 face/back' : '130 core';
@@ -215,27 +204,10 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
         return ['nama' => $nama, 'no' => $no];
     }
 
-    /**
-     * Buat satu baris jurnal dengan struktur kolom baru:
-     * Nama Akun | Tanggal | No Jurnal | No Akun | No | Nama Produksi | Keterangan | Map | Hit KBK | Banyak | M3 | Harga | Total
-     */
     private function makeRow(string $namaAkun, string $noAkun, string $tgl, string $namaProduksi, string $keterangan, string $map, string $hitKbk, $banyak, $m3, $harga, $total): array
     {
         return [
-            $namaAkun,   // A: Nama Akun
-            $tgl,        // B: tgl (tanggal produksi dd-mm-yyyy)
-            '',          // C: jurnal (kosong, admin isi)
-            $noAkun,     // D: No Akun
-            '',          // E: No (kosong, admin isi)
-            '',          // F: mm (kosong, admin isi)
-            $namaProduksi, // G: Nama (dryer pagi/malam)
-            $keterangan, // H: Keterangan
-            $map,        // I: map
-            $hitKbk,     // J: hit kbk
-            $banyak,     // K: Banyak
-            $m3,         // L: M3
-            $harga,      // M: Harga
-            $total,      // N: Total
+            $namaAkun, $tgl, '', $noAkun, '', '', $namaProduksi, $keterangan, $map, $hitKbk, $banyak, $m3, $harga, $total
         ];
     }
 
@@ -261,13 +233,8 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
                 $totalPegawai += $produksi['jumlah_pekerja'] ?? 0;
                 foreach ($produksi['detail_hasils'] ?? [] as $dh) $allHasils[] = $dh;
                 foreach ($produksi['detail_masuks'] ?? [] as $dm) $allMasuks[] = $dm;
-                // Ambil tanggal dari data produksi, format dd-mm-yyyy
                 if (empty($tglProduksi)) {
-                    $rawTgl = $produksi['tanggal_produksi']
-                        ?? $produksi['tanggal']
-                        ?? $produksi['tgl_produksi']
-                        ?? $produksi['date']
-                        ?? '';
+                    $rawTgl = $produksi['tanggal_produksi'] ?? $produksi['tanggal'] ?? $produksi['tgl_produksi'] ?? $produksi['date'] ?? '';
                     if (!empty($rawTgl)) {
                         $tglProduksi = \Carbon\Carbon::parse($rawTgl)->format('d-m-Y');
                     }
@@ -277,7 +244,6 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
             $hasilsReguler = array_filter($allHasils, fn($d) => !$this->isKwAf($d['kw'] ?? 0));
             $hasilsAf      = array_filter($allHasils, fn($d) =>  $this->isKwAf($d['kw'] ?? 0));
 
-            // Grouping key: jenis expanded + tebal
             $makeKey = fn($d) => $this->expandJenis(trim($d['jenis_kayu'] ?? '')) . '_' . (float)($d['ukuran']['t'] ?? 0);
 
             $groupedHasilsReguler = collect($hasilsReguler)->groupBy($makeKey);
@@ -289,19 +255,15 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
             $jurnalShift = [];
             $namaProduksi = 'dryer ' . strtolower($shiftName);
 
-            // ============================================================
-            // DEBIT: Veneer Jadi & Kering — Reguler (kw 1,2,3,4)
-            // ============================================================
+            // DEBIT: Hasil Reguler
             foreach ($groupedHasilsReguler as $key => $dhs) {
                 $sample     = $dhs->first();
                 $jenisAsli  = $this->expandJenis(trim($sample['jenis_kayu'] ?? ''));
                 $tebal      = (float)($sample['ukuran']['t'] ?? 0);
                 $ukuranLengkap = $this->formatUkuran($sample['ukuran'] ?? []);
                 $tipeLabel  = ($tebal < 1) ? '260 f/b' : '130 core';
-                // Keterangan: nama kayu ASLI + ukuran lengkap
                 $ketDesc    = "{$tipeLabel} {$jenisAsli} uk {$ukuranLengkap}";
 
-                // KW 1,2 → Jadi
                 $kwJadi = $dhs->filter(fn($d) => in_array((int)$d['kw'], [1, 2]));
                 if ($kwJadi->sum('isi') > 0) {
                     $m3       = round($this->hitungM3($kwJadi), 4);
@@ -312,7 +274,6 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
                     $totalDebit   += $subtotal;
                 }
 
-                // KW 3,4 → Kering
                 $kwKering = $dhs->filter(fn($d) => in_array((int)$d['kw'], [3, 4]));
                 if ($kwKering->sum('isi') > 0) {
                     $m3       = round($this->hitungM3($kwKering), 4);
@@ -324,34 +285,26 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
                 }
             }
 
-            // ============================================================
-            // DEBIT: Veneer Kering PPC — AF (kw 0 / selain 1-4)
-            // Nama akun pakai "meranti" (normalize), keterangan pakai nama asli + af
-            // ============================================================
+            // DEBIT: Hasil AF (PPC)
             foreach ($groupedHasilsAf as $key => $dhs) {
                 $sample        = $dhs->first();
                 $jenisAsli     = $this->expandJenis(trim($sample['jenis_kayu'] ?? ''));
                 $tebal         = (float)($sample['ukuran']['t'] ?? 0);
                 $ukuranLengkap = $this->formatUkuran($sample['ukuran'] ?? []);
                 $tipeLabel     = ($tebal < 1) ? '260 f/b' : '130 core';
-                // Keterangan: nama kayu ASLI + ukuran lengkap + af
                 $ketDesc       = "{$tipeLabel} {$jenisAsli} uk {$ukuranLengkap} af";
 
                 if ($dhs->sum('isi') > 0) {
                     $m3       = round($this->hitungM3($dhs), 4);
                     $harga    = $this->getHargaPatok($jenisAsli, $tebal, 'kering');
                     $subtotal = round($m3 * $harga, 2);
-                    // getAkun pakai normalize → nama akun "meranti"
                     $akun     = $this->getAkun('kering', $jenisAsli, $tebal, true);
                     $jurnalShift[] = $this->makeRow($akun['nama'], $akun['no'], $tglProduksi, $namaProduksi, $ketDesc, 'd', 'm', $dhs->sum('isi'), $m3, $harga, $subtotal);
                     $totalDebit   += $subtotal;
                 }
             }
 
-            // ============================================================
-            // KREDIT: Veneer Basah Reguler & kehilangan
-            // Kehilangan = masuk - (hasil reguler + hasil AF)
-            // ============================================================
+            // KREDIT: Modal Reguler & Kehilangan
             $allKeys = collect(array_keys($groupedMasuks->toArray()))
                 ->merge(array_keys($groupedHasilsReguler->toArray()))
                 ->merge(array_keys($groupedHasilsAf->toArray()))
@@ -371,7 +324,6 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
                 $jenisAsli  = $this->expandJenis(trim($sample['jenis_kayu'] ?? ''));
                 $tebal      = (float)($sample['ukuran']['t'] ?? 0);
                 $hargaBasah = $this->getHargaPatok($jenisAsli, $tebal, 'basah');
-                // Kredit basah reguler: nama akun pakai normalize (meranti/sengon)
                 $akun       = $this->getAkun('basah', $jenisAsli, $tebal, false);
 
                 if ($dhsReguler->sum('isi') > 0) {
@@ -381,7 +333,6 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
                     $totalKredit  += $subtotal;
                 }
 
-                // Kehilangan = masuk - (reguler + AF)
                 $hilang = $dms->sum('isi') - $totalHasilIsi;
                 if ($hilang > 0) {
                     $m3Hilang       = round($this->hitungM3($dms) - $totalHasilM3, 4);
@@ -391,15 +342,12 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
                 }
             }
 
-            // ============================================================
-            // KREDIT: Veneer Basah PPC — untuk hasil AF
-            // ============================================================
+            // KREDIT: Modal PPC (Untuk Hasil AF)
             foreach ($groupedHasilsAf as $key => $dhs) {
                 $sample     = $dhs->first();
                 $jenisAsli  = $this->expandJenis(trim($sample['jenis_kayu'] ?? ''));
                 $tebal      = (float)($sample['ukuran']['t'] ?? 0);
                 $hargaBasah = $this->getHargaPatok($jenisAsli, $tebal, 'basah');
-                // Kredit basah ppc: nama akun pakai normalize (meranti/sengon)
                 $akun       = $this->getAkun('basah', $jenisAsli, $tebal, true);
 
                 if ($dhs->sum('isi') > 0) {
@@ -410,24 +358,21 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
                 }
             }
 
-            // ============================================================
             // KREDIT: Hutang Gaji
-            // ============================================================
             if ($totalPegawai > 0) {
                 $jurnalShift[] = $this->makeRow('Hutang Gaji', '2400.01', $tglProduksi, $namaProduksi, '', 'k', 'b', $totalPegawai, '', 150000, ($totalPegawai * 150000));
                 $totalKredit  += ($totalPegawai * 150000);
             }
 
-            // ============================================================
-            // HPP Produksi
-            // ============================================================
-            $hpp = $totalDebit - $totalKredit;
+            // HPP (Otomatis menyesuaikan posisi Debet/Kredit agar jurnal Balance)
+            $hpp = $totalKredit - $totalDebit;
             if (round($hpp, 2) != 0) {
-                $jurnalShift[] = $this->makeRow('hpp produksi rotary', '6111', $tglProduksi, $namaProduksi, '', ($hpp > 0 ? 'k' : 'd'), '', '', '', abs(round($hpp, 2)), abs(round($hpp, 2)));
+                $posisiHpp = ($hpp > 0) ? 'd' : 'k';
+                $jurnalShift[] = $this->makeRow('hpp', '6111', $tglProduksi, $namaProduksi, '', $posisiHpp, '', '', '', abs(round($hpp, 2)), abs(round($hpp, 2)));
             }
 
             foreach ($jurnalShift as $r) $rows[] = $r;
-            $rows[] = array_fill(0, 14, ''); // baris kosong pemisah
+            $rows[] = array_fill(0, 14, ''); 
         }
 
         return $rows;

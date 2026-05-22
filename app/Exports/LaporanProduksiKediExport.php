@@ -7,13 +7,16 @@ use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets; // 1. TAMBAHAN UNTUK MULTI-SHEET
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use App\Models\HargaPegawai;
+use App\Exports\Sheets\JurnalKediSheet; // 2. PANGGIL CLASS JURNAL YANG BARU DIBUAT
 
-class LaporanProduksiKediExport implements FromCollection, WithTitle, ShouldAutoSize, WithStyles
+// 3. TAMBAHKAN "WithMultipleSheets" DI SINI
+class LaporanProduksiKediExport implements FromCollection, WithTitle, ShouldAutoSize, WithStyles, WithMultipleSheets 
 {
     protected Collection $data;
 
@@ -193,5 +196,14 @@ class LaporanProduksiKediExport implements FromCollection, WithTitle, ShouldAuto
     public function title(): string
     {
         return 'Laporan Produksi Kedi';
+    }
+
+    // 4. INI ADALAH FUNGSI TAMBAHAN UNTUK MENAMPILKAN MULTI-SHEET
+    public function sheets(): array
+    {
+        return [
+            $this, // Sheet ke-1: Mengambil dari fungsi collection() di atas (Laporan Kedi Asli)
+            new JurnalKediSheet($this->data->toArray()) // Sheet ke-2: Memanggil file JurnalKediSheet yang baru saja dibuat
+        ];
     }
 }
