@@ -16,6 +16,11 @@ class ListRekapKayuMasuks extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('jurnal_kayu')
+                ->label('Jurnal Kayu Masuk')
+                ->icon('heroicon-o-document-chart-bar')
+                ->color('success')
+                ->url('/admin/laporan-jurnal-kayu-masuk'),
 
             Action::make('laporan_kayu')
                 ->label('Laporan Kayu Masuk')
@@ -23,9 +28,6 @@ class ListRekapKayuMasuks extends ListRecords
                 ->color('info')
                 ->url(route('laporan.kayu-masuk'))
                 ->openUrlInNewTab(),
-
-
-
         ];
     }
 }

@@ -120,7 +120,9 @@ class LaporanProduksiPilihPlywood extends Page implements HasForms
                 $p = $u->panjang ?? 0;
                 $l = $u->lebar ?? 0;
                 $t = $u->tebal ?? 0;
-                $byk = $item->jumlah ?? 0;
+                $cacat = $item->jumlah ?? 0;
+                $bagus = $item->jumlah_bagus ?? 0;
+                $total = $cacat + $bagus;
 
                 $jenisCode = $b->jenisBarang->kode_jenis_barang ?? '';
                 $gradeName = $b->grade->nama_grade ?? '';
@@ -132,7 +134,9 @@ class LaporanProduksiPilihPlywood extends Page implements HasForms
                     'l' => $l,
                     't' => $t,
                     'jenis' => $jenisStr ?: '-',
-                    'byk' => $byk,
+                    'bagus' => $bagus,
+                    'cacat' => $cacat,
+                    'total' => $total,
                     'm3' => '',
                 ];
             }
