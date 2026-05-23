@@ -42,10 +42,12 @@ class LaporanPilihPlywoodExport implements FromCollection, WithHeadings, WithSty
                 $row['d_l'] = $d['l'];
                 $row['d_t'] = $d['t'];
                 $row['d_jenis'] = $d['jenis'];
-                $row['d_byk'] = $d['byk'];
+                $row['d_bagus'] = $d['bagus'];
+                $row['d_cacat'] = $d['cacat'];
+                $row['d_total'] = $d['total'];
                 $row['d_m3'] = ''; 
             } else {
-                $row['d_tgl'] = $row['d_p'] = $row['d_l'] = $row['d_t'] = $row['d_jenis'] = $row['d_byk'] = $row['d_m3'] = '';
+                $row['d_tgl'] = $row['d_p'] = $row['d_l'] = $row['d_t'] = $row['d_jenis'] = $row['d_bagus'] = $row['d_cacat'] = $row['d_total'] = $row['d_m3'] = '';
             }
 
             $row['spacer'] = ''; 
@@ -72,7 +74,7 @@ class LaporanPilihPlywoodExport implements FromCollection, WithHeadings, WithSty
     public function headings(): array
     {
         return [
-            'Tanggal', 'p', 'l', 't', 'jenis', 'byk', 'm3',
+            'Tanggal', 'p', 'l', 't', 'jenis', 'Bagus', 'Cacat', 'Total', 'm3',
             '', 
             'Tanggal', 'TTL PKJ', 'HARGA', 'Total m3', 'ONGKOS PER M3', 'ONGKOS PER LB'
         ];
@@ -80,8 +82,8 @@ class LaporanPilihPlywoodExport implements FromCollection, WithHeadings, WithSty
 
     public function styles(Worksheet $sheet)
     {
-        $sheet->getStyle('A1:O1')->getFont()->setBold(true);
-        $sheet->getStyle('A1:O1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A1:P1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:P1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         return [];
     }
 
@@ -92,31 +94,32 @@ class LaporanPilihPlywoodExport implements FromCollection, WithHeadings, WithSty
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = $sheet->getHighestRow();
 
-                $sheet->getStyle("A1:G" . $lastRow)->applyFromArray([
+                $sheet->getStyle("A1:I" . $lastRow)->applyFromArray([
                     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                 ]);
-                $sheet->getStyle("I1:O" . $lastRow)->applyFromArray([
+                $sheet->getStyle("K1:P" . $lastRow)->applyFromArray([
                     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                 ]);
 
-                $sheet->getStyle("H1:H" . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('000000');
-                $sheet->getStyle('N1:O1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFF00');
+                $sheet->getStyle("J1:J" . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('000000');
+                $sheet->getStyle('O1:P1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFF00');
 
                 $sheet->getColumnDimension('A')->setWidth(15);
                 $sheet->getColumnDimension('B')->setWidth(8);
                 $sheet->getColumnDimension('C')->setWidth(8);
                 $sheet->getColumnDimension('D')->setWidth(8);
                 $sheet->getColumnDimension('E')->setWidth(20);
-                $sheet->getColumnDimension('F')->setWidth(8);
-                $sheet->getColumnDimension('G')->setWidth(10);
-                $sheet->getColumnDimension('H')->setWidth(3); 
-                $sheet->getColumnDimension('I')->setWidth(15);
-                $sheet->getColumnDimension('J')->setWidth(10);
-                $sheet->getColumnDimension('K')->setWidth(15);
-                $sheet->getColumnDimension('L')->setWidth(15);
-                $sheet->getColumnDimension('M')->setWidth(18);
-                $sheet->getColumnDimension('N')->setWidth(18);
-                $sheet->getColumnDimension('O')->setWidth(18);
+                $sheet->getColumnDimension('F')->setWidth(10); // Bagus
+                $sheet->getColumnDimension('G')->setWidth(10); // Cacat
+                $sheet->getColumnDimension('H')->setWidth(10); // Total
+                $sheet->getColumnDimension('I')->setWidth(10); // m3
+                $sheet->getColumnDimension('J')->setWidth(3);  // Spacer
+                $sheet->getColumnDimension('K')->setWidth(15); // Tanggal
+                $sheet->getColumnDimension('L')->setWidth(10); // TTL PKJ
+                $sheet->getColumnDimension('M')->setWidth(15); // HARGA
+                $sheet->getColumnDimension('N')->setWidth(15); // Total m3
+                $sheet->getColumnDimension('O')->setWidth(18); // ONGKOS PER M3
+                $sheet->getColumnDimension('P')->setWidth(18); // ONGKOS PER LB
             },
         ];
     }

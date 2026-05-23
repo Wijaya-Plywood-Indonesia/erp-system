@@ -16,6 +16,10 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Cell\Cell;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
+use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
 use App\Models\DetailTurusanKayu;
 
 class LaporanProduksiExport implements WithMultipleSheets
@@ -165,12 +169,21 @@ class LaporanProduksiRekapSheet implements FromCollection, WithHeadings, WithSty
     public function title(): string { return 'Rekap Produksi Custom'; }
 }
 
-class LaporanProduksiJurnalSheet implements FromCollection, WithTitle, WithStyles, WithEvents
+class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromCollection, WithTitle, WithStyles, WithEvents, WithCustomValueBinder
 {
     protected $tanggal;
     protected $titleRows = [];
     protected $headerRows = [];
     protected $dataRanges = [];
+
+    public function bindValue(Cell $cell, $value)
+    {
+        if ($cell->getColumn() === 'D') {
+            $cell->setValueExplicit($value, DataType::TYPE_STRING);
+            return true;
+        }
+        return parent::bindValue($cell, $value);
+    }
 
     public function __construct($tanggal)
     {
@@ -264,24 +277,24 @@ class LaporanProduksiJurnalSheet implements FromCollection, WithTitle, WithStyle
                 if ($noAkun === '115-07') {
                     // Veneer Basah F/B
                     if (stripos($subItem['keterangan'] ?? '', 'sengon') !== false) {
-                        $mappedNoAkun = '1421,00';
+                        $mappedNoAkun = '1421.00';
                         $mappedNamaAkun = 'Veneer Basah 260 face/back sengon WJY';
                     } else {
-                        $mappedNoAkun = '1422,00';
+                        $mappedNoAkun = '1422.00';
                         $mappedNamaAkun = 'Veneer Basah 260 face/back meranti WJY';
                     }
                 } elseif ($noAkun === '115-08') {
                     // Veneer Basah CORE
                     if (stripos($subItem['keterangan'] ?? '', 'sengon') !== false) {
-                        $mappedNoAkun = '1426,00';
+                        $mappedNoAkun = '1426.00';
                         $mappedNamaAkun = 'Veneer Basah 130 core sengon WJY';
                     } else {
-                        $mappedNoAkun = '1427,00';
+                        $mappedNoAkun = '1427.00';
                         $mappedNamaAkun = 'Veneer Basah 130 core meranti WJY';
                     }
                 } elseif ($noAkun === '210-02') {
                     // Hutang Gaji
-                    $mappedNoAkun = '2231,00';
+                    $mappedNoAkun = '2231.00';
                     $mappedNamaAkun = 'Hutang Gaji';
                 }
 
@@ -356,13 +369,29 @@ class LaporanProduksiJurnalSheet implements FromCollection, WithTitle, WithStyle
             }
 
             foreach ($grouped as $g) {
-                $isVeneer = in_array($g['no_akun'], ['115-07', '115-08', '1421,00', '1422,00', '1426,00', '1427,00']);
-                $isHutangGaji = in_array($g['no_akun'], ['210-02', '2231,00']);
-                $isWood = in_array($g['no_akun'], ['115-01', '115-02', '1411,01', '1411,02', '1411,03', '1411,04']);
+                $isVeneer = in_array($g['no_akun'], ['115-07', '115-08', '1421.00', '1422.00', '1426.00', '1427.00']);
+                $isHutangGaji = in_array($g['no_akun'], ['210-02', '2231.00']);
+                $isWood = in_array($g['no_akun'], ['115-01', '115-02', '1411.01', '1411.02', '1411.03', '1411.04']);
 
                 $rowHarga = 0.0;
                 if ($isVeneer) {
-                    $rowHarga = 2700000.0;
+                    $noAkunVal = $g['no_akun'] ?? '';
+                    $namaAkunVal = strtolower($g['nama_akun'] ?? '');
+                    if ($noAkunVal === '1421.00' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'sengon'))) {
+                        $rowHarga = 2700000.0;
+                    } elseif ($noAkunVal === '1422.00' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'meranti'))) {
+                        $rowHarga = 8000000.0;
+                    } elseif ($noAkunVal === '1426.00' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'sengon'))) {
+                        $rowHarga = 1700000.0;
+                    } elseif ($noAkunVal === '1427.00' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'meranti'))) {
+                        $rowHarga = 2100000.0;
+                    } else {
+                        if (str_contains($namaAkunVal, 'core')) {
+                            $rowHarga = str_contains($namaAkunVal, 'sengon') ? 1700000.0 : 2100000.0;
+                        } else {
+                            $rowHarga = str_contains($namaAkunVal, 'sengon') ? 2700000.0 : 8000000.0;
+                        }
+                    }
                 } elseif ($isHutangGaji) {
                     $rowHarga = 150000.0;
                 } elseif ($isWood) {
@@ -387,11 +416,11 @@ class LaporanProduksiJurnalSheet implements FromCollection, WithTitle, WithStyle
                 }
             }
 
-            // Selisih → selalu masuk ke 'hpp triplek' (6111,00) sebagai KREDIT
+            // Selisih → selalu masuk ke 'hpp triplek' (6111.00) sebagai KREDIT
             $selisih = round($totalDebit - $totalKredit, 2);
             $grouped[] = [
                 'nama_akun'  => 'hpp triplek',
-                'no_akun'    => '6111,00',
+                'no_akun'    => '6111.00',
                 'bagian'     => $machine,
                 'keterangan' => '',
                 'dk'         => 'k',
@@ -444,9 +473,9 @@ class LaporanProduksiJurnalSheet implements FromCollection, WithTitle, WithStyle
             $tglVal = \Carbon\Carbon::parse($this->tanggal)->format('d-m-Y');
             foreach ($groupedRows as $g) {
                 // Whitelist mapped accounts for formatting logic
-                $isVeneer = in_array($g['no_akun'], ['115-07', '115-08', '1421,00', '1422,00', '1426,00', '1427,00']);
-                $isHutangGaji = in_array($g['no_akun'], ['210-02', '2231,00']);
-                $isWood = in_array($g['no_akun'], ['115-01', '115-02', '1411,01', '1411,02', '1411,03', '1411,04']);
+                $isVeneer = in_array($g['no_akun'], ['115-07', '115-08', '1421.00', '1422.00', '1426.00', '1427.00']);
+                $isHutangGaji = in_array($g['no_akun'], ['210-02', '2231.00']);
+                $isWood = in_array($g['no_akun'], ['115-01', '115-02', '1411.01', '1411.02', '1411.03', '1411.04']);
 
                 // Format `Nama` (Col 7 / G)
                 if ($isVeneer) {
@@ -466,7 +495,23 @@ class LaporanProduksiJurnalSheet implements FromCollection, WithTitle, WithStyle
                 // Format `Harga` (Col 13 / M)
                 $hargaVal = null;
                 if ($isVeneer) {
-                    $hargaVal = 2700000;
+                    $noAkunVal = $g['no_akun'] ?? '';
+                    $namaAkunVal = strtolower($g['nama_akun'] ?? '');
+                    if ($noAkunVal === '1421.00' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'sengon'))) {
+                        $hargaVal = 2700000;
+                    } elseif ($noAkunVal === '1422.00' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'meranti'))) {
+                        $hargaVal = 8000000;
+                    } elseif ($noAkunVal === '1426.00' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'sengon'))) {
+                        $hargaVal = 1700000;
+                    } elseif ($noAkunVal === '1427.00' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'meranti'))) {
+                        $hargaVal = 2100000;
+                    } else {
+                        if (str_contains($namaAkunVal, 'core')) {
+                            $hargaVal = str_contains($namaAkunVal, 'sengon') ? 1700000 : 2100000;
+                        } else {
+                            $hargaVal = str_contains($namaAkunVal, 'sengon') ? 2700000 : 8000000;
+                        }
+                    }
                 } elseif ($isHutangGaji) {
                     $hargaVal = 150000;
                 } elseif ($isWood) {
