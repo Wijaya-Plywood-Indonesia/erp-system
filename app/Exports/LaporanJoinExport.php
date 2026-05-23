@@ -341,118 +341,88 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
     public function columnWidths(): array
     {
         return [
-            'A' => 45, // Nama Akun
-            'B' => 15, // tgl
-            'C' => 12, // jurnal
-            'D' => 12, // No Akun
-            'E' => 8,  // No
-            'F' => 8,  // mm
-            'G' => 15, // Nama
-            'H' => 45, // Keterangan
-            'I' => 8,  // map
-            'J' => 8,  // hit kbk
-            'K' => 14, // Banyak
-            'L' => 16, // M3
-            'M' => 16, // Harga
-            'N' => 22, // Total
+            'A' => 45,
+            'B' => 15,
+            'C' => 12,
+            'D' => 12,
+            'E' => 8,
+            'F' => 8,
+            'G' => 15,
+            'H' => 45,
+            'I' => 8,
+            'J' => 8,
+            'K' => 14,
+            'L' => 16,
+            'M' => 16,
+            'N' => 22,
         ];
     }
 
     public function columnFormats(): array
     {
         return [
-            'K' => '#,##0',        // Banyak -> Langsung angka bulat murni (Tanpa ,00)
-            'L' => '#,##0.0000',   // M3 -> Template Fix: 4 angka di belakang koma desimal
-            'M' => '#,##0.00',        // Harga -> Langsung angka bulat murni (Tanpa ,00)
-            'N' => '#,##0',        // Total -> Langsung angka bulat murni (Tanpa ,00)
+            'D' => '0.00',           // No Akun sebagai Teks agar .00 tidak hilang
+            'K' => '#,##0',       // Banyak
+            'L' => '#,##0.0000',  // M3: 4 desimal
+            'M' => '#,##0.00',    // Harga
+            'N' => '#,##0',       // Total
         ];
     }
 
     public function styles(Worksheet $sheet)
     {
         $lastRow = $sheet->getHighestRow();
-
         $sheet->getStyle('A1:N1')->applyFromArray([
-            'font' => [
-                'bold' => true,
-                'color' => ['rgb' => 'FFFFFF'], // Teks Putih Bersih
-                'name' => 'Calibri',
-                'size' => 11
-            ],
-            'fill' => [
-                'fillType' => Fill::FILL_SOLID,
-                'startColor' => ['rgb' => '9999FF'] // Warna Biru Khas Excel Modern (Steel Blue Accent)
-            ],
-            'alignment' => [
-                'horizontal' => Alignment::HORIZONTAL_CENTER,
-                'vertical' => Alignment::VERTICAL_CENTER,
-                'wrapText' => true // Otomatis turun baris jika teks kolom panjang
-            ],
-            'borders' => [
-                'allBorders' => [
-                    'borderStyle' => Border::BORDER_THIN,
-                    'color' => ['rgb' => 'FFFFFF'] // Sekat putih antar kolom header agar terlihat clean
-                ]
-            ]
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'name' => 'Calibri', 'size' => 11],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '9999FF']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'FFFFFF']]]
         ]);
 
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:N{$lastRow}")->applyFromArray([
-                'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
-            ]);
+            $sheet->getStyle("A2:N{$lastRow}")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]]);
             $sheet->getStyle("D2:D{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("B2:G{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("I2:J{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle("K2:N{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
         }
     }
 
     private function normalizeJenis(string $jenis): string
     {
-        // Mengubah semua input ke lowercase untuk diperiksa
-        $jns = strtolower(trim($jenis));
-
-        // Jika mengandung 'sengon', maka kelompokkan ke sengon, sisanya (jabon, pinus, meranti, dll) ke meranti
-        return str_contains($jns, 'sengon') ? 'sengon' : 'meranti';
+        return str_contains(strtolower(trim($jenis)), 'sengon') ? 'sengon' : 'meranti';
     }
 
-    private function getHargaPatok(string $jenis, float $tebal): int
+    private function getHargaPatok(string $jenis, float $tebal, bool $isAf = false): int
     {
         $jns = $this->normalizeJenis($jenis);
+        // Jika PCC (AF), gunakan harga khusus
+        if ($isAf) {
+            return ($jns === 'sengon') ? 1500000 : 1800000;
+        }
         $kelompok = ($tebal < 1) ? 'faceback' : 'core';
-
         $harga = [
-            'sengon' => [
-                'faceback' => 4000000,
-                'core'     => 2250000,
-            ],
-            'meranti' => [
-                'faceback' => 12500000,
-                'core'     => 2800000,
-            ]
+            'sengon' => ['faceback' => 4000000, 'core' => 2250000],
+            'meranti' => ['faceback' => 12500000, 'core' => 2800000],
         ];
-
         return $harga[$jns][$kelompok] ?? 0;
     }
 
-    // 🚀 DITAMBAHKAN PARAMETER RUMUS DINAMIS $hitKbk DENGAN FORMAT DEFAULT 'm'
-    private function makeRow($namaAkun, $tgl, $noAnakAkunKoma, $keterangan, $map, $banyak, $m3, $harga, $total, $hitKbk = 'm'): array
+    private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $total, $hitKbk = 'm'): array
     {
         return [
-            $namaAkun,                // A: Nama Akun
-            $tgl,                     // B: tgl
-            '',                       // C: jurnal
-            (string) $noAnakAkunKoma, // D: No Akun (Teks murni format koma)
-            '',                       // E: No
-            '',                       // F: mm
-            'nyambung',               // G: Nama
-            $keterangan,              // H: Keterangan
-            strtolower($map),         // I: map
-            strtolower($hitKbk),      // J: hit kbk (Dinamis: m / b)
-            $banyak > 0 ? (float) $banyak : 0,
-            $m3 > 0     ? (float) $m3 : 0,
-            $harga > 0  ? (float) $harga : 0,
-            $total > 0  ? (float) $total : 0,
+            $namaAkun,
+            (string)$tgl,
+            '',
+            (string)$noAkun,
+            '',
+            '',
+            'nyambung',
+            $keterangan,
+            strtolower($map),
+            strtolower($hitKbk),
+            (float) $banyak,
+            (float) $m3,
+            (float) $harga,
+            (float) $total
         ];
     }
 
@@ -463,147 +433,109 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
 
         foreach ($this->rawCollection as $produksi) {
             $tglFormat = Carbon::parse($produksi->tanggal_produksi)->format('d-m-Y');
-
-            $totalDebit  = 0;
+            $totalDebit = 0;
             $totalKredit = 0;
             $jurnalBlock = [];
 
-            // ============================================================
-            // 1. DEBIT: HasilJoint (Veneer Jadi)
-            // ============================================================
+            // 1. DEBIT: Hasil
             foreach ($produksi->hasilJoint as $hasil) {
                 $ukuran = $hasil->ukuran;
-                $jenisNamaAsli = $hasil->jenisKayu->nama_kayu ?? 'meranti';
-                $jnsNorm = $this->normalizeJenis($jenisNamaAsli); // Sengon atau Meranti
+                $jnsNorm = $this->normalizeJenis($hasil->jenisKayu->nama_kayu ?? '');
+                $isAf = str_contains(strtolower($hasil->kw ?? ''), 'af');
 
-                $tebal = (float)($ukuran->tebal ?? 0);
-                $m3 = ($ukuran->panjang * $ukuran->lebar * $tebal * $hasil->jumlah) / 10000000;
-
-                $hargaPatok = $this->getHargaPatok($jnsNorm, $tebal); // Gunakan jnsNorm untuk harga
+                $noAkun = $isAf ? '1472.00' : ($jnsNorm === 'sengon' ? '1466.00' : '1467.00');
+                $namaAkun = $isAf ? "Veneer Jadi ppc " . strtolower(ucfirst($jnsNorm)) . " WJY" : "Veneer Jadi 130 core " . strtolower(ucfirst($jnsNorm)) . " WJY";
+                $keterangan = $isAf ? "af " . strtolower($hasil->jenisKayu->nama_kayu ?? '') . " " . $ukuran->panjang . " x " . $ukuran->lebar . " x " . $ukuran->tebal
+                    : "130 core " . strtolower($hasil->jenisKayu->nama_kayu ?? '') . " uk " . $ukuran->panjang . " x " . $ukuran->lebar . " x " . $ukuran->tebal;
+                $m3 = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $hasil->jumlah) / 10000000;
+                $hargaPatok = $this->getHargaPatok($jnsNorm, (float)$ukuran->tebal, $isAf);
                 $totalValue = $m3 * $hargaPatok;
 
-                // Akun gunakan jnsNorm, Keterangan gunakan jenisNamaAsli
-                $noAkun = ($jnsNorm === 'sengon') ? '1466,00' : '1467,00';
-                $namaAkun = "Veneer Jadi " . ucfirst($jnsNorm) . " WJY";
-                $ket = "130 core " . strtolower($jenisNamaAsli) . " {$ukuran->panjang} x {$ukuran->lebar} x {$tebal}";
-
-                $jurnalBlock[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $ket, 'd', $hasil->jumlah, $m3, $hargaPatok, $totalValue, 'm');
+                $jurnalBlock[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'd', $hasil->jumlah, $m3, $hargaPatok, $totalValue, 'm');
                 $totalDebit += $totalValue;
             }
 
-            // ============================================================
-            // 2. KREDIT: ModalJoint (Veneer Sortimen)
-            // ============================================================
+            // 2. KREDIT: Modal
             foreach ($produksi->modalJoint as $modal) {
                 $ukuran = $modal->ukuran;
-                $jenisNamaAsli = $modal->jenisKayu->nama_kayu ?? 'meranti';
-                $jnsNorm = $this->normalizeJenis($jenisNamaAsli);
-
-                $tebal = (float)($ukuran->tebal ?? 0);
-                $m3 = ($ukuran->panjang * $ukuran->lebar * $tebal * $modal->jumlah) / 10000000;
-
-                $hargaPatok = $this->getHargaPatok($jnsNorm, $tebal);
+                $jnsNorm = $this->normalizeJenis($modal->jenisKayu->nama_kayu ?? '');
+                $isAf = str_contains(strtolower($modal->kw ?? ''), 'af');
+                $noAkun = $isAf ? '1472.00' : ($jnsNorm === 'sengon' ? '1466.00' : '1467.00');
+                $namaAkun = $isAf ? "Veneer Jadi ppc " . strtolower(ucfirst($jnsNorm)) . " WJY" : "Veneer Jadi 130 core " . strtolower(ucfirst($jnsNorm)) . " WJY";
+                $keterangan = $isAf ? "af " . strtolower($modal->jenisKayu->nama_kayu ?? '') . " " . $ukuran->panjang . " x " . $ukuran->lebar . " x " . $ukuran->tebal
+                    : "130 core " . strtolower($modal->jenisKayu->nama_kayu ?? '') . " uk " . $ukuran->panjang . " x " . $ukuran->lebar . " x " . $ukuran->tebal;
+                $m3 = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $modal->jumlah) / 10000000;
+                $hargaPatok = $this->getHargaPatok($jnsNorm, (float)$ukuran->tebal, $isAf);
                 $totalValue = $m3 * $hargaPatok;
 
-                $noAkun = ($jnsNorm === 'sengon') ? '1416,00' : '1417,00';
-                $namaAkun = "Veneer Jadi " . ucfirst($jnsNorm) . " WJY";
-                $ket = "130 core " . strtolower($jenisNamaAsli) . " {$ukuran->panjang} x {$ukuran->lebar} x {$tebal}";
-
-                $jurnalBlock[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $ket, 'k', $modal->jumlah, $m3, $hargaPatok, $totalValue, 'm');
+                $jurnalBlock[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'k', $modal->jumlah, $m3, $hargaPatok, $totalValue, 'm');
                 $totalKredit += $totalValue;
             }
 
-            // ============================================================
-            // 3. KREDIT: Bahan Pembantu / Lem Tepung (HARDCODED HARGA & NO AKUN)
-            // ============================================================
+            // 3. KREDIT: Bahan (Hit KBK: b)
             foreach ($produksi->bahanProduksi as $bahan) {
-                $jumlahBahan = (float)($bahan->jumlah ?? 0);
-
-                if ($jumlahBahan > 0) {
+                $jumlah = (float)($bahan->jumlah ?? 0);
+                if ($jumlah > 0) {
                     $namaBahanRaw = $bahan->nama_bahan ?? $bahan->nama_bahan_penolong ?? 'bahan';
-                    $namaBahanLower = strtolower(trim($namaBahanRaw));
+                    $nama = strtolower(trim($namaBahanRaw));
 
-                    $hargaHardcode = 15000;
-                    $noAkunKomaBahan = '1481,00';
-                    $prefixLem = '';
+                    // 1. Inisialisasi default
+                    $hargaH = 15000;
+                    $akun = '1481.00';
+                    $prefix = ''; // Default tanpa prefix
 
-                    if (str_contains($namaBahanLower, 'aruki')) {
-                        $hargaHardcode = 152900;
-                        $noAkunKomaBahan = '1507,63';
-                        $prefixLem = 'Lem ';
-                    } elseif (str_contains($namaBahanLower, 'dover') || str_contains($namaBahanLower, 'lem')) {
-                        $hargaHardcode = 152900;
-                        $noAkunKomaBahan = '1507,64';
-                        $prefixLem = 'Lem ';
-                    } elseif (str_contains($namaBahanLower, 'tepung')) {
-                        $hargaHardcode = 18000;
-                        $noAkunKomaBahan = '1507,62';
-                        $prefixLem = '';
+                    // 2. Logika Penentuan Prefix dan Harga
+                    if (str_contains($nama, 'aruki')) {
+                        $hargaH = 152900;
+                        $akun = '1507.63';
+                        $prefix = 'Lem '; // Diberi prefix
+                    } elseif (str_contains($nama, 'dover')) {
+                        $hargaH = 152900;
+                        $akun = '1507.64';
+                        $prefix = 'Lem '; // Diberi prefix
+                    } elseif (str_contains($nama, 'tepung')) {
+                        $hargaH = 18000;
+                        $akun = '1507.62';
+                        $prefix = ''; // Tetap tanpa prefix
                     }
 
-                    // 🚀 RUMUS EVALUASI: hit kbk == b -> banyak * harga
-                    $totalBahan = $hargaHardcode * $jumlahBahan;
+                    $total = $hargaH * $jumlah;
 
-                    $labelDisplayBahan = $prefixLem . ucfirst($namaBahanLower) . ' WJY';
+                    // 3. Gabungkan prefix dengan nama bahan saat pembuatan baris
+                    $namaAkun = $prefix . ucfirst($nama) . ' WJY';
 
-                    // Mapping hit kbk dialihkan menjadi 'b' sesuai instruksi Anda
                     $jurnalBlock[] = $this->makeRow(
-                        $labelDisplayBahan,
+                        $namaAkun,
                         $tglFormat,
-                        $noAkunKomaBahan,
+                        $akun,
                         '',
                         'k',
-                        $jumlahBahan,
+                        $jumlah,
                         0,
-                        $hargaHardcode,
-                        $totalBahan,
+                        $hargaH,
+                        $total,
                         'b'
                     );
-                    $totalKredit += $totalBahan;
+                    $totalKredit += $total;
                 }
             }
 
-            // ============================================================
-            // 4. KREDIT: Upah Gaji Borongan (PegawaiJoint)
-            // ============================================================
-            $jumlahPekerja = (int)$produksi->pegawaiJoint->count();
-            if ($jumlahPekerja > 0) {
-                // 🚀 RUMUS EVALUASI: hit kbk == b -> banyak * harga (Pekerja * 150.000)
-                $totalGaji = $jumlahPekerja * 150000;
-
-                // Mapping hit kbk dialihkan menjadi 'b' sesuai instruksi Anda
-                $jurnalBlock[] = $this->makeRow('Hutang Gaji', $tglFormat, '2400,00', '', 'k', $jumlahPekerja, 0, 150000, $totalGaji, 'b');
-
-                $totalKredit += $totalGaji;
+            // 4. KREDIT: Gaji
+            $jmlPekerja = (int)$produksi->pegawaiJoint->count();
+            if ($jmlPekerja > 0) {
+                $jurnalBlock[] = $this->makeRow('Hutang Gaji', $tglFormat, '2231.00', '', 'k', $jmlPekerja, 0, 150000, ($jmlPekerja * 150000), 'b');
+                $totalKredit += ($jmlPekerja * 150000);
             }
 
-            // ============================================================
-            // 5. PENYEIMBANG BALANCE: HPP Produksi Jointer (Sisa Masuk ke Debet)
-            // ============================================================
-            // 🚀 RUMUS EVALUASI: Sisa selisih (Debet - Kredit) langsung dipaksa masuk ke HPP Debet ('d')
-            $selisihHpp = $totalDebit - $totalKredit;
-            if (round($selisihHpp, 2) != 0) {
-                $jurnalBlock[] = $this->makeRow(
-                    'hpp produksi jointer',
-                    $tglFormat,
-                    '6112,00',
-                    '',
-                    'd', // Dipaksa selalu masuk ke sisi debet sesuai permintaan
-                    0,
-                    0,
-                    abs($selisihHpp),
-                    abs($selisihHpp),
-                    'm'
-                );
+            // 5. HPP
+            $selisih = $totalDebit - $totalKredit;
+            if (round($selisih, 2) != 0) {
+                $jurnalBlock[] = $this->makeRow('hpp triplek', $tglFormat, '6111.00', '', 'd', 0, 0, abs($selisih), abs($selisih), 'm');
             }
 
-            foreach ($jurnalBlock as $row) {
-                $rows[] = $row;
-            }
-
+            foreach ($jurnalBlock as $row) $rows[] = $row;
             $rows[] = array_fill(0, 14, '');
         }
-
         return $rows;
     }
 }

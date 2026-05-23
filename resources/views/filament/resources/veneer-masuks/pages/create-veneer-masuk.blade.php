@@ -96,14 +96,79 @@
                 {{-- Ukuran --}}
                 <div class="{{ $fieldClass }}">
                     <label class="{{ $labelClass }}">Ukuran Barang (P × L × T) <span class="text-danger-500">*</span></label>
-                    <x-filament::input.wrapper>
-                        <x-filament::input.select wire:model.live="item_id_ukuran">
-                            <option value="">-- Pilih KW dulu --</option>
-                            @foreach($this->ukuranOptions as $id => $dim)
-                                <option value="{{ $id }}">{{ $dim }}</option>
-                            @endforeach
-                        </x-filament::input.select>
-                    </x-filament::input.wrapper>
+                    <div wire:key="ukuran-select-{{ $item_tipe_veneer ?? 'null' }}-{{ $item_id_jenis_kayu ?? 'null' }}-{{ $item_kw ?? 'null' }}"
+                        x-data="{ 
+                            open: false, 
+                            search: '', 
+                            selected: @entangle('item_id_ukuran').live,
+                            get items() {
+                                return @js(collect($this->ukuranOptions)->map(fn($dim, $id) => ['id' => (string)$id, 'label' => $dim])->values()->toArray());
+                            },
+                            get filteredItems() {
+                                if (this.search.trim() === '') return this.items;
+                                return this.items.filter(i => i.label.toLowerCase().includes(this.search.toLowerCase()));
+                            }
+                        }" class="relative w-full">
+
+                        <x-filament::input.wrapper>
+                            <button 
+                                @click="open = !open" 
+                                type="button" 
+                                class="w-full flex items-center justify-between px-3 py-2 text-sm text-left bg-white dark:bg-gray-900 border-0 focus:ring-0 focus:outline-none rounded-lg"
+                            >
+                                <span class="truncate" x-text="selected ? (items.find(i => i.id == selected)?.label ?? '-- Pilih Ukuran --') : (items.length > 0 ? '-- Pilih Ukuran --' : '-- Pilih KW dulu --')"></span>
+                                <span class="text-gray-400 dark:text-gray-500">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </span>
+                            </button>
+                        </x-filament::input.wrapper>
+
+                        <div 
+                            x-show="open" 
+                            x-transition 
+                            @click.away="open = false" 
+                            class="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg rounded-lg overflow-hidden" 
+                            style="display: none;"
+                        >
+                            <div class="p-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center relative">
+                                <input 
+                                    x-model="search" 
+                                    type="text" 
+                                    placeholder="Cari ukuran..." 
+                                    class="w-full bg-white dark:bg-gray-800 text-xs border border-gray-200 dark:border-gray-600 rounded-lg p-1.5 pr-7 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                                />
+                                <button 
+                                    x-show="search.length > 0" 
+                                    @click="search = ''" 
+                                    type="button" 
+                                    class="absolute right-4 text-gray-400 hover:text-red-500 font-bold"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                            <div class="max-h-60 overflow-y-auto font-sans text-xs">
+                                <div x-show="filteredItems.length === 0" class="px-3 py-3 text-gray-400 text-center">
+                                    Tidak ada ukuran yang cocok
+                                </div>
+                                <template x-for="item in filteredItems" :key="item.id">
+                                    <div 
+                                        @click="selected = item.id; open = false; search = ''" 
+                                        class="px-3 py-2.5 hover:bg-primary-500 hover:text-white dark:hover:bg-primary-600 cursor-pointer border-b border-gray-50 dark:border-gray-700 last:border-0 transition-colors flex items-center justify-between"
+                                        :class="selected == item.id ? 'bg-primary-50 dark:bg-primary-950/20 text-primary-600 dark:text-primary-400 font-semibold' : 'text-gray-800 dark:text-gray-200'"
+                                    >
+                                        <span x-text="item.label"></span>
+                                        <span x-show="selected == item.id" class="text-primary-600 dark:text-primary-400">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                            </svg>
+                                        </span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
                     @error('item_id_ukuran') <p class="text-xs text-danger-500">{{ $message }}</p> @enderror
                 </div>
 

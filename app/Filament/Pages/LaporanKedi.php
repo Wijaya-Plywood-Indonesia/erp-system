@@ -110,8 +110,8 @@ class LaporanKedi extends Page
             'detailPegawaiKedi',
             'validasiTerakhir',
         ])
-            ->whereDate('tanggal', $this->tanggal)
-            ->orderBy('tanggal')
+            ->whereDate('tanggal_actual_bongkar', $this->tanggal)
+            ->orderBy('tanggal_actual_bongkar')
             ->get();
 
         $this->dataKedi = [];
@@ -156,8 +156,11 @@ class LaporanKedi extends Page
 
             $this->dataKedi[] = [
                 'id' => $produksi->id,
-                'tanggal_masuk' => Carbon::parse($produksi->tanggal)->format('d/m/Y'),
-                'tanggal_keluar' => $produksi->tanggal_actual_bongkar ? Carbon::parse($produksi->tanggal_actual_bongkar)->format('d/m/Y') : '-',
+                // Kita tampilkan tanggal actual sebagai tanggal utama laporan
+                'tanggal_masuk' => $produksi->tanggal ? Carbon::parse($produksi->tanggal)->format('d/m/Y') : '-',
+                'tanggal_keluar' => $produksi->tanggal_actual_bongkar
+                    ? Carbon::parse($produksi->tanggal_actual_bongkar)->format('d/m/Y')
+                    : '-',
                 'status' => $produksi->status,
                 'detail_masuk' => $detailMasuk,
                 'detail_bongkar' => $detailBongkar,

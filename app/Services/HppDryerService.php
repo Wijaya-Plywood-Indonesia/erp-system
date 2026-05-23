@@ -169,7 +169,12 @@ class HppDryerService
         ?string $keterangan = null,
     ): StokVeneerKering {
         return DB::transaction(function () use (
-            $idUkuran, $idJenisKayu, $kw, $m3Keluar, $tanggal, $keterangan
+            $idUkuran,
+            $idJenisKayu,
+            $kw,
+            $m3Keluar,
+            $tanggal,
+            $keterangan
         ) {
             $snapshot = StokVeneerKering::snapshotTerakhir($idUkuran, $idJenisKayu, $kw);
 

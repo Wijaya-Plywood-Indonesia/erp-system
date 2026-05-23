@@ -31,7 +31,9 @@
                                     <th class="p-2 border border-zinc-300 dark:border-zinc-700">L</th>
                                     <th class="p-2 border border-zinc-300 dark:border-zinc-700">T</th>
                                     <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-left">Jenis</th>
-                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-center">Byk</th>
+                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-center bg-green-50 dark:bg-green-900/10">Bagus</th>
+                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-center bg-red-50 dark:bg-red-900/10">Cacat</th>
+                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-center font-bold">Total</th>
                                     <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-right bg-blue-50 dark:bg-blue-900/20">m3</th>
                                 </tr>
                             </thead>
@@ -43,18 +45,24 @@
                                     <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center">{{ $d['l'] }}</td>
                                     <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center">{{ $d['t'] }}</td>
                                     <td class="p-2 border border-zinc-300 dark:border-zinc-700">{{ $d['jenis'] }}</td>
-                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center font-bold">{{ number_format($d['byk']) }}</td>
+                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center bg-green-50/30 dark:bg-green-900/5">{{ number_format($d['bagus']) }}</td>
+                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center bg-red-50/30 dark:bg-red-900/5">{{ number_format($d['cacat']) }}</td>
+                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center font-bold">{{ number_format($d['total']) }}</td>
                                     <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-right font-mono bg-blue-50/50 dark:bg-blue-900/10"></td>
                                 </tr>
                                 @endforeach
                             </tbody>
                             <tfoot>
                                 @php
-                                    $totalByk = collect($reportData['detail'])->sum('byk');
+                                    $totalBagus = collect($reportData['detail'])->sum('bagus');
+                                    $totalCacat = collect($reportData['detail'])->sum('cacat');
+                                    $totalTotal = collect($reportData['detail'])->sum('total');
                                 @endphp
                                 <tr class="bg-zinc-100 dark:bg-zinc-800 font-bold">
                                     <td colspan="5" class="p-2 text-right border border-zinc-300 dark:border-zinc-700">TOTAL:</td>
-                                    <td class="p-2 text-center border border-zinc-300 dark:border-zinc-700">{{ number_format($totalByk) }}</td>
+                                    <td class="p-2 text-center border border-zinc-300 dark:border-zinc-700">{{ number_format($totalBagus) }}</td>
+                                    <td class="p-2 text-center border border-zinc-300 dark:border-zinc-700">{{ number_format($totalCacat) }}</td>
+                                    <td class="p-2 text-center border border-zinc-300 dark:border-zinc-700">{{ number_format($totalTotal) }}</td>
                                     <td class="p-2 border border-zinc-300 dark:border-zinc-700"></td>
                                 </tr>
                             </tfoot>
