@@ -105,6 +105,10 @@ class LaporanKayuKeluar extends Page implements HasForms
         $rows = [];
         $tglVal = Carbon::parse($this->tanggal)->format('d-m-Y');
 
+        $totalBanyak = 0;
+        $totalM3 = 0;
+        $totalHarga = 0;
+
         foreach ($records as $record) {
             $jenisNama = $record->jenisKayu?->nama_kayu ?? '-';
             $isSengon = (stripos($jenisNama, 'sengon') !== false);
@@ -131,6 +135,14 @@ class LaporanKayuKeluar extends Page implements HasForms
 
             $keteranganSpec = "lahan " . ($record->lahan->kode_lahan ?? '-');
 
+            $banyak = $record->total_batang > 0 ? $record->total_batang : 0;
+            $m3 = $record->total_kubikasi > 0 ? $record->total_kubikasi : 0;
+            $harga = $record->nilai_stok;
+
+            $totalBanyak += $banyak;
+            $totalM3 += $m3;
+            $totalHarga += $harga;
+
             $rows[] = [
                 'nama_akun' => $namaAkun,
                 'tgl' => $tglVal,
@@ -143,7 +155,24 @@ class LaporanKayuKeluar extends Page implements HasForms
                 'map' => 'k',
                 'banyak' => $record->total_batang > 0 ? $record->total_batang : null,
                 'm3' => $record->total_kubikasi > 0 ? $record->total_kubikasi : null,
-                'harga' => $record->nilai_stok,
+                'harga' => $harga,
+            ];
+        }
+
+        if (!empty($rows)) {
+            $rows[] = [
+                'nama_akun' => 'HPP Triplek',
+                'tgl' => $tglVal,
+                'jurnal' => '',
+                'no_akun' => '6111.00',
+                'no' => '',
+                'mm' => '',
+                'nama' => 'kayu habis',
+                'keterangan' => '',
+                'map' => 'd',
+                'banyak' => $totalBanyak > 0 ? $totalBanyak : null,
+                'm3' => $totalM3 > 0 ? $totalM3 : null,
+                'harga' => $totalHarga,
             ];
         }
 

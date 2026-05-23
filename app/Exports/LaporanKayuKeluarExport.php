@@ -1536,6 +1536,10 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
         $dataStart = $currentRow;
         $tglVal = Carbon::parse($this->tanggal)->format('d-m-Y');
 
+        $totalBanyak = 0;
+        $totalM3 = 0;
+        $totalHarga = 0;
+
         foreach ($records as $record) {
             $jenisNama = $record->jenisKayu?->nama_kayu ?? '-';
             $isSengon = (stripos($jenisNama, 'sengon') !== false);
@@ -1562,6 +1566,14 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
 
             $keteranganSpec = "lahan " . ($record->lahan->kode_lahan ?? '-');
 
+            $banyak = $record->total_batang > 0 ? $record->total_batang : 0;
+            $m3 = $record->total_kubikasi > 0 ? $record->total_kubikasi : 0;
+            $harga = $record->nilai_stok;
+
+            $totalBanyak += $banyak;
+            $totalM3 += $m3;
+            $totalHarga += $harga;
+
             $rows->push([
                 $namaAkun,                                                 // A
                 $tglVal,                                                   // B
@@ -1574,9 +1586,27 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
                 'k',                                                       // I
                 $record->total_batang > 0 ? $record->total_batang : null,  // J
                 $record->total_kubikasi > 0 ? $record->total_kubikasi : null, // K
-                $record->nilai_stok                                        // L
+                $harga                                                     // L
             ]);
 
+            $currentRow++;
+        }
+
+        if (!$records->isEmpty()) {
+            $rows->push([
+                'HPP Triplek',                                             // A
+                $tglVal,                                                   // B
+                '',                                                        // C
+                '6111.00',                                                 // D
+                '',                                                        // E
+                '',                                                        // F
+                'kayu habis',                                              // G
+                '',                                                        // H
+                'd',                                                       // I
+                $totalBanyak > 0 ? $totalBanyak : null,                    // J
+                $totalM3 > 0 ? $totalM3 : null,                            // K
+                $totalHarga                                                // L
+            ]);
             $currentRow++;
         }
 

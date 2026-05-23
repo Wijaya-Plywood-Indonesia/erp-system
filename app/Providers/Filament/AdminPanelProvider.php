@@ -4,7 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Pages\DashboardHppDryer;
 use App\Filament\Pages\LaporanKayuKeluar;
-
+use App\Filament\Pages\LaporanTurunKayu;
 use App\Filament\Pages\OpnameStokKayu;
 use App\Http\Middleware\RunDailyScheduler;
 use App\Livewire\GradingWizard;
@@ -64,7 +64,7 @@ class AdminPanelProvider extends PanelProvider
                 Dashboard::class,
                 DashboardHppDryer::class,
                 OpnameStokKayu::class,
-               
+                LaporanTurunKayu::class,
                 LaporanKayuKeluar::class,
             ])
             ->brandName('Wijaya')
