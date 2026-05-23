@@ -209,18 +209,18 @@ class LaporanProduksiHotPressRekapSheet implements FromCollection, WithHeadings,
                     $l = $u->lebar ?? 0;
                     $t = $u->tebal ?? 0;
                     $banyak = $item->isi;
-                    $kubikasi = ($p * $l * $t * $banyak) / 1000000000; // Formula adjustment for 0,0388 style
+                    $kubikasi = ($p * $l * $t * $banyak) / 1000000000;
 
                     $outputItems[] = [
                         'no' => $no++,
-                        'mesin' => strtoupper($prod->shift) == 'PAGI' ? 'HOTPRESS PAGI' : 'HOTPRESS 2', // example mapping
+                        'mesin' => strtoupper($prod->shift) == 'PAGI' ? 'HOTPRESS PAGI' : 'HOTPRESS 2',
                         'tgl' => $tglStr,
                         'p' => $p,
                         'l' => $l,
                         't' => $t,
                         'banyak' => $banyak,
                         'jenis_kayu' => $item->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? '-',
-                        'kwalitas' => $item->barangSetengahJadi->grade->nama_grade ?? '-',
+                        'kwalitas' => strtoupper('TRIPLEK ' . ($item->barangSetengahJadi->grade->nama_grade ?? '-')),
                         'kubikasi' => round($kubikasi, 4),
                     ];
                 }
@@ -241,7 +241,7 @@ class LaporanProduksiHotPressRekapSheet implements FromCollection, WithHeadings,
                         't' => $t,
                         'banyak' => $banyak,
                         'jenis_kayu' => $item->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? '-',
-                        'kwalitas' => $item->barangSetengahJadi->grade->nama_grade ?? '-',
+                        'kwalitas' => strtoupper('PLATFORM ' . ($item->barangSetengahJadi->grade->nama_grade ?? '-')),
                         'kubikasi' => round($kubikasi, 4),
                     ];
                 }

@@ -324,6 +324,6 @@ class CreateVeneerKeluar extends Page
             ->title($status === 'kirim' ? 'Berhasil dikirim & diposting ke BK.' : 'Draft berhasil disimpan.')
             ->success()->send();
 
-        $this->redirect(VeneerKeluarResource::getUrl('index'));
+        $this->redirect(url('/admin/nota-barang-keluars'));
     }
 }

@@ -283,6 +283,6 @@ class CreateVeneerMasuk extends Page
             ->title($status === 'kirim' ? 'Berhasil dikirim & diposting ke BM.' : 'Draft berhasil disimpan.')
             ->success()->send();
 
-        $this->redirect(VeneerMasukResource::getUrl('index'));
+        $this->redirect(url('/admin/nota-barang-masuks'));
     }
 }

@@ -122,7 +122,6 @@ class LaporanProduksiHotPress extends Page implements HasForms
 
         $this->dataHp = [];
 
-        // Group by shift-based machine name
         $grouped = $produksiList->groupBy(function ($p) {
             return 'HOTPRESS ' . strtoupper($p->shift) . ' BESAR';
         });
@@ -130,6 +129,7 @@ class LaporanProduksiHotPress extends Page implements HasForms
         foreach ($grouped as $machineName => $records) {
             $hasil = [];
             foreach ($records as $prod) {
+                // Triplek Loop
                 foreach ($prod->triplekHasilHp as $t) {
                     $u = $t->barangSetengahJadi->ukuran ?? null;
                     $p = $u->panjang ?? 0;
@@ -145,12 +145,13 @@ class LaporanProduksiHotPress extends Page implements HasForms
                         't' => $tebal,
                         'isi' => $banyak,
                         'jenis_kayu' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? '-',
-                        'kwalitas' => $t->barangSetengahJadi->grade->nama_grade ?? '-',
+                        'kwalitas' => strtoupper('TRIPLEK ' . ($t->barangSetengahJadi->grade->nama_grade ?? '-')),
                         'nama_barang' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? 'Plywood',
                         'kubikasi' => round($kubikasi, 4),
                         'tipe' => 'Triplek',
                     ];
                 }
+                // Platform Loop
                 foreach ($prod->platformHasilHp as $t) {
                     $u = $t->barangSetengahJadi->ukuran ?? null;
                     $p = $u->panjang ?? 0;
@@ -166,7 +167,7 @@ class LaporanProduksiHotPress extends Page implements HasForms
                         't' => $tebal,
                         'isi' => $banyak,
                         'jenis_kayu' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? '-',
-                        'kwalitas' => $t->barangSetengahJadi->grade->nama_grade ?? '-',
+                        'kwalitas' => strtoupper('PLATFORM ' . ($t->barangSetengahJadi->grade->nama_grade ?? '-')),
                         'nama_barang' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? 'Platform',
                         'kubikasi' => round($kubikasi, 4),
                         'tipe' => 'Platform',
@@ -210,7 +211,7 @@ class LaporanProduksiHotPress extends Page implements HasForms
                 'material_usage' => $materialUsage,
                 'total_pekerja' => $totalPekerja,
                 'harga_pekerja' => $hargaPegawai,
-                'penyusutan' => 1905000, // as in image 3*635000
+                'penyusutan' => 1905000,
                 'bulanan' => 220000,
             ];
         }

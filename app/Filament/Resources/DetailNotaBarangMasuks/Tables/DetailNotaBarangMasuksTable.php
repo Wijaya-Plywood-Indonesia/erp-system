@@ -58,7 +58,7 @@ class DetailNotaBarangMasuksTable
 
                 Action::make('validasi_nota')
                     ->label('Validasi Nota')
-                    ->icon('heroicon-o-check')
+                    ->icon('heroicon-o-check-badge')
                     ->color('success')
                     ->requiresConfirmation()
                     ->visible(function (RelationManager $livewire) {

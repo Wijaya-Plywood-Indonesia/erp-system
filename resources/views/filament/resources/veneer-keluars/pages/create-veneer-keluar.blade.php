@@ -156,7 +156,7 @@
                                 <template x-for="item in filteredItems" :key="item.id">
                                     <div 
                                         @click="selected = item.id; open = false; search = ''" 
-                                        class="px-3 py-2.5 hover:bg-primary-500 hover:text-white dark:hover:bg-primary-600 cursor-pointer border-b border-gray-50 dark:border-gray-700 last:border-0 transition-colors flex items-center justify-between"
+                                        class="px-3 py-2.5 hover:bg-gray-100 dark:hover:bg-zinc-700 cursor-pointer border-b border-gray-50 dark:border-gray-700 last:border-0 transition-colors flex items-center justify-between"
                                         :class="selected == item.id ? 'bg-primary-50 dark:bg-primary-950/20 text-primary-600 dark:text-primary-400 font-semibold' : 'text-gray-800 dark:text-gray-200'"
                                     >
                                         <span x-text="item.label"></span>
@@ -274,10 +274,10 @@
         {{-- ═══════════════════════════════════════════
              SUBMIT BUTTONS
         ═══════════════════════════════════════════ --}}
-        <div class="flex flex-wrap items-center justify-end gap-3">
+        <div class="flex flex-wrap items-center justify-end gap-3" x-data="{ openConfirm: false }">
             <x-filament::button
                 tag="a"
-                :href="$this->getResource()::getUrl('index')"
+                href="/admin/nota-barang-keluars"
                 color="gray"
                 icon="heroicon-o-arrow-left">
                 Batal
@@ -287,10 +287,57 @@
                 Simpan Draft
             </x-filament::button>
 
-            <x-filament::button wire:click="kirim" color="success" icon="heroicon-o-paper-airplane"
-                wire:confirm="Kirim dokumen? Stok akan langsung dikurangi dan tidak bisa diubah lagi.">
+            <x-filament::button @click="openConfirm = true" color="success" icon="heroicon-o-paper-airplane">
                 Kirim &amp; Posting ke BK
             </x-filament::button>
+
+            <!-- Custom Confirmation Modal -->
+            <div 
+                x-show="openConfirm" 
+                class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/60 backdrop-blur-sm"
+                x-transition
+                style="display: none;"
+            >
+                <div 
+                    @click.away="openConfirm = false" 
+                    class="w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-6 text-left"
+                >
+                    <div class="flex items-center gap-3 text-amber-600 dark:text-amber-400 mb-4">
+                        <span class="p-2 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                            </svg>
+                        </span>
+                        <h3 class="text-lg font-bold text-zinc-900 dark:text-white">Kirim Dokumen BK?</h3>
+                    </div>
+
+                    <div class="text-sm text-zinc-600 dark:text-zinc-400 space-y-2 mb-6">
+                        <p>Apakah Anda yakin ingin mengirim dokumen ini?</p>
+                        <p class="font-medium text-zinc-800 dark:text-zinc-200">
+                            Dokumen akan masuk ke draf Nota BK dan <span class="text-primary-600 dark:text-primary-400 font-semibold">menunggu validasi</span> sebelum stok sistem dikurangi.
+                        </p>
+                    </div>
+
+                    <div class="flex justify-end gap-3">
+                        <x-filament::button 
+                            @click="openConfirm = false" 
+                            color="gray" 
+                            size="sm"
+                        >
+                            Batal
+                        </x-filament::button>
+
+                        <x-filament::button 
+                            @click="openConfirm = false; $wire.kirim()" 
+                            color="success" 
+                            size="sm"
+                            icon="heroicon-o-paper-airplane"
+                        >
+                            Ya, Kirim Dokumen
+                        </x-filament::button>
+                    </div>
+                </div>
+            </div>
         </div>
 
     </div>

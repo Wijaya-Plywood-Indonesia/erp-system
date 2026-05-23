@@ -190,14 +190,25 @@ class RotaryJurnalService
             foreach ($produksi->detailLahanRotary as $lahan) {
                 $namaLahan = strtolower($lahan->lahan->nama_lahan ?? '');
                 $isKayu130 = str_contains($namaLahan, '130');
-                $poin      = $this->getPoinKayuFromLahan($lahan);
 
-                // Ambil stok_kubikasi & hpp_average dari summarie untuk item detail
-                $summaries = HppAverageSummarie::where('id_lahan', $lahan->id_lahan)
-                    ->where('stok_kubikasi', '>', 0)
+                // Cek log HPP average terlebih dahulu (apabila lahan sudah selesai digunakan)
+                $logs = HppAverageLog::where('referensi_type', PenggunaanLahanRotary::class)
+                    ->where('referensi_id', $lahan->id)
+                    ->where('tipe_transaksi', 'keluar')
                     ->get();
-                $stokKubikasi = $summaries->sum('stok_kubikasi');
-                $hppAvgLahan  = $stokKubikasi > 0 ? round($poin / $stokKubikasi, 2) : 0;
+
+                if ($logs->isNotEmpty()) {
+                    $poin = $logs->sum(fn($log) => (float) ($log->nilai_stok ?? 0));
+                    $stokKubikasi = $logs->sum(fn($log) => (float) ($log->total_kubikasi ?? 0));
+                    $hppAvgLahan = $stokKubikasi > 0 ? round($poin / $stokKubikasi, 2) : 0;
+                } else {
+                    $poin = $this->getPoinKayuFromLahan($lahan);
+                    $summaries = HppAverageSummarie::where('id_lahan', $lahan->id_lahan)
+                        ->where('stok_kubikasi', '>', 0)
+                        ->get();
+                    $stokKubikasi = $summaries->sum('stok_kubikasi');
+                    $hppAvgLahan  = $stokKubikasi > 0 ? round($poin / $stokKubikasi, 2) : 0;
+                }
 
                 $detailKayuPerProduksi[$produksi->id][] = [
                     'id_lahan'      => $lahan->id_lahan,
@@ -340,6 +351,17 @@ class RotaryJurnalService
     private function getPoinKayuFromLahan(PenggunaanLahanRotary $lahan): float
     {
         try {
+            // Cek terlebih dahulu apakah lahan ini sudah selesai digunakan (punya log keluar)
+            $logs = HppAverageLog::where('referensi_type', PenggunaanLahanRotary::class)
+                ->where('referensi_id', $lahan->id)
+                ->where('tipe_transaksi', 'keluar')
+                ->get();
+
+            if ($logs->isNotEmpty()) {
+                $totalPoin = $logs->sum(fn($log) => (float) ($log->nilai_stok ?? 0));
+                return round($totalPoin, 4);
+            }
+
             $summaries = HppAverageSummarie::where('id_lahan', $lahan->id_lahan)
                 ->where('stok_kubikasi', '>', 0)
                 ->get();
@@ -356,7 +378,7 @@ class RotaryJurnalService
 
             return round($totalPoin, 4);
         } catch (\Throwable $e) {
-            Log::warning("RotaryJurnal: Gagal ambil poin kayu lahan #{$lahan->id}: " . $e->getMessage());
+            Log::warning("RotaryJurnal: Gagal ambil poin kayu lahan #{$lahan->id_lahan}: " . $e->getMessage());
             return 0.0;
         }
     }

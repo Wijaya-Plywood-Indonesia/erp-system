@@ -11,34 +11,34 @@
     <div wire:loading.remove>
         @forelse($dataKedi as $data)
 
-        <div class="mb-8 border border-gray-700 rounded-lg overflow-hidden bg-gray-900 text-white shadow-lg">
+        <div class="mb-8 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm">
 
             {{-- HEADER --}}
-            <div class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
+            <div class="p-4 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                 <h3 class="text-lg font-bold">
                     LAPORAN PRODUKSI KEDI - {{ $data['tanggal_masuk'] }} 
-                    <span class="text-sm font-normal text-gray-400 mx-2">s/d</span> 
+                    <span class="text-sm font-normal text-gray-500 dark:text-gray-400 mx-2">s/d</span> 
                     {{ $data['tanggal_keluar'] }}
                 </h3>
-                <span class="px-3 py-1 text-xs font-semibold rounded bg-blue-600">
+                <span class="px-3 py-1 text-xs font-semibold rounded bg-blue-600 text-white">
                     Status: {{ $data['status'] }}
                 </span>
             </div>
 
             {{-- VALIDASI --}}
-            <div class="p-4 bg-gray-800/50 text-sm border-b border-gray-700 flex justify-between items-center">
+            <div class="p-4 bg-gray-50/50 dark:bg-gray-800/50 text-sm border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                 <div>
-                    <span class="text-gray-400 font-semibold">Validasi:</span>
-                    <span class="text-green-400 font-bold">
+                    <span class="text-gray-500 dark:text-gray-400 font-semibold">Validasi:</span>
+                    <span class="text-green-600 dark:text-green-400 font-bold">
                         {{ $data['validasi_terakhir'] }}
                     </span>
-                    <span class="text-gray-400">
+                    <span class="text-gray-500 dark:text-gray-400">
                         ({{ $data['validasi_oleh'] }})
                     </span>
                 </div>
                 <div>
-                    <span class="text-gray-400 font-semibold">Total Pekerja:</span>
-                    <span class="text-yellow-400 font-bold text-lg">
+                    <span class="text-gray-500 dark:text-gray-400 font-semibold">Total Pekerja:</span>
+                    <span class="text-amber-600 dark:text-amber-400 font-bold text-lg">
                         {{ $data['total_pekerja'] }}
                     </span>
                 </div>
@@ -47,11 +47,11 @@
             {{-- ================= DETAIL MASUK ================= --}}
             @if(!empty($data['detail_masuk']))
             <div class="p-4">
-                <h4 class="font-semibold mb-3 text-yellow-400">Detail Masuk</h4>
+                <h4 class="font-semibold mb-3 text-amber-600 dark:text-amber-400">Detail Masuk</h4>
 
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left text-gray-300">
-                        <thead class="text-xs uppercase bg-gray-800 text-gray-400">
+                    <table class="w-full text-sm text-left text-gray-600 dark:text-gray-300">
+                        <thead class="text-xs uppercase bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
                             <tr>
                                 <th class="px-4 py-2">No Palet</th>
                                 <th class="px-4 py-2">Mesin</th>
@@ -64,13 +64,13 @@
                         </thead>
                         <tbody>
                             @foreach($data['detail_masuk'] as $row)
-                            <tr class="border-b border-gray-800 hover:bg-gray-800">
+                            <tr class="border-b border-gray-100 dark:border-gray-850 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                 <td class="px-4 py-2">{{ $row['no_palet'] }}</td>
                                 <td class="px-4 py-2">{{ $row['mesin'] }}</td>
                                 <td class="px-4 py-2">{{ $row['ukuran'] }}</td>
                                 <td class="px-4 py-2">{{ $row['jenis_kayu'] }}</td>
                                 <td class="px-4 py-2">{{ $row['kw'] }}</td>
-                                <td class="px-4 py-2 font-bold text-green-400">{{ $row['jumlah'] }}</td>
+                                <td class="px-4 py-2 font-bold text-green-600 dark:text-green-400">{{ $row['jumlah'] }}</td>
                                 <td class="px-4 py-2">{{ $row['rencana_bongkar'] }}</td>
                             </tr>
                             @endforeach
@@ -82,12 +82,12 @@
 
             {{-- ================= DETAIL BONGKAR ================= --}}
             @if(!empty($data['detail_bongkar']))
-            <div class="p-4 border-t border-gray-700">
-                <h4 class="font-semibold mb-3 text-blue-400">Detail Bongkar</h4>
+            <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+                <h4 class="font-semibold mb-3 text-blue-600 dark:text-blue-400">Detail Bongkar</h4>
 
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left text-gray-300">
-                        <thead class="text-xs uppercase bg-gray-800 text-gray-400">
+                    <table class="w-full text-sm text-left text-gray-600 dark:text-gray-300">
+                        <thead class="text-xs uppercase bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
                             <tr>
                                 <th class="px-4 py-2">No Palet</th>
                                 <th class="px-4 py-2">Mesin</th>
@@ -99,13 +99,13 @@
                         </thead>
                         <tbody>
                             @foreach($data['detail_bongkar'] as $row)
-                            <tr class="border-b border-gray-800 hover:bg-gray-800">
+                            <tr class="border-b border-gray-100 dark:border-gray-850 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                 <td class="px-4 py-2">{{ $row['no_palet'] }}</td>
                                 <td class="px-4 py-2">{{ $row['mesin'] }}</td>
                                 <td class="px-4 py-2">{{ $row['ukuran'] }}</td>
                                 <td class="px-4 py-2">{{ $row['jenis_kayu'] }}</td>
                                 <td class="px-4 py-2">{{ $row['kw'] }}</td>
-                                <td class="px-4 py-2 font-bold text-green-400">{{ $row['jumlah'] }}</td>
+                                <td class="px-4 py-2 font-bold text-green-600 dark:text-green-400">{{ $row['jumlah'] }}</td>
                             </tr>
                             @endforeach
                         </tbody>
@@ -117,8 +117,8 @@
         </div>
 
         @empty
-        <div class="p-6 text-center bg-gray-800 rounded-lg">
-            <p class="text-gray-400">
+        <div class="p-6 text-center bg-gray-100 dark:bg-gray-800 rounded-lg">
+            <p class="text-gray-500 dark:text-gray-400">
                 Belum ada data Produksi Kedi untuk tanggal ini.
             </p>
         </div>

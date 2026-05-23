@@ -4,8 +4,8 @@ namespace App\Providers\Filament;
 
 use App\Filament\Pages\DashboardHppDryer;
 use App\Filament\Pages\LaporanKayuKeluar;
-use App\Filament\Pages\LaporanTurunKayu;
 use App\Filament\Pages\OpnameStokKayu;
+use App\Filament\Pages\LaporanJurnalKayuMasuk;
 use App\Http\Middleware\RunDailyScheduler;
 use App\Livewire\GradingWizard;
 use Filament\Http\Middleware\Authenticate;
@@ -64,8 +64,8 @@ class AdminPanelProvider extends PanelProvider
                 Dashboard::class,
                 DashboardHppDryer::class,
                 OpnameStokKayu::class,
-                // LaporanTurunKayu::class,
                 LaporanKayuKeluar::class,
+                LaporanJurnalKayuMasuk::class,
             ])
             ->brandName('Wijaya')
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')

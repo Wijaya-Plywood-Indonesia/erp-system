@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use App\Exports\Sheets\JurnalKediSheet;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithTitle;

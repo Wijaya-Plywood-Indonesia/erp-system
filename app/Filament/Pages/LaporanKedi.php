@@ -156,11 +156,16 @@ class LaporanKedi extends Page
 
             $this->dataKedi[] = [
                 'id' => $produksi->id,
-                // Kita tampilkan tanggal actual sebagai tanggal utama laporan
                 'tanggal_masuk' => $produksi->tanggal ? Carbon::parse($produksi->tanggal)->format('d/m/Y') : '-',
                 'tanggal_keluar' => $produksi->tanggal_actual_bongkar
                     ? Carbon::parse($produksi->tanggal_actual_bongkar)->format('d/m/Y')
                     : '-',
+                
+                // TAMBAHKAN BARIS INI AGAR BISA DIBACA EXCEL:
+                'tanggal_actual_bongkar' => $produksi->tanggal_actual_bongkar 
+                    ? Carbon::parse($produksi->tanggal_actual_bongkar)->format('d/m/Y') 
+                    : null,
+
                 'status' => $produksi->status,
                 'detail_masuk' => $detailMasuk,
                 'detail_bongkar' => $detailBongkar,
