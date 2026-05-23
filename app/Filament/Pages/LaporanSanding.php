@@ -97,55 +97,58 @@ class LaporanSanding extends Page implements HasForms
     }
 
     public function loadAllData()
-    {
-        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+{
+    $tanggal = $this->tanggal ?? now()->format('Y-m-d');
 
-        $produksiList = ProduksiSanding::with([
-            'hasilSandings.barangSetengahJadi.ukuran',
-            'hasilSandings.barangSetengahJadi.grade',
-            'hasilSandings.barangSetengahJadi.jenisBarang',
-            'pegawaiSandings',
-            'mesin'
-        ])
-            ->whereDate('tanggal', $tanggal)
-            ->get();
+    $produksiList = ProduksiSanding::with([
+        'hasilSandings.barangSetengahJadi.grade.kategoriBarang', // Pastikan relasi ini dimuat
+        'pegawaiSandings',
+        'mesin'
+    ])
+        ->whereDate('tanggal', $tanggal)
+        ->get();
 
-        $detail = [];
-        $summary = [];
+    $detail = [];
+    $summary = [];
 
-        foreach ($produksiList as $prod) {
-            $mesinLabel = ($prod->mesin->nama_mesin ?? 'Mesin') . ' ' . ucfirst($prod->shift ?? '');
+    foreach ($produksiList as $prod) {
+        $mesinLabel = ($prod->mesin->nama_mesin ?? 'Mesin') . ' ' . ucfirst($prod->shift ?? '');
 
-            foreach ($prod->hasilSandings as $item) {
-                $b = $item->barangSetengahJadi;
-                $u = $b->ukuran ?? null;
-                $p = $u->panjang ?? 0;
-                $l = $u->lebar ?? 0;
-                $t = $u->tebal ?? 0;
-                $byk = $item->kuantitas ?? 0;
+        foreach ($prod->hasilSandings as $item) {
+            $b = $item->barangSetengahJadi;
+            $u = $b->ukuran ?? null;
+            $p = $u->panjang ?? 0;
+            $l = $u->lebar ?? 0;
+            $t = $u->tebal ?? 0;
+            $byk = $item->kuantitas ?? 0;
 
-                $detail[] = [
-                    'tanggal' => Carbon::parse($prod->tanggal)->format('d-M-y'),
-                    'mesin' => $mesinLabel,
-                    'p' => $p,
-                    'l' => $l,
-                    't' => $t,
-                    'jenis' => $b->grade->nama_grade ?? '-',
-                    'banyak' => $byk,
-                    'm3' => '',
-                ];
-            }
+            // Mengambil kategori dari Grade -> KategoriBarang
+            $namaKategori = $b->grade->kategoriBarang->nama_kategori ?? 'BARANG';
+            $namaGrade = $b->grade->nama_grade ?? '-';
 
-            $summary[] = [
+            $detail[] = [
                 'tanggal' => Carbon::parse($prod->tanggal)->format('d-M-y'),
                 'mesin' => $mesinLabel,
-                'jml_pkj' => $prod->pegawaiSandings->count(),
+                'p' => $p,
+                'l' => $l,
+                't' => $t,
+                // Hasil: PLATFORM - BETTER
+                'jenis' => strtoupper($namaKategori . ' - ' . $namaGrade),
+                'banyak' => $byk,
+                'm3' => '',
             ];
         }
 
-        $this->reportData = [
-            'detail' => $detail,
-            'summary' => $summary
+        $summary[] = [
+            'tanggal' => Carbon::parse($prod->tanggal)->format('d-M-y'),
+            'mesin' => $mesinLabel,
+            'jml_pkj' => $prod->pegawaiSandings->count(),
         ];
     }
+
+    $this->reportData = [
+        'detail' => $detail,
+        'summary' => $summary
+    ];
+}
 }
