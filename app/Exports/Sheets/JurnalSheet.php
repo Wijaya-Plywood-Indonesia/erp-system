@@ -69,7 +69,6 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
         return [];
     }
 
-    // REVISI: Penambahan mahoni (mh) dan waru (wr) ke dalam kamus
     private function expandJenis(string $jenis): string
     {
         $map = [
@@ -163,16 +162,17 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
             $no   = $noAkun[$jnsAkun][$tipeVeneer];
             $nama = "Veneer {$namaVeneer} ppc {$jnsAkun} WJY";
         } else {
+            // PERBAIKAN: Nomor akun Meranti disesuaikan (berakhiran 2 untuk faceback, 7 untuk core)
             $noAkun = [
                 'sengon'  => [
-                    'basah'  => ['faceback' => '1421',    'core' => '1426'],
-                    'kering' => ['faceback' => '1441',    'core' => '1446'],
-                    'jadi'   => ['faceback' => '1461',    'core' => '1466'],
+                    'basah'  => ['faceback' => '1421', 'core' => '1426'],
+                    'kering' => ['faceback' => '1441', 'core' => '1446'],
+                    'jadi'   => ['faceback' => '1461', 'core' => '1466'],
                 ],
                 'meranti' => [
-                    'basah'  => ['faceback' => '1421',    'core' => '1426'],
-                    'kering' => ['faceback' => '1441.00', 'core' => '1446.00'],
-                    'jadi'   => ['faceback' => '1461.00', 'core' => '1466.00'],
+                    'basah'  => ['faceback' => '1422.00', 'core' => '1427.00'],
+                    'kering' => ['faceback' => '1442.00', 'core' => '1447.00'],
+                    'jadi'   => ['faceback' => '1462.00', 'core' => '1467.00'],
                 ],
             ];
             $no   = $noAkun[$jnsAkun][$tipeVeneer][$kelompok];

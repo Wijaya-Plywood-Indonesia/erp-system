@@ -55,6 +55,7 @@ class ProduksiPressDryerResource extends Resource
             RelationManagers\DetailPegawaisRelationManager::class,
             RelationManagers\DetailMasuksRelationManager::class,
             RelationManagers\DetailHasilsRelationManager::class,
+            RelationManagers\KendalaPressDryerRelationManager::class,
             RelationManagers\ValidasiPressDryersRelationManager::class,
         ];
     }

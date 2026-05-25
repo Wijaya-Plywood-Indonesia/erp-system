@@ -20,6 +20,8 @@ use App\Models\ValidasiPressDryer;
 use App\Models\ValidasiStik;
 use App\Models\ValidasiKedi;
 use App\Observers\ProductionValidationObserver;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Support\HtmlString;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -28,7 +30,50 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        FilamentView::registerRenderHook(
+    PanelsRenderHook::BODY_END,
+    fn (): HtmlString => new HtmlString(<<<'HTML'
+        <!-- Lightbox Overlay untuk preview foto -->
+        <div id="foto-lightbox"
+             style="display:none; position:fixed; inset:0; z-index:9999;
+                    background:rgba(0,0,0,0.85); cursor:zoom-out;
+                    align-items:center; justify-content:center;">
+            <img id="foto-lightbox-img"
+                 src=""
+                 style="max-width:90vw; max-height:90vh;
+                        border-radius:8px; box-shadow:0 8px 40px rgba(0,0,0,0.6);
+                        object-fit:contain;" />
+        </div>
+
+        <script>
+            // ✅ Pakai event delegation agar berfungsi setelah Livewire re-render
+            document.addEventListener('click', function(e) {
+                const img = e.target.closest('img.foto-preview-trigger');
+                if (!img) return;
+
+                const lightbox    = document.getElementById('foto-lightbox');
+                const lightboxImg = document.getElementById('foto-lightbox-img');
+
+                lightboxImg.src    = img.src;
+                lightbox.style.display = 'flex';
+            });
+
+            // Tutup lightbox saat overlay di-klik
+            document.getElementById('foto-lightbox').addEventListener('click', function() {
+                this.style.display = 'none';
+                document.getElementById('foto-lightbox-img').src = '';
+            });
+
+            // Tutup dengan tombol ESC
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    const lightbox = document.getElementById('foto-lightbox');
+                    lightbox.style.display = 'none';
+                }
+            });
+        </script>
+    HTML),
+);
     }
 
     /**
