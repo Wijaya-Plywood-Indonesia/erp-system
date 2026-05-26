@@ -24,7 +24,7 @@ use Carbon\Carbon;
 class KendalaRotaryRelationManager extends RelationManager
 {
     protected static string $relationship = 'kendalaRotaries';
-    protected static ?string $title = 'Downtime & Kendala Mesin';
+    protected static ?string $title = 'Kendala';
 
     public function isReadOnly(): bool
     {
@@ -35,17 +35,6 @@ class KendalaRotaryRelationManager extends RelationManager
     {
         return $schema
             ->components([
-                Select::make('mesin_id')
-                    ->label('Mesin')
-                    ->relationship('mesin', 'nama_mesin', function (Builder $query) {
-                        $query->whereHas('kategoriMesin', function ($q) {
-                            $q->where('nama_kategori_mesin', 'like', '%rotary%');
-                        });
-                    })
-                    ->required()
-                    ->searchable()
-                    ->preload(),
-
                 DateTimePicker::make('waktu_mulai')
                     ->label('Waktu Kendala Mulai')
                     ->default(now())
@@ -135,6 +124,10 @@ class KendalaRotaryRelationManager extends RelationManager
                     ->mutateFormDataUsing(function (array $data): array {
                         $data['status'] = 'pending';
                         $data['waktu_mulai'] = now()->format('Y-m-d') . ' ' . Carbon::parse($data['waktu_mulai'])->format('H:i') . ':00';
+                        
+                        $parent = $this->getOwnerRecord();
+                        $data['mesin_id'] = $parent->id_mesin;
+                        
                         return $data;
                     }),
             ])

@@ -35,17 +35,24 @@ class LaporanProduksiExport implements WithMultipleSheets
 
     public function sheets(): array
     {
+        $data = $this->dataProduksi;
+        if (empty($data) && $this->tanggal) {
+            $raw = \App\Filament\Pages\LaporanProduksi\Queries\LoadProduksi::run($this->tanggal);
+            $data = \App\Filament\Pages\LaporanProduksi\Transformers\ProduksiDataMap::make($raw);
+        }
         return [
-            new LaporanProduksiDetailSheet($this->dataProduksi),
+            new LaporanProduksiDetailSheet($data),
             new LaporanProduksiRekapSheet($this->tanggal),
             new LaporanProduksiJurnalSheet($this->tanggal),
         ];
     }
 }
 
-class LaporanProduksiDetailSheet implements FromCollection, WithHeadings, WithTitle
+class LaporanProduksiDetailSheet implements FromCollection, WithHeadings, WithTitle, WithEvents
 {
     protected $dataProduksi;
+    protected $mergeRanges = [];
+    protected $tableRanges = [];
 
     public function __construct($dataProduksi)
     {
@@ -54,38 +61,196 @@ class LaporanProduksiDetailSheet implements FromCollection, WithHeadings, WithTi
 
     public function collection()
     {
-        $rows = collect();
+        $allRows = [];
+        $this->mergeRanges = [];
+        $this->tableRanges = [];
+
         foreach ($this->dataProduksi as $mesinNama => $produksiList) {
             $first = $produksiList->first();
             $pekerja = $first['pekerja'] ?? [];
-            $kendala = $first['kendala'] ?? 'Tidak ada kendala.';
+            $daftarKendala = $first['daftar_kendala'] ?? [];
             $tanggal = $first['tanggal'] ?? '';
             $target = $first['target'] ?? 0;
             $jamKerja = $first['jam_kerja'] ?? 0;
             $targetPerJam = $first['target_per_jam'] ?? 0;
-            $hasil = $first['total_target_harian'] ?? 0;
+            $hasil = $first['hasil'] ?? 0;
             $selisih = $first['selisih'] ?? 0;
+            $totalDowntimeMenit = $first['total_downtime_menit'] ?? 0;
 
-            $rows->push(['MESIN: ' . strtoupper($mesinNama)]);
-            $rows->push(['TANGGAL: ' . $tanggal]);
-            $rows->push([]);
-            $rows->push(['ID', 'Nama', 'Masuk', 'Pulang', 'Ijin', 'Potongan Target', 'Keterangan', '', 'Target Harian', 'Jam Kerja', 'Target/Jam', 'Hasil', 'Selisih', 'Kendala']);
-            foreach ($pekerja as $p) {
-                $potTargetRaw = (float) str_replace('.', '', $p['pot_target'] ?? '0');
-                $rows->push([
-                    $p['id'] ?? '-', $p['nama'] ?? '-', $p['jam_masuk'] ?? '-', $p['jam_pulang'] ?? '-', $p['ijin'] ?? '-',
-                    $potTargetRaw > 0 ? (int) $potTargetRaw : '-', $p['keterangan'] ?? '-', '', (int) $target, (int) $jamKerja, round((float) $targetPerJam, 2), (int) $hasil, $selisih >= 0 ? '+' . (int) abs($selisih) : (int) $selisih, $kendala
-                ]);
+            $allRows[] = ['MESIN: ' . strtoupper($mesinNama)];
+            $allRows[] = ['TANGGAL: ' . $tanggal];
+            $allRows[] = array_fill(0, 11, '');
+            
+            $headerRow = count($allRows) + 1;
+            $allRows[] = ['ID', 'Nama', 'Potongan Gaji', 'Keterangan', '', 'Target Harian', 'Jam Kerja', 'Target/Jam', 'Hasil', 'Selisih', 'Kendala'];
+
+            $workerStartRow = count($allRows) + 1;
+            $N = count($pekerja);
+            $workerEndRow = $workerStartRow + $N - 1;
+            $totalRow = $workerStartRow + $N;
+
+            // Pre-calculate cell values for Kendala column
+            $kendalaCellValues = array_fill(0, $N, '');
+
+            if ($N > 0) {
+                if (count($daftarKendala) === 0) {
+                    $kendalaCellValues[0] = 'Tidak ada kendala';
+                    if ($N > 1) {
+                        $this->mergeRanges[] = "K{$workerStartRow}:K" . ($workerStartRow + $N - 1);
+                    }
+                } else {
+                    $M = count($daftarKendala);
+                    $chunkSize = (int) ceil($N / $M);
+
+                    for ($i = 0; $i < $M; $i++) {
+                        $startIdx = $i * $chunkSize;
+                        $endIdx = min(($i + 1) * $chunkSize - 1, $N - 1);
+
+                        if ($startIdx < $N) {
+                            $kendalaCellValues[$startIdx] = $daftarKendala[$i]['text'] ?? '';
+                            $chunkStartRow = $workerStartRow + $startIdx;
+                            $chunkEndRow = $workerStartRow + $endIdx;
+
+                            if ($chunkStartRow < $chunkEndRow) {
+                                $this->mergeRanges[] = "K{$chunkStartRow}:K{$chunkEndRow}";
+                            }
+                        }
+                    }
+                }
             }
-            $totalPotongan = collect($pekerja)->sum(fn($p) => (float) str_replace('.', '', $p['pot_target'] ?? '0'));
-            $rows->push(['TOTAL', '', '', '', '', $totalPotongan > 0 ? (int) $totalPotongan : '', '', '', (int) $target, (int) $jamKerja, round((float) $targetPerJam, 2), (int) $hasil, $selisih >= 0 ? '+' . (int) abs($selisih) : (int) $selisih, '', count($pekerja) . ' pekerja']);
-            $rows->push([]); $rows->push([]);
+
+            foreach ($pekerja as $idx => $p) {
+                $potTargetRaw = (float) str_replace('.', '', $p['pot_target'] ?? '0');
+                $allRows[] = [
+                    $p['id'] ?? '-', $p['nama'] ?? '-', $potTargetRaw > 0 ? (int) $potTargetRaw : 0, $p['keterangan'] ?? '-', '', 
+                    (int) $target, (int) $jamKerja, round((float) $targetPerJam, 2), (int) $hasil, (int) $selisih,
+                    $kendalaCellValues[$idx]
+                ];
+            }
+
+            $allRows[] = [
+                'TOTAL', 
+                $N . ' pekerja', 
+                $N > 0 ? "=SUM(C{$workerStartRow}:C{$workerEndRow})" : 0, 
+                '', 
+                '', 
+                $N > 0 ? "=SUM(F{$workerStartRow}:F{$workerEndRow})" : 0, 
+                (int) $jamKerja, 
+                $N > 0 ? "=SUM(H{$workerStartRow}:H{$workerEndRow})" : 0, 
+                $N > 0 ? "=SUM(I{$workerStartRow}:I{$workerEndRow})" : 0, 
+                $N > 0 ? "=SUM(J{$workerStartRow}:J{$workerEndRow})" : 0, 
+                $totalDowntimeMenit > 0 ? $totalDowntimeMenit . ' menit' : ''
+            ];
+            $allRows[] = array_fill(0, 11, '');
+            $allRows[] = array_fill(0, 11, '');
+
+            // Record the table range for borders and styling
+            $this->tableRanges[] = [
+                'header' => $headerRow,
+                'start'  => $workerStartRow,
+                'end'    => $workerEndRow,
+                'total'  => $totalRow
+            ];
         }
-        return $rows;
+        return collect($allRows);
     }
 
     public function headings(): array { return []; }
     public function title(): string { return 'Detail Per Mesin'; }
+
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function (AfterSheet $event) {
+                $sheet = $event->sheet->getDelegate();
+                
+                // Set explicit column widths
+                $sheet->getColumnDimension('A')->setWidth(10);
+                $sheet->getColumnDimension('B')->setWidth(25);
+                $sheet->getColumnDimension('C')->setWidth(15);
+                $sheet->getColumnDimension('D')->setWidth(20);
+                $sheet->getColumnDimension('E')->setWidth(5);
+                $sheet->getColumnDimension('F')->setWidth(15);
+                $sheet->getColumnDimension('G')->setWidth(12);
+                $sheet->getColumnDimension('H')->setWidth(12);
+                $sheet->getColumnDimension('I')->setWidth(12);
+                $sheet->getColumnDimension('J')->setWidth(12);
+                $sheet->getColumnDimension('K')->setWidth(45);
+
+                // Merge cells dynamically
+                foreach ($this->mergeRanges as $range) {
+                    $sheet->mergeCells($range);
+                }
+
+                // Apply styles, borders, alignments and colors for each table
+                foreach ($this->tableRanges as $range) {
+                    $headerRow = $range['header'];
+                    $startRow = $range['start'];
+                    $endRow = $range['end'];
+                    $totalRow = $range['total'];
+
+                    // 1. Grid borders for the entire table (A{header} to K{total})
+                    $sheet->getStyle("A{$headerRow}:K{$totalRow}")->applyFromArray([
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                                'color' => ['argb' => 'FFCBD5E1'],
+                            ]
+                        ]
+                    ]);
+
+                    // 2. Header row style
+                    $sheet->getStyle("A{$headerRow}:K{$headerRow}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['argb' => 'FF1E293B']],
+                        'fill' => [
+                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            'startColor' => ['argb' => 'FFE2E8F0']
+                        ],
+                        'alignment' => [
+                            'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                            'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                        ]
+                    ]);
+
+                    // 3. Total row style
+                    $sheet->getStyle("A{$totalRow}:K{$totalRow}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['argb' => 'FF1E293B']],
+                        'fill' => [
+                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            'startColor' => ['argb' => 'FFF1F5F9']
+                        ]
+                    ]);
+
+                    // 4. Alignments for worker data cells (A{start} to K{end})
+                    if ($startRow <= $endRow) {
+                        $sheet->getStyle("A{$startRow}:A{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle("B{$startRow}:B{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+                        $sheet->getStyle("C{$startRow}:C{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("D{$startRow}:D{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+                        
+                        $sheet->getStyle("F{$startRow}:F{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("G{$startRow}:G{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle("H{$startRow}:H{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("I{$startRow}:I{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("J{$startRow}:J{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("K{$startRow}:K{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+                        
+                        // Number formats
+                        $sheet->getStyle("C{$startRow}:C{$totalRow}")->getNumberFormat()->setFormatCode('#,##0;(#,##0);"-"');
+                        $sheet->getStyle("F{$startRow}:F{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
+                        $sheet->getStyle("I{$startRow}:I{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
+                    }
+                }
+
+                // Enable wrap text and top vertical alignment for Kendala (K)
+                $highestRow = $sheet->getHighestRow();
+                $sheet->getStyle("K1:K{$highestRow}")
+                    ->getAlignment()
+                    ->setWrapText(true)
+                    ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP);
+            }
+        ];
+    }
 }
 
 class LaporanProduksiRekapSheet implements FromCollection, WithHeadings, WithStyles, WithEvents, WithTitle

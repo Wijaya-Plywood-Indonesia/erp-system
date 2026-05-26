@@ -18,20 +18,8 @@ class RotaryWorkerMap
             $labelDivisi = "ROTARY - " . strtoupper($namaMesin);
 
             // 2. Hitung Downtime (Menit)
+            // Downtime tidak mempengaruhi hitungan (target & potongan) sesuai QA
             $totalKendalaMenit = 0;
-            if ($item->detailGantiPisauRotary) {
-                foreach ($item->detailGantiPisauRotary as $ganti) {
-                    if (!empty($ganti->jam_selesai_ganti) && $ganti->jam_selesai_ganti !== '-') {
-                        try {
-                            $mulai = Carbon::parse($ganti->jam_mulai_ganti_pisau);
-                            $selesai = Carbon::parse($ganti->jam_selesai_ganti);
-                            $totalKendalaMenit += $mulai->diffInMinutes($selesai);
-                        } catch (\Exception $e) {
-                            continue;
-                        }
-                    }
-                }
-            }
 
             // 3. Hitung Target & Potongan
             $totalHasil = $item->detailPaletRotary->sum('total_lembar') ?? 0;
