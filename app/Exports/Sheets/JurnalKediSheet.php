@@ -399,7 +399,7 @@ class JurnalKediSheet implements FromArray, WithTitle, WithColumnWidths, WithSty
 
         $hpp = abs($totalKredit - $totalDebit);
         if (round($hpp, 2) != 0) {
-            $rows[] = $this->makeRow('hpp', '6111', $tglProduksi, $namaProduksi, '', 'd', '', '', '', round($hpp, 2), round($hpp, 2));
+            $rows[] = $this->makeRow('hpp', '6111', $tglProduksi, $namaProduksi, '', 'k', '', '', '', round($hpp, 2), round($hpp, 2));
         }
 
         foreach ($creditRows as $r) {

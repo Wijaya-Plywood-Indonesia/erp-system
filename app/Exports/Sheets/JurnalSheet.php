@@ -400,7 +400,7 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles
 
             $hpp = abs($totalKredit - $totalDebit);
             if (round($hpp, 2) != 0) {
-                $rows[] = $this->makeRow('hpp', '6111', $tglProduksi, $namaProduksi, '', 'd', '', '', '', round($hpp, 2), round($hpp, 2));
+                $rows[] = $this->makeRow('hpp', '6111', $tglProduksi, $namaProduksi, '', 'k', '', '', '', round($hpp, 2), round($hpp, 2));
             }
 
             $rows[] = array_fill(0, 14, ''); 
