@@ -11,6 +11,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 class NotaBarangMasukForm
 {
@@ -39,16 +40,19 @@ class NotaBarangMasukForm
                         self::refreshNomorNota($get, $set);
                     }),
 
-                // Tampilan saja — tidak dikirim ke DB
+                // Bisa diedit manual, sync ke no_nota hidden
                 TextInput::make('no_nota_display')
                     ->label('No. Nota')
                     ->placeholder('(pilih tipe nota dulu)')
-                    ->disabled()
                     ->dehydrated(false)
+                    ->live()
                     ->afterStateHydrated(function ($component, $record) {
                         if ($record) {
                             $component->state($record->no_nota);
                         }
+                    })
+                    ->afterStateUpdated(function (Get $get, Set $set, $state) {
+                        $set('no_nota', $state);
                     }),
 
                 // Yang dikirim ke DB
@@ -82,9 +86,16 @@ class NotaBarangMasukForm
             return;
         }
 
-        $nomor = NomorNotaService::generateBarangMasuk($tipe, Carbon::parse($tanggal));
+        // 1. Ambil format asli dari service (Misal: BML-1231-0608)
+        $nomorOriginal = NomorNotaService::generateBarangMasuk($tipe, Carbon::parse($tanggal));
 
-        $set('no_nota_display', $nomor);
-        $set('no_nota', $nomor);
+        // 2. Ganti tanda hubung pertama setelah kode tipe dengan spasi
+        $nomorCustom = Str::replaceFirst('-', ' ', $nomorOriginal);
+
+        // 3. Ubah menjadi huruf kecil semua (bml 1231-0608)
+        $nomorFinal = Str::lower($nomorCustom);
+
+        $set('no_nota_display', $nomorFinal);
+        $set('no_nota', $nomorFinal);
     }
 }

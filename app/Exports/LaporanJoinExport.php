@@ -503,15 +503,15 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
 
                     // 2. Logika Penentuan Prefix dan Harga
                     if (str_contains($nama, 'aruki')) {
-                        $hargaH = 152900;
+                        $hargaH = 6900;
                         $akun = '1507.63';
                         $prefix = 'Lem '; // Diberi prefix
                     } elseif (str_contains($nama, 'dover')) {
-                        $hargaH = 152900;
+                        $hargaH = 6950;
                         $akun = '1507.64';
                         $prefix = 'Lem '; // Diberi prefix
                     } elseif (str_contains($nama, 'tepung')) {
-                        $hargaH = 18000;
+                        $hargaH = 4500;
                         $akun = '1507.62';
                         $prefix = ''; // Tetap tanpa prefix
                     }
