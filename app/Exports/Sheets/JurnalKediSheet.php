@@ -116,6 +116,11 @@ class JurnalKediSheet implements FromArray, WithTitle, WithColumnWidths, WithSty
         $kelompok = ($tebal < 1) ? 'faceback' : 'core';
         $jns      = $this->normalizeJenis($jenis);
 
+        $dbHarga = $this->getHargaVeneerDb($jenis, $tebal, $tipeKualitas, $isPpc);
+        if ($dbHarga > 0) {
+            return $dbHarga;
+        }
+
         $hargaReguler = [
             'sengon' => [
                 'faceback' => ['basah' => 2700000, 'kering' => 3050000, 'jadi' => 4000000],
@@ -140,6 +145,41 @@ class JurnalKediSheet implements FromArray, WithTitle, WithColumnWidths, WithSty
 
         $tabel = $isPpc ? $hargaPpc : $hargaReguler;
         return $tabel[$jns][$kelompok][$tipeKualitas] ?? 0;
+    }
+
+    private function getHargaVeneerDb(string $jenis, float $tebal, string $tipeKualitas, bool $isPpc = false): int
+    {
+        $jns = str_contains(strtolower(trim($jenis)), 'sengon') ? 'Sengon' : 'Meranti';
+        $jenisKayu = \App\Models\JenisKayu::where('nama_kayu', $jns)->first();
+        if (!$jenisKayu) {
+            return 0;
+        }
+
+        if ($isPpc) {
+            $kelompok = ($tebal < 1) ? 'ppc_faceback' : 'ppc_core';
+        } else {
+            $kelompok = ($tebal < 1) ? 'faceback' : 'core';
+        }
+
+        $ukuranOptions = $kelompok === 'faceback'
+            ? ($jns === 'Sengon' ? ['faceback'] : ['face', 'back'])
+            : ($kelompok === 'ppc_faceback' ? ['ppc_faceback'] : [$kelompok]);
+
+        $hargaVeneer = \App\Models\HargaVeneer::where('id_jenis_kayu', $jenisKayu->id)
+            ->whereIn('ukuran', $ukuranOptions)
+            ->first();
+
+        if (!$hargaVeneer) {
+            return 0;
+        }
+
+        if ($tipeKualitas === 'basah') {
+            return (int) $hargaVeneer->harga_basah;
+        } elseif ($tipeKualitas === 'kering') {
+            return (int) $hargaVeneer->harga_kering;
+        } else {
+            return (int) $hargaVeneer->harga_jadi;
+        }
     }
 
     private function isKwAf(mixed $kw): bool

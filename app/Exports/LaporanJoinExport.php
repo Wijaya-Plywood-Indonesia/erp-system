@@ -411,16 +411,58 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
     private function getHargaPatok(string $jenis, float $tebal, bool $isAf = false): int
     {
         $jns = $this->normalizeJenis($jenis);
+
+        $dbHarga = $this->getHargaVeneerDb($jenis, $tebal, 'jadi', $isAf);
+        if ($dbHarga > 0) {
+            return $dbHarga;
+        }
+
         // Jika PCC (AF), gunakan harga khusus
         if ($isAf) {
             return ($jns === 'sengon') ? 1500000 : 1800000;
         }
+
         $kelompok = ($tebal < 1) ? 'faceback' : 'core';
         $harga = [
             'sengon' => ['faceback' => 4000000, 'core' => 2250000],
             'meranti' => ['faceback' => 12500000, 'core' => 2800000],
         ];
         return $harga[$jns][$kelompok] ?? 0;
+    }
+
+    private function getHargaVeneerDb(string $jenis, float $tebal, string $tipeKualitas, bool $isAf = false): int
+    {
+        $jns = str_contains(strtolower(trim($jenis)), 'sengon') ? 'Sengon' : 'Meranti';
+        $jenisKayu = \App\Models\JenisKayu::where('nama_kayu', $jns)->first();
+        if (!$jenisKayu) {
+            return 0;
+        }
+
+        if ($isAf) {
+            $kelompok = ($tebal < 1) ? 'ppc_faceback' : 'ppc_core';
+        } else {
+            $kelompok = ($tebal < 1) ? 'faceback' : 'core';
+        }
+
+        $ukuranOptions = $kelompok === 'faceback'
+            ? ($jns === 'Sengon' ? ['faceback'] : ['face', 'back'])
+            : ($kelompok === 'ppc_faceback' ? ['ppc_faceback'] : [$kelompok]);
+
+        $hargaVeneer = \App\Models\HargaVeneer::where('id_jenis_kayu', $jenisKayu->id)
+            ->whereIn('ukuran', $ukuranOptions)
+            ->first();
+
+        if (!$hargaVeneer) {
+            return 0;
+        }
+
+        if ($tipeKualitas === 'basah') {
+            return (int) $hargaVeneer->harga_basah;
+        } elseif ($tipeKualitas === 'kering') {
+            return (int) $hargaVeneer->harga_kering;
+        } else {
+            return (int) $hargaVeneer->harga_jadi;
+        }
     }
 
     private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $total, $hitKbk = 'm'): array

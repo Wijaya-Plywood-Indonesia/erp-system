@@ -24,6 +24,7 @@ class HppAveragePage extends Page
     public string $filterJenisKayu = '';
     public string $filterLahan = '';
     public string $filterTipeTransaksi = ''; // ✅ Tambahan filter tipe transaksi
+    public string $limitPerLahan = '15';
 
     // Role untuk yang bisa melihat log HPP
     private const ROLE_ALLOWED = ['super_admin', 'admin', 'finance', 'manager'];

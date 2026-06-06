@@ -25,6 +25,15 @@
             @endforeach
         </select>
 
+        <select wire:model.live="limitPerLahan"
+            class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500 transition-all">
+            <option value="15">15 Log Terbaru</option>
+            <option value="30">30 Log Terbaru</option>
+            <option value="50">50 Log Terbaru</option>
+            <option value="100">100 Log Terbaru</option>
+            <option value="semua">Semua Log</option>
+        </select>
+
         {{-- Searchable Select Lahan --}}
         <div x-data="{ 
                 open: false, 
@@ -150,7 +159,10 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                        @foreach($lahanLogs as $log)
+                        @php
+                        $displayLogs = $this->limitPerLahan === 'semua' ? $lahanLogs : $lahanLogs->take((int)$this->limitPerLahan);
+                        @endphp
+                        @foreach($displayLogs as $log)
                         @php $isM = $log->tipe_transaksi === 'masuk'; @endphp
                         <tr @class(['transition', 'hover:bg-green-50/30 dark:hover:bg-green-900/10'=> $isM, 'hover:bg-red-50/30 dark:hover:bg-red-900/10' => !$isM])>
 

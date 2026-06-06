@@ -334,10 +334,15 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
 
         $rawRows = [];
 
-        // Preload ongkos_mesin dari tabel mesins (keyed by nama_mesin)
-        $mesinOngkos = \App\Models\Mesin::all()
-            ->keyBy(fn($m) => strtoupper(trim($m->nama_mesin)))
-            ->map(fn($m) => (float)($m->ongkos_mesin ?? 0));
+        // Preload mesin dan jenis kayu untuk pencarian dinamis
+        $mesins = \App\Models\Mesin::all()->keyBy(fn($m) => strtoupper(trim($m->nama_mesin)));
+        $jenisKayus = \App\Models\JenisKayu::all()->keyBy(fn($jk) => strtoupper(trim($jk->nama_kayu)));
+
+        // Preload harga veneer kering
+        $hargaVeneerMap = [];
+        foreach (\App\Models\HargaVeneer::all() as $hv) {
+            $hargaVeneerMap[$hv->id_jenis_kayu][strtolower($hv->ukuran)] = (float) $hv->harga_kering;
+        }
 
         foreach ($payload['jurnal_items'] as $item) {
             $namaAkun = $item['nama_akun'];
@@ -398,12 +403,37 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 $harga  = $subItem['harga'];
                 $jumlah = $subItem['jumlah'];
 
-                // Khusus export Excel: harga veneer ambil dari ongkos_mesin di tabel mesins
+                // Khusus export Excel: harga veneer mengikuti harga veneer kering dari tabel harga_veneers
                 if (($subItem['jenis_pihak'] ?? '') === 'produksi') {
-                    $namaM   = strtoupper(trim($bagian));
-                    $ongkos  = $mesinOngkos[$namaM] ?? 0;
-                    $harga   = $ongkos;
-                    $jumlah  = $volume !== null ? round((float)$volume * $ongkos, 4) : null;
+                    $namaM = strtoupper(trim($bagian));
+                    $jenisHasil = isset($mesins[$namaM]) ? $mesins[$namaM]->jenis_hasil : 'core';
+
+                    // Parse jenis kayu dari keterangan
+                    $keterangan = $subItem['keterangan'] ?? '';
+                    $parts = explode(' - ', $keterangan);
+                    $namaKayu = count($parts) > 2 ? trim($parts[2]) : '';
+                    $namaKayuUpper = strtoupper(trim($namaKayu));
+                    $jenisKayuObj = $jenisKayus[$namaKayuUpper] ?? null;
+                    $idJenisKayu = $jenisKayuObj ? $jenisKayuObj->id : null;
+
+                    $ongkos = 0;
+                    if ($idJenisKayu) {
+                        $options = strtolower($jenisHasil) === 'f/b' ? ['faceback', 'face', 'back'] : ['core'];
+                        foreach ($options as $opt) {
+                            if (isset($hargaVeneerMap[$idJenisKayu][$opt])) {
+                                $ongkos = $hargaVeneerMap[$idJenisKayu][$opt];
+                                break;
+                            }
+                        }
+                    }
+
+                    // Fallback to legacy if no match found
+                    if ($ongkos === 0) {
+                        $ongkos = isset($mesins[$namaM]) ? (float)($mesins[$namaM]->ongkos_mesin ?? 0) : 0;
+                    }
+
+                    $harga  = $ongkos;
+                    $jumlah = $volume !== null ? round((float)$volume * $ongkos, 4) : null;
                 }
 
                 // Khusus export Excel: harga pekerja di-hardcode 150.000
@@ -545,19 +575,25 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 if ($isVeneer) {
                     $noAkunVal = $g['no_akun'] ?? '';
                     $namaAkunVal = strtolower($g['nama_akun'] ?? '');
-                    if ($noAkunVal === '1421.00' || $noAkunVal === '1421.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'sengon'))) {
-                        $rowHarga = 2700000.0;
-                    } elseif ($noAkunVal === '1422.00' || $noAkunVal === '1422.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'meranti'))) {
-                        $rowHarga = 8000000.0;
-                    } elseif ($noAkunVal === '1426.00' || $noAkunVal === '1426.01' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'sengon'))) {
-                        $rowHarga = 1700000.0;
-                    } elseif ($noAkunVal === '1427.00' || $noAkunVal === '1427.01' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'meranti'))) {
-                        $rowHarga = 2100000.0;
+                    
+                    $dbHarga = $this->getHargaVeneerBasahDb($noAkunVal, $namaAkunVal);
+                    if ($dbHarga > 0) {
+                        $rowHarga = $dbHarga;
                     } else {
-                        if (str_contains($namaAkunVal, 'core')) {
-                            $rowHarga = str_contains($namaAkunVal, 'sengon') ? 1700000.0 : 2100000.0;
+                        if ($noAkunVal === '1421.00' || $noAkunVal === '1421.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'sengon'))) {
+                            $rowHarga = 2700000.0;
+                        } elseif ($noAkunVal === '1422.00' || $noAkunVal === '1422.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'meranti'))) {
+                            $rowHarga = 8000000.0;
+                        } elseif ($noAkunVal === '1426.00' || $noAkunVal === '1426.01' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'sengon'))) {
+                            $rowHarga = 1700000.0;
+                        } elseif ($noAkunVal === '1427.00' || $noAkunVal === '1427.01' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'meranti'))) {
+                            $rowHarga = 2100000.0;
                         } else {
-                            $rowHarga = str_contains($namaAkunVal, 'sengon') ? 2700000.0 : 8000000.0;
+                            if (str_contains($namaAkunVal, 'core')) {
+                                $rowHarga = str_contains($namaAkunVal, 'sengon') ? 1700000.0 : 2100000.0;
+                            } else {
+                                $rowHarga = str_contains($namaAkunVal, 'sengon') ? 2700000.0 : 8000000.0;
+                            }
                         }
                     }
                 } elseif ($isHutangGaji) {
@@ -670,19 +706,25 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 if ($isVeneer) {
                     $noAkunVal = $g['no_akun'] ?? '';
                     $namaAkunVal = strtolower($g['nama_akun'] ?? '');
-                    if ($noAkunVal === '1421.00' || $noAkunVal === '1421.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'sengon'))) {
-                        $hargaVal = 2700000;
-                    } elseif ($noAkunVal === '1422.00' || $noAkunVal === '1422.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'meranti'))) {
-                        $hargaVal = 8000000;
-                    } elseif ($noAkunVal === '1426.00' || $noAkunVal === '1426.01' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'sengon'))) {
-                        $hargaVal = 1700000;
-                    } elseif ($noAkunVal === '1427.00' || $noAkunVal === '1427.01' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'meranti'))) {
-                        $hargaVal = 2100000;
+                    
+                    $dbHarga = $this->getHargaVeneerBasahDb($noAkunVal, $namaAkunVal);
+                    if ($dbHarga > 0) {
+                        $hargaVal = $dbHarga;
                     } else {
-                        if (str_contains($namaAkunVal, 'core')) {
-                            $hargaVal = str_contains($namaAkunVal, 'sengon') ? 1700000 : 2100000;
+                        if ($noAkunVal === '1421.00' || $noAkunVal === '1421.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'sengon'))) {
+                            $hargaVal = 2700000;
+                        } elseif ($noAkunVal === '1422.00' || $noAkunVal === '1422.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'meranti'))) {
+                            $hargaVal = 8000000;
+                        } elseif ($noAkunVal === '1426.00' || $noAkunVal === '1426.01' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'sengon'))) {
+                            $hargaVal = 1700000;
+                        } elseif ($noAkunVal === '1427.00' || $noAkunVal === '1427.01' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'meranti'))) {
+                            $hargaVal = 2100000;
                         } else {
-                            $hargaVal = str_contains($namaAkunVal, 'sengon') ? 2700000 : 8000000;
+                            if (str_contains($namaAkunVal, 'core')) {
+                                $hargaVal = str_contains($namaAkunVal, 'sengon') ? 1700000 : 2100000;
+                            } else {
+                                $hargaVal = str_contains($namaAkunVal, 'sengon') ? 2700000 : 8000000;
+                            }
                         }
                     }
                 } elseif ($isHutangGaji) {
@@ -812,6 +854,39 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 $sheet->getColumnDimension('N')->setWidth(18); // Total
             }
         ];
+    }
+
+    private function getHargaVeneerBasahDb(string $noAkun, string $namaAkun): float
+    {
+        $noAkunVal = trim($noAkun);
+        $namaAkunVal = strtolower(trim($namaAkun));
+
+        $isSengon = str_contains($namaAkunVal, 'sengon');
+        $isMeranti = str_contains($namaAkunVal, 'meranti') || (!str_contains($namaAkunVal, 'sengon') && !str_contains($namaAkunVal, 'jabon') && !str_contains($namaAkunVal, 'mahoni'));
+        
+        $jns = $isSengon ? 'Sengon' : 'Meranti';
+        $jenisKayu = \App\Models\JenisKayu::where('nama_kayu', $jns)->first();
+        if (!$jenisKayu) {
+            return 0.0;
+        }
+
+        // Determine if it's faceback or core
+        $isCore = str_contains($namaAkunVal, 'core') 
+            || $noAkunVal === '1426.00' 
+            || $noAkunVal === '1426.01' 
+            || $noAkunVal === '1427.00' 
+            || $noAkunVal === '1427.01' 
+            || ($noAkunVal === '115-08');
+
+        $ukuranOptions = !$isCore
+            ? ($jns === 'Sengon' ? ['faceback'] : ['face', 'back'])
+            : ['core'];
+
+        $hargaVeneer = \App\Models\HargaVeneer::where('id_jenis_kayu', $jenisKayu->id)
+            ->whereIn('ukuran', $ukuranOptions)
+            ->first();
+
+        return (float) ($hargaVeneer->harga_basah ?? 0.0);
     }
 }
 
