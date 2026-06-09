@@ -301,12 +301,12 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
             $totalPekerja = count($pekerja);
 
             // ── JUDUL SEKSI ──────────────────────────────────────
-            $rows[] = ['PRODUKSI STIK', '', '', '', '', '', '', '', '', '', ''];
+            $rows[] = ['PRODUKSI STIK', '', '', '', '', '', '', '', '', '', '', ''];
             $this->styleMap[$rowIndex] = 'section_title';
             $rowIndex++;
 
             // ── HEADER KOLOM ─────────────────────────────────────
-            $rows[] = ['Tanggal', 'p', 'l', 't', 'jenis', 'kw1', 'kw2', 'kw3', 'kw4', 'byk', 'TTL PKJ'];
+            $rows[] = ['Tanggal', 'p', 'l', 't', 'jenis', 'kw1', 'kw2', 'kw3', 'kw4', 'kw af', 'byk', 'TTL PKJ'];
             $this->styleMap[$rowIndex] = 'col_header';
             $rowIndex++;
 
@@ -315,7 +315,7 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
 
             if (empty($detailHasil)) {
                 // Fallback jika belum ada input hasil
-                $rows[] = [$tanggal, '-', '-', '-', '-', '', '', '', '', $produksi['hasil_harian'] ?? 0, $totalPekerja];
+                $rows[] = [$tanggal, '-', '-', '-', '-', '', '', '', '', '', $produksi['hasil_harian'] ?? 0, $totalPekerja];
                 $this->styleMap[$rowIndex] = 'data';
                 $rowIndex++;
             } else {
@@ -331,6 +331,7 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
                         $detail['kw2']        ?? '',
                         $detail['kw3']        ?? '',
                         $detail['kw4']        ?? '',
+                        $detail['af']         ?? '',
                         $detail['total']      ?? '',
                         $i === 0 ? $totalPekerja : '',
                     ];
@@ -340,15 +341,15 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
 
                 $dataEndRow = $rowIndex - 1;
 
-                // Merge Tanggal (A) & TTL PKJ (K) jika lebih dari 1 baris
+                // Merge Tanggal (A) & TTL PKJ (L) jika lebih dari 1 baris
                 if (count($detailHasil) > 1) {
                     $this->mergeRanges[] = "A{$dataStartRow}:A{$dataEndRow}";
-                    $this->mergeRanges[] = "K{$dataStartRow}:K{$dataEndRow}";
+                    $this->mergeRanges[] = "L{$dataStartRow}:L{$dataEndRow}";
                 }
             }
 
             // ── BARIS KOSONG PEMISAH ─────────────────────────────
-            $rows[] = ['', '', '', '', '', '', '', '', '', '', ''];
+            $rows[] = ['', '', '', '', '', '', '', '', '', '', '', ''];
             $rowIndex++;
         }
 
@@ -375,8 +376,8 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
             switch ($type) {
 
                 case 'section_title':
-                    $sheet->mergeCells("A{$rowNum}:K{$rowNum}");
-                    $sheet->getStyle("A{$rowNum}:K{$rowNum}")->applyFromArray([
+                    $sheet->mergeCells("A{$rowNum}:L{$rowNum}");
+                    $sheet->getStyle("A{$rowNum}:L{$rowNum}")->applyFromArray([
                         'font' => [
                             'bold'  => true,
                             'size'  => 14,
@@ -397,7 +398,7 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
                     break;
 
                 case 'col_header':
-                    $sheet->getStyle("A{$rowNum}:K{$rowNum}")->applyFromArray([
+                    $sheet->getStyle("A{$rowNum}:L{$rowNum}")->applyFromArray([
                         'font' => [
                             'bold'  => true,
                             'color' => ['rgb' => 'FFFFFF'],
@@ -423,7 +424,7 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
                     break;
 
                 case 'data':
-                    $sheet->getStyle("A{$rowNum}:K{$rowNum}")->applyFromArray([
+                    $sheet->getStyle("A{$rowNum}:L{$rowNum}")->applyFromArray([
                         'font' => ['size' => 10, 'name' => 'Arial'],
                         'fill' => [
                             'fillType'   => Fill::FILL_SOLID,
@@ -451,10 +452,10 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
         $sheet->getColumnDimension('C')->setWidth(7);
         $sheet->getColumnDimension('D')->setWidth(7);
         $sheet->getColumnDimension('E')->setWidth(9);
-        foreach (['F','G','H','I','J'] as $col) {
+        foreach (['F','G','H','I','J','K'] as $col) {
             $sheet->getColumnDimension($col)->setWidth(8);
         }
-        $sheet->getColumnDimension('K')->setWidth(10);
+        $sheet->getColumnDimension('L')->setWidth(10);
 
         $sheet->freezePane('A3');
 

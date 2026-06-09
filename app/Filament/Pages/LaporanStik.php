@@ -85,12 +85,19 @@ class LaporanStik extends Page
     }
 
     /**
-     * Normalisasi nilai field kw menjadi key 'kw1'/'kw2'/'kw3'/'kw4'.
-     * Menangani berbagai format: 'kw1', 'KW1', 'KW 1', '1', 1, 'kw-1', dsb.
+     * Normalisasi nilai field kw menjadi key 'kw1'/'kw2'/'kw3'/'kw4' / 'af'.
+     * Menangani berbagai format: 'kw1', 'KW1', 'KW 1', '1', 1, 'kw-1', 'af', 'AF', dsb.
      */
     protected function normalizeKw(mixed $kw): string
     {
         if ($kw === null || $kw === '') return 'kw1';
+
+        $str = strtolower(trim((string) $kw));
+
+        // Cek apakah af
+        if (str_contains($str, 'af')) {
+            return 'af';
+        }
 
         // Jika berupa angka murni (int atau string angka): langsung jadikan kw{n}
         if (is_numeric($kw)) {
@@ -99,7 +106,6 @@ class LaporanStik extends Page
         }
 
         // Ambil angka di akhir string: 'kw1', 'KW 2', 'Kw-3', 'kw_4', dll.
-        $str = strtolower(trim((string) $kw));
         if (preg_match('/(\d)$/', $str, $m)) {
             $n = (int) $m[1];
             return in_array($n, [1, 2, 3, 4]) ? "kw{$n}" : 'kw1';
@@ -185,6 +191,7 @@ class LaporanStik extends Page
                         'kw2'        => 0,
                         'kw3'        => 0,
                         'kw4'        => 0,
+                        'af'         => 0,
                         'total'      => 0,
                     ];
                 }
@@ -205,6 +212,7 @@ class LaporanStik extends Page
                     'kw2'        => $item['kw2'] > 0 ? $item['kw2'] : '',
                     'kw3'        => $item['kw3'] > 0 ? $item['kw3'] : '',
                     'kw4'        => $item['kw4'] > 0 ? $item['kw4'] : '',
+                    'af'         => $item['af'] > 0 ? $item['af'] : '',
                     'total'      => $item['total'] > 0 ? $item['total'] : '',
                 ];
             }
