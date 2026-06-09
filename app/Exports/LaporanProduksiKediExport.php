@@ -41,7 +41,7 @@ class LaporanProduksiKediExport implements FromCollection, WithTitle, ShouldAuto
             'kw2',
             'kw3',
             'kw4',
-            'kw LB',
+            'kw AF',
             'byk',
             'm3',
             'TTL PKJ',
@@ -62,7 +62,7 @@ class LaporanProduksiKediExport implements FromCollection, WithTitle, ShouldAuto
             'kw2',
             'kw3',
             'kw4',
-            'kw LB',
+            'kw AF',
             'byk',
             'm3',
             'TTL PKJ',
@@ -75,7 +75,12 @@ class LaporanProduksiKediExport implements FromCollection, WithTitle, ShouldAuto
         ];
         $rows->push($subHeader);
 
-        $totals = ['m_byk' => 0, 'm_m3' => 0, 'm_pkj' => 0, 'b_byk' => 0, 'b_m3' => 0, 'b_pkj' => 0];
+        $totals = [
+            'm_kw1' => 0, 'm_kw2' => 0, 'm_kw3' => 0, 'm_kw4' => 0, 'm_kwaf' => 0,
+            'm_byk' => 0, 'm_m3' => 0, 'm_pkj' => 0,
+            'b_kw1' => 0, 'b_kw2' => 0, 'b_kw3' => 0, 'b_kw4' => 0, 'b_kwaf' => 0,
+            'b_byk' => 0, 'b_m3' => 0, 'b_pkj' => 0
+        ];
         $currentRow = 4; // Data mulai di baris 4 (karena ada baris header 1, sub-header 2, dan summary 3)
 
         foreach ($this->data as $produksi) {
@@ -99,14 +104,28 @@ class LaporanProduksiKediExport implements FromCollection, WithTitle, ShouldAuto
                     $row[3] = $l;
                     $row[4] = $t;
                     $row[5] = $this->getJenisKayuShort($dm['jenis_kayu']);
-                    $row[6] = ($dm['kw'] == 1 ? $dm['jumlah'] : '');
-                    $row[7] = ($dm['kw'] == 2 ? $dm['jumlah'] : '');
-                    $row[8] = ($dm['kw'] == 3 ? $dm['jumlah'] : '');
-                    $row[9] = ($dm['kw'] == 4 ? $dm['jumlah'] : '');
-                    $row[10] = ($dm['kw'] == 5 ? $dm['jumlah'] : '');
+
+                    $kwVal = (int)($dm['kw'] ?? 0);
+                    $isKw1 = ($kwVal === 1);
+                    $isKw2 = ($kwVal === 2);
+                    $isKw3 = ($kwVal === 3);
+                    $isKw4 = ($kwVal === 4);
+                    $isKwAf = (!$isKw1 && !$isKw2 && !$isKw3 && !$isKw4);
+
+                    $row[6] = $isKw1 ? $dm['jumlah'] : '';
+                    $row[7] = $isKw2 ? $dm['jumlah'] : '';
+                    $row[8] = $isKw3 ? $dm['jumlah'] : '';
+                    $row[9] = $isKw4 ? $dm['jumlah'] : '';
+                    $row[10] = $isKwAf ? $dm['jumlah'] : '';
                     $row[11] = $dm['jumlah'];
                     $row[12] = round($m3, 4);
                     $row[13] = $produksi['total_pekerja'];
+
+                    if ($isKw1) $totals['m_kw1'] += $dm['jumlah'];
+                    if ($isKw2) $totals['m_kw2'] += $dm['jumlah'];
+                    if ($isKw3) $totals['m_kw3'] += $dm['jumlah'];
+                    if ($isKw4) $totals['m_kw4'] += $dm['jumlah'];
+                    if ($isKwAf) $totals['m_kwaf'] += $dm['jumlah'];
 
                     $totals['m_byk'] += $dm['jumlah'];
                     $totals['m_m3'] += $m3;
@@ -126,14 +145,28 @@ class LaporanProduksiKediExport implements FromCollection, WithTitle, ShouldAuto
                     $row[24] = $l;
                     $row[25] = $t;
                     $row[26] = $this->getJenisKayuShort($db['jenis_kayu']);
-                    $row[27] = ($db['kw'] == 1 ? $db['jumlah'] : '');
-                    $row[28] = ($db['kw'] == 2 ? $db['jumlah'] : '');
-                    $row[29] = ($db['kw'] == 3 ? $db['jumlah'] : '');
-                    $row[30] = ($db['kw'] == 4 ? $db['jumlah'] : '');
-                    $row[31] = ($db['kw'] == 5 ? $db['jumlah'] : '');
+
+                    $kwVal = (int)($db['kw'] ?? 0);
+                    $isKw1 = ($kwVal === 1);
+                    $isKw2 = ($kwVal === 2);
+                    $isKw3 = ($kwVal === 3);
+                    $isKw4 = ($kwVal === 4);
+                    $isKwAf = (!$isKw1 && !$isKw2 && !$isKw3 && !$isKw4);
+
+                    $row[27] = $isKw1 ? $db['jumlah'] : '';
+                    $row[28] = $isKw2 ? $db['jumlah'] : '';
+                    $row[29] = $isKw3 ? $db['jumlah'] : '';
+                    $row[30] = $isKw4 ? $db['jumlah'] : '';
+                    $row[31] = $isKwAf ? $db['jumlah'] : '';
                     $row[32] = $db['jumlah'];
                     $row[33] = round($m3, 4);
                     $row[34] = $produksi['total_pekerja'];
+
+                    if ($isKw1) $totals['b_kw1'] += $db['jumlah'];
+                    if ($isKw2) $totals['b_kw2'] += $db['jumlah'];
+                    if ($isKw3) $totals['b_kw3'] += $db['jumlah'];
+                    if ($isKw4) $totals['b_kw4'] += $db['jumlah'];
+                    if ($isKwAf) $totals['b_kwaf'] += $db['jumlah'];
 
                     $totals['b_byk'] += $db['jumlah'];
                     $totals['b_m3'] += $m3;
@@ -152,12 +185,24 @@ class LaporanProduksiKediExport implements FromCollection, WithTitle, ShouldAuto
 
         $summaryRow = array_fill(0, 41, '');
         $summaryRow[0] = 'TOTAL';
+        $summaryRow[6] = $totals['m_kw1'] ?: '';
+        $summaryRow[7] = $totals['m_kw2'] ?: '';
+        $summaryRow[8] = $totals['m_kw3'] ?: '';
+        $summaryRow[9] = $totals['m_kw4'] ?: '';
+        $summaryRow[10] = $totals['m_kwaf'] ?: '';
         $summaryRow[11] = $totals['m_byk'];
         $summaryRow[12] = round($totals['m_m3'], 3);
         $summaryRow[13] = $totals['m_pkj'];
+        
+        $summaryRow[27] = $totals['b_kw1'] ?: '';
+        $summaryRow[28] = $totals['b_kw2'] ?: '';
+        $summaryRow[29] = $totals['b_kw3'] ?: '';
+        $summaryRow[30] = $totals['b_kw4'] ?: '';
+        $summaryRow[31] = $totals['b_kwaf'] ?: '';
         $summaryRow[32] = $totals['b_byk'];
         $summaryRow[33] = round($totals['b_m3'], 3);
         $summaryRow[34] = $totals['b_pkj'];
+        
         $rows->splice(2, 0, [$summaryRow]);
 
         return $rows;
@@ -194,6 +239,9 @@ class LaporanProduksiKediExport implements FromCollection, WithTitle, ShouldAuto
         $n = strtolower($name);
         if (str_contains($n, 'sengon')) return 's';
         if (str_contains($n, 'meranti')) return 'm';
+        if (str_contains($n, 'mahoni')) return 'mh';
+        if (str_contains($n, 'jabon')) return 'j';
+        if (str_contains($n, 'waru')) return 'wr';
         return $name;
     }
 
