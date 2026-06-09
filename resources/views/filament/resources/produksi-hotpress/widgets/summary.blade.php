@@ -83,69 +83,121 @@
         </div>
 
         {{-- ================= TARGET PROGRESS ================= --}}
-        @if (!empty($summary['targetProgress']) && count($summary['targetProgress']) > 0)
+        {{-- ================= TARGET PROGRESS ================= --}}
+        @if (isset($summary['globalActualAchievement']))
         <div class="space-y-6 py-6 border-t dark:border-gray-700">
-            @foreach ($summary['targetProgress'] as $item)
-                <div class="space-y-3">
-                    <div class="font-semibold text-lg text-gray-900 dark:text-gray-100 flex justify-between items-center">
-                        <span>Progress Target Ukuran {{ $item['ukuran'] }}</span>
-                        <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
-                            ( Target {{ $item['hasTarget'] ? number_format($item['target']) . ' pcs' : 'Belum di Set' }} )
+            <div class="space-y-3">
+                <div class="font-bold text-lg text-gray-900 dark:text-gray-100">
+                    <span>Progress Target Produksi Hot Press (Global)</span>
+                    <div class="text-xs font-normal text-gray-500 dark:text-gray-400 mt-0.5">
+                        Formula: Progress = &sum; (Aktual<sub>i</sub> / Target<sub>i</sub>) &times; 100%
+                    </div>
+                </div>
+
+                @php
+                    $globalProgressVal = (float) ($summary['globalProgress'] ?? 0);
+                    $globalProgressPercent = min(100, max(0, $globalProgressVal));
+                @endphp
+
+                <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:bg-gray-800 dark:border-gray-700 space-y-3">
+                    {{-- Nama & Nilai --}}
+                    <div class="flex justify-between items-end text-sm">
+                        <span class="font-semibold text-gray-700 dark:text-gray-300">
+                            Total Hasil Produksi (Aktual)
+                        </span>
+                        <span class="text-gray-600 dark:text-gray-400 font-mono font-bold text-base">
+                            {{ number_format($summary['globalActualAchievement']) }} pcs
                         </span>
                     </div>
 
-                    @php
-                        $progress = min(100, max(0, (float) $item['progress']));
-                    @endphp
-
-                    <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:bg-gray-800 dark:border-gray-700 space-y-2">
-                        {{-- Nama & Nilai --}}
-                        <div class="flex justify-between text-sm">
-                            <span class="font-medium text-gray-700 dark:text-gray-300">
-                                Pencapaian Aktual (Platform + Triplek)
-                            </span>
-                            <span class="text-gray-600 dark:text-gray-400 font-mono font-bold">
-                                {{ number_format($item['actual']) }}
-                                / {{ $item['hasTarget'] ? number_format($item['target']) . ' pcs' : '-' }}
-                            </span>
+                    {{-- Progress Bar --}}
+                    <div class="w-full h-4 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden shadow-inner flex">
+                        <div
+                            class="h-full rounded-full transition-all duration-500 ease-out"
+                            style="
+                                width: {{ $globalProgressPercent }}%;
+                                background: linear-gradient(90deg, 
+                                    {{ $globalProgressPercent >= 100
+                                        ? '#16a34a, #22c55e'   /* green gradient */
+                                        : ($globalProgressPercent >= 75
+                                            ? '#2563eb, #3b82f6' /* blue gradient */
+                                            : '#f59e0b, #fbbf24') }} /* amber gradient */
+                                );
+                            ">
                         </div>
+                    </div>
 
-                        {{-- Progress Bar --}}
-                        <div class="w-full h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                            <div
-                                class="h-full rounded-full transition-all duration-500"
-                                style="
-                                    width: {{ $progress }}%;
-                                    background-color:
-                                        {{ $progress >= 100
-                                            ? '#16a34a'   /* green-600 */
-                                            : ($progress >= 75
-                                                ? '#2563eb' /* blue-600 */
-                                                : '#f59e0b' /* amber-500 */) }};
-                                ">
-                            </div>
+                    {{-- Persentase & Info --}}
+                    <div class="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
+                        <div>
+                            @if (!$summary['hasTargetGlobal'])
+                                <span class="text-amber-600 dark:text-amber-400 italic font-medium">
+                                    * Silakan atur target untuk ukuran-ukuran ini di menu target mesin HOTPRESS
+                                </span>
+                            @else
+                                <span class="text-gray-400 dark:text-gray-500">
+                                    Pencapaian keseluruhan shift berdasarkan akumulasi persentase target masing-masing ukuran.
+                                </span>
+                            @endif
                         </div>
-
-                        {{-- Persentase & Info --}}
-                        <div class="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
-                            <div>
-                                @if (!$item['hasTarget'])
-                                    <span class="text-amber-600 dark:text-amber-400 italic font-medium">
-                                        * Silakan atur target untuk ukuran ini di menu target mesin HOTPRESS
-                                    </span>
-                                @else
-                                    <span class="text-gray-400">
-                                        Tenaga: {{ $item['orang'] !== '-' ? $item['orang'] . ' org' : '-' }} | Jam Kerja: {{ $item['jam'] !== '-' ? $item['jam'] . ' jam' : '-' }}
-                                    </span>
-                                @endif
-                            </div>
-                            <div class="font-bold">
-                                {{ number_format($progress, 1) }}%
-                            </div>
+                        <div class="font-extrabold text-sm {{ $globalProgressVal >= 100 ? 'text-green-600 dark:text-green-500' : ($globalProgressVal >= 75 ? 'text-blue-600 dark:text-blue-500' : 'text-amber-500') }}">
+                            @if ($globalProgressVal >= 100)
+                                Target Tercapai
+                            @else
+                                {{ number_format($globalProgressVal, 1) }}%
+                            @endif
                         </div>
                     </div>
                 </div>
-            @endforeach
+            </div>
+
+            {{-- Breakdown per Ukuran Table --}}
+            @if (!empty($summary['targetProgress']))
+            <div class="space-y-3 mt-4">
+                <div class="font-semibold text-sm text-gray-700 dark:text-gray-300">
+                    Breakdown Pencapaian per Ukuran
+                </div>
+                <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+                    <table class="w-full text-left text-xs text-gray-600 dark:text-gray-300">
+                        <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-semibold">
+                            <tr>
+                                <th class="px-4 py-2">Ukuran</th>
+                                <th class="px-3 py-2 text-center">Tebal (mm)</th>
+                                <th class="px-3 py-2 text-right">Hasil (pcs)</th>
+                                <th class="px-3 py-2 text-right">Target (pcs)</th>
+                                <th class="px-3 py-2 text-center">Progress</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            @foreach ($summary['targetProgress'] as $item)
+                                @php
+                                    $sizeProgress = $item['hasTarget'] && $item['target'] > 0 
+                                        ? ($item['actual'] / $item['target']) * 100 
+                                        : 0;
+                                @endphp
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
+                                    <td class="px-4 py-2.5 font-medium text-gray-950 dark:text-gray-200">{{ $item['ukuran'] }}</td>
+                                    <td class="px-3 py-2.5 text-center font-mono font-medium">{{ number_format($item['tebal'], 1) }}</td>
+                                    <td class="px-3 py-2.5 text-right font-mono">{{ number_format($item['actual']) }}</td>
+                                    <td class="px-3 py-2.5 text-right font-mono text-gray-500 dark:text-gray-400">
+                                        {{ $item['hasTarget'] ? number_format($item['target']) : '-' }}
+                                    </td>
+                                    <td class="px-3 py-2.5 text-center font-mono font-bold {{ $sizeProgress >= 100 ? 'text-green-600 dark:text-green-500' : 'text-gray-900 dark:text-gray-100 font-medium' }}">
+                                        @if (!$item['hasTarget'])
+                                            -
+                                        @elseif ($sizeProgress >= 100)
+                                            Target Tercapai
+                                        @else
+                                            {{ number_format($sizeProgress, 1) }}%
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            @endif
         </div>
         @endif
 
