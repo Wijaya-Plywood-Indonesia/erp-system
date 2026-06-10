@@ -21,7 +21,7 @@ class JurnalKediSheet implements FromArray, WithTitle, WithColumnWidths, WithSty
 
     public function title(): string
     {
-        return 'Jurnal Bongkar'; // ✅ REVISI 1: kedi → bongkar
+        return 'jurnal produksi';
     }
 
     public function columnWidths(): array

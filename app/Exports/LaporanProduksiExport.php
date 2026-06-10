@@ -786,7 +786,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
 
     public function title(): string
     {
-        return 'Jurnal Pembantu Produksi';
+        return 'jurnal produksi';
     }
 
     public function styles(Worksheet $sheet)

@@ -770,7 +770,7 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
 
     public function title(): string
     {
-        return 'Jurnal Gabung Permesin';
+        return 'jurnal produksi';
     }
 
     public function styles(Worksheet $sheet)
@@ -1738,7 +1738,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
 
     public function title(): string
     {
-        return 'Kayu Keluar';
+        return 'jurnal produksi';
     }
 
     public function styles(Worksheet $sheet)

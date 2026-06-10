@@ -335,7 +335,7 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
 
     public function title(): string
     {
-        return 'Jurnal';
+        return 'jurnal produksi';
     }
 
     public function columnWidths(): array

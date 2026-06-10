@@ -287,7 +287,7 @@ class LaporanJurnalKayuMasukSheet2 extends DefaultValueBinder implements FromCol
 
     public function title(): string
     {
-        return 'Jurnal Kayu Masuk';
+        return 'jurnal produksi';
     }
 
     public function styles(Worksheet $sheet)
