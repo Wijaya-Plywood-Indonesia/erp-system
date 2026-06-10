@@ -4,12 +4,9 @@ namespace App\Filament\Resources\Absensis\Pages;
 
 use App\Filament\Resources\Absensis\AbsensiResource;
 use App\Models\DetailAbsensi;
-use App\Models\DetailPegawai;
-use App\Models\PegawaiSanding;
-use App\Models\Pegawai;
+use App\Services\AbsensiParsingService;
 use Carbon\Carbon;
 use Filament\Resources\Pages\CreateRecord;
-use Illuminate\Support\Facades\Storage;
 use Filament\Notifications\Notification;
 
 class CreateAbsensi extends CreateRecord
@@ -18,63 +15,22 @@ class CreateAbsensi extends CreateRecord
 
     protected function afterCreate(): void
     {
-        $record     = $this->record;
+        $record = $this->record;
         $targetDate = Carbon::parse($record->tanggal)->format('Y-m-d');
-        $nextDate   = Carbon::parse($record->tanggal)->addDay()->format('Y-m-d');
+        $nextDate = Carbon::parse($record->tanggal)->addDay()->format('Y-m-d');
 
         $files = $record->file_path;
-        if (empty($files) || !is_array($files)) return;
-
-        // Kumpulkan semua tap per pegawai
-        // Struktur: $rawLogs['9199'] = [ ['date'=>..., 'time'=>..., 'full'=>...], ... ]
-        $rawLogs       = [];
-        $totalProcessed = 0;
-
-        // ================================================
-        // STEP 1: PARSING — Kumpulkan semua tap
-        // ================================================
-        foreach ($files as $file) {
-            if (!Storage::disk('public')->exists($file)) continue;
-
-            $fileContent = Storage::disk('public')->get($file);
-            $lines = explode("\n", str_replace(["\r\n", "\r"], "\n", $fileContent));
-
-            foreach ($lines as $line) {
-                $trimmedLine = trim($line);
-                if (empty($trimmedLine)) continue;
-
-                $parts = preg_split('/\s+/', $trimmedLine);
-
-                // Cari posisi kolom tanggal (YYYY/MM/DD atau YYYY-MM-DD)
-                $dateIndex = null;
-                foreach ($parts as $i => $value) {
-                    if (preg_match('/^\d{4}[\/\-]\d{2}[\/\-]\d{2}$/', $value)) {
-                        $dateIndex = $i;
-                        break;
-                    }
-                }
-                if ($dateIndex === null) continue;
-
-                try {
-                    $dateStr   = Carbon::parse(str_replace('/', '-', $parts[$dateIndex]))->format('Y-m-d');
-                    $timeStr   = $parts[$dateIndex + 1] ?? null;
-                    $empCode   = ltrim($parts[2] ?? '', '0'); // EnNo selalu di index 2
-
-                    if (!$empCode || !$timeStr) continue;
-
-                    // Hanya ambil data tanggal target dan nextDate saja
-                    if (!in_array($dateStr, [$targetDate, $nextDate])) continue;
-
-                    $rawLogs[$empCode][] = [
-                        'date' => $dateStr,
-                        'time' => $timeStr,
-                        'full' => Carbon::parse("$dateStr $timeStr"),
-                    ];
-                } catch (\Exception $e) {
-                    continue;
-                }
-            }
+        if (empty($files) || !is_array($files)) {
+            return;
         }
+
+        /** @var AbsensiParsingService $parsingService */
+        $parsingService = app(AbsensiParsingService::class);
+        $parseResult = $parsingService->collectLogs($files, $targetDate, $nextDate);
+
+        $rawLogs = $parseResult['raw_logs'];
+        $skippedLines = $parseResult['skipped_lines'];
+        $totalProcessed = 0;
 
         // ================================================
         // STEP 2: PROSES — Tentukan masuk & pulang per orang
@@ -128,7 +84,7 @@ class CreateAbsensi extends CreateRecord
         Notification::make()
             ->success()
             ->title('Import Berhasil')
-            ->body("Berhasil memproses $totalProcessed data pegawai.")
+            ->body("Berhasil memproses $totalProcessed data pegawai, {$skippedLines} baris dilewati karena format tidak valid.")
             ->send();
     }
 
