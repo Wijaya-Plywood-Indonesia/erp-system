@@ -4,10 +4,13 @@ namespace App\Filament\Resources\Absensis\Pages;
 
 use App\Filament\Resources\Absensis\AbsensiResource;
 use App\Models\DetailAbsensi;
+<<<<<<< HEAD
 use App\Models\Pegawai;
+=======
+use App\Services\AbsensiParsingService;
+>>>>>>> 829a8f5264abddd12f4c71777bd5cb353244f002
 use Carbon\Carbon;
 use Filament\Resources\Pages\CreateRecord;
-use Illuminate\Support\Facades\Storage;
 use Filament\Notifications\Notification;
 
 class CreateAbsensi extends CreateRecord
@@ -16,8 +19,9 @@ class CreateAbsensi extends CreateRecord
 
     protected function afterCreate(): void
     {
-        $record     = $this->record;
+        $record = $this->record;
         $targetDate = Carbon::parse($record->tanggal)->format('Y-m-d');
+<<<<<<< HEAD
 
         // Batas toleransi pengambilan data log esok hari untuk cover pulang Shift Malam
         $nextDate   = Carbon::parse($record->tanggal)->addDay()->format('Y-m-d');
@@ -116,7 +120,22 @@ class CreateAbsensi extends CreateRecord
                     continue;
                 }
             }
+=======
+        $nextDate = Carbon::parse($record->tanggal)->addDay()->format('Y-m-d');
+
+        $files = $record->file_path;
+        if (empty($files) || !is_array($files)) {
+            return;
+>>>>>>> 829a8f5264abddd12f4c71777bd5cb353244f002
         }
+
+        /** @var AbsensiParsingService $parsingService */
+        $parsingService = app(AbsensiParsingService::class);
+        $parseResult = $parsingService->collectLogs($files, $targetDate, $nextDate);
+
+        $rawLogs = $parseResult['raw_logs'];
+        $skippedLines = $parseResult['skipped_lines'];
+        $totalProcessed = 0;
 
         // ================================================
         // STEP 2: PROSES MERGE — Kelompokkan Berdasarkan Kedekatan Shift Master
@@ -192,7 +211,11 @@ class CreateAbsensi extends CreateRecord
         Notification::make()
             ->success()
             ->title('Import Berhasil')
+<<<<<<< HEAD
             ->body("Berhasil memproses & menyatukan $totalProcessed data absensi pegawai.")
+=======
+            ->body("Berhasil memproses $totalProcessed data pegawai, {$skippedLines} baris dilewati karena format tidak valid.")
+>>>>>>> 829a8f5264abddd12f4c71777bd5cb353244f002
             ->send();
     }
 
