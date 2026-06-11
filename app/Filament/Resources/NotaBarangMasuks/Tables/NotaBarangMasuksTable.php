@@ -64,15 +64,14 @@ class NotaBarangMasuksTable
                 DeleteAction::make()
                     ->visible(fn($record) => $record->divalidasi_oleh === null)
                     ->before(function ($record) {
-                        if ($record->detail()->exists()) {
+                        if ($record->mutasi) {
+                            $record->mutasi->details()->delete();
+                            $record->mutasi->delete();
+                            $record->detail()->delete();
+                        } elseif ($record->detail()->exists()) {
                             abort(403, 'Tidak bisa menghapus nota karena masih ada detail yang terkait.');
                         }
-                    })
-                    ->failureNotificationTitle('Penghapusan gagal')
-                    ->failureNotification(
-                        fn() =>
-                        'Nota masih memiliki detail. Hapus detailnya dulu.'
-                    ),
+                    }),
             ])
             ->defaultSort('created_at', 'desc')
             ->toolbarActions([

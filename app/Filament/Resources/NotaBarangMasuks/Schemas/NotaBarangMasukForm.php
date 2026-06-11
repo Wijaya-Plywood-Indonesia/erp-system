@@ -2,10 +2,16 @@
 
 namespace App\Filament\Resources\NotaBarangMasuks\Schemas;
 
+use App\Services\NomorNotaService;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 class NotaBarangMasukForm
 {
@@ -15,10 +21,43 @@ class NotaBarangMasukForm
             ->components([
                 DatePicker::make('tanggal')
                     ->default(today())
-                    ->required(),
-                TextInput::make('no_nota')
-                    ->unique()
-                    ->required(),
+                    ->required()
+                    ->live()
+                    ->afterStateUpdated(function (Get $get, Set $set) {
+                        self::refreshNomorNota($get, $set);
+                    }),
+
+                Select::make('tipe_nota')
+                    ->label('Tipe Nota')
+                    ->options([
+                        'BM'  => 'BM – Barang Masuk (Pabrik)',
+                        'BML' => 'BML – Barang Masuk (Lain-lain)',
+                    ])
+                    ->required()
+                    ->native(false)
+                    ->live()
+                    ->afterStateUpdated(function (Get $get, Set $set) {
+                        self::refreshNomorNota($get, $set);
+                    }),
+
+                // Bisa diedit manual, sync ke no_nota hidden
+                TextInput::make('no_nota_display')
+                    ->label('No. Nota')
+                    ->placeholder('(pilih tipe nota dulu)')
+                    ->dehydrated(false)
+                    ->live()
+                    ->afterStateHydrated(function ($component, $record) {
+                        if ($record) {
+                            $component->state($record->no_nota);
+                        }
+                    })
+                    ->afterStateUpdated(function (Get $get, Set $set, $state) {
+                        $set('no_nota', $state);
+                    }),
+
+                // Yang dikirim ke DB
+                Hidden::make('no_nota'),
+
                 TextInput::make('tujuan_nota')
                     ->label('Kepada')
                     ->required(),
@@ -34,5 +73,29 @@ class NotaBarangMasukForm
                     ->disabled()
                     ->dehydrated(false),
             ]);
+    }
+
+    private static function refreshNomorNota(Get $get, Set $set): void
+    {
+        $tipe    = $get('tipe_nota');
+        $tanggal = $get('tanggal');
+
+        if (! $tipe || ! $tanggal) {
+            $set('no_nota_display', null);
+            $set('no_nota', null);
+            return;
+        }
+
+        // 1. Ambil format asli dari service (Misal: BML-1231-0608)
+        $nomorOriginal = NomorNotaService::generateBarangMasuk($tipe, Carbon::parse($tanggal));
+
+        // 2. Ganti tanda hubung pertama setelah kode tipe dengan spasi
+        $nomorCustom = Str::replaceFirst('-', ' ', $nomorOriginal);
+
+        // 3. Ubah menjadi huruf kecil semua (bml 1231-0608)
+        $nomorFinal = Str::lower($nomorCustom);
+
+        $set('no_nota_display', $nomorFinal);
+        $set('no_nota', $nomorFinal);
     }
 }

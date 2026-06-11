@@ -65,9 +65,13 @@ class LaporanProduksiHotPress extends Page implements HasForms
             }
 
             $tglFile = Carbon::parse($this->tanggal)->format('d-m-Y');
+            
+            // DETEKSI DOMAIN SAAT INI
+            $domain = request()->getHost(); 
 
             return Excel::download(
-                new LaporanProduksiHotPressExport($this->dataHp, $this->tanggal),
+                // Tambahkan parameter $domain ke dalam Export Class
+                new LaporanProduksiHotPressExport($this->dataHp, $this->tanggal, $domain),
                 "laporan-hot-press-{$tglFile}.xlsx"
             );
         } catch (\Exception $e) {

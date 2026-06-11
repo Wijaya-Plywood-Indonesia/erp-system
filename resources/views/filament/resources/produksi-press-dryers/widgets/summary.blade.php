@@ -4,37 +4,121 @@
         {{-- ================= STAT UTAMA ================= --}}
         <div class="space-y-3 text-center py-4">
 
-            {{-- TOTAL PRODUKSI --}}
-            <div>
-                <div class="text-4xl font-extrabold text-primary-600 dark:text-primary-500">
-                    {{ number_format($summary['totalAll'] ?? 0) }}
-                </div>
-                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Total Produksi (Lembar)
-                </div>
-            </div>
+            @php
+                $isDryer = false;
+                $firstMesin = $record->detailMesins->first();
+                if ($firstMesin) {
+                    $namaMesin = $firstMesin->mesin->nama_mesin
+                        ?? $firstMesin->kategoriMesin->nama_kategori_mesin
+                        ?? '';
+                    $isDryer = stripos($namaMesin, 'DRYER') !== false;
+                }
+            @endphp
 
-            {{-- TOTAL KUBIKASI (TAMBAHAN BARU) --}}
-            <div style="margin-top: 1.5rem;">
-                <div class="text-3xl font-extrabold text-amber-600 dark:text-amber-500">
-                    {{ number_format($summary['totalKubikasi'] ?? 0, 4) }} m³
+            @if ($isDryer)
+                {{-- TOTAL PRODUKSI (KUBIKASI) --}}
+                <div>
+                    <div class="text-4xl font-extrabold text-primary-600 dark:text-primary-500">
+                        {{ number_format($summary['totalKubikasi'] ?? 0, 4, ',', '.') }} m³
+                    </div>
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Total Produksi (Kubikasi)
+                    </div>
                 </div>
-                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Total Kubikasi (m³)
+
+                {{-- TOTAL LEMBAR --}}
+                <div style="margin-top: 1.5rem;">
+                    <div class="text-3xl font-extrabold text-amber-600 dark:text-amber-500">
+                        {{ number_format($summary['totalAll'] ?? 0) }} Lembar
+                    </div>
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Total Lembar Produksi
+                    </div>
                 </div>
-            </div>
+            @else
+                {{-- TOTAL PRODUKSI (LEMBAR) --}}
+                <div>
+                    <div class="text-4xl font-extrabold text-primary-600 dark:text-primary-500">
+                        {{ number_format($summary['totalAll'] ?? 0) }} Lembar
+                    </div>
+                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Total Produksi (Lembar)
+                    </div>
+                </div>
+            @endif
 
             {{-- TOTAL PEGAWAI --}}
             <div style="margin-top: 1.5rem;">
                 <div class="text-2xl font-bold text-success-600 dark:text-success-500">
-                    {{ number_format($summary['totalPegawai'] ?? 0) }}
+                    {{ number_format($summary['totalPegawai'] ?? 0) }} Orang
                 </div>
                 <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                    Total Pegawai pada Produksi Ini (Orang)
+                    Total Pegawai pada Produksi Ini
                 </div>
             </div>
 
         </div>
+
+        {{-- ================= TARGET PROGRESS ================= --}}
+        @if ($summary['targetSummary']['hasTarget'])
+        @php
+            $target = $summary['targetSummary'];
+            $progress = $target['progress'];
+            $isDryerUnit = $target['unit'] === 'm³';
+        @endphp
+        <div class="space-y-4 py-4 border-t dark:border-gray-700">
+            <div class="font-semibold text-lg text-gray-900 dark:text-gray-100 flex items-center justify-between">
+                <span>Progress Target ({{ $target['targetName'] }})</span>
+                <span class="text-xs font-normal text-gray-500 dark:text-gray-400">
+                    Target: {{ $isDryerUnit ? number_format($target['targetValue'], 4, ',', '.') : number_format($target['targetValue'], 0, ',', '.') }} {{ $target['unit'] }}
+                </span>
+            </div>
+
+            <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:bg-gray-800 dark:border-gray-700 space-y-2">
+                <div class="flex justify-between text-sm">
+                    <span class="font-medium text-gray-700 dark:text-gray-300">
+                        Pencapaian Aktual
+                    </span>
+                    <span class="font-mono text-gray-600 dark:text-gray-400 font-bold">
+                        {{ $isDryerUnit ? number_format($target['actualValue'], 4, ',', '.') : number_format($target['actualValue'], 0, ',', '.') }} 
+                        / 
+                        {{ $isDryerUnit ? number_format($target['targetValue'], 4, ',', '.') : number_format($target['targetValue'], 0, ',', '.') }} 
+                        {{ $target['unit'] }}
+                    </span>
+                </div>
+
+                {{-- Progress Bar --}}
+                <div class="w-full h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                    <div
+                        class="h-full rounded-full transition-all duration-500"
+                        style="
+                            width: {{ $progress }}%;
+                            background-color:
+                                {{ $progress >= 100
+                                    ? '#16a34a'   /* green-600 */
+                                    : ($progress >= 75
+                                        ? '#2563eb' /* blue-600 */
+                                        : '#f59e0b' /* amber-500 */) }};
+                        ">
+                    </div>
+                </div>
+
+                {{-- Persentase --}}
+                <div class="text-xs text-right text-gray-500 dark:text-gray-400 font-bold">
+                    {{ number_format($progress, 1) }}%
+                </div>
+            </div>
+        </div>
+        @else
+        <div class="space-y-4 py-4 border-t dark:border-gray-700">
+            <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                Progress Target
+            </div>
+            <div class="text-sm text-center text-gray-500 dark:text-gray-400 italic py-2">
+                Target tidak terdaftar untuk mesin / shift ini.
+            </div>
+        </div>
+        @endif
 
         {{-- ================= GLOBAL UKURAN + KW ================= --}}
         <div class="space-y-4">

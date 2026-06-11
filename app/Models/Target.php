@@ -25,13 +25,13 @@ class Target extends Model
     ];
 
     protected $casts = [
-        'target' => 'integer',
+        'target' => 'decimal:4',
         'orang' => 'integer',
         'jam' => 'integer',
-        'targetperjam' => 'decimal:2',
-        'targetperorang' => 'decimal:2',
+        'targetperjam' => 'decimal:4',
+        'targetperorang' => 'decimal:4',
         'gaji' => 'decimal:2',
-        'potongan' => 'decimal:2',
+        'potongan' => 'decimal:4',
     ];
     public function mesin()
     {

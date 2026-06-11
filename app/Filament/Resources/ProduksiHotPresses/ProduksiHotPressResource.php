@@ -56,6 +56,7 @@ class ProduksiHotPressResource extends Resource
             RelationManagers\TriplekHasilHpRelationManager::class,
             RelationManagers\BahanPenolongHpRelationManager::class,
             RelationManagers\ValidasiHpRelationManager::class,
+            RelationManagers\KendalaHpRelationManager::class,
         ];
     }
 

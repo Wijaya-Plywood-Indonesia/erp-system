@@ -31,6 +31,16 @@ class PressDryerWorkerMap
 
             $shift = strtoupper($item->shift ?? 'PAGI');
 
+            // --- HITUNG KENDALA DOWNTIME ---
+            $totalKendalaMenit = 0;
+            if (!empty($item->kendalaPressDryers) && $item->kendalaPressDryers->count() > 0) {
+                foreach ($item->kendalaPressDryers as $knd) {
+                    if ($knd->status === 'selesai' && !is_null($knd->durasi_menit)) {
+                        $totalKendalaMenit += (int)$knd->durasi_menit;
+                    }
+                }
+            }
+
             // --- PERBAIKAN LABEL: HANYA DRYER - SHIFT ---
             if (stripos($namaMesin, 'DRYER') !== false) {
                 $labelDivisi = "DRYER - " . $shift;
@@ -46,8 +56,26 @@ class PressDryerWorkerMap
             $ukuranId = null;
 
             if ($item->detailHasils->isNotEmpty()) {
-                $totalHasil = $item->detailHasils->sum('isi');
                 $ukuranId = $item->detailHasils->first()->id_ukuran ?? null;
+
+                if (stripos($namaMesin, 'DRYER') !== false) {
+                    // Dryer uses kubikasi (m3)
+                    $totalHasil = $item->detailHasils->sum(function ($dh) {
+                        $ukuran = $dh->ukuran ?? null;
+                        $panjang = $ukuran?->panjang ?? null;
+                        $lebar = $ukuran?->lebar ?? null;
+                        $tebal = $ukuran?->tebal ?? null;
+                        $isi = $dh->isi ?? 0;
+
+                        if ($panjang && $lebar && $tebal && $isi) {
+                            return ($panjang * $lebar * $tebal * $isi) / 10000000;
+                        }
+                        return 0;
+                    });
+                    $totalHasil = round($totalHasil, 4);
+                } else {
+                    $totalHasil = $item->detailHasils->sum('isi');
+                }
             }
 
             /* ============================================================
@@ -57,13 +85,17 @@ class PressDryerWorkerMap
             $targetModel = null;
 
             if ($mesinUtamaId) {
-                // A. LOGIKA KHUSUS DRYER (TARGET BERDASARKAN SHIFT)
+                // A. LOGIKA KHUSUS DRYER (TARGET BERDASARKAN MESIN / ACUAN SHIFT)
                 if (stripos($namaMesin, 'DRYER') !== false) {
                     if ($shift === 'PAGI') {
                         $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
                     } elseif ($shift === 'MALAM') {
                         $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
                     }
+                } elseif (stripos($namaMesin, 'DRYER 1') !== false || $mesinUtamaId == 17) {
+                    $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
+                } elseif (stripos($namaMesin, 'DRYER 2') !== false || $mesinUtamaId == 18) {
+                    $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
                 }
                 // B. LOGIKA MESIN LAIN (BERDASARKAN UKURAN / DEFAULT MESIN)
                 else {
@@ -85,6 +117,10 @@ class PressDryerWorkerMap
             if ($targetModel === null && $mesinUtamaId) {
                 if (stripos($namaMesin, 'DRYER') !== false) {
                     $targetModel = Target::where('kode_ukuran', 'DRYER ' . $shift)->first();
+                } elseif (stripos($namaMesin, 'DRYER 1') !== false || $mesinUtamaId == 17) {
+                    $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
+                } elseif (stripos($namaMesin, 'DRYER 2') !== false || $mesinUtamaId == 18) {
+                    $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
                 } else {
                     $targetModel = Target::where('id_mesin', $mesinUtamaId)
                         ->whereNull('id_ukuran')
@@ -93,7 +129,7 @@ class PressDryerWorkerMap
             }
 
             // Ambil Data Target
-            $targetHarian = (int) ($targetModel->target ?? 0);
+            $targetHarian = (float) ($targetModel->target ?? 0);
             $potonganPerLembar = (int) ($targetModel->potongan ?? 0);
 
             // Debugging
@@ -112,7 +148,6 @@ class PressDryerWorkerMap
 
             if ($targetHarian > 0 && $selisihProduksi < 0 && $potonganPerLembar > 0) {
 
-                $totalKendalaMenit = 0; // Bisa dihubungkan ke relasi kendala jika ada
                 $jamKerja = (float) ($targetModel->jam ?? 0);
                 $jamKerjaMenit = $jamKerja * 60;
 

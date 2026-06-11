@@ -26,6 +26,69 @@
 
         </div>
 
+        {{-- ================= TARGET PROGRESS ================= --}}
+        @if (!empty($summary['targetProgress']))
+        @php
+            $item = $summary['targetProgress'];
+            $progress = min(100, max(0, (float) $item['progress']));
+        @endphp
+        <div class="space-y-3 py-6 border-t dark:border-gray-700">
+            <div class="font-semibold text-lg text-gray-900 dark:text-gray-100 flex justify-between items-center">
+                <span>Progress Target Produksi Stik</span>
+                <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
+                    ( Target {{ $item['hasTarget'] ? number_format($item['target']) . ' lbr' : 'Belum di Set (Ukuran 0x0x0)' }} )
+                </span>
+            </div>
+
+            <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:bg-gray-800 dark:border-gray-700 space-y-2">
+                {{-- Nama & Nilai --}}
+                <div class="flex justify-between text-sm">
+                    <span class="font-medium text-gray-700 dark:text-gray-300">
+                        Total Pencapaian Aktual (Semua Ukuran)
+                    </span>
+                    <span class="text-gray-600 dark:text-gray-400 font-mono font-bold">
+                        {{ number_format($item['actual']) }}
+                        / {{ $item['hasTarget'] ? number_format($item['target']) . ' lbr' : '-' }}
+                    </span>
+                </div>
+
+                {{-- Progress Bar --}}
+                <div class="w-full h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                    <div
+                        class="h-full rounded-full transition-all duration-500"
+                        style="
+                            width: {{ $progress }}%;
+                            background-color:
+                                {{ $progress >= 100
+                                    ? '#16a34a'   /* green-600 */
+                                    : ($progress >= 75
+                                        ? '#2563eb' /* blue-600 */
+                                        : '#f59e0b' /* amber-500 */) }};
+                        ">
+                    </div>
+                </div>
+
+                {{-- Persentase & Info --}}
+                <div class="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
+                    <div>
+                        @if (!$item['hasTarget'])
+                            <span class="text-amber-600 dark:text-amber-400 italic font-medium">
+                                * Silakan atur target untuk ukuran 0x0x0 di menu target mesin STIK
+                            </span>
+                        @else
+                            <span class="text-gray-400">
+                                Tenaga: {{ $item['orang'] !== '-' ? $item['orang'] . ' org' : '-' }} | Jam Kerja: {{ $item['jam'] !== '-' ? $item['jam'] . ' jam' : '-' }}
+                            </span>
+                        @endif
+                    </div>
+                    <div class="font-bold">
+                        {{ number_format($progress, 1) }}%
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
+
         {{-- ================= GLOBAL UKURAN + KW ================= --}}
         <div class="space-y-4">
             <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">

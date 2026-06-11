@@ -75,14 +75,13 @@ class VeneerKeluarForm
                                     // Only jenis_kayu that have stock > 0
                                     $ids = HppVeneerBasahSummary::where('stok_lembar', '>', 0)
                                         ->distinct()->pluck('id_jenis_kayu');
+                                    return JenisKayu::whereIn('id', $ids)
+                                        ->orderBy('nama_kayu')
+                                        ->pluck('nama_kayu', 'id');
                                 } else {
-                                    // Jenis kayu that exist in kering ledger
-                                    $ids = StokVeneerKering::distinct()->pluck('id_jenis_kayu');
+                                    // TEMPORARY: show all jenis kayu for dry veneer
+                                    return JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id');
                                 }
-
-                                return JenisKayu::whereIn('id', $ids)
-                                    ->orderBy('nama_kayu')
-                                    ->pluck('nama_kayu', 'id');
                             })
                             ->required()
                             ->searchable()
@@ -108,15 +107,16 @@ class VeneerKeluarForm
                                         ->distinct()
                                         ->orderBy('kw')
                                         ->pluck('kw');
+                                    return $kws->mapWithKeys(fn ($kw) => [$kw => "KW {$kw}"])->toArray();
                                 } else {
-                                    // For kering, get distinct kw values with any transactions
-                                    $kws = StokVeneerKering::where('id_jenis_kayu', $idJenisKayu)
-                                        ->distinct()
-                                        ->orderBy('kw')
-                                        ->pluck('kw');
+                                    // TEMPORARY: show all kw for dry veneer
+                                    return [
+                                        '1' => 'KW 1',
+                                        '2' => 'KW 2',
+                                        '3' => 'KW 3',
+                                        '4' => 'KW 4',
+                                    ];
                                 }
-
-                                return $kws->mapWithKeys(fn ($kw) => [$kw => "KW {$kw}"])->toArray();
                             })
                             ->required()
                             ->live()
@@ -154,13 +154,8 @@ class VeneerKeluarForm
                                     }
                                     return $options;
                                 } else {
-                                    // Get ukuran IDs from kering ledger
-                                    $ukuranIds = StokVeneerKering::where('id_jenis_kayu', $idJenisKayu)
-                                        ->where('kw', $kw)
-                                        ->distinct()
-                                        ->pluck('id_ukuran');
-                                    return Ukuran::whereIn('id', $ukuranIds)
-                                        ->orderBy('panjang')->orderBy('lebar')->orderBy('tebal')
+                                    // TEMPORARY: show all sizes for dry veneer
+                                    return Ukuran::orderBy('panjang')->orderBy('lebar')->orderBy('tebal')
                                         ->get()
                                         ->pluck('dimensi', 'id')
                                         ->toArray();

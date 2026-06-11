@@ -41,10 +41,26 @@ class ProduksiPressDryersTable
                     ->searchable(),
 
                 TextColumn::make('kendala')
-                    ->label('Kendala')
+                    ->label('Keterangan')
+                    ->placeholder('-')
                     ->limit(50)
-                    ->tooltip(fn(string $state): string => $state)
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->tooltip(fn(string $state): string => $state),
+
+                TextColumn::make('kendala_mesin')
+                    ->label('Kendala')
+                    ->getStateUsing(function ($record) {
+                        $texts = [];
+                        $kendalas = $record->kendalaPressDryers;
+                        if ($kendalas && $kendalas->isNotEmpty()) {
+                            foreach ($kendalas as $knd) {
+                                $durStr = $knd->durasi_menit ? "{$knd->durasi_menit} m" : 'Pending';
+                                $texts[] = "{$knd->kendala} ({$durStr})";
+                            }
+                        }
+                        return count($texts) > 0 ? implode(', ', $texts) : '-';
+                    })
+                    ->limit(50)
+                    ->tooltip(fn(string $state): string => $state),
 
                 Tables\Columns\BadgeColumn::make('validasiTerakhir.status')
                     ->label('Validasi')
@@ -100,13 +116,13 @@ class ProduksiPressDryersTable
             ])
             ->recordActions([
                 // ⭐ INI TOMBOL KIRIM DATA KE API
-                Action::make('kelola_kendala')
-                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                Action::make('kelola_keterangan')
+                    ->label(fn($record) => $record->kendala ? 'Perbarui Keterangan' : 'Tambah Keterangan')
                     ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
                     ->color(fn($record) => $record->kendala ? 'info' : 'warning')
                     ->schema([
                         Textarea::make('kendala')
-                            ->label('Kendala')
+                            ->label('Keterangan')
                             ->required()
                             ->rows(4),
                     ])
@@ -121,11 +137,11 @@ class ProduksiPressDryersTable
                         ]);
 
                         Notification::make()
-                            ->title('Kendala disimpan')
+                            ->title('Keterangan disimpan')
                             ->success()
                             ->send();
                     })
-                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Keterangan' : 'Tambah Keterangan')
                     ->modalSubmitActionLabel('Simpan'),
 
                 EditAction::make()

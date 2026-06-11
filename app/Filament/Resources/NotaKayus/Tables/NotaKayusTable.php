@@ -213,6 +213,15 @@ class NotaKayusTable
                     ->openUrlInNewTab()
                     ->visible(fn($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
 
+                // --- ACTION: CETAK TURUS 2 ---
+                Action::make('print_turus_2')
+                    ->label('Cetak Turus 2')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->color('warning')
+                    ->url(fn($record) => route('nota-kayu.turus2', $record))
+                    ->openUrlInNewTab()
+                    ->visible(fn($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
+
                 // --- ACTION: TANDAI SUDAH DIPERIKSA ---
                 Action::make('cek')
                     ->label('Tandai Sudah Diperiksa')

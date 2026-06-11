@@ -335,7 +335,7 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
 
     public function title(): string
     {
-        return 'Jurnal';
+        return 'jurnal produksi';
     }
 
     public function columnWidths(): array
@@ -362,10 +362,10 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
     {
         return [
             'D' => '0.00',           // No Akun sebagai Teks agar .00 tidak hilang
-            'K' => '#,##0',       // Banyak
-            'L' => '#,##0.0000',  // M3: 4 desimal
-            'M' => '#,##0.00',    // Harga
-            'N' => '#,##0',       // Total
+            'K' => '#,##0',          // Banyak
+            'L' => '#,##0.0000',     // M3: 4 desimal
+            'M' => '#,##0.00',       // Harga
+            'N' => '#,##0',          // Total
         ];
     }
 
@@ -383,6 +383,23 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             $sheet->getStyle("A2:N{$lastRow}")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]]);
             $sheet->getStyle("D2:D{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle("K2:N{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+            // =========================================================================
+            // PENYESUAIAN RUMUS TOTAL (KOLOM N) SECARA DINAMIS
+            // =========================================================================
+            // Jika J="m", maka Total = Harga * M3 (M*L)
+            // Jika J="b", maka Total = Harga * Banyak (M*K)
+            // Jika tidak keduanya, maka langsung mengambil Harga (M)
+            // =========================================================================
+            for ($row = 2; $row <= $lastRow; $row++) {
+                $namaAkunVal = $sheet->getCell("A{$row}")->getValue();
+                // Formula hanya diisi pada baris yang memiliki data Akun (bukan baris kosong)
+                if ($namaAkunVal !== '' && $namaAkunVal !== null) {
+                    $sheet->getCell("N{$row}")->setValue(
+                        "=IF(J{$row}=\"m\",M{$row}*L{$row},IF(J{$row}=\"b\",M{$row}*K{$row},M{$row}))"
+                    );
+                }
+            }
         }
     }
 
@@ -394,16 +411,58 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
     private function getHargaPatok(string $jenis, float $tebal, bool $isAf = false): int
     {
         $jns = $this->normalizeJenis($jenis);
+
+        $dbHarga = $this->getHargaVeneerDb($jenis, $tebal, 'jadi', $isAf);
+        if ($dbHarga > 0) {
+            return $dbHarga;
+        }
+
         // Jika PCC (AF), gunakan harga khusus
         if ($isAf) {
             return ($jns === 'sengon') ? 1500000 : 1800000;
         }
+
         $kelompok = ($tebal < 1) ? 'faceback' : 'core';
         $harga = [
             'sengon' => ['faceback' => 4000000, 'core' => 2250000],
             'meranti' => ['faceback' => 12500000, 'core' => 2800000],
         ];
         return $harga[$jns][$kelompok] ?? 0;
+    }
+
+    private function getHargaVeneerDb(string $jenis, float $tebal, string $tipeKualitas, bool $isAf = false): int
+    {
+        $jns = str_contains(strtolower(trim($jenis)), 'sengon') ? 'Sengon' : 'Meranti';
+        $jenisKayu = \App\Models\JenisKayu::where('nama_kayu', $jns)->first();
+        if (!$jenisKayu) {
+            return 0;
+        }
+
+        if ($isAf) {
+            $kelompok = ($tebal < 1) ? 'ppc_faceback' : 'ppc_core';
+        } else {
+            $kelompok = ($tebal < 1) ? 'faceback' : 'core';
+        }
+
+        $ukuranOptions = $kelompok === 'faceback'
+            ? ($jns === 'Sengon' ? ['faceback'] : ['face', 'back'])
+            : ($kelompok === 'ppc_faceback' ? ['ppc_faceback'] : [$kelompok]);
+
+        $hargaVeneer = \App\Models\HargaVeneer::where('id_jenis_kayu', $jenisKayu->id)
+            ->whereIn('ukuran', $ukuranOptions)
+            ->first();
+
+        if (!$hargaVeneer) {
+            return 0;
+        }
+
+        if ($tipeKualitas === 'basah') {
+            return (int) $hargaVeneer->harga_basah;
+        } elseif ($tipeKualitas === 'kering') {
+            return (int) $hargaVeneer->harga_kering;
+        } else {
+            return (int) $hargaVeneer->harga_jadi;
+        }
     }
 
     private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $total, $hitKbk = 'm'): array
@@ -486,15 +545,15 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
 
                     // 2. Logika Penentuan Prefix dan Harga
                     if (str_contains($nama, 'aruki')) {
-                        $hargaH = 152900;
+                        $hargaH = 6900;
                         $akun = '1507.63';
                         $prefix = 'Lem '; // Diberi prefix
                     } elseif (str_contains($nama, 'dover')) {
-                        $hargaH = 152900;
+                        $hargaH = 6950;
                         $akun = '1507.64';
                         $prefix = 'Lem '; // Diberi prefix
                     } elseif (str_contains($nama, 'tepung')) {
-                        $hargaH = 18000;
+                        $hargaH = 4500;
                         $akun = '1507.62';
                         $prefix = ''; // Tetap tanpa prefix
                     }
@@ -530,7 +589,8 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             // 5. HPP
             $selisih = $totalDebit - $totalKredit;
             if (round($selisih, 2) != 0) {
-                $jurnalBlock[] = $this->makeRow('hpp triplek', $tglFormat, '6111.00', '', 'd', 0, 0, abs($selisih), abs($selisih), 'm');
+                // PENYESUAIAN: hitKbk diubah dari 'm' menjadi '' agar rumus excel membaca harga di Kolom M secara utuh tanpa dikalikan 0
+                $jurnalBlock[] = $this->makeRow('hpp triplek', $tglFormat, '6111.00', '', 'd', 0, 0, abs($selisih), abs($selisih), '');
             }
 
             foreach ($jurnalBlock as $row) $rows[] = $row;

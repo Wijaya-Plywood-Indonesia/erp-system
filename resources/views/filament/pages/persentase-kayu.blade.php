@@ -72,32 +72,35 @@
             </div>
         </div>
     </div>
-    <div class="flex sm:flex-row flex-col justify-between gap-2 mb-4">
+    <div class="flex sm:flex-row flex-col justify-between gap-2 mb-4 font-sans">
         <div class="flex gap-2">
             <button @click="openAll({{ count($laporan->items()) }})" 
                     type="button"
-                    class="px-3 py-2 text-xs font-bold rounded-lg shadow-sm transition
+                    class="px-3 py-2 text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-1.5
                         bg-primary-500 text-white hover:bg-primary-600 
                         dark:text-black
                         dark:bg-primary-500 dark:hover:bg-primary-400
                         ring-1 ring-primary-400 dark:ring-0">
-                🔓 Buka Semua Baris
+                <x-heroicon-m-lock-open class="w-4 h-4 shrink-0" />
+                Buka Semua Baris
             </button>
             <button @click="closeAll()" 
                     type="button"
-                    class="px-3 py-2 text-xs font-bold rounded-lg shadow-sm transition
+                    class="px-3 py-2 text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-1.5
                         bg-white text-gray-950 dark:hover:bg-gray-900 ring-1 ring-gray-950/10
                         dark:bg-white/10 dark:text-white dark:ring-0">
-                🔒 Tutup Semua Baris
+                <x-heroicon-m-lock-closed class="w-4 h-4 shrink-0" />
+                Tutup Semua Baris
             </button>
         </div>
         <a 
             href="{{ route('filament.admin.pages.persentase-kayu.preview', request()->query()) }}" 
             target="_blank"
-            class="px-4 py-2 text-xs font-bold rounded-lg shadow-sm transition
+            class="px-4 py-2 text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-1.5
                 bg-green-600 text-slate-100 ring-1 ring-green-950/10
                 dark:ring-0">
-        📑Preview Export Excel
+            <x-heroicon-m-document-text class="w-4 h-4 shrink-0" />
+            Preview Export Excel
         </a>
     </div>
     {{-- SECTION SUMMARY STATS --}}
@@ -110,13 +113,20 @@
                 </div>
                 <span class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Input Kayu</span>
             </div>
-            <div class="mt-3 flex flex-col">
-                <span class="text-2xl font-black text-gray-900 dark:text-white">
-                    {{ number_format($rekap['total_kayu_masuk'], 0, ',', '.') }} <span class="text-xs font-medium text-gray-400">Btg</span>
-                </span>
-                <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-1">
-                    {{ number_format($rekap['total_kubikasi_kayu_masuk'], 4, ',', '.') }} m³
-                </span>
+            <div class="mt-3">
+                <div class="flex items-baseline gap-2 flex-wrap">
+                    <span class="text-2xl font-black text-gray-900 dark:text-white">
+                        {{ number_format($rekap['total_kayu_masuk'], 0, ',', '.') }} <span class="text-xs font-medium text-gray-400">Btg</span>
+                    </span>
+                    <span class="text-lg font-bold text-gray-400">/</span>
+                    <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                        {{ number_format($rekap['total_kubikasi_kayu_masuk'], 4, ',', '.') }} <span class="text-xs font-medium text-emerald-500/70">m³</span>
+                    </span>
+                </div>
+                <div class="flex items-center gap-1.5 mt-2">
+                    <div class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <span class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase italic">Jumlah Batang / Kubikasi Kayu Masuk</span>
+                </div>
             </div>
         </div>
 
@@ -127,13 +137,20 @@
                 </div>
                 <span class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Output Veneer</span>
             </div>
-            <div class="mt-3 flex flex-col">
-                <span class="text-2xl font-black text-gray-900 dark:text-white">
-                    {{ number_format($rekap['total_kubikasi_veneer'], 4, ',', '.') }} <span class="text-xs font-medium text-gray-400">m³</span>
-                </span>
-                <span class="text-xs font-bold px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full w-fit mt-1">
-                    Rendemen: {{ $rekap['rata_rata_rendemen'] }}
-                </span>
+            <div class="mt-3">
+                <div class="flex items-baseline gap-2 flex-wrap">
+                    <span class="text-2xl font-black text-gray-900 dark:text-white">
+                        {{ number_format($rekap['total_kubikasi_veneer'], 4, ',', '.') }} <span class="text-xs font-medium text-gray-400">m³</span>
+                    </span>
+                    <span class="text-lg font-bold text-gray-400">/</span>
+                    <span class="text-2xl font-black text-blue-600 dark:text-blue-400">
+                        {{ $rekap['rata_rata_rendemen'] }}
+                    </span>
+                </div>
+                <div class="flex items-center gap-1.5 mt-2">
+                    <div class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                    <span class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase italic">Kubikasi Veneer / Rata-Rata Rendemen</span>
+                </div>
             </div>
         </div>
 
@@ -251,8 +268,11 @@
                             <div class="space-y-4" x-data="{ openMasuk: true, openKeluar: true }">
                                 <div class="rounded-lg border border-gray-200 dark:border-white/10 overflow-hidden">
                                     <button @click="openMasuk = !openMasuk" 
-                                                class="w-full flex justify-between items-center px-4 py-2 bg-white dark:bg-gray-800 font-bold text-sm">
-                                            <span>📦 KAYU MASUK</span>
+                                                class="w-full flex justify-between items-center px-4 py-2 bg-white dark:bg-gray-800 font-bold text-xs uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                                            <span class="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                                                <x-heroicon-m-arrow-down-tray class="w-4 h-4 text-emerald-500" />
+                                                KAYU MASUK
+                                            </span>
                                             <svg class="w-4 h-4 transition-transform" :class="openMasuk ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                                     </button>
                                     <div x-show="openMasuk" class="p-2 overflow-x-auto">
@@ -277,15 +297,25 @@
                                                 </tr>
                                                 @endforeach
                                             </tbody>
+                                            <tfoot>
+                                                <tr class="bg-gray-100/50 dark:bg-gray-700/50 font-black border-t border-gray-300 dark:border-white/10 text-gray-900 dark:text-white">
+                                                    <td class="px-2 py-2" colspan="2">Total</td>
+                                                    <td class="px-2 py-2">{{ number_format(collect($row['inflow'] ?? [])->sum('banyak'), 0) }}</td>
+                                                    <td class="px-2 py-2">{{ number_format(collect($row['inflow'] ?? [])->sum('kubikasi'), 4) }} m³</td>
+                                                    <td class="px-2 py-2 text-green-600 dark:text-green-400">Rp. {{ number_format(collect($row['inflow'] ?? [])->sum('poin'), 2, ',', '.') }}</td>
+                                                </tr>
+                                            </tfoot>
                                         </table>
                                     </div>
                                 </div>
 
                                 <div class="rounded-lg border border-gray-200 dark:border-white/10 overflow-hidden">
                                     <button @click="openKeluar = !openKeluar" 
-                                            class="w-full flex justify-between items-center px-4 py-2 bg-white dark:bg-gray-800 font-bold text-sm">
-                                        {{-- <span>🪵KAYU KELUAR - {{ $row['summary']['jenis_kayu'] }}</span> --}}
-                                        <span>🪵KAYU KELUAR</span>
+                                            class="w-full flex justify-between items-center px-4 py-2 bg-white dark:bg-gray-800 font-bold text-xs uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                                        <span class="flex items-center gap-1.5 text-blue-700 dark:text-blue-400">
+                                            <x-heroicon-m-arrow-up-tray class="w-4 h-4 text-blue-500" />
+                                            KAYU KELUAR
+                                        </span>
                                         <svg class="w-4 h-4 transition-transform" :class="openKeluar ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                                     </button>
                                     <div x-show="openKeluar" class="p-2 overflow-x-auto">
@@ -320,6 +350,14 @@
                                                 </tr>
                                                 @endforeach
                                             </tbody>
+                                            <tfoot>
+                                                <tr class="bg-gray-100/50 dark:bg-gray-700/50 font-black border-t border-gray-300 dark:border-white/10 text-gray-900 dark:text-white">
+                                                    <td class="px-2 py-2" colspan="4">Total</td>
+                                                    <td class="px-2 py-2">{{ number_format(collect($row['outflow'] ?? [])->sum('total_banyak'), 0) }}</td>
+                                                    <td class="px-2 py-2">{{ number_format(collect($row['outflow'] ?? [])->sum('total_kubikasi'), 4) }} m³</td>
+                                                    <td class="px-2 py-2" colspan="3"></td>
+                                                </tr>
+                                            </tfoot>
                                         </table>
                                     </div>
                                 </div>

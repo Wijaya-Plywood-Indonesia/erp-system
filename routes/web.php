@@ -63,6 +63,9 @@ Route::get('/nota-kayu/{record}', [NotaKayuController::class, 'show'])
 Route::get('/nota-kayu/{record}/turus', [NotaKayuTurusController::class, 'show'])
     ->name('nota-kayu.turus');
 
+Route::get('/nota-kayu/{record}/turus2', [NotaKayuTurusController::class, 'show2'])
+    ->name('nota-kayu.turus2');
+
 Route::get('/', function () {
     return view('welcome');
 });

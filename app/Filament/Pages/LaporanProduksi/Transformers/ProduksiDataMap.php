@@ -28,58 +28,69 @@ class ProduksiDataMap
             $ukuranId = null;
 
             // ---------------------------------------------------------
-            // HITUNG TOTAL KENDALA (DOWNTIME) DALAM MENIT
-            // LOGIKA SAMA PERSIS DENGAN TABLE GantiPisauRotariesTable
+            // HITUNG KENDALA / DOWNTIME DARI MODEL BARU (kendalaRotaries)
             // ---------------------------------------------------------
             $totalKendalaMenit = 0;
+            $totalDowntimeMenit = 0;
             $daftarKendala = [];
+            $daftarDowntime = [];
 
-            if ($item->detailGantiPisauRotary && $item->detailGantiPisauRotary->count() > 0) {
-                foreach ($item->detailGantiPisauRotary as $ganti) {
-                    // Hanya hitung jika jam selesai sudah diisi (tidak kosong dan bukan '-')
-                    if (!empty($ganti->jam_selesai_ganti) && $ganti->jam_selesai_ganti !== '-') {
-                        try {
-                            $mulai = Carbon::parse($ganti->jam_mulai_ganti_pisau);
-                            $selesai = Carbon::parse($ganti->jam_selesai_ganti);
-                            $durasiMenit = $mulai->diffInMinutes($selesai);
+            // 1. KENDALA: Dari Kendala Rotary Baru (kendalaRotaries)
+            if (!empty($item->kendalaRotaries) && $item->kendalaRotaries->count() > 0) {
+                foreach ($item->kendalaRotaries as $knd) {
+                    if ($knd->status === 'selesai' && !is_null($knd->durasi_menit)) {
+                        $durasiMenit = (int)$knd->durasi_menit;
+                        $totalDowntimeMenit += $durasiMenit;
 
-                            $totalKendalaMenit += $durasiMenit;
+                        $mulai = $knd->waktu_mulai ? Carbon::parse($knd->waktu_mulai) : null;
+                        $selesai = $knd->waktu_selesai ? Carbon::parse($knd->waktu_selesai) : null;
 
-                            $daftarKendala[] = [
-                                'kendala' => $ganti->jenis_kendala ?? 'Tidak disebutkan',
-                                'keterangan' => $ganti->keterangan ?? '-',
-                                'durasi_menit' => $durasiMenit,
-                                'jam_mulai' => $mulai->format('H:i'),
-                                'jam_selesai' => $selesai->format('H:i'),
-                            ];
-                        } catch (\Exception $e) {
-                            // Skip jika ada error parsing
-                            continue;
-                        }
+                        $timeStr = ($mulai && $selesai) ? ': ' . $mulai->format('H:i') . '-' . $selesai->format('H:i') : '';
+                        $formattedText = ($knd->kendala ?? 'Tidak disebutkan') . ' (' . $durasiMenit . ' menit' . $timeStr . ')';
+
+                        $daftarKendala[] = [
+                            'kendala' => $knd->kendala ?? 'Tidak disebutkan',
+                            'keterangan' => '-',
+                            'durasi_menit' => $durasiMenit,
+                            'jam_mulai' => $mulai ? $mulai->format('H:i') : '-',
+                            'jam_selesai' => $selesai ? $selesai->format('H:i') : '-',
+                            'text' => $formattedText,
+                        ];
+                    } else {
+                        // Include pending/in-progress kendalas in the text list so they are visible
+                        $mulai = $knd->waktu_mulai ? Carbon::parse($knd->waktu_mulai) : null;
+                        $timeStr = $mulai ? ' (Mulai: ' . $mulai->format('H:i') . ' - Pending)' : ' (Pending)';
+                        $formattedText = ($knd->kendala ?? 'Tidak disebutkan') . $timeStr;
+
+                        $daftarKendala[] = [
+                            'kendala' => $knd->kendala ?? 'Tidak disebutkan',
+                            'keterangan' => '-',
+                            'durasi_menit' => 0,
+                            'jam_mulai' => $mulai ? $mulai->format('H:i') : '-',
+                            'jam_selesai' => '-',
+                            'text' => $formattedText,
+                        ];
                     }
                 }
             }
 
+            $totalKendalaMenit = $totalDowntimeMenit;
+            $daftarDowntime = $daftarKendala;
+
             // Format total downtime (sama dengan summarizer di table)
             $totalDowntimeFormatted = '';
-            if ($totalKendalaMenit >= 60) {
-                $jam = floor($totalKendalaMenit / 60);
-                $menit = $totalKendalaMenit % 60;
+            if ($totalDowntimeMenit >= 60) {
+                $jam = floor($totalDowntimeMenit / 60);
+                $menit = $totalDowntimeMenit % 60;
                 $totalDowntimeFormatted = "{$jam} Jam {$menit} Menit";
             } else {
-                $totalDowntimeFormatted = "{$totalKendalaMenit} Menit";
+                $totalDowntimeFormatted = "{$totalDowntimeMenit} Menit";
             }
 
             // Format kendala untuk ditampilkan
             $kendalaText = '-';
             if (count($daftarKendala) > 0) {
-                $kendalaText = implode(', ', array_map(function ($k) {
-                    $text = $k['kendala'] . ' (' . $k['durasi_menit'] . ' menit: ' . $k['jam_mulai'] . '-' . $k['jam_selesai'] . ')';
-                    if ($k['keterangan'] !== '-') {
-                        $text .= ' - ' . $k['keterangan'];
-                    }
-                    return $text;
-                }, $daftarKendala));
+                $kendalaText = implode(', ', array_column($daftarKendala, 'text'));
             }
 
             // ---------------------------------------------------------
@@ -143,52 +154,33 @@ class ProduksiDataMap
             // Target per menit (normal)
             $targetPerMenit = $jamKerjaMenit > 0 ? round($targetHarian / $jamKerjaMenit, 4) : 0;
 
-            // Target yang disesuaikan dengan kendala
-            // Jika ada kendala, target berkurang proporsional dengan waktu yang hilang
-            $targetDisesuaikan = $jamKerjaMenit > 0
-                ? round(($jamKerjaEfektifMenit / $jamKerjaMenit) * $targetHarian, 2)
-                : $targetHarian;
+            // Target tetap menggunakan target harian normal (tidak terpengaruh downtime)
+            $targetDisesuaikan = $targetHarian;
 
-            // Selisih berdasarkan target yang disesuaikan
-            $selisihProduksi = $totalHasil - $targetDisesuaikan;
+            // Selisih berdasarkan target normal
+            $selisihProduksi = $totalHasil - $targetHarian;
 
             $jumlahPekerja = $item->detailPegawaiRotary->count();
             $potonganTotal = 0;
             $potonganPerOrang = 0;
 
-            // --- LOGIKA PERHITUNGAN POTONGAN BERDASARKAN DOWNTIME ---
-            // Hitung kekurangan produksi karena downtime
-            $kekuranganKarenaDowntime = 0;
-            if ($totalKendalaMenit > 0 && $targetPerMenit > 0) {
-                // Kekurangan = target per menit × total menit downtime
-                $kekuranganKarenaDowntime = $targetPerMenit * $totalKendalaMenit;
-            }
-
-            // Jika hasil produksi kurang dari target yang disesuaikan
+            // Jika hasil produksi kurang dari target
             if ($selisihProduksi < 0 && $potonganPerLembar > 0) {
-                $kekuranganTotal = abs($selisihProduksi);
+                $potonganTotal = abs($selisihProduksi) * $potonganPerLembar;
 
-                // Pisahkan: kekurangan karena downtime (tidak kena denda) vs kekurangan karena performa
-                $kekuranganPerforma = $kekuranganTotal - $kekuranganKarenaDowntime;
+                if ($jumlahPekerja > 0) {
+                    $potonganPerOrangRaw = $potonganTotal / $jumlahPekerja;
 
-                // Hanya kekurangan karena performa yang kena denda
-                if ($kekuranganPerforma > 0) {
-                    $potonganTotal = $kekuranganPerforma * $potonganPerLembar;
+                    // Logika Pembulatan Bertingkat: 0-299 -> 0 | 300-799 -> 500 | 800+ -> 1000
+                    $ribuan = floor($potonganPerOrangRaw / 1000);
+                    $ratusan = (int)$potonganPerOrangRaw % 1000;
 
-                    if ($jumlahPekerja > 0) {
-                        $potonganPerOrangRaw = $potonganTotal / $jumlahPekerja;
-
-                        // Logika Pembulatan Bertingkat: 0-299 -> 0 | 300-799 -> 500 | 800+ -> 1000
-                        $ribuan = floor($potonganPerOrangRaw / 1000);
-                        $ratusan = $potonganPerOrangRaw % 1000;
-
-                        if ($ratusan < 300) {
-                            $potonganPerOrang = $ribuan * 1000;
-                        } elseif ($ratusan >= 300 && $ratusan < 800) {
-                            $potonganPerOrang = ($ribuan * 1000) + 500;
-                        } else {
-                            $potonganPerOrang = ($ribuan + 1) * 1000;
-                        }
+                    if ($ratusan < 300) {
+                        $potonganPerOrang = $ribuan * 1000;
+                    } elseif ($ratusan >= 300 && $ratusan < 800) {
+                        $potonganPerOrang = ($ribuan * 1000) + 500;
+                    } else {
+                        $potonganPerOrang = ($ribuan + 1) * 1000;
                     }
                 }
             }
@@ -214,9 +206,11 @@ class ProduksiDataMap
                 'pekerja' => $pekerja,
                 'kendala' => $kendalaText,
                 'daftar_kendala' => $daftarKendala,
+                'daftar_downtime' => $daftarDowntime,
                 'jam_kerja' => $jamKerja,
                 'jam_kerja_efektif' => round($jamKerjaEfektif, 2),
                 'total_kendala_menit' => $totalKendalaMenit,
+                'total_downtime_menit' => $totalDowntimeMenit,
                 'total_downtime_formatted' => $totalDowntimeFormatted, // INI YANG KURANG!
                 'target' => $targetDisesuaikan, // Target yang sudah disesuaikan
                 'target_normal' => $targetHarian, // Target normal tanpa penyesuaian

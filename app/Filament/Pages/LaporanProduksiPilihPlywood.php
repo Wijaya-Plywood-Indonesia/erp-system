@@ -28,10 +28,17 @@ class LaporanProduksiPilihPlywood extends Page implements HasForms
     protected static ?string $navigationLabel = 'Laporan Produksi Pilih Plywood';
     protected static ?int $navigationSort = 17;
 
+    /**
+     * Data laporan produksi Pilih Plywood (terdiri dari detail dan summary).
+     */
     public $reportData = [
         'detail' => [],
         'summary' => []
     ];
+
+    /**
+     * Tanggal laporan yang aktif.
+     */
     public $tanggal = null;
 
     public function mount(): void

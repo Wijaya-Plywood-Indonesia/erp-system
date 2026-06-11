@@ -43,9 +43,11 @@
                                 <th class="p-2 border border-zinc-300 dark:border-zinc-600 text-left w-32">Nama</th>
                                 <th class="p-2 border border-zinc-300 dark:border-zinc-600 text-left">Keterangan</th>
                                 <th class="p-2 border border-zinc-300 dark:border-zinc-600 text-center w-16">map</th>
+                                <th class="p-2 border border-zinc-300 dark:border-zinc-600 text-center w-20">Hit KBK</th>
                                 <th class="p-2 border border-zinc-300 dark:border-zinc-600 text-right w-28">Banyak</th>
                                 <th class="p-2 border border-zinc-300 dark:border-zinc-600 text-right w-36">M3</th>
-                                <th class="p-2 border border-zinc-300 dark:border-zinc-600 text-right w-40">Harga</th>
+                                <th class="p-2 border border-zinc-300 dark:border-zinc-600 text-right w-32">Harga</th>
+                                <th class="p-2 border border-zinc-300 dark:border-zinc-600 text-right w-36">Total</th>
                             </tr>
                         </thead>
 
@@ -79,14 +81,20 @@
                                 <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center text-zinc-700 dark:text-zinc-300 font-semibold font-mono">
                                     {{ $row['map'] }}
                                 </td>
+                                <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center text-zinc-700 dark:text-zinc-300 font-mono font-bold uppercase">
+                                    {{ $row['hit_kbk'] ?? '' }}
+                                </td>
                                 <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-right text-zinc-800 dark:text-zinc-200 font-mono">
                                     {{ $row['banyak'] ? number_format($row['banyak'], 0, ',', '.') : '' }}
                                 </td>
                                 <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-right text-zinc-800 dark:text-zinc-200 font-mono">
                                     {{ $row['m3'] ? number_format($row['m3'], 4, ',', '.') : '' }}
                                 </td>
+                                <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-right text-zinc-700 dark:text-zinc-300 font-mono">
+                                    {{ $row['harga'] ? number_format($row['harga'], 0, ',', '.') : '-' }}
+                                </td>
                                 <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-right font-bold text-zinc-900 dark:text-zinc-100 font-mono text-emerald-600 dark:text-emerald-400">
-                                    {{ number_format($row['harga'], 0, ',', '.') }}
+                                    {{ $row['total'] ? number_format($row['total'], 0, ',', '.') : '-' }}
                                 </td>
                             </tr>
                             @endforeach

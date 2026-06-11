@@ -170,6 +170,108 @@ class ProduksiHotPressSummaryWidget extends Widget
             return strcmp($a->jenis_kayu, $b->jenis_kayu);
         });
 
+        // 5. TARGET PROGRESS (MESIN HOTPRESS)
+        $hotpressMachineIds = \Illuminate\Support\Facades\DB::table('mesins')
+            ->join('kategori_mesins', 'mesins.kategori_mesin_id', '=', 'kategori_mesins.id')
+            ->where('kategori_mesins.nama_kategori_mesin', 'HOTPRESS')
+            ->pluck('mesins.id')
+            ->toArray();
+
+        if (empty($hotpressMachineIds)) {
+            $hotpressMachineIds = [13, 26, 27, 28];
+        }
+
+        $targets = \Illuminate\Support\Facades\DB::table('targets')
+            ->whereIn('id_mesin', $hotpressMachineIds)
+            ->get();
+
+        // Platform Hasil grouped by id_ukuran
+        $platformActuals = PlatformHasilHp::where('id_produksi_hp', $produksiId)
+            ->join('barang_setengah_jadi_hp', 'barang_setengah_jadi_hp.id', '=', 'platform_hasil_hp.id_barang_setengah_jadi')
+            ->selectRaw('barang_setengah_jadi_hp.id_ukuran, SUM(platform_hasil_hp.isi) as total_actual')
+            ->groupBy('barang_setengah_jadi_hp.id_ukuran')
+            ->get();
+
+        // Triplek Hasil grouped by id_ukuran
+        $triplekActuals = TriplekHasilHp::where('id_produksi_hp', $produksiId)
+            ->join('barang_setengah_jadi_hp', 'barang_setengah_jadi_hp.id', '=', 'triplek_hasil_hp.id_barang_setengah_jadi')
+            ->selectRaw('barang_setengah_jadi_hp.id_ukuran, SUM(triplek_hasil_hp.isi) as total_actual')
+            ->groupBy('barang_setengah_jadi_hp.id_ukuran')
+            ->get();
+
+        // Combine actual production by size
+        $combinedActuals = [];
+        foreach ($platformActuals as $act) {
+            $combinedActuals[$act->id_ukuran] = (int) $act->total_actual;
+        }
+        foreach ($triplekActuals as $act) {
+            if (isset($combinedActuals[$act->id_ukuran])) {
+                $combinedActuals[$act->id_ukuran] += (int) $act->total_actual;
+            } else {
+                $combinedActuals[$act->id_ukuran] = (int) $act->total_actual;
+            }
+        }
+
+        $globalActualAchievement = 0;
+        $globalTargetAchievement = 0;
+        $hasTargetGlobal = false;
+
+        $targetProgress = [];
+        foreach ($combinedActuals as $id_ukuran => $actual) {
+            // Find target matching id_ukuran under HOTPRESS machines
+            $tgt = $targets->first(function ($t) use ($id_ukuran) {
+                return $t->id_ukuran == $id_ukuran;
+            });
+
+            // FALLBACK TO WILDCARD (size 33 / '0x0x0') IF NOT FOUND
+            if (!$tgt) {
+                $tgt = $targets->first(function ($t) {
+                    return $t->id_ukuran == 33;
+                });
+            }
+
+            $ukuranModel = \App\Models\Ukuran::find($id_ukuran);
+            $tebal = $ukuranModel ? (float) $ukuranModel->tebal : 0.0;
+
+            $ukuranStr = $ukuranModel ? "{$ukuranModel->panjang} x {$ukuranModel->lebar} x " . floatval($ukuranModel->tebal) : 'Ukuran ?';
+
+            $globalActualAchievement += $actual;
+
+            if ($tgt) {
+                $targetVal = (float) $tgt->target;
+                $globalTargetAchievement += $targetVal;
+                $hasTargetGlobal = true;
+
+                $targetProgress[] = [
+                    'hasTarget' => true,
+                    'ukuran' => $ukuranStr,
+                    'tebal' => $tebal,
+                    'actual' => $actual,
+                    'target' => $targetVal,
+                    'orang' => $tgt->orang,
+                    'jam' => $tgt->jam,
+                ];
+            } else {
+                $targetProgress[] = [
+                    'hasTarget' => false,
+                    'ukuran' => $ukuranStr,
+                    'tebal' => $tebal,
+                    'actual' => $actual,
+                    'target' => 0,
+                    'orang' => '-',
+                    'jam' => '-',
+                ];
+            }
+        }
+
+        $globalProgress = 0;
+        foreach ($targetProgress as $item) {
+            if ($item['hasTarget'] && $item['target'] > 0) {
+                $globalProgress += ($item['actual'] / $item['target']) * 100;
+            }
+        }
+        $globalProgress = round($globalProgress, 1);
+
         $this->summary = [
             'totalPegawai'  => $totalPegawai,
             'totalPlatform' => $totalPlatform,
@@ -177,6 +279,11 @@ class ProduksiHotPressSummaryWidget extends Widget
             'totalTriplek'  => $totalTriplek,
             'listTriplek'   => $listTriplek,
             'globalJenisKayuUkuran' => $globalJenisKayuUkuran,
+            'targetProgress' => $targetProgress,
+            'globalActualAchievement' => $globalActualAchievement,
+            'globalTargetAchievement' => $globalTargetAchievement,
+            'globalProgress' => $globalProgress,
+            'hasTargetGlobal' => $hasTargetGlobal,
         ];
     }
 }

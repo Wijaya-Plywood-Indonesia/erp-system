@@ -25,6 +25,15 @@
             @endforeach
         </select>
 
+        <select wire:model.live="limitPerLahan"
+            class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500 transition-all">
+            <option value="15">15 Log Terbaru</option>
+            <option value="30">30 Log Terbaru</option>
+            <option value="50">50 Log Terbaru</option>
+            <option value="100">100 Log Terbaru</option>
+            <option value="semua">Semua Log</option>
+        </select>
+
         {{-- Searchable Select Lahan --}}
         <div x-data="{ 
                 open: false, 
@@ -90,22 +99,25 @@
                     LAHAN {{ $lahan?->kode_lahan ?? 'N/A' }} <span class="hidden sm:inline">— {{ $lahan?->nama_lahan ?? 'N/A' }}</span>
                 </h2>
             </div>
-
             {{-- SUMMARY BAR PER LAHAN (Responsive Wrap) --}}
-            <div class="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex flex-wrap items-center gap-3">
-                <span class="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 text-[9px] md:text-[10px] font-black px-2 py-1 rounded-sm uppercase tracking-tighter shrink-0">
-                    ↑ {{ number_format($totalMasuk) }} masuk
+            <div class="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex flex-wrap items-center gap-3 font-sans">
+                <span class="inline-flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200/50 dark:border-emerald-900/50 uppercase tracking-wider shrink-0 shadow-sm">
+                    <x-heroicon-m-arrow-down-tray class="w-3.5 h-3.5 text-emerald-500" />
+                    {{ number_format($totalMasuk) }} Masuk
                 </span>
-                <span class="inline-flex items-center gap-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 text-[9px] md:text-[10px] font-black px-2 py-1 rounded-sm uppercase tracking-tighter shrink-0">
-                    ↓ {{ number_format($totalKeluar) }} keluar
+                <span class="inline-flex items-center gap-1.5 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 text-[10px] font-bold px-2 py-0.5 rounded border border-rose-200/50 dark:border-rose-900/50 uppercase tracking-wider shrink-0 shadow-sm">
+                    <x-heroicon-m-arrow-up-tray class="w-3.5 h-3.5 text-rose-500" />
+                    {{ number_format($totalKeluar) }} Keluar
                 </span>
-                <span class="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-[9px] md:text-[10px] font-black px-2 py-1 rounded-sm uppercase tracking-tighter shrink-0">
-                    {{ number_format($saldoBtg) }} saldo
+                <span class="inline-flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200/50 dark:border-slate-800/50 uppercase tracking-wider shrink-0 shadow-sm">
+                    <x-heroicon-m-archive-box class="w-3.5 h-3.5 text-slate-400" />
+                    {{ number_format($saldoBtg) }} Saldo
                 </span>
 
                 @if($lastLogLahan)
-                <span class="sm:ml-auto inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300 text-[9px] md:text-[10px] font-black px-3 py-1 rounded-sm uppercase tracking-tight shrink-0">
-                    HPP TERAKHIR: Rp {{ number_format($lastLogLahan->hpp_average, 0, ',', '.') }}/m³
+                <span class="sm:ml-auto inline-flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/50 text-amber-700 dark:text-amber-300 text-[10px] font-bold px-2.5 py-0.5 rounded uppercase tracking-wider shrink-0 shadow-sm">
+                    <x-heroicon-m-calculator class="w-3.5 h-3.5 text-amber-500" />
+                    HPP Terakhir: Rp {{ number_format($lastLogLahan->hpp_average, 0, ',', '.') }}/m³
                 </span>
                 @endif
             </div>
@@ -119,6 +131,9 @@
                             <th class="px-4 py-3 text-left whitespace-nowrap">Tanggal</th>
                             <th class="px-4 py-3 text-left whitespace-nowrap">Jenis Kayu</th>
                             <th class="px-4 py-3 text-right whitespace-nowrap">Ukuran</th>
+                            <th class="px-4 py-3 text-right border-l border-gray-100 dark:border-gray-700 bg-amber-50/50 dark:bg-amber-900/10 whitespace-nowrap text-amber-600">
+                                HPP Average<div class="text-[10px] font-medium normal-case text-gray-500 tracking-normal text-amber-500">per m³</div>
+                            </th>
                             <th class="px-4 py-3 text-left whitespace-nowrap">Tipe</th>
                             <th class="px-4 py-3 text-left">Keterangan</th>
 
@@ -141,14 +156,13 @@
                             <th class="px-4 py-3 text-right border-l border-gray-100 dark:border-gray-700 whitespace-nowrap">
                                 Total Poin<div class="text-[10px] font-medium normal-case text-gray-500 tracking-normal">Sebelum → Sesudah</div>
                             </th>
-
-                            <th class="px-4 py-3 text-right border-l border-gray-100 dark:border-gray-700 bg-amber-50/50 dark:bg-amber-900/10 whitespace-nowrap text-amber-600">
-                                HPP Average<div class="text-[10px] font-medium normal-case text-gray-500 tracking-normal text-amber-500">per m³</div>
-                            </th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                        @foreach($lahanLogs as $log)
+                        @php
+                        $displayLogs = $this->limitPerLahan === 'semua' ? $lahanLogs : $lahanLogs->take((int)$this->limitPerLahan);
+                        @endphp
+                        @foreach($displayLogs as $log)
                         @php $isM = $log->tipe_transaksi === 'masuk'; @endphp
                         <tr @class(['transition', 'hover:bg-green-50/30 dark:hover:bg-green-900/10'=> $isM, 'hover:bg-red-50/30 dark:hover:bg-red-900/10' => !$isM])>
 
@@ -163,18 +177,31 @@
                             <td class="px-4 py-3 text-right font-black text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap tabular-nums">
                                 {{ $log->panjang }} cm
                             </td>
-
-                            <td class="px-4 py-3 whitespace-nowrap">
-                                <span @class(['inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight', 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'=> $isM, 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' => !$isM])>
-                                    {{ $isM ? '↑ Masuk' : '↓ Keluar' }}
+                            <td class="px-4 py-3 text-right border-l border-gray-50 dark:border-gray-800 bg-amber-50/20 dark:bg-amber-900/5 whitespace-nowrap">
+                                <span class="font-black text-xs text-amber-700 dark:text-amber-400 tabular-nums">
+                                    {{ number_format($log->hpp_average, 0, ',', '.') }}
                                 </span>
                             </td>
 
-                            <td class="px-4 py-3 text-[11px] font-black uppercase text-gray-700 dark:text-gray-300 max-w-[200px]">
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <span @class([ 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border shadow-sm' , 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900'=> $isM,
+                                    'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-900' => !$isM
+                                    ])>
+                                    @if($isM)
+                                    <x-heroicon-m-arrow-down-tray class="w-3 h-3 text-emerald-500" />
+                                    Masuk
+                                    @else
+                                    <x-heroicon-m-arrow-up-tray class="w-3 h-3 text-rose-500" />
+                                    Keluar
+                                    @endif
+                                </span>
+                            </td>
+
+                            <td class="px-4 py-3 text-[11px] font-semibold uppercase text-gray-700 dark:text-gray-300 max-w-[200px]">
                                 @if($log->referensi instanceof \App\Models\NotaKayu && $log->referensi->kayuMasuk?->seri)
                                 SERI: {{ $log->referensi->kayuMasuk->seri }}
                                 @else
-                                {{ $log->keterangan ?? '—' }}
+                                {{ str_replace(['⚙️', '⚠️'], ['', ''], $log->keterangan ?? '—') }}
                                 @endif
                             </td>
 
@@ -214,12 +241,6 @@
                                         {{ number_format($log->nilai_stok_after, 0, ',', '.') }}
                                     </span>
                                 </div>
-                            </td>
-
-                            <td class="px-4 py-3 text-right border-l border-gray-50 dark:border-gray-800 bg-amber-50/20 dark:bg-amber-900/5 whitespace-nowrap">
-                                <span class="font-black text-xs text-amber-700 dark:text-amber-400 tabular-nums">
-                                    {{ number_format($log->hpp_average, 0, ',', '.') }}
-                                </span>
                             </td>
                         </tr>
                         @endforeach

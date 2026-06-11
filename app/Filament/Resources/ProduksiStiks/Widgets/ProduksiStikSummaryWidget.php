@@ -104,12 +104,57 @@ class ProduksiStikSummaryWidget extends Widget
             ->orderBy('ukuran')
             ->get();
 
+        // 6. TARGET PROGRESS (MESIN STIK - GLOBAL DARI UKURAN 0x0x0 / ID 33)
+        $stikMachineIds = DB::table('mesins')
+            ->join('kategori_mesins', 'mesins.kategori_mesin_id', '=', 'kategori_mesins.id')
+            ->where('kategori_mesins.nama_kategori_mesin', 'STIK')
+            ->pluck('mesins.id')
+            ->toArray();
+
+        if (empty($stikMachineIds)) {
+            $stikMachineIds = [8];
+        }
+
+        // Ambil target untuk ukuran 0x0x0 (id_ukuran = 33)
+        $tgt = DB::table('targets')
+            ->whereIn('id_mesin', $stikMachineIds)
+            ->where('id_ukuran', 33)
+            ->first();
+
+        $targetProgress = null;
+
+        if ($tgt) {
+            $targetVal = (float) $tgt->target;
+            $progress = $targetVal > 0 ? min(round(($totalAll / $targetVal) * 100, 1), 100) : 0;
+
+            $targetProgress = [
+                'hasTarget' => true,
+                'ukuran' => 'Semua Ukuran (Global)',
+                'actual' => $totalAll,
+                'target' => $targetVal,
+                'progress' => $progress,
+                'orang' => $tgt->orang,
+                'jam' => $tgt->jam,
+            ];
+        } else {
+            $targetProgress = [
+                'hasTarget' => false,
+                'ukuran' => 'Semua Ukuran (Global)',
+                'actual' => $totalAll,
+                'target' => 0,
+                'progress' => 0,
+                'orang' => '-',
+                'jam' => '-',
+            ];
+        }
+
         $this->summary = [
             'totalAll'       => $totalAll,
             'totalPegawai'   => $totalPegawai,
             'globalUkuranKw' => $globalUkuranKw,
             'globalUkuran'   => $globalUkuran,
             'globalJenisKayuUkuran' => $globalJenisKayuUkuran,
+            'targetProgress' => $targetProgress,
         ];
     }
 }

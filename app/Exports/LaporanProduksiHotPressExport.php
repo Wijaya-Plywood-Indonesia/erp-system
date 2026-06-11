@@ -2,12 +2,15 @@
 
 namespace App\Exports;
 
+use App\Exports\Sheets\LaporanProduksiHotPressJurnalSheet;
 use App\Models\ProduksiHp;
 use App\Models\BahanPenolongHp;
 use App\Models\BahanPenolongProduksi;
 use App\Models\HargaPegawai;
 use App\Models\TriplekHasilHp;
 use App\Models\PlatformHasilHp;
+use App\Models\Target;
+use App\Models\Mesin;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -25,18 +28,23 @@ class LaporanProduksiHotPressExport implements WithMultipleSheets
 {
     protected $tanggal;
     protected $data;
+    protected $domain; // Tambahan variabel domain
 
-    public function __construct($data, $tanggal)
+    public function __construct($data, $tanggal, $domain = '')
     {
         $this->data = $data;
         $this->tanggal = $tanggal;
+        $this->domain = $domain; // Simpan domain
     }
 
     public function sheets(): array
     {
         return [
+            new LaporanProduksiHotPressSheetPekerja($this->tanggal),
             new LaporanProduksiHotPressRekapSheet($this->tanggal),
             new LaporanProduksiHotPressDetailSheet($this->data),
+            // TAMBAHKAN SHEET JURNAL DI SINI
+            new LaporanProduksiHotPressJurnalSheet($this->tanggal, $this->domain),
         ];
     }
 }
@@ -354,4 +362,323 @@ class LaporanProduksiHotPressRekapSheet implements FromCollection, WithHeadings,
     }
 
     public function title(): string { return 'Rekap Hot Press'; }
+}
+
+class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeadings, WithTitle, WithEvents
+{
+    protected $tanggal;
+    protected $mergeRanges = [];
+    protected $tableRanges = [];
+
+    public function __construct($tanggal)
+    {
+        $this->tanggal = $tanggal;
+    }
+
+    public function collection()
+    {
+        $tanggalObj = Carbon::parse($this->tanggal);
+        $tglStr = $tanggalObj->format('d F Y');
+
+        $produksis = ProduksiHp::with([
+            'bahanPenolongHp',
+            'triplekHasilHp.ukuran',
+            'triplekHasilHp.jenisKayu',
+            'triplekHasilHp.barangSetengahJadi.jenisBarang',
+            'triplekHasilHp.mesin',
+            'platformHasilHp.ukuran',
+            'platformHasilHp.jenisKayu',
+            'platformHasilHp.barangSetengahJadi.jenisBarang',
+            'platformHasilHp.mesin',
+            'detailPegawaiHp.pegawaiHp'
+        ])
+            ->whereDate('tanggal_produksi', $this->tanggal)
+            ->get();
+
+        $hotpressMachineIds = Mesin::join('kategori_mesins', 'mesins.kategori_mesin_id', '=', 'kategori_mesins.id')
+            ->where('kategori_mesins.nama_kategori_mesin', 'HOTPRESS')
+            ->pluck('mesins.id')
+            ->toArray();
+
+        if (empty($hotpressMachineIds)) {
+            $hotpressMachineIds = [13, 26, 27, 28];
+        }
+
+        $targets = Target::whereIn('id_mesin', $hotpressMachineIds)->get();
+
+        $allRows = [];
+        $this->mergeRanges = [];
+        $this->tableRanges = [];
+
+        $allRows[] = ['LAPORAN POTONGAN GAJI HOT PRESS'];
+        $allRows[] = ['TANGGAL: ' . $tglStr];
+        $allRows[] = array_fill(0, 11, '');
+
+        foreach ($produksis as $produksi) {
+            $produksiId = $produksi->id;
+            $shift = (strtoupper($produksi->shift ?? '') === 'MALAM') ? 'MALAM' : 'PAGI';
+
+            // 1. Calculate actual production by id_ukuran
+            $platformActuals = PlatformHasilHp::where('id_produksi_hp', $produksiId)
+                ->join('barang_setengah_jadi_hp', 'barang_setengah_jadi_hp.id', '=', 'platform_hasil_hp.id_barang_setengah_jadi')
+                ->selectRaw('barang_setengah_jadi_hp.id_ukuran, SUM(platform_hasil_hp.isi) as total_actual')
+                ->groupBy('barang_setengah_jadi_hp.id_ukuran')
+                ->get();
+
+            $triplekActuals = TriplekHasilHp::where('id_produksi_hp', $produksiId)
+                ->join('barang_setengah_jadi_hp', 'barang_setengah_jadi_hp.id', '=', 'triplek_hasil_hp.id_barang_setengah_jadi')
+                ->selectRaw('barang_setengah_jadi_hp.id_ukuran, SUM(triplek_hasil_hp.isi) as total_actual')
+                ->groupBy('barang_setengah_jadi_hp.id_ukuran')
+                ->get();
+
+            $combinedActuals = [];
+            foreach ($platformActuals as $act) {
+                $combinedActuals[$act->id_ukuran] = (int) $act->total_actual;
+            }
+            foreach ($triplekActuals as $act) {
+                if (isset($combinedActuals[$act->id_ukuran])) {
+                    $combinedActuals[$act->id_ukuran] += (int) $act->total_actual;
+                } else {
+                    $combinedActuals[$act->id_ukuran] = (int) $act->total_actual;
+                }
+            }
+
+            // 2. Calculate deficit and total denda for this session
+            $totalDenda = 0;
+            $totalTargetVal = 0;
+            $totalActualVal = 0;
+            $stdJam = 10;
+
+            foreach ($combinedActuals as $id_ukuran => $actual) {
+                $tgt = $targets->first(function ($t) use ($id_ukuran) {
+                    return $t->id_ukuran == $id_ukuran;
+                });
+
+                // FALLBACK TO WILDCARD (size 33 / '0x0x0') IF NOT FOUND
+                if (!$tgt) {
+                    $tgt = $targets->first(function ($t) {
+                        return $t->id_ukuran == 33;
+                    });
+                }
+
+                if ($tgt) {
+                    $targetVal = (float) $tgt->target;
+                    $potonganPerPcs = (float) $tgt->potongan;
+                    $stdJam = (int) $tgt->jam ?: 10;
+
+                    $totalTargetVal += $targetVal;
+                    $totalActualVal += $actual;
+
+                    $deficit = $targetVal - $actual;
+                    if ($deficit > 0 && $potonganPerPcs > 0) {
+                        $totalDenda += $deficit * $potonganPerPcs;
+                    }
+                }
+            }
+
+            // 3. Share deduction among workers in this session
+            $pekerjaList = $produksi->detailPegawaiHp ?? [];
+            $N = count($pekerjaList);
+            $potonganPerOrang = 0;
+
+            if ($totalDenda > 0 && $N > 0) {
+                $potonganRaw = $totalDenda / $N;
+
+                // --- RUMUS PEMBULATAN KHUSUS (0, 500, 1000) ---
+                $ribuan = floor($potonganRaw / 1000);
+                $ratusan = $potonganRaw % 1000;
+
+                if ($ratusan < 300) {
+                    $potonganPerOrang = $ribuan * 1000;
+                } elseif ($ratusan < 800) {
+                    $potonganPerOrang = ($ribuan * 1000) + 500;
+                } else {
+                    $potonganPerOrang = ($ribuan + 1) * 1000;
+                }
+            }
+
+            if ($N > 0) {
+                $allRows[] = ['PRODUKSI HOT PRESS - ' . strtoupper($shift)];
+                $allRows[] = array_fill(0, 11, '');
+
+                $headerRow = count($allRows) + 1;
+                $allRows[] = ['ID', 'Nama', 'Potongan Gaji', 'Keterangan', '', 'Target Harian', 'Jam Kerja', 'Target/Jam', 'Hasil', 'Selisih', 'Kendala'];
+
+                $workerStartRow = count($allRows) + 1;
+                $workerEndRow = $workerStartRow + $N - 1;
+                $totalRow = $workerStartRow + $N;
+
+                if ($N > 1) {
+                    $this->mergeRanges[] = "F{$workerStartRow}:F{$workerEndRow}";
+                    $this->mergeRanges[] = "G{$workerStartRow}:G{$workerEndRow}";
+                    $this->mergeRanges[] = "H{$workerStartRow}:H{$workerEndRow}";
+                    $this->mergeRanges[] = "I{$workerStartRow}:I{$workerEndRow}";
+                    $this->mergeRanges[] = "J{$workerStartRow}:J{$workerEndRow}";
+                    $this->mergeRanges[] = "K{$workerStartRow}:K{$workerEndRow}";
+                }
+
+                $kendala = $produksi->kendala ?? 'Tidak ada kendala.';
+                $targetPerJam = $stdJam > 0 ? $totalTargetVal / $stdJam : 0;
+                $selisihTampil = $totalActualVal - $totalTargetVal;
+
+                foreach ($pekerjaList as $idx => $dp) {
+                    $jamMasuk = $dp->masuk ? Carbon::parse($dp->masuk)->format('H:i') : '-';
+                    $jamPulang = $dp->pulang ? Carbon::parse($dp->pulang)->format('H:i') : '-';
+
+                    $ketParts = [];
+                    if ($jamMasuk !== '-') {
+                        $ketParts[] = "Masuk: " . $jamMasuk . ($jamPulang !== '-' ? " - " . $jamPulang : "");
+                    }
+                    if (!empty($dp->ijin) && $dp->ijin !== '-') {
+                        $ketParts[] = "Ijin: " . $dp->ijin;
+                    }
+                    if (!empty($dp->ket) && $dp->ket !== '-') {
+                        $ketParts[] = $dp->ket;
+                    }
+                    $ketString = !empty($ketParts) ? implode(" | ", $ketParts) : '-';
+
+                    $allRows[] = [
+                        $dp->pegawaiHp->kode_pegawai ?? '-',
+                        $dp->pegawaiHp->nama_pegawai ?? 'TANPA NAMA',
+                        (int) $potonganPerOrang,
+                        $ketString,
+                        '',
+                        $idx === 0 ? (int) $totalTargetVal : '',
+                        $idx === 0 ? (int) $stdJam : '',
+                        $idx === 0 ? round((float) $targetPerJam, 2) : '',
+                        $idx === 0 ? (int) $totalActualVal : '',
+                        $idx === 0 ? (int) $selisihTampil : '',
+                        $idx === 0 ? $kendala : ''
+                    ];
+                }
+
+                // Total Row
+                $allRows[] = [
+                    'TOTAL',
+                    $N . ' pekerja',
+                    $N > 0 ? "=SUM(C{$workerStartRow}:C{$workerEndRow})" : 0,
+                    '',
+                    '',
+                    $N > 0 ? "=SUM(F{$workerStartRow}:F{$workerEndRow})" : 0,
+                    (int) $stdJam,
+                    $N > 0 ? "=SUM(H{$workerStartRow}:H{$workerEndRow})" : 0,
+                    $N > 0 ? "=SUM(I{$workerStartRow}:I{$workerEndRow})" : 0,
+                    $N > 0 ? "=SUM(J{$workerStartRow}:J{$workerEndRow})" : 0,
+                    ''
+                ];
+
+                $allRows[] = array_fill(0, 11, '');
+                $allRows[] = array_fill(0, 11, '');
+
+                $this->tableRanges[] = [
+                    'header' => $headerRow,
+                    'start'  => $workerStartRow,
+                    'end'    => $workerEndRow,
+                    'total'  => $totalRow
+                ];
+            }
+        }
+
+        return collect($allRows);
+    }
+
+    public function headings(): array { return []; }
+    public function title(): string   { return 'Laporan Pekerja Hot Press'; }
+
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function (AfterSheet $event) {
+                $sheet = $event->sheet->getDelegate();
+                
+                // Set explicit column widths
+                $sheet->getColumnDimension('A')->setWidth(10);
+                $sheet->getColumnDimension('B')->setWidth(25);
+                $sheet->getColumnDimension('C')->setWidth(15);
+                $sheet->getColumnDimension('D')->setWidth(25);
+                $sheet->getColumnDimension('E')->setWidth(5);
+                $sheet->getColumnDimension('F')->setWidth(15);
+                $sheet->getColumnDimension('G')->setWidth(12);
+                $sheet->getColumnDimension('H')->setWidth(12);
+                $sheet->getColumnDimension('I')->setWidth(12);
+                $sheet->getColumnDimension('J')->setWidth(12);
+                $sheet->getColumnDimension('K')->setWidth(45);
+
+                // Merge cells dynamically
+                foreach ($this->mergeRanges as $range) {
+                    $sheet->mergeCells($range);
+                }
+
+                // Apply styles, borders, alignments and colors for each table
+                foreach ($this->tableRanges as $range) {
+                    $headerRow = $range['header'];
+                    $startRow = $range['start'];
+                    $endRow = $range['end'];
+                    $totalRow = $range['total'];
+
+                    // 1. Grid borders for the entire table (A{header} to K{total})
+                    $sheet->getStyle("A{$headerRow}:K{$totalRow}")->applyFromArray([
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => Border::BORDER_THIN,
+                                'color' => ['argb' => 'FFCBD5E1'],
+                            ]
+                        ]
+                    ]);
+
+                    // 2. Header row style
+                    $sheet->getStyle("A{$headerRow}:K{$headerRow}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['argb' => 'FF1E293B']],
+                        'fill' => [
+                            'fillType' => Fill::FILL_SOLID,
+                            'startColor' => ['argb' => 'FFE2E8F0']
+                        ],
+                        'alignment' => [
+                            'horizontal' => Alignment::HORIZONTAL_CENTER,
+                            'vertical' => Alignment::VERTICAL_CENTER,
+                        ]
+                    ]);
+
+                    // 3. Total row style
+                    $sheet->getStyle("A{$totalRow}:K{$totalRow}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['argb' => 'FF1E293B']],
+                        'fill' => [
+                            'fillType' => Fill::FILL_SOLID,
+                            'startColor' => ['argb' => 'FFF1F5F9']
+                        ]
+                    ]);
+
+                    // 4. Alignments for worker data cells (A{start} to K{end})
+                    if ($startRow <= $endRow) {
+                        $sheet->getStyle("A{$startRow}:A{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle("B{$startRow}:B{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                        $sheet->getStyle("C{$startRow}:C{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("D{$startRow}:D{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                        
+                        $sheet->getStyle("F{$startRow}:F{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("G{$startRow}:G{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle("H{$startRow}:H{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("I{$startRow}:I{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("J{$startRow}:J{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("K{$startRow}:K{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                        
+                        // Vertical alignment top for merged cells
+                        $sheet->getStyle("F{$startRow}:K{$endRow}")->getAlignment()->setVertical(Alignment::VERTICAL_TOP);
+
+                        // Number formats
+                        $sheet->getStyle("C{$startRow}:C{$totalRow}")->getNumberFormat()->setFormatCode('#,##0;(#,##0);"-"');
+                        $sheet->getStyle("F{$startRow}:F{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
+                        $sheet->getStyle("H{$startRow}:H{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
+                        $sheet->getStyle("I{$startRow}:I{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
+                        $sheet->getStyle("J{$startRow}:J{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
+                    }
+                }
+
+                // Enable wrap text and top vertical alignment for Keterangan (D) and Kendala (K)
+                $highestRow = $sheet->getHighestRow();
+                $sheet->getStyle("D1:D{$highestRow}")->getAlignment()->setWrapText(true);
+                $sheet->getStyle("K1:K{$highestRow}")->getAlignment()->setWrapText(true);
+            }
+        ];
+    }
 }

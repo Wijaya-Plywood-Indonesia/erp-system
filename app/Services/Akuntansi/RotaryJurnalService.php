@@ -696,7 +696,16 @@ class RotaryJurnalService
 
             foreach ($produksiList as $produksi) {
                 $idMesin     = $produksi->mesin->id ?? null;
-                $ongkosMesin = (float) ($produksi->mesin->ongkos_mesin ?? 0);
+                
+                $idJenisKayu = $produksi->detailLahanRotary->first()->id_jenis_kayu ?? null;
+                $jenisHasil  = $produksi->mesin->jenis_hasil ?? 'core';
+                $ongkosMesin = 0.0;
+                if ($idJenisKayu) {
+                    $ongkosMesin = $this->getHargaVeneerKering($idJenisKayu, $jenisHasil);
+                } else {
+                    $ongkosMesin = (float) ($produksi->mesin->ongkos_mesin ?? 0);
+                }
+                
                 $totalMesin += $ongkosMesin;
 
                 // HPP Kayu — rata-rata hpp_average semua lahan
@@ -907,7 +916,15 @@ class RotaryJurnalService
 
             foreach ($produksiList as $produksi) {
                 $idMesin     = $produksi->mesin->id ?? null;
-                $ongkosMesin = (float) ($produksi->mesin->ongkos_mesin ?? 0);
+                 
+                $idJenisKayu = $produksi->detailLahanRotary->first()->id_jenis_kayu ?? null;
+                $jenisHasil  = $produksi->mesin->jenis_hasil ?? 'core';
+                $ongkosMesin = 0.0;
+                if ($idJenisKayu) {
+                    $ongkosMesin = $this->getHargaVeneerKering($idJenisKayu, $jenisHasil);
+                } else {
+                    $ongkosMesin = (float) ($produksi->mesin->ongkos_mesin ?? 0);
+                }
 
                 // ── HPP Kayu: rata-rata hpp_average semua lahan di mesin ini ──
                 $hppKayuLahanList = [];
@@ -1563,5 +1580,18 @@ class RotaryJurnalService
                 'error'   => $e->getMessage(),
             ]);
         }
+    }
+
+    public function getHargaVeneerKering(int $idJenisKayu, string $jenisHasil): float
+    {
+        $ukuranOptions = strtolower($jenisHasil) === 'f/b'
+            ? ['faceback', 'face', 'back']
+            : ['core'];
+
+        $hargaVeneer = \App\Models\HargaVeneer::where('id_jenis_kayu', $idJenisKayu)
+            ->whereIn('ukuran', $ukuranOptions)
+            ->first();
+
+        return (float) ($hargaVeneer->harga_kering ?? 0);
     }
 }

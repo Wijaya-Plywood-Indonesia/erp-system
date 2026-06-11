@@ -4,6 +4,7 @@ namespace App\Filament\Resources\DetailTurunKayus\Schemas;
 
 use App\Models\Pegawai;
 use App\Models\KayuMasuk;
+use App\Models\DetailTurunKayu;
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\FileUpload;
@@ -23,9 +24,20 @@ class DetailTurunKayuForm
 
                 Select::make('id_kayu_masuk')
                     ->label('Kayu Masuk')
-                    ->options(
-                        KayuMasuk::query()
+                    ->options(function (?DetailTurunKayu $record) {
+                        return KayuMasuk::query()
                             ->with(['penggunaanSupplier', 'penggunaanKendaraanSupplier'])
+                            ->where(function ($query) use ($record) {
+                                // 1. Belum terelasi (tidak ada detail_turun_kayus dengan status selesai)
+                                $query->whereDoesntHave('detailTurunKayus', function ($q) {
+                                    $q->where('status', 'selesai');
+                                });
+
+                                // 2. Jika sedang edit, sertakan record yang sedang diedit saat ini
+                                if ($record && $record->id_kayu_masuk) {
+                                    $query->orWhere('id', $record->id_kayu_masuk);
+                                }
+                            })
                             ->get()
                             ->mapWithKeys(function ($kayu) {
                                 $supplier = $kayu->penggunaanSupplier?->nama_supplier ?? '—';
@@ -37,8 +49,8 @@ class DetailTurunKayuForm
                                     $kayu->id => "$supplier | $nopol ($jenis) | Seri: $seri"
                                 ];
                             })
-                            ->toArray()
-                    )
+                            ->toArray();
+                    })
                     ->searchable()
                     ->preload()
                     ->required()

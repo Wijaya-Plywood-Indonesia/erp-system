@@ -8,6 +8,7 @@ use App\Models\HargaPegawai;
 use App\Models\PenggunaanLahanRotary;
 use App\Models\NotaKayu;
 use App\Models\HargaKayu;
+use App\Models\HppAverageLog;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
 
@@ -38,15 +39,26 @@ class ProduksiInflowService
         $laporanFinal = [];
 
         foreach ($paginatedClosures as $closure) {
+            // Cari penutup terakhir sebelum batch ini untuk lahan yang sama
+            $lastClosure = PenggunaanLahanRotary::where('id_lahan', $closure->id_lahan)
+                ->where('created_at', '<', $closure->created_at)
+                ->where('jumlah_batang', '>', 0)
+                ->orderBy('created_at', 'desc')
+                ->first();
+
             // Untuk setiap penutup, kita cari baris-baris "jahitannya" ke belakang
             // Cari baris yang id_lahan & id_jenis_kayu sama, dan waktu <= penutup saat ini
             // namun > penutup sebelumnya (atau ambil semua yang belum punya penutup lain)
-
-            $batchRecords = PenggunaanLahanRotary::where('id_lahan', $closure->id_lahan)
+            $batchRecordsQuery = PenggunaanLahanRotary::where('id_lahan', $closure->id_lahan)
                 ->where('id_jenis_kayu', $closure->id_jenis_kayu)
                 ->where('created_at', '<=', $closure->created_at)
-                ->orderBy('created_at', 'desc')
-                ->get();
+                ->orderBy('created_at', 'desc');
+
+            if ($lastClosure) {
+                $batchRecordsQuery->where('created_at', '>', $lastClosure->created_at);
+            }
+
+            $batchRecords = $batchRecordsQuery->get();
 
             // Kita potong (slice) hanya sampai penutup sebelumnya jika ada
             $tempGroup = [];
@@ -63,18 +75,10 @@ class ProduksiInflowService
             $tempGroup = array_reverse($tempGroup);
             $batch = $this->stitchBatchWithOutflow($tempGroup);
 
-            // Tentukan Inflow Window
-            // Cari penutup terakhir sebelum batch ini untuk lahan yang sama
-            $lastClosure = PenggunaanLahanRotary::where('id_lahan', $closure->id_lahan)
-                ->where('created_at', '<', $batch['tgl_buka_raw'])
-                ->where('jumlah_batang', '>', 0)
-                ->orderBy('created_at', 'desc')
-                ->first();
+            $end = $closure->created_at;
+            [$start, $notaIds] = $this->calculateInflowBoundaries($closure, $lastClosure);
 
-            $start = $lastClosure ? $lastClosure->created_at : null;
-            $end = $batch['tgl_buka_raw'];
-
-            $dataMasuk = $this->getInflowByWindow($closure->id_lahan, $start, $end, $batch['status']);
+            $dataMasuk = $this->getInflowByWindow($closure->id_lahan, $start, $end, $batch['status'], $closure->id_jenis_kayu, $notaIds);
 
             $tglInflowPertama = $dataMasuk->min('tanggal');
             $tglBukaFix = $tglInflowPertama ?: $batch['info']['tgl_buka_lahan'];
@@ -82,8 +86,12 @@ class ProduksiInflowService
             $batchInfo = $batch['info'];
             $batchInfo['tgl_buka_lahan'] = $tglBukaFix;
             $total_poin = number_format($dataMasuk->sum('poin'), 0, ',', '.');
-            $harga_v_ongkos = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj']) / $batch['grand_total_outflow_m3'] ?? 1);
-            $harga_v_ongkos_penyusutan = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj'] + $batch['grand_total_outflow_penyusutan']) / $batch['grand_total_outflow_m3'] ?? 1);
+            $harga_v_ongkos = $batch['grand_total_outflow_m3'] > 0
+                ? (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj']) / $batch['grand_total_outflow_m3'])
+                : 0.0;
+            $harga_v_ongkos_penyusutan = $batch['grand_total_outflow_m3'] > 0
+                ? (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj'] + $batch['grand_total_outflow_penyusutan']) / $batch['grand_total_outflow_m3'])
+                : 0.0;
 
             $outflowCollection = collect($batch['outflow_detail']);
             $jenis_kayu = $outflowCollection->contains(function ($item) {
@@ -104,12 +112,17 @@ class ProduksiInflowService
                     'rendemen' => $dataMasuk->sum('kubikasi') > 0
                         ? number_format(($batch['grand_total_outflow_m3'] / $dataMasuk->sum('kubikasi')) * 100, 2) . '%'
                         : '0%',
-                    'harga_veneer' => (float) ($dataMasuk->sum('poin') / $batch['grand_total_outflow_m3'] ?? 1),
+                    'harga_veneer' => $batch['grand_total_outflow_m3'] > 0
+                        ? (float) ($dataMasuk->sum('poin') / $batch['grand_total_outflow_m3'])
+                        : 0.0,
                     'harga_v_ongkos' => $harga_v_ongkos,
                     'harga_vop' => $harga_v_ongkos_penyusutan
                 ]
             ];
         }
+
+        // Merge zero inflow batches and maintain descending order
+        $laporanFinal = $this->mergeZeroInflowBatches($laporanFinal, true);
 
         // Kembalikan objek paginator agar view bisa merender links()
         return new LengthAwarePaginator(
@@ -146,15 +159,26 @@ class ProduksiInflowService
         $laporanFinal = [];
 
         foreach ($paginatedClosures as $closure) {
+            // Cari penutup terakhir sebelum batch ini untuk lahan yang sama
+            $lastClosure = PenggunaanLahanRotary::where('id_lahan', $closure->id_lahan)
+                ->where('created_at', '<', $closure->created_at)
+                ->where('jumlah_batang', '>', 0)
+                ->orderBy('created_at', 'desc')
+                ->first();
+
             // Untuk setiap penutup, kita cari baris-baris "jahitannya" ke belakang
             // Cari baris yang id_lahan & id_jenis_kayu sama, dan waktu <= penutup saat ini
             // namun > penutup sebelumnya (atau ambil semua yang belum punya penutup lain)
-
-            $batchRecords = PenggunaanLahanRotary::where('id_lahan', $closure->id_lahan)
+            $batchRecordsQuery = PenggunaanLahanRotary::where('id_lahan', $closure->id_lahan)
                 ->where('id_jenis_kayu', $closure->id_jenis_kayu)
                 ->where('created_at', '<=', $closure->created_at)
-                ->orderBy('created_at', 'desc')
-                ->get();
+                ->orderBy('created_at', 'desc');
+
+            if ($lastClosure) {
+                $batchRecordsQuery->where('created_at', '>', $lastClosure->created_at);
+            }
+
+            $batchRecords = $batchRecordsQuery->get();
 
             // Kita potong (slice) hanya sampai penutup sebelumnya jika ada
             $tempGroup = [];
@@ -171,18 +195,10 @@ class ProduksiInflowService
             $tempGroup = array_reverse($tempGroup);
             $batch = $this->stitchBatchWithOutflow($tempGroup);
 
-            // Tentukan Inflow Window
-            // Cari penutup terakhir sebelum batch ini untuk lahan yang sama
-            $lastClosure = PenggunaanLahanRotary::where('id_lahan', $closure->id_lahan)
-                ->where('created_at', '<', $batch['tgl_buka_raw'])
-                ->where('jumlah_batang', '>', 0)
-                ->orderBy('created_at', 'desc')
-                ->first();
+            $end = $closure->created_at;
+            [$start, $notaIds] = $this->calculateInflowBoundaries($closure, $lastClosure);
 
-            $start = $lastClosure ? $lastClosure->created_at : null;
-            $end = $batch['tgl_buka_raw'];
-
-            $dataMasuk = $this->getInflowByWindow($closure->id_lahan, $start, $end, $batch['status']);
+            $dataMasuk = $this->getInflowByWindow($closure->id_lahan, $start, $end, $batch['status'], $closure->id_jenis_kayu, $notaIds);
 
             $tglInflowPertama = $dataMasuk->min('tanggal');
             $tglBukaFix = $tglInflowPertama ?: $batch['info']['tgl_buka_lahan'];
@@ -190,8 +206,12 @@ class ProduksiInflowService
             $batchInfo = $batch['info'];
             $batchInfo['tgl_buka_lahan'] = $tglBukaFix;
             $total_poin = number_format($dataMasuk->sum('poin'), 0, ',', '.');
-            $harga_v_ongkos = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj']) / $batch['grand_total_outflow_m3'] ?? 1);
-            $harga_v_ongkos_penyusutan = (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj'] + $batch['grand_total_outflow_penyusutan']) / $batch['grand_total_outflow_m3'] ?? 1);
+            $harga_v_ongkos = $batch['grand_total_outflow_m3'] > 0
+                ? (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj']) / $batch['grand_total_outflow_m3'])
+                : 0.0;
+            $harga_v_ongkos_penyusutan = $batch['grand_total_outflow_m3'] > 0
+                ? (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj'] + $batch['grand_total_outflow_penyusutan']) / $batch['grand_total_outflow_m3'])
+                : 0.0;
 
             $outflowCollection = collect($batch['outflow_detail']);
             $jenis_kayu = $outflowCollection->contains(function ($item) {
@@ -212,12 +232,17 @@ class ProduksiInflowService
                     'rendemen' => $dataMasuk->sum('kubikasi') > 0
                         ? number_format(($batch['grand_total_outflow_m3'] / $dataMasuk->sum('kubikasi')) * 100, 2) . '%'
                         : '0%',
-                    'harga_veneer' => (float) ($dataMasuk->sum('poin') / $batch['grand_total_outflow_m3'] ?? 1),
+                    'harga_veneer' => $batch['grand_total_outflow_m3'] > 0
+                        ? (float) ($dataMasuk->sum('poin') / $batch['grand_total_outflow_m3'])
+                        : 0.0,
                     'harga_v_ongkos' => $harga_v_ongkos,
                     'harga_vop' => $harga_v_ongkos_penyusutan
                 ]
             ];
         }
+
+        // Merge zero inflow batches and maintain ascending order
+        $laporanFinal = $this->mergeZeroInflowBatches($laporanFinal, false);
 
         // Kembalikan objek paginator agar view bisa merender links()
         return collect($laporanFinal);
@@ -291,16 +316,16 @@ class ProduksiInflowService
 
             // Perbaikan pembagi kubikasi agar akurat (10^9 untuk mm ke m3)
             $m3 = $ukuran ? ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $totalLembar) / 10_000_000 : 0;
-            $m3TotalAllLahan = $totalOutputHarian[$hasil->id_produksi];
-            $pekerja = ($produksi->detailPegawaiRotary->count() ?? 0);
+            $m3TotalAllLahan = isset($totalOutputHarian[$hasil->id_produksi]) ? (float) $totalOutputHarian[$hasil->id_produksi] : 0.0;
+            $pekerja = $produksi ? ($produksi->detailPegawaiRotary ? $produksi->detailPegawaiRotary->count() : 0) : 0;
 
-            $msa = $pekerja * ($m3 / $m3TotalAllLahan);
+            $msa = ($m3TotalAllLahan > 0) ? ($pekerja * ($m3 / $m3TotalAllLahan)) : 0.0;
             $calculatePekerja = max(1, round($msa * $pekerja));
-            $penyusutan = $produksi->mesin->penyusutan ?? 0;
+            $penyusutan = ($produksi && $produksi->mesin) ? ($produksi->mesin->penyusutan ?? 0) : 0;
 
             return [
-                'tgl' => Carbon::parse($produksi->tgl_produksi)->format('d-m-Y'),
-                'mesin' => $produksi->mesin->nama_mesin ?? 'Unknown',
+                'tgl' => $produksi ? Carbon::parse($produksi->tgl_produksi)->format('d-m-Y') : ($hasil->created_at ? Carbon::parse($hasil->created_at)->format('d-m-Y') : '-'),
+                'mesin' => $produksi ? ($produksi->mesin ? ($produksi->mesin->nama_mesin ?? 'Unknown') : 'Unknown') : 'Unknown',
                 'jam_kerja' => "06:00 - 16:00",
                 'ukuran' => $ukuran ? "{$ukuran->panjang} x {$ukuran->lebar} x {$ukuran->tebal}" : '-',
                 'banyak' => $totalLembar,
@@ -351,31 +376,38 @@ class ProduksiInflowService
     }
 
 
-    private function getInflowByWindow($idLahan, $start, $end, $statusBatch)
+    private function getInflowByWindow($idLahan, $start, $end, $statusBatch, $idJenisKayu, $notaIds = [])
     {
-        // SOLUSI 3: Batasi kolom pada Inflow
+        // SOLUSI 3: Batasi kolom pada Inflow, saring juga berdasarkan jenis kayu batch
         $query = NotaKayu::select('id', 'created_at', 'id_kayu_masuk', 'status')
             ->with([
                 'kayuMasuk:id,seri',
-                'kayuMasuk.detailTurusanKayus' => fn($q) => $q->where('lahan_id', $idLahan)
+                'kayuMasuk.detailTurusanKayus' => fn($q) => $q->where('lahan_id', $idLahan)->where('jenis_kayu_id', $idJenisKayu)
             ])
-            ->where('status', 'like', '%Sudah Diperiksa%')
-            ->whereHas('kayuMasuk.detailTurusanKayus', fn($q) => $q->where('lahan_id', $idLahan));
+            ->where('status', 'like', '%Sudah Diperiksa%');
 
         $batasAtas = ($statusBatch === 'PROSES') ? now() : $end;
-        $query->where('created_at', '<=', $batasAtas);
-        if ($start) {
-            $query->where('created_at', '>', $start);
+
+        if (!empty($notaIds)) {
+            $query->whereIn('id', $notaIds);
+        } else {
+            $query->whereHas('kayuMasuk.detailTurusanKayus', fn($q) => $q->where('lahan_id', $idLahan)->where('jenis_kayu_id', $idJenisKayu));
+            $query->where('created_at', '<=', $batasAtas);
+            if ($start) {
+                $query->where('created_at', '>', $start);
+            }
         }
 
-        return $query->get()->map(function ($nota) use ($idLahan) {
-            $kayuMasukId = $nota->id_kayu_masuk;
+        $notas = $query->get();
+        $notaInflows = collect();
 
-            // Perhitungan Tingkat SQL Tinggi untuk Kubikasi dan Poin
+        if (!$notas->isEmpty()) {
+            $kayuMasukIds = $notas->pluck('id_kayu_masuk')->unique()->toArray();
 
-            $totals = DetailTurusanKayu::query()
-                ->where('detail_turusan_kayus.id_kayu_masuk', $kayuMasukId)
+            $totalsGrouped = DetailTurusanKayu::query()
+                ->whereIn('detail_turusan_kayus.id_kayu_masuk', $kayuMasukIds)
                 ->where('detail_turusan_kayus.lahan_id', $idLahan)
+                ->where('detail_turusan_kayus.jenis_kayu_id', $idJenisKayu)
                 ->leftJoin('harga_kayus', function ($join) {
                     $join->on('detail_turusan_kayus.jenis_kayu_id', '=', 'harga_kayus.id_jenis_kayu')
                         ->on('detail_turusan_kayus.grade', '=', 'harga_kayus.grade')
@@ -384,17 +416,14 @@ class ProduksiInflowService
                         ->whereColumn('detail_turusan_kayus.diameter', '<=', 'harga_kayus.diameter_terbesar');
                 })
                 ->selectRaw("
+                        detail_turusan_kayus.id_kayu_masuk,
                         SUM(detail_turusan_kayus.kuantitas) as total_qty,
-                        
-                        /* 1. KUBIKASI (Tetap pakai ROUND 4 desimal karena ini sudah FIX sebelumnya) */
                         SUM(
                             ROUND(
                                 (CAST(detail_turusan_kayus.panjang AS DECIMAL(20,4)) * CAST(detail_turusan_kayus.diameter AS DECIMAL(20,4)) * CAST(detail_turusan_kayus.diameter AS DECIMAL(20,4)) * 0.785 / 1000000) 
                                 * CAST(detail_turusan_kayus.kuantitas AS DECIMAL(20,4)), 
                             4)
                         ) as total_kubikasi,
-
-                        /* 2. POIN: Kita gunakan FLOOR untuk membuang desimal di setiap baris (Gaya Excel) */
                         SUM(
                             FLOOR(
                                 (COALESCE(harga_kayus.harga_beli, 0) * ROUND(
@@ -404,20 +433,62 @@ class ProduksiInflowService
                                 ) * 1000
                             )
                         ) as total_poin,
-
                         COUNT(CASE WHEN harga_kayus.harga_beli IS NULL THEN 1 END) as harga_kosong_count
                     ")
-                ->first();
+                ->groupBy('detail_turusan_kayus.id_kayu_masuk')
+                ->get()
+                ->keyBy('id_kayu_masuk');
+
+            $notaInflows = $notas->map(function ($nota) use ($idLahan, $totalsGrouped) {
+                $kayuMasukId = $nota->id_kayu_masuk;
+                $totals = $totalsGrouped->get($kayuMasukId);
+
+                $totalQty = $totals ? (int) $totals->total_qty : 0;
+                $totalKubikasi = $totals ? (float) $totals->total_kubikasi : 0.0;
+                $totalPoin = $totals ? (float) $totals->total_poin : 0.0;
+                $hargaKosongCount = $totals ? (int) $totals->harga_kosong_count : 0;
+
+                return [
+                    'tanggal' => $nota->created_at->format('d-m-Y'),
+                    'seri' => ($hargaKosongCount > 0)
+                        ? $nota->kayuMasuk->seri . " ⚠️ (Harga Belum Atur: $hargaKosongCount Baris)"
+                        : $nota->kayuMasuk->seri,
+                    'banyak' => $totalQty,
+                    'kubikasi' => $totalKubikasi,
+                    'poin' => $totalPoin
+                ];
+            })->filter(fn($x) => $x['banyak'] > 0)->values();
+        }
+
+        // Ambil Data Stok Opname dari HppAverageLog
+        $opnameQuery = HppAverageLog::where('id_lahan', $idLahan)
+            ->where('id_jenis_kayu', $idJenisKayu)
+            ->where('keterangan', 'like', 'STOK OPNAME%')
+            ->where('created_at', '<=', $batasAtas);
+
+        if ($start) {
+            $opnameQuery->where('created_at', '>', $start);
+        }
+
+        $opnames = $opnameQuery->get();
+
+        $opnameInflows = $opnames->map(function ($log) {
+            $isMasuk = $log->tipe_transaksi === 'masuk';
+            $multiplier = $isMasuk ? 1 : -1;
+
+            $parts = explode('|', $log->keterangan);
+            $notes = isset($parts[1]) ? trim($parts[1]) : 'Koreksi Stok';
+
             return [
-                'tanggal' => $nota->created_at->format('d-m-Y'),
-                'seri' => ($totals->harga_kosong_count > 0)
-                    ? $nota->kayuMasuk->seri . " ⚠️ (Harga Belum Atur: $totals->harga_kosong_count Baris)"
-                    : $nota->kayuMasuk->seri,
-                'banyak' => (int) $totals->total_qty,
-                'kubikasi' => (float) $totals->total_kubikasi,
-                'poin' => (float) $totals->total_poin // Poin sudah sinkron dengan database & excel
+                'tanggal' => $log->created_at->format('d-m-Y'),
+                'seri' => "⚙️ OPNAME: " . $notes,
+                'banyak' => $log->total_batang * $multiplier,
+                'kubikasi' => (float) $log->total_kubikasi * $multiplier,
+                'poin' => (float) $log->nilai_stok * $multiplier
             ];
         });
+
+        return $notaInflows->concat($opnameInflows);
     }
 
     private function calculatePoin($item)
@@ -453,5 +524,201 @@ class ProduksiInflowService
             ->toArray();
 
         return $paginatedClosures;
+    }
+
+    private function getBatchStart($closure)
+    {
+        if (!$closure) {
+            return null;
+        }
+        $batchRecords = PenggunaanLahanRotary::where('id_lahan', $closure->id_lahan)
+            ->where('id_jenis_kayu', $closure->id_jenis_kayu)
+            ->where('created_at', '<=', $closure->created_at)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $tempGroup = [];
+        foreach ($batchRecords as $record) {
+            $tempGroup[] = $record;
+            if ($record->id !== $closure->id && $record->jumlah_batang > 0) {
+                array_pop($tempGroup);
+                break;
+            }
+        }
+        $tempGroup = array_reverse($tempGroup);
+        return $tempGroup[0] ? $tempGroup[0]->created_at : $closure->created_at;
+    }
+
+    private function mergeZeroInflowBatches(array $laporanFinal, $descending = false): array
+    {
+        // 1. Urutkan secara kronologis (ASC) berdasarkan waktu buka lahan
+        usort($laporanFinal, function ($a, $b) {
+            return strcmp($a['batch_info']['tgl_buka_lahan'], $b['batch_info']['tgl_buka_lahan']);
+        });
+
+        $mergedList = [];
+
+        foreach ($laporanFinal as $item) {
+            $totalMasuk = (float) $item['summary']['total_masuk_m3'];
+            $totalKeluar = (float) $item['summary']['total_keluar_m3'];
+
+            // Jika batch memiliki 0 kayu masuk tetapi memiliki kayu keluar (outflow), 
+            // ini adalah kelanjutan dari batch sebelumnya pada lahan & jenis kayu yang sama.
+            if ($totalMasuk == 0 && $totalKeluar > 0) {
+                $foundParentKey = null;
+                for ($i = count($mergedList) - 1; $i >= 0; $i--) {
+                    if ($mergedList[$i]['batch_info']['lahan'] === $item['batch_info']['lahan'] &&
+                        $mergedList[$i]['batch_info']['jenis_kayu'] === $item['batch_info']['jenis_kayu']) {
+                        $foundParentKey = $i;
+                        break;
+                    }
+                }
+
+                if ($foundParentKey !== null) {
+                    $parent = &$mergedList[$foundParentKey];
+
+                    // Gabungkan Outflow
+                    $parent['outflow'] = array_merge($parent['outflow'], $item['outflow']);
+
+                    // Hitung ulang grand total outflow
+                    $totalOutflowM3 = collect($parent['outflow'])->sum(fn($x) => (float) str_replace(',', '', $x['total_kubikasi']));
+                    $totalOngkos = collect($parent['outflow'])->sum('ongkos');
+                    $totalPenyusutan = collect($parent['outflow'])->sum('penyusutan');
+
+                    // Update summary
+                    $parent['summary']['total_keluar_m3'] = (float) number_format($totalOutflowM3, 4);
+
+                    $totalInflowM3 = (float) $parent['summary']['total_masuk_m3'];
+                    $parent['summary']['rendemen'] = $totalInflowM3 > 0
+                        ? number_format(($totalOutflowM3 / $totalInflowM3) * 100, 2) . '%'
+                        : '0%';
+
+                    $totalPoinVal = (float) str_replace(['.', ','], ['', '.'], $parent['summary']['total_poin']);
+
+                    $parent['summary']['harga_veneer'] = $totalOutflowM3 > 0
+                        ? (float) ($totalPoinVal / $totalOutflowM3)
+                        : 0.0;
+
+                    $parent['summary']['harga_v_ongkos'] = $totalOutflowM3 > 0
+                        ? (float) (($totalPoinVal + $totalOngkos) / $totalOutflowM3)
+                        : 0.0;
+
+                    $parent['summary']['harga_vop'] = $totalOutflowM3 > 0
+                        ? (float) (($totalPoinVal + $totalOngkos + $totalPenyusutan) / $totalOutflowM3)
+                        : 0.0;
+
+                    // Update info batch ke status penutupan terakhir
+                    $parent['batch_info']['tgl_tutup_lahan'] = $item['batch_info']['tgl_tutup_lahan'];
+                    $parent['batch_info']['jumlah_batang_akhir'] = $item['batch_info']['jumlah_batang_akhir'];
+                    $parent['batch_info']['status'] = $item['batch_info']['status'];
+
+                    continue;
+                }
+            }
+
+            $mergedList[] = $item;
+        }
+
+        // 2. Kembalikan ke urutan menurun (DESC) jika dipanggil oleh laporan utama
+        if ($descending) {
+            usort($mergedList, function ($a, $b) {
+                return strcmp($b['batch_info']['tgl_buka_lahan'], $a['batch_info']['tgl_buka_lahan']);
+            });
+        }
+
+        return $mergedList;
+    }
+
+    private function calculateInflowBoundaries($closure, $lastClosure)
+    {
+        $start = $lastClosure ? $lastClosure->created_at : null;
+        $notaIds = [];
+
+        $currentClosureLog = \App\Models\HppAverageLog::where('referensi_type', \App\Models\PenggunaanLahanRotary::class)
+            ->where('referensi_id', $closure->id)
+            ->first();
+
+        if ($currentClosureLog) {
+            $lastClosureLog = \App\Models\HppAverageLog::where('id_lahan', $closure->id_lahan)
+                ->where('id_jenis_kayu', $closure->id_jenis_kayu)
+                ->where('tipe_transaksi', 'keluar')
+                ->where('created_at', '<', $currentClosureLog->created_at)
+                ->orderBy('created_at', 'desc')
+                ->first();
+
+            if ($lastClosureLog) {
+                $prevClosure = \App\Models\PenggunaanLahanRotary::find($lastClosureLog->referensi_id);
+                if ($prevClosure) {
+                    $start = $prevClosure->created_at;
+                }
+            } else {
+                $masukLogsQuery = \App\Models\HppAverageLog::where('id_lahan', $closure->id_lahan)
+                    ->where('id_jenis_kayu', $closure->id_jenis_kayu)
+                    ->where('tipe_transaksi', 'masuk')
+                    ->where('referensi_type', \App\Models\NotaKayu::class)
+                    ->where('created_at', '<', $currentClosureLog->created_at);
+
+                $notaIds = $masukLogsQuery->pluck('referensi_id')->toArray();
+
+                // Hitung berapa banyak qty yang sudah tercatat di HPP masuk
+                $trackedQty = 0;
+                if (!empty($notaIds)) {
+                    $trackedQty = \App\Models\DetailTurusanKayu::where('lahan_id', $closure->id_lahan)
+                        ->where('jenis_kayu_id', $closure->id_jenis_kayu)
+                        ->whereIn('id_kayu_masuk', function($q) use ($notaIds) {
+                            $q->select('id_kayu_masuk')->from('nota_kayus')->whereIn('id', $notaIds);
+                        })
+                        ->sum('kuantitas');
+                }
+
+                // Sisa qty yang merupakan saldo awal (pre-HPP)
+                $untrackedQty = $currentClosureLog->total_batang - $trackedQty;
+
+                if ($untrackedQty > 0) {
+                    $minNotaCreatedAt = null;
+                    if (!empty($notaIds)) {
+                        $minNotaCreatedAt = \App\Models\NotaKayu::whereIn('id', $notaIds)->min('created_at');
+                    }
+                    $firstHppTime = $minNotaCreatedAt ?: $currentClosureLog->created_at;
+
+                    // Query NotaKayu sebelum HPP secara descending
+                    $preHppNotas = \App\Models\NotaKayu::where('status', 'like', '%Sudah Diperiksa%')
+                        ->where('created_at', '<', $firstHppTime)
+                        ->whereHas('kayuMasuk.detailTurusanKayus', function($q) use ($closure) {
+                            $q->where('lahan_id', $closure->id_lahan)
+                              ->where('jenis_kayu_id', $closure->id_jenis_kayu);
+                        })
+                        ->orderBy('created_at', 'desc')
+                        ->get();
+
+                    $accumulated = 0;
+                    $preHppNotaIds = [];
+                    foreach ($preHppNotas as $n) {
+                        if ($accumulated >= $untrackedQty) {
+                            break;
+                        }
+                        $qty = \App\Models\DetailTurusanKayu::where('id_kayu_masuk', $n->id_kayu_masuk)
+                            ->where('lahan_id', $closure->id_lahan)
+                            ->where('jenis_kayu_id', $closure->id_jenis_kayu)
+                            ->sum('kuantitas');
+
+                        $preHppNotaIds[] = $n->id;
+                        $accumulated += $qty;
+                    }
+
+                    $notaIds = array_merge($notaIds, $preHppNotaIds);
+                }
+
+                // Set start boundary to the oldest nota in the merged list, with a subDays(30) fallback if empty
+                if (!empty($notaIds)) {
+                    $minNotaCreatedAt = \App\Models\NotaKayu::whereIn('id', $notaIds)->min('created_at');
+                    if ($minNotaCreatedAt) {
+                        $start = \Carbon\Carbon::parse($minNotaCreatedAt)->subDays(30);
+                    }
+                }
+            }
+        }
+
+        return [$start, $notaIds];
     }
 }

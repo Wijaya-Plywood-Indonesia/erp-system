@@ -43,7 +43,7 @@ class TargetsTable
                     ->searchable(),
 
                 TextColumn::make('target')
-                    ->numeric()
+                    ->numeric(decimalPlaces: 4)
                     ->sortable(),
 
                 TextColumn::make('orang')
@@ -57,12 +57,12 @@ class TargetsTable
                 // Kolom Kalkulasi (Hanya sortable jika kolom ini ada di database)
                 TextColumn::make('targetperjam')
                     ->label('Tgt/Jam')
-                    ->numeric(decimalPlaces: 2)
+                    ->numeric(decimalPlaces: 4)
                     ->sortable(),
 
                 TextColumn::make('targetperorang')
                     ->label('Tgt/Org')
-                    ->numeric(decimalPlaces: 2)
+                    ->numeric(decimalPlaces: 4)
                     ->sortable(),
 
                 TextColumn::make('gaji')

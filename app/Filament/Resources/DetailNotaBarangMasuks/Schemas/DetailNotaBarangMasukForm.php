@@ -29,7 +29,8 @@ class DetailNotaBarangMasukForm
 
                 Textarea::make('keterangan')
                     ->label('Keterangan')
-                    ->rows(3),
+                    ->rows(3)
+                    ->required(),
                 //
             ]);
     }

@@ -209,10 +209,10 @@
         </x-filament::section>
 
         {{-- ═══════════════════════════════════════════
-             DAFTAR BARANG
+             DAFTAR BARANG VENEER
         ═══════════════════════════════════════════ --}}
         @if(count($items) > 0)
-        <x-filament::section heading="Daftar Barang ({{ count($items) }} item)">
+        <x-filament::section heading="Daftar Barang Veneer ({{ count($items) }} item)">
             <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                 <table class="w-full text-sm">
                     <thead class="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-500 dark:text-gray-400">
@@ -257,12 +257,102 @@
                 </table>
             </div>
         </x-filament::section>
-        @else
+        @endif
+
+        {{-- ═══════════════════════════════════════════
+             INPUT TAMBAH BAHAN LAIN (NON-VENEER)
+        ═══════════════════════════════════════════ --}}
+        <x-filament::section heading="Tambah Bahan / Barang Lain (Selain Veneer - Opsional)">
+            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                {{-- Nama Barang --}}
+                <div class="{{ $fieldClass }}">
+                    <label class="{{ $labelClass }}">Nama Barang <span class="text-danger-500">*</span></label>
+                    <x-filament::input.wrapper>
+                        <x-filament::input type="text" wire:model.live="nv_nama_barang" placeholder="Paku, Solasi, dll..." />
+                    </x-filament::input.wrapper>
+                    @error('nv_nama_barang') <p class="text-xs text-danger-500">{{ $message }}</p> @enderror
+                </div>
+
+                {{-- Jumlah --}}
+                <div class="{{ $fieldClass }}">
+                    <label class="{{ $labelClass }}">Jumlah <span class="text-danger-500">*</span></label>
+                    <x-filament::input.wrapper>
+                        <x-filament::input type="number" wire:model.live="nv_jumlah" placeholder="0" min="1" />
+                    </x-filament::input.wrapper>
+                    @error('nv_jumlah') <p class="text-xs text-danger-500">{{ $message }}</p> @enderror
+                </div>
+
+                {{-- Satuan --}}
+                <div class="{{ $fieldClass }}">
+                    <label class="{{ $labelClass }}">Satuan <span class="text-danger-500">*</span></label>
+                    <x-filament::input.wrapper>
+                        <x-filament::input type="text" wire:model.live="nv_satuan" placeholder="Pcs, Kg, Box, dll..." />
+                    </x-filament::input.wrapper>
+                    @error('nv_satuan') <p class="text-xs text-danger-500">{{ $message }}</p> @enderror
+                </div>
+
+                {{-- Keterangan --}}
+                <div class="{{ $fieldClass }}">
+                    <label class="{{ $labelClass }}">Keterangan</label>
+                    <x-filament::input.wrapper>
+                        <x-filament::input type="text" wire:model.live="nv_keterangan" placeholder="Opsional..." />
+                    </x-filament::input.wrapper>
+                </div>
+            </div>
+
+            <div class="mt-5 border-t border-gray-100 dark:border-gray-700 pt-4">
+                <x-filament::button wire:click="tambahBahanLain" icon="heroicon-o-plus-circle" color="warning" size="md">
+                    Tambah Bahan Lain
+                </x-filament::button>
+            </div>
+        </x-filament::section>
+
+        {{-- ═══════════════════════════════════════════
+             DAFTAR BAHAN / BARANG LAIN
+        ═══════════════════════════════════════════ --}}
+        @if(count($non_veneer_items) > 0)
+        <x-filament::section heading="Daftar Bahan / Barang Lain ({{ count($non_veneer_items) }} item)">
+            <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-500 dark:text-gray-400">
+                        <tr>
+                            <th class="px-4 py-3 text-left">#</th>
+                            <th class="px-4 py-3 text-left">Nama Barang</th>
+                            <th class="px-4 py-3 text-right">Jumlah</th>
+                            <th class="px-4 py-3 text-left">Satuan</th>
+                            <th class="px-4 py-3 text-left">Keterangan</th>
+                            <th class="px-4 py-3 text-center">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                        @foreach($non_veneer_items as $i => $item)
+                        <tr class="bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <td class="px-4 py-3 text-gray-500">{{ $i + 1 }}</td>
+                            <td class="px-4 py-3 font-medium">{{ $item['nama_barang'] }}</td>
+                            <td class="px-4 py-3 text-right font-semibold">{{ number_format($item['jumlah']) }}</td>
+                            <td class="px-4 py-3">{{ $item['satuan'] }}</td>
+                            <td class="px-4 py-3 text-gray-500">{{ $item['keterangan'] ?: '-' }}</td>
+                            <td class="px-4 py-3 text-center">
+                                <button wire:click="hapusBahanLain({{ $i }})"
+                                    class="inline-flex items-center justify-center rounded p-1 text-danger-500 hover:bg-danger-50 hover:text-danger-700 dark:hover:bg-danger-900 transition-colors"
+                                    wire:confirm="Hapus barang ini dari daftar?">
+                                    <x-heroicon-o-trash class="w-4 h-4" />
+                                </button>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </x-filament::section>
+        @endif
+
+        @if(count($items) === 0 && count($non_veneer_items) === 0)
         <x-filament::section>
             <div class="flex flex-col items-center justify-center py-10 text-gray-400 dark:text-gray-600">
                 <x-heroicon-o-inbox-arrow-down class="w-12 h-12 mb-3 opacity-30" />
                 <p class="text-sm">Belum ada barang yang ditambahkan.</p>
-                <p class="text-xs mt-1 opacity-70">Isi form di atas lalu klik "Tambah Barang".</p>
+                <p class="text-xs mt-1 opacity-70">Isi form di atas lalu klik "Tambah Barang" atau "Tambah Bahan Lain".</p>
             </div>
         </x-filament::section>
         @endif

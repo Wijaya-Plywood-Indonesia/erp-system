@@ -53,6 +53,7 @@ class ProduksiKediResource extends Resource
             DetailBongkarRelationManager::class,
             PegawaiKediRelationManager::class,
             YesRelationManager::class,
+            RelationManagers\KendalaKediRelationManager::class,
         ];
     }
 

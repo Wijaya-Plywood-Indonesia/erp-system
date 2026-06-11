@@ -46,6 +46,7 @@ class TargetForm
                 TextInput::make('target')
                     ->label('Target')
                     ->numeric()
+                    ->step(0.0001)
                     ->required(),
 
                 TextInput::make('orang')

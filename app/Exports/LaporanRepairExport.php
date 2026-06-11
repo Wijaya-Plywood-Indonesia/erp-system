@@ -307,54 +307,58 @@ class LaporanRepairSummarySheet implements FromCollection, WithHeadings, WithTit
 // ============================================================
 // SHEET 3: JURNAL — REPAIR TEMPLATE (MENIRU STRUKTUR JOIN)
 // ============================================================
+// ============================================================
+// SHEET 3: JURNAL — REPAIR TEMPLATE (MENIRU STRUKTUR JOIN)
+// ============================================================
 class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles, WithColumnFormatting
 {
     public function __construct(protected $rawCollection) {}
 
     public function title(): string
     {
-        return 'Jurnal';
+        return 'jurnal produksi';
     }
 
     public function columnWidths(): array
     {
         return [
-            'A' => 45, // Nama Akun
-            'B' => 15, // tgl
-            'C' => 12, // jurnal
-            'D' => 12, // No Akun
-            'E' => 8,  // No
-            'F' => 8,  // mm
-            'G' => 15, // Nama
-            'H' => 45, // Keterangan
-            'I' => 8,  // map
-            'J' => 8,  // hit kbk
-            'K' => 14, // Banyak
-            'L' => 16, // M3
-            'M' => 16, // Harga
-            'N' => 22, // Total
+            'A' => 45,
+            'B' => 15,
+            'C' => 12,
+            'D' => 12,
+            'E' => 8,
+            'F' => 8,
+            'G' => 15,
+            'H' => 45,
+            'I' => 8,
+            'J' => 8,
+            'K' => 14,
+            'L' => 16,
+            'M' => 16,
+            'N' => 22,
         ];
     }
 
     public function columnFormats(): array
     {
         return [
-            'D' => '0.00',         // No Akun sebagai Teks/Desimal Terkunci agar .00 tidak hilang
-            'K' => '#,##0',        // Banyak
-            'L' => '#,##0.0000',   // M3: 4 desimal
-            'M' => '#,##0.00',     // Harga
-            'N' => '#,##0',        // Total
+            'D' => '0.00',
+            'K' => '#,##0',
+            'L' => '#,##0.0000',
+            'M' => '#,##0.00',
+            'N' => '#,##0',
         ];
     }
 
     public function styles(Worksheet $sheet)
     {
         $lastRow = $sheet->getHighestRow();
+
         $sheet->getStyle('A1:N1')->applyFromArray([
-            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'name' => 'Calibri', 'size' => 11],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '9999FF']],
+            'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'name' => 'Calibri', 'size' => 11],
+            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '9999FF']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'FFFFFF']]]
+            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'FFFFFF']]]
         ]);
 
         if ($lastRow > 1) {
@@ -363,6 +367,22 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             $sheet->getStyle("B2:G{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle("I2:J{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle("K2:N{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+            // =========================================================================
+            // RUMUS TOTAL (KOLOM N) YANG BARU & FLEKSIBEL
+            // =========================================================================
+            // Jika J="m", maka Total = Harga * M3 (M*L)
+            // Jika J="b", maka Total = Harga * Banyak (M*K)
+            // Jika tidak keduanya, maka Total = Harga (M)
+            // =========================================================================
+            for ($row = 2; $row <= $lastRow; $row++) {
+                $namaAkunVal = $sheet->getCell("A{$row}")->getValue();
+                if ($namaAkunVal !== '' && $namaAkunVal !== null) {
+                    $sheet->getCell("N{$row}")->setValue(
+                        "=IF(J{$row}=\"m\",M{$row}*L{$row},IF(J{$row}=\"b\",M{$row}*K{$row},M{$row}))"
+                    );
+                }
+            }
         }
     }
 
@@ -371,172 +391,352 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
         return str_contains(strtolower(trim($jenis)), 'sengon') ? 'sengon' : 'meranti';
     }
 
-    private function getHargaPatok(string $jenis, float $tebal, bool $isAf = false): int
+    /**
+     * Mengembalikan [noAkun, namaAkun] berdasarkan jenis, tebal, isAf, dan kwNorm.
+     */
+    private function getNoAkunDanNama(string $jenis, float $tebal, bool $isAf, string $kwNorm): array
     {
-        $jns = $this->normalizeJenis($jenis);
-        // Jika PCC (AF), gunakan harga khusus sesuai master rule
-        if ($isAf) {
-            return ($jns === 'sengon') ? 1500000 : 1800000;
+        $jnsNorm    = $this->normalizeJenis($jenis);
+        $isSengon   = $jnsNorm === 'sengon';
+        $jnsLabel   = strtolower($jnsNorm);
+
+        $isWHN = false;
+        if (request()) {
+            $host = request()->getHost();
+            if ($host === 'wahana.wijayaplywoods.com' || env('APP_COMPANY') === 'WHN') {
+                $isWHN = true;
+            }
         }
-        $kelompok = ($tebal < 1) ? 'faceback' : 'core';
-        $harga = [
-            'sengon' => ['faceback' => 2800000, 'core' => 2250000],
-            'meranti' => ['faceback' => 2800000, 'core' => 2800000],
-        ];
-        return $harga[$jns][$kelompok] ?? 0;
+
+        $companySuffix = $isWHN ? 'WHN' : 'WJY';
+        $accountSuffix = $isWHN ? '.01' : '.00';
+
+        $tipeVeneer = $tebal < 1 ? '260 face/back' : '130 core';
+
+        if ($isAf) {
+            if ($kwNorm === 'jadi') {
+                $noAkun   = $isSengon ? ('1472' . $accountSuffix) : ('1471' . $accountSuffix);
+                $namaAkun = "Veneer Jadi ppc {$jnsLabel} {$companySuffix}";
+            } else {
+                $noAkun   = $isSengon ? ('1452' . $accountSuffix) : ('1451' . $accountSuffix);
+                $namaAkun = "Veneer Kering ppc {$jnsLabel} {$companySuffix}";
+            }
+        } elseif ($kwNorm === 'jadi') {
+            if ($tebal < 1) {
+                $noAkun = $isSengon ? ('1461' . $accountSuffix) : ('1462' . $accountSuffix);
+            } else {
+                $noAkun = $isSengon ? ('1466' . $accountSuffix) : ('1467' . $accountSuffix);
+            }
+            $namaAkun = "Veneer Jadi {$tipeVeneer} {$jnsLabel} {$companySuffix}";
+        } else {
+            if ($tebal < 1) {
+                $noAkun = $isSengon ? ('1441' . $accountSuffix) : ('1442' . $accountSuffix);
+            } else {
+                $noAkun = $isSengon ? ('1446' . $accountSuffix) : ('1447' . $accountSuffix);
+            }
+            $namaAkun = "Veneer Kering {$tipeVeneer} {$jnsLabel} {$companySuffix}";
+        }
+
+        return [$noAkun, $namaAkun];
     }
 
-    private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $total, $hitKbk = 'm'): array
+    private function getHargaPatok(string $jenis, float $tebal, bool $isAf = false, string $status = 'jadi'): int
+    {
+        $jns = $this->normalizeJenis($jenis);
+
+        $dbHarga = $this->getHargaVeneerDb($jenis, $tebal, $status, $isAf);
+        if ($dbHarga > 0) {
+            return $dbHarga;
+        }
+
+        if ($isAf) {
+            $kelompok = $tebal < 1 ? 'ppc_faceback' : 'ppc_core';
+            $harga    = [
+                'sengon'  => [
+                    'ppc_faceback' => ['basah' => 1700000, 'kering' => 1700000, 'jadi' => 1700000],
+                    'ppc_core'     => ['basah' => 1500000, 'kering' => 1500000, 'jadi' => 1500000],
+                ],
+                'meranti' => [
+                    'ppc_faceback' => ['basah' => 2000000, 'kering' => 2000000, 'jadi' => 2000000],
+                    'ppc_core'     => ['basah' => 1800000, 'kering' => 1800000, 'jadi' => 1800000],
+                ],
+            ];
+            return $harga[$jns][$kelompok][$status] ?? 0;
+        }
+
+        $kelompok = $tebal < 1 ? 'faceback' : 'core';
+        $harga    = [
+            'sengon'  => [
+                'faceback' => ['basah' => 2700000, 'kering' => 3050000, 'jadi' => 4000000],
+                'core'     => ['basah' => 1700000, 'kering' => 2000000, 'jadi' => 2250000],
+            ],
+            'sengon'  => ['faceback' => ['basah' => 2700000, 'kering' => 2800000, 'jadi' => 4000000], 'core' => ['basah' => 1700000, 'kering' => 1900000, 'jadi' => 2250000]],
+            'meranti' => ['faceback' => ['basah' => 8000000, 'kering' => 8500000, 'jadi' => 12500000], 'core' => ['basah' => 2100000, 'kering' => 2500000, 'jadi' => 2800000]],
+        ];
+        return $harga[$jns][$kelompok][$status] ?? 0;
+    }
+
+    private function getHargaVeneerDb(string $jenis, float $tebal, string $tipeKualitas, bool $isAf = false): int
+    {
+        $jns = str_contains(strtolower(trim($jenis)), 'sengon') ? 'Sengon' : 'Meranti';
+        $jenisKayu = \App\Models\JenisKayu::where('nama_kayu', $jns)->first();
+        if (!$jenisKayu) {
+            return 0;
+        }
+
+        if ($isAf) {
+            $kelompok = ($tebal < 1) ? 'ppc_faceback' : 'ppc_core';
+        } else {
+            $kelompok = ($tebal < 1) ? 'faceback' : 'core';
+        }
+
+        $ukuranOptions = $kelompok === 'faceback'
+            ? ($jns === 'Sengon' ? ['faceback'] : ['face', 'back'])
+            : ($kelompok === 'ppc_faceback' ? ['ppc_faceback'] : [$kelompok]);
+
+        $hargaVeneer = \App\Models\HargaVeneer::where('id_jenis_kayu', $jenisKayu->id)
+            ->whereIn('ukuran', $ukuranOptions)
+            ->first();
+
+        if (!$hargaVeneer) {
+            return 0;
+        }
+
+        if ($tipeKualitas === 'basah') {
+            return (int) $hargaVeneer->harga_basah;
+        } elseif ($tipeKualitas === 'kering') {
+            return (int) $hargaVeneer->harga_kering;
+        } else {
+            return (int) $hargaVeneer->harga_jadi;
+        }
+    }
+
+    private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $hitKbk = 'm'): array
     {
         return [
             $namaAkun,
-            (string)$tgl,
+            (string) $tgl,
             '',
-            (string)$noAkun,
+            (string) $noAkun,
             '',
             '',
-            'tembel', // Nama aktivitas disesuaikan dengan konteks repair (tembel)
+            'tembel',
             $keterangan,
             strtolower($map),
-            strtolower($hitKbk),
-            (float) $banyak,
-            (float) $m3,
-            (float) $harga,
-            (float) $total
+            $hitKbk !== '' && $hitKbk !== null ? strtolower($hitKbk) : '',
+            $banyak === '' || $banyak === null ? '' : (float) $banyak,
+            $m3 === '' || $m3 === null ? '' : (float) $m3,
+            $harga === '' || $harga === null ? '' : (float) $harga,
+            '', 
         ];
     }
 
     public function array(): array
     {
-        $rows = [];
+        $rows   = [];
         $rows[] = ['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total'];
 
         foreach ($this->rawCollection as $produksi) {
-            $tglFormat = Carbon::parse($produksi->tanggal)->format('d-m-Y');
-            $totalDebit = 0;
-            $totalKredit = 0;
-            $jurnalBlock = [];
+            $tglFormat         = Carbon::parse($produksi->tanggal)->format('d-m-Y');
+            $totalDebit        = 0;
+            $totalKredit       = 0;
+            $jurnalBlockDebit  = [];
+            $jurnalBlockKredit = [];
+            $selisihPerGroup   = [];
 
             // ============================================================
-            // 1. DEBIT: Hasil Repair (Barang Jadi) - SESUAI STRUKTUR RENCANA
+            // 1. DEBIT: Hasil Repair → kwNorm selalu 'jadi'
             // ============================================================
-            foreach ($produksi->hasilRepairs as $hasil) {
-                // 1. Tarik jembatan rencana repair-nya
-                $rencanaRepair = $hasil->rencanaRepair;
+            $groupedHasil = collect($produksi->hasilRepairs)->groupBy(function ($hasil) {
+                $modal = $hasil->rencanaRepair?->modalRepairs;
+                if (!$modal || !$modal->ukuran || !$modal->jenisKayu) return 'invalid_data';
+                $jnsNorm  = $this->normalizeJenis($modal->jenisKayu->nama_kayu ?? '');
+                $kwStatus = strtolower(($hasil->rencanaRepair->kw ?? $modal->kw) ?? '');
+                $isAf     = str_contains($kwStatus, 'af') ? 'af' : 'reguler';
+                $kw       = (int) filter_var($kwStatus, FILTER_SANITIZE_NUMBER_INT);
+                $kwNorm   = ($kw == 1 || $kw == 2) ? 'jadi' : 'kering';
+                return "{$jnsNorm}|{$modal->ukuran->panjang}|{$modal->ukuran->lebar}|{$modal->ukuran->tebal}|{$isAf}|{$kwNorm}";
+            });
 
-                // 2. Tarik modal repair melalui relasi 'modalRepairs' (sesuai nama fungsi di model Anda)
-                $modal = $rencanaRepair?->modalRepairs;
-
-                // 🚀 PROTEKSI: Jika jembatan rencana atau modalnya tidak ketemu/null, skip agar tidak crash
-                if (!$modal || !$modal->ukuran || !$modal->jenisKayu) {
-                    continue;
+            foreach ($groupedHasil as $key => $items) {
+                if ($key === 'invalid_data') continue;
+                [$jnsNorm, $panjang, $lebar, $tebal, $statusKw, $kwNorm] = explode('|', $key);
+                $isAf = ($statusKw === 'af');
+                $totalBanyak = $items->sum('jumlah');
+                $totalM3     = ((float)$panjang * (float)$lebar * (float)$tebal * $totalBanyak) / 10000000;
+                $kelompok = (float)$tebal < 1 ? 'faceback' : 'core';
+                $groupKey = "{$jnsNorm}|{$kelompok}|{$statusKw}";
+                if (!isset($selisihPerGroup[$groupKey])) {
+                    $selisihPerGroup[$groupKey] = ['hasilM3' => 0, 'modalM3' => 0, 'hasilBanyak' => 0, 'modalBanyak' => 0, 'jenis' => $jnsNorm, 'tebal' => (float)$tebal, 'panjang' => (float)$panjang, 'lebar' => (float)$lebar, 'kelompok' => $kelompok, 'isAf' => $isAf, 'kwNorm' => 'jadi'];
                 }
+                $selisihPerGroup[$groupKey]['hasilM3'] += $totalM3;
+                $selisihPerGroup[$groupKey]['hasilBanyak'] += $totalBanyak;
+                [$noAkun, $namaAkun] = $this->getNoAkunDanNama($jnsNorm, (float)$tebal, $isAf, 'jadi');
+                $hargaPatok = $this->getHargaPatok($jnsNorm, (float)$tebal, $isAf, 'jadi');
 
-                $ukuran = $modal->ukuran;
-                $namaKayuAsli = $modal->jenisKayu->nama_kayu ?? '';
-                $jnsNorm = $this->normalizeJenis($namaKayuAsli);
+                $tipeVeneer = (float)$tebal < 1 ? '260 Face/Back' : '130 Core';
+                $keterangan = "{$tipeVeneer} " . strtolower($jnsNorm) . " uk " . str_replace('.', ',', (float)$tebal);
 
-                // Cek status AF/PCC bisa dari RencanaRepair (kolom kw) atau dari ModalRepair asli
-                $kwStatus = strtolower(($rencanaRepair->kw ?? $modal->kw) ?? '');
-                $isAf = str_contains($kwStatus, 'af');
-
-                // Amankan nilai dimensi ukuran kayu
-                $panjang = (float)($ukuran->panjang ?? 0);
-                $lebar   = (float)($ukuran->lebar ?? 0);
-                $tebal   = (float)($ukuran->tebal ?? 0);
-
-                // Hitung Volume (M3) berdasarkan Jumlah dari tabel HASIL REPAIR
-                $m3 = ($panjang * $lebar * $tebal * $hasil->jumlah) / 10000000;
-
-                // Ambil harga patok berdasarkan jenis kayu & tebal
-                $hargaPatok = $this->getHargaPatok($jnsNorm, $tebal, $isAf);
-                $totalValue = $m3 * $hargaPatok;
-
-                // Penentuan No Akun & Nama Akun untuk DEBIT (Hasil Jadi)
-                $noAkun = $isAf ? '1472.00' : ($jnsNorm === 'sengon' ? '1466.00' : '1467.00');
-
-                // Format teks nama akun (Capitalized pada nama jenis kayu)
-                $namaAkun = $isAf
-                    ? "Veneer Jadi ppc " . strtolower(ucfirst($jnsNorm)) . " WJY"
-                    : "Veneer Jadi 130 core " . strtolower(ucfirst($jnsNorm)) . " WJY";
-
-                // Format keterangan mengikuti Excel asli (130 Core [jenis] uk [tebal] atau af [jenis] [dimensi])
-                $keterangan = $isAf
-                    ? "af " . strtolower($namaKayuAsli) . " " . $panjang . " x " . $lebar . " x " . $tebal
-                    : "130 Core " . strtolower($namaKayuAsli) . " uk " . $panjang . " x " . $lebar . " x " . $tebal;
-
-                // Masukkan ke array Jurnal (m = Hasil/Sortimen/Modal)
-                $jurnalBlock[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'd', $hasil->jumlah, $m3, $hargaPatok, $totalValue, 'm');
-                $totalDebit += $totalValue;
+                $jurnalBlockDebit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'd', $totalBanyak, $totalM3, $hargaPatok, 'm');
+                $totalDebit += ($totalM3 * $hargaPatok);
             }
 
             // ============================================================
-            // 2. KREDIT: Modal Repair (Bahan Mentah Keluar) - ANTI CRASH
+            // 2. KREDIT: Modal Repair → kwNorm selalu 'kering'
             // ============================================================
-            foreach ($produksi->modalRepairs as $modal) {
-                // 🚀 PROTEKSI 1: Jika relasi ukuran atau jenis kayu null, skip data ini agar tidak crash
-                if (!$modal->ukuran || !$modal->jenisKayu) {
-                    continue;
+            $groupedModal = collect($produksi->modalRepairs)->groupBy(function ($modal) {
+                if (!$modal->ukuran || !$modal->jenisKayu) return 'invalid_data';
+                $jnsNorm  = $this->normalizeJenis($modal->jenisKayu->nama_kayu ?? '');
+                $kwStatus = strtolower($modal->kw ?? '');
+                $isAf     = str_contains($kwStatus, 'af') ? 'af' : 'reguler';
+                $kw       = (int) filter_var($kwStatus, FILTER_SANITIZE_NUMBER_INT);
+                $kwNorm   = ($kw == 1 || $kw == 2) ? 'jadi' : 'kering';
+                return "{$jnsNorm}|{$modal->ukuran->panjang}|{$modal->ukuran->lebar}|{$modal->ukuran->tebal}|{$isAf}|{$kwNorm}";
+            });
+
+            foreach ($groupedModal as $key => $items) {
+                if ($key === 'invalid_data') continue;
+                [$jnsNorm, $panjang, $lebar, $tebal, $statusKw, $kwNorm] = explode('|', $key);
+                $isAf = ($statusKw === 'af');
+                $totalBanyak = $items->sum('jumlah');
+                $totalM3     = ((float)$panjang * (float)$lebar * (float)$tebal * $totalBanyak) / 10000000;
+                $kelompok = (float)$tebal < 1 ? 'faceback' : 'core';
+                $groupKey = "{$jnsNorm}|{$kelompok}|{$statusKw}";
+                if (!isset($selisihPerGroup[$groupKey])) {
+                    $selisihPerGroup[$groupKey] = ['hasilM3' => 0, 'modalM3' => 0, 'hasilBanyak' => 0, 'modalBanyak' => 0, 'jenis' => $jnsNorm, 'tebal' => (float)$tebal, 'panjang' => (float)$panjang, 'lebar' => (float)$lebar, 'kelompok' => $kelompok, 'isAf' => $isAf, 'kwNorm' => 'kering'];
                 }
+                $selisihPerGroup[$groupKey]['modalM3'] += $totalM3;
+                $selisihPerGroup[$groupKey]['modalBanyak'] += $totalBanyak;
+                [$noAkun, $namaAkun] = $this->getNoAkunDanNama($jnsNorm, (float)$tebal, $isAf, 'kering');
+                $hargaPatok = $this->getHargaPatok($jnsNorm, (float)$tebal, $isAf, 'kering');
 
-                $ukuran = $modal->ukuran;
-                $namaKayuAsli = $modal->jenisKayu->nama_kayu ?? '';
-                $jnsNorm = $this->normalizeJenis($namaKayuAsli);
-                $isAf = str_contains(strtolower($modal->kw ?? ''), 'af');
+                $tipeVeneer = (float)$tebal < 1 ? '260 Face/Back' : '130 Core';
+                $keterangan = "{$tipeVeneer} " . strtolower($jnsNorm) . " uk " . str_replace('.', ',', (float)$tebal);
 
-                // Amankan nilai dimensi
-                $panjang = (float)($ukuran->panjang ?? 0);
-                $lebar   = (float)($ukuran->lebar ?? 0);
-                $tebal   = (float)($ukuran->tebal ?? 0);
-
-                $m3 = ($panjang * $lebar * $tebal * $modal->jumlah) / 10000000;
-                $hargaPatok = $this->getHargaPatok($jnsNorm, $tebal, $isAf);
-                $totalValue = $m3 * $hargaPatok;
-
-                // Penentuan No Akun & Nama Akun
-                $noAkun = $isAf ? '1472.00' : ($jnsNorm === 'sengon' ? '1441.00' : '1447.00');
-
-                // 🚀 PENYESUAIAN TEKS: Mengikuti gambar (Veneer Kering 130 core [Capitalized] WJY)
-                $namaAkun = $isAf
-                    ? "Veneer Jadi ppc " . strtolower(ucfirst($jnsNorm)) . " WJY"
-                    : "Veneer Kering 130 core " . strtolower(ucfirst($jnsNorm)) . " WJY";
-
-                // 🚀 PENYESUAIAN KETERANGAN: Mengikuti gambar (130 Core [Nama Kayu] uk [Tebal])
-                $keterangan = $isAf
-                    ? "af " . strtolower($namaKayuAsli) . " " . $panjang . " x " . $lebar . " x " . $tebal
-                    : "130 core " . strtolower($namaKayuAsli) . " uk " . $panjang . " x " . $lebar . " x " . $tebal;
-
-                // Jika ada catatan kehilangan seperti di gambar (misal ada kolom status/keterangan di modal)
-                if (str_contains(strtolower($modal->keterangan ?? ''), 'kehilangan')) {
-                    $keterangan .= " // kehilangan";
-                }
-
-                $jurnalBlock[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'k', $modal->jumlah, $m3, $hargaPatok, $totalValue, 'm');
-                $totalKredit += $totalValue;
+                $jurnalBlockKredit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'k', $totalBanyak, $totalM3, $hargaPatok, 'm');
+                $totalKredit += ($totalM3 * $hargaPatok);
             }
+
             // ============================================================
-            // 4. KREDIT: Gaji Pegawai Repair (Membaca RencanaPegawai)
+            // 3. LOGIKA JURNAL PENYEIMBANG SELISIH — PER KELOMPOK
             // ============================================================
-            $jmlPekerja = (int)$produksi->rencanaPegawais->count();
+            foreach ($selisihPerGroup as $g) {
+                $diffM3 = round($g['hasilM3'] - $g['modalM3'], 4);
+                if ($diffM3 == 0) continue;
+                $kwTarget = ($diffM3 < 0) ? 'kering' : 'jadi';
+                $hargaPatok = $this->getHargaPatok($g['jenis'], $g['tebal'], $g['isAf'], $kwTarget);
+                [$noAkun, $namaAkun] = $this->getNoAkunDanNama($g['jenis'], $g['tebal'], $g['isAf'], $kwTarget);
+
+                $tipeVeneer = $g['kelompok'] === 'faceback' ? '260 Face/Back' : '130 Core';
+                $keterangan = ($diffM3 < 0 ? 'Kekurangan ' : 'Kelebihan ') . "{$tipeVeneer} " . strtolower($g['jenis']) . " uk " . str_replace('.', ',', (float)$g['tebal']);
+
+                if ($diffM3 < 0) {
+                    $jurnalBlockKredit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'k', 0, abs($diffM3), $hargaPatok, 'm');
+                    $totalKredit += (abs($diffM3) * $hargaPatok);
+                } else {
+                    $jurnalBlockDebit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'd', 0, abs($diffM3), $hargaPatok, 'm');
+                    $totalDebit += (abs($diffM3) * $hargaPatok);
+                }
+            }
+
+            // ============================================================
+            // 4. KREDIT: Bahan Pendukung / Penolong
+            // ============================================================
+            if (!empty($produksi->bahanPenolongRepair)) {
+                foreach ($produksi->bahanPenolongRepair as $bahan) {
+                    $jumlah = (float)($bahan->jumlah ?? 0);
+                    if ($jumlah > 0) {
+                        $namaBahanRaw = $bahan->bahanPenolong->nama_bahan_penolong ?? 'Bahan';
+                        $namaLower = strtolower(trim($namaBahanRaw));
+                        
+                        $isWHN = false;
+                        if (request()) {
+                            $host = request()->getHost();
+                            if ($host === 'wahana.wijayaplywoods.com' || env('APP_COMPANY') === 'WHN') {
+                                $isWHN = true;
+                            }
+                        }
+
+                        if ($isWHN) {
+                            if (str_contains($namaLower, 'solasi') || str_contains($namaLower, 'isolasi')) {
+                                $noAkun = '1507.35';
+                                $namaAkun = 'isolasi coklat WHN';
+                            } else {
+                                $noAkun = '1507.35'; // default/fallback
+                                $namaAkun = $namaBahanRaw . ' WHN';
+                            }
+                        } else {
+                            if (str_contains($namaLower, 'solasi') || str_contains($namaLower, 'isolasi')) {
+                                if (str_contains($namaLower, 'putih')) {
+                                    $noAkun = '1507.66';
+                                    $namaAkun = 'isolasi putih WJY';
+                                } else {
+                                    $noAkun = '1507.67';
+                                    $namaAkun = 'isolasi coklat WJY';
+                                }
+                            } elseif (str_contains($namaLower, 'coolant') || str_contains($namaLower, 'oil')) {
+                                $noAkun = '1507.58';
+                                $namaAkun = 'coolant oil WJY';
+                            } elseif (str_contains($namaLower, 'hardener') || str_contains($namaLower, 'hadner')) {
+                                $noAkun = '1507.59';
+                                $namaAkun = 'hadner WJY';
+                            } elseif (str_contains($namaLower, 'cutter')) {
+                                $noAkun = '1507.60';
+                                $namaAkun = 'Isi cutter WJY';
+                            } elseif (str_contains($namaLower, 'staples') || str_contains($namaLower, 'staple')) {
+                                $noAkun = '1507.61';
+                                $namaAkun = 'Isi Staples WJY';
+                            } elseif (str_contains($namaLower, 'tepung')) {
+                                $noAkun = '1507.62';
+                                $namaAkun = 'Tepung WJY';
+                            } elseif (str_contains($namaLower, 'aruki')) {
+                                $noAkun = '1507.63';
+                                $namaAkun = 'Lem Aruki WJY';
+                            } elseif (str_contains($namaLower, 'dover')) {
+                                $noAkun = '1507.64';
+                                $namaAkun = 'Lem Dover WJY';
+                            } elseif (str_contains($namaLower, 'pai')) {
+                                $noAkun = '1507.65';
+                                $namaAkun = 'Lem PAI WJY';
+                            } elseif (str_contains($namaLower, 'stapler')) {
+                                $noAkun = '1507.68';
+                                $namaAkun = 'stapler WJY';
+                            } else {
+                                $noAkun = '1507.67'; // default/fallback
+                                $namaAkun = $namaBahanRaw . ' WJY';
+                            }
+                        }
+
+                        $harga = ($bahan->bahanPenolong->harga ?? 41000);
+                        $jurnalBlockKredit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, '', 'k', $jumlah, '', $harga, 'b');
+                        $totalKredit += ($jumlah * $harga);
+                    }
+                }
+            }
+
+            // ============================================================
+            // 5. KREDIT: Gaji Pegawai Repair
+            // ============================================================
+            $jmlPekerja = (int) $produksi->rencanaPegawais->count();
             if ($jmlPekerja > 0) {
-                $totalGaji = $jmlPekerja * 150000;
-                $jurnalBlock[] = $this->makeRow('Hutang Gaji', $tglFormat, '2231.00', '', 'k', $jmlPekerja, 0, 150000, $totalGaji, 'b');
-                $totalKredit += $totalGaji;
+                $jurnalBlockKredit[] = $this->makeRow('Hutang Gaji', $tglFormat, '2231.00', '', 'k', $jmlPekerja, '', 150000, 'b');
+                $totalKredit += ($jmlPekerja * 150000);
             }
 
             // ============================================================
-            // 5. DEBIT/PENYEIMBANG: HPP Repair
+            // 6. DEBIT/PENYEIMBANG: HPP Repair
             // ============================================================
             $selisih = $totalDebit - $totalKredit;
             if (round($selisih, 2) != 0) {
-                $jurnalBlock[] = $this->makeRow('hpp triplek', $tglFormat, '6111.00', '', 'd', 0, 0, abs($selisih), abs($selisih), 'm');
+                if ($selisih > 0) {
+                    $jurnalBlockKredit[] = $this->makeRow('hpp triplek', $tglFormat, '6111.00', '', 'k', '', '', abs($selisih), '');
+                } else {
+                    $jurnalBlockDebit[] = $this->makeRow('hpp triplek', $tglFormat, '6111.00', '', 'd', '', '', abs($selisih), '');
+                }
             }
 
-            // Konsolidasi ke output sheet utama
-            foreach ($jurnalBlock as $row) {
-                $rows[] = $row;
-            }
-            $rows[] = array_fill(0, 14, ''); // Baris kosong pembatas antar tanggal produksi
+            $rows = array_merge($rows, $jurnalBlockDebit, $jurnalBlockKredit);
+            $rows[] = array_fill(0, 14, '');
         }
         return $rows;
     }

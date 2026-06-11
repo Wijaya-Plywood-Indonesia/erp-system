@@ -37,6 +37,101 @@ class LaporanKayuKeluarExport implements WithMultipleSheets
             new LaporanProduksiKayuHabisSheet($this->tanggal),
         ];
     }
+
+    public static function getAccountDetails(string $jenisKayuNama, $panjang): array
+    {
+        $jenis = strtolower(trim($jenisKayuNama));
+        $panjang = (int) $panjang;
+
+        $isWHN = false;
+        if (request()) {
+            $host = request()->getHost();
+            if ($host === 'wahana.wijayaplywoods.com' || env('APP_COMPANY') === 'WHN') {
+                $isWHN = true;
+            }
+        }
+
+        $isLunak = (str_contains($jenis, 'sengon') || str_contains($jenis, 'lunak'));
+        $isMeranti = str_contains($jenis, 'meranti');
+        $isRijek = str_contains($jenis, 'rijek');
+        $isLogCore = str_contains($jenis, 'log core') || str_contains($jenis, 'core');
+        $isBaloan = str_contains($jenis, 'baloan') || str_contains($jenis, 'balo,an');
+
+        if ($isWHN) {
+            if ($isMeranti) {
+                return ['no_akun' => '1413.09', 'nama_akun' => 'Kayu Meranti WHN'];
+            }
+            if ($isRijek) {
+                return ['no_akun' => '1413.10', 'nama_akun' => 'Kayu Rijek WHN'];
+            }
+            if ($isLogCore) {
+                if ($panjang === 130) {
+                    return ['no_akun' => '1414.00', 'nama_akun' => 'log core 130 WHN'];
+                }
+                return ['no_akun' => '1413.13', 'nama_akun' => 'log core 260 WHN'];
+            }
+            if ($isBaloan) {
+                return ['no_akun' => '1413.05', 'nama_akun' => 'kayu balo,an'];
+            }
+
+            // Lunak
+            if ($isLunak) {
+                if ($panjang === 130) {
+                    return ['no_akun' => '1413.07', 'nama_akun' => 'Kayu Lunak 130 WHN'];
+                }
+                if ($panjang === 230) {
+                    return ['no_akun' => '1413.11', 'nama_akun' => 'kayu Lunak 230 WHN'];
+                }
+                if ($panjang === 100) {
+                    return ['no_akun' => '1413.12', 'nama_akun' => 'kayu Lunak 100 WHN'];
+                }
+                return ['no_akun' => '1413.01', 'nama_akun' => 'kayu Lunak 260 WHN'];
+            }
+
+            // Keras (default)
+            if ($panjang === 130) {
+                return ['no_akun' => '1413.08', 'nama_akun' => 'Kayu Keras 130 WHN'];
+            }
+            return ['no_akun' => '1413.06', 'nama_akun' => 'Kayu Keras 260 WHN'];
+        } else {
+            // WJY
+            if ($isMeranti) {
+                return ['no_akun' => '1411.05', 'nama_akun' => 'Kayu Meranti WJY'];
+            }
+            if ($isRijek) {
+                return ['no_akun' => '1411.06', 'nama_akun' => 'Kayu Rijek WJY'];
+            }
+            if ($isLogCore) {
+                if ($panjang === 130) {
+                    return ['no_akun' => '1413.04', 'nama_akun' => 'log core 130 WJY'];
+                }
+                return ['no_akun' => '1413.03', 'nama_akun' => 'log core 260 WJY'];
+            }
+            if ($isBaloan) {
+                return ['no_akun' => '1413.05', 'nama_akun' => 'kayu balo,an'];
+            }
+
+            // Lunak
+            if ($isLunak) {
+                if ($panjang === 130) {
+                    return ['no_akun' => '1411.03', 'nama_akun' => 'Kayu Lunak 130 WJY'];
+                }
+                if ($panjang === 230) {
+                    return ['no_akun' => '1411.07', 'nama_akun' => 'kayu Lunak 230 WJY'];
+                }
+                if ($panjang === 100) {
+                    return ['no_akun' => '1411.08', 'nama_akun' => 'kayu Lunak 100 WJY'];
+                }
+                return ['no_akun' => '1411.01', 'nama_akun' => 'kayu Lunak 260 WJY'];
+            }
+
+            // Keras (default)
+            if ($panjang === 130) {
+                return ['no_akun' => '1411.04', 'nama_akun' => 'Kayu Keras 130 WJY'];
+            }
+            return ['no_akun' => '1411.02', 'nama_akun' => 'Kayu Keras 260 WJY'];
+        }
+    }
 }
 
 class LaporanKayuKeluarDetailSheet implements FromCollection, WithTitle, ShouldAutoSize, WithStyles
@@ -210,6 +305,11 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
     public function bindValue(Cell $cell, $value)
     {
         if ($cell->getColumn() === 'D') {
+            if (is_numeric($value)) {
+                $cell->setValueExplicit((float)$value, DataType::TYPE_NUMERIC);
+                $cell->getWorksheet()->getStyle($cell->getCoordinate())->getNumberFormat()->setFormatCode('0.00');
+                return true;
+            }
             $cell->setValueExplicit($value, DataType::TYPE_STRING);
             return true;
         }
@@ -234,10 +334,15 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
 
         $rawRows = [];
 
-        // Preload ongkos_mesin dari tabel mesins (keyed by nama_mesin)
-        $mesinOngkos = \App\Models\Mesin::all()
-            ->keyBy(fn($m) => strtoupper(trim($m->nama_mesin)))
-            ->map(fn($m) => (float)($m->ongkos_mesin ?? 0));
+        // Preload mesin dan jenis kayu untuk pencarian dinamis
+        $mesins = \App\Models\Mesin::all()->keyBy(fn($m) => strtoupper(trim($m->nama_mesin)));
+        $jenisKayus = \App\Models\JenisKayu::all()->keyBy(fn($jk) => strtoupper(trim($jk->nama_kayu)));
+
+        // Preload harga veneer kering
+        $hargaVeneerMap = [];
+        foreach (\App\Models\HargaVeneer::all() as $hv) {
+            $hargaVeneerMap[$hv->id_jenis_kayu][strtolower($hv->ukuran)] = (float) $hv->harga_kering;
+        }
 
         foreach ($payload['jurnal_items'] as $item) {
             $namaAkun = $item['nama_akun'];
@@ -268,29 +373,10 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                     $parts = explode(' - ', $subItem['keterangan'] ?? '');
                     $bagian = count($parts) > 1 ? trim($parts[1]) : '-';
 
-                    $isSengon = false;
-                    if (count($parts) > 0) {
-                        $isSengon = (stripos($parts[0], 'sengon') !== false);
-                    }
-
                     $is130 = ($noAkun === '115-01');
-                    if ($isSengon) {
-                        if (!$is130) {
-                            $mappedNoAkun = '1411.01';
-                            $mappedNamaAkun = 'kayu Lunak 260 WJY';
-                        } else {
-                            $mappedNoAkun = '1411.03';
-                            $mappedNamaAkun = 'Kayu Lunak 130 WJY';
-                        }
-                    } else {
-                        if (!$is130) {
-                            $mappedNoAkun = '1411.02';
-                            $mappedNamaAkun = 'Kayu Keras 260 WJY';
-                        } else {
-                            $mappedNoAkun = '1411.04';
-                            $mappedNamaAkun = 'Kayu Keras 130 WJY';
-                        }
-                    }
+                    $acc = LaporanKayuKeluarExport::getAccountDetails($parts[0] ?? '', $is130 ? 130 : 260);
+                    $mappedNoAkun = $acc['no_akun'];
+                    $mappedNamaAkun = $acc['nama_akun'];
 
                     $lahanName = $subItem['nama_pihak'] ?? '';
                     if (stripos($lahanName, 'Lahan ') === 0) {
@@ -317,12 +403,37 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 $harga  = $subItem['harga'];
                 $jumlah = $subItem['jumlah'];
 
-                // Khusus export Excel: harga veneer ambil dari ongkos_mesin di tabel mesins
+                // Khusus export Excel: harga veneer mengikuti harga veneer kering dari tabel harga_veneers
                 if (($subItem['jenis_pihak'] ?? '') === 'produksi') {
-                    $namaM   = strtoupper(trim($bagian));
-                    $ongkos  = $mesinOngkos[$namaM] ?? 0;
-                    $harga   = $ongkos;
-                    $jumlah  = $volume !== null ? round((float)$volume * $ongkos, 4) : null;
+                    $namaM = strtoupper(trim($bagian));
+                    $jenisHasil = isset($mesins[$namaM]) ? $mesins[$namaM]->jenis_hasil : 'core';
+
+                    // Parse jenis kayu dari keterangan
+                    $keterangan = $subItem['keterangan'] ?? '';
+                    $parts = explode(' - ', $keterangan);
+                    $namaKayu = count($parts) > 2 ? trim($parts[2]) : '';
+                    $namaKayuUpper = strtoupper(trim($namaKayu));
+                    $jenisKayuObj = $jenisKayus[$namaKayuUpper] ?? null;
+                    $idJenisKayu = $jenisKayuObj ? $jenisKayuObj->id : null;
+
+                    $ongkos = 0;
+                    if ($idJenisKayu) {
+                        $options = strtolower($jenisHasil) === 'f/b' ? ['faceback', 'face', 'back'] : ['core'];
+                        foreach ($options as $opt) {
+                            if (isset($hargaVeneerMap[$idJenisKayu][$opt])) {
+                                $ongkos = $hargaVeneerMap[$idJenisKayu][$opt];
+                                break;
+                            }
+                        }
+                    }
+
+                    // Fallback to legacy if no match found
+                    if ($ongkos === 0) {
+                        $ongkos = isset($mesins[$namaM]) ? (float)($mesins[$namaM]->ongkos_mesin ?? 0) : 0;
+                    }
+
+                    $harga  = $ongkos;
+                    $jumlah = $volume !== null ? round((float)$volume * $ongkos, 4) : null;
                 }
 
                 // Khusus export Excel: harga pekerja di-hardcode 150.000
@@ -336,47 +447,40 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
 
                 if ($noAkun === '115-01' || $noAkun === '115-02') {
                     $parts = explode(' - ', $subItem['keterangan'] ?? '');
-                    $isSengon = false;
-                    if (count($parts) > 0) {
-                        $isSengon = (stripos($parts[0], 'sengon') !== false);
-                    }
                     $is130 = ($noAkun === '115-01');
-                    if ($isSengon) {
-                        if (!$is130) {
-                            $mappedNoAkun = '1411.01';
-                            $mappedNamaAkun = 'kayu Lunak 260 WJY';
-                        } else {
-                            $mappedNoAkun = '1411.03';
-                            $mappedNamaAkun = 'Kayu Lunak 130 WJY';
-                        }
-                    } else {
-                        if (!$is130) {
-                            $mappedNoAkun = '1411.02';
-                            $mappedNamaAkun = 'Kayu Keras 260 WJY';
-                        } else {
-                            $mappedNoAkun = '1411.04';
-                            $mappedNamaAkun = 'Kayu Keras 130 WJY';
-                        }
-                    }
+                    $acc = LaporanKayuKeluarExport::getAccountDetails($parts[0] ?? '', $is130 ? 130 : 260);
+                    $mappedNoAkun = $acc['no_akun'];
+                    $mappedNamaAkun = $acc['mappedNamaAkun'] ?? $acc['nama_akun'];
                 }
 
-                if ($noAkun === '115-07') {
-                    // Veneer Basah F/B
-                    if (stripos($subItem['keterangan'] ?? '', 'sengon') !== false) {
-                        $mappedNoAkun = '1421.00';
-                        $mappedNamaAkun = 'Veneer Basah 260 face/back sengon WJY';
-                    } else {
-                        $mappedNoAkun = '1422.00';
-                        $mappedNamaAkun = 'Veneer Basah 260 face/back meranti WJY';
+                if ($noAkun === '115-07' || $noAkun === '115-08') {
+                    $isWHN = false;
+                    if (request()) {
+                        $host = request()->getHost();
+                        if ($host === 'wahana.wijayaplywoods.com' || env('APP_COMPANY') === 'WHN') {
+                            $isWHN = true;
+                        }
                     }
-                } elseif ($noAkun === '115-08') {
-                    // Veneer Basah CORE
-                    if (stripos($subItem['keterangan'] ?? '', 'sengon') !== false) {
-                        $mappedNoAkun = '1426.00';
-                        $mappedNamaAkun = 'Veneer Basah 130 core sengon WJY';
+
+                    $isSengon = (stripos($subItem['keterangan'] ?? '', 'sengon') !== false);
+                    if ($noAkun === '115-07') {
+                        // Veneer Basah F/B
+                        if ($isWHN) {
+                            $mappedNoAkun = $isSengon ? '1421.01' : '1422.01';
+                            $mappedNamaAkun = $isSengon ? 'Veneer Basah 260 face/back sengon WHN' : 'Veneer Basah 260 face/back meranti WHN';
+                        } else {
+                            $mappedNoAkun = $isSengon ? '1421.00' : '1422.00';
+                            $mappedNamaAkun = $isSengon ? 'Veneer Basah 260 face/back sengon WJY' : 'Veneer Basah 260 face/back meranti WJY';
+                        }
                     } else {
-                        $mappedNoAkun = '1427.00';
-                        $mappedNamaAkun = 'Veneer Basah 130 core meranti WJY';
+                        // Veneer Basah CORE
+                        if ($isWHN) {
+                            $mappedNoAkun = $isSengon ? '1426.01' : '1427.01';
+                            $mappedNamaAkun = $isSengon ? 'Veneer Basah 130 core sengon WHN' : 'Veneer Basah 130 core meranti WHN';
+                        } else {
+                            $mappedNoAkun = $isSengon ? '1426.00' : '1427.00';
+                            $mappedNamaAkun = $isSengon ? 'Veneer Basah 130 core sengon WJY' : 'Veneer Basah 130 core meranti WJY';
+                        }
                     }
                 } elseif ($noAkun === '210-02') {
                     // Hutang Gaji
@@ -455,28 +559,41 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
             }
 
             foreach ($grouped as $g) {
-                $isVeneer = in_array($g['no_akun'], ['115-07', '115-08', '1421.00', '1422.00', '1426.00', '1427.00']);
+                $isVeneer = in_array($g['no_akun'], ['115-07', '115-08', '1421.00', '1421.01', '1422.00', '1422.01', '1426.00', '1426.01', '1427.00', '1427.01']);
                 $isHutangGaji = in_array($g['no_akun'], ['210-02', '2231.00']);
-                $isWood = in_array($g['no_akun'], ['115-01', '115-02', '1411.01', '1411.02', '1411.03', '1411.04']);
-                $isKayuKeluar = in_array($g['no_akun'], ['1411.01', '1411.02', '1411.03', '1411.04']);
+                $isWood = in_array($g['no_akun'], [
+                    '115-01', '115-02', 
+                    '1411.01', '1411.02', '1411.03', '1411.04', '1411.05', '1411.06', '1411.07', '1411.08',
+                    '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00'
+                ]);
+                $isKayuKeluar = in_array($g['no_akun'], [
+                    '1411.01', '1411.02', '1411.03', '1411.04', '1411.05', '1411.06', '1411.07', '1411.08',
+                    '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00'
+                ]);
 
                 $rowHarga = 0.0;
                 if ($isVeneer) {
                     $noAkunVal = $g['no_akun'] ?? '';
                     $namaAkunVal = strtolower($g['nama_akun'] ?? '');
-                    if ($noAkunVal === '1421.00' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'sengon'))) {
-                        $rowHarga = 2700000.0;
-                    } elseif ($noAkunVal === '1422.00' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'meranti'))) {
-                        $rowHarga = 8000000.0;
-                    } elseif ($noAkunVal === '1426.00' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'sengon'))) {
-                        $rowHarga = 1700000.0;
-                    } elseif ($noAkunVal === '1427.00' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'meranti'))) {
-                        $rowHarga = 2100000.0;
+                    
+                    $dbHarga = $this->getHargaVeneerBasahDb($noAkunVal, $namaAkunVal);
+                    if ($dbHarga > 0) {
+                        $rowHarga = $dbHarga;
                     } else {
-                        if (str_contains($namaAkunVal, 'core')) {
-                            $rowHarga = str_contains($namaAkunVal, 'sengon') ? 1700000.0 : 2100000.0;
+                        if ($noAkunVal === '1421.00' || $noAkunVal === '1421.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'sengon'))) {
+                            $rowHarga = 2700000.0;
+                        } elseif ($noAkunVal === '1422.00' || $noAkunVal === '1422.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'meranti'))) {
+                            $rowHarga = 8000000.0;
+                        } elseif ($noAkunVal === '1426.00' || $noAkunVal === '1426.01' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'sengon'))) {
+                            $rowHarga = 1700000.0;
+                        } elseif ($noAkunVal === '1427.00' || $noAkunVal === '1427.01' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'meranti'))) {
+                            $rowHarga = 2100000.0;
                         } else {
-                            $rowHarga = str_contains($namaAkunVal, 'sengon') ? 2700000.0 : 8000000.0;
+                            if (str_contains($namaAkunVal, 'core')) {
+                                $rowHarga = str_contains($namaAkunVal, 'sengon') ? 1700000.0 : 2100000.0;
+                            } else {
+                                $rowHarga = str_contains($namaAkunVal, 'sengon') ? 2700000.0 : 8000000.0;
+                            }
                         }
                     }
                 } elseif ($isHutangGaji) {
@@ -561,22 +678,25 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
             $dataStart = $currentRow;
             $tglVal = Carbon::parse($this->tanggal)->format('d-m-Y');
             foreach ($groupedRows as $g) {
-                $isVeneer = in_array($g['no_akun'], ['115-07', '115-08', '1421.00', '1422.00', '1426.00', '1427.00']);
+                $isVeneer = in_array($g['no_akun'], ['115-07', '115-08', '1421.00', '1421.01', '1422.00', '1422.01', '1426.00', '1426.01', '1427.00', '1427.01']);
                 $isHutangGaji = in_array($g['no_akun'], ['210-02', '2231.00']);
-                $isKayuKeluar = in_array($g['no_akun'], ['1411.01', '1411.02', '1411.03', '1411.04']);
+                $isKayuKeluar = in_array($g['no_akun'], [
+                    '1411.01', '1411.02', '1411.03', '1411.04', '1411.05', '1411.06', '1411.07', '1411.08',
+                    '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00'
+                ]);
 
                 // Format `Nama` (Col 7 / G)
                 if ($isVeneer) {
-                    $namaVal = 'KUPASAN (M - ' . strtoupper($g['bagian']) . ')';
+                    $namaVal = 'kupasan (m - ' . strtolower($g['bagian']) . ')';
                 } elseif ($isKayuKeluar) {
                     $namaVal = 'kayu keluar';
                 } else {
-                    $namaVal = 'KUPASAN';
+                    $namaVal = 'kupasan';
                 }
 
                 // Format `hit kbk` (Col 10 / J)
                 $hitKbkVal = '';
-                if ($isVeneer) {
+                if ($isVeneer || $isKayuKeluar) {
                     $hitKbkVal = 'm';
                 } elseif ($isHutangGaji) {
                     $hitKbkVal = 'b';
@@ -586,19 +706,25 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 if ($isVeneer) {
                     $noAkunVal = $g['no_akun'] ?? '';
                     $namaAkunVal = strtolower($g['nama_akun'] ?? '');
-                    if ($noAkunVal === '1421.00' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'sengon'))) {
-                        $hargaVal = 2700000;
-                    } elseif ($noAkunVal === '1422.00' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'meranti'))) {
-                        $hargaVal = 8000000;
-                    } elseif ($noAkunVal === '1426.00' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'sengon'))) {
-                        $hargaVal = 1700000;
-                    } elseif ($noAkunVal === '1427.00' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'meranti'))) {
-                        $hargaVal = 2100000;
+                    
+                    $dbHarga = $this->getHargaVeneerBasahDb($noAkunVal, $namaAkunVal);
+                    if ($dbHarga > 0) {
+                        $hargaVal = $dbHarga;
                     } else {
-                        if (str_contains($namaAkunVal, 'core')) {
-                            $hargaVal = str_contains($namaAkunVal, 'sengon') ? 1700000 : 2100000;
+                        if ($noAkunVal === '1421.00' || $noAkunVal === '1421.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'sengon'))) {
+                            $hargaVal = 2700000;
+                        } elseif ($noAkunVal === '1422.00' || $noAkunVal === '1422.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'meranti'))) {
+                            $hargaVal = 8000000;
+                        } elseif ($noAkunVal === '1426.00' || $noAkunVal === '1426.01' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'sengon'))) {
+                            $hargaVal = 1700000;
+                        } elseif ($noAkunVal === '1427.00' || $noAkunVal === '1427.01' || ($noAkunVal === '115-08' && str_contains($namaAkunVal, 'meranti'))) {
+                            $hargaVal = 2100000;
                         } else {
-                            $hargaVal = str_contains($namaAkunVal, 'sengon') ? 2700000 : 8000000;
+                            if (str_contains($namaAkunVal, 'core')) {
+                                $hargaVal = str_contains($namaAkunVal, 'sengon') ? 1700000 : 2100000;
+                            } else {
+                                $hargaVal = str_contains($namaAkunVal, 'sengon') ? 2700000 : 8000000;
+                            }
                         }
                     }
                 } elseif ($isHutangGaji) {
@@ -609,16 +735,8 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                     $hargaVal = $g['jumlah'];
                 }
 
-                $totalVal = 0.0;
-                if ($isKayuKeluar) {
-                    $totalVal = (float)$g['jumlah'];
-                } elseif ($g['has_vol'] && $g['volume'] !== null && $g['volume'] > 0) {
-                    $totalVal = (float)$g['volume'] * (float)$hargaVal;
-                } elseif ($g['has_qty'] && $g['banyak'] !== null && $g['banyak'] > 0) {
-                    $totalVal = (float)$g['banyak'] * (float)$hargaVal;
-                } else {
-                    $totalVal = (float)$hargaVal;
-                }
+                // Calculate Total as an Excel formula referencing 'hit kbk' (Col J), Harga (Col M), M3 (Col L), and Banyak (Col K)
+                $totalVal = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
 
                 $rows->push([
                     $g['nama_akun'],                                    // 1. Nama Akun
@@ -652,7 +770,7 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
 
     public function title(): string
     {
-        return 'Jurnal Gabung Permesin';
+        return 'jurnal produksi';
     }
 
     public function styles(Worksheet $sheet)
@@ -737,6 +855,39 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
             }
         ];
     }
+
+    private function getHargaVeneerBasahDb(string $noAkun, string $namaAkun): float
+    {
+        $noAkunVal = trim($noAkun);
+        $namaAkunVal = strtolower(trim($namaAkun));
+
+        $isSengon = str_contains($namaAkunVal, 'sengon');
+        $isMeranti = str_contains($namaAkunVal, 'meranti') || (!str_contains($namaAkunVal, 'sengon') && !str_contains($namaAkunVal, 'jabon') && !str_contains($namaAkunVal, 'mahoni'));
+        
+        $jns = $isSengon ? 'Sengon' : 'Meranti';
+        $jenisKayu = \App\Models\JenisKayu::where('nama_kayu', $jns)->first();
+        if (!$jenisKayu) {
+            return 0.0;
+        }
+
+        // Determine if it's faceback or core
+        $isCore = str_contains($namaAkunVal, 'core') 
+            || $noAkunVal === '1426.00' 
+            || $noAkunVal === '1426.01' 
+            || $noAkunVal === '1427.00' 
+            || $noAkunVal === '1427.01' 
+            || ($noAkunVal === '115-08');
+
+        $ukuranOptions = !$isCore
+            ? ($jns === 'Sengon' ? ['faceback'] : ['face', 'back'])
+            : ['core'];
+
+        $hargaVeneer = \App\Models\HargaVeneer::where('id_jenis_kayu', $jenisKayu->id)
+            ->whereIn('ukuran', $ukuranOptions)
+            ->first();
+
+        return (float) ($hargaVeneer->harga_basah ?? 0.0);
+    }
 }
 
 class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements FromCollection, WithTitle, WithStyles, WithEvents, WithCustomValueBinder
@@ -749,6 +900,11 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
     public function bindValue(Cell $cell, $value)
     {
         if ($cell->getColumn() === 'D') {
+            if (is_numeric($value)) {
+                $cell->setValueExplicit((float)$value, DataType::TYPE_NUMERIC);
+                $cell->getWorksheet()->getStyle($cell->getCoordinate())->getNumberFormat()->setFormatCode('0.00');
+                return true;
+            }
             $cell->setValueExplicit($value, DataType::TYPE_STRING);
             return true;
         }
@@ -784,29 +940,11 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
             foreach ($item['items'] as $subItem) {
                 $parts = explode(' - ', $subItem['keterangan'] ?? '');
                 $bagian = count($parts) > 1 ? trim($parts[1]) : '-';
-                $isSengon = false;
-                if (count($parts) > 0) {
-                    $isSengon = (stripos($parts[0], 'sengon') !== false);
-                }
 
                 $is130 = ($noAkun === '115-01');
-                if ($isSengon) {
-                    if (!$is130) {
-                        $mappedNoAkun = '1411.01';
-                        $mappedNamaAkun = 'kayu Lunak 260 WJY';
-                    } else {
-                        $mappedNoAkun = '1411.03';
-                        $mappedNamaAkun = 'Kayu Lunak 130 WJY';
-                    }
-                } else {
-                    if (!$is130) {
-                        $mappedNoAkun = '1411.02';
-                        $mappedNamaAkun = 'Kayu Keras 260 WJY';
-                    } else {
-                        $mappedNoAkun = '1411.04';
-                        $mappedNamaAkun = 'Kayu Keras 130 WJY';
-                    }
-                }
+                $acc = LaporanKayuKeluarExport::getAccountDetails($parts[0] ?? '', $is130 ? 130 : 260);
+                $mappedNoAkun = $acc['no_akun'];
+                $mappedNamaAkun = $acc['nama_akun'];
 
                 $lahanName = $subItem['nama_pihak'] ?? '';
                 if (stripos($lahanName, 'Lahan ') === 0) {
@@ -907,6 +1045,8 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
         $dataStart = $currentRow;
         $tglVal = Carbon::parse($this->tanggal)->format('d-m-Y');
         foreach ($grouped as $g) {
+            $totalVal = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
+
             $rows->push([
                 $g['nama_akun'],                                    // 1. Nama Akun
                 $tglVal,                                            // 2. tgl
@@ -917,11 +1057,11 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
                 'kayu keluar',                                      // 7. Nama
                 $g['keterangan'],                                   // 8. Keterangan
                 'k',                                                // 9. map
-                '',                                                 // 10. hit kbk
+                'm',                                                // 10. hit kbk
                 $g['has_qty'] ? $g['banyak'] : null,                // 11. Banyak
                 $g['has_vol'] ? $g['volume'] : null,                // 12. M3
                 $g['harga'],                                        // 13. Harga
-                $g['jumlah']                                        // 14. Total
+                $totalVal                                           // 14. Total
             ]);
             $currentRow++;
         }
@@ -1030,6 +1170,11 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
     public function bindValue(Cell $cell, $value)
     {
         if ($cell->getColumn() === 'D') {
+            if (is_numeric($value)) {
+                $cell->setValueExplicit((float)$value, DataType::TYPE_NUMERIC);
+                $cell->getWorksheet()->getStyle($cell->getCoordinate())->getNumberFormat()->setFormatCode('0.00');
+                return true;
+            }
             $cell->setValueExplicit($value, DataType::TYPE_STRING);
             return true;
         }
@@ -1207,41 +1352,9 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
 
         foreach ($grouped as $g) {
 
-            $isSengon = (
-                stripos($g['jenis_nama'], 'sengon') !== false
-            );
-
-            $is130 = ($g['panjang'] == 130);
-
-            // =====================================================
-            // ACCOUNT
-            // =====================================================
-            if ($isSengon) {
-
-                if (!$is130) {
-
-                    $noAkun = '1411.01';
-                    $namaAkun = 'Kayu Lunak 260 WJY';
-
-                } else {
-
-                    $noAkun = '1411.03';
-                    $namaAkun = 'Kayu Lunak 130 WJY';
-                }
-
-            } else {
-
-                if (!$is130) {
-
-                    $noAkun = '1411.02';
-                    $namaAkun = 'Kayu Keras 260 WJY';
-
-                } else {
-
-                    $noAkun = '1411.04';
-                    $namaAkun = 'Kayu Keras 130 WJY';
-                }
-            }
+            $acc = LaporanKayuKeluarExport::getAccountDetails($g['jenis_nama'] ?? '', $g['panjang']);
+            $noAkun = $acc['no_akun'];
+            $namaAkun = $acc['nama_akun'];
 
             // =====================================================
             // HARGA RATA-RATA PER M3
@@ -1262,6 +1375,8 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
             // =====================================================
             // PUSH ROW
             // =====================================================
+            $totalVal = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
+
             $rows->push([
                 $namaAkun,                                         // A
                 $tglVal,                                           // B
@@ -1272,11 +1387,11 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
                 'kayu keluar',                                     // G
                 $keteranganSpec,                                   // H
                 'k',                                               // I
-                '',                                                // J
+                'm',                                                // J
                 $g['banyak'] > 0 ? $g['banyak'] : null,            // K
                 $g['volume'] > 0 ? $g['volume'] : null,            // L
                 $hargaPerM3,                                       // M
-                $g['total_harga']                                  // N
+                $totalVal                                          // N
             ]);
 
             $currentRow++;
@@ -1474,6 +1589,11 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
     public function bindValue(Cell $cell, $value)
     {
         if ($cell->getColumn() === 'D') {
+            if (is_numeric($value)) {
+                $cell->setValueExplicit((float)$value, DataType::TYPE_NUMERIC);
+                $cell->getWorksheet()->getStyle($cell->getCoordinate())->getNumberFormat()->setFormatCode('0.00');
+                return true;
+            }
             $cell->setValueExplicit($value, DataType::TYPE_STRING);
             return true;
         }
@@ -1509,7 +1629,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
         $noJurnal = 'ROT/' . $dateStr . '/KAYU_KELUAR';
 
         $rows->push([
-            'No. Jurnal: ' . $noJurnal, '', '', '', '', '', '', '', '', '', '', ''
+            'No. Jurnal: ' . $noJurnal, '', '', '', '', '', '', '', '', '', '', '', '', ''
         ]);
         $this->titleRows[] = $currentRow;
         $currentRow++;
@@ -1525,9 +1645,11 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
             'Nama',
             'Keterangan',
             'map',
+            'hit kbk',
             'Banyak',
             'M3',
-            'Harga'
+            'Harga',
+            'Total'
         ]);
         $this->headerRows[] = $currentRow;
         $currentRow++;
@@ -1540,73 +1662,68 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
         $totalM3 = 0;
         $totalHarga = 0;
 
+        // Pre-calculate totals
+        foreach ($records as $record) {
+            $totalBanyak += ($record->total_batang > 0 ? $record->total_batang : 0);
+            $totalM3 += ($record->total_kubikasi > 0 ? $record->total_kubikasi : 0);
+            $totalHarga += $record->nilai_stok;
+        }
+
+        // 1. Add Debit row first: HPP Triplek
+        if (!$records->isEmpty()) {
+            $totalValHpp = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
+
+            $rows->push([
+                'HPP Triplek',                                                // 1. Nama Akun
+                $tglVal,                                                      // 2. tgl
+                '',                                                           // 3. jurnal
+                '6111.00',                                                    // 4. No Akun
+                '',                                                           // 5. No
+                '',                                                           // 6. mm
+                'kayu habis',                                                 // 7. Nama
+                '',                                                           // 8. Keterangan
+                'd',                                                          // 9. map
+                '',                                                           // 10. hit kbk
+                $totalBanyak > 0 ? $totalBanyak : null,                       // 11. Banyak
+                $totalM3 > 0 ? $totalM3 : null,                               // 12. M3
+                $totalHarga,                                                  // 13. Harga
+                $totalValHpp                                                  // 14. Total
+            ]);
+            $currentRow++;
+        }
+
+        // 2. Add Credit rows second
         foreach ($records as $record) {
             $jenisNama = $record->jenisKayu?->nama_kayu ?? '-';
-            $isSengon = (stripos($jenisNama, 'sengon') !== false);
-            $is130 = ($record->panjang == 130);
-
-            // Account determination
-            if ($isSengon) {
-                if (!$is130) {
-                    $noAkun = '1411.01';
-                    $namaAkun = 'Kayu Lunak 260 WJY';
-                } else {
-                    $noAkun = '1411.03';
-                    $namaAkun = 'Kayu Lunak 130 WJY';
-                }
-            } else {
-                if (!$is130) {
-                    $noAkun = '1411.02';
-                    $namaAkun = 'Kayu Keras 260 WJY';
-                } else {
-                    $noAkun = '1411.04';
-                    $namaAkun = 'Kayu Keras 130 WJY';
-                }
-            }
+            $acc = LaporanKayuKeluarExport::getAccountDetails($jenisNama, $record->panjang);
+            $noAkun = $acc['no_akun'];
+            $namaAkun = $acc['nama_akun'];
 
             $keteranganSpec = "lahan " . ($record->lahan->kode_lahan ?? '-');
 
             $banyak = $record->total_batang > 0 ? $record->total_batang : 0;
             $m3 = $record->total_kubikasi > 0 ? $record->total_kubikasi : 0;
-            $harga = $record->nilai_stok;
+            $totalStokValue = $record->nilai_stok;
 
-            $totalBanyak += $banyak;
-            $totalM3 += $m3;
-            $totalHarga += $harga;
+            $totalVal = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
 
             $rows->push([
-                $namaAkun,                                                 // A
-                $tglVal,                                                   // B
-                '',                                                        // C
-                $noAkun,                                                   // D
-                '',                                                        // E
-                '',                                                        // F
-                'kayu keluar',                                             // G
-                $keteranganSpec,                                           // H
-                'k',                                                       // I
-                $record->total_batang > 0 ? $record->total_batang : null,  // J
-                $record->total_kubikasi > 0 ? $record->total_kubikasi : null, // K
-                $harga                                                     // L
+                $namaAkun,                                                    // 1. Nama Akun
+                $tglVal,                                                      // 2. tgl
+                '',                                                           // 3. jurnal
+                $noAkun,                                                      // 4. No Akun
+                '',                                                           // 5. No
+                '',                                                           // 6. mm
+                'kayu keluar',                                                // 7. Nama
+                $keteranganSpec,                                              // 8. Keterangan
+                'k',                                                          // 9. map
+                '',                                                           // 10. hit kbk
+                $banyak > 0 ? $banyak : null,                                 // 11. Banyak
+                $m3 > 0 ? $m3 : null,                                         // 12. M3
+                $totalStokValue,                                              // 13. Harga
+                $totalVal                                                     // 14. Total
             ]);
 
-            $currentRow++;
-        }
-
-        if (!$records->isEmpty()) {
-            $rows->push([
-                'HPP Triplek',                                             // A
-                $tglVal,                                                   // B
-                '',                                                        // C
-                '6111.00',                                                 // D
-                '',                                                        // E
-                '',                                                        // F
-                'kayu habis',                                              // G
-                '',                                                        // H
-                'd',                                                       // I
-                $totalBanyak > 0 ? $totalBanyak : null,                    // J
-                $totalM3 > 0 ? $totalM3 : null,                            // K
-                $totalHarga                                                // L
-            ]);
             $currentRow++;
         }
 
@@ -1621,7 +1738,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
 
     public function title(): string
     {
-        return 'Kayu Keluar';
+        return 'jurnal produksi';
     }
 
     public function styles(Worksheet $sheet)
@@ -1637,8 +1754,8 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
 
                 // Style Title Rows
                 foreach ($this->titleRows as $row) {
-                    $sheet->mergeCells("A{$row}:L{$row}");
-                    $sheet->getStyle("A{$row}:L{$row}")->applyFromArray([
+                    $sheet->mergeCells("A{$row}:N{$row}");
+                    $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
                         'font' => [
                             'bold' => true,
                             'size' => 11,
@@ -1657,7 +1774,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
 
                 // Style Header Rows
                 foreach ($this->headerRows as $row) {
-                    $sheet->getStyle("A{$row}:L{$row}")->applyFromArray([
+                    $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
                         'font' => [
                             'bold' => true,
                             'size' => 10
@@ -1683,7 +1800,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
                     $end = $range['end'];
                     if ($start > $end) continue;
 
-                    $sheet->getStyle("A{$start}:L{$end}")->applyFromArray([
+                    $sheet->getStyle("A{$start}:N{$end}")->applyFromArray([
                         'borders' => [
                             'allBorders' => ['borderStyle' => Border::BORDER_THIN]
                         ]
@@ -1692,28 +1809,30 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
                     $sheet->getStyle("A{$start}:A{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("B{$start}:F{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     $sheet->getStyle("G{$start}:H{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
-                    $sheet->getStyle("I{$start}:I{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                    $sheet->getStyle("J{$start}:L{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    $sheet->getStyle("I{$start}:J{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("K{$start}:N{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
                     // Number formats
-                    $sheet->getStyle("J{$start}:J{$end}")->getNumberFormat()->setFormatCode('#,##0');
-                    $sheet->getStyle("K{$start}:K{$end}")->getNumberFormat()->setFormatCode('#,##0.0000');
-                    $sheet->getStyle("L{$start}:L{$end}")->getNumberFormat()->setFormatCode('#,##0');
+                    $sheet->getStyle("K{$start}:K{$end}")->getNumberFormat()->setFormatCode('#,##0');
+                    $sheet->getStyle("L{$start}:L{$end}")->getNumberFormat()->setFormatCode('#,##0.0000');
+                    $sheet->getStyle("M{$start}:N{$end}")->getNumberFormat()->setFormatCode('#,##0');
                 }
 
                 // Column Widths
                 $sheet->getColumnDimension('A')->setWidth(25);
                 $sheet->getColumnDimension('B')->setWidth(15);
-                $sheet->getColumnDimension('C')->setWidth(12);
+                $sheet->getColumnDimension('C')->setWidth(10);
                 $sheet->getColumnDimension('D')->setWidth(15);
                 $sheet->getColumnDimension('E')->setWidth(10);
-                $sheet->getColumnDimension('F')->setWidth(10);
-                $sheet->getColumnDimension('G')->setWidth(20);
-                $sheet->getColumnDimension('H')->setWidth(45);
-                $sheet->getColumnDimension('I')->setWidth(10);
-                $sheet->getColumnDimension('J')->setWidth(12);
-                $sheet->getColumnDimension('K')->setWidth(15);
-                $sheet->getColumnDimension('L')->setWidth(18);
+                $sheet->getColumnDimension('F')->setWidth(10); // mm
+                $sheet->getColumnDimension('G')->setWidth(20); // Nama / 'kayu keluar' / 'kayu habis'
+                $sheet->getColumnDimension('H')->setWidth(30); // Keterangan (e.g. 'lahan A')
+                $sheet->getColumnDimension('I')->setWidth(10); // map
+                $sheet->getColumnDimension('J')->setWidth(12); // hit kbk
+                $sheet->getColumnDimension('K')->setWidth(12); // Banyak
+                $sheet->getColumnDimension('L')->setWidth(15); // M3
+                $sheet->getColumnDimension('M')->setWidth(18); // Harga
+                $sheet->getColumnDimension('N')->setWidth(18); // Total
             }
         ];
     }

@@ -40,6 +40,15 @@ class CreateVeneerMasuk extends Page
     /* ─────────────── Item list ─────────────── */
     public array $items = [];
 
+    /* ─────────────── Non-veneer Item input ─────────────── */
+    public string $nv_nama_barang = '';
+    public ?int    $nv_jumlah      = null;
+    public string $nv_satuan      = 'Pcs';
+    public string $nv_keterangan  = '';
+
+    /* ─────────────── Non-veneer Item list ─────────────── */
+    public array $non_veneer_items = [];
+
     /* ══════════════════════════════════════════
      *  LIFECYCLE
      * ══════════════════════════════════════════ */
@@ -54,6 +63,7 @@ class CreateVeneerMasuk extends Page
             $this->tujuan_nota = $saved['tujuan_nota'] ?? '';
             $this->keterangan  = $saved['keterangan']  ?? '';
             $this->items       = $saved['items']       ?? [];
+            $this->non_veneer_items = $saved['non_veneer_items'] ?? [];
         }
     }
 
@@ -98,6 +108,7 @@ class CreateVeneerMasuk extends Page
             'tujuan_nota' => $this->tujuan_nota,
             'keterangan'  => $this->keterangan,
             'items'       => $this->items,
+            'non_veneer_items' => $this->non_veneer_items,
         ]]);
     }
 
@@ -228,6 +239,35 @@ class CreateVeneerMasuk extends Page
         $this->syncSession();
     }
 
+    public function tambahBahanLain(): void
+    {
+        $this->validate([
+            'nv_nama_barang' => 'required|string',
+            'nv_jumlah'      => 'required|integer|min:1',
+            'nv_satuan'      => 'required|string',
+        ]);
+
+        $this->non_veneer_items[] = [
+            'nama_barang' => $this->nv_nama_barang,
+            'jumlah'      => $this->nv_jumlah,
+            'satuan'      => $this->nv_satuan,
+            'keterangan'  => $this->nv_keterangan,
+        ];
+
+        $this->nv_nama_barang = '';
+        $this->nv_jumlah      = null;
+        $this->nv_satuan      = 'Pcs';
+        $this->nv_keterangan  = '';
+
+        $this->syncSession();
+    }
+
+    public function hapusBahanLain(int $index): void
+    {
+        array_splice($this->non_veneer_items, $index, 1);
+        $this->syncSession();
+    }
+
     public function simpanDraft(): void
     {
         $this->saveDocument('draft');
@@ -246,8 +286,8 @@ class CreateVeneerMasuk extends Page
             'tujuan_nota' => 'required|string',
         ]);
 
-        if (empty($this->items)) {
-            Notification::make()->title('Tambahkan minimal 1 barang.')->danger()->send();
+        if (empty($this->items) && empty($this->non_veneer_items)) {
+            Notification::make()->title('Tambahkan minimal 1 barang (veneer atau non-veneer).')->danger()->send();
             return;
         }
 
@@ -273,8 +313,24 @@ class CreateVeneerMasuk extends Page
             ]);
         }
 
-        if ($status === 'kirim') {
-            app(VeneerMutasiService::class)->process($mutasi);
+        // Always process to generate NotaBarangMasuk and details (veneer items)
+        app(VeneerMutasiService::class)->process($mutasi);
+
+        // Save traditional non-veneer details directly to DetailNotaBarangMasuk table
+        if ($mutasi->id_nota_bm) {
+            \App\Models\DetailNotaBarangMasuk::where('id_nota_bm', $mutasi->id_nota_bm)
+                ->where('nama_barang', 'not like', 'Veneer %')
+                ->delete();
+
+            foreach ($this->non_veneer_items as $item) {
+                \App\Models\DetailNotaBarangMasuk::create([
+                    'id_nota_bm'  => $mutasi->id_nota_bm,
+                    'nama_barang' => $item['nama_barang'],
+                    'jumlah'      => (int) $item['jumlah'],
+                    'satuan'      => $item['satuan'] ?? 'Pcs',
+                    'keterangan'  => $item['keterangan'] ?? null,
+                ]);
+            }
         }
 
         session()->forget($this->sessionKey());

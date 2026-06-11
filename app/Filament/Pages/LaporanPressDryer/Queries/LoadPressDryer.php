@@ -28,6 +28,9 @@ class LoadPressDryer
             'detailMesins:id,id_produksi_dryer,id_mesin_dryer',
             'detailMesins.mesin:id,nama_mesin',
             'detailMesins.kategoriMesin:id,nama_kategori_mesin',
+
+            // Kendala
+            'kendalaPressDryers',
         ])
             ->select('id', 'tanggal_produksi', 'shift', 'kendala')
             ->whereBetween('tanggal_produksi', [$start, $end])

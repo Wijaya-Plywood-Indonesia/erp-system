@@ -53,6 +53,7 @@
                                             <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-left w-32">Nama Supplier</th>
                                             <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-center w-16">Lahan</th>
                                             <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-center w-16">m</th>
+                                            <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-center w-20">Hit KBK</th>
                                             <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-right w-24">Banyak</th>
                                             <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-right w-28">M3</th>
                                             <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-right w-32">Harga</th>
@@ -86,6 +87,9 @@
                                                 <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center font-mono uppercase font-bold
                                                     {{ $row['m'] === 'd' ? 'text-primary-600 dark:text-primary-400' : 'text-amber-600 dark:text-amber-500' }}">
                                                     {{ $row['m'] }}
+                                                </td>
+                                                <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center font-mono font-bold uppercase">
+                                                    {{ $row['hit_kbk'] ?? '' }}
                                                 </td>
                                                 <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-right font-mono">
                                                     {{ $row['banyak'] !== null ? number_format($row['banyak'], 0, ',', '.') : '' }}

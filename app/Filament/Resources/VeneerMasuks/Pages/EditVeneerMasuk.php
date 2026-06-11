@@ -21,9 +21,7 @@ class EditVeneerMasuk extends EditRecord
 
     protected function afterSave(): void
     {
-        if ($this->record->status === 'kirim') {
-            app(VeneerMutasiService::class)->process($this->record);
-        }
+        app(VeneerMutasiService::class)->process($this->record);
     }
 
     protected function getHeaderActions(): array

@@ -20,6 +20,7 @@ class ProduksiNyusupsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('tanggal_produksi', 'desc')
             ->columns([
                 TextColumn::make('tanggal_produksi')
                     ->label('Tanggal Produksi')
@@ -31,7 +32,7 @@ class ProduksiNyusupsTable
                     ->label('Kendala')
                     ->limit(50)
                     ->placeholder('Tidak ada kendala')
-                    ->tooltip(fn ($record) => $record->kendala)
+                    ->tooltip(fn($record) => $record->kendala)
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\BadgeColumn::make('validasiTerakhir.status')
@@ -58,17 +59,18 @@ class ProduksiNyusupsTable
 
             ->recordActions([
                 Action::make('kelola_kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
+                    ->label(fn($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
                     ->icon('heroicon-m-chat-bubble-left-right')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'gray')
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'gray')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Catatan Kendala Produksi')
                             ->required()
                             ->rows(4),
                     ])
-                    ->mountUsing(fn ($form, $record) =>
+                    ->mountUsing(
+                        fn($form, $record) =>
                         $form->fill(['kendala' => $record->kendala])
                     )
                     ->action(function (array $data, $record): void {
@@ -85,12 +87,12 @@ class ProduksiNyusupsTable
                     ->modalWidth('lg'),
 
                 EditAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
                 ViewAction::make(),
 
                 DeleteAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->before(function ($record) {
 
                         $hasRelation =
@@ -114,9 +116,10 @@ class ProduksiNyusupsTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->visible(fn ($records) =>
+                        ->visible(
+                            fn($records) =>
                             $records->every(
-                                fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi'
+                                fn($r) => $r->validasiTerakhir?->status !== 'divalidasi'
                             )
                         )
                         ->before(function ($records) {

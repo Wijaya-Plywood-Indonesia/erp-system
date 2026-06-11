@@ -46,4 +46,9 @@ class ProduksiSanding extends Model
     {
         return $this->belongsTo(Mesin::class, 'id_mesin');
     }
+
+    public function kendalaSandings()
+    {
+        return $this->hasMany(KendalaSanding::class, 'produksi_sanding_id');
+    }
 }

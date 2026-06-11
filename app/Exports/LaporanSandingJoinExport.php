@@ -12,7 +12,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class LaporanSandingExport implements FromCollection, WithHeadings, WithStyles, WithEvents
+class LaporanSandingJoinExport implements FromCollection, WithHeadings, WithStyles, WithEvents
 {
     protected $data;
     protected $tanggal;

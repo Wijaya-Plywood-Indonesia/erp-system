@@ -40,6 +40,15 @@ class CreateVeneerKeluar extends Page
     /* ─────────────── Item list ─────────────── */
     public array $items = [];
 
+    /* ─────────────── Non-veneer Item input ─────────────── */
+    public string $nv_nama_barang = '';
+    public ?int    $nv_jumlah      = null;
+    public string $nv_satuan      = 'Pcs';
+    public string $nv_keterangan  = '';
+
+    /* ─────────────── Non-veneer Item list ─────────────── */
+    public array $non_veneer_items = [];
+
     /* ══════════════════════════════════════════
      *  LIFECYCLE
      * ══════════════════════════════════════════ */
@@ -54,6 +63,7 @@ class CreateVeneerKeluar extends Page
             $this->tujuan_nota = $saved['tujuan_nota'] ?? '';
             $this->keterangan  = $saved['keterangan']  ?? '';
             $this->items       = $saved['items']       ?? [];
+            $this->non_veneer_items = $saved['non_veneer_items'] ?? [];
         }
     }
 
@@ -100,6 +110,7 @@ class CreateVeneerKeluar extends Page
             'tujuan_nota' => $this->tujuan_nota,
             'keterangan'  => $this->keterangan,
             'items'       => $this->items,
+            'non_veneer_items' => $this->non_veneer_items,
         ]]);
     }
 
@@ -115,12 +126,12 @@ class CreateVeneerKeluar extends Page
         if ($this->item_tipe_veneer === 'basah') {
             $ids = HppVeneerBasahSummary::where('stok_lembar', '>', 0)
                 ->distinct()->pluck('id_jenis_kayu');
+            return JenisKayu::whereIn('id', $ids)->orderBy('nama_kayu')
+                ->pluck('nama_kayu', 'id')->toArray();
         } else {
-            $ids = StokVeneerKering::distinct()->pluck('id_jenis_kayu');
+            // TEMPORARY: show all jenis kayu for dry veneer
+            return JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id')->toArray();
         }
-
-        return JenisKayu::whereIn('id', $ids)->orderBy('nama_kayu')
-            ->pluck('nama_kayu', 'id')->toArray();
     }
 
     #[Computed]
@@ -131,12 +142,16 @@ class CreateVeneerKeluar extends Page
         if ($this->item_tipe_veneer === 'basah') {
             $kws = HppVeneerBasahSummary::where('id_jenis_kayu', $this->item_id_jenis_kayu)
                 ->where('stok_lembar', '>', 0)->distinct()->orderBy('kw')->pluck('kw');
+            return $kws->mapWithKeys(fn ($k) => [$k => "KW {$k}"])->toArray();
         } else {
-            $kws = StokVeneerKering::where('id_jenis_kayu', $this->item_id_jenis_kayu)
-                ->distinct()->orderBy('kw')->pluck('kw');
+            // TEMPORARY: show all kw for dry veneer
+            return [
+                '1' => 'KW 1',
+                '2' => 'KW 2',
+                '3' => 'KW 3',
+                '4' => 'KW 4',
+            ];
         }
-
-        return $kws->mapWithKeys(fn ($k) => [$k => "KW {$k}"])->toArray();
     }
 
     #[Computed]
@@ -157,10 +172,8 @@ class CreateVeneerKeluar extends Page
             }
             return $opts;
         } else {
-            $ids = StokVeneerKering::where('id_jenis_kayu', $this->item_id_jenis_kayu)
-                ->where('kw', $this->item_kw)->distinct()->pluck('id_ukuran');
-            return Ukuran::whereIn('id', $ids)->orderBy('panjang')
-                ->get()->pluck('dimensi', 'id')->toArray();
+            // TEMPORARY: show all sizes for dry veneer
+            return Ukuran::orderBy('panjang')->get()->pluck('dimensi', 'id')->toArray();
         }
     }
 
@@ -269,6 +282,35 @@ class CreateVeneerKeluar extends Page
         $this->syncSession();
     }
 
+    public function tambahBahanLain(): void
+    {
+        $this->validate([
+            'nv_nama_barang' => 'required|string',
+            'nv_jumlah'      => 'required|integer|min:1',
+            'nv_satuan'      => 'required|string',
+        ]);
+
+        $this->non_veneer_items[] = [
+            'nama_barang' => $this->nv_nama_barang,
+            'jumlah'      => $this->nv_jumlah,
+            'satuan'      => $this->nv_satuan,
+            'keterangan'  => $this->nv_keterangan,
+        ];
+
+        $this->nv_nama_barang = '';
+        $this->nv_jumlah      = null;
+        $this->nv_satuan      = 'Pcs';
+        $this->nv_keterangan  = '';
+
+        $this->syncSession();
+    }
+
+    public function hapusBahanLain(int $index): void
+    {
+        array_splice($this->non_veneer_items, $index, 1);
+        $this->syncSession();
+    }
+
     public function simpanDraft(): void
     {
         $this->saveDocument('draft');
@@ -287,8 +329,8 @@ class CreateVeneerKeluar extends Page
             'tujuan_nota' => 'required|string',
         ]);
 
-        if (empty($this->items)) {
-            Notification::make()->title('Tambahkan minimal 1 barang.')->danger()->send();
+        if (empty($this->items) && empty($this->non_veneer_items)) {
+            Notification::make()->title('Tambahkan minimal 1 barang (veneer atau non-veneer).')->danger()->send();
             return;
         }
 
@@ -314,8 +356,24 @@ class CreateVeneerKeluar extends Page
             ]);
         }
 
-        if ($status === 'kirim') {
-            app(VeneerMutasiService::class)->process($mutasi);
+        // Always process to generate NotaBarangKeluar and details (veneer items)
+        app(VeneerMutasiService::class)->process($mutasi);
+
+        // Save traditional non-veneer details directly to DetailNotaBarangKeluar table
+        if ($mutasi->id_nota_bk) {
+            \App\Models\DetailNotaBarangKeluar::where('id_nota_bk', $mutasi->id_nota_bk)
+                ->where('nama_barang', 'not like', 'Veneer %')
+                ->delete();
+
+            foreach ($this->non_veneer_items as $item) {
+                \App\Models\DetailNotaBarangKeluar::create([
+                    'id_nota_bk'  => $mutasi->id_nota_bk,
+                    'nama_barang' => $item['nama_barang'],
+                    'jumlah'      => (int) $item['jumlah'],
+                    'satuan'      => $item['satuan'] ?? 'Pcs',
+                    'keterangan'  => $item['keterangan'] ?? null,
+                ]);
+            }
         }
 
         session()->forget($this->sessionKey());

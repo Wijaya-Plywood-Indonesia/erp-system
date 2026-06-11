@@ -14,12 +14,6 @@ class ListNotaBarangKeluars extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('veneer_keluar')
-                ->label('Veneer Keluar')
-                ->icon('heroicon-o-arrow-up-tray')
-                ->color('warning')
-                ->url('/admin/veneer-keluars/create'),
-
             Action::make('rekap_nota_bk')
                 ->label('Rekap Nota Barang Keluar')
                 ->icon('heroicon-o-document-text')

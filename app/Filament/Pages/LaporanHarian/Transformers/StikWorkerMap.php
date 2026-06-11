@@ -11,20 +11,23 @@ class StikWorkerMap
     {
         $results = [];
 
-        // 1. Ambil Referensi Target STIK (Sekali saja di luar loop agar efisien)
-        $targetRef = Target::where('kode_ukuran', 'STIK')->first();
+        // 1. Ambil Referensi Target STIK (berdasarkan id_mesin = 8 dan id_ukuran = 33 / '0x0x0')
+        $targetRef = Target::where('id_mesin', 8)
+            ->where('id_ukuran', 33)
+            ->first();
 
-        // Default value sesuai referensi Anda: 7000 target, 0 potongan
-        $stdTarget = $targetRef->target ?? 7000;
-        $stdPotHarga = $targetRef->potongan ?? 0;
+        // Default value: 3000 target, 0 potongan
+        $stdTarget = $targetRef ? (float) $targetRef->target : 3000;
+        $stdPotHarga = $targetRef ? (float) $targetRef->potongan : 0;
 
         foreach ($collection as $item) {
 
             $labelDivisi = "STIK";
 
             // 2. Ambil Hasil Produksi
-            // Sesuai referensi Anda, nilainya ada di kolom 'hasil_produksi' tabel produksi_stiks
-            $totalHasil = $item->hasil_produksi ?? 0;
+            $totalHasil = $item->detailHasilStik ? $item->detailHasilStik->sum(function($dh) {
+                return (int) $dh->total_lembar;
+            }) : 0;
 
             // 3. Hitung Selisih & Potongan
             $selisih = $stdTarget - $totalHasil;

@@ -104,4 +104,9 @@ class ProduksiRotary extends Model
             }
         });
     }
+
+    public function kendalaRotaries(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(KendalaRotary::class, 'produksi_rotary_id');
+    }
 }

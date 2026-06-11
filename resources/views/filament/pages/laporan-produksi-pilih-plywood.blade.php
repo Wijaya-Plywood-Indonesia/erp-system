@@ -1,3 +1,4 @@
+{{-- Laporan Produksi Pilih Plywood --}}
 <x-filament-panels::page>
     <div class="p-4 bg-white dark:bg-zinc-900 rounded-lg shadow">
         {{ $this->form }}

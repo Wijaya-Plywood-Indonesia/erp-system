@@ -63,4 +63,9 @@ class ProduksiHp extends Model
     {
         return $this->hasMany(RencanaKerjaHp::class, 'id_produksi_hp');
     }
+
+    public function kendalaHps()
+    {
+        return $this->hasMany(KendalaHp::class, 'produksi_hp_id');
+    }
 }

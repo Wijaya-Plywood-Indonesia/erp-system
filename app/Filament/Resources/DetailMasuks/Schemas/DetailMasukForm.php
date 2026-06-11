@@ -46,29 +46,26 @@ class DetailMasukForm
                         ->unique()
                         ->toArray();
 
-                    // 🔥 Ambil palet yang SUDAH DIPAKAI dari kedua tabel
-                    $usedPallets = collect()
-                        ->merge(
-                            DB::table((new DetailMasuk)->getTable())
-                                ->whereNotNull('no_palet')
-                                ->pluck('no_palet')
-                        )
-                        ->merge(
-                            DB::table((new DetailMasukStik)->getTable())
-                                ->whereNotNull('no_palet')
-                                ->pluck('no_palet')
-                        )
-                        ->map(fn($id) => (int) $id)
+                    // Sum used sheets in detail_masuks
+                    $usedInMasukQuery = DB::table((new DetailMasuk)->getTable())
+                        ->whereNotNull('no_palet')
+                        ->where('no_palet', '>', 0);
+                    if ($record) {
+                        $usedInMasukQuery->where('id', '!=', $record->id);
+                    }
+                    $usedInMasuk = $usedInMasukQuery
+                        ->groupBy('no_palet')
+                        ->select('no_palet', DB::raw('SUM(isi) as total_used'))
+                        ->pluck('total_used', 'no_palet')
                         ->toArray();
 
-                    // ✅ Keluarkan palet milik record yang sedang diedit
-                    if ($record) {
-                        $currentNoPalet = (int) $record->getRawOriginal('no_palet');
-                        $usedPallets = array_filter(
-                            $usedPallets,
-                            fn($id) => $id !== $currentNoPalet
-                        );
-                    }
+                    // Sum used sheets in detail_masuk_stiks
+                    $usedInMasukStik = DB::table((new DetailMasukStik)->getTable())
+                        ->whereNotNull('no_palet')
+                        ->groupBy('no_palet')
+                        ->select('no_palet', DB::raw('SUM(isi) as total_used'))
+                        ->pluck('total_used', 'no_palet')
+                        ->toArray();
 
                     $palets = DetailHasilPaletRotary::with([
                         'ukuran',
@@ -80,17 +77,21 @@ class DetailMasukForm
 
                     $options = [];
                     foreach ($palets as $p) {
-                        $isUsed = in_array($p->id, $usedPallets);
+                        $totalUsed = ($usedInMasuk[$p->id] ?? 0) + ($usedInMasukStik[$p->kode_palet] ?? 0);
+                        $remaining = $p->total_lembar - $totalUsed;
 
-                        if ($isUsed) continue;
+                        if ($remaining <= 0) continue;
     
                         $nomor  = $p->kode_palet;
-                        $isi    = $p->total_lembar ?? 0;
                         $ukuran = $p->ukuran?->nama_ukuran ?? 'Ukuran N/A';
                         $kw     = $p->kw ?? '-';
                         $kayu   = $p->penggunaanLahan?->jenisKayu?->nama_kayu ?? 'Kayu Tidak Diketahui';
 
-                        $options[$p->id] = "{$nomor} | {$kayu} | {$ukuran} | KW: {$kw} | Isi: {$isi} lbr";
+                        if ($remaining < $p->total_lembar) {
+                            $options[$p->id] = "{$nomor} | {$kayu} | {$ukuran} | KW: {$kw} | Sisa: {$remaining} lbr (dari {$p->total_lembar})";
+                        } else {
+                            $options[$p->id] = "{$nomor} | {$kayu} | {$ukuran} | KW: {$kw} | Isi: {$p->total_lembar} lbr";
+                        }
                     }
 
                     // ✅ Sembunyikan AF saat edit
@@ -106,26 +107,34 @@ class DetailMasukForm
                 ->disabled(fn($record) => $record !== null)
                 ->dehydrated(false)
 
-                // ✅ Validasi backend anti bypass duplicate
+                // ✅ Validasi backend anti bypass duplicate/over-limit
                 ->rule(function ($record) {
                     return function ($attribute, $value, $fail) use ($record) {
                         if ($value === 'AF') return;
 
-                        // ✅ Saat edit, skip validasi untuk palet yang sedang diedit
-                        if ($record && (int) $record->getRawOriginal('no_palet') === (int) $value) {
+                        // Jika edit palet yang sama, kurangi isi saat ini dari total digunakan
+                        $palet = \App\Models\DetailHasilPaletRotary::find($value);
+                        if (!$palet) {
+                            $fail('Palet tidak ditemukan.');
                             return;
                         }
 
-                        $exists =
-                            DB::table((new DetailMasuk)->getTable())
-                            ->where('no_palet', $value)
-                            ->exists()
-                            || DB::table((new DetailMasukStik)->getTable())
-                            ->where('no_palet', $value)
-                            ->exists();
+                        $usedInMasukQuery = DB::table((new DetailMasuk)->getTable())
+                            ->where('no_palet', $value);
+                        if ($record) {
+                            $usedInMasukQuery->where('id', '!=', $record->id);
+                        }
+                        $totalUsedMasuk = $usedInMasukQuery->sum('isi');
 
-                        if ($exists) {
-                            $fail('Palet sudah digunakan!');
+                        $totalUsedStik = DB::table((new DetailMasukStik)->getTable())
+                            ->where('no_palet', $palet->kode_palet)
+                            ->sum('isi');
+
+                        $totalUsed = $totalUsedMasuk + $totalUsedStik;
+                        $remaining = $palet->total_lembar - $totalUsed;
+
+                        if ($remaining <= 0) {
+                            $fail('Palet sudah digunakan seluruhnya!');
                         }
                     };
                 })
@@ -159,7 +168,17 @@ class DetailMasukForm
                         $palet = DetailHasilPaletRotary::with(['penggunaanLahan', 'ukuran'])->find($state);
                         if ($palet) {
                             $set('kw', $palet->kw);           // ✅ KW dari palet
-                            $set('isi', $palet->total_lembar);
+                            
+                            // Hitung sisa lembar untuk autofill awal
+                            $totalUsedMasuk = DB::table((new DetailMasuk)->getTable())
+                                ->where('no_palet', $state)
+                                ->sum('isi');
+                            $totalUsedStik = DB::table((new DetailMasukStik)->getTable())
+                                ->where('no_palet', $palet->kode_palet)
+                                ->sum('isi');
+                            $remaining = $palet->total_lembar - ($totalUsedMasuk + $totalUsedStik);
+                            
+                            $set('isi', max(0, $remaining));
                             $set('id_jenis_kayu', $palet->penggunaanLahan?->id_jenis_kayu);
                             $set('id_ukuran', $palet->id_ukuran);
                         }
@@ -227,7 +246,34 @@ class DetailMasukForm
                 ->required()
                 ->numeric()
                 // ->readOnly(fn(Get $get) => $get('no_palet_select') !== 'AF' && $get('no_palet_select') !== null)
-                ->dehydrated(true),
+                ->dehydrated(true)
+                ->rules([
+                    fn (Get $get, $record): \Closure => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                        $noPaletSelect = $get('no_palet_select');
+                        if ($noPaletSelect && $noPaletSelect !== 'AF') {
+                            $palet = \App\Models\DetailHasilPaletRotary::find($noPaletSelect);
+                            if ($palet) {
+                                // Hitung total used di detail_masuks oleh baris LAIN (selain record ini)
+                                $usedInMasukQuery = DB::table((new DetailMasuk)->getTable())
+                                    ->where('no_palet', $noPaletSelect);
+                                if ($record) {
+                                    $usedInMasukQuery->where('id', '!=', $record->id);
+                                }
+                                $totalUsedMasuk = $usedInMasukQuery->sum('isi');
+
+                                $totalUsedStik = DB::table((new DetailMasukStik)->getTable())
+                                    ->where('no_palet', $palet->kode_palet)
+                                    ->sum('isi');
+
+                                $remaining = $palet->total_lembar - ($totalUsedMasuk + $totalUsedStik);
+
+                                if ((int)$value > $remaining) {
+                                    $fail("Jumlah isi tidak boleh melebihi sisa lembar palet ({$remaining} lembar).");
+                                }
+                            }
+                        }
+                    },
+                ]),
         ]);
     }
 }

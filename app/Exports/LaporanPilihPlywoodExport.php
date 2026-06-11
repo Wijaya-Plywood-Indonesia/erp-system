@@ -14,9 +14,19 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 class LaporanPilihPlywoodExport implements FromCollection, WithHeadings, WithStyles, WithEvents
 {
+    /**
+     * Menyimpan data laporan berisi 'detail' dan 'summary'.
+     */
     protected $data;
+
+    /**
+     * Menyimpan tanggal laporan yang diekspor.
+     */
     protected $tanggal;
 
+    /**
+     * Inisialisasi export dengan data laporan dan tanggal terkait.
+     */
     public function __construct($data, $tanggal)
     {
         $this->data = $data;

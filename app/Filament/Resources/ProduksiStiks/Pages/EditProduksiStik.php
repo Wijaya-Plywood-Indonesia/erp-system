@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ProduksiStiks\Pages;
 
 use App\Filament\Resources\ProduksiStiks\ProduksiStikResource;
+use App\Filament\Resources\ProduksiStiks\Widgets\ProduksiStikSummaryWidget;
 use App\Models\ProduksiStik;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Validation\ValidationException;
@@ -10,6 +11,13 @@ use Illuminate\Validation\ValidationException;
 class EditProduksiStik extends EditRecord
 {
     protected static string $resource = ProduksiStikResource::class;
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            ProduksiStikSummaryWidget::class,
+        ];
+    }
 
     protected function beforeSave(): void
     {

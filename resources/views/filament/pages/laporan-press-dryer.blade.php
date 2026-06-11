@@ -178,7 +178,7 @@
 
                                         <span class="font-medium">Target:</span>
                                         <strong class="font-mono">{{
-                                            number_format($target)
+                                            number_format($target, 4, ',', '.')
                                         }}</strong>
 
                                         <span class="text-zinc-400">|</span>
@@ -195,7 +195,7 @@
                                         <span class="font-medium">Hasil:</span>
                                         <strong
                                             class="font-mono {{ $warna }}"
-                                            >{{ number_format($hasil) }}</strong
+                                            >{{ number_format($hasil, 4, ',', '.') }}</strong
                                         >
 
                                         <span class="text-zinc-400">|</span>
@@ -206,7 +206,7 @@
                                         <strong class="font-mono {{ $warna }}"
                                             >{{ $tanda
                                             }}{{
-                                                number_format(abs($selisih))
+                                                number_format(abs($selisih), 4, ',', '.')
                                             }}</strong
                                         >
 
@@ -222,6 +222,19 @@
                         </table>
                     </div>
                 </div>
+                 @if(!empty($first['kendala']) && $first['kendala'] !== '-')
+                 <div class="mt-4 p-3 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-lg text-xs">
+                     <span class="font-bold text-red-600 dark:text-red-400">KENDALA MESIN:</span>
+                     <p class="mt-1 text-red-800 dark:text-red-200 font-medium whitespace-pre-line">{{ $first['kendala'] }}</p>
+                 </div>
+                 @endif
+
+                 @if(!empty($first['keterangan_global']) && $first['keterangan_global'] !== '-')
+                 <div class="mt-4 p-3 bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-700/50 rounded-lg text-xs">
+                     <span class="font-bold text-zinc-600 dark:text-zinc-400">KETERANGAN:</span>
+                     <p class="mt-1 text-zinc-800 dark:text-zinc-200 font-medium whitespace-pre-line">{{ $first['keterangan_global'] }}</p>
+                 </div>
+                 @endif
             </div>
         </div>
         @empty

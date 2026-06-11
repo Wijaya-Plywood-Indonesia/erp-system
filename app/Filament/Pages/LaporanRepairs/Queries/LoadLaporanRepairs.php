@@ -18,6 +18,9 @@ class LoadLaporanRepairs
             'rencanaPegawais.pegawai',
             'rencanaPegawais.rencanaRepairs.hasilRepairs',
 
+            // Relasi bahan penolong
+            'bahanPenolongRepair.bahanPenolong',
+
         ])
             ->whereDate('tanggal', $tgl)
             ->get();

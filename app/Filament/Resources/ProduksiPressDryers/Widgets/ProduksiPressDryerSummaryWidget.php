@@ -42,6 +42,12 @@ class ProduksiPressDryerSummaryWidget extends Widget
         if (!$this->record) return;
 
         try {
+            // Eager load necessary relationships safely
+            $this->record->loadMissing([
+                'detailMesins.mesin',
+                'detailMesins.kategoriMesin',
+            ]);
+
             $produksiId = $this->record->id;
 
             // 1. TOTAL PRODUKSI (LEMBAR)
@@ -88,7 +94,6 @@ class ProduksiPressDryerSummaryWidget extends Widget
             foreach ($breakdownLog as $logLine) Log::info($logLine);
             Log::info("TOTAL KUBIKASI AKHIR: $totalKubikasi");
 
-            // Query Dasar Ukuran (Untuk tampilan List)
             // Query Dasar Ukuran (Untuk tampilan List)
             $baseQuery = DetailHasil::query()
                 ->where('detail_hasils.id_produksi_dryer', $produksiId)
@@ -138,6 +143,55 @@ class ProduksiPressDryerSummaryWidget extends Widget
                 ->orderBy('ukuran')
                 ->get();
 
+            // 6. LOGIKA TARGET
+            $firstMesin = $this->record->detailMesins->first();
+            $namaMesin = '-';
+            $mesinUtamaId = null;
+
+            if ($firstMesin) {
+                $namaMesin = $firstMesin->mesin->nama_mesin
+                    ?? $firstMesin->kategoriMesin->nama_kategori_mesin
+                    ?? 'MESIN ?';
+                $mesinUtamaId = $firstMesin->id_mesin_dryer;
+            }
+
+            $shift = strtoupper($this->record->shift ?? 'PAGI');
+            $targetModel = null;
+
+            if ($mesinUtamaId) {
+                if (stripos($namaMesin, 'DRYER') !== false) {
+                    if ($shift === 'PAGI') {
+                        $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER PAGI')->first();
+                    } else {
+                        $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER MALAM')->first();
+                    }
+                } elseif (stripos($namaMesin, 'DRYER 1') !== false || $mesinUtamaId == 17) {
+                    $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER PAGI')->first();
+                } elseif (stripos($namaMesin, 'DRYER 2') !== false || $mesinUtamaId == 18) {
+                    $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER MALAM')->first();
+                } else {
+                    $targetModel = \App\Models\Target::where('id_mesin', $mesinUtamaId)->first();
+                }
+            }
+
+            $targetValue = $targetModel ? (float) $targetModel->target : 0;
+            $isDryer = stripos($namaMesin, 'DRYER') !== false;
+            $progress = 0;
+
+            if ($targetValue > 0) {
+                $actual = $isDryer ? $totalKubikasi : $totalAll;
+                $progress = min(round(($actual / $targetValue) * 100, 1), 100);
+            }
+
+            $targetSummary = [
+                'hasTarget' => $targetModel !== null,
+                'targetName' => $targetModel->kode_ukuran ?? ($targetModel ? $namaMesin : 'TIDAK ADA TARGET'),
+                'targetValue' => $targetValue,
+                'unit' => $isDryer ? 'm³' : 'Lembar',
+                'actualValue' => $isDryer ? $totalKubikasi : $totalAll,
+                'progress' => $progress,
+            ];
+
             $this->summary = [
                 'totalAll' => $totalAll,
                 'totalPegawai' => $totalPegawai,
@@ -145,6 +199,7 @@ class ProduksiPressDryerSummaryWidget extends Widget
                 'globalUkuranKw' => $globalUkuranKw,
                 'globalUkuran' => $globalUkuran,
                 'globalJenisKayuUkuran' => $globalJenisKayuUkuran,
+                'targetSummary' => $targetSummary,
             ];
         } catch (\Exception $e) {
             Log::error("Error pada Summary Widget Dryer: " . $e->getMessage());

@@ -19,6 +19,7 @@ class ProduksiPilihPlywoodsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('tanggal_produksi', 'desc')
             ->columns([
                 TextColumn::make('tanggal_produksi')
                     ->date()
@@ -27,7 +28,7 @@ class ProduksiPilihPlywoodsTable
                 TextColumn::make('kendala')
                     ->label('Kendala')
                     ->limit(50)
-                    ->tooltip(fn (string $state): string => $state)
+                    ->tooltip(fn(string $state): string => $state)
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('created_at')
@@ -41,9 +42,9 @@ class ProduksiPilihPlywoodsTable
             ])
             ->recordActions([
                 Action::make('kelola_kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn ($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'warning')
+                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Kendala')
@@ -65,14 +66,14 @@ class ProduksiPilihPlywoodsTable
                             ->success()
                             ->send();
                     })
-                    ->modalHeading(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
                     ->modalSubmitActionLabel('Simpan'),
 
                 EditAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
                 DeleteAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->before(function ($record, DeleteAction $action) {
 
                         // 🔒 cek semua relasi
@@ -106,8 +107,8 @@ class ProduksiPilihPlywoodsTable
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->visible(
-                            fn ($records) =>
-                                $records->every(fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi')
+                            fn($records) =>
+                            $records->every(fn($r) => $r->validasiTerakhir?->status !== 'divalidasi')
                         ),
                 ]),
             ]);

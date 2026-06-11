@@ -89,4 +89,9 @@ class ProduksiPressDryer extends Model
     {
         return $this->hasMany(StokVeneerKering::class, 'id_produksi_dryer');
     }
+
+    public function kendalaPressDryers()
+    {
+        return $this->hasMany(KendalaPressDryer::class, 'produksi_press_dryer_id');
+    }
 }

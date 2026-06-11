@@ -58,7 +58,7 @@ class ProduksiRotariesTable
                             $record->detailPegawaiRotary()->exists()
                             || $record->detailLahanRotary()->exists()
                             || $record->detailValidasiHasilRotary()->exists()
-                            || $record->detailGantiPisauRotary()->exists()
+                            || $record->kendalaRotaries()->exists()
                             || $record->detailPaletRotary()->exists()
                             || $record->detailKayuPecah()->exists()
                             || $record->riwayatKayu()->exists();

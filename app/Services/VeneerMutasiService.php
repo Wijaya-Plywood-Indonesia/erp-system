@@ -24,16 +24,12 @@ class VeneerMutasiService
      */
     public function process(VeneerMutasi $mutasi): void
     {
-        if ($mutasi->status !== 'kirim') {
-            return;
-        }
-
         DB::transaction(function () use ($mutasi) {
             $mutasi->dibuat_oleh = auth()->id();
             $mutasi->save();
 
             $details = $mutasi->details;
-            if ($details->isEmpty()) {
+            if ($mutasi->status === 'kirim' && $details->isEmpty()) {
                 throw new \Exception("Detail barang harus diisi minimal 1 item.");
             }
 
@@ -53,8 +49,8 @@ class VeneerMutasiService
                         'no_nota'     => $mutasi->no_nota,
                         'tujuan_nota' => $mutasi->tujuan_nota ?? '-',
                     ]);
-                    // Delete old details
-                    DetailNotaBarangKeluar::where('id_nota_bk', $nota->id)->delete();
+                    // Delete old veneer details
+                    DetailNotaBarangKeluar::where('id_nota_bk', $nota->id)->where('nama_barang', 'like', 'Veneer %')->delete();
                 } else {
                     $nota = NotaBarangKeluar::create([
                         'tanggal'      => $mutasi->tanggal,
@@ -72,8 +68,8 @@ class VeneerMutasiService
                         'no_nota'     => $mutasi->no_nota,
                         'tujuan_nota' => $mutasi->tujuan_nota ?? '-',
                     ]);
-                    // Delete old details
-                    DetailNotaBarangMasuk::where('id_nota_bm', $nota->id)->delete();
+                    // Delete old veneer details
+                    DetailNotaBarangMasuk::where('id_nota_bm', $nota->id)->where('nama_barang', 'like', 'Veneer %')->delete();
                 } else {
                     $nota = NotaBarangMasuk::create([
                         'tanggal'      => $mutasi->tanggal,
@@ -126,8 +122,10 @@ class VeneerMutasiService
      */
     public function processStockFromNota($nota): void
     {
-        // Guard: cannot validate own nota
-        if ((int) $nota->dibuat_oleh === (int) auth()->id()) {
+        // Guard: cannot validate own nota (except Super Admin)
+        $user = auth()->user();
+        $isSuperAdmin = $user && $user->hasAnyRole(['super_admin', 'Super Admin']);
+        if (!$isSuperAdmin && (int) $nota->dibuat_oleh === (int) auth()->id()) {
             throw new \Exception("Anda tidak dapat memvalidasi nota yang Anda buat sendiri.");
         }
 
