@@ -156,7 +156,7 @@ class LaporanJoinSummarySheet implements FromCollection, WithHeadings, WithTitle
         $grandTotalByk = 0;
 
         foreach ($this->rawCollection as $produksi) {
-            $tanggal = Carbon::parse($produksi->tanggal_produksi)->format('d-m-yy');
+            $tanggal = Carbon::parse($produksi->tanggal_produksi)->format('d-m-Y');
 
             // 1. Build bahan list
             $bahanRows = [];
