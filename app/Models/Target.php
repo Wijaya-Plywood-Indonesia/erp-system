@@ -20,6 +20,8 @@ class Target extends Model
         'target',
         'orang',
         'jam',
+        'jam_mulai',
+        'jam_selesai',
         'gaji',
         'status',
     ];
