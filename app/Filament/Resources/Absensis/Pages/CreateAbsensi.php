@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Absensis\Pages;
 use App\Filament\Resources\Absensis\AbsensiResource;
 use App\Models\DetailAbsensi;
 use App\Services\AbsensiParsingService;
+use App\Services\AbsensiPairingService;
 use Carbon\Carbon;
 use Filament\Resources\Pages\CreateRecord;
 use Filament\Notifications\Notification;
@@ -32,39 +33,31 @@ class CreateAbsensi extends CreateRecord
         $skippedLines = $parseResult['skipped_lines'];
         $totalProcessed = 0;
 
+        /** @var AbsensiPairingService $pairingService */
+        $pairingService = app(AbsensiPairingService::class);
+
         // ================================================
         // STEP 2: PROSES — Tentukan masuk & pulang per orang
         // ================================================
         foreach ($rawLogs as $empCode => $entries) {
-            // Urutkan semua tap dari yang paling awal
-            $sorted = collect($entries)->sortBy('full');
+            // Find previous day's attendance
+            $prevDate = Carbon::parse($targetDate)->subDay()->format('Y-m-d');
+            $previousAbsen = DetailAbsensi::where('kode_pegawai', $empCode)
+                ->where('tanggal', $prevDate)
+                ->first();
 
-            // Tap pertama di hari target = jam masuk
-            $firstTap = $sorted->filter(fn($l) => $l['date'] === $targetDate)->first();
-            if (!$firstTap) continue; // Tidak ada tap di hari target, skip
-
-            $jamMasuk   = $firstTap['time'];
-            $jamMasukDt = Carbon::parse($firstTap['full']);
-
-            // ⭐ DETEKSI SHIFT DARI JAM MASUK
-            // Shift Malam: tap masuk antara jam 14:00 - 23:59
-            $isShiftMalam = $jamMasukDt->hour >= 14;
-
-            if ($isShiftMalam) {
-                // Shift Malam: cari tap pulang di nextDate (jam 00:00 - 10:00)
-                $lastTap = $sorted
-                    ->filter(fn($l) => $l['date'] === $nextDate
-                        && Carbon::parse($l['full'])->hour <= 10)
-                    ->last();
-            } else {
-                // Shift Pagi: cari tap pulang di hari yang sama, setelah jam masuk
-                $lastTap = $sorted
-                    ->filter(fn($l) => $l['date'] === $targetDate
-                        && Carbon::parse($l['full'])->gt($jamMasukDt))
-                    ->last();
+            $prevCheckout = null;
+            if ($previousAbsen && $previousAbsen->jam_pulang) {
+                $prevCheckout = Carbon::parse($prevDate . ' ' . $previousAbsen->jam_pulang);
             }
 
-            $jamPulang = $lastTap['time'] ?? null;
+            $paired = $pairingService->pairEmployeeLogs($entries, $targetDate, $nextDate, $prevCheckout);
+            if (!$paired) {
+                continue; // Tidak ada tap masuk di hari target, skip
+            }
+
+            $jamMasuk = $paired['jam_masuk'];
+            $jamPulang = $paired['jam_pulang'];
 
             // ================================================
             // STEP 3: SIMPAN ke database
