@@ -7,6 +7,7 @@ use App\Models\JenisKayu;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Filament\Support\RawJs;
 
 class ReferensiHargaProduksiForm
 {
@@ -113,10 +114,11 @@ class ReferensiHargaProduksiForm
 
                 TextInput::make('harga')
                     ->label('Harga Produksi')
-                    ->numeric()
                     ->prefix('Rp')
-                    ->minValue(0)
-                    ->placeholder('0.0000'),
+                    ->mask(RawJs::make('$money($input, \',\', \'.\', 0)'))
+                    ->formatStateUsing(fn ($state) => $state ? number_format($state, 0, ',', '.') : null)
+                    ->dehydrateStateUsing(fn ($state) => blank($state) ? null : str_replace('.', '', $state))
+                    ->placeholder('0'),
             ]);
     }
 }
