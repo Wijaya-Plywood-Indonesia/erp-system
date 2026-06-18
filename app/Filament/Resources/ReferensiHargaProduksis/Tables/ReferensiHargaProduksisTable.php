@@ -30,24 +30,15 @@ class ReferensiHargaProduksisTable
                         });
                     }),
 
+                TextColumn::make('kw')
+                    ->label('KW')
+                    ->searchable()
+                    ->sortable(),
+
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
                     ->searchable()
                     ->sortable(),
-
-                TextColumn::make('subAnakAkun')
-                    ->label('Sub Anak Akun')
-                    ->state(fn($record) => $record->subAnakAkun ? $record->subAnakAkun->kode_sub_anak_akun . ' - ' . $record->subAnakAkun->nama_sub_anak_akun : '-')
-                    ->searchable(query: function ($query, string $search) {
-                        $query->whereHas('subAnakAkun', function ($q) use ($search) {
-                            $q->where('kode_sub_anak_akun', 'like', "%{$search}%")
-                                ->orWhere('nama_sub_anak_akun', 'like', "%{$search}%");
-                        });
-                    })
-                    ->sortable(query: function ($query, string $direction) {
-                        $query->join('sub_anak_akuns', 'referensi_harga_produksi.id_sub_anak_akun', '=', 'sub_anak_akuns.id')
-                            ->orderBy('sub_anak_akuns.nama_sub_anak_akun', $direction);
-                    }),
 
                 TextColumn::make('jenis_barang')
                     ->label('Jenis Barang')
@@ -63,15 +54,24 @@ class ReferensiHargaProduksisTable
                     ->searchable()
                     ->sortable(),
 
-                TextColumn::make('kw')
-                    ->label('KW')
-                    ->searchable()
-                    ->sortable(),
-
                 TextColumn::make('harga')
                     ->label('Harga')
                     ->formatStateUsing(fn($state) => 'Rp ' . number_format($state, 2, ',', '.'))
                     ->sortable(),
+
+                TextColumn::make('subAnakAkun')
+                    ->label('Sub Anak Akun')
+                    ->state(fn($record) => $record->subAnakAkun ? $record->subAnakAkun->kode_sub_anak_akun . ' - ' . $record->subAnakAkun->nama_sub_anak_akun : '-')
+                    ->searchable(query: function ($query, string $search) {
+                        $query->whereHas('subAnakAkun', function ($q) use ($search) {
+                            $q->where('kode_sub_anak_akun', 'like', "%{$search}%")
+                                ->orWhere('nama_sub_anak_akun', 'like', "%{$search}%");
+                        });
+                    })
+                    ->sortable(query: function ($query, string $direction) {
+                        $query->join('sub_anak_akuns', 'referensi_harga_produksi.id_sub_anak_akun', '=', 'sub_anak_akuns.id')
+                            ->orderBy('sub_anak_akuns.nama_sub_anak_akun', $direction);
+                    }),
 
                 TextColumn::make('created_at')
                     ->label('Tanggal Dibuat')

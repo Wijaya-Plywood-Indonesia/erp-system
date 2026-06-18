@@ -67,33 +67,27 @@ class ReferensiHargaProduksiSeeder extends Seeder
             ];
         }
 
-        // Ambil data ukuran pertama untuk fallback
-        $firstUkuran = Ukuran::first();
-        if (!$firstUkuran) {
-            $firstUkuran = Ukuran::create([
-                'panjang' => 2600,
-                'lebar' => 1270,
-                'tebal' => 3
+        // Ambil atau buat data ukuran 0x0x0
+        $ukuran0 = Ukuran::where('panjang', 0)
+            ->where('lebar', 0)
+            ->where('tebal', 0)
+            ->first();
+
+        if (!$ukuran0) {
+            $ukuran0 = Ukuran::create([
+                'panjang' => 0,
+                'lebar' => 0,
+                'tebal' => 0
             ]);
         }
-
-        // Petakan ukuran string ke record Ukuran di database
-        $ukuranFaceBack = Ukuran::where('panjang', '>=', 2000)->first() ?? $firstUkuran;
-        $ukuranCore = Ukuran::where('panjang', '<', 2000)->where('panjang', '>=', 1000)->first() ?? $firstUkuran;
-        $ukuranPpc = Ukuran::where('panjang', '<', 1000)->first() ?? $firstUkuran;
 
         foreach ($items as $hv) {
             $idJenisKayu = $hv['id_jenis_kayu'];
             $jenisKayu = JenisKayu::find($idJenisKayu);
             $woodName = strtolower($jenisKayu ? $jenisKayu->nama_kayu : '');
             
-            // Tentukan Ukuran
-            $idUkuran = match($hv['ukuran']) {
-                'faceback', 'face', 'back' => $ukuranFaceBack->id,
-                'core' => $ukuranCore->id,
-                'ppc_faceback', 'ppc_core' => $ukuranPpc->id,
-                default => $firstUkuran->id,
-            };
+            // Tentukan Ukuran (pakai 0x0x0 karena ini referensi harga awal)
+            $idUkuran = $ukuran0->id;
 
             // Kata kunci posisi
             $posTerm = match($hv['ukuran']) {
