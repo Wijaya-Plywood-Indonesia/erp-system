@@ -198,11 +198,14 @@
                             <td class="py-4 px-6">
                                 @php
                                     $badgeColor = match($item->jenis_barang) {
-                                        'Veneer Jadi' => 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+                                        'Veneer', 'Veneer Jadi' => 'bg-emerald-50 text-emerald-700 border border-emerald-200',
                                         'Veneer Kering' => 'bg-cyan-50 text-cyan-700 border border-cyan-200',
                                         'Veneer Basah' => 'bg-sky-50 text-sky-700 border border-sky-200',
                                         'Platform' => 'bg-indigo-50 text-indigo-700 border border-indigo-200',
                                         'Afalan' => 'bg-rose-50 text-rose-700 border border-rose-200',
+                                        'Plywood' => 'bg-amber-50 text-amber-700 border border-amber-200',
+                                        'Barang' => 'bg-blue-50 text-blue-700 border border-blue-200',
+                                        'Lain-Lain' => 'bg-slate-100 text-slate-700 border border-slate-200',
                                         default => 'bg-slate-100 text-slate-700 border border-slate-200',
                                     };
                                 @endphp

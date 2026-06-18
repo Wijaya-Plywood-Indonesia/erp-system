@@ -66,7 +66,7 @@ class ReferensiHargaProduksiController extends Controller
         }
 
         // Fitur Pagination
-        $data = $query->paginate(10)->withQueryString();
+        $data = $query->paginate(100)->withQueryString();
 
         return view('referensi_harga_produksi.index', compact('data'));
     }
@@ -81,7 +81,10 @@ class ReferensiHargaProduksiController extends Controller
             'Veneer Basah',
             'Veneer Kering',
             'Veneer Jadi',
+            'Veneer',
             'Platform',
+            'Plywood',
+            'Barang',
             'Lain-Lain'
         ]);
         $dbJenisBarangs = ReferensiHargaProduksi::whereNotNull('jenis_barang')->where('jenis_barang', '!=', '')->distinct()->pluck('jenis_barang');
@@ -113,7 +116,10 @@ class ReferensiHargaProduksiController extends Controller
             'Veneer Basah',
             'Veneer Kering',
             'Veneer Jadi',
+            'Veneer',
             'Platform',
+            'Plywood',
+            'Barang',
             'Lain-Lain'
         ]);
         $dbJenisBarangs = ReferensiHargaProduksi::whereNotNull('jenis_barang')->where('jenis_barang', '!=', '')->distinct()->pluck('jenis_barang');

@@ -55,7 +55,8 @@ class ReferensiHargaProduksiRequest extends FormRequest
             ],
             'jenis_barang' => [
                 'nullable',
-                'in:Afalan,Veneer Basah,Veneer Kering,Veneer Jadi,Platform,Lain-Lain'
+                'string',
+                'max:100'
             ],
             'kw' => [
                 'nullable',

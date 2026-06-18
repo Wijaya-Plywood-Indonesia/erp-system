@@ -70,7 +70,7 @@ class ReferensiHargaProduksiForm
 
                 Select::make('jenis_barang')
                     ->label('Jenis Barang')
-                    ->options(function () {
+                    ->options(function ($state) {
                         $defaults = [
                             'Afalan' => 'Afalan',
                             'Veneer Basah' => 'Veneer Basah',
@@ -84,7 +84,14 @@ class ReferensiHargaProduksiForm
                             ->distinct()
                             ->pluck('jenis_barang', 'jenis_barang')
                             ->toArray();
-                        return array_merge($defaults, $dbValues);
+                        
+                        $options = array_merge($defaults, $dbValues);
+                        
+                        if ($state && !array_key_exists($state, $options)) {
+                            $options[$state] = $state;
+                        }
+                        
+                        return $options;
                     })
                     ->searchable()
                     ->native(false)
@@ -102,7 +109,19 @@ class ReferensiHargaProduksiForm
 
                 Select::make('kw')
                     ->label('KW')
-                    ->options(fn () => \App\Models\ReferensiHargaProduksi::whereNotNull('kw')->where('kw', '!=', '')->distinct()->pluck('kw', 'kw')->toArray())
+                    ->options(function ($state) {
+                        $options = \App\Models\ReferensiHargaProduksi::whereNotNull('kw')
+                            ->where('kw', '!=', '')
+                            ->distinct()
+                            ->pluck('kw', 'kw')
+                            ->toArray();
+                        
+                        if ($state && !array_key_exists($state, $options)) {
+                            $options[$state] = $state;
+                        }
+                        
+                        return $options;
+                    })
                     ->searchable()
                     ->native(false)
                     ->placeholder('Pilih atau buat baru')
