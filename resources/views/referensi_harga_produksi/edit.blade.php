@@ -64,6 +64,16 @@
                 @csrf
                 @method('PUT')
 
+                <!-- Nama -->
+                <div class="flex flex-col gap-1.5">
+                    <label for="nama" class="text-xs font-bold text-slate-700 uppercase tracking-wider">Nama (Opsional)</label>
+                    <input type="text" name="nama" id="nama" value="{{ old('nama', $referensiHargaProduksi->nama) }}" placeholder="Masukkan nama referensi" 
+                        class="w-full bg-slate-50 border @error('nama') border-rose-500 @else border-slate-200 @enderror rounded-xl py-2.5 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
+                    @error('nama')
+                        <p class="text-rose-500 text-xs font-medium mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <!-- Ukuran -->
                     <div class="flex flex-col gap-1.5">

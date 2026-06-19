@@ -390,7 +390,8 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
             'platformHasilHp.jenisKayu',
             'platformHasilHp.barangSetengahJadi.jenisBarang',
             'platformHasilHp.mesin',
-            'detailPegawaiHp.pegawaiHp'
+            'detailPegawaiHp.pegawaiHp',
+            'kendalaHps.mesin',
         ])
             ->whereDate('tanggal_produksi', $this->tanggal)
             ->get();
@@ -528,7 +529,28 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                     $this->mergeRanges[] = "K{$workerStartRow}:K{$workerEndRow}";
                 }
 
-                $kendala = $produksi->kendala ?? 'Tidak ada kendala.';
+                $kendalaText = 'Tidak ada kendala.';
+                if ($produksi->kendalaHps && $produksi->kendalaHps->isNotEmpty()) {
+                    $kendalaParts = [];
+                    foreach ($produksi->kendalaHps as $k) {
+                        $mesinLabel = $k->mesin?->nama_mesin;
+                        $mulai = $k->waktu_mulai ? Carbon::parse($k->waktu_mulai)->format('H:i') : '';
+                        $selisihTime = $k->waktu_selesai ? Carbon::parse($k->waktu_selesai)->format('H:i') : '';
+                        $durasi = $k->durasi_menit ? "{$k->durasi_menit} menit" : '';
+                        
+                        $timeStr = '';
+                        if ($mulai || $selisihTime) {
+                            $timeStr = " (" . ($durasi ? "{$durasi}: " : "") . "{$mulai}-{$selisihTime})";
+                        }
+                        
+                        $mesinPart = $mesinLabel ? "{$mesinLabel}: " : "";
+                        $kendalaParts[] = $mesinPart . $k->kendala . $timeStr;
+                    }
+                    $kendalaText = implode("\n", $kendalaParts);
+                } else if (!empty($produksi->kendala) && $produksi->kendala !== '-') {
+                    $kendalaText = $produksi->kendala;
+                }
+                $kendala = $kendalaText;
                 $targetPerJam = $stdJam > 0 ? 1 / $stdJam : 0;
                 $pencapaianVal = $totalTargetVal > 0 ? $totalActualVal / $totalTargetVal : 0;
 

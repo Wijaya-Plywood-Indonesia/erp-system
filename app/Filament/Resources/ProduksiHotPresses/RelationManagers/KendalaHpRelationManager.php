@@ -135,7 +135,12 @@ class KendalaHpRelationManager extends RelationManager
                     ->label('Tambah Kendala')
                     ->mutateFormDataUsing(function (array $data): array {
                         $data['status'] = 'pending';
-                        $data['waktu_mulai'] = now()->format('Y-m-d') . ' ' . Carbon::parse($data['waktu_mulai'])->format('H:i') . ':00';
+                        
+                        $parent = $this->getOwnerRecord();
+                        $parentDate = $parent?->tanggal_produksi ?? now()->format('Y-m-d');
+                        $parentDateStr = Carbon::parse($parentDate)->format('Y-m-d');
+                        $data['waktu_mulai'] = $parentDateStr . ' ' . Carbon::parse($data['waktu_mulai'])->format('H:i') . ':00';
+                        
                         return $data;
                     }),
             ])

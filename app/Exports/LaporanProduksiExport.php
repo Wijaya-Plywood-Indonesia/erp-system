@@ -96,23 +96,34 @@ class LaporanProduksiDetailSheet implements FromCollection, WithHeadings, WithTi
                 if (count($daftarKendala) === 0) {
                     $kendalaCellValues[0] = 'Tidak ada kendala';
                     if ($N > 1) {
-                        $this->mergeRanges[] = "K{$workerStartRow}:K" . ($workerStartRow + $N - 1);
+                        $this->mergeRanges[] = "K{$workerStartRow}:K{$workerEndRow}";
                     }
                 } else {
                     $M = count($daftarKendala);
-                    $chunkSize = (int) ceil($N / $M);
+                    
+                    if ($N < $M) {
+                        // Jika jumlah pekerja lebih sedikit dari kendala, gabungkan semua kendala dengan newline
+                        $text = implode("\n", array_column($daftarKendala, 'text'));
+                        $kendalaCellValues[0] = $text;
+                        if ($N > 1) {
+                            $this->mergeRanges[] = "K{$workerStartRow}:K{$workerEndRow}";
+                        }
+                    } else {
+                        // Jika pekerja cukup, bagi rata secara chunk
+                        $chunkSize = (int) ceil($N / $M);
 
-                    for ($i = 0; $i < $M; $i++) {
-                        $startIdx = $i * $chunkSize;
-                        $endIdx = min(($i + 1) * $chunkSize - 1, $N - 1);
+                        for ($i = 0; $i < $M; $i++) {
+                            $startIdx = $i * $chunkSize;
+                            $endIdx = min(($i + 1) * $chunkSize - 1, $N - 1);
 
-                        if ($startIdx < $N) {
-                            $kendalaCellValues[$startIdx] = $daftarKendala[$i]['text'] ?? '';
-                            $chunkStartRow = $workerStartRow + $startIdx;
-                            $chunkEndRow = $workerStartRow + $endIdx;
+                            if ($startIdx < $N) {
+                                $kendalaCellValues[$startIdx] = $daftarKendala[$i]['text'] ?? '';
+                                $chunkStartRow = $workerStartRow + $startIdx;
+                                $chunkEndRow = $workerStartRow + $endIdx;
 
-                            if ($chunkStartRow < $chunkEndRow) {
-                                $this->mergeRanges[] = "K{$chunkStartRow}:K{$chunkEndRow}";
+                                if ($chunkStartRow < $chunkEndRow) {
+                                    $this->mergeRanges[] = "K{$chunkStartRow}:K{$chunkEndRow}";
+                                }
                             }
                         }
                     }
@@ -629,7 +640,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
 
                 $rowTotal = 0.0;
                 if ($g['has_vol'] && $g['volume'] !== null && $g['volume'] > 0) {
-                    $rowTotal = (float)$g['volume'] * $rowHarga;
+                    $rowTotal = round((float)$g['volume'], 4) * $rowHarga;
                 } elseif ($g['has_qty'] && $g['banyak'] !== null && $g['banyak'] > 0) {
                     $rowTotal = (float)$g['banyak'] * $rowHarga;
                 } else {
@@ -772,7 +783,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $g['dk'],                                           // 9. map
                     $hitKbkVal,                                         // 10. hit kbk
                     $g['has_qty'] ? $g['banyak'] : null,                // 11. Banyak
-                    $g['has_vol'] ? $g['volume'] : null,                // 12. M3
+                    $g['has_vol'] ? round($g['volume'], 4) : null,      // 12. M3
                     $hargaVal,                                          // 13. Harga
                     $totalVal                                           // 14. Total
                 ]);

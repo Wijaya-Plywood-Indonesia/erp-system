@@ -29,6 +29,9 @@ return new class extends Migration
                 $table->foreign('id_jenis_kayu')->references('id')->on('jenis_kayus')->cascadeOnDelete();
             });
         }
+
+        // Silakan jalankan seeder secara manual dari terminal jika diperlukan:
+        // php artisan db:seed --class=ReferensiHargaProduksiSeeder
     }
 
     /**

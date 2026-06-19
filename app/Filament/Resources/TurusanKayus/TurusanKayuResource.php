@@ -5,8 +5,10 @@ namespace App\Filament\Resources\TurusanKayus;
 use App\Filament\Resources\TurusanKayus\Pages\CreateTurusanKayu;
 use App\Filament\Resources\TurusanKayus\Pages\EditTurusanKayu;
 use App\Filament\Resources\TurusanKayus\Pages\ListTurusanKayus;
+use App\Filament\Resources\TurusanKayus\Pages\ViewTurusanKayu;
 use App\Filament\Resources\TurusanKayus\RelationManagers\DetailturusanKayusRelationManager;
 use App\Filament\Resources\TurusanKayus\Schemas\TurusanKayuForm;
+use App\Filament\Resources\TurusanKayus\Schemas\TurusanKayuInfolist;
 use App\Filament\Resources\TurusanKayus\Tables\TurusanKayusTable;
 use App\Models\KayuMasuk;
 use BackedEnum;
@@ -35,10 +37,15 @@ class TurusanKayuResource extends Resource
         return TurusanKayusTable::configure($table);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return TurusanKayuInfolist::configure($schema);
+    }
+
     public static function getRelations(): array
     {
         return [
-                //
+            //
             DetailturusanKayusRelationManager::class,
         ];
     }
@@ -48,6 +55,7 @@ class TurusanKayuResource extends Resource
         return [
             'index' => ListTurusanKayus::route('/'),
             'create' => CreateTurusanKayu::route('/create'),
+            'view' => ViewTurusanKayu::route('/{record}'),
             'edit' => EditTurusanKayu::route('/{record}/edit'),
         ];
     }

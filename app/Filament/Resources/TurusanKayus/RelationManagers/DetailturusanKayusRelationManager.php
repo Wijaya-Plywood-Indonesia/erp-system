@@ -15,6 +15,11 @@ class DetailturusanKayusRelationManager extends RelationManager
 
     protected $listeners = ['refreshDatatable' => '$refresh'];
 
+    public function isReadOnly(): bool
+    {
+        return false;
+    }
+
     public static function canViewForRecord($ownerRecord, $pageClass): bool
     {
         $detailTurun = DetailTurunKayu::where('id_kayu_masuk', $ownerRecord->id)->first();

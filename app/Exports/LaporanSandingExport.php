@@ -53,7 +53,8 @@ class LaporanSandingPotonganGajiSheet implements FromCollection, WithHeadings, W
             'hasilSandings.barangSetengahJadi.ukuran',
             'hasilSandings.barangSetengahJadi.jenisBarang',
             'hasilSandings.barangSetengahJadi.grade.kategoriBarang',
-            'mesin'
+            'mesin',
+            'kendalaSandings'
         ])
             ->whereDate('tanggal', $this->tanggal)
             ->get();
@@ -123,7 +124,43 @@ class LaporanSandingPotonganGajiSheet implements FromCollection, WithHeadings, W
             $jamKerja = 10;
             $targetPerJam = $target / $jamKerja;
             $selisih = $totalActual - $target;
-            $kendala = $prod->kendala ?? '-';
+
+            // HITUNG KENDALA DOWNTIME DARI MODEL BARU (kendalaSandings)
+            $totalDowntimeMenit = 0;
+            $daftarKendala = [];
+
+            if (!empty($prod->kendalaSandings) && $prod->kendalaSandings->count() > 0) {
+                foreach ($prod->kendalaSandings as $knd) {
+                    if ($knd->status === 'selesai' && !is_null($knd->durasi_menit)) {
+                        $durasiMenit = (int)$knd->durasi_menit;
+                        $mulai = $knd->waktu_mulai ? Carbon::parse($knd->waktu_mulai) : null;
+                        $selesai = $knd->waktu_selesai ? Carbon::parse($knd->waktu_selesai) : null;
+
+                        $timeStr = ($mulai && $selesai) ? ': ' . $mulai->format('H:i') . '-' . $selesai->format('H:i') : '';
+                        $formattedText = ($knd->kendala ?? 'Tidak disebutkan') . ' (' . $durasiMenit . ' menit' . $timeStr . ')';
+
+                        $daftarKendala[] = [
+                            'text' => $formattedText,
+                        ];
+                        $totalDowntimeMenit += $durasiMenit;
+                    } else {
+                        $mulai = $knd->waktu_mulai ? Carbon::parse($knd->waktu_mulai) : null;
+                        $timeStr = $mulai ? ' (Mulai: ' . $mulai->format('H:i') . ' - Pending)' : ' (Pending)';
+                        $formattedText = ($knd->kendala ?? 'Tidak disebutkan') . $timeStr;
+
+                        $daftarKendala[] = [
+                            'text' => $formattedText,
+                        ];
+                    }
+                }
+            } else {
+                // Fallback ke kolom kendala lama di tabel produksi_sandings jika ada
+                if (!empty($prod->kendala) && $prod->kendala !== '-') {
+                    $daftarKendala[] = [
+                        'text' => $prod->kendala,
+                    ];
+                }
+            }
 
             $allRows[] = ['MESIN: ' . strtoupper($mesinNama)];
             $allRows[] = ['TANGGAL: ' . $tanggalFormatted];
@@ -136,13 +173,54 @@ class LaporanSandingPotonganGajiSheet implements FromCollection, WithHeadings, W
             $workerEndRow = $workerStartRow + $N - 1;
             $totalRow = $workerStartRow + $N;
 
+            // Merge kolom F s/d J secara statis jika N > 1
             if ($N > 1) {
                 $this->mergeRanges[] = "F{$workerStartRow}:F{$workerEndRow}";
                 $this->mergeRanges[] = "G{$workerStartRow}:G{$workerEndRow}";
                 $this->mergeRanges[] = "H{$workerStartRow}:H{$workerEndRow}";
                 $this->mergeRanges[] = "I{$workerStartRow}:I{$workerEndRow}";
                 $this->mergeRanges[] = "J{$workerStartRow}:J{$workerEndRow}";
-                $this->mergeRanges[] = "K{$workerStartRow}:K{$workerEndRow}";
+            }
+
+            // Pre-calculate nilai sel untuk kolom Kendala (K) secara dinamis
+            $kendalaCellValues = array_fill(0, $N, '');
+
+            if ($N > 0) {
+                if (count($daftarKendala) === 0) {
+                    $kendalaCellValues[0] = 'Tidak ada kendala';
+                    if ($N > 1) {
+                        $this->mergeRanges[] = "K{$workerStartRow}:K{$workerEndRow}";
+                    }
+                } else {
+                    $M = count($daftarKendala);
+                    
+                    if ($N < $M) {
+                        // Jika jumlah pekerja lebih sedikit dari kendala, gabungkan semua kendala dengan newline
+                        $text = implode("\n", array_column($daftarKendala, 'text'));
+                        $kendalaCellValues[0] = $text;
+                        if ($N > 1) {
+                            $this->mergeRanges[] = "K{$workerStartRow}:K{$workerEndRow}";
+                        }
+                    } else {
+                        // Jika pekerja cukup, bagi rata secara chunk
+                        $chunkSize = (int) ceil($N / $M);
+
+                        for ($i = 0; $i < $M; $i++) {
+                            $startIdx = $i * $chunkSize;
+                            $endIdx = min(($i + 1) * $chunkSize - 1, $N - 1);
+
+                            if ($startIdx < $N) {
+                                $kendalaCellValues[$startIdx] = $daftarKendala[$i]['text'] ?? '';
+                                $chunkStartRow = $workerStartRow + $startIdx;
+                                $chunkEndRow = $workerStartRow + $endIdx;
+
+                                if ($chunkStartRow < $chunkEndRow) {
+                                    $this->mergeRanges[] = "K{$chunkStartRow}:K{$chunkEndRow}";
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             foreach ($pekerja as $idx => $ps) {
@@ -172,7 +250,7 @@ class LaporanSandingPotonganGajiSheet implements FromCollection, WithHeadings, W
                     $idx === 0 ? round((float) $targetPerJam, 2) : '',
                     $idx === 0 ? (int) $totalActual : '',
                     $idx === 0 ? (int) $selisih : '',
-                    $idx === 0 ? $kendala : ''
+                    $kendalaCellValues[$idx]
                 ];
             }
 
@@ -188,7 +266,7 @@ class LaporanSandingPotonganGajiSheet implements FromCollection, WithHeadings, W
                 $N > 0 ? "=SUM(H{$workerStartRow}:H{$workerEndRow})" : 0,
                 $N > 0 ? "=SUM(I{$workerStartRow}:I{$workerEndRow})" : 0,
                 $N > 0 ? "=SUM(J{$workerStartRow}:J{$workerEndRow})" : 0,
-                ''
+                $totalDowntimeMenit > 0 ? $totalDowntimeMenit . ' menit' : ''
             ];
 
             $allRows[] = array_fill(0, 11, '');

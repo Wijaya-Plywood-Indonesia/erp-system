@@ -9,10 +9,8 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        Artisan::call('db:seed', [
-            '--class' => 'Database\\Seeders\\AkunSeeder',
-            '--force' => true,
-        ]);
+        // Silakan jalankan manual dari terminal:
+        // php artisan db:seed --class=AkunSeeder
     }
 
     /**

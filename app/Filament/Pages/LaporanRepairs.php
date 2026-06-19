@@ -100,7 +100,11 @@ class LaporanRepairs extends Page
             if ($state instanceof Carbon) {
                 $tanggal = $state->format('Y-m-d');
             } elseif (is_string($state)) {
-                $tanggal = Carbon::parse($state)->format('Y-m-d');
+                if (str_contains($state, '/')) {
+                    $tanggal = Carbon::createFromFormat('d/m/Y', $state)->format('Y-m-d');
+                } else {
+                    $tanggal = Carbon::parse($state)->format('Y-m-d');
+                }
             } else {
                 $tanggal = now()->format('Y-m-d');
             }

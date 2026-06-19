@@ -614,7 +614,7 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 if ($isKayuKeluar) {
                     $rowTotal = (float)$g['jumlah'];
                 } elseif ($g['has_vol'] && $g['volume'] !== null && $g['volume'] > 0) {
-                    $rowTotal = (float)$g['volume'] * $rowHarga;
+                    $rowTotal = round((float)$g['volume'], 4) * $rowHarga;
                 } elseif ($g['has_qty'] && $g['banyak'] !== null && $g['banyak'] > 0) {
                     $rowTotal = (float)$g['banyak'] * $rowHarga;
                 } else {
@@ -756,7 +756,7 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                     $g['dk'],                                           // 9. map
                     $hitKbkVal,                                         // 10. hit kbk
                     $g['has_qty'] ? $g['banyak'] : null,                // 11. Banyak
-                    $g['has_vol'] ? $g['volume'] : null,                // 12. M3
+                    $g['has_vol'] ? round($g['volume'], 4) : null,      // 12. M3
                     $hargaVal,                                          // 13. Harga
                     $totalVal                                           // 14. Total
                 ]);
@@ -1070,7 +1070,7 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
                 'k',                                                // 9. map
                 'm',                                                // 10. hit kbk
                 $g['has_qty'] ? $g['banyak'] : null,                // 11. Banyak
-                $g['has_vol'] ? $g['volume'] : null,                // 12. M3
+                $g['has_vol'] ? round($g['volume'], 4) : null,      // 12. M3
                 $g['harga'],                                        // 13. Harga
                 $totalVal                                           // 14. Total
             ]);
@@ -1370,8 +1370,9 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
             // =====================================================
             // HARGA RATA-RATA PER M3
             // =====================================================
-            $hargaPerM3 = $g['volume'] > 0
-                ? $g['total_harga'] / $g['volume']
+            $roundedVol = round($g['volume'], 4);
+            $hargaPerM3 = $roundedVol > 0
+                ? $g['total_harga'] / $roundedVol
                 : 0;
 
             // =====================================================
@@ -1400,7 +1401,7 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
                 'k',                                               // I
                 'm',                                                // J
                 $g['banyak'] > 0 ? $g['banyak'] : null,            // K
-                $g['volume'] > 0 ? $g['volume'] : null,            // L
+                $roundedVol > 0 ? $roundedVol : null,              // L
                 $hargaPerM3,                                       // M
                 $totalVal                                          // N
             ]);
@@ -1679,6 +1680,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
             $totalM3 += ($record->total_kubikasi > 0 ? $record->total_kubikasi : 0);
             $totalHarga += $record->nilai_stok;
         }
+        $totalM3 = round($totalM3, 4);
 
         // 1. Add Debit row first: HPP Triplek
         if (!$records->isEmpty()) {
@@ -1713,7 +1715,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
             $keteranganSpec = "lahan " . ($record->lahan->kode_lahan ?? '-');
 
             $banyak = $record->total_batang > 0 ? $record->total_batang : 0;
-            $m3 = $record->total_kubikasi > 0 ? $record->total_kubikasi : 0;
+            $m3 = $record->total_kubikasi > 0 ? round($record->total_kubikasi, 4) : 0;
             $totalStokValue = $record->nilai_stok;
 
             $totalVal = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";

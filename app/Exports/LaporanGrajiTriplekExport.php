@@ -53,6 +53,7 @@ class LaporanGrajiTriplekPotonganGajiSheet implements FromCollection, WithHeadin
             'hasilGrajiTriplek.barangSetengahJadiHp.ukuran',
             'hasilGrajiTriplek.barangSetengahJadiHp.jenisBarang',
             'hasilGrajiTriplek.barangSetengahJadiHp.grade.kategoriBarang',
+            'kendalaGrajiTripleks.mesin',
         ])
             ->whereDate('tanggal_produksi', $this->tanggal)
             ->get();
@@ -109,7 +110,30 @@ class LaporanGrajiTriplekPotonganGajiSheet implements FromCollection, WithHeadin
             $jamKerja = 10; // Jam kerja standard
             $targetPerJam = $jamKerja > 0 ? $target / $jamKerja : 0;
             $selisih = $totalActual - $target;
-            $kendala = $prod->kendala ?? '-';
+
+            // Concatenate child table constraints if available
+            $kendalaText = '-';
+            if ($prod->kendalaGrajiTripleks && $prod->kendalaGrajiTripleks->isNotEmpty()) {
+                $kendalaParts = [];
+                foreach ($prod->kendalaGrajiTripleks as $k) {
+                    $mesinLabel = $k->mesin?->nama_mesin;
+                    $mulai = $k->waktu_mulai ? Carbon::parse($k->waktu_mulai)->format('H:i') : '';
+                    $selisihTime = $k->waktu_selesai ? Carbon::parse($k->waktu_selesai)->format('H:i') : '';
+                    $durasi = $k->durasi_menit ? "{$k->durasi_menit} menit" : '';
+                    
+                    $timeStr = '';
+                    if ($mulai || $selisihTime) {
+                        $timeStr = " (" . ($durasi ? "{$durasi}: " : "") . "{$mulai}-{$selisihTime})";
+                    }
+                    
+                    $mesinPart = $mesinLabel ? "{$mesinLabel}: " : "";
+                    $kendalaParts[] = $mesinPart . $k->kendala . $timeStr;
+                }
+                $kendalaText = implode("\n", $kendalaParts);
+            } else {
+                $kendalaText = $prod->kendala ?? '-';
+            }
+            $kendala = $kendalaText;
 
             $allRows[] = ['MESIN: ' . strtoupper($mesinNama)];
             $allRows[] = ['TANGGAL: ' . $tanggalFormatted];

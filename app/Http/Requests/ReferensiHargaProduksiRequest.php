@@ -35,6 +35,11 @@ class ReferensiHargaProduksiRequest extends FormRequest
         }
 
         return [
+            'nama' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
             'id_ukuran' => [
                 'nullable',
                 'exists:ukurans,id',
@@ -50,7 +55,8 @@ class ReferensiHargaProduksiRequest extends FormRequest
             ],
             'jenis_barang' => [
                 'nullable',
-                'in:Afalan,Veneer Basah,Veneer Kering,Veneer Jadi,Platform,Lain-Lain'
+                'string',
+                'max:100'
             ],
             'kw' => [
                 'nullable',

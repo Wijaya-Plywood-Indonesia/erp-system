@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\TurusanKayus\Tables;
 
+use App\Filament\Resources\TurusanKayus\TurusanKayuResource;
 use App\Models\DetailKayuMasuk;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -9,6 +10,7 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
@@ -53,22 +55,22 @@ class TurusanKayusTable
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('updated_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->headerActions([
-
-
-            ])
+            ->headerActions([])
             ->filters([
                 //
             ])
             ->recordActions([
                 EditAction::make()
                     // Hanya muncul jika tidak terkunci ATAU user adalah Admin
-                    ->visible(fn ($record) => !$isLocked($record)),
+                    ->visible(fn($record) => !$isLocked($record)),
             ])
+            ->recordUrl(
+                fn($record): string => TurusanKayuResource::getUrl('view', ['record' => $record])
+            )
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->visible(fn ($record) => !$isLocked($record)),
+                        ->visible(fn($record) => !$isLocked($record)),
                 ]),
             ]);
     }

@@ -64,19 +64,30 @@ class LaporanPressDryerSheet implements FromCollection, WithHeadings, WithTitle,
                     }
                 } else {
                     $M = count($daftarKendala);
-                    $chunkSize = (int) ceil($N / $M);
+                    
+                    if ($N < $M) {
+                        // Jika jumlah pekerja lebih sedikit dari kendala, gabungkan semua kendala dengan newline
+                        $text = implode("\n", array_column($daftarKendala, 'text'));
+                        $kendalaCellValues[0] = $text;
+                        if ($N > 1) {
+                            $this->mergeRanges[] = "K{$workerStartRow}:K{$workerEndRow}";
+                        }
+                    } else {
+                        // Jika pekerja cukup, bagi rata secara chunk
+                        $chunkSize = (int) ceil($N / $M);
 
-                    for ($i = 0; $i < $M; $i++) {
-                        $startIdx = $i * $chunkSize;
-                        $endIdx = min(($i + 1) * $chunkSize - 1, $N - 1);
+                        for ($i = 0; $i < $M; $i++) {
+                            $startIdx = $i * $chunkSize;
+                            $endIdx = min(($i + 1) * $chunkSize - 1, $N - 1);
 
-                        if ($startIdx < $N) {
-                            $kendalaCellValues[$startIdx] = $daftarKendala[$i]['text'] ?? '';
-                            $chunkStartRow = $workerStartRow + $startIdx;
-                            $chunkEndRow = $workerStartRow + $endIdx;
+                            if ($startIdx < $N) {
+                                $kendalaCellValues[$startIdx] = $daftarKendala[$i]['text'] ?? '';
+                                $chunkStartRow = $workerStartRow + $startIdx;
+                                $chunkEndRow = $workerStartRow + $endIdx;
 
-                            if ($chunkStartRow < $chunkEndRow) {
-                                $this->mergeRanges[] = "K{$chunkStartRow}:K{$chunkEndRow}";
+                                if ($chunkStartRow < $chunkEndRow) {
+                                    $this->mergeRanges[] = "K{$chunkStartRow}:K{$chunkEndRow}";
+                                }
                             }
                         }
                     }

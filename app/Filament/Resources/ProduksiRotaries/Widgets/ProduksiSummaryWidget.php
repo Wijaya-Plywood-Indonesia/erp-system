@@ -99,6 +99,26 @@ class ProduksiSummaryWidget extends Widget
             ->orderBy('ukuran')
             ->get();
 
+        // 4.6 REKAP LAHAN & UKURAN
+        $globalLahanUkuran = DetailHasilPaletRotary::query()
+            ->where('detail_hasil_palet_rotaries.id_produksi', $produksiId)
+            ->join('ukurans', 'ukurans.id', '=', 'detail_hasil_palet_rotaries.id_ukuran')
+            ->join('penggunaan_lahan_rotaries', 'penggunaan_lahan_rotaries.id', '=', 'detail_hasil_palet_rotaries.id_penggunaan_lahan')
+            ->join('lahans', 'lahans.id', '=', 'penggunaan_lahan_rotaries.id_lahan')
+            ->selectRaw('
+                CONCAT(
+                    TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
+                    TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
+                    TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
+                ) AS ukuran,
+                CONCAT(COALESCE(lahans.kode_lahan, ""), " - ", COALESCE(lahans.nama_lahan, "")) as nama_lahan,
+                SUM(CAST(detail_hasil_palet_rotaries.total_lembar AS UNSIGNED)) AS total
+            ')
+            ->groupBy('lahans.kode_lahan', 'lahans.nama_lahan', 'ukurans.panjang', 'ukurans.lebar', 'ukurans.tebal')
+            ->orderBy('nama_lahan')
+            ->orderBy('ukuran')
+            ->get();
+
         // 5. Ambil Target
         $dbName = "produksi_rotaries";
         $dbHasil = "detail_hasil_palet_rotaries";
@@ -114,6 +134,7 @@ class ProduksiSummaryWidget extends Widget
             'globalUkuranKwJenis' => $globalUkuranKwJenis,
             'globalUkuran' => $globalUkuran,
             'globalJenisKayuUkuran' => $globalJenisKayuUkuran,
+            'globalLahanUkuran' => $globalLahanUkuran,
             'globalTarget' => $globalTarget
         ];
     }

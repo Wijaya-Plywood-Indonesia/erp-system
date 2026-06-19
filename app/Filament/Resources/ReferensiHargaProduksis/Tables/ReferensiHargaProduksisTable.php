@@ -15,12 +15,20 @@ class ReferensiHargaProduksisTable
     {
         return $table
             ->columns([
+                TextColumn::make('nama')
+                    ->label('Nama')
+                    ->searchable()
+                    ->sortable()
+                    ->default('-'),
+
                 TextColumn::make('ukuran')
                     ->label('Ukuran')
                     ->state(function ($record) {
-                        return optional($record->ukuran)->panjang . 'mm x ' .
-                            optional($record->ukuran)->lebar . 'mm x ' .
-                            optional($record->ukuran)->tebal . 'mm';
+                        return $record->ukuran ? (
+                            $record->ukuran->panjang . 'mm x ' .
+                            $record->ukuran->lebar . 'mm x ' .
+                            $record->ukuran->tebal . 'mm'
+                        ) : '-';
                     })
                     ->searchable(query: function ($query, string $search) {
                         $query->whereHas('ukuran', function ($q) use ($search) {
@@ -30,9 +38,36 @@ class ReferensiHargaProduksisTable
                         });
                     }),
 
+                TextColumn::make('kw')
+                    ->label('KW')
+                    ->searchable()
+                    ->sortable(),
+
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
                     ->searchable()
+                    ->sortable(),
+
+                TextColumn::make('jenis_barang')
+                    ->label('Jenis Barang')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'Veneer Jadi', 'Veneer' => 'success',
+                        'Veneer Kering' => 'info',
+                        'Veneer Basah' => 'info',
+                        'Platform' => 'primary',
+                        'Afalan' => 'danger',
+                        'Plywood' => 'warning',
+                        'Barang' => 'info',
+                        'Lain-Lain' => 'gray',
+                        default => 'gray',
+                    })
+                    ->searchable()
+                    ->sortable(),
+
+                TextColumn::make('harga')
+                    ->label('Harga')
+                    ->formatStateUsing(fn($state) => 'Rp ' . number_format($state, 2, ',', '.'))
                     ->sortable(),
 
                 TextColumn::make('subAnakAkun')
@@ -48,30 +83,6 @@ class ReferensiHargaProduksisTable
                         $query->join('sub_anak_akuns', 'referensi_harga_produksi.id_sub_anak_akun', '=', 'sub_anak_akuns.id')
                             ->orderBy('sub_anak_akuns.nama_sub_anak_akun', $direction);
                     }),
-
-                TextColumn::make('jenis_barang')
-                    ->label('Jenis Barang')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'Veneer Jadi' => 'success',
-                        'Veneer Kering' => 'info',
-                        'Veneer Basah' => 'primary',
-                        'Platform' => 'warning',
-                        'Afalan' => 'danger',
-                        default => 'gray',
-                    })
-                    ->searchable()
-                    ->sortable(),
-
-                TextColumn::make('kw')
-                    ->label('KW')
-                    ->searchable()
-                    ->sortable(),
-
-                TextColumn::make('harga')
-                    ->label('Harga')
-                    ->formatStateUsing(fn($state) => 'Rp ' . number_format($state, 2, ',', '.'))
-                    ->sortable(),
 
                 TextColumn::make('created_at')
                     ->label('Tanggal Dibuat')
