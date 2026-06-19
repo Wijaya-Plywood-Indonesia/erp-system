@@ -105,6 +105,7 @@ class ProduksiSummaryWidget extends Widget
             ->join('ukurans', 'ukurans.id', '=', 'detail_hasil_palet_rotaries.id_ukuran')
             ->join('penggunaan_lahan_rotaries', 'penggunaan_lahan_rotaries.id', '=', 'detail_hasil_palet_rotaries.id_penggunaan_lahan')
             ->join('lahans', 'lahans.id', '=', 'penggunaan_lahan_rotaries.id_lahan')
+            ->join('jenis_kayus', 'jenis_kayus.id', '=', 'penggunaan_lahan_rotaries.id_jenis_kayu')
             ->selectRaw('
                 CONCAT(
                     TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
@@ -112,9 +113,10 @@ class ProduksiSummaryWidget extends Widget
                     TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
                 ) AS ukuran,
                 CONCAT(COALESCE(lahans.kode_lahan, ""), " - ", COALESCE(lahans.nama_lahan, "")) as nama_lahan,
+                jenis_kayus.nama_kayu as jenis_kayu,
                 SUM(CAST(detail_hasil_palet_rotaries.total_lembar AS UNSIGNED)) AS total
             ')
-            ->groupBy('lahans.kode_lahan', 'lahans.nama_lahan', 'ukurans.panjang', 'ukurans.lebar', 'ukurans.tebal')
+            ->groupBy('lahans.kode_lahan', 'lahans.nama_lahan', 'jenis_kayus.nama_kayu', 'ukurans.panjang', 'ukurans.lebar', 'ukurans.tebal')
             ->orderBy('nama_lahan')
             ->orderBy('ukuran')
             ->get();

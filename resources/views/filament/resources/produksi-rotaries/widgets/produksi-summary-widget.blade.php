@@ -125,6 +125,7 @@
             <tr>
               <th class="px-4 py-3 font-semibold">Nama Lahan</th>
               <th class="px-4 py-3 font-semibold">Ukuran Veneer</th>
+              <th class="px-4 py-3 font-semibold">Jenis Kayu</th>
               <th class="px-4 py-3 font-semibold text-right">Hasil</th>
             </tr>
           </thead>
@@ -135,13 +136,14 @@
               <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                 <td class="px-4 py-3">{{ $row->nama_lahan }}</td>
                 <td class="px-4 py-3">{{ $row->ukuran }}</td>
+                <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
                 <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
               </tr>
             @endforeach
           </tbody>
           <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">
             <tr>
-              <td colspan="2" class="px-4 py-3 text-right border-t dark:border-gray-700">Total Keseluruhan</td>
+              <td colspan="3" class="px-4 py-3 text-right border-t dark:border-gray-700">Total Keseluruhan</td>
               <td class="px-4 py-3 text-right border-t dark:border-gray-700">{{ number_format($grandTotalLahan) }}</td>
             </tr>
           </tfoot>
@@ -153,16 +155,15 @@
     @forelse ($summary['globalTarget'] ?? [] as $item)
     <div class="mt-6 space-y-4">
     <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">
-        Progress Target Kayu {{$item['nama_kayu']}}  
+        Progress Target Mesin {{ $item['nama_mesin'] ?? '' }}  
         <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
-            ( Target {{ $item['target'] == 0 ? "Belum di Set" : $item['target'] }} )
+            ( Target {{ ($item['target'] ?? 0) == 0 ? "Belum di Set" : number_format($item['target'] ?? 0) }} )
         </span>
     </div>
 
         @php
             // pastikan numeric & dibatasi max 100
-            $progress = min(100, max(0, (float) $item['progress'] ));
-            // $progress = min(100, max(0, (float)$item['target'] === 0 && $item['progress'] !== 0 ? 100 :(float) $item['progress'] ));
+            $progress = min(100, max(0, (float) ($item['progress'] ?? 0) ));
         @endphp
 
         <div
@@ -172,14 +173,14 @@
             {{-- Nama & Nilai --}}
             <div class="flex justify-between text-sm">
                 <span class="font-medium text-gray-700 dark:text-gray-300">
-                    Ukuran {{$item['ukuran_formatted']}}
+                    Ukuran {{ $item['ukuran_formatted'] ?? '' }}
                 </span>
                 <span class="text-gray-600 dark:text-gray-400">
-                  {{ number_format($item['total_produksi']) }}
+                  {{ number_format($item['total_produksi'] ?? 0) }}
                   /
-                  @if($item['target'] > 0)
-                    {{ number_format($item['target_saat_ini']) }}
-                    ({{ number_format($item['target']) }})
+                  @if(($item['target'] ?? 0) > 0)
+                    {{ number_format($item['target_saat_ini'] ?? 0) }}
+                    ({{ number_format($item['target'] ?? 0) }})
                   @else
                     0
                   @endif
