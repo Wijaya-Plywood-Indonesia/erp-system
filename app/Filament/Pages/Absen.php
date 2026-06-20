@@ -215,13 +215,32 @@ class Absen extends Page implements HasForms
 
                     $finger = $listFinger->get($kodep);
 
+                    $isMalam = false;
+                    foreach ($allDivisi as $divisi) {
+                        if (str_contains(strtoupper($divisi), 'MALAM')) {
+                            $isMalam = true;
+                            break;
+                        }
+                    }
+
+                    $rawMasuk = $finger?->jam_masuk ?? '-';
+                    $rawPulang = $finger?->jam_pulang ?? '-';
+
+                    if ($isMalam) {
+                        $fMasuk = $rawPulang;
+                        $fPulang = $rawMasuk;
+                    } else {
+                        $fMasuk = $rawMasuk;
+                        $fPulang = $rawPulang;
+                    }
+
                     return [
                         'kodep'      => $kodep,
                         'nama'       => $first['nama'] ?? '-',
                         'masuk'      => $first['masuk'] ?? '-',
                         'pulang'     => $first['pulang'] ?? '-',
-                        'f_masuk'    => $finger?->jam_masuk ?? '-',
-                        'f_pulang'   => $finger?->jam_pulang ?? '-',
+                        'f_masuk'    => $fMasuk,
+                        'f_pulang'   => $fPulang,
                         'hasil'      => $allDivisi,
                         'ijin'       => $first['ijin'] ?? '',
                         'keterangan' => $first['keterangan'] ?? '',
