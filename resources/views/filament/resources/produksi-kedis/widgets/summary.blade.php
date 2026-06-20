@@ -81,7 +81,7 @@
             <div class="space-y-4">
                 <div class="flex items-center gap-2 font-bold text-sm text-gray-800 dark:text-gray-200 uppercase tracking-tighter">
                     <span class="w-2 h-4 bg-emerald-500 rounded-sm"></span>
-                    Rincian Kayu Masuk
+                    Rincian Veneer Masuk
                 </div>
 
                 <div class="space-y-2">
@@ -102,16 +102,16 @@
 
             {{-- RINGKASAN JENIS KAYU & UKURAN MASUK --}}
             @if (!empty($summary['globalJenisKayuUkuranMasuk']) && count($summary['globalJenisKayuUkuranMasuk']) > 0)
-           <div class="space-y-4 mt-6">
+            <div class="space-y-4 mt-6">
                 <div class="flex items-center gap-2 font-bold text-sm text-gray-800 dark:text-gray-200 uppercase tracking-tighter">
                     <span class="w-2 h-4 bg-emerald-500 rounded-sm"></span>
-                    Ringkasan Kayu & Ukuran Masuk
+                    Ringkasan Veneer & Ukuran Masuk
                 </div>
 
                 <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
                     <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300">
                         <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white">
-                        <tr>
+                            <tr>
                                 <th class="px-4 py-3 font-semibold">Jenis Kayu</th>
                                 <th class="px-4 py-3 font-semibold">Ukuran Veneer</th>
                                 <th class="px-4 py-3 font-semibold">kw</th>
@@ -121,13 +121,13 @@
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                             @php $grandTotalMasuk = 0; @endphp
                             @foreach (($summary['globalJenisKayuUkuranMasuk'] ?? []) as $row)
-                                @php $grandTotalMasuk += $row->total; @endphp
-                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                    <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
-                                    <td class="px-4 py-3">{{ $row->ukuran }}</td>
-                                    <td class="px-4 py-3">{{ $row->kw }}</td>
-                                    <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
-                                </tr>
+                            @php $grandTotalMasuk += $row->total; @endphp
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
+                                <td class="px-4 py-3">{{ $row->ukuran }}</td>
+                                <td class="px-4 py-3">{{ $row->kw }}</td>
+                                <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
+                            </tr>
                             @endforeach
                         </tbody>
                         <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">
@@ -187,13 +187,13 @@
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                             @php $grandTotalBongkar = 0; @endphp
                             @foreach (($summary['globalJenisKayuUkuranBongkar'] ?? []) as $row)
-                                @php $grandTotalBongkar += $row->total; @endphp
-                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                    <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
-                                    <td class="px-4 py-3">{{ $row->ukuran }}</td>
-                                    <td class="px-4 py-3">{{ $row->kw }}</td>
-                                    <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
-                                </tr>
+                            @php $grandTotalBongkar += $row->total; @endphp
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
+                                <td class="px-4 py-3">{{ $row->ukuran }}</td>
+                                <td class="px-4 py-3">{{ $row->kw }}</td>
+                                <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
+                            </tr>
                             @endforeach
                         </tbody>
                         <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">

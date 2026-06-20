@@ -49,13 +49,11 @@ class PegawaiPotAfJointsTable
                     ->dateTime('H:i'),
 
                 TextColumn::make('ijin')
-                    ->label('Izin')
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->label('Izin'),
 
                 TextColumn::make('ket')
                     ->label('Keterangan')
-                    ->limit(30)
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->limit(30),
             ])
             ->filters([
                 //

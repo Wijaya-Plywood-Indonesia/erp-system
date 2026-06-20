@@ -43,8 +43,11 @@ class TurusanKayusTable
                     ->label('Seri Kayu')
                     ->alignCenter()
                     ->numeric()->sortable(),
+                TextColumn::make('penggunaanSupplier.nama_supplier')
+                    ->label('Nama Supplier'),
                 TextColumn::make('jenis_dokumen_angkut')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('upload_dokumen_angkut')
                     ->label('Dokumen Legal')
                     ->badge()
