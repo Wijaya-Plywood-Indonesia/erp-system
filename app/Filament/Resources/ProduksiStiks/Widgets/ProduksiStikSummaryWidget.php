@@ -84,24 +84,27 @@ class ProduksiStikSummaryWidget extends Widget
             ->orderBy('ukuran')
             ->get();
 
+        $totalPekerjaStik = DetailPegawaiStik::where('id_produksi_stik', $produksiId)
+            ->whereNotNull('id_pegawai')
+            ->distinct('id_pegawai')
+            ->count('id_pegawai');
+
         // 5. GLOBAL JENIS KAYU & UKURAN (Ditambahkan Total Pekerja Unik per baris kelompok)
         $globalJenisKayuUkuran = DetailHasilStik::query()
             ->where('detail_hasil_stik.id_produksi_stik', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'detail_hasil_stik.id_ukuran')
             ->join('jenis_kayus', 'jenis_kayus.id', '=', 'detail_hasil_stik.id_jenis_kayu')
-            // Join ke tabel pegawai untuk menghitung jumlah total orang yang terlibat
-            ->leftJoin('detail_pegawai_stik', 'detail_pegawai_stik.id_produksi_stik', '=', 'detail_hasil_stik.id_produksi_stik')
             ->selectRaw('
-                jenis_kayus.nama_kayu as jenis_kayu,
-                CONCAT(
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
-                    TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
-                ) AS ukuran,
-                detail_hasil_stik.kw as kw,
-                SUM(CAST(detail_hasil_stik.total_lembar AS UNSIGNED)) AS total,
-                COUNT(DISTINCT detail_pegawai_stik.id_pegawai) AS total_pekerja
-            ')
+                    jenis_kayus.nama_kayu as jenis_kayu,
+                    CONCAT(
+                        TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
+                        TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
+                        TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
+                    ) AS ukuran,
+                    detail_hasil_stik.kw as kw,
+                    SUM(CAST(detail_hasil_stik.total_lembar AS UNSIGNED)) AS total
+                    -- ✅ total_pekerja DIHAPUS dari sini
+                ')
             ->groupBy('jenis_kayus.nama_kayu', 'ukuran', 'detail_hasil_stik.kw')
             ->orderBy('jenis_kayus.nama_kayu')
             ->orderBy('ukuran')
@@ -156,6 +159,7 @@ class ProduksiStikSummaryWidget extends Widget
             'globalUkuranKw' => $globalUkuranKw,
             'globalUkuran' => $globalUkuran,
             'globalJenisKayuUkuran' => $globalJenisKayuUkuran,
+            'totalPekerjaStik'      => $totalPekerjaStik,
             'targetProgress' => $targetProgress,
         ];
     }

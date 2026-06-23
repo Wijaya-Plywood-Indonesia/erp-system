@@ -7,7 +7,7 @@ use Carbon\Carbon;
 class AbsensiPairingService
 {
     /**
-      * Pair raw log entries for a single employee on a given target date.
+     * Pair raw log entries for a single employee on a given target date.
      *
      * @param array $entries Raw log entries containing 'date', 'time', and 'full' (Carbon instance)
      * @param string $targetDate Format 'Y-m-d'
@@ -42,7 +42,7 @@ class AbsensiPairingService
                 }
 
                 $time = $entry['time'];
-                
+
                 // If forced shift is specified, filter by its specific check-in window
                 if ($forcedShift === 'MALAM') {
                     if ($time >= '14:00:00' && $time <= '23:59:59') {
