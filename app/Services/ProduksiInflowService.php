@@ -134,7 +134,10 @@ class ProduksiInflowService
             $itemCollection->count(),
             $perPage,
             $currentPage,
-            ['path' => request()->url(), 'query' => request()->query()]
+            [
+    'path' => url()->previous(),
+    'query' => request()->query()
+]
         );
     }
 
