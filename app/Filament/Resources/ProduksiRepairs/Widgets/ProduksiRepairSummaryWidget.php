@@ -57,22 +57,24 @@ class ProduksiRepairSummaryWidget extends Widget
             ->join('rencana_pegawais', 'rencana_pegawais.id', '=', 'rencana_repairs.id_rencana_pegawai')
             ->join('modal_repairs', 'modal_repairs.id', '=', 'rencana_repairs.id_modal_repair')
             ->join('ukurans', 'ukurans.id', '=', 'modal_repairs.id_ukuran')
+            ->join('jenis_kayus', 'jenis_kayus.id', '=', 'modal_repairs.id_jenis_kayu')
             ->selectRaw('
-                CONCAT(
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
-                    TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
-                    TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
-                ) AS ukuran,
-                rencana_repairs.kw,
-                SUM(CAST(hasil_repairs.jumlah AS UNSIGNED)) AS total,
-                COUNT(DISTINCT rencana_pegawais.id_pegawai) AS jumlah_orang
-            ')
-            ->groupBy('ukuran', 'rencana_repairs.kw')
+        jenis_kayus.nama_kayu AS jenis_kayu, -- <-- PERBAIKAN 1: Wajib diselect agar terbaca di Blade
+        CONCAT(
+            TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
+            TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
+            TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
+        ) AS ukuran,
+        rencana_repairs.kw,
+        SUM(CAST(hasil_repairs.jumlah AS UNSIGNED)) AS total,
+        COUNT(DISTINCT rencana_pegawais.id_pegawai) AS jumlah_orang
+    ')
+            ->groupBy('jenis_kayus.nama_kayu', 'ukuran', 'rencana_repairs.kw') // <-- PERBAIKAN 2: Digabung di sini
+            ->orderBy('jenis_kayus.nama_kayu')
             ->orderBy('ukuran')
             ->orderBy('rencana_repairs.kw')
             ->get();
 
-            
 
         // 4. GLOBAL JENIS KAYU & UKURAN
         $globalJenisKayuUkuran = HasilRepair::query()
