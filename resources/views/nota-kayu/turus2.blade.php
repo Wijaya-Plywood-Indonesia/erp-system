@@ -196,7 +196,7 @@
         .action-bar {
             text-align: center;
             margin-bottom: 15px;
-        }
+            }
 
         .action-bar button {
             padding: 8px 16px;
@@ -449,7 +449,6 @@
 
     <div class="app-layout">
 
-        <!-- INTERACTIVE SIDEBAR FORM (Screen only) -->
         <div class="sidebar-panel">
             <div class="sidebar-content">
                 <h2>Edit Data Cetak</h2>
@@ -494,16 +493,13 @@
                     <input type="text" id="input-grader" value="{{ $record->penerima ?? 'pak kadam' }}" />
                 </div>
             </div>
-            <!-- Floating vertical toggle handle -->
             <div class="sidebar-toggle-handle" onclick="toggleSidebar()">
                 <span id="handle-arrow">&#10094;</span>
             </div>
         </div>
 
-        <!-- PREVIEW PANEL -->
         <div class="preview-panel">
 
-            <!-- ACTION BUTTONS -->
             <div class="action-bar">
                 <button id="btn-toggle-sidebar" onclick="toggleSidebar()" style="background: #2b2b2b;">Sembunyikan Form</button>
                 <button onclick="downloadPNG()">Export PNG</button>
@@ -512,14 +508,12 @@
                 <button onclick="window.print()">Print</button>
             </div>
 
-            <!-- AREA EXPORT -->
             <div id="nota-area-landscape">
 
                 @foreach($pages as $pageIndex => $pageGroups)
 
                     <div class="page-container" id="page-{{ $pageIndex }}">
 
-                        <!-- HEADER -->
                         <div class="page-header">
                             <h3>Nota Turus Kayu</h3>
                             
@@ -575,7 +569,6 @@
                             </table>
                         </div>
 
-                        <!-- COLUMNS CONTENT -->
                         <div class="columns-container">
 
                             @foreach($pageGroups as $group)
@@ -583,11 +576,7 @@
                                 <div class="group-wrapper">
                                     
                                     <div class="group-title">
-                                        {{ $group['kodeLahan'] }}
-                                        -
-                                        {{ $group['panjang'] }} cm
-                                        {{ $group['jenis'] }}
-                                        ({{ $group['grade'] == 1 ? 'A' : 'B' }})
+                                        {{ $group['kodeLahan'] }} - {{ $group['panjang'] }} CM ({{ $group['grade'] == 1 ? 'A' : 'B' }})
                                         @if($group['is_continued']) <span style="font-size: 8px; color: #555;">(Sbg)</span> @endif
                                     </div>
 
@@ -652,6 +641,7 @@
                                                                         fill:none;
                                                                         stroke-width:5px;
                                                                         stroke-linecap:round;
+                                                                        stroke-linejoin:round;
                                                                     "
                                                                 >
                                                                     @for($j = 1; $j <= $rem; $j++)
@@ -690,11 +680,9 @@
 
                         </div>
 
-                        <!-- FOOTER -->
                         <div class="page-footer">
                             
                             @if($loop->last)
-                                <!-- TOTAL KESELURUHANN (Hanya halaman terakhir) -->
                                 <div class="total-box">
                                     <table>
                                         <tr>
@@ -708,11 +696,9 @@
                                     </table>
                                 </div>
                             @else
-                                <!-- Spacer untuk halaman non-terakhir agar signature terdorong rapi -->
                                 <div style="height: 25px;"></div>
                             @endif
 
-                            <!-- SIGNATURE BLOCK -->
                             <table class="signature">
                                 <tr>
                                     <td>Penanggung Jawab</td>
@@ -732,7 +718,6 @@
                                 </tr>
                             </table>
 
-                            <!-- FOOTER DETAILS -->
                             <div class="footer-info">
                                 Dicetak: {{ now()->format('d/m/Y H:i') }}
                             </div>
@@ -752,7 +737,6 @@
 
     </div>
 
-    <!-- LIBRARY -->
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
