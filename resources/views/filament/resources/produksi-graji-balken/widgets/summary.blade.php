@@ -67,7 +67,7 @@
                 @if (!empty($summary['globalJenisKayuUkuran']) && count($summary['globalJenisKayuUkuran']) > 0)
                 <div class="space-y-4 pt-6 border-t border-gray-100 dark:border-gray-800">
                     <h3 class="text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-tight">
-                        Ringkasan Penggunaan Kayu & Ukuran Hasil
+                        Ringkasan Penggunaan Veneer & Ukuran Hasil
                     </h3>
                     <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
                         <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300">
