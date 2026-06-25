@@ -22,6 +22,69 @@ class TempatKayusTable
     private const ROLE_PENGAWAS = ['pengawas_rotary_1', 'pengawas_rotary_2'];
     private const ROLE_ADMIN = ['super_admin', 'Super Admin', 'admin_kayu'];
 
+    // Tambahkan method ini di dalam class TempatKayusTable
+    private static function getCekBelumLunas($record): \Illuminate\Support\Collection
+    {
+        $lastResetLogId = \App\Models\HppAverageLog::where('id_lahan', $record->id_lahan)
+            ->where('panjang', $record->group_panjang)
+            ->where('stok_batang_after', 0)
+            ->latest('id')
+            ->value('id');
+
+        $notaIdDariLog = \App\Models\HppAverageLog::where('id_lahan', $record->id_lahan)
+            ->where('panjang', $record->group_panjang)
+            ->where('tipe_transaksi', 'masuk')
+            ->where('referensi_type', \App\Models\NotaKayu::class)
+            ->when($lastResetLogId, fn($q) => $q->where('id', '>', $lastResetLogId))
+            ->pluck('referensi_id')
+            ->unique()
+            ->values();
+
+        // ── Pengecekan 1: dari log ────────────────────────────────
+        $belumLunasDariLog = \App\Models\NotaKayu::whereIn('id', $notaIdDariLog)
+            ->with('kayuMasuk:id,seri')
+            ->get()
+            ->groupBy(fn($nota) => (string) $nota->kayuMasuk?->seri)
+            ->map(fn($group) => $group->sortByDesc('id')->first())
+            ->filter(
+                fn($nota) =>
+                !str_starts_with(strtolower(trim($nota->status_pelunasan ?? '')), 'lunas')
+            )
+            ->map(fn($nota) => (string) $nota->kayuMasuk?->seri) // ✅ Pastikan string
+            ->filter(fn($seri) => !empty($seri))
+            ->values();
+
+        // ── Pengecekan 2: nota belum lunas periode aktif ──────────
+        $notaIdTerkecilDiLog = $notaIdDariLog->min();
+
+        $belumLunasBaru = collect(); // ✅ Default plain collect()
+
+        if ($notaIdTerkecilDiLog) {
+            $belumLunasBaru = \App\Models\NotaKayu::where('status_pelunasan', 'Belum Lunas')
+                ->where('id', '>=', $notaIdTerkecilDiLog)
+                ->whereNotIn('id', $notaIdDariLog)
+                ->whereHas(
+                    'kayuMasuk.detailTurusanKayus',
+                    fn($q) =>
+                    $q->where('lahan_id', $record->id_lahan)
+                        ->where('panjang', $record->group_panjang)
+                )
+                ->with('kayuMasuk:id,seri')
+                ->get()
+                ->map(fn($nota) => (string) $nota->kayuMasuk?->seri) // ✅ Pastikan string
+                ->filter(fn($seri) => !empty($seri))
+                ->values();
+        }
+
+        // ✅ Gunakan collect() biasa, bukan Eloquent Collection
+        // untuk hindari error getKey() on string
+        return collect()
+            ->concat($belumLunasDariLog) // ← concat aman untuk string
+            ->concat($belumLunasBaru)    // ← concat aman untuk string
+            ->unique()
+            ->values();
+    }
+
     public const MESIN_MAP = [
         130 => ['SANJI', 'YUEQUN'],
         260 => ['SPINDLESS', 'MERANTI'],
@@ -53,6 +116,24 @@ class TempatKayusTable
                         'tempat_kayus.status',
                         'tempat_kayus.diserahkan_oleh',
                         'tempat_kayus.diterima_oleh',
+                        // ✅ Subquery: hitung nota belum lunas di periode aktif
+                        DB::raw('(
+                SELECT COUNT(*)
+                FROM nota_kayus nk2
+                JOIN kayu_masuks km2 ON km2.id = nk2.id_kayu_masuk
+                JOIN detail_turusan_kayus dtk2 ON dtk2.id_kayu_masuk = km2.id
+                WHERE dtk2.lahan_id = tempat_kayus.id_lahan
+                AND dtk2.panjang = hpp_average_summaries.panjang
+                AND nk2.status_pelunasan = "Belum Lunas"
+                AND nk2.id >= (
+                    SELECT MIN(referensi_id)
+                    FROM hpp_average_logs
+                    WHERE id_lahan = tempat_kayus.id_lahan
+                    AND panjang = hpp_average_summaries.panjang
+                    AND tipe_transaksi = "masuk"
+                    AND referensi_type = "App\\\\Models\\\\NotaKayu"
+                )
+            ) as count_belum_lunas'),
                     )
                     ->groupBy(
                         'tempat_kayus.id_lahan',
@@ -63,35 +144,53 @@ class TempatKayusTable
                         'tempat_kayus.diterima_oleh',
                     );
 
-                // ── Sorting berdasarkan role ──────────────────────────────────────
                 if ($bisaTerima) {
-                    $query
-                        ->orderByRaw("
-                            CASE 
-                                WHEN tempat_kayus.status = 'sudah diserahkan'                           THEN 0
-                                WHEN tempat_kayus.status = 'sudah diterima'                             THEN 1
-                                WHEN (tempat_kayus.status IS NULL OR tempat_kayus.status = 'belum serah')
-                                AND SUM(hpp_average_summaries.stok_batang) > 0                        THEN 2
-                                WHEN (tempat_kayus.status IS NULL OR tempat_kayus.status = 'belum serah')
-                                AND SUM(hpp_average_summaries.stok_batang) <= 0                       THEN 3
-                                ELSE 3
-                            END ASC
-                        ")
+                    $query->orderByRaw("
+            CASE
+                WHEN tempat_kayus.status = 'sudah diserahkan'
+                    THEN 0
+                WHEN tempat_kayus.status = 'sudah diterima'
+                    THEN 1
+                WHEN (tempat_kayus.status IS NULL OR tempat_kayus.status = 'belum serah')
+                    AND SUM(hpp_average_summaries.stok_batang) > 0
+                    AND count_belum_lunas = 0
+                    THEN 2
+                WHEN (tempat_kayus.status IS NULL OR tempat_kayus.status = 'belum serah')
+                    AND count_belum_lunas > 0
+                    THEN 3
+                WHEN (tempat_kayus.status IS NULL OR tempat_kayus.status = 'belum serah')
+                    AND SUM(hpp_average_summaries.stok_batang) <= 0
+                    THEN 4
+                ELSE 4
+            END ASC
+        ")
                         ->orderBy('hpp_average_summaries.panjang', 'asc')
                         ->orderBy('tempat_kayus.id_lahan', 'asc');
                 } elseif ($bisaSerah) {
-                    $query
-                        ->orderByRaw("
-                        CASE 
-                            WHEN (tempat_kayus.status IS NULL OR tempat_kayus.status = 'belum serah')
-                            AND SUM(hpp_average_summaries.stok_batang) > 0  THEN 0
-                            WHEN tempat_kayus.status = 'sudah diserahkan'     THEN 1
-                            WHEN tempat_kayus.status = 'sudah diterima'       THEN 2
-                            WHEN (tempat_kayus.status IS NULL OR tempat_kayus.status = 'belum serah')
-                            AND SUM(hpp_average_summaries.stok_batang) <= 0 THEN 3
-                            ELSE 3
-                        END ASC
-                    ")
+                    $query->orderByRaw("
+            CASE
+                -- ✅ Priority 0: Penuh + semua lunas → siap serah
+                WHEN (tempat_kayus.status IS NULL OR tempat_kayus.status = 'belum serah')
+                    AND SUM(hpp_average_summaries.stok_batang) > 0
+                    AND count_belum_lunas = 0
+                    THEN 0
+                -- ✅ Priority 1: Ada isi tapi belum lunas → perlu bayar dulu
+                WHEN (tempat_kayus.status IS NULL OR tempat_kayus.status = 'belum serah')
+                    AND count_belum_lunas > 0
+                    THEN 1
+                -- ✅ Priority 2: Sudah diserahkan
+                WHEN tempat_kayus.status = 'sudah diserahkan'
+                    THEN 2
+                -- ✅ Priority 3: Sudah diterima
+                WHEN tempat_kayus.status = 'sudah diterima'
+                    THEN 3
+                -- ✅ Priority 4: Kosong
+                WHEN (tempat_kayus.status IS NULL OR tempat_kayus.status = 'belum serah')
+                    AND SUM(hpp_average_summaries.stok_batang) <= 0
+                    THEN 4
+                ELSE 4
+            END ASC
+        ")
                         ->orderBy('hpp_average_summaries.panjang', 'asc')
                         ->orderByRaw("SUM(hpp_average_summaries.stok_batang) DESC")
                         ->orderBy('tempat_kayus.id_lahan', 'asc');
@@ -207,11 +306,10 @@ class TempatKayusTable
                             ->latest('id')
                             ->value('id');
 
-                        // ── 2. Ambil logs — referensi saja, BUKAN nested ──────────
-                        // ✅ Tidak ->with(['referensi.kayuMasuk']) karena polymorphic
+                        // ── 2. Ambil logs ─────────────────────────────────────────
                         $query = \App\Models\HppAverageLog::where('id_lahan', $record->id_lahan)
                             ->where('panjang', $record->group_panjang)
-                            ->with(['referensi']); // ✅ Load referensi saja
+                            ->with(['referensi']);
 
                         if ($lastResetLogId) {
                             $query->where('id', '>', $lastResetLogId);
@@ -232,9 +330,8 @@ class TempatKayusTable
                                 $log->referensi_type === \App\Models\NotaKayu::class ||
                                 $log->referensi_type === 'NotaKayu'
                             ) {
-                                // ✅ Akses kayuMasuk dari referensi (NotaKayu) yang sudah loaded
                                 if ($log->referensi) {
-                                    $log->referensi->loadMissing('kayuMasuk'); // ✅ Aman karena hanya untuk NotaKayu
+                                    $log->referensi->loadMissing('kayuMasuk');
                                     $seri = $log->referensi->kayuMasuk?->seri ?? 'Tanpa Seri';
                                 }
                             }
@@ -276,27 +373,58 @@ class TempatKayusTable
                             }
                         }
 
-                        // ── 4. Ambil status_pelunasan terbaru per seri ────────────
-                        $semuaSeri = collect($queue)
-                            ->pluck('seri')
+                        // ── 4. Pelunasan dari log (sudah lunas) ───────────────────
+                        $notaIdDariLog = \App\Models\HppAverageLog::where('id_lahan', $record->id_lahan)
+                            ->where('panjang', $record->group_panjang)
+                            ->where('tipe_transaksi', 'masuk')
+                            ->where('referensi_type', \App\Models\NotaKayu::class)
+                            ->when($lastResetLogId, fn($q) => $q->where('id', '>', $lastResetLogId))
+                            ->pluck('referensi_id')
                             ->unique()
-                            ->filter(fn($s) => $s !== 'Tanpa Seri')
-                            ->map(fn($s) => (string) $s)
                             ->values();
 
-                        // ✅ Ambil nota terbaru per seri (bukan nota lama)
-                        $pelunasanBySeri = \App\Models\NotaKayu::whereHas('kayuMasuk', function ($q) use ($semuaSeri) {
-                            $q->whereIn('seri', $semuaSeri);
-                        })
+                        $pelunasanDariLog = \App\Models\NotaKayu::whereIn('id', $notaIdDariLog)
                             ->with('kayuMasuk:id,seri')
                             ->get()
-                            ->groupBy(fn($nota) => (string) $nota->kayuMasuk?->seri)    // ✅ Group by seri
-                            ->map(fn($group) => $group->sortByDesc('id')->first());       // ✅ Ambil terbaru\\
+                            ->groupBy(fn($nota) => (string) $nota->kayuMasuk?->seri)
+                            ->map(fn($group) => $group->sortByDesc('id')->first());
 
+                        // ── 5. ✅ Nota BELUM LUNAS yang relevan di periode aktif ──
+                        // Kunci: gunakan id nota terkecil yang sudah masuk log
+                        // sebagai batas bawah periode aktif
+                        // Nota lama (id < batas) = tidak relevan, skip
+                        $notaIdTerkecilDiLog = $notaIdDariLog->min(); // ← id terkecil dari log periode aktif
+
+                        $notaBelumLunas = collect();
+
+                        if ($notaIdTerkecilDiLog) {
+                            $notaBelumLunas = \App\Models\NotaKayu::where('status_pelunasan', 'Belum Lunas')
+                                // ✅ Hanya nota yang id >= nota terkecil di log periode aktif
+                                // Nota lama Feb (id 814, 815) → id < batas → terfilter otomatis
+                                ->where('id', '>=', $notaIdTerkecilDiLog)
+                                // ✅ Yang sudah di log = sudah lunas, skip
+                                ->whereNotIn('id', $notaIdDariLog)
+                                // ✅ Hanya yang terhubung ke lahan + panjang ini via DetailTurusanKayu
+                                ->whereHas(
+                                    'kayuMasuk.detailTurusanKayus',
+                                    fn($q) =>
+                                    $q->where('lahan_id', $record->id_lahan)
+                                        ->where('panjang', $record->group_panjang)
+                                )
+                                ->with('kayuMasuk:id,seri')
+                                ->get()
+                                ->groupBy(fn($nota) => (string) $nota->kayuMasuk?->seri)
+                                ->map(fn($group) => $group->sortByDesc('id')->first());
+                        }
+
+                        // ── 6. Gabungkan: log (prioritas) + belum lunas ───────────
+                        $pelunasanBySeri = $pelunasanDariLog->union($notaBelumLunas);
+
+                        // ── 7. lastIdBySeri untuk sorting ─────────────────────────
                         $lastIdBySeri = \App\Models\HppAverageLog::where('id_lahan', $record->id_lahan)
                             ->where('panjang', $record->group_panjang)
-                            ->whereNotNull('referensi_type')
                             ->where('referensi_type', \App\Models\NotaKayu::class)
+                            ->when($lastResetLogId, fn($q) => $q->where('id', '>', $lastResetLogId))
                             ->with('referensi.kayuMasuk')
                             ->get()
                             ->map(fn($log) => [
@@ -307,7 +435,7 @@ class TempatKayusTable
                             ->groupBy('seri')
                             ->map(fn($group) => $group->sortByDesc('id')->first()['id']);
 
-                        // ── 5. Group + gabungkan status pelunasan ─────────────────
+                        // ── 8. Bangun groupedBySeri dari queue (stok aktif) ───────
                         $groupedBySeri = collect($queue)
                             ->groupBy('seri')
                             ->map(function ($group, $seri) use ($pelunasanBySeri, $lastIdBySeri) {
@@ -316,13 +444,44 @@ class TempatKayusTable
                                     'total_batang'     => $group->sum('qty_left'),
                                     'total_kubikasi'   => $group->sum('kubikasi_left'),
                                     'status_pelunasan' => $pelunasanBySeri[(string) $seri]?->status_pelunasan ?? null,
-                                    'last_seen'        => $lastIdBySeri[(string) $seri] ?? null,
+                                    'last_seen'        => $lastIdBySeri[(string) $seri] ?? PHP_INT_MAX,
                                 ];
-                            })
+                            });
+
+                        // ── 9. ✅ Sisipkan nota belum lunas yang belum ada di stok ─
+
+                        foreach ($notaBelumLunas as $seri => $nota) {
+                            if ($groupedBySeri->has($seri)) {
+                                continue;
+                            }
+
+                            // ✅ Ambil total batang & kubikasi dari DetailTurusanKayu
+                            // karena nota belum lunas belum masuk HppAverageLog
+                            $detailTurusan = \App\Models\DetailTurusanKayu::where('id_kayu_masuk', $nota->kayuMasuk?->id)
+                                ->where('lahan_id', $record->id_lahan)
+                                ->where('panjang', $record->group_panjang)
+                                ->get();
+
+                            $totalBatangBelumLunas   = $detailTurusan->sum('kuantitas');
+                            $totalKubikasibelumLunas = $detailTurusan->sum(
+                                fn($d) => ($d->panjang * $d->diameter * $d->diameter * $d->kuantitas * 0.785) / 1_000_000
+                            );
+
+                            $groupedBySeri->put($seri, [
+                                'seri'             => $seri,
+                                'total_batang'     => $totalBatangBelumLunas,       // ✅ Dari DetailTurusanKayu
+                                'total_kubikasi'   => $totalKubikasibelumLunas,     // ✅ Dari DetailTurusanKayu
+                                'status_pelunasan' => 'Belum Lunas',
+                                'last_seen'        => 0,
+                            ]);
+                        }
+
+                        // ── 10. Sort: yang ada di log dulu, belum lunas di bawah ──
+                        $groupedBySeri = $groupedBySeri
                             ->sortByDesc('last_seen')
                             ->values();
 
-                        // ── 6. Total dari HppAverageSummarie (1 query) ────────────
+                        // ── 11. Total dari HppAverageSummarie ─────────────────────
                         $summary = \App\Models\HppAverageSummarie::where('id_lahan', $record->id_lahan)
                             ->where('panjang', $record->group_panjang)
                             ->where('grade', $record->group_grade)
@@ -342,39 +501,13 @@ class TempatKayusTable
 
                 // ACTION SERAH
                 Action::make('serah_kayu')
-                    ->label('Lahan Penuh')
+                    ->label('Penuh')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('primary')
                     ->requiresConfirmation()
                     ->modalHeading('Serahkan Kayu?')
                     ->modalDescription(function ($record) {
-
-                        $semuaSeri = \App\Models\HppAverageLog::where('id_lahan', $record->id_lahan)
-                            ->where('panjang', $record->group_panjang)
-                            ->where('referensi_type', \App\Models\NotaKayu::class)
-                            ->with('referensi.kayuMasuk')
-                            ->get()
-                            ->map(fn($log) => (string) ($log->referensi?->kayuMasuk?->seri ?? null))
-                            ->filter()
-                            ->unique()
-                            ->values();
-
-                        $belumLunas = \App\Models\NotaKayu::whereHas(
-                            'kayuMasuk',
-                            fn($q) =>
-                            $q->whereIn('seri', $semuaSeri)
-                        )
-                            ->with('kayuMasuk')
-                            ->get()
-                            ->groupBy(fn($nota) => (string) $nota->kayuMasuk?->seri)     // ✅ Group by seri
-                            ->map(fn($group) => $group->sortByDesc('id')->first())         // ✅ Ambil terbaru
-                            ->filter(
-                                fn($nota) =>
-                                !str_starts_with(strtolower(trim($nota->status_pelunasan ?? '')), 'lunas')
-                            )
-                            ->map(fn($nota) => (string) $nota->kayuMasuk?->seri)
-                            ->filter()
-                            ->values();
+                        $belumLunas = self::getCekBelumLunas($record); // ✅ Pakai helper
 
                         if ($belumLunas->isNotEmpty()) {
                             return "⚠️ Seri berikut belum lunas: " . $belumLunas->implode(', ') . ". Tidak dapat diserahkan.";
@@ -389,68 +522,21 @@ class TempatKayusTable
                         if ($record->status !== 'belum serah' && $record->status !== null) {
                             return false;
                         }
+
                         $totalBatang = HppAverageSummarie::where('id_lahan', $record->id_lahan)
                             ->where('panjang', $record->group_panjang)
                             ->where('grade', $record->group_grade)
                             ->sum('stok_batang');
-                        if ($totalBatang <= 0) {
-                            return false;
-                        }
-                        $semuaSeri = \App\Models\HppAverageLog::where('id_lahan', $record->id_lahan)
-                            ->where('panjang', $record->group_panjang)
-                            ->where('referensi_type', \App\Models\NotaKayu::class)
-                            ->with('referensi.kayuMasuk')
-                            ->get()
-                            ->map(fn($log) => (string) ($log->referensi?->kayuMasuk?->seri ?? null))
-                            ->filter()
-                            ->unique()
-                            ->values();
-                        if ($semuaSeri->isEmpty()) {
-                            return true;
-                        }
-                        $belumLunas = \App\Models\NotaKayu::whereHas(
-                            'kayuMasuk',
-                            fn($q) => $q->whereIn('seri', $semuaSeri)
-                        )
-                            ->with('kayuMasuk')
-                            ->get()
-                            ->groupBy(fn($nota) => (string) $nota->kayuMasuk?->seri)
-                            ->map(fn($group) => $group->sortByDesc('id')->first())
-                            ->filter(fn($nota) => !str_starts_with(strtolower(trim($nota->status_pelunasan ?? '')), 'lunas'))
-                            ->map(fn($nota) => (string) $nota->kayuMasuk?->seri)
-                            ->filter()
-                            ->values();
+
+                        if ($totalBatang <= 0) return false;
+
+                        // ✅ Pakai helper — tombol tidak muncul kalau ada yang belum lunas
+                        $belumLunas = self::getCekBelumLunas($record);
                         return $belumLunas->isEmpty();
                     })
                     ->action(function ($record) {
-
-                        // ✅ Server-side guard — logika SAMA dengan modalDescription
-                        $semuaSeri = \App\Models\HppAverageLog::where('id_lahan', $record->id_lahan)
-                            ->where('panjang', $record->group_panjang)
-                            ->where('referensi_type', \App\Models\NotaKayu::class)
-                            ->with('referensi.kayuMasuk')
-                            ->get()
-                            ->map(fn($log) => (string) ($log->referensi?->kayuMasuk?->seri ?? null))
-                            ->filter()
-                            ->unique()
-                            ->values();
-
-                        $belumLunas = \App\Models\NotaKayu::whereHas(
-                            'kayuMasuk',
-                            fn($q) =>
-                            $q->whereIn('seri', $semuaSeri)
-                        )
-                            ->with('kayuMasuk')
-                            ->get()
-                            ->groupBy(fn($nota) => (string) $nota->kayuMasuk?->seri)     // ✅ Fix — sama dengan modalDescription
-                            ->map(fn($group) => $group->sortByDesc('id')->first())         // ✅ Fix — ambil terbaru
-                            ->filter(
-                                fn($nota) =>
-                                !str_starts_with(strtolower(trim($nota->status_pelunasan ?? '')), 'lunas')
-                            )
-                            ->map(fn($nota) => (string) $nota->kayuMasuk?->seri)
-                            ->filter()
-                            ->values();
+                        // ✅ Server-side guard — cek ulang dengan helper yang sama
+                        $belumLunas = self::getCekBelumLunas($record);
 
                         if ($belumLunas->isNotEmpty()) {
                             Notification::make()
@@ -462,6 +548,7 @@ class TempatKayusTable
                             return;
                         }
 
+                        // ── Proses serah ──────────────────────────────────────
                         try {
                             DB::transaction(function () use ($record) {
                                 $totalBatang = HppAverageSummarie::where('id_lahan', $record->id_lahan)
@@ -538,7 +625,7 @@ class TempatKayusTable
 
                 // ACTION TERIMA
                 Action::make('terima_kayu')
-                    ->label('Terima Kayu')
+                    ->label('Terima')
                     ->icon('heroicon-o-check-circle')
                     ->color('info')
                     ->requiresConfirmation()

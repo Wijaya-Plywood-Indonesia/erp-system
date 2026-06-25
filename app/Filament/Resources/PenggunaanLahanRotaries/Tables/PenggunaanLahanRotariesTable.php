@@ -139,6 +139,7 @@ class PenggunaanLahanRotariesTable
                         }
 
                         DB::transaction(function () use ($record, $idLahan, $idJenisKayu) {
+                            $tglProduksi = $record->produksi_rotary?->tgl_produksi ?? now();
 
                             // ══════════════════════════════════════════════════
                             // LANGKAH 1: Ambil HPP terakhir dari summary AKTIF
@@ -207,7 +208,7 @@ class PenggunaanLahanRotariesTable
                                     'id_jenis_kayu'        => $idJenisKayu,
                                     'grade'                => null,
                                     'panjang'              => $item->panjang,
-                                    'tanggal'              => now(),
+                                    'tanggal'              => $tglProduksi,
                                     'tipe_transaksi'       => 'keluar',
                                     'keterangan'           => $keteranganLog,
                                     'referensi_type'       => PenggunaanLahanRotary::class,
@@ -270,7 +271,7 @@ class PenggunaanLahanRotariesTable
                             $updatedCount = DB::table('tempat_kayus')
                                 ->where('id_lahan', $idLahan)
                                 ->update([
-                                    'id_kayu_masuk'   => null,
+                                    // 'id_kayu_masuk'   => null,
                                     'jumlah_batang'   => 0,
                                     'status'          => 'belum serah',
                                     'diserahkan_oleh' => null,
