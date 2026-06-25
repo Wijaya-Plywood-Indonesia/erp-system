@@ -4,6 +4,7 @@ namespace App\Filament\Resources\ProduksiRotaries\RelationManagers;
 
 use App\Models\Pegawai;
 use App\Models\PegawaiRotary;
+use App\Models\ValidasiHasilRotary;
 use Carbon\CarbonPeriod;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -28,9 +29,38 @@ class DetailPegawaiRotaryRelationManager extends RelationManager
     //Format Angka
     // FUNGSI BARU UNTUK MEMUNCULKAN TOMBOL DI HALAMAN VIEW
     public function isReadOnly(): bool
-    {
+{
+    $user = \Filament\Facades\Filament::auth()->user();
+
+    // Hanya role ini yang terdampak lock
+    $rolesAffectedByLock = [
+        'pengawas_rotary_1',
+        'pengawas_rotary_2',
+        'kepala_produksi_wijaya',
+    ];
+
+    // Jika user bukan salah satu dari role di atas, tidak terkunci
+    if (!$user?->hasAnyRole($rolesAffectedByLock)) {
         return false;
     }
+
+    $ownerRecord = $this->getOwnerRecord();
+
+    $validated = \App\Models\ValidasiHasilRotary::where('id_produksi', $ownerRecord->id)
+        ->where('status', 'disetujui')
+        ->pluck('role')
+        ->toArray();
+
+    $kepalaSudah = collect($validated)->contains(
+        fn($role) => str_contains(strtolower($role), 'kepala_produksi')
+    );
+
+    $pengawasSudah = collect($validated)->contains(
+        fn($role) => str_contains(strtolower($role), 'pengawas_rotary')
+    );
+
+    return $kepalaSudah && $pengawasSudah;
+}
     public static function timeOptions(): array
     {
         return collect(CarbonPeriod::create('00:00', '1 hour', '23:00')->toArray())
