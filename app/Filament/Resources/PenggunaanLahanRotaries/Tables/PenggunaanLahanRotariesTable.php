@@ -86,6 +86,28 @@ class PenggunaanLahanRotariesTable
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
                     ->requiresConfirmation()
+                    ->visible(function ($record) {
+                        // Cek apakah produksi rotary ini sudah locked
+                        $idProduksi = $record->id_produksi ?? null;
+                        if (!$idProduksi) return true; // Jika tidak ada id_produksi, tampilkan saja
+
+                        $validated = \App\Models\ValidasiHasilRotary::where('id_produksi', $idProduksi)
+                            ->where('status', 'disetujui')
+                            ->pluck('role')
+                            ->toArray();
+
+                        $kepalaSudah = collect($validated)->contains(
+                            fn($role) => str_contains(strtolower($role), 'kepala_produksi')
+                        );
+
+                        $pengawasSudah = collect($validated)->contains(
+                            fn($role) => str_contains(strtolower($role), 'pengawas_rotary')
+                        );
+
+                        $isLocked = $kepalaSudah && $pengawasSudah;
+
+                        return !$isLocked; // Tampilkan hanya jika BELUM locked
+                    })
                     ->modalHeading('Konfirmasi Pengosongan Lahan & Stok')
 
                     // ── Modal Description ─────────────────────────────────────
