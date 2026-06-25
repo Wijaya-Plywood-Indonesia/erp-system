@@ -29,7 +29,8 @@ class PressDryerWorkerMap
                 $mesinUtamaId = $firstMesin->id_mesin_dryer;
             }
 
-            $shift = strtoupper($item->shift ?? 'PAGI');
+            $shift = strtoupper(trim($item->shift ?? ''));
+            $shift = $shift === '' ? null : $shift;
 
             // --- HITUNG KENDALA DOWNTIME ---
             $totalKendalaMenit = 0;
@@ -41,12 +42,7 @@ class PressDryerWorkerMap
                 }
             }
 
-            // --- PERBAIKAN LABEL: HANYA DRYER - SHIFT ---
-            if (stripos($namaMesin, 'DRYER') !== false) {
-                $labelDivisi = "DRYER - " . $shift;
-            } else {
-                $labelDivisi = strtoupper($namaMesin);
-            }
+            $labelDivisi = $shift ? "DRYER - " . strtoupper($shift) : "DRYER";
 
             /* ============================================================
              * 2. HASIL PRODUKSI
@@ -82,31 +78,31 @@ class PressDryerWorkerMap
              * 3. CARI TARGET (LOGIKA DRYER VS NON-DRYER)
              * ============================================================ */
 
-            $targetModel = null;
+            $target = null;
 
             if ($mesinUtamaId) {
                 // A. LOGIKA KHUSUS DRYER (TARGET BERDASARKAN MESIN / ACUAN SHIFT)
                 if (stripos($namaMesin, 'DRYER') !== false) {
                     if ($shift === 'PAGI') {
-                        $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
+                        $target = Target::where('kode_ukuran', 'DRYER PAGI')->first();
                     } elseif ($shift === 'MALAM') {
-                        $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
+                        $target = Target::where('kode_ukuran', 'DRYER MALAM')->first();
                     }
                 } elseif (stripos($namaMesin, 'DRYER 1') !== false || $mesinUtamaId == 17) {
-                    $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
+                    $target = Target::where('kode_ukuran', 'DRYER PAGI')->first();
                 } elseif (stripos($namaMesin, 'DRYER 2') !== false || $mesinUtamaId == 18) {
-                    $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
+                    $target = Target::where('kode_ukuran', 'DRYER MALAM')->first();
                 }
                 // B. LOGIKA MESIN LAIN (BERDASARKAN UKURAN / DEFAULT MESIN)
                 else {
-                    $targetModel = Target::where('id_mesin', $mesinUtamaId)
+                    $target = Target::where('id_mesin', $mesinUtamaId)
                         ->when($ukuranId !== null, function ($q) use ($ukuranId) {
                             return $q->where('id_ukuran', $ukuranId);
                         })
                         ->first();
 
-                    if (!$targetModel) {
-                        $targetModel = Target::where('id_mesin', $mesinUtamaId)
+                    if (!$target) {
+                        $target = Target::where('id_mesin', $mesinUtamaId)
                             ->whereNull('id_ukuran')
                             ->first();
                     }
@@ -114,23 +110,23 @@ class PressDryerWorkerMap
             }
 
             // Fallback Terakhir
-            if ($targetModel === null && $mesinUtamaId) {
+            if ($target === null && $mesinUtamaId) {
                 if (stripos($namaMesin, 'DRYER') !== false) {
-                    $targetModel = Target::where('kode_ukuran', 'DRYER ' . $shift)->first();
+                    $target = Target::where('kode_ukuran', 'DRYER ' . $shift)->first();
                 } elseif (stripos($namaMesin, 'DRYER 1') !== false || $mesinUtamaId == 17) {
-                    $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
+                    $target = Target::where('kode_ukuran', 'DRYER PAGI')->first();
                 } elseif (stripos($namaMesin, 'DRYER 2') !== false || $mesinUtamaId == 18) {
-                    $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
+                    $target = Target::where('kode_ukuran', 'DRYER MALAM')->first();
                 } else {
-                    $targetModel = Target::where('id_mesin', $mesinUtamaId)
+                    $target = Target::where('id_mesin', $mesinUtamaId)
                         ->whereNull('id_ukuran')
                         ->first();
                 }
             }
 
             // Ambil Data Target
-            $targetHarian = (float) ($targetModel->target ?? 0);
-            $potonganPerLembar = (int) ($targetModel->potongan ?? 0);
+            $targetHarian = (float) ($target->target ?? 0);
+            $potonganPerLembar = (int) ($target->potongan ?? 0);
 
             // Debugging
             Log::info("Processing Dryer ID: {$item->id} | Mesin: {$namaMesin} | Shift: {$shift}", [
@@ -148,7 +144,7 @@ class PressDryerWorkerMap
 
             if ($targetHarian > 0 && $selisihProduksi < 0 && $potonganPerLembar > 0) {
 
-                $jamKerja = (float) ($targetModel->jam ?? 0);
+                $jamKerja = (float) ($target->jam ?? 0);
                 $jamKerjaMenit = $jamKerja * 60;
 
                 $targetPerMenit = $jamKerjaMenit > 0 ? ($targetHarian / $jamKerjaMenit) : 0;
@@ -201,7 +197,7 @@ class PressDryerWorkerMap
                     'hasil' => $labelDivisi, // DRYER - PAGI atau DRYER - MALAM
                     'ijin' => $dp->ijin ?? '',
                     'potongan_targ' => (int) $potonganFinal,
-                    'keterangan' => $dp->keterangan ?? '',
+                    'keterangan' => $dp->ket ?? '',
                 ];
             }
         }

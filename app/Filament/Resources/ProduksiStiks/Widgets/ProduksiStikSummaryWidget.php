@@ -84,11 +84,13 @@ class ProduksiStikSummaryWidget extends Widget
             ->orderBy('ukuran')
             ->get();
 
-        // 5. GLOBAL JENIS KAYU & UKURAN
+        // 5. GLOBAL JENIS KAYU & UKURAN (Ditambahkan Total Pekerja Unik per baris kelompok)
         $globalJenisKayuUkuran = DetailHasilStik::query()
-            ->where('id_produksi_stik', $produksiId)
+            ->where('detail_hasil_stik.id_produksi_stik', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'detail_hasil_stik.id_ukuran')
             ->join('jenis_kayus', 'jenis_kayus.id', '=', 'detail_hasil_stik.id_jenis_kayu')
+            // Join ke tabel pegawai untuk menghitung jumlah total orang yang terlibat
+            ->leftJoin('detail_pegawai_stik', 'detail_pegawai_stik.id_produksi_stik', '=', 'detail_hasil_stik.id_produksi_stik')
             ->selectRaw('
                 jenis_kayus.nama_kayu as jenis_kayu,
                 CONCAT(
@@ -97,14 +99,15 @@ class ProduksiStikSummaryWidget extends Widget
                     TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
                 ) AS ukuran,
                 detail_hasil_stik.kw as kw,
-                SUM(CAST(detail_hasil_stik.total_lembar AS UNSIGNED)) AS total
+                SUM(CAST(detail_hasil_stik.total_lembar AS UNSIGNED)) AS total,
+                COUNT(DISTINCT detail_pegawai_stik.id_pegawai) AS total_pekerja
             ')
             ->groupBy('jenis_kayus.nama_kayu', 'ukuran', 'detail_hasil_stik.kw')
             ->orderBy('jenis_kayus.nama_kayu')
             ->orderBy('ukuran')
             ->get();
 
-        // 6. TARGET PROGRESS (MESIN STIK - GLOBAL DARI UKURAN 0x0x0 / ID 33)
+        // 6. TARGET PROGRESS (MESIN STIK)
         $stikMachineIds = DB::table('mesins')
             ->join('kategori_mesins', 'mesins.kategori_mesin_id', '=', 'kategori_mesins.id')
             ->where('kategori_mesins.nama_kategori_mesin', 'STIK')
@@ -115,7 +118,6 @@ class ProduksiStikSummaryWidget extends Widget
             $stikMachineIds = [8];
         }
 
-        // Ambil target untuk ukuran 0x0x0 (id_ukuran = 33)
         $tgt = DB::table('targets')
             ->whereIn('id_mesin', $stikMachineIds)
             ->where('id_ukuran', 33)
@@ -149,10 +151,10 @@ class ProduksiStikSummaryWidget extends Widget
         }
 
         $this->summary = [
-            'totalAll'       => $totalAll,
-            'totalPegawai'   => $totalPegawai,
+            'totalAll' => $totalAll,
+            'totalPegawai' => $totalPegawai,
             'globalUkuranKw' => $globalUkuranKw,
-            'globalUkuran'   => $globalUkuran,
+            'globalUkuran' => $globalUkuran,
             'globalJenisKayuUkuran' => $globalJenisKayuUkuran,
             'targetProgress' => $targetProgress,
         ];

@@ -28,7 +28,7 @@ class TurunKayuWorkerMap
                     'hasil' => $labelDivisi,
                     'ijin' => $ptk->izin ?? '',
                     'potongan_targ' => 0, // Belum ada logika potongan untuk Turun Kayu
-                    'keterangan' => $ptk->keterangan ?? '',
+                    'keterangan' => $ptk->ket  ?? '',
                 ];
             }
         }

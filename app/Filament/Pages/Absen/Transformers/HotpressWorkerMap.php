@@ -125,7 +125,7 @@ class HotpressWorkerMap
                         'hasil' => $labelHasil,
                         'ijin' => $dp->ijin ?? '-',
                         'potongan_targ' => (int) $potonganPerOrang,
-                        'keterangan' => $dp->ket ?? $produksi->kendala ?? '',
+                        'keterangan' => $dp->ket ?? '',
                     ];
                 }
             }

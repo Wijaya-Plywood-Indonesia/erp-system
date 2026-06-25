@@ -52,18 +52,18 @@ class PilihPlywoodWorkerMap
                     $qty = $hasil->jumlah_bagus ?? 0;
                     if ($qty > $maxQty) {
                         $maxQty = $qty;
-                        
+
                         $b = $hasil->barangSetengahJadiHp;
                         if ($b) {
                             $isSengon = ($b->jenisBarang && stripos($b->jenisBarang->nama_jenis_barang, 'sengon') !== false);
-                            
+
                             if ($isSengon) {
                                 $kategoriId = $b->grade?->id_kategori_barang ?? 0;
                                 $kategoriNama = $b->grade?->kategoriBarang?->nama_kategori ?? '';
-                                
+
                                 $isNonSanding = ($kategoriId == 2 || stripos($kategoriNama, 'mentah') !== false || stripos($kategoriNama, 'non') !== false);
                                 $isSanding = ($kategoriId == 1 || (stripos($kategoriNama, 'plywood') !== false && stripos($kategoriNama, 'mentah') === false));
-                                
+
                                 if ($isNonSanding) {
                                     $target = 2200; // Sengon Non Sanding
                                 } elseif ($isSanding) {
@@ -121,7 +121,7 @@ class PilihPlywoodWorkerMap
                         'hasil' => $labelHasil,
                         'ijin' => $pp->ijin ?? '-',
                         'potongan_targ' => (int) $potonganPerOrang,
-                        'keterangan' => $pp->ket ?? $produksi->kendala ?? '',
+                        'keterangan' => $pp->ket  ?? '',
                     ];
                 }
             }

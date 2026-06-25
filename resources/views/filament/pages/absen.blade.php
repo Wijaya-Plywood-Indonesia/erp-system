@@ -79,37 +79,27 @@
                                         <td class="p-2 text-left text-xs font-medium border-r border-zinc-300 dark:border-zinc-700">
                                             <div class="flex flex-wrap gap-1.5">
                                                 @php
-                                                $divisiList = is_array($row['hasil']) ? $row['hasil'] : explode(', ', $row['hasil']);
+                                                $divisiList = is_array($row['hasil'])
+                                                ? $row['hasil']
+                                                : explode(' || ', $row['hasil']);
+                                                // Detect apakah baris ini merupakan shift malam berdasarkan fingerprint masuk & pulang
+                                                $isNightShift = false;
+                                                if (isset($row['f_masuk'], $row['f_pulang']) && $row['f_masuk'] !== '-' && $row['f_pulang'] !== '-') {
+                                                $isNightShift = strtotime($row['f_masuk']) > strtotime($row['f_pulang']);
+                                                }
                                                 @endphp
 
                                                 @foreach($divisiList as $divisi)
                                                 @php
                                                 $divisi = strtoupper(trim($divisi));
-                                                $isMalam = str_contains($divisi, 'MALAM');
-                                                $isPagi = str_contains($divisi, 'PAGI');
+                                                // Shift malam di‑detect dari fingerprint atau kata "MALAM"
+                                                $isMalam = $isNightShift || str_contains($divisi, 'MALAM');
+                                                // Jika bukan malam dan fingerprint masuk/pulang valid → dianggap pagi
+                                                $isPagi = (!$isMalam) && ($row['f_masuk'] !== '-' && $row['f_pulang'] !== '-');
                                                 @endphp
 
                                                 @if($divisi === '-' || empty($divisi))
                                                 <span class="text-zinc-400 font-normal">-</span>
-                                                @elseif(str_contains($divisi, 'ROTARY'))
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-orange-100 text-orange-800 ring-1 ring-orange-500/30">ROTARY</span>
-                                                @elseif(str_contains($divisi, 'DRYER'))
-                                                {{-- Penyesuaian Warna Dryer: Indigo untuk Malam, Green untuk Pagi --}}
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold {{ $isMalam ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-500/30' : 'bg-green-100 text-green-800' }} border border-current uppercase">
-                                                    DRYER {{ $isMalam ? 'MALAM' : ($isPagi ? 'PAGI' : '') }}
-                                                </span>
-                                                @elseif(str_contains($divisi, 'REPAIR'))
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 ring-1 ring-blue-500/30">REPAIR</span>
-                                                @elseif(str_contains($divisi, 'SANDING JOINT'))
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-teal-100 text-teal-800 border border-teal-200 uppercase">SANDING JOIN</span>
-                                                @elseif(str_contains($divisi, 'JOINT'))
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-cyan-100 text-cyan-800 border border-cyan-200 uppercase">JOIN</span>
-                                                @elseif(str_contains($divisi, 'STIK'))
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-pink-100 text-pink-800 border border-pink-200 uppercase">STIK</span>
-                                                @elseif(str_contains($divisi, 'KEDI') || str_contains($divisi, 'PUTTY'))
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800 border border-purple-200 uppercase">KEDI</span>
-                                                @elseif(str_contains($divisi, 'POT AFALAN'))
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200 uppercase">POT AFALAN</span>
                                                 @elseif(str_contains($divisi, 'LAIN-LAIN'))
                                                 <div class="flex items-center gap-1">
                                                     {{-- Badge Label --}}
@@ -130,6 +120,25 @@
                                                     </span>
                                                     @endif
                                                 </div>
+                                                @elseif(str_contains($divisi, 'ROTARY'))
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-orange-100 text-orange-800 ring-1 ring-orange-500/30">ROTARY</span>
+                                                @elseif(str_contains($divisi, 'DRYER'))
+                                                {{-- Penyesuaian Warna Dryer: Indigo untuk Malam, Green untuk Pagi --}}
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold {{ $isMalam ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-500/30' : 'bg-green-100 text-green-800' }} border border-current uppercase">
+                                                    DRYER {{ $isMalam ? 'MALAM' : ($isPagi ? 'PAGI' : '') }}
+                                                </span>
+                                                @elseif(str_contains($divisi, 'REPAIR'))
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 ring-1 ring-blue-500/30">REPAIR</span>
+                                                @elseif(str_contains($divisi, 'SANDING JOINT'))
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-teal-100 text-teal-800 border border-teal-200 uppercase">SANDING JOIN</span>
+                                                @elseif(str_contains($divisi, 'JOINT'))
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-cyan-100 text-cyan-800 border border-cyan-200 uppercase">JOIN</span>
+                                                @elseif(str_contains($divisi, 'STIK'))
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-pink-100 text-pink-800 border border-pink-200 uppercase">STIK</span>
+                                                @elseif(str_contains($divisi, 'KEDI') || str_contains($divisi, 'PUTTY'))
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800 border border-purple-200 uppercase">KEDI</span>
+                                                @elseif(str_contains($divisi, 'POT AFALAN'))
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200 uppercase">POT AFALAN</span>
                                                 @elseif(str_contains($divisi, 'DEMPUL'))
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-800 ring-1 ring-indigo-500/30">DEMPUL</span>
                                                 @elseif(str_contains($divisi, 'GRAJI TRIPLEK'))

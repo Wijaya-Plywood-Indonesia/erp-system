@@ -112,7 +112,7 @@ class SandingWorkerMap
                         'hasil' => $labelHasil,
                         'ijin' => $ps->ijin ?? '-',
                         'potongan_targ' => (int) $potonganPerOrang,
-                        'keterangan' => $ps->ket ?? $produksi->kendala ?? '',
+                        'keterangan' => $ps->ket  ?? '',
                     ];
                 }
             }

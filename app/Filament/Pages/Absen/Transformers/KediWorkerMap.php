@@ -110,7 +110,7 @@ class KediWorkerMap
                         'hasil' => $labelDivisi,
                         'ijin' => $dp->ijin ?? '',
                         'potongan_targ' => (int) $potonganFinal,
-                        'keterangan' => $dp->keterangan ?? '',
+                        'keterangan' => $dp->ket ?? '',
                     ];
                 }
             }

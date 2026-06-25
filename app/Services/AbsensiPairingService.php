@@ -45,7 +45,7 @@ class AbsensiPairingService
                 
                 // If forced shift is specified, filter by its specific check-in window
                 if ($forcedShift === 'MALAM') {
-                    if ($time >= '13:00:00' && $time <= '23:59:59') {
+                    if ($time >= '14:00:00' && $time <= '23:59:59') {
                         $firstTap = $entry;
                         break;
                     }
@@ -56,7 +56,7 @@ class AbsensiPairingService
                     }
                 } else {
                     // Default logic: Day Shift (05:00 - 13:59) or Night Shift (14:00 - 23:59)
-                    if ($time >= '05:00:00' && $time <= '23:59:59') {
+                    if ($time >= '05:00:00' && $time <= '13:59:59') {
                         $firstTap = $entry;
                         break;
                     }

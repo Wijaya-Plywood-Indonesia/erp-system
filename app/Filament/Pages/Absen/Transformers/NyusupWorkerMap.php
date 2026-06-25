@@ -52,7 +52,7 @@ class NyusupWorkerMap
                         'hasil' => $labelHasil,
                         'ijin' => $pn->ijin ?? '-',
                         'potongan_targ' => 0,
-                        'keterangan' => $pn->ket ?? $produksi->kendala ?? '',
+                        'keterangan' => $pn->ket  ?? '',
                     ];
                 }
             }
