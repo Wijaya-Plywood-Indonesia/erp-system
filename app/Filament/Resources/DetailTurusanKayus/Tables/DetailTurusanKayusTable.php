@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\DetailTurusanKayus\Tables;
 
 use App\Models\DetailTurusanKayu;
+use App\Models\HargaKayu;
 use App\Models\JenisKayu;
 use App\Models\Lahan;
 use Filament\Tables\Table;
@@ -52,6 +53,15 @@ class DetailTurusanKayusTable
         if ($livewire && method_exists($livewire, 'getOwnerRecord')) {
             $ownerRecord = $livewire->getOwnerRecord();
         }
+
+        $findHargaKayu = function (int $jenisKayuId, int $panjang, $grade, int $diameter) {
+            return HargaKayu::where('id_jenis_kayu', $jenisKayuId)
+                ->where('panjang', $panjang)
+                ->where('grade', $grade)
+                ->where('diameter_terkecil', '<=', $diameter)
+                ->where('diameter_terbesar', '>=', $diameter)
+                ->first();
+        };
 
         return $table
             ->columns([

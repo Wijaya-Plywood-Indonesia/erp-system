@@ -200,7 +200,7 @@
         @if (!empty($summary['globalJenisKayuUkuran']) && count($summary['globalJenisKayuUkuran']) > 0)
         <div class="space-y-4 mt-8">
             <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                Ringkasan Penggunaan Kayu & Ukuran Hasil (Platform & Triplek)
+                Ringkasan Penggunaan Veneer & Ukuran Hasil (Platform & Triplek)
             </div>
 
             <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">

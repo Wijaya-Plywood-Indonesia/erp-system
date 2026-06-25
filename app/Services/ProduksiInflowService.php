@@ -34,11 +34,10 @@ class ProduksiInflowService
                 $query->where('nama_lahan', $nama_lahan);
             });
         }
-        $paginatedClosures = $query->orderBy('created_at', 'desc')
-            ->paginate($perPage);
+        $allClosures = $query->orderBy('created_at', 'desc')->get();
         $laporanFinal = [];
 
-        foreach ($paginatedClosures as $closure) {
+        foreach ($allClosures as $closure) {
             // Cari penutup terakhir sebelum batch ini untuk lahan yang sama
             $lastClosure = PenggunaanLahanRotary::where('id_lahan', $closure->id_lahan)
                 ->where('created_at', '<', $closure->created_at)
@@ -124,13 +123,21 @@ class ProduksiInflowService
         // Merge zero inflow batches and maintain descending order
         $laporanFinal = $this->mergeZeroInflowBatches($laporanFinal, true);
 
+        // Paginate manually
+        $currentPage = LengthAwarePaginator::resolveCurrentPage();
+        $itemCollection = collect($laporanFinal);
+        $slice = $itemCollection->slice(($currentPage - 1) * $perPage, $perPage)->values()->all();
+
         // Kembalikan objek paginator agar view bisa merender links()
         return new LengthAwarePaginator(
-            $laporanFinal,
-            $paginatedClosures->total(),
-            $paginatedClosures->perPage(),
-            $paginatedClosures->currentPage(),
-            ['path' => request()->url(), 'query' => request()->query()]
+            $slice,
+            $itemCollection->count(),
+            $perPage,
+            $currentPage,
+            [
+    'path' => url()->previous(),
+    'query' => request()->query()
+]
         );
     }
 

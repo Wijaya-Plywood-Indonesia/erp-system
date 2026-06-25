@@ -70,6 +70,7 @@
                 @endforelse
             </div>
         </div>
+@if (false)
 
         {{-- [SECTION 3] GLOBAL UKURAN (REKAP SEMUA KW) --}}
         <div class="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
@@ -97,13 +98,13 @@
                 @endforeach
             </div>
         </div>
-
+@endif
         {{-- [SECTION 4] RINGKASAN JENIS KAYU & UKURAN --}}
         @if (!empty($summary['globalJenisKayuUkuran']) && count($summary['globalJenisKayuUkuran']) > 0)
         <div class="space-y-4 pt-6 border-t border-gray-100 dark:border-gray-800">
             <div class="flex items-center gap-2 font-semibold text-lg text-gray-900 dark:text-gray-100">
                 <x-heroicon-m-table-cells class="w-5 h-5 text-gray-400" />
-                Ringkasan Penggunaan Kayu & Ukuran Hasil
+                Ringkasan Penggunaan Veneer & Ukuran Hasil
             </div>
 
             <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
