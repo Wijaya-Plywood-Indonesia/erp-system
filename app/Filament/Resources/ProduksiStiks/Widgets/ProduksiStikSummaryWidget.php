@@ -175,6 +175,7 @@ class ProduksiStikSummaryWidget extends Widget
             'globalUkuranKw' => $globalUkuranKw,
             'globalUkuran' => $globalUkuran,
             'globalJenisKayuUkuran' => $globalJenisKayuUkuran,
+            'totalPekerjaStik'      => $totalPekerjaStik,
             'targetProgress' => $targetProgress,
         ];
     }
