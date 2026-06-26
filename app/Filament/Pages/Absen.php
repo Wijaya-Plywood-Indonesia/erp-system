@@ -233,13 +233,16 @@ class Absen extends Page implements HasForms
                     $rawMasuk = $finger?->jam_masuk ?? '-';
                     $rawPulang = $finger?->jam_pulang ?? '-';
 
-                    if ($isMalam) {
-                        $fMasuk = $rawPulang;
-                        $fPulang = $rawMasuk;
-                    } else {
-                        $fMasuk = $rawMasuk;
-                        $fPulang = $rawPulang;
-                    }
+                    // if ($isMalam) {
+                    // $fMasuk = $rawPulang;
+                    //     $fPulang = $rawMasuk;
+                    // } else {
+                    // $fMasuk = $rawMasuk;
+                    //     $fPulang = $rawPulang;
+                    // }
+
+                    $fMasuk  = $rawMasuk;
+                    $fPulang = $rawPulang;
 
                     return [
                         'kodep'      => $kodep,

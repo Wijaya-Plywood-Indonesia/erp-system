@@ -56,7 +56,7 @@
                     {{-- KIRI: Ukuran, KW & Detail Orang --}}
                     <div class="flex flex-col">
                         <span class="text-sm font-bold text-gray-800 dark:text-gray-200">
-                            {{ $row->ukuran }} + KW {{ $row->kw }} - {{ $row->jumlah_orang }} Orang Mengerjakan
+                            {{ $row->ukuran }} + KW {{ $row->kw }} + {{ $row->jenis_kayu }} - {{ $row->jumlah_orang }} Orang Mengerjakan
                         </span>
                     </div>
 
@@ -120,13 +120,13 @@
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         @php $grandTotal = 0; @endphp
                         @foreach (($summary['globalJenisKayuUkuran'] ?? []) as $row)
-                            @php $grandTotal += $row->total; @endphp
-                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
-                                <td class="px-4 py-3">{{ $row->ukuran }}</td>
-                                <td class="px-4 py-3">{{ $row->kw }}</td>
-                                <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
-                            </tr>
+                        @php $grandTotal += $row->total; @endphp
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                            <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
+                            <td class="px-4 py-3">{{ $row->ukuran }}</td>
+                            <td class="px-4 py-3">{{ $row->kw }}</td>
+                            <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
+                        </tr>
                         @endforeach
                     </tbody>
                     <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">

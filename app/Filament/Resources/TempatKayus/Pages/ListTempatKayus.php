@@ -10,10 +10,10 @@ class ListTempatKayus extends ListRecords
 {
     protected static string $resource = TempatKayuResource::class;
 
-    protected function getHeaderActions(): array
-    {
-        return [
-            CreateAction::make(),
-        ];
-    }
+    // protected function getHeaderActions(): array
+    // {
+    //     return [
+    //         CreateAction::make(),
+    //     ];
+    // }
 }
