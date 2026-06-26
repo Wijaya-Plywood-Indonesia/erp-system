@@ -2,18 +2,20 @@
 
 namespace App\Filament\Resources\ProduksiStiks\Widgets;
 
-use Filament\Widgets\Widget;
-use Illuminate\Support\Facades\DB;
-use App\Models\ProduksiStik;
 use App\Models\DetailHasilStik;
 use App\Models\DetailPegawaiStik;
+use App\Models\ProduksiStik;
+use Filament\Widgets\Widget;
+use Illuminate\Support\Facades\DB;
 
 class ProduksiStikSummaryWidget extends Widget
 {
     protected string $view = 'filament.resources.produksi-stik.widgets.summary';
+
     protected int|string|array $columnSpan = 'full';
 
     public ?ProduksiStik $record = null;
+
     public array $summary = [];
 
     /**
@@ -23,7 +25,9 @@ class ProduksiStikSummaryWidget extends Widget
     {
         $id = $this->record?->id;
 
-        if (! $id) return [];
+        if (! $id) {
+            return [];
+        }
 
         return [
             "echo:production.stik.{$id},.ProductionUpdated" => 'refreshSummary',
@@ -41,7 +45,9 @@ class ProduksiStikSummaryWidget extends Widget
      */
     public function refreshSummary(): void
     {
-        if (! $this->record) return;
+        if (! $this->record) {
+            return;
+        }
 
         $produksiId = $this->record->id;
 
@@ -84,32 +90,42 @@ class ProduksiStikSummaryWidget extends Widget
             ->orderBy('ukuran')
             ->get();
 
-        $totalPekerjaStik = DetailPegawaiStik::where('id_produksi_stik', $produksiId)
-            ->whereNotNull('id_pegawai')
-            ->distinct('id_pegawai')
-            ->count('id_pegawai');
-
-        // 5. GLOBAL JENIS KAYU & UKURAN (Ditambahkan Total Pekerja Unik per baris kelompok)
+        // 5. GLOBAL JENIS KAYU & UKURAN
+        // 5. GLOBAL JENIS KAYU & UKURAN
         $globalJenisKayuUkuran = DetailHasilStik::query()
             ->where('detail_hasil_stik.id_produksi_stik', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'detail_hasil_stik.id_ukuran')
             ->join('jenis_kayus', 'jenis_kayus.id', '=', 'detail_hasil_stik.id_jenis_kayu')
-            ->selectRaw('
-                    jenis_kayus.nama_kayu as jenis_kayu,
-                    CONCAT(
-                        TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
-                        TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
-                        TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
-                    ) AS ukuran,
-                    detail_hasil_stik.kw as kw,
-                    SUM(CAST(detail_hasil_stik.total_lembar AS UNSIGNED)) AS total
-                    -- ✅ total_pekerja DIHAPUS dari sini
-                ')
-            ->groupBy('jenis_kayus.nama_kayu', 'ukuran', 'detail_hasil_stik.kw')
+            ->leftJoin('detail_masuk_stik', function ($join) {
+                $join->on('detail_masuk_stik.id_produksi_stik', '=', 'detail_hasil_stik.id_produksi_stik')
+                    ->on('detail_masuk_stik.id_ukuran', '=', 'detail_hasil_stik.id_ukuran')
+                    ->on('detail_masuk_stik.id_jenis_kayu', '=', 'detail_hasil_stik.id_jenis_kayu')
+                    ->on('detail_masuk_stik.kw', '=', 'detail_hasil_stik.kw');
+            })
+            ->selectRaw("
+        jenis_kayus.nama_kayu AS jenis_kayu,
+
+        CONCAT(
+            TRIM(TRAILING '.00' FROM CAST(ukurans.panjang AS CHAR)), ' x ',
+            TRIM(TRAILING '.00' FROM CAST(ukurans.lebar AS CHAR)), ' x ',
+            TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(ukurans.tebal AS CHAR)))
+        ) AS ukuran,
+
+        detail_hasil_stik.kw AS kw,
+
+        MAX(CAST(detail_masuk_stik.isi AS UNSIGNED)) AS total_bahan,
+
+        SUM(CAST(detail_hasil_stik.total_lembar AS UNSIGNED)) AS total_hasil
+    ")
+            ->groupBy(
+                'jenis_kayus.nama_kayu',
+                'ukuran',
+                'detail_hasil_stik.kw'
+            )
             ->orderBy('jenis_kayus.nama_kayu')
             ->orderBy('ukuran')
+            ->orderBy('detail_hasil_stik.kw')
             ->get();
-
         // 6. TARGET PROGRESS (MESIN STIK)
         $stikMachineIds = DB::table('mesins')
             ->join('kategori_mesins', 'mesins.kategori_mesin_id', '=', 'kategori_mesins.id')
