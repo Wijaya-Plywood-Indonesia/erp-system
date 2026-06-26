@@ -197,21 +197,26 @@ class CreateAbsensi extends CreateRecord
                 /** @var Carbon $logTime */
                 $logTime = $entry['full'];
 
-                $targetMasukDt  = Carbon::parse("$targetDate $jadwalMasuk");
+                $jamMasukAcuan = ($isShiftMalam && Carbon::parse($jadwalMasuk)->hour < 14)
+                    ? '18:00:00'
+                    : $jadwalMasuk;
+
+                $targetMasukDt  = Carbon::parse("$targetDate $jamMasukAcuan");
+
                 $targetPulangDt = $isShiftMalam
-                    ? Carbon::parse("$targetDate $jadwalPulang")->addDay()
+                    ? Carbon::parse("$nextDate $jadwalPulang")  // ← pakai $nextDate, bukan addDay()
                     : Carbon::parse("$targetDate $jadwalPulang");
 
                 $selisihKeMasuk  = abs($logTime->diffInMinutes($targetMasukDt));
                 $selisihKePulang = abs($logTime->diffInMinutes($targetPulangDt));
-
+                $threshold = $isShiftMalam ? 600 : 480;
                 if ($selisihKeMasuk < $selisihKePulang) {
-                    if ($selisihKeMasuk < $minSelisihMasuk && $selisihKeMasuk < 480) {
+                    if ($selisihKeMasuk < $minSelisihMasuk && $selisihKeMasuk < $threshold) {
                         $minSelisihMasuk = $selisihKeMasuk;
                         $jamMasukLog    = $entry['time'];
                     }
                 } else {
-                    if ($selisihKePulang < $minSelisihPulang && $selisihKePulang < 480) {
+                    if ($selisihKePulang < $minSelisihPulang && $selisihKePulang < $threshold) {
                         $minSelisihPulang = $selisihKePulang;
                         $jamPulangLog    = $entry['time'];
                     }

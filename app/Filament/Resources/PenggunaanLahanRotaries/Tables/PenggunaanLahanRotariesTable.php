@@ -293,7 +293,7 @@ class PenggunaanLahanRotariesTable
                             $updatedCount = DB::table('tempat_kayus')
                                 ->where('id_lahan', $idLahan)
                                 ->update([
-                                    'id_kayu_masuk'   => null,
+                                    // 'id_kayu_masuk'   => null,
                                     'jumlah_batang'   => 0,
                                     'status'          => 'belum serah',
                                     'diserahkan_oleh' => null,

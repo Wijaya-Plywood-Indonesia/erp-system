@@ -7,7 +7,7 @@ use Carbon\Carbon;
 class AbsensiPairingService
 {
     /**
-      * Pair raw log entries for a single employee on a given target date.
+     * Pair raw log entries for a single employee on a given target date.
      *
      * @param array $entries Raw log entries containing 'date', 'time', and 'full' (Carbon instance)
      * @param string $targetDate Format 'Y-m-d'
@@ -32,54 +32,84 @@ class AbsensiPairingService
             }
         }
 
-        // 2. Find the first valid IN scan on targetDate.
-        $firstTap = null;
-        foreach ($filtered as $entry) {
-            if ($entry['date'] === $targetDate) {
-                // If this scan corresponds to the checkout of the previous shift, skip it
-                if ($prevCheckout && $entry['full']->diffInMinutes($prevCheckout, true) <= 5) {
-                    continue;
-                }
-
-                $time = $entry['time'];
-                
-                // If forced shift is specified, filter by its specific check-in window
-                if ($forcedShift === 'MALAM') {
-                    if ($time >= '14:00:00' && $time <= '23:59:59') {
-                        $firstTap = $entry;
-                        break;
-                    }
-                } elseif ($forcedShift === 'PAGI') {
-                    if ($time >= '05:00:00' && $time <= '13:59:59') {
-                        $firstTap = $entry;
-                        break;
-                    }
-                } else {
-                    // Default logic: Day Shift (05:00 - 13:59) or Night Shift (14:00 - 23:59)
-                    if ($time >= '05:00:00' && $time <= '13:59:59') {
-                        $firstTap = $entry;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (!$firstTap) {
-            return null;
-        }
-
-        $jamMasuk = $firstTap['time'];
-        $jamMasukDt = $firstTap['full'];
-
-        // 3. Classify Shift
+        // 2. Determine the shift first (PAGI or MALAM) based on forcedShift, explicit time windows, or the presence of a night‑time entry.
+        $isShiftMalam = false;
+        // 2a. Forced shift takes priority
         if ($forcedShift === 'MALAM') {
             $isShiftMalam = true;
         } elseif ($forcedShift === 'PAGI') {
             $isShiftMalam = false;
         } else {
-            // Shift Malam: tap masuk antara jam 14:00 - 23:59
-            $isShiftMalam = $jamMasukDt->hour >= 14;
+            // 2b. Auto‑detect: use the earliest entry of the target date *after* skipping a possible previous checkout
+            $firstOfDay = null;
+            foreach ($filtered as $e) {
+                if ($e['date'] !== $targetDate) {
+                    continue;
+                }
+                // Skip the scan that matches the previous night‑shift checkout (handled earlier)
+                if ($prevCheckout && $e['full']->diffInMinutes($prevCheckout, true) <= 5) {
+                    continue;
+                }
+                $firstOfDay = $e;
+                break;
+            }
+            if ($firstOfDay && $firstOfDay['time'] >= '14:00:00') {
+                $isShiftMalam = true;
+            }
         }
+
+        if (!$forcedShift) {
+            $firstScanToday = $sorted->first(fn($e) => $e['date'] === $targetDate);
+            if ($firstScanToday) {
+                $scanHour    = Carbon::parse($firstScanToday['full'])->hour;
+                $forcedShift = $scanHour >= 14 ? 'MALAM' : 'PAGI';
+                $isShiftMalam = $forcedShift === 'MALAM'; // ← tambahkan baris ini
+            }
+        }
+
+        // 3. Find the first valid IN scan on targetDate according to the detected shift.
+        $firstTap = null;
+        foreach ($filtered as $entry) {
+            if ($entry['date'] !== $targetDate) {
+                continue;
+            }
+            // Skip a scan that is essentially the checkout of the previous shift
+            if ($prevCheckout && $entry['full']->diffInMinutes($prevCheckout, true) <= 5) {
+                continue;
+            }
+
+            $time = $entry['time'];
+            if ($isShiftMalam) {
+                // Night shift: accept scans from 14:00 to 23:59
+                if ($time >= '14:00:00' && $time <= '23:59:59') {
+                    $firstTap = $entry;
+                    break;
+                }
+            } else {
+                // Day shift: accept scans from 05:00 to 13:59
+                if ($time >= '05:00:00' && $time <= '13:59:59') {
+                    $firstTap = $entry;
+                    break;
+                }
+            }
+        }
+
+        // 4. Fallback – if no scan matches the strict window we still take the earliest entry of the day.
+        if (!$firstTap) {
+            foreach ($filtered as $entry) {
+                if ($entry['date'] === $targetDate) {
+                    $firstTap = $entry;
+                    break;
+                }
+            }
+        }
+
+        if (!$firstTap) {
+            return null; // No entry at all for the target date.
+        }
+
+        $jamMasuk = $firstTap['time'];
+        $jamMasukDt = $firstTap['full'];
 
         $jamPulang = null;
         if ($isShiftMalam) {

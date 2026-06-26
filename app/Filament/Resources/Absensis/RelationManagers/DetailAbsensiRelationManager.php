@@ -121,11 +121,15 @@ class DetailAbsensiRelationManager extends RelationManager
                             }
 
                             // KASUS C: Shift Normal/Pagi tapi Jam Terbalik karena salah kolom di file
-                            if (!$isShiftMalamSistem && $absen->jam_masuk && $absen->jam_pulang) {
-                                if (Carbon::parse($absen->jam_masuk)->gt(Carbon::parse($absen->jam_pulang))) {
-                                    // Tukar posisi secara aman (Swap)
-                                    $temp = $absen->jam_masuk;
-                                    $absen->jam_masuk = $absen->jam_pulang;
+                            if ($isShiftMalamSistem && $absen->jam_masuk && $absen->jam_pulang) {
+                                $jamMasukHour  = Carbon::parse($absen->jam_masuk)->hour;
+                                $jamPulangHour = Carbon::parse($absen->jam_pulang)->hour;
+
+                                // Jika jam masuk terdeteksi pagi (00-12) dan jam pulang sore/malam (12-23)
+                                // berarti posisinya terbalik → swap
+                                if ($jamMasukHour <= 12 && $jamPulangHour >= 12) {
+                                    $temp              = $absen->jam_masuk;
+                                    $absen->jam_masuk  = $absen->jam_pulang;
                                     $absen->jam_pulang = $temp;
                                     $absen->save();
                                     $fixedCount++;

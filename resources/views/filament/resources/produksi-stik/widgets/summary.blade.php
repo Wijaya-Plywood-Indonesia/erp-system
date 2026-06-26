@@ -164,7 +164,7 @@
                             <td class="px-4 py-3">{{ $row->ukuran }}</td>
                             <td class="px-4 py-3">{{ $row->kw }}</td>
                             <td class="px-4 py-3 text-center font-medium text-gray-800 dark:text-gray-200">
-                                {{ $row->total_pekerja ?? 0 }} Orang
+                                {{ $summary['totalPekerjaStik'] ?? 0 }} Orang
                             </td> {{-- Nilai Kolom Baru --}}
                             <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
                         </tr>
