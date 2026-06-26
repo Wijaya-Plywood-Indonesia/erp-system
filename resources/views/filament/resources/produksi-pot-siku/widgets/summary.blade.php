@@ -74,7 +74,7 @@
         @if (!empty($summary['globalJenisKayuUkuran']) && count($summary['globalJenisKayuUkuran']) > 0)
             <div class="space-y-4 mt-6">
                 <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                    Ringkasan Penggunaan Kayu & Ukuran Hasil
+                    Ringkasan Penggunaan Veneer & Ukuran Hasil
                 </div>
 
                 <div
