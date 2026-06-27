@@ -1,8 +1,6 @@
 <x-filament::widget>
-  <x-filament::card
-    class="w-full space-y-10 dark:bg-gray-900 dark:border-gray-800"
-  >
-    {{-- ================= TOTAL PRODUKSI (COMMENTED OUT)
+    <x-filament::card class="w-full space-y-10 dark:bg-gray-900 dark:border-gray-800">
+        {{-- ================= TOTAL PRODUKSI (COMMENTED OUT)
     <div class="text-center py-4">
       <div
         class="text-4xl font-extrabold text-primary-600 dark:text-primary-500"
@@ -15,24 +13,24 @@
     </div>
     --}}
 
-    {{-- Header Stat Utama --}}
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 py-6 border-b dark:border-gray-700">
-      <div class="text-center border-r dark:border-gray-700 last:border-0">
-        <div class="text-5xl font-black text-primary-600 tracking-tight">
-          {{ number_format($summary['totalAll'] ?? 0) }}
-        </div>
-        <p class="text-sm font-semibold uppercase tracking-wider text-gray-500 mt-1">Total Lembar Produksi</p>
-      </div>
+        {{-- Header Stat Utama --}}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 py-6 border-b dark:border-gray-700">
+            <div class="text-center border-r dark:border-gray-700 last:border-0">
+                <div class="text-5xl font-black text-primary-600 tracking-tight">
+                    {{ number_format($summary['totalAll'] ?? 0) }}
+                </div>
+                <p class="text-sm font-semibold uppercase tracking-wider text-gray-500 mt-1">Total Lembar Produksi</p>
+            </div>
 
-      <div class="text-center">
-        <div class="text-5xl font-black text-success-600 tracking-tight">
-          {{ number_format($summary['totalPegawai'] ?? 0) }}
+            <div class="text-center">
+                <div class="text-5xl font-black text-success-600 tracking-tight">
+                    {{ number_format($summary['totalPegawai'] ?? 0) }}
+                </div>
+                <p class="text-sm font-semibold uppercase tracking-wider text-gray-500 mt-1">Personil Terlibat</p>
+            </div>
         </div>
-        <p class="text-sm font-semibold uppercase tracking-wider text-gray-500 mt-1">Personil Terlibat</p>
-      </div>
-    </div>
 
-    {{-- Section 1: Ukuran + KW + Jenis Kayu (COMMENTED OUT)
+        {{-- Section 1: Ukuran + KW + Jenis Kayu (COMMENTED OUT)
     <div class="space-y-4">
       <h3 class="text-lg font-bold flex items-center gap-2 text-gray-800 dark:text-gray-200">
         Rincian Ukuran, KW & Jenis Kayu
@@ -55,7 +53,7 @@
     </div>
     --}}
 
-    {{-- Section 2: Global Ukuran (COMMENTED OUT)
+        {{-- Section 2: Global Ukuran (COMMENTED OUT)
     <div class="space-y-4">
       <h3 class="text-lg font-bold flex items-center gap-2 text-gray-800 dark:text-gray-200">
         Akumulasi Per Ukuran
@@ -72,146 +70,152 @@
     </div>
     --}}
 
-    {{-- Section 3: Jenis Kayu dan Ukuran --}}
-    @if (!empty($summary['globalJenisKayuUkuran']) && count($summary['globalJenisKayuUkuran']) > 0)
-    <div class="space-y-4 mt-6">
-      <h3 class="text-lg font-bold flex items-center gap-2 text-gray-800 dark:text-gray-200">
-        Ringkasan Penggunaan Kayu & Ukuran Hasil
-      </h3>
+        {{-- Section 3: Jenis Kayu dan Ukuran --}}
+        @if (!empty($summary['globalJenisKayuUkuran']) && count($summary['globalJenisKayuUkuran']) > 0)
+            <div class="space-y-4 mt-6">
+                <h3 class="text-lg font-bold flex items-center gap-2 text-gray-800 dark:text-gray-200">
+                    Hasil Produksi
+                </h3>
 
-      <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
-        <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300">
-          <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white">
-            <tr>
-              <th class="px-4 py-3 font-semibold">Jenis Kayu</th>
-              <th class="px-4 py-3 font-semibold">Ukuran Veneer</th>
-              <th class="px-4 py-3 font-semibold">kw</th>
-              <th class="px-4 py-3 font-semibold text-right">Hasil</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            @php $grandTotal = 0; @endphp
-            @foreach ($summary['globalJenisKayuUkuran'] as $row)
-              @php $grandTotal += $row->total; @endphp
-              <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
-                <td class="px-4 py-3">{{ $row->ukuran }}</td>
-                <td class="px-4 py-3">{{ $row->kw }}</td>
-                <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
-              </tr>
-            @endforeach
-          </tbody>
-          <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">
-            <tr>
-              <td colspan="3" class="px-4 py-3 text-right border-t dark:border-gray-700">Total Keseluruhan</td>
-              <td class="px-4 py-3 text-right border-t dark:border-gray-700">{{ number_format($grandTotal) }}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
-    @endif
+                <div
+                    class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+                    <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300">
+                        <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white">
+                            <tr>
+                                <th class="px-4 py-3 font-semibold">Jenis Kayu</th>
+                                <th class="px-4 py-3 font-semibold">Ukuran Veneer</th>
+                                <th class="px-4 py-3 font-semibold">kw</th>
+                                <th class="px-4 py-3 font-semibold text-right">Hasil</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            @php $grandTotal = 0; @endphp
+                            @foreach ($summary['globalJenisKayuUkuran'] as $row)
+                                @php $grandTotal += $row->total; @endphp
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                    <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
+                                    <td class="px-4 py-3">{{ $row->ukuran }}</td>
+                                    <td class="px-4 py-3">{{ $row->kw }}</td>
+                                    <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                        <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">
+                            <tr>
+                                <td colspan="3" class="px-4 py-3 text-right border-t dark:border-gray-700">Total
+                                    Keseluruhan</td>
+                                <td class="px-4 py-3 text-right border-t dark:border-gray-700">
+                                    {{ number_format($grandTotal) }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        @endif
 
-    {{-- Section 4: Hasil Per Lahan --}}
-    @if (!empty($summary['globalLahanUkuran']) && count($summary['globalLahanUkuran']) > 0)
-    <div class="space-y-4 mt-6">
-      <h3 class="text-lg font-bold flex items-center gap-2 text-gray-800 dark:text-gray-200">
-        Hasil Per Lahan
-      </h3>
+        {{-- Section 4: Hasil Per Lahan --}}
+        @if (!empty($summary['globalLahanUkuran']) && count($summary['globalLahanUkuran']) > 0)
+            <div class="space-y-4 mt-6">
+                <h3 class="text-lg font-bold flex items-center gap-2 text-gray-800 dark:text-gray-200">
+                    Hasil Per Lahan
+                </h3>
 
-      <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
-        <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300">
-          <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white">
-            <tr>
-              <th class="px-4 py-3 font-semibold">Nama Lahan</th>
-              <th class="px-4 py-3 font-semibold">Ukuran Veneer</th>
-              <th class="px-4 py-3 font-semibold">Jenis Kayu</th>
-              <th class="px-4 py-3 font-semibold text-right">Hasil</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            @php $grandTotalLahan = 0; @endphp
-            @foreach ($summary['globalLahanUkuran'] as $row)
-              @php $grandTotalLahan += $row->total; @endphp
-              <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                <td class="px-4 py-3">{{ $row->nama_lahan }}</td>
-                <td class="px-4 py-3">{{ $row->ukuran }}</td>
-                <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
-                <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
-              </tr>
-            @endforeach
-          </tbody>
-          <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">
-            <tr>
-              <td colspan="3" class="px-4 py-3 text-right border-t dark:border-gray-700">Total Keseluruhan</td>
-              <td class="px-4 py-3 text-right border-t dark:border-gray-700">{{ number_format($grandTotalLahan) }}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
-    @endif
+                <div
+                    class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+                    <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300">
+                        <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white">
+                            <tr>
+                                <th class="px-4 py-3 font-semibold">Nama Lahan</th>
+                                <th class="px-4 py-3 font-semibold">Ukuran Veneer</th>
+                                <th class="px-4 py-3 font-semibold">Jenis Kayu</th>
+                                <th class="px-4 py-3 font-semibold text-right">Hasil</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            @php $grandTotalLahan = 0; @endphp
+                            @foreach ($summary['globalLahanUkuran'] as $row)
+                                @php $grandTotalLahan += $row->total; @endphp
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                    <td class="px-4 py-3">{{ $row->nama_lahan }}</td>
+                                    <td class="px-4 py-3">{{ $row->ukuran }}</td>
+                                    <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
+                                    <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                        <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">
+                            <tr>
+                                <td colspan="3" class="px-4 py-3 text-right border-t dark:border-gray-700">Total
+                                    Keseluruhan</td>
+                                <td class="px-4 py-3 text-right border-t dark:border-gray-700">
+                                    {{ number_format($grandTotalLahan) }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        @endif
 
-    @forelse ($summary['globalTarget'] ?? [] as $item)
-    <div class="mt-6 space-y-4">
-    <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">
-        Progress Target Mesin {{ $item['nama_mesin'] ?? '' }}  
-        <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
-            ( Target {{ ($item['target'] ?? 0) == 0 ? "Belum di Set" : number_format($item['target'] ?? 0) }} )
-        </span>
-    </div>
+        @forelse ($summary['globalTarget'] ?? [] as $item)
+            <div class="mt-6 space-y-4">
+                <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                    Progress Target Mesin {{ $item['nama_mesin'] ?? '' }}
+                    <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
+                        (Target
+                        {{ ($item['target'] ?? 0) == 0 ? 'Belum di Set' : number_format($item['target'] ?? 0) }})
+                    </span>
+                </div>
 
-        @php
-            // pastikan numeric & dibatasi max 100
-            $progress = min(100, max(0, (float) ($item['progress'] ?? 0) ));
-        @endphp
+                @php
+                    // pastikan numeric & dibatasi max 100
+                    $progress = min(100, max(0, (float) ($item['progress'] ?? 0)));
+                @endphp
 
-        <div
-            class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm
+                <div
+                    class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm
                    dark:bg-gray-800 dark:border-gray-700 space-y-2">
 
-            {{-- Nama & Nilai --}}
-            <div class="flex justify-between text-sm">
-                <span class="font-medium text-gray-700 dark:text-gray-300">
-                    Ukuran {{ $item['ukuran_formatted'] ?? '' }}
-                </span>
-                <span class="text-gray-600 dark:text-gray-400">
-                  {{ number_format($item['total_produksi'] ?? 0) }}
-                  /
-                  @if($item['target'] > 0)
-                    {{-- {{ number_format($item['target_saat_ini']) }} --}}
-                    ({{ number_format($item['target']) }})
-                  @else
-                    0
-                  @endif
-                </span>
-            </div>
-        {{-- Progress Bar --}}
-        <div class="w-full h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-            <div
-                class="h-full rounded-full transition-all duration-500"
-                style="
+                    {{-- Nama & Nilai --}}
+                    <div class="flex justify-between text-sm">
+                        <span class="font-medium text-gray-700 dark:text-gray-300">
+                            Ukuran {{ $item['ukuran_formatted'] ?? '' }}
+                        </span>
+                        <span class="text-gray-600 dark:text-gray-400">
+                            {{ number_format($item['total_produksi'] ?? 0) }}
+                            /
+                            @if ($item['target'] > 0)
+                                {{-- {{ number_format($item['target_saat_ini']) }} --}}
+                                ({{ number_format($item['target']) }})
+                            @else
+                                0
+                            @endif
+                        </span>
+                    </div>
+                    {{-- Progress Bar --}}
+                    <div class="w-full h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                        <div class="h-full rounded-full transition-all duration-500"
+                            style="
                     width: {{ $progress }}%;
                     background-color:
                         {{ $progress >= 100
-                            ? '#16a34a'   /* green-600 */
+                            ? '#16a34a' /* green-600 */
                             : ($progress >= 75
                                 ? '#2563eb' /* blue-600 */
-                                : '#f59e0b' /* amber-500 */) }};
+                                : '#f59e0b'); /* amber-500 */ }};
                 ">
-            </div>
-        </div>
+                        </div>
+                    </div>
                     {{-- Persentase --}}
                     <div class="text-xs text-right text-gray-500 dark:text-gray-400">
                         {{ number_format($progress, 1) }}%
                     </div>
                 </div>
-      </div>
-              @empty
-                  <div class="text-sm  text-center text-gray-500 dark:text-gray-400 italic">
-                      Belum ada data progress kayu.
-                  </div>
-              @endforelse
+            </div>
+        @empty
+            <div class="text-sm  text-center text-gray-500 dark:text-gray-400 italic">
+                Belum ada data progress kayu.
+            </div>
+        @endforelse
 
-  </x-filament::card>
+    </x-filament::card>
 </x-filament::widget>
