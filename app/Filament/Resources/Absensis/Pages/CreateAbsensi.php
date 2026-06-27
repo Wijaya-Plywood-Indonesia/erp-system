@@ -5,6 +5,11 @@ namespace App\Filament\Resources\Absensis\Pages;
 use App\Filament\Resources\Absensis\AbsensiResource;
 use App\Models\DetailAbsensi;
 use App\Models\Pegawai;
+use App\Models\ProduksiGrajitriplek;
+use App\Models\ProduksiHp;
+use App\Models\ProduksiPressDryer;
+use App\Models\ProduksiSanding;
+use App\Services\AbsensiPairingService;
 use Carbon\Carbon;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\Storage;
@@ -79,7 +84,7 @@ class CreateAbsensi extends CreateRecord
                         $dateTimeString .= ' ' . $parts[$dateIndex + 1];
                     }
 
-                    $carbonLog = Carbon::parse(str_replace('/', '-', $dateTimeString));
+                    $carbonLog = Carbon::parse(str_replace('/', '-', $dateTimeString), 'Asia/Jakarta');
                     $dateStr   = $carbonLog->format('Y-m-d');
                     $timeStr   = $carbonLog->format('H:i:s');
 
@@ -119,121 +124,84 @@ class CreateAbsensi extends CreateRecord
             }
         }
 
+        // ===============================================
+
+        $semuaPegawai = Pegawai::all()
+            ->keyBy(fn($p) => ltrim($p->kode_pegawai, '0'));
+
+        // Pre-load shift produksi untuk targetDate sekaligus
+        $shiftDryer   = ProduksiPressDryer::whereDate('tanggal_produksi', $targetDate)
+            ->with('detailPegawais')
+            ->get();
+        $shiftHp      = ProduksiHp::whereDate('tanggal_produksi', $targetDate)
+            ->with('detailPegawaiHp')
+            ->get();
+        $shiftSanding = ProduksiSanding::whereDate('tanggal', $targetDate)
+            ->with('pegawaiSandings')
+            ->get();
+        $shiftGraji   = ProduksiGrajitriplek::whereDate('tanggal_produksi', $targetDate)
+            ->with('pegawaiGrajiTriplek')
+            ->get();
+
+        $pairingService = app(AbsensiPairingService::class);
+
         // ================================================
-        // STEP 2: PROSES MERGE — Kelompokkan Berdasarkan Kedekatan Shift Master
+        // STEP 2 + 3: PAIRING & SIMPAN (digabung, pakai Service)
         // ================================================
         foreach ($rawLogs as $empCode => $entries) {
-            // Urutkan semua log gabungan (Kantor A + Kantor B) secara kronologis dari pagi ke malam
-            $sorted = collect($entries)->sortBy('full');
-
-            // Ambil acuan aturan shift resmi milik pegawai dari database master
-            $pegawai = Pegawai::where('kode_pegawai', $empCode)->first();
-
-            // -----------------------------------------------------------------
-            // 1️⃣ Ambil jadwal master (jika ada) dan deteksi shift dari tabel produksi
-            // -----------------------------------------------------------------
-            // Default jadwal (fallback bila tidak ada data master)
-            $jadwalMasuk  = '07:00:00';
-            $jadwalPulang = '16:00:00';
-            $isShiftMalamSistem = false;
-            $forcedShift = null; // nilai dari tabel produksi, jika ada
+            $pegawai     = $semuaPegawai->get($empCode);
+            $forcedShift = null;
 
             if ($pegawai) {
-                $jadwalMasuk  = $pegawai->jam_masuk_sistem ?? $jadwalMasuk;
-                $jadwalPulang = $pegawai->jam_pulang_sistem ?? $jadwalPulang;
-                $isShiftMalamSistem = Carbon::parse($jadwalMasuk)->hour >= 14;
+                // Cek shift dari data produksi yang sudah di-preload
+                $shifts = array_filter([
+                    $shiftDryer->first(
+                        fn($r) => $r->detailPegawais->contains(fn($d) => $d->id_pegawai === $pegawai->id)
+                    )?->shift,
+                    $shiftHp->first(
+                        fn($r) => $r->detailPegawaiHp->contains(fn($d) => $d->id_pegawai === $pegawai->id)
+                    )?->shift,
+                    $shiftSanding->first(
+                        fn($r) => $r->pegawaiSandings->contains(fn($d) => $d->id_pegawai === $pegawai->id)
+                    )?->shift,
+                    $shiftGraji->first(
+                        fn($r) => $r->pegawaiGrajiTriplek->contains(fn($d) => $d->id_pegawai === $pegawai->id)
+                    )?->shift,
+                ]);
 
-                // ------- CARI SHIFT DI TABEL PRODUKSI (Dryer, HP, Sanding, Graji) -------
-                $dryerShift = \App\Models\ProduksiPressDryer::whereDate('tanggal_produksi', $targetDate)
-                    ->whereHas('detailPegawais', fn($q) => $q->where('id_pegawai', $pegawai->id))
-                    ->value('shift');
-                $hpShift = \App\Models\ProduksiHp::whereDate('tanggal_produksi', $targetDate)
-                    ->whereHas('detailPegawaiHp', fn($q) => $q->where('id_pegawai', $pegawai->id))
-                    ->value('shift');
-                $sandingShift = \App\Models\ProduksiSanding::whereDate('tanggal', $targetDate)
-                    ->whereHas('pegawaiSandings', fn($q) => $q->where('id_pegawai', $pegawai->id))
-                    ->value('shift');
-                $grajiShift = \App\Models\ProduksiGrajitriplek::whereDate('tanggal_produksi', $targetDate)
-                    ->whereHas('pegawaiGrajiTriplek', fn($q) => $q->where('id_pegawai', $pegawai->id))
-                    ->value('shift');
-
-                $shifts = array_filter([$dryerShift, $hpShift, $sandingShift, $grajiShift]);
                 if (count($shifts) > 0) {
-                    // Ambil nilai pertama yang tidak null; semua yang tidak null seharusnya sama.
                     $forcedShift = strtoupper(trim(reset($shifts)));
-                    // Jika ada perbedaan antar tabel, catat warning.
+
                     if (count(array_unique($shifts)) > 1) {
-                        Log::warning('Conflicting shift values for employee ' . $empCode . ' on ' . $targetDate, [
-                            'dryer'   => $dryerShift,
-                            'hp'      => $hpShift,
-                            'sanding' => $sandingShift,
-                            'graji'   => $grajiShift,
-                        ]);
+                        Log::warning("Conflicting shift for $empCode on $targetDate", compact('shifts'));
+                    }
+                }
+
+                // Fallback ke jadwal master pegawai jika tidak ada di tabel produksi
+                if (!$forcedShift) {
+                    $jamMasukSistem = $pegawai->jam_masuk_sistem ?? '07:00:00';
+                    if (Carbon::parse($jamMasukSistem)->hour >= 14) {
+                        $forcedShift = 'MALAM';
                     }
                 }
             }
 
-            // -----------------------------------------------------------------
-            // 2️⃣ Tentukan apakah pegawai ini seharusnya diperlakukan sebagai SHIFT MALAM
-            // -----------------------------------------------------------------
-            // Prioritas: forcedShift (dari produksi) > master schedule > default
-            if ($forcedShift === 'MALAM') {
-                $isShiftMalam = true;
-            } elseif ($forcedShift === 'PAGI') {
-                $isShiftMalam = false;
-            } else {
-                $isShiftMalam = $isShiftMalamSistem;
-            }
+            // Pakai Service yang sudah matang logikanya
+            $result = $pairingService->pairEmployeeLogs(
+                entries: $entries,
+                targetDate: $targetDate,
+                nextDate: $nextDate,
+                prevCheckout: null,
+                forcedShift: $forcedShift,
+            );
 
-            // -----------------------------------------------------------------
-            // 3️⃣ Proses logs untuk menentukan jam masuk & jam pulang (versi final)
-            // -----------------------------------------------------------------
-            $jamMasukLog  = null;
-            $jamPulangLog = null;
-            $minSelisihMasuk  = PHP_INT_MAX;
-            $minSelisihPulang = PHP_INT_MAX;
-
-            foreach ($sorted as $entry) {
-                /** @var Carbon $logTime */
-                $logTime = $entry['full'];
-
-                $jamMasukAcuan = ($isShiftMalam && Carbon::parse($jadwalMasuk)->hour < 14)
-                    ? '18:00:00'
-                    : $jadwalMasuk;
-
-                $targetMasukDt  = Carbon::parse("$targetDate $jamMasukAcuan");
-
-                $targetPulangDt = $isShiftMalam
-                    ? Carbon::parse("$nextDate $jadwalPulang")  // ← pakai $nextDate, bukan addDay()
-                    : Carbon::parse("$targetDate $jadwalPulang");
-
-                $selisihKeMasuk  = abs($logTime->diffInMinutes($targetMasukDt));
-                $selisihKePulang = abs($logTime->diffInMinutes($targetPulangDt));
-                $threshold = $isShiftMalam ? 600 : 480;
-                if ($selisihKeMasuk < $selisihKePulang) {
-                    if ($selisihKeMasuk < $minSelisihMasuk && $selisihKeMasuk < $threshold) {
-                        $minSelisihMasuk = $selisihKeMasuk;
-                        $jamMasukLog    = $entry['time'];
-                    }
-                } else {
-                    if ($selisihKePulang < $minSelisihPulang && $selisihKePulang < $threshold) {
-                        $minSelisihPulang = $selisihKePulang;
-                        $jamPulangLog    = $entry['time'];
-                    }
-                }
-            }
-
-            // ================================================
-            // STEP 3: SIMPAN HASIL SINKRONISASI KE DATABASE
-            // ================================================
-            if ($jamMasukLog || $jamPulangLog) {
-                // updateOrCreate memastikan jika data tanggal tersebut sudah ada akan diperbarui, jika belum ada akan dibuat baru
+            if ($result) {
                 DetailAbsensi::updateOrCreate(
                     ['kode_pegawai' => $empCode, 'tanggal' => $targetDate],
                     [
                         'id_absensi' => $record->id,
-                        'jam_masuk'  => $jamMasukLog,
-                        'jam_pulang' => $jamPulangLog,
+                        'jam_masuk'  => $result['jam_masuk'],
+                        'jam_pulang' => $result['jam_pulang'],
                     ]
                 );
                 $totalProcessed++;

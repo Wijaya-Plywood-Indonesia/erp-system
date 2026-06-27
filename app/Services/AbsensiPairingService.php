@@ -58,14 +58,14 @@ class AbsensiPairingService
             }
         }
 
-        if (!$forcedShift) {
-            $firstScanToday = $sorted->first(fn($e) => $e['date'] === $targetDate);
-            if ($firstScanToday) {
-                $scanHour    = Carbon::parse($firstScanToday['full'])->hour;
-                $forcedShift = $scanHour >= 14 ? 'MALAM' : 'PAGI';
-                $isShiftMalam = $forcedShift === 'MALAM'; // ← tambahkan baris ini
-            }
-        }
+        // if (!$forcedShift) {
+        //     $firstScanToday = $sorted->first(fn($e) => $e['date'] === $targetDate);
+        //     if ($firstScanToday) {
+        //         $scanHour    = Carbon::parse($firstScanToday['full'])->hour;
+        //         $forcedShift = $scanHour >= 14 ? 'MALAM' : 'PAGI';
+        //         $isShiftMalam = $forcedShift === 'MALAM'; // ← tambahkan baris ini
+        //     }
+        // }
 
         // 3. Find the first valid IN scan on targetDate according to the detected shift.
         $firstTap = null;
