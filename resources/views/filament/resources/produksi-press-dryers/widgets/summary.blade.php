@@ -15,7 +15,6 @@
             @endphp
 
             @if ($isDryer)
-                {{-- TOTAL PRODUKSI (KUBIKASI) --}}
                 <div>
                     <div class="text-4xl font-extrabold text-primary-600 dark:text-primary-500">
                         {{ number_format($summary['totalKubikasi'] ?? 0, 4, ',', '.') }} m³
@@ -25,7 +24,6 @@
                     </div>
                 </div>
 
-                {{-- TOTAL LEMBAR --}}
                 <div style="margin-top: 1.5rem;">
                     <div class="text-3xl font-extrabold text-amber-600 dark:text-amber-500">
                         {{ number_format($summary['totalAll'] ?? 0) }} Lembar
@@ -35,7 +33,6 @@
                     </div>
                 </div>
             @else
-                {{-- TOTAL PRODUKSI (LEMBAR) --}}
                 <div>
                     <div class="text-4xl font-extrabold text-primary-600 dark:text-primary-500">
                         {{ number_format($summary['totalAll'] ?? 0) }} Lembar
@@ -46,7 +43,6 @@
                 </div>
             @endif
 
-            {{-- TOTAL PEGAWAI --}}
             <div style="margin-top: 1.5rem;">
                 <div class="text-2xl font-bold text-success-600 dark:text-success-500">
                     {{ number_format($summary['totalPegawai'] ?? 0) }} Orang
@@ -64,6 +60,14 @@
                 $target = $summary['targetSummary'];
                 $progress = $target['progress'];
                 $isDryerUnit = $target['unit'] === 'm³';
+
+                if ($progress >= 100) {
+                    $progressColor = '#16a34a';
+                } elseif ($progress >= 75) {
+                    $progressColor = '#2563eb';
+                } else {
+                    $progressColor = '#f59e0b';
+                }
             @endphp
             <div class="space-y-4 py-4 border-t dark:border-gray-700">
                 <div class="font-semibold text-lg text-gray-900 dark:text-gray-100 flex items-center justify-between">
@@ -92,19 +96,10 @@
                     {{-- Progress Bar --}}
                     <div class="w-full h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
                         <div class="h-full rounded-full transition-all duration-500"
-                            style="
-                            width: {{ $progress }}%;
-                            background-color:
-                                {{ $progress >= 100
-                                    ? '#16a34a' /* green-600 */
-                                    : ($progress >= 75
-                                        ? '#2563eb' /* blue-600 */
-                                        : '#f59e0b'); /* amber-500 */ }};
-                        ">
+                            style="width: {{ $progress }}%; background-color: {{ $progressColor }};">
                         </div>
                     </div>
 
-                    {{-- Persentase --}}
                     <div class="text-xs text-right text-gray-500 dark:text-gray-400 font-bold">
                         {{ number_format($progress, 1) }}%
                     </div>
@@ -121,7 +116,7 @@
             </div>
         @endif
 
-        {{-- ================= GLOBAL UKURAN + KW ================= --}}
+        {{-- ================= GLOBAL UKURAN + KW (hidden) ================= --}}
         @if (false)
             <div class="space-y-4">
                 <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">
@@ -135,7 +130,6 @@
                             <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
                                 {{ $row->ukuran }}
                                 <span class="text-xs text-gray-500 dark:text-gray-400">• KW {{ $row->kw }}</span>
-                                {{-- TAMBAHAN: Jenis Kayu --}}
                                 <span class="ml-1 text-xs font-semibold text-blue-500 dark:text-blue-400">
                                     • {{ $row->jenis_kayu }}
                                 </span>
@@ -161,7 +155,6 @@
                         class="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm dark:bg-gray-800 dark:border-gray-700">
                         <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
                             {{ $row->ukuran }}
-                            {{-- TAMBAHAN: Jenis Kayu --}}
                             <span class="ml-1 text-xs font-semibold text-blue-500 dark:text-blue-400">
                                 • {{ $row->jenis_kayu }}
                             </span>

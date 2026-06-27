@@ -49,6 +49,14 @@
             $globalProgressVal = (float) ($summary['globalProgress'] ?? 0);
             $globalProgressPercent = min(100, max(0, $globalProgressVal));
             $potonganPerOrang = (float) ($summary['potonganPerOrang'] ?? 0);
+
+            if ($globalProgressPercent >= 100) {
+                $progressColor = '#16a34a';
+            } elseif ($globalProgressPercent >= 75) {
+                $progressColor = '#2563eb';
+            } else {
+                $progressColor = '#f59e0b';
+            }
         @endphp
 
         <div class="space-y-4">
@@ -61,7 +69,6 @@
 
             <div
                 class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:bg-gray-800 dark:border-gray-700 space-y-2">
-                {{-- Nama & Nilai --}}
                 <div class="flex justify-between text-sm">
                     <span class="font-medium text-gray-700 dark:text-gray-300">
                         Mesin {{ $record->mesin?->nama_mesin ?? 'SANDING' }}
@@ -74,24 +81,13 @@
                 {{-- Progress Bar --}}
                 <div class="w-full h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
                     <div class="h-full rounded-full transition-all duration-500"
-                        style="
-                            width: {{ $globalProgressPercent }}%;
-                            background-color:
-                                {{ $globalProgressPercent >= 100
-                                    ? '#16a34a' /* green-600 */
-                                    : ($globalProgressPercent >= 75
-                                        ? '#2563eb' /* blue-600 */
-                                        : '#f59e0b'); /* amber-500 */ }};
-                        ">
+                        style="width: {{ $globalProgressPercent }}%; background-color: {{ $progressColor }};">
                     </div>
                 </div>
 
-                {{-- Persentase --}}
                 <div class="text-xs text-right text-gray-500 dark:text-gray-400 font-bold">
                     {{ number_format($globalProgressVal, 1) }}%
                 </div>
-
-
             </div>
         </div>
 
@@ -126,6 +122,7 @@
                 @endforelse
             </div>
         </div>
+
         @if (false)
             {{-- [SECTION 3] GLOBAL UKURAN (REKAP SEMUA KW) --}}
             <div class="space-y-4 pt-6 border-t border-gray-100 dark:border-gray-800">
@@ -147,8 +144,9 @@
                         </div>
                     @endforeach
                 </div>
-
+            </div>
         @endif
+
         {{-- [SECTION 4] RINGKASAN JENIS KAYU & UKURAN --}}
         @if (!empty($summary['globalJenisKayuUkuran']) && count($summary['globalJenisKayuUkuran']) > 0)
             <div class="space-y-4 pt-6 border-t border-gray-100 dark:border-gray-800">
