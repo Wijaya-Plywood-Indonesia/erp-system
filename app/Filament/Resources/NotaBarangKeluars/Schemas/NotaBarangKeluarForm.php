@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\NotaBarangKeluars\Schemas;
 
+use App\Models\NotaBarangKeluar;
 use App\Services\NomorNotaService;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -36,7 +37,16 @@ class NotaBarangKeluarForm
                 TextInput::make('no_nota')
                     ->label('No. Nota')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->live(onBlur: true)
+                    ->unique(
+                        table: NotaBarangKeluar::class,
+                        column: 'no_nota',
+                        ignoreRecord: true
+                    )
+                    ->validationMessages([
+                        'unique' => 'Nomor nota ini sudah terdaftar di sistem. Silakan gunakan nomor lain.',
+                    ]),
 
                 TextInput::make('tujuan_nota')
                     ->label('Kepada')
