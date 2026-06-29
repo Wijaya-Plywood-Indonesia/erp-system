@@ -9,20 +9,24 @@ use App\Filament\Resources\ReferensiHargaProduksis\Schemas\ReferensiHargaProduks
 use App\Filament\Resources\ReferensiHargaProduksis\Tables\ReferensiHargaProduksisTable;
 use App\Models\ReferensiHargaProduksi;
 use BackedEnum;
-use UnitEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class ReferensiHargaProduksiResource extends Resource
 {
     protected static ?string $model = ReferensiHargaProduksi::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
+
     protected static ?string $navigationLabel = 'Referensi Harga Produksi';
+
     protected static ?string $pluralModelLabel = 'Referensi Harga Produksi';
+
     protected static ?string $modelLabel = 'Referensi Harga Produksi';
 
     public static function form(Schema $schema): Schema

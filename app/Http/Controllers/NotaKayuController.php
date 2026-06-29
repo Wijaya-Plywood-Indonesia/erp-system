@@ -14,7 +14,6 @@ class NotaKayuController extends Controller
         $record->load([
             'kayuMasuk.detailTurusanKayus.jenisKayu',
             'kayuMasuk.penggunaanSupplier',
-            'kayuMasuk.detailTurusanKayus.lahan',
         ]);
 
         $details = $record->kayuMasuk->detailTurusanKayus ?? collect();
@@ -23,24 +22,23 @@ class NotaKayuController extends Controller
             return "Nota ini tidak memiliki detail kayu.";
         }
 
-        // Uncomment jika ingin menampilkan grouping global, tapi sekarang sudah pakai per lahan
         // Ambil info dasar dari item pertama untuk filter rentang master (layouting nota)
-        // $firstItem   = $details->first();
-        // $jenisKayuId = $firstItem?->jenis_kayu_id ?? 1;
-        // $grade       = $firstItem?->grade ?? 1;
-        // $panjang     = $firstItem?->panjang ?? 130;
+        $firstItem   = $details->first();
+        $jenisKayuId = $firstItem?->jenis_kayu_id ?? 1;
+        $grade       = $firstItem?->grade ?? 1;
+        $panjang     = $firstItem?->panjang ?? 130;
 
         /**
          * LOGIKA GROUPING NOTA
          * Rentang diameter dari master HargaKayu hanya digunakan sebagai template baris (layout).
          * Nilai harganya tetap akan mengambil dari snapshot per batang.
          */
-        // $groupedByDiameter = $this->groupByRentangDiameter(
-        //     $details,
-        //     $jenisKayuId,
-        //     $grade,
-        //     $panjang
-        // );
+        $groupedByDiameter = $this->groupByRentangDiameter(
+            $details,
+            $jenisKayuId,
+            $grade,
+            $panjang
+        );
 
         // =========================
         // TOTAL BATANG & KUBIKASI
@@ -110,38 +108,6 @@ class NotaKayuController extends Controller
 
         $selisih = (int) ($grandTotal - $totalAkhir);
 
-        // =========================
-        // GROUPING BY LAHAN + GRADE + PANJANG + JENIS
-
-        $grouped = $details->groupBy(function ($item) {
-            $kodeLahan = optional($item->lahan)->kode_lahan ?? '-';
-            $grade     = $item->grade ?? 0;
-            $panjang   = $item->panjang ?? '-';
-            $jenis     = optional($item->jenisKayu)->nama_kayu ?? '-';
-            return "{$kodeLahan}|{$grade}|{$panjang}|{$jenis}";
-        });
-        $groupedByLahan = [];
-        // SESUDAH — pakai nama berbeda:
-        foreach ($grouped as $key => $items) {
-            [$kodeLahan, $gradeGrup, $panjangGrup, $jenis] = explode('|', $key);
-            $firstItem   = $items->first();
-            $idJenisKayu = $firstItem?->jenisKayu?->id ?? $firstItem?->jenis_kayu_id;
-
-            $groupedByLahan[$key] = [
-                'items'             => $items,
-                'kodeLahan'         => $kodeLahan,
-                'grade'             => $gradeGrup,
-                'panjang'           => $panjangGrup,
-                'jenis'             => $jenis,
-                'groupedByDiameter' => $this->groupByRentangDiameter(
-                    $items,
-                    $idJenisKayu,
-                    $gradeGrup,
-                    $panjangGrup
-                ),
-            ];
-        }
-
         return view('nota-kayu.print', [
             'record'            => $record,
             'totalBatang'       => $totalBatang,
@@ -152,8 +118,7 @@ class NotaKayuController extends Controller
             'totalAkhir'        => $hargaBeliAkhir,
             'hargaFinal'        => $totalAkhir,
             'selisih'           => $selisih,
-            // 'groupedByDiameter' => $groupedByDiameter, uncoment jika ingin menampilkan grouping global, tapi sekarang sudah pakai per lahan
-            'groupedByLahan'    => $groupedByLahan,
+            'groupedByDiameter' => $groupedByDiameter,
         ]);
     }
 
@@ -162,26 +127,11 @@ class NotaKayuController extends Controller
      */
     public function groupByRentangDiameter($details, $idJenisKayu, $grade, $panjang)
     {
-        // Cache key per kombinasi unik
-        static $rentangCache = [];
-        $cacheKey = "{$idJenisKayu}|{$grade}|{$panjang}";
-
-        if (!isset($rentangCache[$cacheKey])) {
-            $rentangCache[$cacheKey] = HargaKayu::where('id_jenis_kayu', $idJenisKayu)
-                ->where('grade', $grade)
-                ->where('panjang', $panjang)
-                ->orderBy('diameter_terkecil')
-                ->get();
-        }
-
-        // $rentangList = HargaKayu::where('id_jenis_kayu', $idJenisKayu)
-        //     ->where('grade', $grade)
-        //     ->where('panjang', $panjang)
-        //     ->orderBy('diameter_terkecil')
-        //     ->get();
-
-        // Hapus ini jika nanti bermasalah dan uncomment yang diatas
-        $rentangList = $rentangCache[$cacheKey];
+        $rentangList = HargaKayu::where('id_jenis_kayu', $idJenisKayu)
+            ->where('grade', $grade)
+            ->where('panjang', $panjang)
+            ->orderBy('diameter_terkecil')
+            ->get();
 
         $hasil       = collect();
         $terpakaiIds = collect();
@@ -202,12 +152,7 @@ class NotaKayuController extends Controller
                  */
                 $harga = $kelompok->first()->harga ?? 0;
 
-                // $totalHarga = round($harga * $totalKubikasi * 1000);
-                $totalHarga = $kelompok->sum(function ($item) {
-                    $harga = $item->harga ?? 0;
-                    $kubikasi = round($item->kubikasi, 4);
-                    return round($harga * $kubikasi * 1000);
-                });
+                $totalHarga = round($harga * $totalKubikasi * 1000);
 
                 $hasil->push([
                     'rentang'      => "{$rentang->diameter_terkecil} - {$rentang->diameter_terbesar}",
