@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\KayuMasuks\Schemas;
 
+use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -20,13 +21,11 @@ class KayuMasukInfolist
                             ->badge()
                             ->color('info'),
 
-                        TextEntry::make('upload_dokumen_angkut')
+                        ImageEntry::make('upload_dokumen_angkut')
                             ->label('File Dokumen Angkut')
                             ->badge()
-                            ->formatStateUsing(fn($state) => $state ? 'Lihat File' : 'Tidak Ada')
-                            ->color(fn($state) => $state ? 'success' : 'danger')
-                            ->url(fn($state) => $state ? asset('storage/' . $state) : null)
-                            ->openUrlInNewTab(),
+                            ->square()
+                            ->size(50),
 
                         TextEntry::make('tgl_kayu_masuk')
                             ->label('Tanggal Kayu Masuk')
@@ -92,9 +91,9 @@ class KayuMasukInfolist
                             ->default(
                                 fn($record) =>
                                 $record->penggunaanDokumenKayu
-                                ? ($record->penggunaanDokumenKayu->dokumen_legal ?? '-')
-                                . 'No : (' . ($record->penggunaanDokumenKayu->no_dokumen_legal ?? '-') . ')'
-                                : '-'
+                                    ? ($record->penggunaanDokumenKayu->dokumen_legal ?? '-')
+                                    . 'No : (' . ($record->penggunaanDokumenKayu->no_dokumen_legal ?? '-') . ')'
+                                    : '-'
                             )
                             ->badge()
                             ->color('info'),
