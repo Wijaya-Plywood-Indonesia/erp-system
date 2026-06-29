@@ -62,10 +62,16 @@ class ReferensiHargaProduksisTable
                     ->placeholder('-')
                     ->sortable(),
 
-                TextColumn::make('subAnakAkun.nama_sub_anak_akun')
+                TextColumn::make('sub_anak_akun')
                     ->label('Sub Anak Akun')
                     ->placeholder('-')
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->getStateUsing(function ($record) {
+                        if (! $record->subAnakAkun) {
+                            return '-';
+                        }
+
+                        return "{$record->subAnakAkun->kode_sub_anak_akun} - {$record->subAnakAkun->nama_sub_anak_akun}";
+                    }),
             ])
             ->filters([
                 SelectFilter::make('id_jenis_kayu')
