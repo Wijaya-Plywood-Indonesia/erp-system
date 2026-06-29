@@ -13,6 +13,7 @@ on:
         default: "prarelease"
         type: choice
         options:
+          - testing_only
           - prarelease
           - production
 
