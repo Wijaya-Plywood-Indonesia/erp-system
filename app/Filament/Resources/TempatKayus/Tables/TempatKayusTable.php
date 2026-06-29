@@ -10,7 +10,9 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Enums\RecordActionsPosition;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -199,13 +201,15 @@ class TempatKayusTable
                 TextColumn::make('lahan.kode_lahan')
                     ->label('Lahan')
                     ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
 
                 TextColumn::make('group_panjang')
                     ->label('Pjg')
                     ->sortable()
                     ->badge()
-                    ->color(fn ($state) => $state == 260 ? 'success' : 'info'),
+                    ->color(fn ($state) => $state == 260 ? 'success' : 'info')
+                    ->toggleable(),
 
                 TextColumn::make('total_batang_riil')
                     ->label('Batang')
@@ -213,7 +217,8 @@ class TempatKayusTable
                         return (int) self::getKayuAktif((int) $record->id_lahan)->sum('Batang');
                     })
                     ->numeric()
-                    ->alignCenter(),
+                    ->alignCenter()
+                    ->toggleable(),
 
                 TextColumn::make('kubikasi_riil')
                     ->label('Volume (m³)')
@@ -223,17 +228,20 @@ class TempatKayusTable
                         // Bulatkan sekali setelah semua kubikasi terakumulasi
                         return number_format(round((float) $total, 4), 4, '.', ',');
                     })
-                    ->color('primary'),
+                    ->color('primary')
+                    ->toggleable(),
 
                 TextColumn::make('diserahkan_oleh')
                     ->label('Diserahkan Oleh')
                     ->sortable()
-                    ->default('-'),
+                    ->default('-')
+                    ->toggleable(),
 
                 TextColumn::make('diterima_oleh')
                     ->sortable()
                     ->label('Diterima Oleh')
-                    ->default('-'),
+                    ->default('-')
+                    ->toggleable(),
 
                 TextColumn::make('status')
                     ->sortable()
@@ -248,9 +256,26 @@ class TempatKayusTable
                         'sudah diterima' => 'success',
                         'sudah diserahkan' => 'warning',
                         default => 'gray',
-                    }),
+                    })
+                    ->toggleable(),
             ])
-            ->filters([])
+            ->filters([
+                TernaryFilter::make('status_serah')
+                    ->label('Status Serah')
+                    ->placeholder('Semua Data')
+                    ->trueLabel('Sudah Diserahkan')
+                    ->falseLabel('Belum Diserahkan')
+                    ->queries(
+                        true: fn (Builder $query) => $query->where('tempat_kayus.status', 'sudah diserahkan'),
+                        false: fn (Builder $query) => $query->where(function ($q) {
+                            $q->whereNull('tempat_kayus.status')
+                                ->orWhere('tempat_kayus.status', '!=', 'sudah diserahkan');
+                        }),
+                        blank: fn (Builder $query) => $query,
+                    ),
+            ], layout: FiltersLayout::AboveContent)
+            ->filtersFormColumns(1)
+            ->deferFilters(false)
             ->recordActions([
 
                 // ── MODAL DETAIL ─────────────────────────────────────────────
