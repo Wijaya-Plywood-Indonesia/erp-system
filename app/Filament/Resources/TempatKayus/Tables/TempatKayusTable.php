@@ -85,8 +85,10 @@ class TempatKayusTable
                     'Supplier' => trim($first->kayuMasuk?->penggunaanSupplier?->nama_supplier ?? ''),
                     'Status Pelunasan' => $statusPelunasan,
                     'Batang' => (int) $rows->sum('kuantitas'),
-                    // Tidak dibulatkan di sini; bulatkan sekali saat ditampilkan
-                    'Kubikasi' => (float) $rows->sum('kubikasi'),
+                    // ✅ DIUBAH: ikut pola NotaKayuController → round PER-ITEM (4 desimal) dulu,
+                    // baru di-sum. Ini memastikan total kubikasi selalu match dengan
+                    // angka per-baris yang dilihat user (round-then-sum), bukan sebaliknya.
+                    'Kubikasi' => (float) $rows->sum(fn ($r) => round($r->kubikasi, 4)),
                     'Panjang' => $rows->pluck('panjang')->unique()->sort()->implode(', '),
                     'Grade' => $rows->pluck('grade')->unique()->sort()->implode(', '),
                     'is_lunas' => $isLunas,
@@ -223,10 +225,12 @@ class TempatKayusTable
                 TextColumn::make('kubikasi_riil')
                     ->label('Volume (m³)')
                     ->getStateUsing(function ($record) {
+                        // ✅ DIUBAH: 'Kubikasi' di getKayuAktif() sudah hasil round-then-sum
+                        // per item (4 desimal). Tidak perlu round lagi di sini agar tidak dobel
+                        // pembulatan dan tetap konsisten dengan pola NotaKayuController.
                         $total = self::getKayuAktif((int) $record->id_lahan)->sum('Kubikasi');
 
-                        // Bulatkan sekali setelah semua kubikasi terakumulasi
-                        return number_format(round((float) $total, 4), 4, '.', ',');
+                        return number_format((float) $total, 4, '.', ',');
                     })
                     ->color('primary')
                     ->toggleable(),
@@ -292,8 +296,9 @@ class TempatKayusTable
 
                         $totalStokRiil = (int) $kayuAktif->sum('Batang');
 
-                        // Bulatkan sekali setelah semua kubikasi terakumulasi
-                        $totalKubikasiRiil = round((float) $kayuAktif->sum('Kubikasi'), 4);
+                        // ✅ DIUBAH: 'Kubikasi' sudah round-then-sum per item di getKayuAktif().
+                        // Tidak perlu round lagi di sini (hindari dobel pembulatan).
+                        $totalKubikasiRiil = (float) $kayuAktif->sum('Kubikasi');
 
                         return view('filament.components.detail-kayu-modal', [
                             'record' => $record,
