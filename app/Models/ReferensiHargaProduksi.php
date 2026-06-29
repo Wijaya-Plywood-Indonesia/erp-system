@@ -16,71 +16,120 @@ class ReferensiHargaProduksi extends Model
         'nama',
         'id_ukuran',
         'id_jenis_kayu',
-        'id_sub_anak_akun',
-        'jenis_barang',
-        'kw',
+        'id_kategori_barang',
+        'id_grade',
+        'kw_min',
+        'kw_max',
+        't_min',
+        't_max',
         'harga',
+        'id_sub_anak_akun',
+        'created_by',
     ];
 
     protected $casts = [
         'id_ukuran' => 'integer',
         'id_jenis_kayu' => 'integer',
-        'id_sub_anak_akun' => 'integer',
+        'id_kategori_barang' => 'integer',
+        'id_grade' => 'integer',
+        'kw_min' => 'integer',
+        'kw_max' => 'integer',
+        't_min' => 'float',
+        't_max' => 'float',
         'harga' => 'float',
+        'id_sub_anak_akun' => 'integer',
+        'created_by' => 'integer',
     ];
 
-    /**
-     * Relasi ke model Ukuran
-     */
+    // ── Relasi ────────────────────────────────────────────────
+
     public function ukuran(): BelongsTo
     {
         return $this->belongsTo(Ukuran::class, 'id_ukuran');
     }
 
-    /**
-     * Relasi ke model JenisKayu
-     */
     public function jenisKayu(): BelongsTo
     {
         return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu');
     }
 
-    /**
-     * Relasi ke model SubAnakAkun
-     */
+    public function kategoriBarang(): BelongsTo
+    {
+        return $this->belongsTo(KategoriBarang::class, 'id_kategori_barang');
+    }
+
+    public function grade(): BelongsTo
+    {
+        return $this->belongsTo(Grade::class, 'id_grade');
+    }
+
     public function subAnakAkun(): BelongsTo
     {
         return $this->belongsTo(SubAnakAkun::class, 'id_sub_anak_akun');
     }
 
-    /**
-     * Cari referensi harga produksi dengan pencarian berbasis ukuran spesifik.
-     * Jika tidak ditemukan, akan fallback mencari dengan id_ukuran = null (referensi harga awal/standar).
-     *
-     * Contoh penggunaan:
-     * $ref = ReferensiHargaProduksi::findReferensi($idJenisKayu, $jenisBarang, $kw, $idUkuran);
-     * $harga = $ref?->harga ?? 0;
-     */
-    public static function findReferensi(?int $idJenisKayu, ?string $jenisBarang, ?string $kw, ?int $idUkuran = null): ?self
+    public function createdBy(): BelongsTo
     {
-        // 1. Cari yang cocok dengan id_ukuran spesifik terlebih dahulu
-        if ($idUkuran) {
-            $record = self::where('id_jenis_kayu', $idJenisKayu)
-                ->where('jenis_barang', $jenisBarang)
-                ->where('kw', $kw)
-                ->where('id_ukuran', $idUkuran)
-                ->first();
+        return $this->belongsTo(User::class, 'created_by');
+    }
 
+    // ── Static finder ─────────────────────────────────────────
+
+    /**
+     * Cari referensi harga produksi berdasarkan parameter.
+     *
+     * Logika pencarian:
+     *  1. Cocokkan semua parameter + id_ukuran spesifik
+     *  2. Fallback: id_ukuran = null (referensi standar)
+     *
+     * Parameter kw dan tebal dicocokkan ke dalam range (min–max).
+     * Jika kolom min/max null di database, dianggap tidak ada batasan (wildcard).
+     *
+     * Contoh:
+     *   $ref = ReferensiHargaProduksi::findReferensi(
+     *       idJenisKayu: 1,
+     *       idKategoriBarang: 2,
+     *       idGrade: 1,
+     *       kw: 3,
+     *       tebal: 2.5,
+     *       idUkuran: 5,
+     *   );
+     *   $harga = $ref?->harga ?? 0;
+     */
+    public static function findReferensi(
+        ?int $idJenisKayu = null,
+        ?int $idKategoriBarang = null,
+        ?int $idGrade = null,
+        ?int $kw = null,
+        ?float $tebal = null,
+        ?int $idUkuran = null,
+        ?int $idSubAnakAkun = null,
+    ): ?self {
+        $base = fn () => self::query()
+            ->when($idJenisKayu !== null, fn ($q) => $q->where('id_jenis_kayu', $idJenisKayu))
+            ->when($idKategoriBarang !== null, fn ($q) => $q->where('id_kategori_barang', $idKategoriBarang))
+            ->when($idGrade !== null, fn ($q) => $q->where('id_grade', $idGrade))
+            ->when($idSubAnakAkun !== null, fn ($q) => $q->where('id_sub_anak_akun', $idSubAnakAkun))
+            // kw harus berada dalam range kw_min – kw_max
+            ->when($kw !== null, fn ($q) => $q
+                ->where(fn ($q2) => $q2->whereNull('kw_min')->orWhere('kw_min', '<=', $kw))
+                ->where(fn ($q2) => $q2->whereNull('kw_max')->orWhere('kw_max', '>=', $kw))
+            )
+            // tebal harus berada dalam range t_min – t_max
+            ->when($tebal !== null, fn ($q) => $q
+                ->where(fn ($q2) => $q2->whereNull('t_min')->orWhere('t_min', '<=', $tebal))
+                ->where(fn ($q2) => $q2->whereNull('t_max')->orWhere('t_max', '>=', $tebal))
+            );
+
+        // 1. Cari dengan id_ukuran spesifik
+        if ($idUkuran !== null) {
+            $record = $base()->where('id_ukuran', $idUkuran)->first();
             if ($record) {
                 return $record;
             }
         }
 
-        // 2. Fallback: Cari yang id_ukuran-nya null (referensi awal/standar)
-        return self::where('id_jenis_kayu', $idJenisKayu)
-            ->where('jenis_barang', $jenisBarang)
-            ->where('kw', $kw)
-            ->whereNull('id_ukuran')
-            ->first();
+        // 2. Fallback: id_ukuran null (referensi standar)
+        return $base()->whereNull('id_ukuran')->first();
     }
 }

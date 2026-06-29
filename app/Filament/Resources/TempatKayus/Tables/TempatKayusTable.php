@@ -10,7 +10,9 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Enums\RecordActionsPosition;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -83,8 +85,10 @@ class TempatKayusTable
                     'Supplier' => trim($first->kayuMasuk?->penggunaanSupplier?->nama_supplier ?? ''),
                     'Status Pelunasan' => $statusPelunasan,
                     'Batang' => (int) $rows->sum('kuantitas'),
-                    // Tidak dibulatkan di sini; bulatkan sekali saat ditampilkan
-                    'Kubikasi' => (float) $rows->sum('kubikasi'),
+                    // ✅ DIUBAH: ikut pola NotaKayuController → round PER-ITEM (4 desimal) dulu,
+                    // baru di-sum. Ini memastikan total kubikasi selalu match dengan
+                    // angka per-baris yang dilihat user (round-then-sum), bukan sebaliknya.
+                    'Kubikasi' => (float) $rows->sum(fn ($r) => round($r->kubikasi, 4)),
                     'Panjang' => $rows->pluck('panjang')->unique()->sort()->implode(', '),
                     'Grade' => $rows->pluck('grade')->unique()->sort()->implode(', '),
                     'is_lunas' => $isLunas,
@@ -199,13 +203,15 @@ class TempatKayusTable
                 TextColumn::make('lahan.kode_lahan')
                     ->label('Lahan')
                     ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
 
                 TextColumn::make('group_panjang')
                     ->label('Pjg')
                     ->sortable()
                     ->badge()
-                    ->color(fn ($state) => $state == 260 ? 'success' : 'info'),
+                    ->color(fn ($state) => $state == 260 ? 'success' : 'info')
+                    ->toggleable(),
 
                 TextColumn::make('total_batang_riil')
                     ->label('Batang')
@@ -213,27 +219,33 @@ class TempatKayusTable
                         return (int) self::getKayuAktif((int) $record->id_lahan)->sum('Batang');
                     })
                     ->numeric()
-                    ->alignCenter(),
+                    ->alignCenter()
+                    ->toggleable(),
 
                 TextColumn::make('kubikasi_riil')
                     ->label('Volume (m³)')
                     ->getStateUsing(function ($record) {
+                        // ✅ DIUBAH: 'Kubikasi' di getKayuAktif() sudah hasil round-then-sum
+                        // per item (4 desimal). Tidak perlu round lagi di sini agar tidak dobel
+                        // pembulatan dan tetap konsisten dengan pola NotaKayuController.
                         $total = self::getKayuAktif((int) $record->id_lahan)->sum('Kubikasi');
 
-                        // Bulatkan sekali setelah semua kubikasi terakumulasi
-                        return number_format(round((float) $total, 4), 4, '.', ',');
+                        return number_format((float) $total, 4, '.', ',');
                     })
-                    ->color('primary'),
+                    ->color('primary')
+                    ->toggleable(),
 
                 TextColumn::make('diserahkan_oleh')
                     ->label('Diserahkan Oleh')
                     ->sortable()
-                    ->default('-'),
+                    ->default('-')
+                    ->toggleable(),
 
                 TextColumn::make('diterima_oleh')
                     ->sortable()
                     ->label('Diterima Oleh')
-                    ->default('-'),
+                    ->default('-')
+                    ->toggleable(),
 
                 TextColumn::make('status')
                     ->sortable()
@@ -248,9 +260,26 @@ class TempatKayusTable
                         'sudah diterima' => 'success',
                         'sudah diserahkan' => 'warning',
                         default => 'gray',
-                    }),
+                    })
+                    ->toggleable(),
             ])
-            ->filters([])
+            ->filters([
+                TernaryFilter::make('status_serah')
+                    ->label('Status Serah')
+                    ->placeholder('Semua Data')
+                    ->trueLabel('Sudah Diserahkan')
+                    ->falseLabel('Belum Diserahkan')
+                    ->queries(
+                        true: fn (Builder $query) => $query->where('tempat_kayus.status', 'sudah diserahkan'),
+                        false: fn (Builder $query) => $query->where(function ($q) {
+                            $q->whereNull('tempat_kayus.status')
+                                ->orWhere('tempat_kayus.status', '!=', 'sudah diserahkan');
+                        }),
+                        blank: fn (Builder $query) => $query,
+                    ),
+            ], layout: FiltersLayout::AboveContent)
+            ->filtersFormColumns(1)
+            ->deferFilters(false)
             ->recordActions([
 
                 // ── MODAL DETAIL ─────────────────────────────────────────────
@@ -267,8 +296,9 @@ class TempatKayusTable
 
                         $totalStokRiil = (int) $kayuAktif->sum('Batang');
 
-                        // Bulatkan sekali setelah semua kubikasi terakumulasi
-                        $totalKubikasiRiil = round((float) $kayuAktif->sum('Kubikasi'), 4);
+                        // ✅ DIUBAH: 'Kubikasi' sudah round-then-sum per item di getKayuAktif().
+                        // Tidak perlu round lagi di sini (hindari dobel pembulatan).
+                        $totalKubikasiRiil = (float) $kayuAktif->sum('Kubikasi');
 
                         return view('filament.components.detail-kayu-modal', [
                             'record' => $record,

@@ -32,14 +32,14 @@ class EditReferensiHargaProduksi extends EditRecord
         } catch (UniqueConstraintViolationException $e) {
             Notification::make()
                 ->title('Data sudah ada')
-                ->body('Kombinasi Jenis Kayu, Ukuran, Jenis Barang, dan KW yang sama sudah terdaftar. Silakan periksa kembali data Anda.')
+                ->body('Kombinasi data yang sama sudah terdaftar. Silakan periksa kembali data Anda.')
                 ->danger()
                 ->persistent()
                 ->send();
 
             $this->halt();
 
-            return $record; // satisfy intelephense — halt() stops execution via Livewire
+            return $record;
         }
     }
 }
