@@ -1,104 +1,571 @@
-name: Laravel 12 CI/CD Full Automation
+name: Laravel 12 CI/CD Delta Deployment
 
 on:
   push:
     branches: ["main"]
   create:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: "Pilih job yang ingin ditest"
+        required: true
+        default: "prarelease"
+        type: choice
+        options:
+          - testing_only
+          - prarelease
+          - production
 
 jobs:
-  # ------------------------------------------------------------
-  # JOB 1: TESTING (CI) - TIDAK ADA PERUBAHAN
-  # ------------------------------------------------------------
+  # ============================================================
+  # JOB 1: TESTING (CI) — tidak ada perubahan
+  # ============================================================
   laravel-tests:
-      name: Run Tests (CI)
-      runs-on: ubuntu-latest
-      services:
-        mariadb:
-          image: mariadb:10.6
-          env:
-            MARIADB_ROOT_PASSWORD: password
-            MARIADB_DATABASE: laravel_testing
-          ports:
-            - 3306:3306
-          options: >-
-            --health-cmd="healthcheck.sh --connect --innodb_initialized"
-            --health-interval=10s
-            --health-timeout=5s
-            --health-retries=3
-      steps:
-        - uses: actions/checkout@v4
-  
-        - name: Setup PHP 8.4
-          uses: shivammathur/setup-php@v2
-          with:
-            php-version: "8.4"
-            extensions: mbstring, dom, fileinfo, mysql, pdo_mysql
-  
-        # 1. Setup Node.js v20 (Direkomendasikan untuk stabilitas Vite)
-        - name: Setup Node.js
-          uses: actions/setup-node@v4
-          with:
-            node-version: 20
-  
-        - name: Copy .env
-          run: php -r "file_exists('.env') || copy('.env.example', '.env');"
-  
-        - name: Install Dependencies
-          run: composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
-  
-        # 2. Jalankan Build Vite sebelum perintah Artisan agar manifest.json terbentuk 👈
-        - name: Install NPM Dependencies & Build Assets
-          run: |
-            npm install
-            npm run build
-  
-        - name: Generate App Key
-          run: php artisan key:generate
-  
-        - name: Set Permissions
-          run: chmod -R 777 storage bootstrap/cache
-  
-        - name: Run Migrations (Testing)
-          env:
-            DB_CONNECTION: mysql
-            DB_HOST: 127.0.0.1
-            DB_PORT: 3306
-            DB_DATABASE: laravel_testing
-            DB_USERNAME: root
-            DB_PASSWORD: password
-          run: php artisan migrate
-  
-        - name: Run Tests
-          env:
-            DB_CONNECTION: mysql
-            DB_HOST: 127.0.0.1
-            DB_PORT: 3306
-            DB_DATABASE: laravel_testing
-            DB_USERNAME: root
-            DB_PASSWORD: password
-          run: php artisan test
-  # ------------------------------------------------------------
-  # JOB 3: DEPLOY PRODUCTION (MULTI-SITE)
-  # ------------------------------------------------------------
-  deploy-production:
-    name: Deploy to kayu.wijayaplywoods.com
+    name: Run Tests (CI)
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:10.6
+        env:
+          MARIADB_ROOT_PASSWORD: password
+          MARIADB_DATABASE: laravel_testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mbstring, dom, fileinfo, mysql, pdo_mysql
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Copy .env
+        run: php -r "file_exists('.env') || copy('.env.example', '.env');"
+
+      - name: Install Composer Dependencies
+        run: composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+
+      - name: Install NPM Dependencies & Build Assets
+        run: |
+          npm install
+          npm run build
+
+      - name: Generate App Key
+        run: php artisan key:generate
+
+      - name: Set Permissions
+        run: chmod -R 777 storage bootstrap/cache
+
+      - name: Run Migrations (Testing)
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: laravel_testing
+          DB_USERNAME: root
+          DB_PASSWORD: password
+        run: php artisan migrate
+
+      - name: Run Tests
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: laravel_testing
+          DB_USERNAME: root
+          DB_PASSWORD: password
+        run: php artisan test
+
+  # ============================================================
+  # JOB 2: DEPLOY PRARELEASE — Delta dari commit terakhir di main
+  # ============================================================
+  deploy-prarelease:
+    name: Deploy to prarelease.wijayaplywoods.com
     needs: laravel-tests
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Wajib: butuh full history untuk git diff
 
-      # --- Build PHP
+      # ----------------------------------------------------------
+      # STEP 1: Ambil commit hash terakhir yang berhasil di-deploy
+      # File .last_deploy_commit disimpan di server
+      # ----------------------------------------------------------
+      - name: Get last deployed commit from server
+        id: last_commit
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            MARKER="/home/${{ secrets.SSH_USERNAME }}/prarelease.wijayaplywoods.com/.last_deploy_commit"
+            if [ -f "$MARKER" ]; then
+              cat "$MARKER"
+            else
+              echo "FULL_DEPLOY"
+            fi
+
+      # Simpan output dari SSH ke environment variable
+      - name: Parse last commit output
+        id: parse_commit
+        run: |
+          # Ambil baris terakhir dari output SSH (baris lain adalah banner/info)
+          LAST=$(echo "${{ steps.last_commit.outputs.output }}" | tail -n 1 | tr -d '[:space:]')
+          echo "last_commit=$LAST" >> $GITHUB_OUTPUT
+          echo "Last deployed commit: $LAST"
+
+      # ----------------------------------------------------------
+      # STEP 2: Deteksi file yang berubah sejak commit terakhir
+      # ----------------------------------------------------------
+      - name: Detect changed files
+        id: changed
+        run: |
+          LAST="${{ steps.parse_commit.outputs.last_commit }}"
+          CURRENT="${{ github.sha }}"
+
+          echo "Current commit: $CURRENT"
+          echo "Last deployed: $LAST"
+
+          # Daftar file/folder yang TIDAK BOLEH masuk ZIP apapun kondisinya
+          ALWAYS_EXCLUDE=(
+            ".git"
+            ".github"
+            "node_modules"
+            "tests"
+            ".env"
+            ".env.*"
+            "storage"
+            "build_deploy"
+          )
+
+          if [ "$LAST" = "FULL_DEPLOY" ] || [ -z "$LAST" ]; then
+            echo "⚡ Mode: FULL DEPLOY (pertama kali atau marker tidak ditemukan)"
+            echo "mode=full" >> $GITHUB_OUTPUT
+          else
+            # Cek apakah commit LAST masih valid di repo
+            if ! git cat-file -e "$LAST^{commit}" 2>/dev/null; then
+              echo "⚠️ Commit $LAST tidak ditemukan di repo, fallback ke FULL DEPLOY"
+              echo "mode=full" >> $GITHUB_OUTPUT
+            else
+              echo "⚡ Mode: DELTA DEPLOY ($LAST → $CURRENT)"
+              echo "mode=delta" >> $GITHUB_OUTPUT
+
+              # File yang ditambah atau dimodifikasi
+              git diff --name-only --diff-filter=ACM "$LAST" "$CURRENT" > /tmp/changed_files.txt
+
+              # File yang dihapus (perlu dikirim info ke server untuk di-rm)
+              git diff --name-only --diff-filter=D "$LAST" "$CURRENT" > /tmp/deleted_files.txt
+
+              echo "--- File berubah/baru ---"
+              cat /tmp/changed_files.txt
+
+              echo "--- File dihapus ---"
+              cat /tmp/deleted_files.txt
+
+              # Filter exclude dari changed files
+              for EXCL in "${ALWAYS_EXCLUDE[@]}"; do
+                grep -v "^${EXCL}" /tmp/changed_files.txt > /tmp/changed_files_filtered.txt || true
+                mv /tmp/changed_files_filtered.txt /tmp/changed_files.txt
+              done
+
+              # Jika tidak ada file yang berubah setelah filter
+              CHANGED_COUNT=$(wc -l < /tmp/changed_files.txt)
+              DELETED_COUNT=$(wc -l < /tmp/deleted_files.txt)
+              echo "changed_count=$CHANGED_COUNT" >> $GITHUB_OUTPUT
+              echo "deleted_count=$DELETED_COUNT" >> $GITHUB_OUTPUT
+
+              if [ "$CHANGED_COUNT" -eq 0 ] && [ "$DELETED_COUNT" -eq 0 ]; then
+                echo "✅ Tidak ada file yang berubah, skip deploy"
+                echo "mode=skip" >> $GITHUB_OUTPUT
+              fi
+            fi
+          fi
+
+      # ----------------------------------------------------------
+      # STEP 3A: Build assets (hanya jika ada perubahan frontend)
+      # ----------------------------------------------------------
+      - name: Check if frontend assets changed
+        id: frontend_check
+        if: steps.changed.outputs.mode != 'skip'
+        run: |
+          if [ "${{ steps.changed.outputs.mode }}" = "full" ]; then
+            echo "rebuild=true" >> $GITHUB_OUTPUT
+          else
+            # Cek apakah ada perubahan di folder frontend
+            if grep -qE "^(resources/|package\.json|package-lock\.json|vite\.config)" /tmp/changed_files.txt 2>/dev/null; then
+              echo "rebuild=true" >> $GITHUB_OUTPUT
+              echo "🎨 Perubahan frontend terdeteksi, rebuild assets"
+            else
+              echo "rebuild=false" >> $GITHUB_OUTPUT
+              echo "⏩ Tidak ada perubahan frontend, skip rebuild"
+            fi
+          fi
+
       - name: Setup PHP for Production
+        if: steps.changed.outputs.mode != 'skip'
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.4"
 
-      # ✅ BARU - Buat .env sementara sebelum composer install
+      - name: Install Composer Dependencies (Prod)
+        if: steps.changed.outputs.mode != 'skip'
+        env:
+          BROADCAST_CONNECTION: log
+          REVERB_APP_KEY: "dummy-key"
+          REVERB_APP_SECRET: "dummy-secret"
+          REVERB_APP_ID: "123456"
+        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction
+
+      - name: Setup Node.js
+        if: steps.frontend_check.outputs.rebuild == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install NPM & Build Assets
+        if: steps.frontend_check.outputs.rebuild == 'true'
+        run: |
+          npm ci
+          npm run build
+
+      # ----------------------------------------------------------
+      # STEP 3B: Buat ZIP — full atau delta
+      # ----------------------------------------------------------
+      - name: Create FULL ZIP package
+        if: steps.changed.outputs.mode == 'full'
+        run: |
+          set -euo pipefail
+          BUILD_DIR=./build_deploy
+          rm -rf "$BUILD_DIR" && mkdir -p "$BUILD_DIR"
+          rsync -a --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude 'node_modules/' \
+            --exclude 'tests/' \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude 'storage/' \
+            --exclude 'build_deploy/' \
+            ./ "$BUILD_DIR/" || [ $? -eq 24 ]
+          (cd "$BUILD_DIR" && zip -r ../deploy.zip . -q)
+          echo "📦 Full ZIP size: $(du -sh ../deploy.zip 2>/dev/null || du -sh deploy.zip)"
+
+      - name: Create DELTA ZIP package
+        if: steps.changed.outputs.mode == 'delta'
+        run: |
+          set -euo pipefail
+
+          # Jika ada perubahan frontend, tambahkan hasil build ke changed files
+          if [ "${{ steps.frontend_check.outputs.rebuild }}" = "true" ]; then
+            # Tambahkan semua file hasil build Vite
+            find public/build -type f >> /tmp/changed_files.txt 2>/dev/null || true
+          fi
+
+          # Tambahkan vendor jika composer.lock berubah
+          if grep -q "^composer\.lock" /tmp/changed_files.txt 2>/dev/null; then
+            echo "📦 composer.lock berubah, include vendor/"
+            find vendor -type f >> /tmp/changed_files.txt 2>/dev/null || true
+          fi
+
+          # Hapus duplikat
+          sort -u /tmp/changed_files.txt -o /tmp/changed_files.txt
+
+          echo "--- File yang akan di-ZIP (delta) ---"
+          cat /tmp/changed_files.txt
+
+          # Buat ZIP hanya dari file yang berubah
+          if [ -s /tmp/changed_files.txt ]; then
+            zip -r deploy.zip . -i@/tmp/changed_files.txt -q
+            echo "📦 Delta ZIP size: $(du -sh deploy.zip)"
+          else
+            # Buat ZIP kosong sebagai marker (tidak ada file konten)
+            echo "no_changes" > /tmp/no_changes_marker.txt
+            zip deploy.zip /tmp/no_changes_marker.txt -q
+          fi
+
+          # Simpan daftar file yang dihapus untuk dikirim ke server
+          if [ -s /tmp/deleted_files.txt ]; then
+            cp /tmp/deleted_files.txt deleted_files.txt
+          fi
+
+      # ----------------------------------------------------------
+      # STEP 4: Upload ZIP (dan deleted_files jika ada)
+      # ----------------------------------------------------------
+      - name: Upload ZIP to Server
+        if: steps.changed.outputs.mode != 'skip'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "deploy.zip"
+          target: "/home/${{ secrets.SSH_USERNAME }}"
+
+      - name: Upload deleted files list (jika ada)
+        if: steps.changed.outputs.mode == 'delta' && steps.changed.outputs.deleted_count != '0'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "deleted_files.txt"
+          target: "/home/${{ secrets.SSH_USERNAME }}"
+
+      # ----------------------------------------------------------
+      # STEP 5: Execute deploy di server
+      # ----------------------------------------------------------
+      - name: Execute Remote SSH Commands (Full Deploy)
+        if: steps.changed.outputs.mode == 'full'
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            TARGET="/home/${{ secrets.SSH_USERNAME }}/prarelease.wijayaplywoods.com"
+            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_prarelease"
+
+            cd "$TARGET"
+            php artisan down || true
+
+            # Extract ke staging dulu
+            rm -rf "$STAGING" && mkdir -p "$STAGING"
+            unzip -oq /home/${{ secrets.SSH_USERNAME }}/deploy.zip -d "$STAGING"
+
+            # Hapus file lama kecuali yang diproteksi
+            find . -mindepth 1 -maxdepth 1 \
+              ! -name 'storage' \
+              ! -name '.env' \
+              ! -name '.env.*' \
+              ! -name '.github' \
+              -exec rm -rf {} +
+
+            # Deploy dengan rsync — tidak akan overwrite storage/.env
+            rsync -a \
+              --exclude 'storage/' \
+              --exclude '.env' \
+              --exclude '.env.*' \
+              --exclude '.github/' \
+              "$STAGING/" "$TARGET/"
+
+            php artisan optimize:clear
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            php artisan migrate --force
+            php artisan up
+
+            # Simpan commit hash sebagai marker deploy terakhir
+            echo "${{ github.sha }}" > "$TARGET/.last_deploy_commit"
+
+            # Cleanup
+            rm -rf "$STAGING"
+            rm -f /home/${{ secrets.SSH_USERNAME }}/deploy.zip
+
+            echo "🚀 Prarelease Full Deployment Success! [${{ github.sha }}]"
+
+      - name: Execute Remote SSH Commands (Delta Deploy)
+        if: steps.changed.outputs.mode == 'delta'
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            TARGET="/home/${{ secrets.SSH_USERNAME }}/prarelease.wijayaplywoods.com"
+            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_prarelease"
+
+            cd "$TARGET"
+            php artisan down || true
+
+            # Extract delta ke staging
+            rm -rf "$STAGING" && mkdir -p "$STAGING"
+            unzip -oq /home/${{ secrets.SSH_USERNAME }}/deploy.zip -d "$STAGING"
+
+            # Copy hanya file yang berubah (rsync delta mode)
+            rsync -a \
+              --exclude 'storage/' \
+              --exclude '.env' \
+              --exclude '.env.*' \
+              --exclude '.github/' \
+              "$STAGING/" "$TARGET/"
+
+            # Hapus file yang dihapus di repo (jika ada)
+            DELETED_LIST="/home/${{ secrets.SSH_USERNAME }}/deleted_files.txt"
+            if [ -f "$DELETED_LIST" ]; then
+              echo "🗑️ Menghapus file yang dihapus di repo..."
+              while IFS= read -r file; do
+                # Proteksi: jangan hapus storage, .env, .github
+                if echo "$file" | grep -qE "^(storage/|\.env|\.github/)"; then
+                  echo "⏩ Skip protected: $file"
+                  continue
+                fi
+                if [ -f "$TARGET/$file" ]; then
+                  rm -f "$TARGET/$file"
+                  echo "🗑️ Deleted: $file"
+                fi
+              done < "$DELETED_LIST"
+              rm -f "$DELETED_LIST"
+            fi
+
+            php artisan optimize:clear
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            php artisan migrate --force
+            php artisan up
+
+            # Update marker
+            echo "${{ github.sha }}" > "$TARGET/.last_deploy_commit"
+
+            # Cleanup
+            rm -rf "$STAGING"
+            rm -f /home/${{ secrets.SSH_USERNAME }}/deploy.zip
+
+            echo "⚡ Prarelease Delta Deployment Success! [${{ github.sha }}]"
+
+      - name: Skip notification
+        if: steps.changed.outputs.mode == 'skip'
+        run: echo "✅ Tidak ada perubahan yang perlu di-deploy, pipeline selesai."
+
+  # ============================================================
+  # JOB 3: DEPLOY PRODUCTION — Delta dari tag sebelumnya ke tag baru
+  # ============================================================
+  deploy-production:
+    name: Deploy to kayu.wijayaplywoods.com
+    needs: laravel-tests
+    if: startsWith(github.ref, 'refs/tags/') && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Wajib: butuh full history untuk git diff antar tag
+
+      # ----------------------------------------------------------
+      # STEP 1: Deteksi tag sebelumnya
+      # ----------------------------------------------------------
+      - name: Get previous tag
+        id: prev_tag
+        run: |
+          CURRENT_TAG="${{ github.ref_name }}"
+          echo "Current tag: $CURRENT_TAG"
+
+          # Ambil semua tag yang diurutkan secara version, exclude tag saat ini
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${CURRENT_TAG}$" | head -n 1)
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "⚡ Tidak ada tag sebelumnya, mode: FULL DEPLOY"
+            echo "mode=full" >> $GITHUB_OUTPUT
+            echo "prev_tag=" >> $GITHUB_OUTPUT
+          else
+            echo "⚡ Tag sebelumnya: $PREV_TAG → mode: DELTA DEPLOY"
+            echo "mode=delta" >> $GITHUB_OUTPUT
+            echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+          fi
+
+      # ----------------------------------------------------------
+      # STEP 2: Deteksi file yang berubah antar tag
+      # ----------------------------------------------------------
+      - name: Detect changed files between tags
+        id: changed
+        run: |
+          MODE="${{ steps.prev_tag.outputs.mode }}"
+          PREV="${{ steps.prev_tag.outputs.prev_tag }}"
+          CURRENT="${{ github.ref_name }}"
+
+          ALWAYS_EXCLUDE=(
+            ".git"
+            ".github"
+            "node_modules"
+            "tests"
+            ".env"
+            ".env.*"
+            "storage"
+            "build_deploy"
+          )
+
+          if [ "$MODE" = "full" ]; then
+            echo "mode=full" >> $GITHUB_OUTPUT
+          else
+            echo "mode=delta" >> $GITHUB_OUTPUT
+
+            git diff --name-only --diff-filter=ACM "$PREV" "$CURRENT" > /tmp/changed_files.txt
+            git diff --name-only --diff-filter=D "$PREV" "$CURRENT" > /tmp/deleted_files.txt
+
+            # Filter exclude
+            for EXCL in "${ALWAYS_EXCLUDE[@]}"; do
+              grep -v "^${EXCL}" /tmp/changed_files.txt > /tmp/cf_tmp.txt || true
+              mv /tmp/cf_tmp.txt /tmp/changed_files.txt
+            done
+
+            echo "--- Changed files ($PREV → $CURRENT) ---"
+            cat /tmp/changed_files.txt
+
+            echo "--- Deleted files ---"
+            cat /tmp/deleted_files.txt
+
+            CHANGED_COUNT=$(wc -l < /tmp/changed_files.txt)
+            DELETED_COUNT=$(wc -l < /tmp/deleted_files.txt)
+            echo "changed_count=$CHANGED_COUNT" >> $GITHUB_OUTPUT
+            echo "deleted_count=$DELETED_COUNT" >> $GITHUB_OUTPUT
+          fi
+
+      # ----------------------------------------------------------
+      # STEP 3: Cek apakah perlu rebuild frontend / vendor
+      # ----------------------------------------------------------
+      - name: Check rebuild requirements
+        id: rebuild_check
+        run: |
+          MODE="${{ steps.changed.outputs.mode }}"
+
+          if [ "$MODE" = "full" ]; then
+            echo "frontend=true" >> $GITHUB_OUTPUT
+            echo "vendor=true" >> $GITHUB_OUTPUT
+          else
+            # Frontend
+            if grep -qE "^(resources/|package\.json|package-lock\.json|vite\.config)" /tmp/changed_files.txt 2>/dev/null; then
+              echo "frontend=true" >> $GITHUB_OUTPUT
+              echo "🎨 Frontend perlu rebuild"
+            else
+              echo "frontend=false" >> $GITHUB_OUTPUT
+            fi
+
+            # Vendor
+            if grep -qE "^(composer\.json|composer\.lock)" /tmp/changed_files.txt 2>/dev/null; then
+              echo "vendor=true" >> $GITHUB_OUTPUT
+              echo "📦 Vendor perlu rebuild"
+            else
+              echo "vendor=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      # ----------------------------------------------------------
+      # STEP 4: Build
+      # ----------------------------------------------------------
       - name: Create temporary .env
         run: |
           echo "APP_KEY=base64:dummykeydummykeydummykeydummykey=" > .env
@@ -108,55 +575,95 @@ jobs:
           echo "PUSHER_APP_ID=dummy" >> .env
           echo "PUSHER_APP_CLUSTER=ap1" >> .env
 
-      # ✅ DIUBAH - Tambah --no-scripts
+      - name: Setup PHP for Production
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+
       - name: Install Composer Dependencies (Prod)
+        if: steps.rebuild_check.outputs.vendor == 'true'
         run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
 
-      # ✅ BARU - Jalankan package:discover manual setelah .env ada
       - name: Run package discover
+        if: steps.rebuild_check.outputs.vendor == 'true'
         run: php artisan package:discover --ansi
 
-      # --- Build Frontend
       - name: Setup Node.js
+        if: steps.rebuild_check.outputs.frontend == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Install NPM Dependencies
-        run: npm ci
+      - name: Install NPM & Build Assets
+        if: steps.rebuild_check.outputs.frontend == 'true'
+        run: |
+          npm ci
+          npm run build
 
-      - name: Build Frontend Assets
-        run: npm run build
-
-      # --- Create ZIP (Build Once)
-      - name: Create ZIP package
+      # ----------------------------------------------------------
+      # STEP 5: Buat ZIP (full atau delta)
+      # ----------------------------------------------------------
+      - name: Create FULL ZIP package
+        if: steps.changed.outputs.mode == 'full'
         run: |
           set -euo pipefail
           BUILD_DIR=./build_deploy
-          rm -rf "$BUILD_DIR"
-          mkdir -p "$BUILD_DIR"
+          rm -rf "$BUILD_DIR" && mkdir -p "$BUILD_DIR"
           rsync -a --delete \
-          --exclude '.git/' \
-          --exclude '.github/' \
-          --exclude 'node_modules/' \
-          --exclude 'tests/' \
-          --exclude '.env' \
-          --exclude 'storage/' \
-          --exclude 'build_deploy/' \
-          ./ "$BUILD_DIR/" || [ $? -eq 24 ]
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude 'node_modules/' \
+            --exclude 'tests/' \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude 'storage/' \
+            --exclude 'build_deploy/' \
+            ./ "$BUILD_DIR/" || [ $? -eq 24 ]
           (cd "$BUILD_DIR" && zip -r ../deploy.zip . -q)
-          
-      # --- Setup SSH
+          echo "📦 Full ZIP: $(du -sh deploy.zip)"
+
+      - name: Create DELTA ZIP package
+        if: steps.changed.outputs.mode == 'delta'
+        run: |
+          set -euo pipefail
+
+          # Tambahkan hasil build frontend jika direbuild
+          if [ "${{ steps.rebuild_check.outputs.frontend }}" = "true" ]; then
+            find public/build -type f >> /tmp/changed_files.txt 2>/dev/null || true
+          fi
+
+          # Tambahkan vendor jika direbuild
+          if [ "${{ steps.rebuild_check.outputs.vendor }}" = "true" ]; then
+            find vendor -type f >> /tmp/changed_files.txt 2>/dev/null || true
+          fi
+
+          # Hapus duplikat
+          sort -u /tmp/changed_files.txt -o /tmp/changed_files.txt
+
+          echo "--- File yang akan di-ZIP ---"
+          wc -l /tmp/changed_files.txt
+          head -30 /tmp/changed_files.txt
+
+          zip -r deploy.zip . -i@/tmp/changed_files.txt -q
+          echo "📦 Delta ZIP: $(du -sh deploy.zip)"
+
+          if [ -s /tmp/deleted_files.txt ]; then
+            cp /tmp/deleted_files.txt deleted_files.txt
+          fi
+
+      # ----------------------------------------------------------
+      # STEP 6: Setup SSH
+      # ----------------------------------------------------------
       - name: Setup SSH Key
         run: |
-          mkdir -p $HOME/.ssh
-          chmod 700 $HOME/.ssh
+          mkdir -p $HOME/.ssh && chmod 700 $HOME/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > $HOME/.ssh/id_ed25519
           chmod 600 $HOME/.ssh/id_ed25519
-          # Pastikan dikenal host-nya
           ssh-keyscan -p ${{ secrets.SSH_PORT }} -H ${{ secrets.SSH_HOST }} >> $HOME/.ssh/known_hosts
 
-      # --- Upload to Server (Upload Once)
+      # ----------------------------------------------------------
+      # STEP 7: Upload ke server
+      # ----------------------------------------------------------
       - name: Upload ZIP to Server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -167,8 +674,22 @@ jobs:
           source: "deploy.zip"
           target: "/home/${{ secrets.SSH_USERNAME }}"
 
-      # --- Multi-Site Deployment (Looping)
-      - name: Execute Remote SSH Commands
+      - name: Upload deleted files list (jika ada)
+        if: steps.changed.outputs.mode == 'delta' && steps.changed.outputs.deleted_count != '0'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "deleted_files.txt"
+          target: "/home/${{ secrets.SSH_USERNAME }}"
+
+      # ----------------------------------------------------------
+      # STEP 8: Execute deploy di server
+      # ----------------------------------------------------------
+      - name: Execute Remote SSH Commands (Full Deploy)
+        if: steps.changed.outputs.mode == 'full'
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -176,40 +697,108 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # 1. Definisikan langsung target direktori situs Anda
-            TARGET_DIR="/home/${{ secrets.SSH_USERNAME }}/kayu.wijayaplywoods.com"
-      
-            echo "=========================================="
-            echo "🚀 Starting deployment for: kayu.wijayaplywoods.com"
-            echo "📂 Target Directory: $TARGET_DIR"
-            echo "=========================================="
-      
-            # 2. Pastikan folder target ada (Safety check)
-            if [ ! -d "$TARGET_DIR" ]; then
-              echo "❌ Directory $TARGET_DIR does not exist. Deployment aborted."
-              exit 1 # Gunakan exit 1 agar GitHub Actions tahu bahwa proses ini gagal
+            set -euo pipefail
+            TARGET="/home/${{ secrets.SSH_USERNAME }}/kayu.wijayaplywoods.com"
+            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_production"
+
+            if [ ! -d "$TARGET" ]; then
+              echo "❌ $TARGET tidak ditemukan. Abort."
+              exit 1
             fi
-      
-            cd "$TARGET_DIR"
+
+            cd "$TARGET"
             php artisan down || true
+
+            rm -rf "$STAGING" && mkdir -p "$STAGING"
+            unzip -oq /home/${{ secrets.SSH_USERNAME }}/deploy.zip -d "$STAGING"
+
             find . -mindepth 1 -maxdepth 1 \
               ! -name 'storage' \
               ! -name '.env' \
-              -exec rm -rf {} \;
+              ! -name '.env.*' \
+              ! -name '.github' \
+              -exec rm -rf {} +
 
-            unzip -oq ../deploy.zip -d .
-      
-            # 6. Optimasi Cache Laravel
+            rsync -a \
+              --exclude 'storage/' \
+              --exclude '.env' \
+              --exclude '.env.*' \
+              --exclude '.github/' \
+              "$STAGING/" "$TARGET/"
+
             php artisan optimize:clear
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
-            
-            # 7. Selesai Maintenance Mode
+            php artisan migrate --force
             php artisan up
-      
-            # 8. Hapus file ZIP setelah semua selesai untuk hemat space
-            rm /home/${{ secrets.SSH_USERNAME }}/deploy.zip
-            
-            echo "🧹 Cleaned up deployment artifacts."
-            echo "✅ Deployment Success!"
+
+            # Simpan tag sebagai marker deploy terakhir
+            echo "${{ github.ref_name }}" > "$TARGET/.last_deploy_tag"
+
+            rm -rf "$STAGING"
+            rm -f /home/${{ secrets.SSH_USERNAME }}/deploy.zip
+
+            echo "🚀 Production Full Deployment Success! [${{ github.ref_name }}]"
+
+      - name: Execute Remote SSH Commands (Delta Deploy)
+        if: steps.changed.outputs.mode == 'delta'
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            TARGET="/home/${{ secrets.SSH_USERNAME }}/kayu.wijayaplywoods.com"
+            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_production"
+
+            if [ ! -d "$TARGET" ]; then
+              echo "❌ $TARGET tidak ditemukan. Abort."
+              exit 1
+            fi
+
+            cd "$TARGET"
+            php artisan down || true
+
+            rm -rf "$STAGING" && mkdir -p "$STAGING"
+            unzip -oq /home/${{ secrets.SSH_USERNAME }}/deploy.zip -d "$STAGING"
+
+            rsync -a \
+              --exclude 'storage/' \
+              --exclude '.env' \
+              --exclude '.env.*' \
+              --exclude '.github/' \
+              "$STAGING/" "$TARGET/"
+
+            # Hapus file yang dihapus di repo
+            DELETED_LIST="/home/${{ secrets.SSH_USERNAME }}/deleted_files.txt"
+            if [ -f "$DELETED_LIST" ]; then
+              while IFS= read -r file; do
+                if echo "$file" | grep -qE "^(storage/|\.env|\.github/)"; then
+                  echo "⏩ Skip protected: $file"
+                  continue
+                fi
+                if [ -f "$TARGET/$file" ]; then
+                  rm -f "$TARGET/$file"
+                  echo "🗑️ Deleted: $file"
+                fi
+              done < "$DELETED_LIST"
+              rm -f "$DELETED_LIST"
+            fi
+
+            php artisan optimize:clear
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            php artisan migrate --force
+            php artisan up
+
+            # Update tag marker
+            echo "${{ github.ref_name }}" > "$TARGET/.last_deploy_tag"
+
+            rm -rf "$STAGING"
+            rm -f /home/${{ secrets.SSH_USERNAME }}/deploy.zip
+
+            echo "⚡ Production Delta Deployment Success! [${{ github.ref_name }}]"

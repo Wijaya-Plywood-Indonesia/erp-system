@@ -271,7 +271,7 @@
                             <tbody>
                                 @foreach($listUnregistered as $index => $unreg)
                                 <tr class="{{ $index % 2 === 0 ? 'bg-white dark:bg-zinc-900' : 'bg-zinc-50 dark:bg-zinc-800/50' }} border-t border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition duration-75">
-                                    <td class="p-2 text-center font-mono font-bold text-zinc-100 border-r border-zinc-300 dark:border-zinc-700">
+                                    <td class="p-2 text-center font-mono font-bold text-zinc-600 dark:text-zinc-400 border-r border-zinc-300 dark:border-zinc-700">
                                         {{ $unreg['kodep'] }}
                                     </td>
                                     <td class="p-2 text-center italic text-zinc-400 font-light border-r border-zinc-300 dark:border-zinc-700">
