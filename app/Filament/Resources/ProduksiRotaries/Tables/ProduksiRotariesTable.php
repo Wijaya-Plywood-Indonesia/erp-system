@@ -2,17 +2,19 @@
 
 namespace App\Filament\Resources\ProduksiRotaries\Tables;
 
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
+use Filament\Support\Exceptions\Halt;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
-use Filament\Support\Exceptions\Halt;
 
 class ProduksiRotariesTable
 {
@@ -29,6 +31,12 @@ class ProduksiRotariesTable
                     ->label('Nama Mesin')
                     ->sortable()
                     ->searchable(),
+
+                TextColumn::make('kendala')
+                    ->label('Keterangan Kendala')
+                    ->placeholder('Tidak ada kendala')
+                    ->searchable()
+                    ->limit(30),
 
                 TextColumn::make('created_at')
                     ->dateTime()
@@ -48,12 +56,35 @@ class ProduksiRotariesTable
                     }),
             ])
             ->recordActions([
+                Action::make('isi_kendala')
+                    ->label('Isi Kendala')
+                    ->icon('heroicon-o-chat-bubble-left-ellipsis')
+                    ->color('warning')
+                    ->modalHeading('Keterangan Kendala Produksi Rotary')
+                    ->form([
+                        Textarea::make('kendala')
+                            ->label('Kendala')
+                            ->rows(5),
+                    ])
+                    ->fillForm(fn ($record): array => [
+                        'kendala' => $record->kendala,
+                    ])
+                    ->action(function (array $data, $record): void {
+                        $record->update([
+                            'kendala' => $data['kendala'],
+                        ]);
+
+                        Notification::make()
+                            ->title('Berhasil memperbarui kendala')
+                            ->success()
+                            ->send();
+                    }),
+
                 EditAction::make(),
                 ViewAction::make(),
 
                 DeleteAction::make()
                     ->before(function ($record) {
-
                         $hasDetail =
                             $record->detailPegawaiRotary()->exists()
                             || $record->detailLahanRotary()->exists()
@@ -70,8 +101,7 @@ class ProduksiRotariesTable
                                 ->danger()
                                 ->send();
 
-                            // ⛔ WAJIB: hentikan delete
-                            throw new Halt();
+                            throw new Halt;
                         }
                     }),
             ])
