@@ -1,0 +1,47 @@
+Table GrajiStik{
+    id bigint [pk]
+    tanggal date
+    keterangan text
+    create_at timestamp
+    update_at timestamp
+}
+
+Table ModalGrajiStik{
+    id bigint [pk]
+    id_graji_stik bigint [ref : > GrajiStik.id]
+    id_ukuran bigint
+    jumlah_bahan int 
+    nomor_palet int
+    create_at timestamp
+    update_at timestamp
+}
+
+Table PegawaiGraji{
+    id bigint [pk]
+    id_graji_stik bigint [ref: > GrajiStik.id]
+    id_pegawai_graji bigint 
+    jam_masuk time
+    jam_pulang time
+    ijin varchar
+    keterangan text
+    create_at timestamp
+    update_at timestamp
+}
+
+Table HasilGraji{
+    id bigint [pk]
+    id_graji_stik bigint [ref: > GrajiStik.id]
+    id_modal_graji_stik bigint [ref: > ModalGrajiStik.id]
+    hasil_graji int
+    create_at timestamp
+    update_at timestamp
+}
+
+Table ValidasiPilihVeener{
+    id bigint [pk]
+    id_graji_stik bigint [ref: > GrajiStik.id]
+    role varchar
+    status varchar
+    created_at timestamp
+    updated_at timestamp
+}

@@ -1,0 +1,102 @@
+{
+  "version": "1.0.0",
+  "darkMode": true,
+  "gridEnabling": true,
+  "detailLevel": "All",
+  "tablePositions": [
+    {
+      "name": "OngkosPekerja",
+      "schemaName": "public",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "name": "DetailOngkosSpindless",
+      "schemaName": "public",
+      "x": 248,
+      "y": 0
+    },
+    {
+      "name": "TotalSolasi",
+      "schemaName": "public",
+      "x": 568,
+      "y": 192
+    },
+    {
+      "name": "HargaPekerja",
+      "schemaName": "public",
+      "x": 561.1294229544957,
+      "y": 8
+    },
+    {
+      "name": "HargaSolasi",
+      "schemaName": "public",
+      "x": 46.633152346344815,
+      "y": 144
+    }
+  ],
+  "tableGroupCollapseStates": [],
+  "stickyNoteLayouts": [],
+  "referencePaths": [
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "OngkosPekerja",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_ongkos_spindless"
+      ],
+      "secondTableName": "DetailOngkosSpindless",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "HargaPekerja",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_harga_pekerja"
+      ],
+      "secondTableName": "DetailOngkosSpindless",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "TotalSolasi",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_total_solasi"
+      ],
+      "secondTableName": "DetailOngkosSpindless",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "HargaSolasi",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_harga_solasi"
+      ],
+      "secondTableName": "DetailOngkosSpindless",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    }
+  ]
+}

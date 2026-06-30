@@ -1,0 +1,102 @@
+@startuml
+' === KONFIGURASI TAMPILAN ===
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam usecase {
+    BackgroundColor White
+    BorderColor DarkSlateGray
+    ArrowColor Black
+}
+
+' === DEFINISI AKTOR ===
+actor "Pengawas Rotary" as Pengawas
+actor "SuperAdmin" as Admin
+
+package "Sistem Produksi Rotary" {
+
+  ' --- GROUP 1: AUTHENTIKASI (Shared) ---
+  rectangle "Akses & Dashboard" {
+      usecase "Login Aplikasi" as UC_Login
+      usecase "Dashboard Utama" as UC_Dash
+  }
+
+  ' --- GROUP 2: MASTER DATA & VALIDASI (Area Admin) ---
+  ' Admin menyiapkan data & memvalidasi hasil kerja Pengawas
+  rectangle "Manajemen Master & Validasi" {
+      usecase "Kelola Data Pegawai" as UC_M_Pegawai
+      usecase "Kelola Data Lahan" as UC_M_Lahan
+      usecase "Kelola Ukuran Kayu" as UC_M_Ukuran
+      
+      ' Admin juga melakukan validasi data produksi
+      usecase "Validasi Laporan Produksi" as UC_Validasi
+  }
+  
+  ' --- GROUP 3: OPERASIONAL HARIAN (Area Pengawas) ---
+  ' Pengawas melakukan input berdasarkan kondisi lapangan
+  rectangle "Manajemen Produksi Rotary"{
+        usecase "Input Produksi Rotary Baru" as UC_InputUtama
+        usecase "Hapus Data Produksi" as UC_DeleteData
+        
+        ' Langkah-langkah (Include) - Detail Input
+        usecase "Input Pegawai Rotary" as UC_In_Pegawai
+        usecase "Input Asal Lahan" as UC_In_Lahan
+        usecase "Input Hasil Produksi" as UC_In_Hasil
+        usecase "Input Jumlah Kayu Pecah" as UC_In_Pecah
+        usecase "Input Kendala" as UC_In_Kendala
+  }
+  
+  ' =========================================================
+  ' RELASI AKTOR KE SYSTEM (LOGIN & DASHBOARD)
+  ' =========================================================
+  Admin --> UC_Login
+  Admin --> UC_Dash
+  
+  Pengawas --> UC_Login
+  Pengawas --> UC_Dash
+
+  ' =========================================================
+  ' RELASI ADMIN (Pembuat Data & Validator)
+  ' =========================================================
+  Admin --> UC_M_Pegawai
+  Admin --> UC_M_Lahan
+  Admin --> UC_M_Ukuran
+  Admin --> UC_Validasi
+
+  ' =========================================================
+  ' RELASI PENGAWAS (Operasional)
+  ' =========================================================
+  Pengawas --> UC_InputUtama
+  Pengawas --> UC_DeleteData
+
+  ' =========================================================
+  ' ATURAN SISTEM (INCLUDE LOGIC)
+  ' =========================================================
+  UC_Login --> UC_Dash
+  
+  ' Pengawas WAJIB melakukan langkah ini saat input produksi
+  UC_InputUtama ..> UC_In_Pegawai : <<include>>
+  UC_InputUtama ..> UC_In_Lahan : <<include>>
+  UC_InputUtama ..> UC_In_Hasil : <<include>>
+  UC_InputUtama ..> UC_In_Pecah : <<include>>
+  UC_InputUtama ..> UC_In_Kendala : <<include>>
+
+  ' =========================================================
+  ' VISUALISASI KETERGANTUNGAN DATA (READ DATA)
+  ' =========================================================
+  ' Garis putus-putus abu-abu visualisasi aliran data
+  
+  ' 1. Inputan Pengawas 'membaca' Master Data Pegawai
+  UC_In_Pegawai .[#Gray].> UC_M_Pegawai : <<read data>>
+  
+  ' 2. Inputan Pengawas 'membaca' Master Data Lahan
+  UC_In_Lahan   .[#Gray].> UC_M_Lahan   : <<read data>>
+  
+  ' 3. Inputan Hasil Produksi 'membaca' Master Data Ukuran (NEW)
+  UC_In_Hasil   .[#Gray].> UC_M_Ukuran  : <<read data>>
+  
+  ' 4. Validasi Admin 'membaca' hasil inputan Pengawas
+  UC_Validasi   .[#Gray].> UC_InputUtama : <<validate data>>
+}
+
+@enduml

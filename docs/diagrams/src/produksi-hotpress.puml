@@ -1,0 +1,64 @@
+@startuml
+' Panggil file style yang sudah dibuat
+!include style.puml
+
+left to right direction
+skinparam packageStyle rectangle
+
+' === DEFINISI AKTOR ===
+actor "SuperAdmin" as Admin
+actor "Pengawas Hotpress" as Pengawas
+
+package "Sistem Produksi HotPress" {
+
+    ' --- AREA MASTER DATA (Oleh Admin) ---
+    rectangle "Master Data" {
+        usecase "Kelola Data Pegawai" as UC_M_Pegawai
+        usecase "Kelola Barang Setengah Jadi" as UC_M_Ukuran
+        usecase "Validasi Repair" as UC_M_Validasi
+    }
+
+    ' --- AREA OPERASIONAL (Oleh Pengawas) ---
+    rectangle "Menu Produksi HotPress" {
+        usecase "Hapus Produksi HotPress" as UC_Hapus
+        
+        ' Use Case Utama (Abstract)
+        usecase "Input Produksi HotPress" as UC_Input_Utama
+
+        ' Sub-Proses (Langkah Detail)
+        usecase "Rencana Produksi HotPress" as UC_In_HotPress
+        usecase "Input Pegawai" as UC_In_Pegawai
+        usecase "Input Bahan Veener" as UC_In_BahanVeener
+        usecase "Input Bahan Platform" as UC_In_BahanPlatform
+        usecase "Input Hasil Platform" as UC_In_HasilPlatform
+        usecase "Input Hasil Triplek" as UC_In_HasilTriplek
+        usecase "Input Bahan Penolong" as UC_In_BahanPenolong
+    }
+
+    ' =========================================
+    ' RELASI AKTOR KE USE CASE
+    ' =========================================
+    
+    ' Admin mengelola master
+    Admin --> UC_M_Pegawai
+    Admin --> UC_M_Ukuran
+    Admin --> UC_M_Validasi
+
+    ' Pengawas melakukan input dan hapus
+    Pengawas --> UC_Hapus
+    Pengawas --> UC_Input_Utama
+
+    UC_Input_Utama --> UC_In_HotPress : <<include>>
+    UC_Input_Utama --> UC_In_Pegawai : <<include>>
+    UC_Input_Utama --> UC_In_BahanVeener: <<include>>
+    UC_Input_Utama --> UC_In_BahanPlatform : <<include>>
+    UC_Input_Utama --> UC_In_HasilPlatform : <<include>>
+    UC_Input_Utama --> UC_In_HasilTriplek : <<include>>
+    UC_Input_Utama --> UC_In_BahanPenolong : <<include>>
+
+    UC_In_HotPress .[#gray].> UC_M_Ukuran : <<read data>>
+    UC_In_Pegawai .[#gray].> UC_M_Pegawai : <<read data>>
+    UC_M_Validasi .[#gray].> UC_Input_Utama : <<validate data>>
+}
+
+@enduml

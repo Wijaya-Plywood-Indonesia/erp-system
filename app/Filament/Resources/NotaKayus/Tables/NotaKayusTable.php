@@ -1,0 +1,339 @@
+<?php
+
+namespace App\Filament\Resources\NotaKayus\Tables;
+
+use App\Filament\Resources\NotaKayus\NotaKayuResource;
+use App\Models\DetailKayuMasuk;
+use App\Models\DetailTurusanKayu;
+use App\Models\HppAverageLog;
+use App\Models\NotaKayu;
+use App\Services\HppAverageService;
+use App\Services\JurnalSyncService;
+use App\Services\NotaKayuJurnalPayloadService;
+use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+
+class NotaKayusTable
+{
+    public static function configure(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('no_nota')
+                    ->searchable(),
+
+                TextColumn::make('info_kayu')
+                    ->label('Info Kayu')
+                    ->sortable()
+                    ->searchable(query: function ($query, string $search) {
+                        $numberOnly = preg_replace('/[^0-9]/', '', $search);
+
+                        return $query->whereHas('kayuMasuk', function ($q) use ($search, $numberOnly) {
+                            if (is_numeric($numberOnly) && $numberOnly !== '') {
+                                $q->where('seri', '=', $numberOnly);
+                            } else {
+                                $q->whereHas('penggunaanSupplier', function ($sq) use ($search) {
+                                    $sq->where('nama_supplier', 'like', "%{$search}%");
+                                });
+                            }
+                        });
+                    })
+                    ->getStateUsing(function ($record) {
+                        if (! $record->kayuMasuk) return '-';
+                        $seri         = $record->kayuMasuk->seri ?? '-';
+                        $namaSupplier = $record->kayuMasuk->penggunaanSupplier?->nama_supplier ?? '-';
+                        $noTelepon    = $record->kayuMasuk->penggunaanSupplier?->no_telepon ?? '-';
+
+                        return "Seri {$seri} - {$namaSupplier} ({$noTelepon})";
+                    }),
+
+                TextColumn::make('penanggung_jawab')
+                    ->label('PJ')
+                    ->searchable(),
+
+                TextColumn::make('total_summary2')
+                    ->label('Rekap Turusan 1')
+                    ->getStateUsing(function ($record) {
+                        if (! $record->kayuMasuk) {
+                            return "0 Batang\n0.0000 m³";
+                        }
+                        $total    = DetailKayuMasuk::hitungTotalByKayuMasuk($record->kayuMasuk->id);
+                        $batang   = number_format($total['total_batang']);
+                        $kubikasi = number_format($total['total_kubikasi'], 4);
+
+                        return "{$batang} Batang\n{$kubikasi} m³";
+                    })
+                    ->badge()
+                    ->color('success')
+                    ->formatStateUsing(fn(string $state) => str_replace("\n", '<br>', e($state)))
+                    ->html()
+                    ->alignCenter(),
+
+                TextColumn::make('total_summary')
+                    ->label('Rekap Turusan 2')
+                    ->getStateUsing(function ($record) {
+                        if (! $record->kayuMasuk) {
+                            return "0 Batang\n0.0000 m³";
+                        }
+                        $total    = DetailTurusanKayu::hitungTotalByKayuMasuk($record->kayuMasuk->id);
+                        $batang   = number_format($total['total_batang']);
+                        $kubikasi = number_format($total['total_kubikasi'], 4);
+
+                        return "{$batang} Batang\n{$kubikasi} m³";
+                    })
+                    ->badge()
+                    ->color('success')
+                    ->formatStateUsing(fn(string $state) => str_replace("\n", '<br>', e($state)))
+                    ->html()
+                    ->alignCenter(),
+
+                TextColumn::make('penerima')
+                    ->searchable(),
+
+                TextColumn::make('satpam')
+                    ->searchable(),
+
+                TextColumn::make('status')
+                    ->label('Status')
+                    ->searchable()
+                    ->badge()
+                    ->colors([
+                        'secondary' => 'Belum Diperiksa',
+                        'success'   => fn($state) => str_contains($state ?? '', 'Sudah Diperiksa'),
+                        'warning'   => fn($state) => str_contains($state ?? '', 'Menunggu'),
+                        'danger'    => fn($state) => str_contains($state ?? '', 'Ditolak'),
+                    ]),
+
+                TextColumn::make('status_pelunasan')
+                    ->label('Pelunasan')
+                    ->badge()
+                    ->colors([
+                        'danger' => 'Belum Lunas',
+                        // Tetap hijau jika teks mengandung kata 'Lunas' (termasuk yang ada jam/usernya)
+                        'success' => fn($state) => str_starts_with($state ?? '', 'Lunas'),
+                        'warning' => 'Sebagian',
+                    ])
+                    ->searchable(),
+
+                TextColumn::make('created_at')
+                    ->dateTime('d/m/Y H:i')
+                    ->label('Tgl Nota')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->defaultSort('created_at', 'desc')
+            ->recordActions([
+
+                // --- ACTION: TANDAI LUNAS (UTAMA: UPDATE STOK, TEMPAT KAYU & JURNAL) ---
+                Action::make('set_lunas')
+                    ->label('Tandai Lunas')
+                    ->icon('heroicon-o-banknotes')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalHeading('Konfirmasi Pelunasan & Sinkronisasi Data')
+                    ->modalDescription('Menandai nota sebagai Lunas akan memicu: 1. Penambahan Stok Lahan, 2. Update Data Tempat Kayu, dan 3. Pengiriman Jurnal ke Akuntansi. Lanjutkan?')
+                    ->action(function ($record) {
+                        $user = Auth::user();
+                        $timestamp = now()->format('d/m/Y H:i');
+
+                        // 1. Update status pelunasan dengan Audit Trail (Siapa & Kapan)
+                        $record->status_pelunasan = "Lunas - {$timestamp} ({$user->name})";
+                        $record->save();
+
+                        // 2. TRIGGER PEMBARUAN STOK & TEMPAT KAYU:
+                        // Cek apakah log HPP sudah ada untuk mencegah data ganda (Double Entry)
+                        $sudahAdaLog = HppAverageLog::where('referensi_type', NotaKayu::class)
+                            ->where('referensi_id', $record->id)
+                            ->exists();
+
+                        if (! $sudahAdaLog) {
+                            try {
+                                // Service ini secara otomatis mengupdate:
+                                // - HppAverageLog (Riwayat)
+                                // - HppAverageSummaries (Saldo Stok)
+                                // - TempatKayu (Sinkronisasi Lahan untuk Produksi)
+                                app(HppAverageService::class)->prosesNotaKayuMasuk($record);
+
+                                Log::info('[NotaKayu] Stok & Tempat Kayu berhasil diperbarui', [
+                                    'nota_id' => $record->id,
+                                    'user' => $user->name
+                                ]);
+                            } catch (\Throwable $e) {
+                                Log::error('[NotaKayu] GAGAL update stok & tempat kayu', [
+                                    'nota_id' => $record->id,
+                                    'error'   => $e->getMessage(),
+                                ]);
+                            }
+                        }
+
+                        // 3. TRIGGER JURNAL: Sinkronisasi data ke Perusahaan 2
+                        self::jalankanSync($record);
+
+                        Notification::make()
+                            ->title('Pelunasan Berhasil')
+                            ->body("Stok dan Tempat Kayu telah diperbarui.")
+                            ->success()
+                            ->send();
+                    })
+                    ->visible(
+                        fn($record) =>
+                        // Tombol muncul hanya jika nota sudah diperiksa fisiknya 
+                        // dan statusnya masih 'Belum Lunas'
+                        str_contains($record->status ?? '', 'Sudah Diperiksa') &&
+                            $record->status_pelunasan === 'Belum Lunas'
+                    ),
+
+                // --- ACTION: CETAK NOTA ---
+                Action::make('print')
+                    ->label('Cetak Nota')
+                    ->icon('heroicon-o-printer')
+                    ->color('success')
+                    ->url(fn($record) => route('nota-kayu.show', $record))
+                    ->openUrlInNewTab()
+                    ->visible(fn($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
+
+                // --- ACTION: CETAK TURUS ---
+                Action::make('print_turus')
+                    ->label('Cetak Turus')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->color('info')
+                    ->url(fn($record) => route('nota-kayu.turus', $record))
+                    ->openUrlInNewTab()
+                    ->visible(fn($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
+
+                // --- ACTION: CETAK TURUS 2 ---
+                Action::make('print_turus_2')
+                    ->label('Cetak Turus 2')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->color('warning')
+                    ->url(fn($record) => route('nota-kayu.turus2', $record))
+                    ->openUrlInNewTab()
+                    ->visible(fn($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
+
+                // --- ACTION: TANDAI SUDAH DIPERIKSA ---
+                Action::make('cek')
+                    ->label('Tandai Sudah Diperiksa')
+                    ->icon('heroicon-o-check')
+                    ->color('success')
+                    ->visible(function ($record) {
+                        if (str_contains($record->status ?? '', 'Sudah Diperiksa')) return false;
+                        if (! $record->kayuMasuk) return false;
+
+                        $total1 = DetailTurusanKayu::hitungTotalByKayuMasuk($record->kayuMasuk->id);
+                        $total2 = DetailKayuMasuk::hitungTotalByKayuMasuk($record->kayuMasuk->id);
+
+                        $batangSama   = $total1['total_batang'] == $total2['total_batang'];
+                        $kubikasiSama = abs($total1['total_kubikasi'] - $total2['total_kubikasi']) < 0.0001;
+
+                        return $batangSama && $kubikasiSama;
+                    })
+                    ->requiresConfirmation()
+                    ->action(function ($record) {
+                        $user = Auth::user();
+                        $record->status = "Sudah Diperiksa oleh {$user->name}";
+                        $record->save();
+
+                        Notification::make()
+                            ->success()
+                            ->title('Verifikasi Fisik Berhasil')
+                            ->body('Status fisik telah diperbarui. Silakan lanjut ke proses Pelunasan untuk menambah stok.')
+                            ->send();
+                    }),
+
+                // --- LOGIKA OTORISASI ---
+                ViewAction::make()
+                    ->visible(function ($record) {
+                        $user = Auth::user();
+                        $isAdmin = $user->hasRole(['admin', 'super_admin']);
+                        $sudahDiperiksa = str_contains($record->status ?? '', 'Sudah Diperiksa');
+                        return $isAdmin || !$sudahDiperiksa;
+                    }),
+
+                EditAction::make()
+                    ->visible(function ($record) {
+                        $user = Auth::user();
+                        $isAdmin = $user->hasRole(['admin', 'super_admin']);
+                        $sudahDiperiksa = str_contains($record->status ?? '', 'Sudah Diperiksa');
+                        return $isAdmin || !$sudahDiperiksa;
+                    }),
+
+                DeleteAction::make()
+                    ->visible(fn() => Auth::user()->hasRole(['admin', 'super_admin'])),
+            ])
+            ->filters([
+                Filter::make('seri_kayu')
+                    ->form([
+                        TextInput::make('nomor_seri')
+                            ->label('Cari Seri Kayu')
+                            ->placeholder('Contoh: 123')
+                            ->numeric(),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query->when(
+                            $data['nomor_seri'],
+                            fn(Builder $query, $seri): Builder => $query->whereHas(
+                                'kayuMasuk',
+                                fn(Builder $q) => $q->where('seri', 'like', "%{$seri}%")
+                            )
+                        );
+                    })
+                    ->indicateUsing(function (array $data): ?string {
+                        if (! $data['nomor_seri']) {
+                            return null;
+                        }
+                        return 'Seri Kayu: ' . $data['nomor_seri'];
+                    }),
+
+                SelectFilter::make('status_pelunasan')
+                    ->options([
+                        'Belum Lunas' => 'Belum Lunas',
+                        'Lunas' => 'Lunas',
+                        'Sebagian' => 'Sebagian',
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        if (empty($data['value'])) return $query;
+
+                        if ($data['value'] === 'Lunas') {
+                            return $query->where('status_pelunasan', 'LIKE', 'Lunas%');
+                        }
+
+                        return $query->where('status_pelunasan', $data['value']);
+                    })
+            ]);
+    }
+
+    private static function jalankanSync($record): array
+    {
+        try {
+            $record->loadMissing(['kayuMasuk.detailTurusanKayus.jenisKayu', 'kayuMasuk.penggunaanSupplier']);
+            if (! $record->kayuMasuk || $record->kayuMasuk->detailTurusanKayus->isEmpty()) return ['success' => false];
+
+            $payloadService = app(NotaKayuJurnalPayloadService::class);
+            $payload = $payloadService->buildPayload($record);
+            $payload['petugas'] = ['nama' => Auth::user()?->name, 'email' => Auth::user()?->email];
+
+            $syncService = app(JurnalSyncService::class);
+            $result = $syncService->kirim($record, $payload);
+
+            if ($result['success'] && ! empty($result['no_jurnal'])) {
+                Cache::put("jurnal_sync_{$record->id}", $result['no_jurnal'], now()->addYear());
+            }
+            return $result;
+        } catch (\Throwable $e) {
+            Log::error("[NotaKayusTable] Sync gagal: {$e->getMessage()}");
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+}

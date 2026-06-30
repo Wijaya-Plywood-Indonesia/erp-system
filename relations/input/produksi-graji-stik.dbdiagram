@@ -1,0 +1,117 @@
+{
+  "version": "1.0.0",
+  "darkMode": true,
+  "gridEnabling": true,
+  "detailLevel": "All",
+  "tablePositions": [
+    {
+      "name": "GrajiStik",
+      "schemaName": "public",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "name": "ModalGrajiStik",
+      "schemaName": "public",
+      "x": 248,
+      "y": 0
+    },
+    {
+      "name": "PegawaiGraji",
+      "schemaName": "public",
+      "x": 496,
+      "y": 0
+    },
+    {
+      "name": "HasilGraji",
+      "schemaName": "public",
+      "x": 760,
+      "y": 0
+    },
+    {
+      "name": "ValidasiPilihVeener",
+      "schemaName": "public",
+      "x": 0,
+      "y": 240
+    }
+  ],
+  "tableGroupCollapseStates": [],
+  "stickyNoteLayouts": [],
+  "referencePaths": [
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "GrajiStik",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_graji_stik"
+      ],
+      "secondTableName": "ModalGrajiStik",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "GrajiStik",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_graji_stik"
+      ],
+      "secondTableName": "PegawaiGraji",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "GrajiStik",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_graji_stik"
+      ],
+      "secondTableName": "HasilGraji",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "ModalGrajiStik",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_modal_graji_stik"
+      ],
+      "secondTableName": "HasilGraji",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "GrajiStik",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_graji_stik"
+      ],
+      "secondTableName": "ValidasiPilihVeener",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "version": "1.0.0",
+  "darkMode": true,
+  "gridEnabling": false,
+  "detailLevel": "All",
+  "tablePositions": [
+    {
+      "name": "produksi_graji_balken",
+      "schemaName": "public",
+      "x": 0,
+      "y": 50
+    },
+    {
+      "name": "pegawai_graji_balken",
+      "schemaName": "public",
+      "x": 0,
+      "y": 260
+    },
+    {
+      "name": "hasil_graji_balken",
+      "schemaName": "public",
+      "x": 0,
+      "y": 662
+    },
+    {
+      "name": "validasi_graji_balken",
+      "schemaName": "public",
+      "x": 0,
+      "y": 1000
+    }
+  ],
+  "tableGroupCollapseStates": [],
+  "stickyNoteLayouts": [],
+  "referencePaths": [
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_graji_balken",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_graji_balken"
+      ],
+      "secondTableName": "pegawai_graji_balken",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_graji_balken",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_graji_balken"
+      ],
+      "secondTableName": "hasil_graji_balken",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_graji_balken",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_graji_balken"
+      ],
+      "secondTableName": "validasi_graji_balken",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    }
+  ]
+}

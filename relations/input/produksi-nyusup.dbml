@@ -1,0 +1,41 @@
+Table produksi_nyusup {
+  id bigint
+  tanggal_produksi date
+  kendala text [null]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table pegawai_nyusup {
+  id bigint
+  id_produksi_nyusup bigint [ref: > produksi_nyusup.id]
+  id_pegawai bigint
+  tugas text
+  masuk time
+  pulang time
+  ijin varchar [null]
+  ket varchar [null]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table detail_barang_dikerjakan {
+  id bigint
+  id_produksi_nyusup bigint [ref: > produksi_nyusup.id]
+  id_pegawai_nyusup bigint [ref: > pegawai_nyusup.id]
+  id_barang_setengah_jadi_hp bigint
+  no_palet int
+  modal int
+  hasil int
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table validasi_nyusup {
+  id bigint
+  id_produksi_nyusup bigint [ref: > produksi_nyusup.id]
+  role varchar
+  status varchar
+  created_at timestamp
+  updated_at timestamp
+}

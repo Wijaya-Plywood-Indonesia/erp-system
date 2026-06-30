@@ -1,0 +1,81 @@
+{
+  "version": "1.0.0",
+  "darkMode": true,
+  "gridEnabling": false,
+  "detailLevel": "All",
+  "tablePositions": [
+    {
+      "name": "produksi_guellotine",
+      "schemaName": "public",
+      "x": 0,
+      "y": 50
+    },
+    {
+      "name": "pegawai_guellotine",
+      "schemaName": "public",
+      "x": 257.33154296875,
+      "y": 50
+    },
+    {
+      "name": "hasil_guellotine",
+      "schemaName": "public",
+      "x": 562.0419921875,
+      "y": 50
+    },
+    {
+      "name": "validasi_guellotine",
+      "schemaName": "public",
+      "x": 0,
+      "y": 452
+    }
+  ],
+  "tableGroupCollapseStates": [],
+  "stickyNoteLayouts": [],
+  "referencePaths": [
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_guellotine",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_guellotine"
+      ],
+      "secondTableName": "pegawai_guellotine",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_guellotine",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_guellotine"
+      ],
+      "secondTableName": "hasil_guellotine",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_guellotine",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_guellotine"
+      ],
+      "secondTableName": "validasi_guellotine",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    }
+  ]
+}

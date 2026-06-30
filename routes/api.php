@@ -1,0 +1,225 @@
+<?php
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use App\Models\DetailKayuMasuk;
+use App\Models\DetailTurusanKayu;
+use App\Models\DetailAbsensi;
+use App\Http\Controllers\Api\RotaryJurnalController;
+use App\Models\User;
+use Carbon\Carbon;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification;
+use App\Http\Controllers\ProduksiPressDryerController;
+
+Route::get(
+    '/produksi-dryer/{id}/preview',
+    [ProduksiPressDryerController::class, 'previewPayload']
+);
+
+Route::post(
+    '/produksi-dryer/{id}/kirim',
+    [ProduksiPressDryerController::class, 'kirimKeWebLain']
+);
+
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+*/
+
+// Middleware ['web', 'auth'] untuk fitur Offline Kayu Masuk (Satu Sesi Browser)
+Route::middleware(['web', 'auth'])->group(function () {
+
+    // 1. Sinkron Detail Kayu Masuk
+    Route::post('/offline/sync-detail-kayu-masuk', function (Request $request) {
+        $validator = Validator::make($request->all(), [
+            'parent_id' => 'required|exists:kayu_masuks,id',
+            'items' => 'required|array',
+            'items.*.id_lahan' => 'required|exists:lahans,id',
+            'items.*.id_jenis_kayu' => 'required|exists:jenis_kayus,id',
+            'items.*.panjang' => 'required|numeric',
+            'items.*.grade' => 'required',
+            'items.*.diameter' => 'required|numeric',
+            'items.*.jumlah_batang' => 'required|numeric|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            foreach ($request->items as $item) {
+                DetailKayuMasuk::create([
+                    'id_kayu_masuk' => $request->parent_id,
+                    'id_lahan' => $item['id_lahan'],
+                    'id_jenis_kayu' => $item['id_jenis_kayu'],
+                    'panjang' => $item['panjang'],
+                    'grade' => $item['grade'],
+                    'diameter' => $item['diameter'],
+                    'jumlah_batang' => $item['jumlah_batang'],
+                    'keterangan' => 'Input via Mode Offline',
+                ]);
+            }
+            DB::commit();
+            return response()->json(['status' => 'success', 'message' => 'Data kayu berhasil sinkron.']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    });
+
+    // 2. Sinkron Detail Turusan Kayu
+    Route::post('/offline/sync-detail-turusan-kayu', function (Request $request) {
+        $validator = Validator::make($request->all(), [
+            'parent_id' => 'required|exists:kayu_masuks,id',
+            'items' => 'required|array',
+            'items.*.lahan_id' => 'required|exists:lahans,id',
+            'items.*.jenis_kayu_id' => 'required|exists:jenis_kayus,id',
+            'items.*.panjang' => 'required|numeric',
+            'items.*.grade' => 'required',
+            'items.*.diameter' => 'required|numeric',
+            'items.*.kuantitas'     => 'required|numeric|min:1', // ← tambah ini
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            foreach ($request->items as $item) {
+                $lastNo = DetailTurusanKayu::where('id_kayu_masuk', $request->parent_id)->max('nomer_urut') ?? 0;
+                DetailTurusanKayu::create([
+                    'id_kayu_masuk' => $request->parent_id,
+                    'nomer_urut' => $lastNo + 1,
+                    'lahan_id' => $item['lahan_id'],
+                    'jenis_kayu_id' => $item['jenis_kayu_id'],
+                    'panjang' => $item['panjang'],
+                    'grade' => $item['grade'],
+                    'diameter' => $item['diameter'],
+                    'kuantitas' => $item['kuantitas'],
+                    'keterangan' => 'Offline Input',
+                ]);
+            }
+            DB::commit();
+            return response()->json(['status' => 'success', 'message' => 'Data turusan berhasil sinkron.']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    });
+});
+
+
+Route::prefix('jurnal/rotary')->group(function () {
+
+    // ── PREVIEW / TESTING ────────────────────────────────────────────────────
+    // GET  /api/jurnal/rotary/preview?tanggal=2025-08-01
+    // POST /api/jurnal/rotary/preview   body: { "tanggal": "2025-08-01" }
+    Route::match(['GET', 'POST'], '/preview', [RotaryJurnalController::class, 'preview']);
+
+    // ── TRIGGER (dari event validasi) ────────────────────────────────────────
+    // POST /api/jurnal/rotary/trigger   body: { "id_produksi": 123 }
+    Route::post('/trigger', [RotaryJurnalController::class, 'trigger']);
+
+    // ── CEK STATUS VALIDASI ──────────────────────────────────────────────────
+    // GET  /api/jurnal/rotary/status/2025-08-01
+    Route::get('/status/{tanggal}', [RotaryJurnalController::class, 'statusValidasi']);
+});
+/**
+ * 3. API SINKRONISASI ABSENSI ANTAR WEBSITE (EXTERNAL)
+ * Endpoint: /api/external/sync-absensi
+ * Tanpa Middleware Auth (Menggunakan API KEY untuk Bypass CORS Server-to-Server)
+ */
+Route::post('/external/sync-absensi', function (Request $request) {
+
+    // 1. Validasi API KEY
+    if ($request->header('X-API-KEY') !== 'SINKRON_SECRET_KEY_123') {
+        return response()->json(['message' => 'Unauthorized'], 401);
+    }
+
+    // 2. Validasi Input
+    $validator = Validator::make($request->all(), [
+        'tanggal' => 'required|date',
+        'absensi' => 'required|array',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json(['errors' => $validator->errors()], 422);
+    }
+
+    DB::beginTransaction();
+    try {
+        $dataAbsensi = $request->input('absensi');
+        $tanggal = $request->input('tanggal');
+
+        // 3. TANGANI DATA INDUK (absensis)
+        // Kita cari laporan untuk tanggal tersebut, jika tidak ada maka buat baru
+        // Ini agar Relation Manager di Filament bisa menampilkan datanya
+        $parent = \App\Models\Absensi::firstOrCreate(
+            ['tanggal' => $tanggal],
+            [
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+
+        $successCount = 0;
+        $skippedCodes = [];
+
+        foreach ($dataAbsensi as $item) {
+            $cleanKode = ltrim($item['kodep'], '0');
+
+            // 1. Pastikan Pegawai ada
+            $pegawai = DB::table('pegawais')->where('kode_pegawai', $cleanKode)->first();
+
+            if ($pegawai) {
+                // 2. Cari data absen yang sudah ada di database lokal untuk tanggal tersebut
+                $existing = DetailAbsensi::where('kode_pegawai', $cleanKode)
+                    ->where('tanggal', $tanggal)
+                    ->first();
+
+                // 3. Logika Penggabungan: Ambil jam dari Wahana hanya jika di lokal masih kosong
+                $jamMasukBaru = ($existing && $existing->jam_masuk && $existing->jam_masuk !== '-')
+                    ? $existing->jam_masuk
+                    : ($item['f_masuk'] ?? null);
+
+                $jamPulangBaru = ($existing && $existing->jam_pulang && $existing->jam_pulang !== '-')
+                    ? $existing->jam_pulang
+                    : ($item['f_pulang'] ?? null);
+
+                // 4. Eksekusi Update atau Create
+                DetailAbsensi::updateOrCreate(
+                    [
+                        'kode_pegawai' => $cleanKode,
+                        'tanggal' => $tanggal,
+                    ],
+                    [
+                        'id_absensi' => $parent->id, // Pastikan ID Induk tersedia
+                        'jam_masuk' => $jamMasukBaru,
+                        'jam_pulang' => $jamPulangBaru,
+                        'keterangan' => ($existing ? $existing->keterangan : '') . ' (Synced from Wahana)',
+                    ]
+                );
+                $successCount++;
+            } else {
+                $skippedCodes[] = $cleanKode;
+            }
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Berhasil memproses $successCount data. (Dilewati: " . count($skippedCodes) . ")",
+            'details' => ['skipped' => $skippedCodes]
+        ]);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+    }
+});

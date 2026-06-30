@@ -1,0 +1,70 @@
+Table produksi_rotaries{
+    id bigint [pk]
+    id_mesin bigint
+    tgl_produksi date
+    kendala varchar
+    created_at datetime
+    updated_at datetime
+}
+
+Table pegawai_rotaries {
+    id bigint [pk]
+    id_produksi bigint [ref : > produksi_rotaries.id]
+    id_pegawai bigint
+    role varchar
+    jam_masuk time
+    jam_pulang time
+    created_at datetime
+    updated_at datetime
+}
+
+Table penggunaan_lahan_rotaries {
+    id bigint [pk]
+    id_produksi bigint [ref : > produksi_rotaries.id]
+    id_lahan bigint
+    id_jenis_kayu bigint
+    jumlah_batang int
+    created_at datetime
+    updated_at datetime
+}
+
+Table detail_hasil_palet_rotaries {
+    id bigint
+    id_produksi bigint [ref : > produksi_rotaries.id]
+    id_penggunaan_lahan bigint [ref : > penggunaan_lahan_rotaries.id]
+    timestamp_laporan datetime
+    id_ukuran bigint
+    kw varchar
+    palet int [null]
+    total_lembar int
+    created_at datetime
+    updated_at datetime
+}
+
+Table ganti_pisau_rotaries {
+    id bigint
+    id_produksi bigint [ref : > produksi_rotaries.id]
+    jam_mulai_ganti_pisau time
+    jam_selesai_ganti time
+    created_at datetime
+    updated_at datetime
+}
+
+Table kayu_pecah_rotaries {
+    id bigint
+    id_produksi bigint [ref : > produksi_rotaries.id]
+    id_penggunaan_lahan bigint [ref : > penggunaan_lahan_rotaries.id]
+    ukuran decimal 
+    foto varchar
+    created_at datetime
+    updated_at datetime
+}
+
+Table validasi_hasil_rotaries {
+    id bigint
+    id_produksi bigint [ref : > produksi_rotaries.id]
+    role varchar
+    status varchar
+    created_at datetime
+    updated_at datetime
+}

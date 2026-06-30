@@ -1,0 +1,113 @@
+@startuml
+' === KONFIGURASI TAMPILAN ===
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam usecase {
+    BackgroundColor White
+    BorderColor DarkSlateGray
+    ArrowColor Black
+}
+
+' === DEFINISI AKTOR ===
+actor "Admin Kayu" as Admin
+actor Grader
+actor Penurus
+
+package "Sistem Turun & Turus Kayu" {
+
+  ' =========================================================
+  ' GROUP 1: VALIDASI (GATEKEEPER) - DILAKUKAN ADMIN
+  ' =========================================================
+  rectangle "1. Validasi Turun Kayu (Menu Turun Kayu)" {
+      usecase "Validasi Fisik vs Dokumen" as UC_Validasi
+      
+      ' Langkah-langkah validasi
+      usecase "Pilih Seri Kayu Masuk" as UC_V_Seri
+      usecase "Input Nama Supir" as UC_V_Supir
+      usecase "Cek Jumlah Kayu" as UC_V_Jumlah
+      usecase "Upload Foto Bukti" as UC_V_Foto
+      usecase "Set Status (Selesai)" as UC_V_Status
+  }
+
+  ' =========================================================
+  ' GROUP 2: PROSES DETAIL - HANYA BISA JIKA STATUS = ACCEPTED
+  ' =========================================================
+  
+  ' --- AREA GRADER ---
+  rectangle "2A. Menu Kayu Masuks (Penurus 1)" {
+      usecase "Input Data Turusan Kayu 1" as UC_Grading
+      
+      ' Langkah Grader
+      usecase "Pilih Table Berdasarkan No. Seri" as UC_G_Seri
+      usecase "New Detail Kayu Masuk" as UC_G_Input
+      
+      ' Detail Atribut (Kita gabung agar diagram tidak terlalu ramai)
+      note bottom of UC_G_Input
+        Termasuk:
+        - Pilih Lahan
+        - Panjang Kayu
+        - Grade Kayu
+        - Jenis Kayu
+        - Diameter Kayu
+      end note
+  }
+
+  ' --- AREA PENURUS ---
+  rectangle "2B. Menu Turusan Kayu (Penurus 2)" {
+      usecase "Input Data Turusan Kayu 2" as UC_Turus
+      
+      ' Langkah Penurus
+      usecase "Pilih Table Berdasarkan No. Seri" as UC_T_Seri
+      usecase "Tambah Kayu" as UC_T_Add
+      
+      note bottom of UC_T_Add
+        Termasuk:
+        - Pilih Lahan
+        - Panjang Kayu
+        - Grade Kayu
+        - Jenis Kayu
+        - Diameter Kayu
+      end note
+  }
+
+  ' =========================================================
+  ' RELASI & ALUR KERJA
+  ' =========================================================
+
+  ' 1. Admin melakukan Validasi
+  Admin --> UC_Validasi
+  
+  ' Include langkah-langkah validasi
+  UC_Validasi ..> UC_V_Seri : <<include>>
+  UC_Validasi ..> UC_V_Supir : <<include>>
+  UC_Validasi ..> UC_V_Jumlah : <<include>>
+  UC_Validasi ..> UC_V_Foto : <<include>>
+  UC_Validasi ..> UC_V_Status : <<include>>
+
+  ' 2. Grader & Penurus melakukan tugasnya
+  Grader --> UC_Grading
+  Penurus --> UC_Turus
+
+  ' Include langkah operasional
+  UC_Grading ..> UC_G_Seri : <<include>>
+  UC_Grading ..> UC_G_Input : <<include>>
+  
+  UC_Turus ..> UC_T_Seri : <<include>>
+  UC_Turus ..> UC_T_Add : <<include>>
+
+  ' =========================================================
+  ' LOGIKA KETERGANTUNGAN (CONSTRAINT)
+  ' =========================================================
+  
+  ' Kita buat catatan visual penghubung
+  note "Hanya bisa diakses jika\nStatus Validasi = Selesai" as N_Constraint
+  
+  ' Hubungkan note ini ke Use Case Grader dan Penurus
+  UC_Validasi .. N_Constraint
+  N_Constraint .. UC_Grading
+  N_Constraint .. UC_Turus
+  
+}
+
+@enduml

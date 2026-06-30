@@ -1,0 +1,68 @@
+@startuml
+' Panggil file style yang sudah dibuat
+!include style.puml
+
+left to right direction
+skinparam packageStyle rectangle
+
+' === DEFINISI AKTOR ===
+actor "SuperAdmin" as Admin
+actor "Pengawas Repair" as Pengawas
+
+package "Sistem Produksi Repair" {
+
+    ' --- AREA MASTER DATA (Oleh Admin) ---
+    rectangle "Master Data" {
+        usecase "Kelola Data Pegawai" as UC_M_Pegawai
+        usecase "Kelola Ukuran Kayu" as UC_M_Ukuran
+        usecase "Validasi Repair" as UC_M_Validasi
+    }
+
+    ' --- AREA OPERASIONAL (Oleh Pengawas) ---
+    rectangle "Menu Produksi Repair" {
+        usecase "Hapus Produksi Repair" as UC_Hapus
+        
+        ' Use Case Utama (Abstract)
+        usecase "Input Produksi Repair" as UC_Input_Utama
+
+        ' Sub-Proses (Langkah Detail)
+        usecase "Modal Repair" as UC_In_Repair
+        usecase "Input Pegawai" as UC_In_Pegawai
+        usecase "Input Rencana Repair" as UC_In_RencanaRepair
+        usecase "Input Hasil Repair" as UC_In_HasilRepair
+    }
+
+    ' =========================================
+    ' RELASI AKTOR KE USE CASE
+    ' =========================================
+    
+    ' Admin mengelola master
+    Admin --> UC_M_Pegawai
+    Admin --> UC_M_Ukuran
+    Admin --> UC_M_Validasi
+
+    ' Pengawas melakukan input dan hapus
+    Pengawas --> UC_Input_Utama
+    Pengawas --> UC_Hapus
+
+    ' =========================================
+    ' LOGIKA ALUR (RELATIONSHIPS)
+    ' =========================================
+
+    ' 1. Generalisasi (Pilihan Menu)
+    ' "Input Produksi Kedi" bisa berupa Bongkar ATAU Masuk
+    UC_Input_Utama --> UC_In_Repair : <<include>>
+    UC_Input_Utama --> UC_In_Pegawai : <<include>>
+    UC_Input_Utama --> UC_In_RencanaRepair : <<include>>
+    UC_Input_Utama --> UC_In_HasilRepair : <<include>>
+
+    ' 3. Dependency / Read Data (Koneksi ke Master)
+    ' Saat input detail bongkar, perlu baca data ukuran dari admin
+    UC_In_Repair .[#gray].> UC_M_Ukuran : <<read data>>
+    UC_In_Pegawai .[#gray].> UC_M_Pegawai : <<read data>>
+
+    UC_M_Validasi .[#gray].> UC_Input_Utama : <<validate data>>
+
+}
+
+@enduml

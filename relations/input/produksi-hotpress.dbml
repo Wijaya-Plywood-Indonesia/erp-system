@@ -1,0 +1,86 @@
+Table produksi_hp {
+    id bigint
+    tanggal_produksi date
+    kendala varchar
+    created_at datetime
+    updated_at datetime
+}
+
+Table rencana_kerja_hp {
+    id bigint
+    id_produksi_hp bigint [ref: > produksi_hp.id]
+    id_barang_setengah_jadi_hp bigint
+    jumlah int
+    created_at datetime
+    updated_at datetime
+}
+
+Table detail_pegawai_hp {
+    id bigint
+    id_produksi_hp bigint [ref: > produksi_hp.id]
+    id_mesin bigint
+    id_pegawai bigint
+    tugas text
+    masuk date
+    pulang date
+    ijin varchar
+    ket varchar
+    created_at datetime
+    updated_at datetime
+}
+
+Table veener_bahan_hp {
+  id bigint [PK]
+  id_produksi_hp bigint [ref : > produksi_hp.id]
+  id_detail_komposisi bigint
+  no_palet integer 
+  isi integer
+  created_at datetime
+  updated_at datetime
+} 
+
+Table platform_bahan_hp {
+  id bigint [PK]
+  id_produksi_hp bigint [ref : > produksi_hp.id]
+  id_detail_komposisi bigint
+  no_palet integer 
+  isi integer
+  created_at datetime
+  updated_at datetime
+}
+
+Table triplek_hasil_hp {
+    id bigint
+    id_produksi_hp bigint [ref: > produksi_hp.id]
+    id_mesin bigint
+    id_barang_setengah_jadi_hp bigint
+    no_palet int
+    isi int
+    created_at datetime
+    updated_at datetime
+}
+
+Table platform_hasil_hp {
+    id bigint
+    id_produksi_hp bigint [ref: > produksi_hp.id]
+    id_mesin bigint
+    id_barang_setengah_jadi_hp bigint
+    no_palet int
+    isi int
+    created_at datetime
+    updated_at datetime
+}
+
+Table bahan_penolong_hp {
+  id bigint [PK]
+  id_produksi_hp bigint [ref : > produksi_hp.id]
+  nama_bahan varchar
+  jumlah integer
+}
+
+Table validasi_hp {
+  id bigint [PK]
+  id_produksi_hp bigint [ref : > produksi_hp.id]
+  role varchar
+  status varchar
+}

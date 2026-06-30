@@ -1,0 +1,174 @@
+{
+  "version": "1.0.0",
+  "darkMode": true,
+  "gridEnabling": false,
+  "detailLevel": "All",
+  "tablePositions": [
+    {
+      "name": "produksi_rotaries",
+      "schemaName": "public",
+      "x": 456,
+      "y": 384
+    },
+    {
+      "name": "pegawai_rotaries",
+      "schemaName": "public",
+      "x": 48,
+      "y": 216
+    },
+    {
+      "name": "penggunaan_lahan_rotaries",
+      "schemaName": "public",
+      "x": 720,
+      "y": 208
+    },
+    {
+      "name": "detail_hasil_palet_rotaries",
+      "schemaName": "public",
+      "x": 872,
+      "y": 536
+    },
+    {
+      "name": "ganti_pisau_rotaries",
+      "schemaName": "public",
+      "x": 320,
+      "y": 48
+    },
+    {
+      "name": "kayu_pecah_rotaries",
+      "schemaName": "public",
+      "x": 488,
+      "y": 696
+    },
+    {
+      "name": "validasi_hasil_rotaries",
+      "schemaName": "public",
+      "x": 168,
+      "y": 568
+    }
+  ],
+  "tableGroupCollapseStates": [],
+  "stickyNoteLayouts": [],
+  "referencePaths": [
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_rotaries",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi"
+      ],
+      "secondTableName": "pegawai_rotaries",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_rotaries",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi"
+      ],
+      "secondTableName": "penggunaan_lahan_rotaries",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_rotaries",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi"
+      ],
+      "secondTableName": "detail_hasil_palet_rotaries",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "penggunaan_lahan_rotaries",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_penggunaan_lahan"
+      ],
+      "secondTableName": "detail_hasil_palet_rotaries",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_rotaries",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi"
+      ],
+      "secondTableName": "ganti_pisau_rotaries",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_rotaries",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi"
+      ],
+      "secondTableName": "kayu_pecah_rotaries",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "penggunaan_lahan_rotaries",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_penggunaan_lahan"
+      ],
+      "secondTableName": "kayu_pecah_rotaries",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_rotaries",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi"
+      ],
+      "secondTableName": "validasi_hasil_rotaries",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    }
+  ]
+}

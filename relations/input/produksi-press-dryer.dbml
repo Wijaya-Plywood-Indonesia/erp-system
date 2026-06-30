@@ -1,0 +1,51 @@
+Table produksi_press_dryer {
+    id bigint
+    tanggal_produksi date
+    shift varchar
+    kendala text
+    created_at datetime
+    updated_at datetime
+}
+
+Table detail_mesin {
+    id bigint
+    id_produksi_dryer bigint [ref : > produksi_press_dryer.id]
+    id_mesin_dryer bigint
+    jam_kerja_mesin int
+    created_at datetime
+    updated_at datetime
+}
+
+Table detail_masuks {
+    id bigint
+    id_produksi_dryer bigint [ref : > produksi_press_dryer.id]
+    id_ukuran bigint
+    id_jenis_kayu bigint
+    no_palet int
+    kw varchar
+    isi varchar
+    created_at datetime
+    updated_at datetime
+}
+
+Table detail_hasils {
+    id bigint
+    id_produksi_dryer bigint [ref : > produksi_press_dryer.id]
+    id_ukuran bigint
+    id_jenis_kayu bigint
+    no_palet int
+    kw varchar
+    isi varchar
+    created_at datetime
+    updated_at datetime
+}
+
+Table validasis {
+    id bigint
+    id_produksi_dryer bigint [ref : > produksi_press_dryer.id]
+    role varchar
+    status varchar
+    created_at datetime
+    updated_at datetime
+}
+

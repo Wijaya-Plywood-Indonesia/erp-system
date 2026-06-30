@@ -1,0 +1,102 @@
+{
+  "version": "1.0.0",
+  "darkMode": true,
+  "gridEnabling": false,
+  "detailLevel": "All",
+  "tablePositions": [
+    {
+      "name": "produksi_graji_triplek",
+      "schemaName": "public",
+      "x": 0,
+      "y": 50
+    },
+    {
+      "name": "pegawai_graji_triplek",
+      "schemaName": "public",
+      "x": 317.15185546875,
+      "y": 50
+    },
+    {
+      "name": "masuk_graji_triplek",
+      "schemaName": "public",
+      "x": 634.3037109375,
+      "y": 50
+    },
+    {
+      "name": "hasil_graji_triplek",
+      "schemaName": "public",
+      "x": 973.1328125,
+      "y": 50
+    },
+    {
+      "name": "validasi_graji_triplek",
+      "schemaName": "public",
+      "x": 0,
+      "y": 324
+    }
+  ],
+  "tableGroupCollapseStates": [],
+  "stickyNoteLayouts": [],
+  "referencePaths": [
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_graji_triplek",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_graji_triplek"
+      ],
+      "secondTableName": "pegawai_graji_triplek",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_graji_triplek",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_graji_triplek"
+      ],
+      "secondTableName": "masuk_graji_triplek",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_graji_triplek",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_graji_triplek"
+      ],
+      "secondTableName": "hasil_graji_triplek",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "produksi_graji_triplek",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id_produksi_graji_triplek"
+      ],
+      "secondTableName": "validasi_graji_triplek",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    }
+  ]
+}
