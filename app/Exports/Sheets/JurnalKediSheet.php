@@ -14,8 +14,10 @@ class JurnalKediSheet implements FromArray, WithTitle, WithColumnWidths, WithSty
     protected array $dataKedi;
     protected int $rowIndex = 0;
 
-    // Cache agar tidak query DB berulang untuk key yang sama
-    private array $refCache = [];
+    // Cache agar tidak query DB berulang
+    private array $refCache      = [];
+    private array $kayuCache     = [];
+    private array $kategoriCache = [];
 
     public function __construct($dataKedi)
     {
@@ -70,100 +72,92 @@ class JurnalKediSheet implements FromArray, WithTitle, WithColumnWidths, WithSty
     // DATABASE REFERENCE HELPERS
     // =========================================================================
 
-    private function getIdKayuByNama(string $namaLike): ?int
+    /**
+     * Ambil id jenis kayu berdasarkan nama (dengan cache).
+     * Jenis selain sengon & meranti → fallback ke meranti.
+     */
+    private function getIdKayuByNama(string $jenisKayu): ?int
     {
-        try {
-            $kayu = \App\Models\JenisKayu::whereRaw("LOWER(nama_kayu) LIKE ?", ["%{$namaLike}%"])->first();
-            return $kayu?->id;
-        } catch (\Throwable $e) {
-            return null;
+        $jenisUntukRef = in_array(strtolower(trim($jenisKayu)), ['sengon', 'meranti'])
+            ? $jenisKayu
+            : 'meranti';
+
+        $key = strtolower($jenisUntukRef);
+        if (!array_key_exists($key, $this->kayuCache)) {
+            try {
+                $kayu = \App\Models\JenisKayu::whereRaw("LOWER(nama_kayu) LIKE ?", ["%{$key}%"])->first();
+                $this->kayuCache[$key] = $kayu?->id;
+            } catch (\Throwable $e) {
+                $this->kayuCache[$key] = null;
+            }
         }
+        return $this->kayuCache[$key];
     }
 
     /**
-     * Ambil referensi harga dari DB.
-     *
-     * Mapping jenis_barang:
-     *   'veneer jadi'   → debit kw 1,2
-     *   'veneer kering' → debit kw 3,4
-     *   'veneer afalan' → debit kw af  (juga dipakai untuk kredit af)
-     *   'veneer basah'  → kredit reguler
-     *
-     * KW di tabel referensi:
-     *   veneer jadi   → kolom kw = 'jadi'     (dibedakan 260/130 via nama akun)
-     *   veneer kering → kolom kw = 'Face/Back' atau 'Core'
-     *   veneer basah  → kolom kw = 'Face/Back' atau 'Core'
-     *   veneer afalan → kolom kw = 'Face/Back' atau 'Core'
-     *
-     * Jenis kayu selain sengon & meranti → fallback ke referensi meranti.
-     * id_ukuran di tabel dikosongkan semua → pembeda 260/130 dari nama sub akun.
+     * Ambil id kategori barang berdasarkan nama (dengan cache).
+     * PENTING: kolom di tabel kategori_barang adalah `nama_kategori`, bukan `nama`.
+     * Contoh: 'veneer jadi', 'veneer kering', 'veneer basah', 'veneer afalan'
      */
-    private function fetchReferensi(string $jenisKayu, float $tebal, string $jenisBarang, string $kw): ?\App\Models\ReferensiHargaProduksi
+    private function getIdKategoriBarang(string $namaKategori): ?int
     {
+        $key = strtolower(trim($namaKategori));
+        if (!array_key_exists($key, $this->kategoriCache)) {
+            try {
+                $kategori = \App\Models\KategoriBarang::whereRaw("LOWER(nama_kategori) LIKE ?", ["%{$key}%"])->first();
+                $this->kategoriCache[$key] = $kategori?->id;
+            } catch (\Throwable $e) {
+                $this->kategoriCache[$key] = null;
+            }
+        }
+        return $this->kategoriCache[$key];
+    }
+
+    /**
+     * Ambil referensi harga dari DB menggunakan findReferensi() di model.
+     *
+     * Mapping kw integer yang dikirim:
+     *   veneer jadi   → kw = 1  (representatif, cocok ke range kw_min=1, kw_max=2)
+     *   veneer kering → kw = 3  (representatif, cocok ke range kw_min=3, kw_max=4)
+     *   veneer afalan → kw = null (kw_min/kw_max null di tabel, skip filter kw)
+     *   veneer basah  → kw = null (cukup filter by kategori + jenis kayu + tebal)
+     *
+     * Pembeda 260 f/b vs 130 core otomatis via t_min/t_max di tabel.
+     *
+     * Guard penting: jika id kategori barang tidak ditemukan di DB,
+     * langsung return null tanpa lanjut ke findReferensi(). Tanpa guard ini,
+     * findReferensi() akan SKIP filter kategori (karena null dianggap "tidak
+     * difilter") dan bisa salah ambil referensi dari kategori lain yang
+     * kebetulan cocok di kw/tebal.
+     */
+    private function fetchReferensi(
+        string $jenisKayu,
+        float $tebal,
+        string $jenisBarang,
+        ?int $kw = null
+    ): ?\App\Models\ReferensiHargaProduksi {
         $cacheKey = strtolower("{$jenisKayu}_{$tebal}_{$jenisBarang}_{$kw}");
         if (array_key_exists($cacheKey, $this->refCache)) {
             return $this->refCache[$cacheKey];
         }
 
-        // Hanya sengon & meranti pakai ref sendiri, selain itu fallback ke meranti
-        $jenisUntukRef = in_array(strtolower(trim($jenisKayu)), ['sengon', 'meranti'])
-            ? $jenisKayu
-            : 'meranti';
+        $idJenisKayu      = $this->getIdKayuByNama($jenisKayu);
+        $idKategoriBarang = $this->getIdKategoriBarang($jenisBarang);
 
-        $idJenisKayu = $this->getIdKayuByNama($jenisUntukRef);
-
-        $q = \App\Models\ReferensiHargaProduksi::with(['subAnakAkun', 'ukuran'])
-            ->whereRaw("LOWER(jenis_barang) = ?", [strtolower($jenisBarang)]);
-
-        if ($idJenisKayu) {
-            $q->where('id_jenis_kayu', $idJenisKayu);
-        }
-
-        $all = $q->get();
-        if ($all->isEmpty()) {
+        // Guard: kategori tidak ditemukan → jangan lanjut cari, supaya tidak
+        // salah ambil referensi dari kategori lain.
+        if ($idKategoriBarang === null) {
             return $this->refCache[$cacheKey] = null;
         }
 
-        // ── Filter KW ────────────────────────────────────────────────────────
-        if (strtolower($jenisBarang) === 'veneer jadi') {
-            // Tabel pakai kw = 'jadi', bedakan 260/130 dari nama akun berdasarkan tebal
-            $poolJadi = $all->filter(
-                fn($item) => strtolower(trim($item->kw ?? '')) === 'jadi'
-            );
-            $pool = $poolJadi->isNotEmpty() ? $poolJadi : $all;
-
-            $keyword  = ($tebal < 1) ? '260' : '130';
-            $filtered = $pool->filter(
-                fn($item) => str_contains(
-                    strtolower($item->subAnakAkun?->nama_sub_anak_akun ?? ''),
-                    $keyword
-                )
-            );
-
-            return $this->refCache[$cacheKey] = $filtered->first() ?? $pool->first();
-        }
-
-        // Untuk veneer kering, basah, afalan: filter via kolom kw (Face/Back atau Core)
-        $filteredKw = $all->filter(
-            fn($item) => strtolower(trim($item->kw ?? '')) === strtolower($kw)
+        $result = \App\Models\ReferensiHargaProduksi::findReferensi(
+            idJenisKayu      : $idJenisKayu,
+            idKategoriBarang : $idKategoriBarang,
+            kw               : $kw,     // null → findReferensi() skip filter kw_min/kw_max
+            tebal            : $tebal,  // dicocokkan ke t_min <= tebal <= t_max
         );
-        $pool = $filteredKw->isNotEmpty()
-            ? $filteredKw
-            : $all->filter(fn($i) => empty(trim($i->kw ?? '')));
-        if ($pool->isEmpty()) {
-            $pool = $all;
-        }
 
-        // ── Filter ukuran tebal (prioritas spesifik, fallback tanpa ukuran) ──
-        $filteredUkuran = $pool->filter(
-            fn($item) => $item->ukuran && (float) $item->ukuran->tebal == $tebal
-        );
-        if ($filteredUkuran->isNotEmpty()) {
-            return $this->refCache[$cacheKey] = $filteredUkuran->first();
-        }
-
-        $tanpaUkuran = $pool->filter(fn($i) => is_null($i->id_ukuran));
-        return $this->refCache[$cacheKey] = $tanpaUkuran->first() ?? $pool->first();
+        return $this->refCache[$cacheKey] = $result;
     }
 
     /**
@@ -318,15 +312,18 @@ class JurnalKediSheet implements FromArray, WithTitle, WithColumnWidths, WithSty
             $ukuranLengkap = $this->formatUkuran($dim);
             $tipeLabel     = ($tebal < 1) ? '260 f/b' : '130 core';
 
-            // KW untuk filter kolom kw di tabel referensi
-            $kwReguler = ($tebal < 1) ? 'face/back' : 'core';
-
-            // ── Ambil semua referensi dari DB ─────────────────────────────────
-            $refJadi    = $this->fetchReferensi($jenisAsli, $tebal, 'veneer jadi',   $kwReguler);
-            $refKering  = $this->fetchReferensi($jenisAsli, $tebal, 'veneer kering', $kwReguler);
-            $refAf      = $this->fetchReferensi($jenisAsli, $tebal, 'veneer afalan', $kwReguler);
-            $refBasah   = $this->fetchReferensi($jenisAsli, $tebal, 'veneer basah',  $kwReguler);
-            $refBasahAf = $this->fetchReferensi($jenisAsli, $tebal, 'veneer afalan', $kwReguler);
+            // ── Ambil referensi dari DB ───────────────────────────────────────
+            // kw integer dikirim sebagai representatif range:
+            //   jadi   → kw=1 (cocok ke kw_min=1, kw_max=2 di tabel)
+            //   kering → kw=3 (cocok ke kw_min=3, kw_max=4 di tabel)
+            //   afalan → null (kw_min/kw_max null di tabel, skip filter)
+            //   basah  → null (cukup filter kategori + jenis kayu + tebal)
+            // Pembeda 260 f/b vs 130 core otomatis via t_min/t_max di tabel
+            $refJadi    = $this->fetchReferensi($jenisAsli, $tebal, 'veneer jadi',   1);
+            $refKering  = $this->fetchReferensi($jenisAsli, $tebal, 'veneer kering', 3);
+            $refAf      = $this->fetchReferensi($jenisAsli, $tebal, 'veneer afalan');
+            $refBasah   = $this->fetchReferensi($jenisAsli, $tebal, 'veneer basah');
+            $refBasahAf = $this->fetchReferensi($jenisAsli, $tebal, 'veneer afalan');
 
             [$akunJadiNama,    $akunJadiNo,    $hargaJadi]    = $this->extractAkun($refJadi);
             [$akunKeringNama,  $akunKeringNo,  $hargaKering]  = $this->extractAkun($refKering);
