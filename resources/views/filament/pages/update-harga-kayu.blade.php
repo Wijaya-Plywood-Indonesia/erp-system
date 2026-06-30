@@ -331,7 +331,11 @@
 
         @if (!$hasPending)
             {{-- RINGKASAN PERUBAHAN --}}
-            <div x-show="Object.keys(changes).length > 0" x-cloak>
+            <div x-show="Object.keys(changes).length > 0" x-cloak class="flex flex-col gap-4">
+                <div class="flex justify-end"> <x-filament::button wire:click="submit" icon="heroicon-m-paper-airplane">
+                        Ajukan Perubahan
+                    </x-filament::button> </div>
+
                 <x-filament::section>
                     <x-slot name="heading">Ringkasan Perubahan</x-slot>
                     <x-slot name="description">Harga berikut akan diajukan untuk persetujuan.</x-slot>
