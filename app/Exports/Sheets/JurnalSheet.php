@@ -15,6 +15,12 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
     protected array $dataProduksi;
     protected int $rowIndex = 0;
 
+    // Cache agar tidak query DB berulang
+    private array $refCache      = [];
+    private array $kayuCache     = [];
+    private array $kategoriCache = [];
+    private array $ukuranCache   = []; // tambahan untuk opsi B
+
     public function __construct($dataProduksi)
     {
         $this->dataProduksi = $dataProduksi;
@@ -49,15 +55,14 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
     {
         $lastRow = $sheet->getHighestRow();
 
-        $borderStyle = [
+        $sheet->getStyle("A1:N{$lastRow}")->applyFromArray([
             'borders' => [
                 'allBorders' => [
                     'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
                     'color'       => ['rgb' => '000000'],
                 ],
             ],
-        ];
-        $sheet->getStyle("A1:N{$lastRow}")->applyFromArray($borderStyle);
+        ]);
 
         $sheet->getStyle('A1:N1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
@@ -80,88 +85,122 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
     // DATABASE REFERENCE HELPERS
     // =========================================================================
 
-    private function getIdKayuByNama(string $namaLike): ?int
+    private function getIdKayuByNama(string $jenisKayu): ?int
     {
-        try {
-            $kayu = \App\Models\JenisKayu::whereRaw("LOWER(nama_kayu) LIKE ?", ["%{$namaLike}%"])->first();
-            return $kayu?->id;
-        } catch (\Throwable $e) {
-            return null;
+        $jenisUntukRef = in_array(strtolower(trim($jenisKayu)), ['sengon', 'meranti'])
+            ? $jenisKayu
+            : 'meranti';
+
+        $key = strtolower($jenisUntukRef);
+        if (!array_key_exists($key, $this->kayuCache)) {
+            try {
+                $kayu = \App\Models\JenisKayu::whereRaw("LOWER(nama_kayu) LIKE ?", ["%{$key}%"])->first();
+                $this->kayuCache[$key] = $kayu?->id;
+            } catch (\Throwable $e) {
+                $this->kayuCache[$key] = null;
+            }
         }
+        return $this->kayuCache[$key];
+    }
+
+    private function getIdKategoriBarang(string $namaKategori): ?int
+{
+    $key = strtolower(trim($namaKategori));
+    if (!array_key_exists($key, $this->kategoriCache)) {
+        try {
+            $kategori = \App\Models\KategoriBarang::whereRaw("LOWER(nama_kategori) LIKE ?", ["%{$key}%"])->first();
+            $this->kategoriCache[$key] = $kategori?->id;
+        } catch (\Throwable $e) {
+            $this->kategoriCache[$key] = null;
+        }
+    }
+    return $this->kategoriCache[$key];
+}
+
+    /**
+     * [OPSI B] Lookup id_ukuran dari tabel ukuran berdasarkan dimensi p x l x t.
+     *
+     * findReferensi() di model punya 2 langkah:
+     *   1. Cari dengan id_ukuran spesifik → prioritas utama
+     *   2. Fallback ke id_ukuran = null   → referensi standar
+     *
+     * Dengan mengirim id_ukuran, kita memanfaatkan langkah 1.
+     * Jika ukuran tidak ditemukan di tabel ukuran → kirim null,
+     * findReferensi() otomatis fallback ke langkah 2.
+     *
+     * Cocok jika di tabel referensi ada baris dengan id_ukuran spesifik
+     * (harga berbeda per ukuran) DAN ada baris fallback id_ukuran = null
+     * (harga standar untuk ukuran yang tidak terdaftar).
+     */
+    private function getIdUkuran(float $p, float $l, float $t): ?int
+    {
+        $key = "{$p}_{$l}_{$t}";
+        if (!array_key_exists($key, $this->ukuranCache)) {
+            try {
+                $ukuran = \App\Models\Ukuran::where('panjang', $p)
+                    ->where('lebar', $l)
+                    ->where('tebal', $t)
+                    ->first();
+                $this->ukuranCache[$key] = $ukuran?->id;
+            } catch (\Throwable $e) {
+                $this->ukuranCache[$key] = null;
+            }
+        }
+        return $this->ukuranCache[$key];
     }
 
     /**
-     * Fetch referensi berdasarkan:
-     * - $jenisKayu  : nama jenis kayu (sengon, meranti, dll)
-     * - $tebal      : tebal veneer untuk mencocokkan ukuran
-     * - $jenisBarang: 'veneer jadi' | 'veneer kering' | 'veneer basah' | 'veneer afalan'
-     * - $kw         : 'face/back' (tebal < 1) | 'core' (tebal >= 1)
+     * Ambil referensi harga dari DB menggunakan findReferensi() di model.
      *
-     * Mapping logika produksi:
-     *   kw hasil 1,2 → veneer jadi   + kw face/back atau core
-     *   kw hasil 3,4 → veneer kering + kw face/back atau core
-     *   kw hasil af  → veneer afalan + kw face/back atau core
-     *   modal masuk  → veneer basah  + kw face/back atau core
+     * [OPSI B] Mengirim id_ukuran hasil lookup dari tabel ukuran.
+     * findReferensi() akan:
+     *   - Prioritas: cocokkan id_ukuran spesifik
+     *   - Fallback : id_ukuran = null (referensi standar)
+     *
+     * Jika tabel referensi tidak punya baris id_ukuran spesifik,
+     * otomatis jatuh ke fallback → perilaku sama seperti Opsi A.
+     *
+     * Mapping kw:
+     *   veneer jadi   → kw=1 (range kw_min=1, kw_max=2)
+     *   veneer kering → kw=3 (range kw_min=3, kw_max=4)
+     *   veneer afalan → null (kw_min/kw_max null di tabel)
+     *   veneer basah  → null (filter by kategori + jenis kayu + tebal)
      */
-    private function fetchReferensi(string $jenisKayu, float $tebal, string $jenisBarang, string $kw): ?\App\Models\ReferensiHargaProduksi
-{
-    $jenisUntukRef = in_array(strtolower(trim($jenisKayu)), ['sengon', 'meranti'])
-        ? $jenisKayu
-        : 'meranti';
+    private function fetchReferensi(
+        string $jenisKayu,
+        float $tebal,
+        string $jenisBarang,
+        ?int $kw = null,
+        ?array $ukuranDim = null  // ['p' => float, 'l' => float, 't' => float]
+    ): ?\App\Models\ReferensiHargaProduksi {
+        $cacheKey = strtolower("{$jenisKayu}_{$tebal}_{$jenisBarang}_{$kw}");
+        if (array_key_exists($cacheKey, $this->refCache)) {
+            return $this->refCache[$cacheKey];
+        }
 
-    $idJenisKayu = $this->getIdKayuByNama($jenisUntukRef);
+        $idJenisKayu      = $this->getIdKayuByNama($jenisKayu);
+        $idKategoriBarang = $this->getIdKategoriBarang($jenisBarang);
 
-    $q = \App\Models\ReferensiHargaProduksi::with(['subAnakAkun', 'ukuran'])
-        ->whereRaw("LOWER(jenis_barang) = ?", [strtolower($jenisBarang)]);
+        // Lookup id_ukuran jika dimensi lengkap dikirim
+        $idUkuran = null;
+        if ($ukuranDim !== null) {
+            $idUkuran = $this->getIdUkuran(
+                $ukuranDim['p'] ?? 0,
+                $ukuranDim['l'] ?? 0,
+                $ukuranDim['t'] ?? 0,
+            );
+        }
 
-    if ($idJenisKayu) {
-        $q->where('id_jenis_kayu', $idJenisKayu);
-    }
-
-    $all = $q->get();
-    if ($all->isEmpty()) return null;
-
-    // ── 1. Filter KW ──────────────────────────────────────────────────────────
-    if (strtolower($jenisBarang) === 'veneer jadi') {
-        // Tabel referensi pakai kw = 'jadi' untuk semua veneer jadi,
-        // jadi filter dulu pakai 'jadi', lalu bedakan 260/130 dari nama akun
-        $poolJadi = $all->filter(
-            fn($item) => strtolower(trim($item->kw ?? '')) === 'jadi'
+        $result = \App\Models\ReferensiHargaProduksi::findReferensi(
+            idJenisKayu      : $idJenisKayu,
+            idKategoriBarang : $idKategoriBarang,
+            kw               : $kw,
+            tebal            : $tebal,
+            idUkuran         : $idUkuran,  // null jika ukuran tidak ada di tabel ukuran
         );
-        $pool = $poolJadi->isNotEmpty() ? $poolJadi : $all;
 
-        // Bedakan 260 face/back vs 130 core dari nama sub akun
-        $keyword  = ($tebal < 1) ? '260' : '130';
-        $filtered = $pool->filter(
-            fn($item) => str_contains(
-                strtolower($item->subAnakAkun?->nama_sub_anak_akun ?? ''),
-                $keyword
-            )
-        );
-        // Fallback ke semua pool jika keyword tidak ketemu
-        return $filtered->first() ?? $pool->first();
+        return $this->refCache[$cacheKey] = $result;
     }
-
-    // Untuk veneer kering, basah, afalan: filter pakai kw face/back atau core
-    $filteredKw = $all->filter(
-        fn($item) => strtolower(trim($item->kw ?? '')) === strtolower($kw)
-    );
-    $pool = $filteredKw->isNotEmpty()
-        ? $filteredKw
-        : $all->filter(fn($i) => empty(trim($i->kw ?? '')));
-    if ($pool->isEmpty()) $pool = $all;
-
-    // ── 2. Filter ukuran tebal ────────────────────────────────────────────────
-    $filteredUkuran = $pool->filter(
-        fn($item) => $item->ukuran && (float) $item->ukuran->tebal == $tebal
-    );
-    if ($filteredUkuran->isNotEmpty()) {
-        return $filteredUkuran->first();
-    }
-
-    $tanpaUkuran = $pool->filter(fn($i) => is_null($i->id_ukuran));
-    return $tanpaUkuran->first() ?? $pool->first();
-}
 
     private function extractAkun(?\App\Models\ReferensiHargaProduksi $ref): array
     {
@@ -304,34 +343,41 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                 if (!$sample) continue;
 
                 $jenisAsli     = $this->expandJenis(trim($sample['jenis_kayu'] ?? ''));
-                $tebal         = (float) ($sample['ukuran']['t'] ?? 0);
-                $ukuranLengkap = $this->formatUkuran($sample['ukuran'] ?? []);
+                $ukuranArr     = $sample['ukuran'] ?? [];
+                $tebal         = (float) ($ukuranArr['t'] ?? 0);
+                $ukuranLengkap = $this->formatUkuran($ukuranArr);
                 $tipeLabel     = ($tebal < 1) ? '260 f/b' : '130 core';
 
-                // KW di master: tebal < 1 → face/back, tebal >= 1 → core
-                $kwReguler = ($tebal < 1) ? 'face/back' : 'core';
+                // Dimensi lengkap untuk lookup id_ukuran (Opsi B)
+                $dim = [
+                    'p' => (float) ($ukuranArr['p'] ?? $ukuranArr['panjang'] ?? 0),
+                    'l' => (float) ($ukuranArr['l'] ?? $ukuranArr['lebar']   ?? 0),
+                    't' => $tebal,
+                ];
 
-                // --- PENCARIAN REFERENSI DATABASE ---
-                $refJadi     = $this->fetchReferensi($jenisAsli, $tebal, 'veneer jadi',   $kwReguler);
-                $refKering   = $this->fetchReferensi($jenisAsli, $tebal, 'veneer kering', $kwReguler);
-                $refAf       = $this->fetchReferensi($jenisAsli, $tebal, 'veneer afalan', $kwReguler);
-                $refBasah    = $this->fetchReferensi($jenisAsli, $tebal, 'veneer basah',  $kwReguler);
-                $refBasahPpc = $this->fetchReferensi($jenisAsli, $tebal, 'veneer afalan', $kwReguler);
+                // ── Ambil referensi dari DB ───────────────────────────────────
+                // Mengirim $dim agar findReferensi() coba cocokkan id_ukuran spesifik dulu,
+                // fallback ke id_ukuran=null jika tidak ada.
+                $refJadi    = $this->fetchReferensi($jenisAsli, $tebal, 'veneer jadi',   1,    $dim);
+                $refKering  = $this->fetchReferensi($jenisAsli, $tebal, 'veneer kering', 3,    $dim);
+                $refAf      = $this->fetchReferensi($jenisAsli, $tebal, 'veneer afalan', null, $dim);
+                $refBasah   = $this->fetchReferensi($jenisAsli, $tebal, 'veneer basah',  null, $dim);
+                $refBasahAf = $this->fetchReferensi($jenisAsli, $tebal, 'veneer afalan', null, $dim);
 
-                [$akunJadiNama,     $akunJadiNo,     $hargaJadi]     = $this->extractAkun($refJadi);
-                [$akunKeringNama,   $akunKeringNo,   $hargaKering]   = $this->extractAkun($refKering);
-                [$akunAfNama,       $akunAfNo,       $hargaAf]       = $this->extractAkun($refAf);
-                [$akunBasahNama,    $akunBasahNo,    $hargaBasah]    = $this->extractAkun($refBasah);
-                [$akunBasahPpcNama, $akunBasahPpcNo, $hargaBasahPpc] = $this->extractAkun($refBasahPpc);
+                [$akunJadiNama,    $akunJadiNo,    $hargaJadi]    = $this->extractAkun($refJadi);
+                [$akunKeringNama,  $akunKeringNo,  $hargaKering]  = $this->extractAkun($refKering);
+                [$akunAfNama,      $akunAfNo,      $hargaAf]      = $this->extractAkun($refAf);
+                [$akunBasahNama,   $akunBasahNo,   $hargaBasah]   = $this->extractAkun($refBasah);
+                [$akunBasahAfNama, $akunBasahAfNo, $hargaBasahAf] = $this->extractAkun($refBasahAf);
 
                 // Keterangan debit
-                $ketJadi   = "{$tipeLabel} {$jenisAsli} uk {$ukuranLengkap}" . (!$refJadi ? ' [UNKNOWN]' : '');
+                $ketJadi   = "{$tipeLabel} {$jenisAsli} uk {$ukuranLengkap}" . (!$refJadi   ? ' [UNKNOWN]' : '');
                 $ketKering = "{$tipeLabel} {$jenisAsli} uk {$ukuranLengkap}" . (!$refKering ? ' [UNKNOWN]' : '');
-                $ketAf     = "{$tipeLabel} {$jenisAsli} uk {$ukuranLengkap} af" . (!$refAf ? ' [UNKNOWN]' : '');
+                $ketAf     = "{$tipeLabel} {$jenisAsli} uk {$ukuranLengkap} af" . (!$refAf  ? ' [UNKNOWN]' : '');
 
                 // Keterangan kredit
-                $ketBasah    = "{$tipeLabel} {$jenisAsli} uk {$ukuranLengkap} basah" . (!$refBasah ? ' [UNKNOWN]' : '');
-                $ketBasahPpc = "{$tipeLabel} {$jenisAsli} uk {$ukuranLengkap} basah af" . (!$refBasahPpc ? ' [UNKNOWN]' : '');
+                $ketBasah   = "{$tipeLabel} {$jenisAsli} uk {$ukuranLengkap} basah" . (!$refBasah  ? ' [UNKNOWN]' : '');
+                $ketBasahAf = "{$tipeLabel} {$jenisAsli} uk {$ukuranLengkap} basah af" . (!$refBasahAf ? ' [UNKNOWN]' : '');
 
                 $kwJadiItems   = $dhsReguler->filter(fn($d) => in_array((int) $d['kw'], [1, 2]));
                 $kwKeringItems = $dhsReguler->filter(fn($d) => in_array((int) $d['kw'], [3, 4]));
@@ -372,10 +418,10 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                         $akunKelebihanNo   = $akunKeringNo;
                         $hargaKelebihan    = $hargaKering;
                         $ketKelebihan      = $ketKering . " (kelebihan {$kelebihan})";
-
                         $m3KelebihanRnd    = round($m3Kelebihan, 4);
                         $subtotalKel       = round($m3KelebihanRnd * $hargaKelebihan, 0);
                         $kelebihanDebitRow = $this->makeRow($akunKelebihanNama, $akunKelebihanNo, $tglProduksi, $namaProduksi, $ketKelebihan, 'd', 'm', $kelebihan, $m3KelebihanRnd, $hargaKelebihan, $subtotalKel);
+
                     } elseif ($jadiOutputIsi >= $keringOutputIsi && $jadiOutputIsi >= $afOutputIsi) {
                         $regJadiIsi        = max(0, $jadiOutputIsi - $kelebihan);
                         $m3Jadi            = $jadiOutputIsi > 0 ? ($regJadiIsi / $jadiOutputIsi) * $m3JadiTotal : 0;
@@ -384,10 +430,10 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                         $akunKelebihanNo   = $akunJadiNo;
                         $hargaKelebihan    = $hargaJadi;
                         $ketKelebihan      = $ketJadi . " (kelebihan {$kelebihan})";
-
                         $m3KelebihanRnd    = round($m3Kelebihan, 4);
                         $subtotalKel       = round($m3KelebihanRnd * $hargaKelebihan, 0);
                         $kelebihanDebitRow = $this->makeRow($akunKelebihanNama, $akunKelebihanNo, $tglProduksi, $namaProduksi, $ketKelebihan, 'd', 'm', $kelebihan, $m3KelebihanRnd, $hargaKelebihan, $subtotalKel);
+
                     } else {
                         $regAfIsi          = max(0, $afOutputIsi - $kelebihan);
                         $m3Af              = $afOutputIsi > 0 ? ($regAfIsi / $afOutputIsi) * $m3AfTotal : 0;
@@ -396,14 +442,13 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                         $akunKelebihanNo   = $akunAfNo;
                         $hargaKelebihan    = $hargaAf;
                         $ketKelebihan      = $ketAf . " (kelebihan {$kelebihan})";
-
                         $m3KelebihanRnd    = round($m3Kelebihan, 4);
                         $subtotalKel       = round($m3KelebihanRnd * $hargaKelebihan, 0);
                         $kelebihanDebitRow = $this->makeRow($akunKelebihanNama, $akunKelebihanNo, $tglProduksi, $namaProduksi, $ketKelebihan, 'd', 'm', $kelebihan, $m3KelebihanRnd, $hargaKelebihan, $subtotalKel);
                     }
                 }
 
-                // --- DEBIT ---
+                // ── DEBIT ─────────────────────────────────────────────────────
                 if ($regJadiIsi > 0) {
                     $m3JadiRnd   = round($m3Jadi, 4);
                     $subtotal    = round($m3JadiRnd * $hargaJadi, 0);
@@ -430,7 +475,7 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                     $totalDebit += $kelebihanDebitRow[13];
                 }
 
-                // --- KREDIT ---
+                // ── KREDIT ────────────────────────────────────────────────────
                 if ($hilang >= 0) {
                     if ($jadiOutputIsi > 0 || $keringOutputIsi > 0) {
                         $m3Reguler    = round($m3JadiTotal + $m3KeringTotal, 4);
@@ -441,8 +486,8 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
 
                     if ($afOutputIsi > 0) {
                         $m3AfRound    = round($m3AfTotal, 4);
-                        $subtotal     = round($m3AfRound * $hargaBasahPpc, 0);
-                        $creditRows[] = $this->makeRow($akunBasahPpcNama, $akunBasahPpcNo, $tglProduksi, $namaProduksi, $ketBasahPpc, 'k', 'm', $afOutputIsi, $m3AfRound, $hargaBasahPpc, $subtotal);
+                        $subtotal     = round($m3AfRound * $hargaBasahAf, 0);
+                        $creditRows[] = $this->makeRow($akunBasahAfNama, $akunBasahAfNo, $tglProduksi, $namaProduksi, $ketBasahAf, 'k', 'm', $afOutputIsi, $m3AfRound, $hargaBasahAf, $subtotal);
                         $totalKredit += $subtotal;
                     }
 
@@ -467,20 +512,15 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             foreach ($creditRows as $r) $rows[] = $r;
 
             if ($totalPegawai > 0) {
-                $rows[] = $this->makeRow('Hutang Gaji', '2231.00', $tglProduksi, $namaProduksi, '', 'k', 'b', $totalPegawai, '', 150000, ($totalPegawai * 150000));
+                $rows[]       = $this->makeRow('Hutang Gaji', '2231.00', $tglProduksi, $namaProduksi, '', 'k', 'b', $totalPegawai, '', 150000, ($totalPegawai * 150000));
                 $totalKredit += ($totalPegawai * 150000);
             }
 
-            // =========================================================
-            // HPP PENYEIMBANG OTOMATIS BULAT
-            // =========================================================
             $nilaiHpp = $totalKredit - $totalDebit;
-
             if (round(abs($nilaiHpp), 0) != 0) {
                 $mapHpp     = $nilaiHpp > 0 ? 'd' : 'k';
                 $nominalHpp = round(abs($nilaiHpp), 0);
-
-                $rows[] = $this->makeRow('hpp', '6111.00', $tglProduksi, $namaProduksi, '', $mapHpp, '', '', '', $nominalHpp, $nominalHpp);
+                $rows[]     = $this->makeRow('hpp', '6111.00', $tglProduksi, $namaProduksi, '', $mapHpp, '', '', '', $nominalHpp, $nominalHpp);
             }
 
             $rows[] = array_fill(0, 14, '');
