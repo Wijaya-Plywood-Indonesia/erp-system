@@ -13,6 +13,7 @@ on:
         default: "prarelease"
         type: choice
         options:
+          - testing_only
           - prarelease
           - production
 
@@ -93,9 +94,10 @@ jobs:
   deploy-prarelease:
     name: Deploy to prarelease.wijayaplywoods.com
     needs: laravel-tests
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: |
+      (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target == 'prarelease')
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -346,7 +348,7 @@ jobs:
             STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_prarelease"
 
             cd "$TARGET"
-            php artisan down || true
+            [ -f "artisan" ] && php artisan down || true
 
             # Extract ke staging dulu
             rm -rf "$STAGING" && mkdir -p "$STAGING"
@@ -360,13 +362,12 @@ jobs:
               ! -name '.github' \
               -exec rm -rf {} +
 
-            # Deploy dengan rsync — tidak akan overwrite storage/.env
-            rsync -a \
-              --exclude 'storage/' \
-              --exclude '.env' \
-              --exclude '.env.*' \
-              --exclude '.github/' \
-              "$STAGING/" "$TARGET/"
+            find "$STAGING" -mindepth 1 -maxdepth 1 \
+              ! -name 'storage' \
+              ! -name '.env' \
+              ! -name '.env.*' \
+              ! -name '.github' \
+              -exec cp -r {} "$TARGET/" \;
 
             php artisan optimize:clear
             php artisan config:cache
@@ -398,19 +399,19 @@ jobs:
             STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_prarelease"
 
             cd "$TARGET"
-            php artisan down || true
+            [ -f "artisan" ] && php artisan down || true
 
             # Extract delta ke staging
             rm -rf "$STAGING" && mkdir -p "$STAGING"
             unzip -oq /home/${{ secrets.SSH_USERNAME }}/deploy.zip -d "$STAGING"
 
             # Copy hanya file yang berubah (rsync delta mode)
-            rsync -a \
-              --exclude 'storage/' \
-              --exclude '.env' \
-              --exclude '.env.*' \
-              --exclude '.github/' \
-              "$STAGING/" "$TARGET/"
+            find "$STAGING" -mindepth 1 -maxdepth 1 \
+              ! -name 'storage' \
+              ! -name '.env' \
+              ! -name '.env.*' \
+              ! -name '.github' \
+              -exec cp -r {} "$TARGET/" \;
 
             # Hapus file yang dihapus di repo (jika ada)
             DELETED_LIST="/home/${{ secrets.SSH_USERNAME }}/deleted_files.txt"
@@ -706,7 +707,7 @@ jobs:
             fi
 
             cd "$TARGET"
-            php artisan down || true
+            [ -f "artisan" ] && php artisan down || true
 
             rm -rf "$STAGING" && mkdir -p "$STAGING"
             unzip -oq /home/${{ secrets.SSH_USERNAME }}/deploy.zip -d "$STAGING"
@@ -718,12 +719,12 @@ jobs:
               ! -name '.github' \
               -exec rm -rf {} +
 
-            rsync -a \
-              --exclude 'storage/' \
-              --exclude '.env' \
-              --exclude '.env.*' \
-              --exclude '.github/' \
-              "$STAGING/" "$TARGET/"
+            find "$STAGING" -mindepth 1 -maxdepth 1 \
+              ! -name 'storage' \
+              ! -name '.env' \
+              ! -name '.env.*' \
+              ! -name '.github' \
+              -exec cp -r {} "$TARGET/" \;
 
             php artisan optimize:clear
             php artisan config:cache
@@ -759,17 +760,17 @@ jobs:
             fi
 
             cd "$TARGET"
-            php artisan down || true
+            [ -f "artisan" ] && php artisan down || true
 
             rm -rf "$STAGING" && mkdir -p "$STAGING"
             unzip -oq /home/${{ secrets.SSH_USERNAME }}/deploy.zip -d "$STAGING"
 
-            rsync -a \
-              --exclude 'storage/' \
-              --exclude '.env' \
-              --exclude '.env.*' \
-              --exclude '.github/' \
-              "$STAGING/" "$TARGET/"
+            find "$STAGING" -mindepth 1 -maxdepth 1 \
+              ! -name 'storage' \
+              ! -name '.env' \
+              ! -name '.env.*' \
+              ! -name '.github' \
+              -exec cp -r {} "$TARGET/" \;
 
             # Hapus file yang dihapus di repo
             DELETED_LIST="/home/${{ secrets.SSH_USERNAME }}/deleted_files.txt"

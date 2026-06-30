@@ -239,7 +239,7 @@ class DetailKayuMasuksTable
                         ->label('Update Jenis Kayu')
                         ->icon('heroicon-o-tag')
                         ->schema([
-                            Select::make('jenis_kayu_id')
+                            Select::make('id_jenis_kayu')
                                 ->label('Jenis Kayu Baru')
                                 ->options(JenisKayu::pluck('nama_kayu', 'id'))
                                 ->searchable()
@@ -247,7 +247,7 @@ class DetailKayuMasuksTable
                         ])
                         ->action(function (array $data, Collection $records) {
                             $records->each->update([
-                                'jenis_kayu_id' => $data['jenis_kayu_id'],
+                                'id_jenis_kayu' => $data['id_jenis_kayu'],
                             ]);
                         })
                         ->deselectRecordsAfterCompletion(),

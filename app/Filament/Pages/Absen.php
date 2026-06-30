@@ -224,22 +224,8 @@ class Absen extends Page implements HasForms
 
                     $finger = $listFinger->get($kodep);
 
-                    $isMalam = false;
-                    // Pengecekan str_contains sekarang menggunakan variabel string $allDivisi
-                    if (str_contains(strtoupper($allDivisi), 'MALAM')) {
-                        $isMalam = true;
-                    }
-
                     $rawMasuk = $finger?->jam_masuk ?? '-';
                     $rawPulang = $finger?->jam_pulang ?? '-';
-
-                    // if ($isMalam) {
-                    // $fMasuk = $rawPulang;
-                    //     $fPulang = $rawMasuk;
-                    // } else {
-                    // $fMasuk = $rawMasuk;
-                    //     $fPulang = $rawPulang;
-                    // }
 
                     $fMasuk  = $rawMasuk;
                     $fPulang = $rawPulang;
