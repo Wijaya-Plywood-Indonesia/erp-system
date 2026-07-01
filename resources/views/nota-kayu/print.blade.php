@@ -83,7 +83,7 @@
             padding: 8px 6px;
             background: #fff;
             border-radius: 6px;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.12);
             box-sizing: border-box;
         }
 
@@ -107,20 +107,9 @@
             opacity: 0.85;
         }
 
-        .btn-jpg {
-            background: #f59e0b;
-            color: #fff;
-        }
-
-        .btn-png {
-            background: #3b82f6;
-            color: #fff;
-        }
-
-        .btn-pdf {
-            background: #ef4444;
-            color: #fff;
-        }
+        .btn-jpg  { background: #f59e0b; color: #fff; }
+        .btn-png  { background: #3b82f6; color: #fff; }
+        .btn-pdf  { background: #ef4444; color: #fff; }
 
         .export-btn svg {
             width: 13px;
@@ -134,7 +123,7 @@
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.45);
+            background: rgba(0,0,0,0.45);
             z-index: 9999;
             align-items: center;
             justify-content: center;
@@ -145,38 +134,27 @@
             font-size: 14px;
         }
 
-        #export-loading.show {
-            display: flex;
-        }
+        #export-loading.show { display: flex; }
 
         .spinner {
             width: 36px;
             height: 36px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
+            border: 4px solid rgba(255,255,255,0.3);
             border-top-color: #fff;
             border-radius: 50%;
             animation: spin 0.7s linear infinite;
         }
 
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         /* Sembunyikan toolbar saat cetak browser biasa */
         @media print {
-            .export-toolbar {
-                display: none !important;
-            }
+            .export-toolbar { display: none !important; }
         }
 
         @media (max-width: 360px) {
-
             .phone-wrapper,
-            .export-toolbar {
-                width: 100%;
-            }
+            .export-toolbar { width: 100%; }
         }
     </style>
 </head>
@@ -192,21 +170,15 @@
     <!-- ===== TOMBOL EXPORT ===== -->
     <div class="export-toolbar" id="export-toolbar">
         <button class="export-btn btn-jpg" onclick="exportNota('jpg')" title="Simpan sebagai JPG">
-            <svg viewBox="0 0 24 24">
-                <path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm7 3a5 5 0 1 0 0 10A5 5 0 0 0 12 6zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6z" />
-            </svg>
+            <svg viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm7 3a5 5 0 1 0 0 10A5 5 0 0 0 12 6zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
             JPG
         </button>
         <button class="export-btn btn-png" onclick="exportNota('png')" title="Simpan sebagai PNG">
-            <svg viewBox="0 0 24 24">
-                <path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2 4v10h2V9h4v2H9v2h4a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H7z" />
-            </svg>
+            <svg viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2 4v10h2V9h4v2H9v2h4a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H7z"/></svg>
             PNG
         </button>
         <button class="export-btn btn-pdf" onclick="exportNota('pdf')" title="Simpan sebagai PDF">
-            <svg viewBox="0 0 24 24">
-                <path d="M6 2a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6zm7 1.5L18.5 9H13V3.5zM8 12h2c1.1 0 2 .9 2 2s-.9 2-2 2H9v2H8v-6zm1 1v2h1a1 1 0 0 0 0-2H9zm4-1h1.5c1.38 0 2.5 1.12 2.5 2.5S15.88 17 14.5 17H13v-5zm1 1v3h.5a1.5 1.5 0 0 0 0-3H14z" />
-            </svg>
+            <svg viewBox="0 0 24 24"><path d="M6 2a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6zm7 1.5L18.5 9H13V3.5zM8 12h2c1.1 0 2 .9 2 2s-.9 2-2 2H9v2H8v-6zm1 1v2h1a1 1 0 0 0 0-2H9zm4-1h1.5c1.38 0 2.5 1.12 2.5 2.5S15.88 17 14.5 17H13v-5zm1 1v3h.5a1.5 1.5 0 0 0 0-3H14z"/></svg>
             PDF
         </button>
     </div>
@@ -235,91 +207,91 @@
         </table>
 
         @php
-        $details = $record->kayuMasuk->detailTurusanKayus ?? collect();
-        $grouped = $details->groupBy(function($item) {
-        $kodeLahan = optional($item->lahan)->kode_lahan ?? '-';
-        $grade = $item->grade ?? 0;
-        $panjang = $item->panjang ?? '-';
-        $jenis = optional($item->jenisKayu)->nama_kayu ?? '-';
-        return "{$kodeLahan}|{$grade}|{$panjang}|{$jenis}";
-        });
-        $grandBatang = 0;
-        $grandM3 = 0;
-        $grandHarga = 0;
+            $details = $record->kayuMasuk->detailTurusanKayus ?? collect();
+            $grouped = $details->groupBy(function($item) {
+                $kodeLahan = optional($item->lahan)->kode_lahan ?? '-';
+                $grade     = $item->grade ?? 0;
+                $panjang   = $item->panjang ?? '-';
+                $jenis     = optional($item->jenisKayu)->nama_kayu ?? '-';
+                return "{$kodeLahan}|{$grade}|{$panjang}|{$jenis}";
+            });
+            $grandBatang = 0;
+            $grandM3     = 0;
+            $grandHarga  = 0;
         @endphp
 
         @foreach($grouped as $key => $items)
-        @php
-        [$kodeLahan, $grade, $panjang, $jenis] = explode('|', $key);
-        $gradeText = $grade == 1 ? 'A' : ($grade == 2 ? 'B' : '-');
-        $subtotalBatang = $items->sum('kuantitas');
-        $subtotalM3 = $items->sum('kubikasi');
-        $subtotalHarga = $items->sum('total_harga');
-        $grandBatang += $subtotalBatang;
-        $grandM3 += $subtotalM3;
-        $grandHarga += $subtotalHarga;
-        @endphp
-
-        <div class="group-title">
-            {{ $kodeLahan }} &nbsp;&nbsp; {{ $panjang }} cm {{ $jenis }} ({{ $gradeText }})
-        </div>
-
-        @php
-        $firstItem = $items->first();
-        $idJenisKayu = optional($firstItem->jenisKayu)->id ?? $firstItem->id_jenis_kayu ?? null;
-        $groupedByDiameter = app(\App\Http\Controllers\NotaKayuController::class)
-        ->groupByRentangDiameter($items, $idJenisKayu, $grade, $panjang);
-        @endphp
-
-        {{-- === Rekap per Rentang Diameter === --}}
-        <table border="1" cellspacing="0" cellpadding="5" width="100%">
-            <thead>
-                <tr>
-                    <th style="text-align: center">Rentang D (cm)</th>
-                    <th style="text-align: center">Btg</th>
-                    <th style="text-align: center">m³</th>
-                    <th style="text-align: center">Harga</th>
-                    <th style="text-align: center">Poin</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($groupedByDiameter as $detail)
-                <tr>
-                    <td style="text-align: center">{{ $detail["rentang"] }}</td>
-                    <td style="text-align: right">{{ $detail["batang"] }}</td>
-                    <td style="text-align: right">
-                        {{ number_format($detail["kubikasi"], 4, ",", ".") }} m³
-                    </td>
-                    <td style="text-align: right">
-                        {{ number_format($detail["harga_satuan"], 0, ",", ".") }}
-                    </td>
-                    <td style="text-align: right">
-                        {{ number_format($detail["total_harga"], 0, ",", ".") }}
-                    </td>
-                </tr>
-                @empty
-                <tr>
-                    <td colspan="5" style="text-align: center">Tidak ada data</td>
-                </tr>
-                @endforelse
-            </tbody>
-
             @php
-            $totalBatangGrup = $groupedByDiameter->sum('batang');
-            $totalKubikasiGrup = $groupedByDiameter->sum('kubikasi');
-            $totalHargaGrup = $groupedByDiameter->sum('total_harga');
+                [$kodeLahan, $grade, $panjang, $jenis] = explode('|', $key);
+                $gradeText      = $grade == 1 ? 'A' : ($grade == 2 ? 'B' : '-');
+                $subtotalBatang = $items->sum('kuantitas');
+                $subtotalM3     = $items->sum('kubikasi');
+                $subtotalHarga  = $items->sum('total_harga');
+                $grandBatang   += $subtotalBatang;
+                $grandM3       += $subtotalM3;
+                $grandHarga    += $subtotalHarga;
             @endphp
 
-            <tfoot>
-                <tr style="font-weight: bold; background: #f7f7f7">
-                    <td style="text-align: center">Total</td>
-                    <td style="text-align: right">{{ number_format($totalBatangGrup, 0, ",", ".") }}</td>
-                    <td style="text-align: right">{{ number_format($totalKubikasiGrup, 4, ",", ".") }}</td>
-                    <td></td>
-                    <td style="text-align: right">{{ number_format($totalHargaGrup, 0, ",", ".") }}</td>
-                </tr>
-            </tfoot>
-        </table>
+            <div class="group-title">
+                {{ $kodeLahan }} &nbsp;&nbsp; {{ $panjang }} cm {{ $jenis }} ({{ $gradeText }})
+            </div>
+
+            @php
+                $firstItem      = $items->first();
+                $idJenisKayu    = optional($firstItem->jenisKayu)->id ?? $firstItem->id_jenis_kayu ?? null;
+                $groupedByDiameter = app(\App\Http\Controllers\NotaKayuController::class)
+                    ->groupByRentangDiameter($items, $idJenisKayu, $grade, $panjang);
+            @endphp
+
+            {{-- === Rekap per Rentang Diameter === --}}
+            <table border="1" cellspacing="0" cellpadding="5" width="100%">
+                <thead>
+                    <tr>
+                        <th style="text-align: center">Rentang D (cm)</th>
+                        <th style="text-align: center">Btg</th>
+                        <th style="text-align: center">m³</th>
+                        <th style="text-align: center">Harga</th>
+                        <th style="text-align: center">Poin</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($groupedByDiameter as $detail)
+                    <tr>
+                        <td style="text-align: center">{{ $detail["rentang"] }}</td>
+                        <td style="text-align: right">{{ $detail["batang"] }}</td>
+                        <td style="text-align: right">
+                            {{ number_format($detail["kubikasi"], 4, ",", ".") }} m³
+                        </td>
+                        <td style="text-align: right">
+                            {{ number_format($detail["harga_satuan"], 0, ",", ".") }}
+                        </td>
+                        <td style="text-align: right">
+                            {{ number_format($detail["total_harga"], 0, ",", ".") }}
+                        </td>
+                    </tr>
+                    @empty
+                    <tr>
+                        <td colspan="5" style="text-align: center">Tidak ada data</td>
+                    </tr>
+                    @endforelse
+                </tbody>
+
+                @php
+                    $totalBatangGrup   = $groupedByDiameter->sum('batang');
+                    $totalKubikasiGrup = $groupedByDiameter->sum('kubikasi');
+                    $totalHargaGrup    = $groupedByDiameter->sum('total_harga');
+                @endphp
+
+                <tfoot>
+                    <tr style="font-weight: bold; background: #f7f7f7">
+                        <td style="text-align: center">Total</td>
+                        <td style="text-align: right">{{ number_format($totalBatangGrup, 0, ",", ".") }}</td>
+                        <td style="text-align: right">{{ number_format($totalKubikasiGrup, 4, ",", ".") }}</td>
+                        <td></td>
+                        <td style="text-align: right">{{ number_format($totalHargaGrup, 0, ",", ".") }}</td>
+                    </tr>
+                </tfoot>
+            </table>
         @endforeach
 
         <div style="margin-top: 20px; display: flex; justify-content: flex-end">
@@ -387,7 +359,7 @@
         async function captureNota() {
             const el = document.getElementById('nota-content');
             return await html2canvas(el, {
-                scale: 2, // resolusi 2x supaya tajam
+                scale: 2,           // resolusi 2x supaya tajam
                 useCORS: true,
                 backgroundColor: '#ffffff',
                 logging: false
@@ -417,22 +389,20 @@
                     triggerDownload(url, `${filename}.png`);
 
                 } else if (format === 'pdf') {
-                    const {
-                        jsPDF
-                    } = window.jspdf;
+                    const { jsPDF } = window.jspdf;
 
-                    const imgWidth = canvas.width;
+                    const imgWidth  = canvas.width;
                     const imgHeight = canvas.height;
 
                     // Konversi px -> mm (96dpi → 1px = 0.264583mm, lalu ÷ scale 2)
-                    const pxToMm = 0.264583 / 2;
-                    const pdfW = imgWidth * pxToMm;
-                    const pdfH = imgHeight * pxToMm;
+                    const pxToMm    = 0.264583 / 2;
+                    const pdfW      = imgWidth  * pxToMm;
+                    const pdfH      = imgHeight * pxToMm;
 
                     const pdf = new jsPDF({
                         orientation: pdfW > pdfH ? 'landscape' : 'portrait',
                         unit: 'mm',
-                        format: [pdfW, pdfH] // halaman pas dengan konten
+                        format: [pdfW, pdfH]  // halaman pas dengan konten
                     });
 
                     pdf.addImage(
@@ -461,5 +431,4 @@
     </script>
 
 </body>
-
 </html>
