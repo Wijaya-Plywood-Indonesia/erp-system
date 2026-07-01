@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Validation\ValidationException;
 
 class ProduksiRepair extends Model
 {
@@ -11,13 +12,12 @@ class ProduksiRepair extends Model
 
     protected $fillable = [
         'tanggal',
-        'kendala'
+        'kendala',
     ];
 
     protected $casts = [
         'tanggal' => 'date',
     ];
-
 
     public function rencanaPegawais(): HasMany
     {
@@ -55,10 +55,15 @@ class ProduksiRepair extends Model
             $exists = static::whereDate('tanggal', $model->tanggal)->exists();
 
             if ($exists) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     'tanggal' => 'Data produksi repair untuk tanggal ini sudah ada.',
                 ]);
             }
         });
+    }
+
+    public function serahTerimaVeneerKering(): HasMany
+    {
+        return $this->hasMany(SerahTerimaVeneerKering::class, 'id_produksi_repair');
     }
 }

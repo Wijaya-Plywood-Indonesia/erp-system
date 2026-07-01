@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\ProduksiPressDryers\RelationManagers;
 
 use App\Models\DetailHasil;
+use App\Models\DetailMasuk;
+use App\Models\SerahTerimaVeneerKering;
 use App\Services\SerahHasilDryerService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -10,19 +12,21 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class DetailHasilsRelationManager extends RelationManager
 {
     protected static ?string $title = 'Hasil';
+
     protected static string $relationship = 'detailHasils';
 
     public function isReadOnly(): bool
@@ -43,7 +47,8 @@ class DetailHasilsRelationManager extends RelationManager
                     ->label('Ukuran Kayu')
                     ->options(function () {
                         $produksi = $this->getOwnerRecord();
-                        return \App\Models\DetailMasuk::where('id_produksi_dryer', $produksi->id)
+
+                        return DetailMasuk::where('id_produksi_dryer', $produksi->id)
                             ->with('ukuran')
                             ->get()
                             ->pluck('ukuran.nama_ukuran', 'id_ukuran')
@@ -53,14 +58,15 @@ class DetailHasilsRelationManager extends RelationManager
                     ->afterStateUpdated(function ($state) {
                         session(['last_ukuran' => $state]);
                     })
-                    ->default(fn() => session('last_ukuran'))
+                    ->default(fn () => session('last_ukuran'))
                     ->required(),
 
                 Select::make('id_jenis_kayu')
                     ->label('Jenis Kayu')
                     ->options(function () {
                         $produksi = $this->getOwnerRecord();
-                        return \App\Models\DetailMasuk::where('id_produksi_dryer', $produksi->id)
+
+                        return DetailMasuk::where('id_produksi_dryer', $produksi->id)
                             ->select('id_jenis_kayu')
                             ->distinct()
                             ->with('jenisKayu:id,nama_kayu')
@@ -71,7 +77,7 @@ class DetailHasilsRelationManager extends RelationManager
                     ->afterStateUpdated(function ($state) {
                         session(['last_jenis_kayu' => $state]);
                     })
-                    ->default(fn() => session('last_jenis_kayu'))
+                    ->default(fn () => session('last_jenis_kayu'))
                     ->required(),
 
                 TextInput::make('kw')
@@ -90,14 +96,20 @@ class DetailHasilsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn($query) => $query->with(['stokMasuk', 'ukuran', 'jenisKayu', 'produksiDryer']))
+            ->modifyQueryUsing(fn ($query) => $query->with([
+                'stokMasuk',
+                'ukuran',
+                'jenisKayu',
+                'produksiDryer',
+                'serahTerimaVeneerKering', // eager load untuk cek status repair
+            ]))
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
                     ->searchable()
                     ->badge()
-                    ->color(fn($record) => $record->stokMasuk ? 'success' : 'gray')
-                    ->description(fn($record) => $record->stokMasuk ? 'Sudah Serah' : 'Belum Serah'),
+                    ->color(fn ($record) => $record->stokMasuk ? 'success' : 'gray')
+                    ->description(fn ($record) => $record->stokMasuk ? 'Sudah Serah' : 'Belum Serah'),
 
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
@@ -123,6 +135,24 @@ class DetailHasilsRelationManager extends RelationManager
                 TextColumn::make('isi')
                     ->label('Isi'),
 
+                // Kolom status repair — informatif
+                TextColumn::make('status_repair')
+                    ->label('Status Repair')
+                    ->badge()
+                    ->getStateUsing(function (DetailHasil $record) {
+                        $serahTerima = $record->serahTerimaVeneerKering;
+                        if (! $serahTerima) {
+                            return 'Belum Diserahkan';
+                        }
+
+                        return $serahTerima->diterima_oleh === '-' ? 'Menunggu Repair' : 'Sudah Diterima Repair';
+                    })
+                    ->color(fn ($state) => match ($state) {
+                        'Sudah Diterima Repair' => 'success',
+                        'Menunggu Repair' => 'warning',
+                        default => 'gray',
+                    }),
+
                 TextColumn::make('created_at')
                     ->label('Tanggal Input')
                     ->dateTime()
@@ -132,8 +162,7 @@ class DetailHasilsRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make()
                     ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
             ->recordActions([
@@ -142,11 +171,6 @@ class DetailHasilsRelationManager extends RelationManager
                     ->icon('heroicon-o-paper-airplane')
                     ->color('success')
                     ->requiresConfirmation()
-                    /**
-                     * SOLUSI PALING AMAN: Direct DB Check.
-                     * Kita cek langsung ke tabel 'stok_veneer_kerings' menggunakan kueri SQL mentah.
-                     * Ini 100% akurat karena tidak bergantung pada cache model Eloquent.
-                     */
                     ->visible(function (DetailHasil $record) {
                         return ! DB::table('stok_veneer_kerings')
                             ->where('id_detail_hasil_dryer', $record->id)
@@ -154,18 +178,38 @@ class DetailHasilsRelationManager extends RelationManager
                     })
                     ->action(function (DetailHasil $record) {
                         try {
-                            app(SerahHasilDryerService::class)->serahkan($record);
+                            DB::transaction(function () use ($record) {
+                                // Step 1: serah ke gudang (logic lama)
+                                app(SerahHasilDryerService::class)->serahkan($record);
 
-                            /**
-                             * Bersihkan memori objek setelah aksi
-                             */
+                                // Step 2: otomatis serah ke repair sekaligus
+                                $sudahKeRepair = DB::table('serah_terima_veneer_kering')
+                                    ->where('id_detail_hasil', $record->id)
+                                    ->exists();
+
+                                if (! $sudahKeRepair) {
+                                    SerahTerimaVeneerKering::create([
+                                        'id_detail_hasil' => $record->id,
+                                        'id_detail_bongkar_kedi' => null,
+                                        'tipe_sumber' => 'dryer',
+                                        'id_produksi_repair' => null,
+                                        'diserahkan_oleh' => Auth::user()->name,
+                                        'diterima_oleh' => '-',
+                                        'status' => 'Serah Veneer',
+                                    ]);
+                                }
+                            });
+
                             $record->unsetRelation('stokMasuk');
+                            $record->unsetRelation('serahTerimaVeneerKering');
                             $record->refresh();
 
                             Notification::make()
                                 ->title('Penyerahan Berhasil')
+                                ->body('Veneer kering telah masuk gudang dan siap diterima Repair.')
                                 ->success()
                                 ->send();
+
                         } catch (\Throwable $e) {
                             Notification::make()
                                 ->title('Gagal')
@@ -175,25 +219,23 @@ class DetailHasilsRelationManager extends RelationManager
                         }
                     }),
 
+                // Action serahKeRepair dihapus — sudah otomatis di atas
 
                 EditAction::make()
                     ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
 
                 DeleteAction::make()
                     ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->hidden(
-                            fn($livewire) =>
-                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                            fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                         ),
                 ]),
             ]);

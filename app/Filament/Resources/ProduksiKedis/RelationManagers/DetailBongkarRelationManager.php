@@ -2,26 +2,30 @@
 
 namespace App\Filament\Resources\ProduksiKedis\RelationManagers;
 
+use App\Models\SerahTerimaVeneerKering;
+use App\Models\Ukuran;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Actions\CreateAction;
-use Filament\Resources\RelationManagers\RelationManager;
-use Filament\Schemas\Schema;
-use Filament\Tables\Table;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\BadgeColumn;
-use App\Models\JenisKayu;
-use App\Models\Ukuran;
-use App\Models\Mesin;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class DetailBongkarRelationManager extends RelationManager
 {
     protected static ?string $title = 'Bongkar Kedi';
+
     protected static string $relationship = 'detailBongkarKedi';
 
     public function isReadOnly(): bool
@@ -29,16 +33,10 @@ class DetailBongkarRelationManager extends RelationManager
         return false;
     }
 
-
-
-
     public function form(Schema $schema): Schema
     {
         return $schema
             ->schema([
-
-
-
                 // Pilihan Kayu Gabungan (Jenis Kayu + Ukuran) dari data masuk
                 Select::make('kayu_masuk_composite')
                     ->label('Pilih Kayu (Dari Data Masuk)')
@@ -49,6 +47,7 @@ class DetailBongkarRelationManager extends RelationManager
                             ->mapWithKeys(function ($d) {
                                 $key = "{$d->id_jenis_kayu}-{$d->id_ukuran}";
                                 $label = "{$d->jenisKayu->nama_kayu} | {$d->ukuran->dimensi}";
+
                                 return [$key => $label];
                             })
                             ->unique();
@@ -67,18 +66,16 @@ class DetailBongkarRelationManager extends RelationManager
                         }
                     })
                     ->required()
-                    ->dehydrated(false), // Jangan simpan kolom virtual ini ke DB
+                    ->dehydrated(false),
 
-                \Filament\Forms\Components\Hidden::make('id_jenis_kayu')
+                Hidden::make('id_jenis_kayu')
                     ->required(),
 
-                \Filament\Forms\Components\Hidden::make('id_ukuran')
+                Hidden::make('id_ukuran')
                     ->required(),
-
 
                 TextInput::make('kw')
                     ->label('Kualitas (KW)')
-
                     ->required()
                     ->placeholder('Cth: 1, 2, 3 dll.'),
 
@@ -87,6 +84,7 @@ class DetailBongkarRelationManager extends RelationManager
                     ->required()
                     ->numeric()
                     ->placeholder('Cth: 1.5 atau 100'),
+
                 TextInput::make('no_palet')
                     ->label('Nomor Palet')
                     ->numeric()
@@ -94,20 +92,25 @@ class DetailBongkarRelationManager extends RelationManager
             ]);
     }
 
-
     public function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn ($query) => $query->with([
+                'jenisKayu',
+                'ukuran',
+                'serahTerimaVeneerKering', // eager load untuk cek status serah
+            ]))
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
-                    ->searchable(),
-
-
+                    ->searchable()
+                    ->badge()
+                    ->color(fn ($record) => $record->serahTerimaVeneerKering ? 'success' : 'gray')
+                    ->description(fn ($record) => $record->serahTerimaVeneerKering ? 'Sudah Serah' : 'Belum Serah'),
 
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
-                    ->searchable(), 
+                    ->searchable(),
 
                 TextColumn::make('ukuran.nama_ukuran')
                     ->label('Ukuran')
@@ -116,7 +119,6 @@ class DetailBongkarRelationManager extends RelationManager
                             $q->where('panjang', 'like', "%{$search}%")
                                 ->orWhere('lebar', 'like', "%{$search}%")
                                 ->orWhere('tebal', 'like', "%{$search}%")
-                                // Mendukung format pencarian "12 x 12"
                                 ->orWhereRaw("CONCAT(panjang, ' x ', lebar, ' x ', tebal) LIKE ?", ["%{$search}%"]);
                         });
                     })
@@ -130,6 +132,25 @@ class DetailBongkarRelationManager extends RelationManager
                 TextColumn::make('jumlah')
                     ->label('Jumlah'),
 
+                // Kolom status serah — informatif, sama seperti di Dryer
+                // Kolom status serah — informatif
+                TextColumn::make('status_repair')
+                    ->label('Status')
+                    ->badge()
+                    ->getStateUsing(function ($record) {
+                        $serahTerima = $record->serahTerimaVeneerKering;
+                        if (! $serahTerima) {
+                            return 'Belum Diserahkan';
+                        }
+
+                        return $serahTerima->diterima_oleh === '-' ? 'Sudah Diserahkan' : 'Sudah Diterima Repair';
+                    })
+                    ->color(fn ($state) => match ($state) {
+                        'Sudah Diterima Repair' => 'success',
+                        'Sudah Diserahkan' => 'warning',
+                        default => 'gray',
+                    }),
+
                 TextColumn::make('created_at')
                     ->label('Tanggal Input')
                     ->dateTime()
@@ -139,38 +160,72 @@ class DetailBongkarRelationManager extends RelationManager
                 //
             ])
             ->headerActions([
-                // Create Action — HILANG jika status sudah divalidasi
                 CreateAction::make()
                     ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->isBongkarDivalidasi()
+                        fn ($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()
                     ),
             ])
             ->recordActions([
-                // Edit Action — HILANG jika status sudah divalidasi
+                // Tombol Serah — muncul kalau belum pernah diserahkan
+                Action::make('serah')
+                    ->label('Serah')
+                    ->icon('heroicon-o-paper-airplane')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->modalHeading('Serahkan Veneer Kering ini ke Repair?')
+                    ->visible(fn ($record) => ! $record->serahTerimaVeneerKering)
+                    ->action(function ($record) {
+                        try {
+                            DB::transaction(function () use ($record) {
+                                SerahTerimaVeneerKering::create([
+                                    'id_detail_hasil' => null,
+                                    'id_detail_bongkar_kedi' => $record->id,
+                                    'tipe_sumber' => 'kedi',
+                                    'id_produksi_repair' => null,
+                                    'diserahkan_oleh' => Auth::user()->name,
+                                    'diterima_oleh' => '-',
+                                    'status' => 'Serah Veneer',
+                                ]);
+                            });
+
+                            $record->unsetRelation('serahTerimaVeneerKering');
+                            $record->refresh();
+
+                            Notification::make()
+                                ->title('Veneer Kering Berhasil Diserahkan')
+                                ->body('Siap diterima Repair.')
+                                ->success()
+                                ->send();
+
+                        } catch (\Throwable $e) {
+                            Notification::make()
+                                ->title('Gagal')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
+
                 EditAction::make()
                     ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->isBongkarDivalidasi()
+                        fn ($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()
                     ),
 
-                // Delete Action — HILANG jika status sudah divalidasi
                 DeleteAction::make()
                     ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->isBongkarDivalidasi()
+                        fn ($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()
                     ),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->hidden(
-                            fn($livewire) =>
-                            $livewire->ownerRecord?->isBongkarDivalidasi()
+                            fn ($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()
                         ),
                 ]),
             ]);
     }
+
     public static function canViewForRecord($ownerRecord, $pageClass): bool
     {
         return in_array($ownerRecord->status, ['bongkar', 'selesai']);

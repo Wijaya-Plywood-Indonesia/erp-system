@@ -7,8 +7,8 @@ use App\Filament\Resources\ProduksiPressDryers\Pages\EditProduksiPressDryer;
 use App\Filament\Resources\ProduksiPressDryers\Pages\ListProduksiPressDryers;
 use App\Filament\Resources\ProduksiPressDryers\Pages\ViewProduksiPressDryer;
 use App\Filament\Resources\ProduksiPressDryers\Schemas\ProduksiPressDryerForm;
-use App\Filament\Resources\ProduksiPressDryers\Tables\ProduksiPressDryersTable;
 use App\Filament\Resources\ProduksiPressDryers\Schemas\ProduksiPressDryerInfolist;
+use App\Filament\Resources\ProduksiPressDryers\Tables\ProduksiPressDryersTable;
 use App\Filament\Resources\ProduksiRotaries\RelationManagers\SerahTerimaRelationManager;
 use App\Models\ProduksiPressDryer;
 use BackedEnum;
@@ -24,7 +24,9 @@ class ProduksiPressDryerResource extends Resource
     protected static ?string $model = ProduksiPressDryer::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedFire;
+
     protected static string|UnitEnum|null $navigationGroup = 'Dryer';
+
     protected static ?int $navigationSort = 1;
 
     public static function getEloquentQuery(): Builder
@@ -51,6 +53,7 @@ class ProduksiPressDryerResource extends Resource
     {
         return [
             SerahTerimaRelationManager::class,
+            RelationManagers\SerahTerimaVeneerKeringRelationManager::class,
             RelationManagers\DetailMesinsRelationManager::class,
             RelationManagers\DetailPegawaisRelationManager::class,
             RelationManagers\DetailMasuksRelationManager::class,
@@ -59,7 +62,6 @@ class ProduksiPressDryerResource extends Resource
             RelationManagers\ValidasiPressDryersRelationManager::class,
         ];
     }
-
 
     public static function getPages(): array
     {

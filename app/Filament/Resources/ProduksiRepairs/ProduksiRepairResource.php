@@ -2,29 +2,28 @@
 
 namespace App\Filament\Resources\ProduksiRepairs;
 
+use App\Filament\Resources\ProduksiPressDryers\RelationManagers\SerahTerimaVeneerKeringRelationManager;
 use App\Filament\Resources\ProduksiRepairs\Pages\CreateProduksiRepair;
 use App\Filament\Resources\ProduksiRepairs\Pages\EditProduksiRepair;
 use App\Filament\Resources\ProduksiRepairs\Pages\ListProduksiRepairs;
 use App\Filament\Resources\ProduksiRepairs\Pages\ViewProduksiRepair;
 use App\Filament\Resources\ProduksiRepairs\RelationManagers\BahanPenolongRepairRelationManager;
+use App\Filament\Resources\ProduksiRepairs\RelationManagers\DetailRencanaPegawaiRelationManager;
+use App\Filament\Resources\ProduksiRepairs\RelationManagers\HasilRepairRelationManager;
+use App\Filament\Resources\ProduksiRepairs\RelationManagers\ModalRepairRelationManager;
+use App\Filament\Resources\ProduksiRepairs\RelationManagers\RencanaRepairRelationManager;
+use App\Filament\Resources\ProduksiRepairs\RelationManagers\ValidasiRepairRelationManager;
 use App\Filament\Resources\ProduksiRepairs\Schemas\ProduksiRepairForm;
 use App\Filament\Resources\ProduksiRepairs\Schemas\ProduksiRepairInfolist;
 use App\Filament\Resources\ProduksiRepairs\Tables\ProduksiRepairsTable;
 use App\Models\ProduksiRepair;
+// Relation Managers
 use BackedEnum;
-use UnitEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-
-// Relation Managers
-use App\Filament\Resources\ProduksiRepairs\RelationManagers\DetailRencanaPegawaiRelationManager;
-use App\Filament\Resources\ProduksiRepairs\RelationManagers\RencanaRepairRelationManager;
-use App\Filament\Resources\ProduksiRepairs\RelationManagers\HasilRepairRelationManager;
-use App\Filament\Resources\ProduksiRepairs\RelationManagers\ModalRepairRelationManager;
-use App\Filament\Resources\ProduksiRepairs\RelationManagers\ValidasiRepairRelationManager;
-use App\Models\BahanPenolongRepair;
+use UnitEnum;
 
 class ProduksiRepairResource extends Resource
 {
@@ -52,6 +51,7 @@ class ProduksiRepairResource extends Resource
     public static function getRelations(): array
     {
         return [
+            SerahTerimaVeneerKeringRelationManager::class,
             ModalRepairRelationManager::class,
             DetailRencanaPegawaiRelationManager::class,
             RencanaRepairRelationManager::class,
