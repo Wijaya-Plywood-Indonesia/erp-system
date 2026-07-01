@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Validation\ValidationException;
 
 class ProduksiPressDryer extends Model
 {
@@ -20,7 +21,6 @@ class ProduksiPressDryer extends Model
         'tanggal_produksi' => 'date', // atau 'datetime'
         // casts lainnya...
     ];
-
 
     public function detailMasuks()
     {
@@ -61,7 +61,7 @@ class ProduksiPressDryer extends Model
 
     public function getLabelAttribute()
     {
-        return $this->tanggal_produksi . ' | ' . $this->shift;
+        return $this->tanggal_produksi.' | '.$this->shift;
     }
 
     protected static function booted()
@@ -72,14 +72,14 @@ class ProduksiPressDryer extends Model
                 ->exists();
 
             if ($exists) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     'tanggal_produksi' => 'Data produksi untuk tanggal dan shift ini sudah ada.',
                 ]);
             }
         });
     }
 
-    //relasi stok dan log
+    // relasi stok dan log
     public function ongkosDryer()
     {
         return $this->hasOne(OngkosProduksiDryer::class, 'id_produksi_dryer');
@@ -93,5 +93,17 @@ class ProduksiPressDryer extends Model
     public function kendalaPressDryers()
     {
         return $this->hasMany(KendalaPressDryer::class, 'produksi_press_dryer_id');
+    }
+
+    public function serahTerimaVeneerKering(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            SerahTerimaVeneerKering::class,
+            DetailHasil::class,
+            'id_produksi_dryer', // FK di detail_hasils
+            'id_detail_hasil',   // FK di serah_terima_veneer_kering
+            'id',                // PK di produksi_press_dryers
+            'id',                // PK di detail_hasils
+        );
     }
 }

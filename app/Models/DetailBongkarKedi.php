@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Events\ProductionUpdated;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class DetailBongkarKedi extends Model
 {
@@ -38,14 +40,20 @@ class DetailBongkarKedi extends Model
         // Menggunakan static::saved mencakup Created dan Updated
         static::saved(function ($model) {
             if ($model->id_produksi_kedi) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_kedi, 'kedi');
+                ProductionUpdated::dispatch($model->id_produksi_kedi, 'kedi');
             }
         });
 
         static::deleted(function ($model) {
             if ($model->id_produksi_kedi) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_kedi, 'kedi');
+                ProductionUpdated::dispatch($model->id_produksi_kedi, 'kedi');
             }
         });
+    }
+
+    // di App\Models\DetailBongkarKedi
+    public function serahTerimaVeneerKering(): HasOne
+    {
+        return $this->hasOne(SerahTerimaVeneerKering::class, 'id_detail_bongkar_kedi');
     }
 }
