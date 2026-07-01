@@ -8,13 +8,16 @@
         $dataRaw = collect($summary['globalUkuranKw'] ?? []);
 
         // Grouping untuk Rekap Ukuran Saja (Gabungan Semua KW)
-        $globalUkuran = $dataRaw->groupBy('ukuran')->map(function ($rows) {
+        $globalUkuran = $dataRaw
+        ->groupBy('ukuran')
+        ->map(function ($rows) {
         return (object) [
         'ukuran' => $rows->first()->ukuran,
         'total' => $rows->sum('total'),
-        'total_orang' => $rows->sum('jumlah_orang')
+        'total_orang' => $rows->sum('jumlah_orang'),
         ];
-        })->values();
+        })
+        ->values();
         @endphp
 
         {{-- [SECTION 1] STATISTIK UTAMA --}}
@@ -51,12 +54,14 @@
 
             <div class="grid grid-cols-1 gap-3">
                 @forelse ($dataRaw as $row)
-                <div class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm dark:bg-gray-800 dark:border-gray-700 transition border border-transparent">
+                <div
+                    class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm dark:bg-gray-800 dark:border-gray-700 transition border border-transparent">
 
                     {{-- KIRI: Ukuran, KW & Detail Orang --}}
                     <div class="flex flex-col">
                         <span class="text-sm font-bold text-gray-800 dark:text-gray-200">
-                            {{ $row->ukuran }} + KW {{ $row->kw }} + {{ $row->jenis_kayu }} - {{ $row->jumlah_orang }} Orang Mengerjakan
+                            {{ $row->ukuran }} + KW {{ $row->kw }} + {{ $row->jenis_kayu }} -
+                            {{ $row->jumlah_orang }} Orang Mengerjakan
                         </span>
                     </div>
 
@@ -81,7 +86,8 @@
 
             <div class="grid grid-cols-1 gap-3">
                 @foreach ($globalUkuran as $row)
-                <div class="flex items-center justify-between rounded-xl bg-primary-50/30 px-4 py-3 shadow-sm dark:bg-gray-800/50 dark:border-gray-700">
+                <div
+                    class="flex items-center justify-between rounded-xl bg-primary-50/30 px-4 py-3 shadow-sm dark:bg-gray-800/50 dark:border-gray-700">
 
                     {{-- KIRI: Ukuran & Akumulasi Orang --}}
                     <div class="flex flex-col">
@@ -104,10 +110,11 @@
         <div class="space-y-4 pt-6 border-t border-gray-100 dark:border-gray-800">
             <div class="flex items-center gap-2 font-semibold text-lg text-gray-900 dark:text-gray-100">
                 <x-heroicon-m-table-cells class="w-5 h-5 text-gray-400" />
-                Ringkasan Penggunaan Veneer & Ukuran Hasil
+                Hasil Produksi
             </div>
 
-            <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+            <div
+                class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
                 <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300">
                     <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white">
                         <tr>
@@ -119,7 +126,7 @@
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         @php $grandTotal = 0; @endphp
-                        @foreach (($summary['globalJenisKayuUkuran'] ?? []) as $row)
+                        @foreach ($summary['globalJenisKayuUkuran'] ?? [] as $row)
                         @php $grandTotal += $row->total; @endphp
                         <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                             <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
@@ -131,8 +138,11 @@
                     </tbody>
                     <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">
                         <tr>
-                            <td colspan="3" class="px-4 py-3 text-right border-t dark:border-gray-700">Total Keseluruhan</td>
-                            <td class="px-4 py-3 text-right border-t dark:border-gray-700">{{ number_format($grandTotal) }}</td>
+                            <td colspan="3" class="px-4 py-3 text-right border-t dark:border-gray-700">Total
+                                Keseluruhan</td>
+                            <td class="px-4 py-3 text-right border-t dark:border-gray-700">
+                                {{ number_format($grandTotal) }}
+                            </td>
                         </tr>
                     </tfoot>
                 </table>

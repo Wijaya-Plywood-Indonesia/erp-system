@@ -2,11 +2,12 @@
 
 namespace App\Filament\Resources\ReferensiHargaProduksis\Tables;
 
+use App\Models\KategoriBarang;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Actions\DeleteAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class ReferensiHargaProduksisTable
@@ -18,86 +19,80 @@ class ReferensiHargaProduksisTable
                 TextColumn::make('nama')
                     ->label('Nama')
                     ->searchable()
-                    ->sortable()
-                    ->default('-'),
-
-                TextColumn::make('ukuran')
-                    ->label('Ukuran')
-                    ->state(function ($record) {
-                        return $record->ukuran ? (
-                            $record->ukuran->panjang . 'mm x ' .
-                            $record->ukuran->lebar . 'mm x ' .
-                            $record->ukuran->tebal . 'mm'
-                        ) : '-';
-                    })
-                    ->searchable(query: function ($query, string $search) {
-                        $query->whereHas('ukuran', function ($q) use ($search) {
-                            $q->where('panjang', 'like', "%{$search}%")
-                                ->orWhere('lebar', 'like', "%{$search}%")
-                                ->orWhere('tebal', 'like', "%{$search}%");
-                        });
-                    }),
-
-                TextColumn::make('kw')
-                    ->label('KW')
-                    ->searchable()
-                    ->sortable(),
+                    ->placeholder('-'),
 
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
                     ->searchable()
-                    ->sortable(),
+                    ->placeholder('-'),
 
-                TextColumn::make('jenis_barang')
-                    ->label('Jenis Barang')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'Veneer Jadi', 'Veneer' => 'success',
-                        'Veneer Kering' => 'info',
-                        'Veneer Basah' => 'info',
-                        'Platform' => 'primary',
-                        'Afalan' => 'danger',
-                        'Plywood' => 'warning',
-                        'Barang' => 'info',
-                        'Lain-Lain' => 'gray',
-                        default => 'gray',
-                    })
-                    ->searchable()
-                    ->sortable(),
+                TextColumn::make('ukuran.dimensi')
+                    ->label('Ukuran')
+                    ->placeholder('-'),
+
+                TextColumn::make('kategoriBarang.nama_kategori')
+                    ->label('Kategori Barang')
+                    ->placeholder('-'),
+
+                TextColumn::make('grade.nama_grade')
+                    ->label('Grade')
+                    ->placeholder('-'),
+
+                TextColumn::make('kw_min')
+                    ->label('KW Min')
+                    ->placeholder('-'),
+
+                TextColumn::make('kw_max')
+                    ->label('KW Max')
+                    ->placeholder('-'),
+
+                TextColumn::make('t_min')
+                    ->label('T Min')
+                    ->suffix(' mm')
+                    ->placeholder('-'),
+
+                TextColumn::make('t_max')
+                    ->label('T Max')
+                    ->suffix(' mm')
+                    ->placeholder('-'),
 
                 TextColumn::make('harga')
                     ->label('Harga')
-                    ->formatStateUsing(fn($state) => 'Rp ' . number_format($state, 2, ',', '.'))
+                    ->money('IDR')
+                    ->placeholder('-')
                     ->sortable(),
 
-                TextColumn::make('subAnakAkun')
+                TextColumn::make('sub_anak_akun')
                     ->label('Sub Anak Akun')
-                    ->state(fn($record) => $record->subAnakAkun ? $record->subAnakAkun->kode_sub_anak_akun . ' - ' . $record->subAnakAkun->nama_sub_anak_akun : '-')
-                    ->searchable(query: function ($query, string $search) {
-                        $query->whereHas('subAnakAkun', function ($q) use ($search) {
-                            $q->where('kode_sub_anak_akun', 'like', "%{$search}%")
-                                ->orWhere('nama_sub_anak_akun', 'like', "%{$search}%");
-                        });
-                    })
-                    ->sortable(query: function ($query, string $direction) {
-                        $query->join('sub_anak_akuns', 'referensi_harga_produksi.id_sub_anak_akun', '=', 'sub_anak_akuns.id')
-                            ->orderBy('sub_anak_akuns.nama_sub_anak_akun', $direction);
-                    }),
+                    ->placeholder('-')
+                    ->getStateUsing(function ($record) {
+                        if (! $record->subAnakAkun) {
+                            return '-';
+                        }
 
-                TextColumn::make('created_at')
-                    ->label('Tanggal Dibuat')
-                    ->dateTime('d M Y H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                        return "{$record->subAnakAkun->kode_sub_anak_akun} - {$record->subAnakAkun->nama_sub_anak_akun}";
+                    }),
             ])
             ->filters([
-                //
+                SelectFilter::make('id_jenis_kayu')
+                    ->label('Jenis Kayu')
+                    ->relationship('jenisKayu', 'nama_kayu'),
+
+                SelectFilter::make('id_kategori_barang')
+                    ->label('Kategori Barang')
+                    ->options(
+                        KategoriBarang::query()
+                            ->pluck('nama_kategori', 'id')
+                    ),
+
+                SelectFilter::make('id_grade')
+                    ->label('Grade')
+                    ->relationship('grade', 'nama_grade'),
             ])
-            ->recordActions([
+            ->actions([
                 EditAction::make(),
-                DeleteAction::make(),
             ])
-            ->toolbarActions([
+            ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

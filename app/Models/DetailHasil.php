@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Events\ProductionUpdated;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class DetailHasil extends Model
 {
@@ -18,18 +20,20 @@ class DetailHasil extends Model
     ];
 
     public function produksiDryer()
-{
-    return $this->belongsTo(ProduksiPressDryer::class, 'id_produksi_dryer');
-}
+    {
+        return $this->belongsTo(ProduksiPressDryer::class, 'id_produksi_dryer');
+    }
 
     public function ukuran()
     {
         return $this->belongsTo(Ukuran::class, 'id_ukuran');
     }
+
     public function jenisKayu()
     {
         return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu', 'id');
     }
+
     public function produksi()
     {
         return $this->belongsTo(ProduksiPressDryer::class, 'id_produksi_dryer');
@@ -45,14 +49,19 @@ class DetailHasil extends Model
         // Menggunakan static::saved mencakup Created dan Updated
         static::saved(function ($model) {
             if ($model->id_produksi_dryer) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_dryer, 'dryer');
+                ProductionUpdated::dispatch($model->id_produksi_dryer, 'dryer');
             }
         });
 
         static::deleted(function ($model) {
             if ($model->id_produksi_dryer) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_dryer, 'dryer');
+                ProductionUpdated::dispatch($model->id_produksi_dryer, 'dryer');
             }
         });
+    }
+
+    public function serahTerimaVeneerKering(): HasOne
+    {
+        return $this->hasOne(SerahTerimaVeneerKering::class, 'id_detail_hasil');
     }
 }

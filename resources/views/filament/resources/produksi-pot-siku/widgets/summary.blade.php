@@ -74,7 +74,7 @@
         @if (!empty($summary['globalJenisKayuUkuran']) && count($summary['globalJenisKayuUkuran']) > 0)
         <div class="space-y-4 mt-6">
             <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                Ringkasan Penggunaan Veneer & Ukuran Hasil
+                Hasil Produksi
             </div>
 
             <div
@@ -130,6 +130,61 @@
                     </tfoot>
                 </table>
             </div>
+        </div>
+
+        <div
+            class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+            <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300">
+                <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white">
+                    <tr>
+                        <th class="px-4 py-3 font-semibold">Jenis Kayu</th>
+                        <th class="px-4 py-3 font-semibold">Ukuran Veneer</th>
+                        <th class="px-4 py-3 font-semibold text-center">KW</th>
+                        <th class="px-4 py-3 font-semibold text-right">Hasil (Tinggi)</th>
+                        <th class="px-4 py-3 font-semibold text-right">Hasil (Volume)</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    @php
+                    $grandTotalTinggi = 0;
+                    $grandTotalM3 = 0;
+                    @endphp
+                    @foreach ($summary['globalJenisKayuUkuran'] ?? [] as $row)
+                    @php
+                    $grandTotalTinggi += $row->total;
+                    $grandTotalM3 += $row->total_m³;
+                    @endphp
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                        <td class="px-4 py-3 font-medium">{{ $row->jenis_kayu }}</td>
+                        <td class="px-4 py-3">{{ $row->ukuran }}</td>
+                        <td class="px-4 py-3 text-center">
+                            <span
+                                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                                KW {{ $row->kw }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-right">{{ number_format($row->total) }} cm</td>
+                        <td class="px-4 py-3 text-right font-medium text-amber-600 dark:text-amber-400">
+                            {{ number_format($row->total_m³, 4) }} m³
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+                <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">
+                    <tr>
+                        <td colspan="3" class="px-4 py-3 text-right border-t dark:border-gray-700">Total
+                            Keseluruhan</td>
+                        <td class="px-4 py-3 text-right border-t dark:border-gray-700">
+                            {{ number_format($grandTotalTinggi) }} cm
+                        </td>
+                        <td
+                            class="px-4 py-3 text-right border-t dark:border-gray-700 text-amber-600 dark:text-amber-400">
+                            {{ number_format($grandTotalM3, 4) }} m³
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
         </div>
         @endif
 

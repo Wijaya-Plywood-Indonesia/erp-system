@@ -34,7 +34,8 @@
 
             <div class="grid grid-cols-1 gap-3">
                 @foreach ($summary['globalUkuranKw'] as $row)
-                <div class="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm
+                <div
+                    class="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm
                                 dark:bg-gray-800 dark:border-gray-700">
                     <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
                         {{ $row->ukuran }}
@@ -61,7 +62,8 @@
 
             <div class="grid grid-cols-1 gap-3">
                 @foreach ($summary['globalUkuran'] as $row)
-                <div class="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm
+                <div
+                    class="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm
                                 dark:bg-gray-800 dark:border-gray-700">
                     <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
                         {{ $row->ukuran }}
@@ -79,10 +81,11 @@
         @if (!empty($summary['globalJenisKayuUkuran']) && count($summary['globalJenisKayuUkuran']) > 0)
         <div class="space-y-4 mt-6">
             <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                Ringkasan Penggunaan Veneer & Ukuran Hasil
+                Hasil Produksi
             </div>
 
-            <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+            <div
+                class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
                 <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300">
                     <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white">
                         <tr>
@@ -94,7 +97,7 @@
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         @php $grandTotal = 0; @endphp
-                        @foreach (($summary['globalJenisKayuUkuran'] ?? []) as $row)
+                        @foreach ($summary['globalJenisKayuUkuran'] ?? [] as $row)
                         @php $grandTotal += $row->total; @endphp
                         <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                             <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
@@ -106,8 +109,11 @@
                     </tbody>
                     <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">
                         <tr>
-                            <td colspan="3" class="px-4 py-3 text-right border-t dark:border-gray-700">Total Keseluruhan</td>
-                            <td class="px-4 py-3 text-right border-t dark:border-gray-700">{{ number_format($grandTotal) }}</td>
+                            <td colspan="3" class="px-4 py-3 text-right border-t dark:border-gray-700">Total
+                                Keseluruhan</td>
+                            <td class="px-4 py-3 text-right border-t dark:border-gray-700">
+                                {{ number_format($grandTotal) }}
+                            </td>
                         </tr>
                     </tfoot>
                 </table>

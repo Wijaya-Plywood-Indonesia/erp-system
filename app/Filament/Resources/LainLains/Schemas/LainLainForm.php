@@ -10,6 +10,7 @@ use Filament\Schemas\Schema;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Hidden;
 
 class LainLainForm
 {
@@ -17,6 +18,7 @@ class LainLainForm
     {
         return $schema
             ->components([
+
                 Select::make('masuk')
                     ->label('Jam Masuk')
                     ->options(self::timeOptions())

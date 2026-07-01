@@ -30,9 +30,10 @@
 
                 {{-- List Detail --}}
                 <div class="space-y-3">
-                    @if(isset($summary['listPlatform']) && count($summary['listPlatform']) > 0)
+                    @if (isset($summary['listPlatform']) && count($summary['listPlatform']) > 0)
                     @foreach ($summary['listPlatform'] as $row)
-                    <div class="flex justify-between items-center border-b border-gray-100 pb-2 last:border-0 dark:border-gray-700">
+                    <div
+                        class="flex justify-between items-center border-b border-gray-100 pb-2 last:border-0 dark:border-gray-700">
                         <div>
                             <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">
                                 {{ $row->ukuran }} - {{ $row->kw }}
@@ -61,9 +62,10 @@
 
                 {{-- List Detail --}}
                 <div class="space-y-3">
-                    @if(isset($summary['listTriplek']) && count($summary['listTriplek']) > 0)
+                    @if (isset($summary['listTriplek']) && count($summary['listTriplek']) > 0)
                     @foreach ($summary['listTriplek'] as $row)
-                    <div class="flex justify-between items-center border-b border-gray-100 pb-2 last:border-0 dark:border-gray-700">
+                    <div
+                        class="flex justify-between items-center border-b border-gray-100 pb-2 last:border-0 dark:border-gray-700">
                         <div>
                             <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">
                                 {{ $row->ukuran }} - {{ $row->kw }}
@@ -96,7 +98,8 @@
                 $globalProgressPercent = min(100, max(0, $globalProgressVal));
                 @endphp
 
-                <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:bg-gray-800 dark:border-gray-700 space-y-3">
+                <div
+                    class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:bg-gray-800 dark:border-gray-700 space-y-3">
                     {{-- Nama & Nilai --}}
                     <div class="flex justify-between items-end text-sm">
                         <span class="font-semibold text-gray-700 dark:text-gray-300">
@@ -108,14 +111,14 @@
                     </div>
 
                     {{-- Progress Bar --}}
-                    <div class="w-full h-4 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden shadow-inner flex">
-                        <div
-                            class="h-full rounded-full transition-all duration-500 ease-out"
+                    <div
+                        class="w-full h-4 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden shadow-inner flex">
+                        <div class="h-full rounded-full transition-all duration-500 ease-out"
                             style="
                                 width: {{ $globalProgressPercent }}%;
                                 background: linear-gradient(90deg, 
                                     {{ $globalProgressPercent >= 100
-                                        ? '#16a34a, #22c55e'   /* green gradient */
+                                        ? '#16a34a, #22c55e' /* green gradient */
                                         : ($globalProgressPercent >= 75
                                             ? '#2563eb, #3b82f6' /* blue gradient */
                                             : '#f59e0b, #fbbf24') }} /* amber gradient */
@@ -133,11 +136,13 @@
                             </span>
                             @else
                             <span class="text-gray-500 dark:text-gray-400 font-semibold">
-                                Bebas potongan gaji jika target global mencapai 100% (tidak harus 100% per ukuran).
+                                Bebas potongan gaji jika target global mencapai 100% (tidak harus 100% per
+                                ukuran).
                             </span>
                             @endif
                         </div>
-                        <div class="font-extrabold text-sm {{ $globalProgressVal >= 100 ? 'text-green-600 dark:text-green-500' : ($globalProgressVal >= 75 ? 'text-blue-600 dark:text-blue-500' : 'text-amber-500') }}">
+                        <div
+                            class="font-extrabold text-sm {{ $globalProgressVal >= 100 ? 'text-green-600 dark:text-green-500' : ($globalProgressVal >= 75 ? 'text-blue-600 dark:text-blue-500' : 'text-amber-500') }}">
                             @if ($globalProgressVal >= 100)
                             Target Tercapai
                             @else
@@ -154,9 +159,11 @@
                 <div class="font-semibold text-sm text-gray-700 dark:text-gray-300">
                     Breakdown Pencapaian per Ukuran
                 </div>
-                <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+                <div
+                    class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
                     <table class="w-full text-left text-xs text-gray-600 dark:text-gray-300">
-                        <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-semibold">
+                        <thead
+                            class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-semibold">
                             <tr>
                                 <th class="px-4 py-2">Ukuran</th>
                                 <th class="px-3 py-2 text-center">Tebal (mm)</th>
@@ -168,18 +175,27 @@
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                             @foreach ($summary['targetProgress'] as $item)
                             @php
-                            $sizeProgress = $item['hasTarget'] && $item['target'] > 0
+                            $sizeProgress =
+                            $item['hasTarget'] && $item['target'] > 0
                             ? ($item['actual'] / $item['target']) * 100
                             : 0;
                             @endphp
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
-                                <td class="px-4 py-2.5 font-medium text-gray-950 dark:text-gray-200">{{ $item['ukuran'] }}</td>
-                                <td class="px-3 py-2.5 text-center font-mono font-medium">{{ number_format($item['tebal'], 1) }}</td>
-                                <td class="px-3 py-2.5 text-right font-mono">{{ number_format($item['actual']) }}</td>
-                                <td class="px-3 py-2.5 text-right font-mono text-gray-500 dark:text-gray-400">
+                                <td class="px-4 py-2.5 font-medium text-gray-950 dark:text-gray-200">
+                                    {{ $item['ukuran'] }}
+                                </td>
+                                <td class="px-3 py-2.5 text-center font-mono font-medium">
+                                    {{ number_format($item['tebal'], 1) }}
+                                </td>
+                                <td class="px-3 py-2.5 text-right font-mono">
+                                    {{ number_format($item['actual']) }}
+                                </td>
+                                <td
+                                    class="px-3 py-2.5 text-right font-mono text-gray-500 dark:text-gray-400">
                                     {{ $item['hasTarget'] ? number_format($item['target']) : '-' }}
                                 </td>
-                                <td class="px-3 py-2.5 text-center font-mono font-bold {{ $sizeProgress >= 100 ? 'text-green-600 dark:text-green-500' : 'text-gray-900 dark:text-gray-100 font-medium' }}">
+                                <td
+                                    class="px-3 py-2.5 text-center font-mono font-bold {{ $sizeProgress >= 100 ? 'text-green-600 dark:text-green-500' : 'text-gray-900 dark:text-gray-100 font-medium' }}">
                                     @if (!$item['hasTarget'])
                                     -
                                     @else
@@ -200,10 +216,11 @@
         @if (!empty($summary['globalJenisKayuUkuran']) && count($summary['globalJenisKayuUkuran']) > 0)
         <div class="space-y-4 mt-8">
             <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                Ringkasan Penggunaan Veneer & Ukuran Hasil (Platform & Triplek)
+                Hasil Produksi (Platform & Triplek)
             </div>
 
-            <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+            <div
+                class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
                 <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300">
                     <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white">
                         <tr>
@@ -215,7 +232,7 @@
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         @php $grandTotal = 0; @endphp
-                        @foreach (($summary['globalJenisKayuUkuran'] ?? []) as $row)
+                        @foreach ($summary['globalJenisKayuUkuran'] ?? [] as $row)
                         @php $grandTotal += $row->total; @endphp
                         <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                             <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
@@ -227,8 +244,11 @@
                     </tbody>
                     <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">
                         <tr>
-                            <td colspan="3" class="px-4 py-3 text-right border-t dark:border-gray-700">Total Keseluruhan</td>
-                            <td class="px-4 py-3 text-right border-t dark:border-gray-700">{{ number_format($grandTotal) }}</td>
+                            <td colspan="3" class="px-4 py-3 text-right border-t dark:border-gray-700">Total
+                                Keseluruhan</td>
+                            <td class="px-4 py-3 text-right border-t dark:border-gray-700">
+                                {{ number_format($grandTotal) }}
+                            </td>
                         </tr>
                     </tfoot>
                 </table>

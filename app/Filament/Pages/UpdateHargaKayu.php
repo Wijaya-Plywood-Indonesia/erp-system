@@ -154,7 +154,7 @@ class UpdateHargaKayu extends Page
         }
 
         DB::transaction(function () use ($ids) {
-            $rows = HargaKayu::whereIn('id', $ids)->where('status', 'pending')->get();
+            $rows = HargaKayu::whereIn('id', $ids)->get();
 
             foreach ($rows as $row) {
                 HargaKayuLog::create([
@@ -189,7 +189,6 @@ class UpdateHargaKayu extends Page
         }
 
         HargaKayu::whereIn('id', $ids)
-            ->where('status', 'pending')
             ->update([
                 'harga_baru' => null,
                 'status' => null,

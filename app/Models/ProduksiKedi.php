@@ -81,4 +81,16 @@ class ProduksiKedi extends Model
     {
         return $this->hasMany(KendalaKedi::class, 'produksi_kedi_id');
     }
+
+    public function serahTerimaVeneerKering(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            SerahTerimaVeneerKering::class,
+            DetailBongkarKedi::class,
+            'id_produksi_kedi',        // FK di DetailBongkarKedi yang mengarah ke ProduksiKedi
+            'id_detail_bongkar_kedi',  // FK di SerahTerimaVeneerKering yang mengarah ke DetailBongkarKedi
+            'id',                      // local key di ProduksiKedi
+            'id'                       // local key di DetailBongkarKedi
+        );
+    }
 }
