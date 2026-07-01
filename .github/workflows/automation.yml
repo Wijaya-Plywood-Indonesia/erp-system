@@ -90,14 +90,28 @@ jobs:
 
   # ============================================================
   # JOB 2: DEPLOY PRARELEASE — Delta dari commit terakhir di main
+  # Sekarang jalan untuk 2 domain: prarelease.wijayaplywoods.com
+  # dan prarelease-wahana.wijayaplywoods.com (via matrix)
   # ============================================================
   deploy-prarelease:
-    name: Deploy to prarelease.wijayaplywoods.com
+    name: "Deploy to ${{ matrix.site.domain }}"
     needs: laravel-tests
     if: |
       (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target == 'prarelease')
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        site:
+          - domain: prarelease.wijayaplywoods.com
+          - domain: prarelease-wahana
+    concurrency:
+      group: deploy-${{ matrix.site.domain }}
+      cancel-in-progress: false
+    env:
+      ZIP_NAME: "deploy-${{ matrix.site.domain }}.zip"
+      DELETED_NAME: "deleted-${{ matrix.site.domain }}.txt"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -105,7 +119,7 @@ jobs:
 
       # ----------------------------------------------------------
       # STEP 1: Ambil commit hash terakhir yang berhasil di-deploy
-      # File .last_deploy_commit disimpan di server
+      # File .last_deploy_commit disimpan di server, di dalam folder domain masing-masing
       # ----------------------------------------------------------
       - name: Get last deployed commit from server
         id: last_commit
@@ -116,7 +130,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            MARKER="/home/${{ secrets.SSH_USERNAME }}/prarelease.wijayaplywoods.com/.last_deploy_commit"
+            MARKER="/home/${{ secrets.SSH_USERNAME }}/${{ matrix.site.domain }}/.last_deploy_commit"
             if [ -f "$MARKER" ]; then
               cat "$MARKER"
             else
@@ -130,7 +144,7 @@ jobs:
           # Ambil baris terakhir dari output SSH (baris lain adalah banner/info)
           LAST=$(echo "${{ steps.last_commit.outputs.output }}" | tail -n 1 | tr -d '[:space:]')
           echo "last_commit=$LAST" >> $GITHUB_OUTPUT
-          echo "Last deployed commit: $LAST"
+          echo "Last deployed commit untuk ${{ matrix.site.domain }}: $LAST"
 
       # ----------------------------------------------------------
       # STEP 2: Deteksi file yang berubah sejak commit terakhir
@@ -141,6 +155,7 @@ jobs:
           LAST="${{ steps.parse_commit.outputs.last_commit }}"
           CURRENT="${{ github.sha }}"
 
+          echo "Domain: ${{ matrix.site.domain }}"
           echo "Current commit: $CURRENT"
           echo "Last deployed: $LAST"
 
@@ -248,6 +263,8 @@ jobs:
 
       # ----------------------------------------------------------
       # STEP 3B: Buat ZIP — full atau delta
+      # Nama file ZIP unik per domain (env.ZIP_NAME) supaya tidak
+      # tabrakan saat 2 matrix job upload ke server yang sama
       # ----------------------------------------------------------
       - name: Create FULL ZIP package
         if: steps.changed.outputs.mode == 'full'
@@ -265,8 +282,8 @@ jobs:
             --exclude 'storage/' \
             --exclude 'build_deploy/' \
             ./ "$BUILD_DIR/" || [ $? -eq 24 ]
-          (cd "$BUILD_DIR" && zip -r ../deploy.zip . -q)
-          echo "📦 Full ZIP size: $(du -sh ../deploy.zip 2>/dev/null || du -sh deploy.zip)"
+          (cd "$BUILD_DIR" && zip -r "../$ZIP_NAME" . -q)
+          echo "📦 Full ZIP size: $(du -sh "$ZIP_NAME")"
 
       - name: Create DELTA ZIP package
         if: steps.changed.outputs.mode == 'delta'
@@ -275,7 +292,6 @@ jobs:
 
           # Jika ada perubahan frontend, tambahkan hasil build ke changed files
           if [ "${{ steps.frontend_check.outputs.rebuild }}" = "true" ]; then
-            # Tambahkan semua file hasil build Vite
             find public/build -type f >> /tmp/changed_files.txt 2>/dev/null || true
           fi
 
@@ -291,19 +307,16 @@ jobs:
           echo "--- File yang akan di-ZIP (delta) ---"
           cat /tmp/changed_files.txt
 
-          # Buat ZIP hanya dari file yang berubah
           if [ -s /tmp/changed_files.txt ]; then
-            zip -r deploy.zip . -i@/tmp/changed_files.txt -q
-            echo "📦 Delta ZIP size: $(du -sh deploy.zip)"
+            zip -r "$ZIP_NAME" . -i@/tmp/changed_files.txt -q
+            echo "📦 Delta ZIP size: $(du -sh "$ZIP_NAME")"
           else
-            # Buat ZIP kosong sebagai marker (tidak ada file konten)
             echo "no_changes" > /tmp/no_changes_marker.txt
-            zip deploy.zip /tmp/no_changes_marker.txt -q
+            zip "$ZIP_NAME" /tmp/no_changes_marker.txt -q
           fi
 
-          # Simpan daftar file yang dihapus untuk dikirim ke server
           if [ -s /tmp/deleted_files.txt ]; then
-            cp /tmp/deleted_files.txt deleted_files.txt
+            cp /tmp/deleted_files.txt "$DELETED_NAME"
           fi
 
       # ----------------------------------------------------------
@@ -317,7 +330,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           port: ${{ secrets.SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "deploy.zip"
+          source: "${{ env.ZIP_NAME }}"
           target: "/home/${{ secrets.SSH_USERNAME }}"
 
       - name: Upload deleted files list (jika ada)
@@ -328,11 +341,12 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           port: ${{ secrets.SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "deleted_files.txt"
+          source: "${{ env.DELETED_NAME }}"
           target: "/home/${{ secrets.SSH_USERNAME }}"
 
       # ----------------------------------------------------------
       # STEP 5: Execute deploy di server
+      # TARGET dan STAGING sekarang memakai nama domain dari matrix
       # ----------------------------------------------------------
       - name: Execute Remote SSH Commands (Full Deploy)
         if: steps.changed.outputs.mode == 'full'
@@ -344,17 +358,17 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -euo pipefail
-            TARGET="/home/${{ secrets.SSH_USERNAME }}/prarelease.wijayaplywoods.com"
-            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_prarelease"
+            DOMAIN="${{ matrix.site.domain }}"
+            TARGET="/home/${{ secrets.SSH_USERNAME }}/$DOMAIN"
+            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_$DOMAIN"
 
             cd "$TARGET"
+            trap 'php artisan up || true' EXIT
             [ -f "artisan" ] && php artisan down || true
 
-            # Extract ke staging dulu
             rm -rf "$STAGING" && mkdir -p "$STAGING"
-            unzip -oq /home/${{ secrets.SSH_USERNAME }}/deploy.zip -d "$STAGING"
+            unzip -oq "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}" -d "$STAGING"
 
-            # Hapus file lama kecuali yang diproteksi
             find . -mindepth 1 -maxdepth 1 \
               ! -name 'storage' \
               ! -name '.env' \
@@ -374,16 +388,13 @@ jobs:
             php artisan route:cache
             php artisan view:cache
             php artisan migrate --force
-            php artisan up
 
-            # Simpan commit hash sebagai marker deploy terakhir
             echo "${{ github.sha }}" > "$TARGET/.last_deploy_commit"
 
-            # Cleanup
             rm -rf "$STAGING"
-            rm -f /home/${{ secrets.SSH_USERNAME }}/deploy.zip
+            rm -f "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
 
-            echo "🚀 Prarelease Full Deployment Success! [${{ github.sha }}]"
+            echo "🚀 [$DOMAIN] Full Deployment Success! [${{ github.sha }}]"
 
       - name: Execute Remote SSH Commands (Delta Deploy)
         if: steps.changed.outputs.mode == 'delta'
@@ -395,17 +406,17 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -euo pipefail
-            TARGET="/home/${{ secrets.SSH_USERNAME }}/prarelease.wijayaplywoods.com"
-            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_prarelease"
+            DOMAIN="${{ matrix.site.domain }}"
+            TARGET="/home/${{ secrets.SSH_USERNAME }}/$DOMAIN"
+            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_$DOMAIN"
 
             cd "$TARGET"
+            trap 'php artisan up || true' EXIT
             [ -f "artisan" ] && php artisan down || true
 
-            # Extract delta ke staging
             rm -rf "$STAGING" && mkdir -p "$STAGING"
-            unzip -oq /home/${{ secrets.SSH_USERNAME }}/deploy.zip -d "$STAGING"
+            unzip -oq "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}" -d "$STAGING"
 
-            # Copy hanya file yang berubah (rsync delta mode)
             find "$STAGING" -mindepth 1 -maxdepth 1 \
               ! -name 'storage' \
               ! -name '.env' \
@@ -413,12 +424,10 @@ jobs:
               ! -name '.github' \
               -exec cp -r {} "$TARGET/" \;
 
-            # Hapus file yang dihapus di repo (jika ada)
-            DELETED_LIST="/home/${{ secrets.SSH_USERNAME }}/deleted_files.txt"
+            DELETED_LIST="/home/${{ secrets.SSH_USERNAME }}/${{ env.DELETED_NAME }}"
             if [ -f "$DELETED_LIST" ]; then
               echo "🗑️ Menghapus file yang dihapus di repo..."
               while IFS= read -r file; do
-                # Proteksi: jangan hapus storage, .env, .github
                 if echo "$file" | grep -qE "^(storage/|\.env|\.github/)"; then
                   echo "⏩ Skip protected: $file"
                   continue
@@ -436,29 +445,40 @@ jobs:
             php artisan route:cache
             php artisan view:cache
             php artisan migrate --force
-            php artisan up
 
-            # Update marker
             echo "${{ github.sha }}" > "$TARGET/.last_deploy_commit"
 
-            # Cleanup
             rm -rf "$STAGING"
-            rm -f /home/${{ secrets.SSH_USERNAME }}/deploy.zip
+            rm -f "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
 
-            echo "⚡ Prarelease Delta Deployment Success! [${{ github.sha }}]"
+            echo "⚡ [$DOMAIN] Delta Deployment Success! [${{ github.sha }}]"
 
       - name: Skip notification
         if: steps.changed.outputs.mode == 'skip'
-        run: echo "✅ Tidak ada perubahan yang perlu di-deploy, pipeline selesai."
+        run: echo "✅ [${{ matrix.site.domain }}] Tidak ada perubahan yang perlu di-deploy, pipeline selesai."
 
   # ============================================================
   # JOB 3: DEPLOY PRODUCTION — Delta dari tag sebelumnya ke tag baru
+  # Sekarang jalan untuk 2 domain: kayu.wijayaplywoods.com
+  # dan wahana.wijayaplywoods.com (via matrix)
   # ============================================================
   deploy-production:
-    name: Deploy to kayu.wijayaplywoods.com
+    name: "Deploy to ${{ matrix.site.domain }}"
     needs: laravel-tests
     if: startsWith(github.ref, 'refs/tags/') && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        site:
+          - domain: kayu.wijayaplywoods.com
+          - domain: wahana.wijayaplywoods.com
+    concurrency:
+      group: deploy-${{ matrix.site.domain }}
+      cancel-in-progress: false
+    env:
+      ZIP_NAME: "deploy-${{ matrix.site.domain }}.zip"
+      DELETED_NAME: "deleted-${{ matrix.site.domain }}.txt"
 
     steps:
       - uses: actions/checkout@v4
@@ -466,7 +486,8 @@ jobs:
           fetch-depth: 0 # Wajib: butuh full history untuk git diff antar tag
 
       # ----------------------------------------------------------
-      # STEP 1: Deteksi tag sebelumnya
+      # STEP 1: Deteksi tag sebelumnya (sama untuk semua domain,
+      # karena berbasis git tag, bukan state di server)
       # ----------------------------------------------------------
       - name: Get previous tag
         id: prev_tag
@@ -474,7 +495,6 @@ jobs:
           CURRENT_TAG="${{ github.ref_name }}"
           echo "Current tag: $CURRENT_TAG"
 
-          # Ambil semua tag yang diurutkan secara version, exclude tag saat ini
           PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${CURRENT_TAG}$" | head -n 1)
 
           if [ -z "$PREV_TAG" ]; then
@@ -516,7 +536,6 @@ jobs:
             git diff --name-only --diff-filter=ACM "$PREV" "$CURRENT" > /tmp/changed_files.txt
             git diff --name-only --diff-filter=D "$PREV" "$CURRENT" > /tmp/deleted_files.txt
 
-            # Filter exclude
             for EXCL in "${ALWAYS_EXCLUDE[@]}"; do
               grep -v "^${EXCL}" /tmp/changed_files.txt > /tmp/cf_tmp.txt || true
               mv /tmp/cf_tmp.txt /tmp/changed_files.txt
@@ -524,7 +543,6 @@ jobs:
 
             echo "--- Changed files ($PREV → $CURRENT) ---"
             cat /tmp/changed_files.txt
-
             echo "--- Deleted files ---"
             cat /tmp/deleted_files.txt
 
@@ -546,7 +564,6 @@ jobs:
             echo "frontend=true" >> $GITHUB_OUTPUT
             echo "vendor=true" >> $GITHUB_OUTPUT
           else
-            # Frontend
             if grep -qE "^(resources/|package\.json|package-lock\.json|vite\.config)" /tmp/changed_files.txt 2>/dev/null; then
               echo "frontend=true" >> $GITHUB_OUTPUT
               echo "🎨 Frontend perlu rebuild"
@@ -554,7 +571,6 @@ jobs:
               echo "frontend=false" >> $GITHUB_OUTPUT
             fi
 
-            # Vendor
             if grep -qE "^(composer\.json|composer\.lock)" /tmp/changed_files.txt 2>/dev/null; then
               echo "vendor=true" >> $GITHUB_OUTPUT
               echo "📦 Vendor perlu rebuild"
@@ -601,7 +617,7 @@ jobs:
           npm run build
 
       # ----------------------------------------------------------
-      # STEP 5: Buat ZIP (full atau delta)
+      # STEP 5: Buat ZIP (full atau delta) — nama unik per domain
       # ----------------------------------------------------------
       - name: Create FULL ZIP package
         if: steps.changed.outputs.mode == 'full'
@@ -619,36 +635,33 @@ jobs:
             --exclude 'storage/' \
             --exclude 'build_deploy/' \
             ./ "$BUILD_DIR/" || [ $? -eq 24 ]
-          (cd "$BUILD_DIR" && zip -r ../deploy.zip . -q)
-          echo "📦 Full ZIP: $(du -sh deploy.zip)"
+          (cd "$BUILD_DIR" && zip -r "../$ZIP_NAME" . -q)
+          echo "📦 Full ZIP: $(du -sh "$ZIP_NAME")"
 
       - name: Create DELTA ZIP package
         if: steps.changed.outputs.mode == 'delta'
         run: |
           set -euo pipefail
 
-          # Tambahkan hasil build frontend jika direbuild
           if [ "${{ steps.rebuild_check.outputs.frontend }}" = "true" ]; then
             find public/build -type f >> /tmp/changed_files.txt 2>/dev/null || true
           fi
 
-          # Tambahkan vendor jika direbuild
           if [ "${{ steps.rebuild_check.outputs.vendor }}" = "true" ]; then
             find vendor -type f >> /tmp/changed_files.txt 2>/dev/null || true
           fi
 
-          # Hapus duplikat
           sort -u /tmp/changed_files.txt -o /tmp/changed_files.txt
 
           echo "--- File yang akan di-ZIP ---"
           wc -l /tmp/changed_files.txt
           head -30 /tmp/changed_files.txt
 
-          zip -r deploy.zip . -i@/tmp/changed_files.txt -q
-          echo "📦 Delta ZIP: $(du -sh deploy.zip)"
+          zip -r "$ZIP_NAME" . -i@/tmp/changed_files.txt -q
+          echo "📦 Delta ZIP: $(du -sh "$ZIP_NAME")"
 
           if [ -s /tmp/deleted_files.txt ]; then
-            cp /tmp/deleted_files.txt deleted_files.txt
+            cp /tmp/deleted_files.txt "$DELETED_NAME"
           fi
 
       # ----------------------------------------------------------
@@ -671,7 +684,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           port: ${{ secrets.SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "deploy.zip"
+          source: "${{ env.ZIP_NAME }}"
           target: "/home/${{ secrets.SSH_USERNAME }}"
 
       - name: Upload deleted files list (jika ada)
@@ -682,7 +695,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           port: ${{ secrets.SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "deleted_files.txt"
+          source: "${{ env.DELETED_NAME }}"
           target: "/home/${{ secrets.SSH_USERNAME }}"
 
       # ----------------------------------------------------------
@@ -698,8 +711,9 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -euo pipefail
-            TARGET="/home/${{ secrets.SSH_USERNAME }}/kayu.wijayaplywoods.com"
-            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_production"
+            DOMAIN="${{ matrix.site.domain }}"
+            TARGET="/home/${{ secrets.SSH_USERNAME }}/$DOMAIN"
+            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_$DOMAIN"
 
             if [ ! -d "$TARGET" ]; then
               echo "❌ $TARGET tidak ditemukan. Abort."
@@ -707,10 +721,11 @@ jobs:
             fi
 
             cd "$TARGET"
+            trap 'php artisan up || true' EXIT
             [ -f "artisan" ] && php artisan down || true
 
             rm -rf "$STAGING" && mkdir -p "$STAGING"
-            unzip -oq /home/${{ secrets.SSH_USERNAME }}/deploy.zip -d "$STAGING"
+            unzip -oq "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}" -d "$STAGING"
 
             find . -mindepth 1 -maxdepth 1 \
               ! -name 'storage' \
@@ -731,15 +746,13 @@ jobs:
             php artisan route:cache
             php artisan view:cache
             php artisan migrate --force
-            php artisan up
 
-            # Simpan tag sebagai marker deploy terakhir
             echo "${{ github.ref_name }}" > "$TARGET/.last_deploy_tag"
 
             rm -rf "$STAGING"
-            rm -f /home/${{ secrets.SSH_USERNAME }}/deploy.zip
+            rm -f "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
 
-            echo "🚀 Production Full Deployment Success! [${{ github.ref_name }}]"
+            echo "🚀 [$DOMAIN] Production Full Deployment Success! [${{ github.ref_name }}]"
 
       - name: Execute Remote SSH Commands (Delta Deploy)
         if: steps.changed.outputs.mode == 'delta'
@@ -751,8 +764,9 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -euo pipefail
-            TARGET="/home/${{ secrets.SSH_USERNAME }}/kayu.wijayaplywoods.com"
-            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_production"
+            DOMAIN="${{ matrix.site.domain }}"
+            TARGET="/home/${{ secrets.SSH_USERNAME }}/$DOMAIN"
+            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_$DOMAIN"
 
             if [ ! -d "$TARGET" ]; then
               echo "❌ $TARGET tidak ditemukan. Abort."
@@ -760,10 +774,11 @@ jobs:
             fi
 
             cd "$TARGET"
+            trap 'php artisan up || true' EXIT
             [ -f "artisan" ] && php artisan down || true
 
             rm -rf "$STAGING" && mkdir -p "$STAGING"
-            unzip -oq /home/${{ secrets.SSH_USERNAME }}/deploy.zip -d "$STAGING"
+            unzip -oq "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}" -d "$STAGING"
 
             find "$STAGING" -mindepth 1 -maxdepth 1 \
               ! -name 'storage' \
@@ -772,8 +787,7 @@ jobs:
               ! -name '.github' \
               -exec cp -r {} "$TARGET/" \;
 
-            # Hapus file yang dihapus di repo
-            DELETED_LIST="/home/${{ secrets.SSH_USERNAME }}/deleted_files.txt"
+            DELETED_LIST="/home/${{ secrets.SSH_USERNAME }}/${{ env.DELETED_NAME }}"
             if [ -f "$DELETED_LIST" ]; then
               while IFS= read -r file; do
                 if echo "$file" | grep -qE "^(storage/|\.env|\.github/)"; then
@@ -793,12 +807,10 @@ jobs:
             php artisan route:cache
             php artisan view:cache
             php artisan migrate --force
-            php artisan up
 
-            # Update tag marker
             echo "${{ github.ref_name }}" > "$TARGET/.last_deploy_tag"
 
             rm -rf "$STAGING"
-            rm -f /home/${{ secrets.SSH_USERNAME }}/deploy.zip
+            rm -f "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
 
-            echo "⚡ Production Delta Deployment Success! [${{ github.ref_name }}]"
+            echo "⚡ [$DOMAIN] Production Delta Deployment Success! [${{ github.ref_name }}]"
