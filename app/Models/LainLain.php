@@ -32,6 +32,6 @@ class LainLain extends Model
     public function creator()
     {
         // Ganti 'created_by' menjadi 'dibuat_oleh' jika kolom di tabel Anda namanya 'dibuat_oleh'
-        return $this->belongsTo(User::class, 'created_by'); 
+        return $this->belongsTo(User::class, 'created_by');
     }
 }

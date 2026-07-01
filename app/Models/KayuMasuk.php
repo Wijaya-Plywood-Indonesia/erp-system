@@ -82,7 +82,7 @@ class KayuMasuk extends Model
 
     public function tempatKayu(): HasMany
     {
-        return $this->hasMany(TempatKayu::class, 'id_tempat_kayu');
+        return $this->hasMany(TempatKayu::class, 'id_kayu_masuk');
     }
 
     public function detailMasukanKayu(): HasMany

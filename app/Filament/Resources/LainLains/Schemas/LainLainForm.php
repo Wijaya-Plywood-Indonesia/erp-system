@@ -101,18 +101,18 @@ class LainLainForm
                     ->maxLength(255),
 
                 Hidden::make('created_by') // Sesuaikan dengan nama kolom di database Anda (bisa 'dibuat_oleh' atau 'created_by')
-            ->default(fn() => auth()->id())
-            ->dehydrated(fn($context) => $context === 'create'),
-            
-        TextInput::make('created_by_display')
-            ->label('Dibuat Oleh')
-            ->formatStateUsing(
-                fn($record) => 
-                // Pastikan relasi di model namanya sesuai. Di sini saya pakai 'creator'
-                $record?->creator?->name ?? auth()->user()->name 
-            )
-            ->disabled()
-            ->dehydrated(false),
+                    ->default(fn() => auth()->id())
+                    ->dehydrated(fn($context) => $context === 'create'),
+
+                TextInput::make('created_by_display')
+                    ->label('Dibuat Oleh')
+                    ->formatStateUsing(
+                        fn($record) =>
+                        // Pastikan relasi di model namanya sesuai. Di sini saya pakai 'creator'
+                        $record?->creator?->name ?? auth()->user()->name
+                    )
+                    ->disabled()
+                    ->dehydrated(false),
             ]);
     }
     public static function timeOptions(): array
