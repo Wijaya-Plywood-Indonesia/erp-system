@@ -21,8 +21,8 @@ class LainLainsTable
                     ->formatStateUsing(
                         fn($record) =>
                         $record->pegawai
-                        ? "{$record->pegawai->kode_pegawai} - {$record->pegawai->nama_pegawai}"
-                        : '-'
+                            ? "{$record->pegawai->kode_pegawai} - {$record->pegawai->nama_pegawai}"
+                            : '-'
                     )
                     ->sortable()
                     ->searchable(query: function ($query, $search) {
@@ -60,6 +60,11 @@ class LainLainsTable
                     ->default('-')
                     ->limit(30)
                     ->toggleable(isToggledHiddenByDefault: false),
+
+                TextColumn::make('creator.name')
+                    ->label('Dibuat Oleh')
+                    ->sortable()
+                    ->searchable(),
             ])
             ->filters([
                 //

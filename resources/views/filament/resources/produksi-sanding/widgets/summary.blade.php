@@ -39,11 +39,11 @@
 
         {{-- ================= TARGET PROGRESS (SANDING) ================= --}}
         @php
-            $target = (float) ($summary['target'] ?? 250);
-            $totalAll = (float) ($summary['totalAll'] ?? 0);
-            $globalProgressVal = (float) ($summary['globalProgress'] ?? 0);
-            $globalProgressPercent = min(100, max(0, $globalProgressVal));
-            $potonganPerOrang = (float) ($summary['potonganPerOrang'] ?? 0);
+        $target = (float) ($summary['target'] ?? 250);
+        $totalAll = (float) ($summary['totalAll'] ?? 0);
+        $globalProgressVal = (float) ($summary['globalProgress'] ?? 0);
+        $globalProgressPercent = min(100, max(0, $globalProgressVal));
+        $potonganPerOrang = (float) ($summary['potonganPerOrang'] ?? 0);
         @endphp
 
         <div class="space-y-4">
@@ -118,7 +118,7 @@
                 @endforelse
             </div>
         </div>
-@if(false)
+        @if(false)
         {{-- [SECTION 3] GLOBAL UKURAN (REKAP SEMUA KW) --}}
         <div class="space-y-4 pt-6 border-t border-gray-100 dark:border-gray-800">
             <div class="flex items-center gap-2 font-bold text-lg text-gray-800 dark:text-gray-100">
@@ -139,28 +139,28 @@
                 @endforeach
             </div>
 
-@endif
-        {{-- [SECTION 4] RINGKASAN JENIS KAYU & UKURAN --}}
-        @if (!empty($summary['globalJenisKayuUkuran']) && count($summary['globalJenisKayuUkuran']) > 0)
-        <div class="space-y-4 pt-6 border-t border-gray-100 dark:border-gray-800">
-            <div class="flex items-center gap-2 font-bold text-lg text-gray-800 dark:text-gray-100">
-                <x-heroicon-m-table-cells class="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                Ringkasan Penggunaan Veneer & Ukuran Hasil
-            </div>
+            @endif
+            {{-- [SECTION 4] RINGKASAN JENIS KAYU & UKURAN --}}
+            @if (!empty($summary['globalJenisKayuUkuran']) && count($summary['globalJenisKayuUkuran']) > 0)
+            <div class="space-y-4 pt-6 border-t border-gray-100 dark:border-gray-800">
+                <div class="flex items-center gap-2 font-bold text-lg text-gray-800 dark:text-gray-100">
+                    <x-heroicon-m-table-cells class="w-5 h-5 text-gray-400 dark:text-gray-500" />
+                    Ringkasan Penggunaan Veneer & Ukuran Hasil
+                </div>
 
-            <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
-                <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300">
-                    <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white">
-                        <tr>
-                            <th class="px-4 py-3 font-semibold">Jenis Kayu</th>
-                            <th class="px-4 py-3 font-semibold">Ukuran</th>
-                            <th class="px-4 py-3 font-semibold">kw</th>
-                            <th class="px-4 py-3 font-semibold text-right">Hasil (Pcs)</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        @php $grandTotal = 0; @endphp
-                        @foreach (($summary['globalJenisKayuUkuran'] ?? []) as $row)
+                <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+                    <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300">
+                        <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white">
+                            <tr>
+                                <th class="px-4 py-3 font-semibold">Jenis Kayu</th>
+                                <th class="px-4 py-3 font-semibold">Ukuran</th>
+                                <th class="px-4 py-3 font-semibold">kw</th>
+                                <th class="px-4 py-3 font-semibold text-right">Hasil (Pcs)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            @php $grandTotal = 0; @endphp
+                            @foreach (($summary['globalJenisKayuUkuran'] ?? []) as $row)
                             @php $grandTotal += $row->total; @endphp
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                                 <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
@@ -168,18 +168,18 @@
                                 <td class="px-4 py-3">{{ $row->kw }}</td>
                                 <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
                             </tr>
-                        @endforeach
-                    </tbody>
-                    <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">
-                        <tr>
-                            <td colspan="3" class="px-4 py-3 text-right border-t dark:border-gray-700">Total Keseluruhan</td>
-                            <td class="px-4 py-3 text-right border-t dark:border-gray-700">{{ number_format($grandTotal) }}</td>
-                        </tr>
-                    </tfoot>
-                </table>
+                            @endforeach
+                        </tbody>
+                        <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">
+                            <tr>
+                                <td colspan="3" class="px-4 py-3 text-right border-t dark:border-gray-700">Total Keseluruhan</td>
+                                <td class="px-4 py-3 text-right border-t dark:border-gray-700">{{ number_format($grandTotal) }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
             </div>
-        </div>
-        @endif
+            @endif
 
     </x-filament::card>
 </x-filament::widget>

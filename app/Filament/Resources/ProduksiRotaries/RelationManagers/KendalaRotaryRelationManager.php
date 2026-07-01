@@ -155,7 +155,6 @@ class KendalaRotaryRelationManager extends RelationManager
                     ->label('Tambah Kendala')
                     ->mutateFormDataUsing(function (array $data): array {
                         $data['status'] = 'pending';
-
                         $parent = $this->getOwnerRecord();
                         $parentDate = $parent?->tgl_produksi ?? now()->format('Y-m-d');
                         $parentDateStr = Carbon::parse($parentDate)->format('Y-m-d');

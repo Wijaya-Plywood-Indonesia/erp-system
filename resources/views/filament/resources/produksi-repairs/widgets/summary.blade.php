@@ -70,7 +70,7 @@
                 @endforelse
             </div>
         </div>
-@if (false)
+        @if (false)
 
         {{-- [SECTION 3] GLOBAL UKURAN (REKAP SEMUA KW) --}}
         <div class="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
@@ -98,7 +98,7 @@
                 @endforeach
             </div>
         </div>
-@endif
+        @endif
         {{-- [SECTION 4] RINGKASAN JENIS KAYU & UKURAN --}}
         @if (!empty($summary['globalJenisKayuUkuran']) && count($summary['globalJenisKayuUkuran']) > 0)
         <div class="space-y-4 pt-6 border-t border-gray-100 dark:border-gray-800">

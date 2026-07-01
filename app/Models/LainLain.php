@@ -16,6 +16,7 @@ class LainLain extends Model
         'ijin',
         'ket',
         'hasil',
+        'created_by',
     ];
 
     public function pegawai()
@@ -26,5 +27,11 @@ class LainLain extends Model
     public function detailLainLain()
     {
         return $this->belongsTo(DetailLainLain::class, 'id_detail_lain_lain');
+    }
+
+    public function creator()
+    {
+        // Ganti 'created_by' menjadi 'dibuat_oleh' jika kolom di tabel Anda namanya 'dibuat_oleh'
+        return $this->belongsTo(User::class, 'created_by');
     }
 }

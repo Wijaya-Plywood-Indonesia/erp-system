@@ -16,7 +16,7 @@ use Filament\Tables\Table;
 use UnitEnum;
 
 class AnakAkunResource extends Resource
-{   
+{
     protected static bool $shouldRegisterNavigation = false;
 
     protected static ?string $model = AnakAkun::class;

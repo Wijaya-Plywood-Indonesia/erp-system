@@ -92,8 +92,8 @@
                 </div>
 
                 @php
-                    $globalProgressVal = (float) ($summary['globalProgress'] ?? 0);
-                    $globalProgressPercent = min(100, max(0, $globalProgressVal));
+                $globalProgressVal = (float) ($summary['globalProgress'] ?? 0);
+                $globalProgressPercent = min(100, max(0, $globalProgressVal));
                 @endphp
 
                 <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:bg-gray-800 dark:border-gray-700 space-y-3">
@@ -128,20 +128,20 @@
                     <div class="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
                         <div>
                             @if (!$summary['hasTargetGlobal'])
-                                <span class="text-amber-600 dark:text-amber-400 italic font-medium">
-                                    * Silakan atur target untuk ukuran-ukuran ini di menu target mesin HOTPRESS
-                                </span>
+                            <span class="text-amber-600 dark:text-amber-400 italic font-medium">
+                                * Silakan atur target untuk ukuran-ukuran ini di menu target mesin HOTPRESS
+                            </span>
                             @else
-                                <span class="text-gray-500 dark:text-gray-400 font-semibold">
-                                    Bebas potongan gaji jika target global mencapai 100% (tidak harus 100% per ukuran).
-                                </span>
+                            <span class="text-gray-500 dark:text-gray-400 font-semibold">
+                                Bebas potongan gaji jika target global mencapai 100% (tidak harus 100% per ukuran).
+                            </span>
                             @endif
                         </div>
                         <div class="font-extrabold text-sm {{ $globalProgressVal >= 100 ? 'text-green-600 dark:text-green-500' : ($globalProgressVal >= 75 ? 'text-blue-600 dark:text-blue-500' : 'text-amber-500') }}">
                             @if ($globalProgressVal >= 100)
-                                Target Tercapai
+                            Target Tercapai
                             @else
-                                {{ number_format($globalProgressVal, 1) }}%
+                            {{ number_format($globalProgressVal, 1) }}%
                             @endif
                         </div>
                     </div>
@@ -167,26 +167,26 @@
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                             @foreach ($summary['targetProgress'] as $item)
-                                @php
-                                    $sizeProgress = $item['hasTarget'] && $item['target'] > 0 
-                                        ? ($item['actual'] / $item['target']) * 100 
-                                        : 0;
-                                @endphp
-                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
-                                    <td class="px-4 py-2.5 font-medium text-gray-950 dark:text-gray-200">{{ $item['ukuran'] }}</td>
-                                    <td class="px-3 py-2.5 text-center font-mono font-medium">{{ number_format($item['tebal'], 1) }}</td>
-                                    <td class="px-3 py-2.5 text-right font-mono">{{ number_format($item['actual']) }}</td>
-                                    <td class="px-3 py-2.5 text-right font-mono text-gray-500 dark:text-gray-400">
-                                        {{ $item['hasTarget'] ? number_format($item['target']) : '-' }}
-                                    </td>
-                                    <td class="px-3 py-2.5 text-center font-mono font-bold {{ $sizeProgress >= 100 ? 'text-green-600 dark:text-green-500' : 'text-gray-900 dark:text-gray-100 font-medium' }}">
-                                        @if (!$item['hasTarget'])
-                                            -
-                                        @else
-                                            +{{ number_format($sizeProgress, 1) }}%
-                                        @endif
-                                    </td>
-                                </tr>
+                            @php
+                            $sizeProgress = $item['hasTarget'] && $item['target'] > 0
+                            ? ($item['actual'] / $item['target']) * 100
+                            : 0;
+                            @endphp
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
+                                <td class="px-4 py-2.5 font-medium text-gray-950 dark:text-gray-200">{{ $item['ukuran'] }}</td>
+                                <td class="px-3 py-2.5 text-center font-mono font-medium">{{ number_format($item['tebal'], 1) }}</td>
+                                <td class="px-3 py-2.5 text-right font-mono">{{ number_format($item['actual']) }}</td>
+                                <td class="px-3 py-2.5 text-right font-mono text-gray-500 dark:text-gray-400">
+                                    {{ $item['hasTarget'] ? number_format($item['target']) : '-' }}
+                                </td>
+                                <td class="px-3 py-2.5 text-center font-mono font-bold {{ $sizeProgress >= 100 ? 'text-green-600 dark:text-green-500' : 'text-gray-900 dark:text-gray-100 font-medium' }}">
+                                    @if (!$item['hasTarget'])
+                                    -
+                                    @else
+                                    +{{ number_format($sizeProgress, 1) }}%
+                                    @endif
+                                </td>
+                            </tr>
                             @endforeach
                         </tbody>
                     </table>
@@ -216,13 +216,13 @@
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         @php $grandTotal = 0; @endphp
                         @foreach (($summary['globalJenisKayuUkuran'] ?? []) as $row)
-                            @php $grandTotal += $row->total; @endphp
-                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
-                                <td class="px-4 py-3">{{ $row->ukuran }}</td>
-                                <td class="px-4 py-3">{{ $row->kw }}</td>
-                                <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
-                            </tr>
+                        @php $grandTotal += $row->total; @endphp
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                            <td class="px-4 py-3">{{ $row->jenis_kayu }}</td>
+                            <td class="px-4 py-3">{{ $row->ukuran }}</td>
+                            <td class="px-4 py-3">{{ $row->kw }}</td>
+                            <td class="px-4 py-3 text-right font-medium">{{ number_format($row->total) }}</td>
+                        </tr>
                         @endforeach
                     </tbody>
                     <tfoot class="bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white font-bold">

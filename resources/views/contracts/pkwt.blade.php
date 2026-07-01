@@ -378,7 +378,7 @@
 
       <!-- TTD PIHAK PERTAMA -->
       <td style="height: 80px; vertical-align: bottom; text-align: left;">
-        <img src="{{ asset('storage/ttd/anis.png') }}" style="height:70px;">
+        <img src="{{ asset('storage/app/public/ttd/anis.png') }}" style="height:70px;">
       </td>
 
       <!-- TTD PIHAK KEDUA -->

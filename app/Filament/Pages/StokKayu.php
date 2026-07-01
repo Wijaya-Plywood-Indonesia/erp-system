@@ -41,7 +41,6 @@ class StokKayu extends Page
     {
         $this->activeLahanId = null;
     }
-
     // ── Computed: semua lahan ──────────────────────────────────
     public function getLahansProperty()
     {
