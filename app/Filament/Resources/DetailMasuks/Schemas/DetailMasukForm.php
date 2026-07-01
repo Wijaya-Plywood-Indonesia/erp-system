@@ -28,7 +28,6 @@ class DetailMasukForm
         $foreignKey = $tipe === 'stik' ? 'id_produksi_stik' : 'id_produksi_dryer';
 
         return $schema->schema([
-
             // ✅ Simpan ID Produksi ke kolom yang benar agar tidak "Undefined id_produksi"
             Hidden::make($foreignKey)
                 ->default($idProduksi)
@@ -81,7 +80,7 @@ class DetailMasukForm
                         $remaining = $p->total_lembar - $totalUsed;
 
                         if ($remaining <= 0) continue;
-    
+
                         $nomor  = $p->kode_palet;
                         $ukuran = $p->ukuran?->nama_ukuran ?? 'Ukuran N/A';
                         $kw     = $p->kw ?? '-';
@@ -168,7 +167,7 @@ class DetailMasukForm
                         $palet = DetailHasilPaletRotary::with(['penggunaanLahan', 'ukuran'])->find($state);
                         if ($palet) {
                             $set('kw', $palet->kw);           // ✅ KW dari palet
-                            
+
                             // Hitung sisa lembar untuk autofill awal
                             $totalUsedMasuk = DB::table((new DetailMasuk)->getTable())
                                 ->where('no_palet', $state)
@@ -177,7 +176,7 @@ class DetailMasukForm
                                 ->where('no_palet', $palet->kode_palet)
                                 ->sum('isi');
                             $remaining = $palet->total_lembar - ($totalUsedMasuk + $totalUsedStik);
-                            
+
                             $set('isi', max(0, $remaining));
                             $set('id_jenis_kayu', $palet->penggunaanLahan?->id_jenis_kayu);
                             $set('id_ukuran', $palet->id_ukuran);
@@ -248,7 +247,7 @@ class DetailMasukForm
                 // ->readOnly(fn(Get $get) => $get('no_palet_select') !== 'AF' && $get('no_palet_select') !== null)
                 ->dehydrated(true)
                 ->rules([
-                    fn (Get $get, $record): \Closure => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                    fn(Get $get, $record): \Closure => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
                         $noPaletSelect = $get('no_palet_select');
                         if ($noPaletSelect && $noPaletSelect !== 'AF') {
                             $palet = \App\Models\DetailHasilPaletRotary::find($noPaletSelect);

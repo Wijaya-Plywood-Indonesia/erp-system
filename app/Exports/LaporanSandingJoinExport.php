@@ -6,14 +6,20 @@ use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class LaporanSandingJoinExport implements FromCollection, WithHeadings, WithStyles, WithEvents
+class LaporanSandingJoinExport implements FromCollection, WithHeadings, WithStyles, WithEvents, WithTitle
 {
+    public function title(): string
+    {
+        return 'Sheet1';
+    }
+
     protected $data;
     protected $tanggal;
 

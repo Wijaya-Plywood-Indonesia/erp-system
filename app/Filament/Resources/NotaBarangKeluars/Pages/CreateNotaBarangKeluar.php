@@ -13,12 +13,7 @@ class CreateNotaBarangKeluar extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $tanggal = Carbon::parse($data['tanggal']);
-
-        $data['no_nota'] = NomorNotaService::generateBarangKeluar(
-            tipe: $data['tipe_nota'],
-            tanggal: $tanggal,
-        );
+        unset($data['tipe_nota']); // buang karena tidak ada di tabel
 
         return $data;
     }

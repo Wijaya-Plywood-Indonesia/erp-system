@@ -86,6 +86,28 @@ class PenggunaanLahanRotariesTable
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
                     ->requiresConfirmation()
+                    ->visible(function ($record) {
+                        // Cek apakah produksi rotary ini sudah locked
+                        $idProduksi = $record->id_produksi ?? null;
+                        if (!$idProduksi) return true; // Jika tidak ada id_produksi, tampilkan saja
+
+                        $validated = \App\Models\ValidasiHasilRotary::where('id_produksi', $idProduksi)
+                            ->where('status', 'disetujui')
+                            ->pluck('role')
+                            ->toArray();
+
+                        $kepalaSudah = collect($validated)->contains(
+                            fn($role) => str_contains(strtolower($role), 'kepala_produksi')
+                        );
+
+                        $pengawasSudah = collect($validated)->contains(
+                            fn($role) => str_contains(strtolower($role), 'pengawas_rotary')
+                        );
+
+                        $isLocked = $kepalaSudah && $pengawasSudah;
+
+                        return !$isLocked; // Tampilkan hanya jika BELUM locked
+                    })
                     ->modalHeading('Konfirmasi Pengosongan Lahan & Stok')
 
                     // ── Modal Description ─────────────────────────────────────
@@ -139,6 +161,7 @@ class PenggunaanLahanRotariesTable
                         }
 
                         DB::transaction(function () use ($record, $idLahan, $idJenisKayu) {
+                            $tglProduksi = $record->produksi_rotary?->tgl_produksi ?? now();
 
                             // ══════════════════════════════════════════════════
                             // LANGKAH 1: Ambil HPP terakhir dari summary AKTIF
@@ -207,7 +230,7 @@ class PenggunaanLahanRotariesTable
                                     'id_jenis_kayu'        => $idJenisKayu,
                                     'grade'                => null,
                                     'panjang'              => $item->panjang,
-                                    'tanggal'              => now(),
+                                    'tanggal'              => $tglProduksi,
                                     'tipe_transaksi'       => 'keluar',
                                     'keterangan'           => $keteranganLog,
                                     'referensi_type'       => PenggunaanLahanRotary::class,
@@ -270,7 +293,7 @@ class PenggunaanLahanRotariesTable
                             $updatedCount = DB::table('tempat_kayus')
                                 ->where('id_lahan', $idLahan)
                                 ->update([
-                                    'id_kayu_masuk'   => null,
+                                    // 'id_kayu_masuk'   => null,
                                     'jumlah_batang'   => 0,
                                     'status'          => 'belum serah',
                                     'diserahkan_oleh' => null,

@@ -34,4 +34,9 @@ class JenisKayu extends Model
     {
         return $this->hasMany(RencanaPegawai::class, 'id_jenis_kayu');
     }
+
+    public function referensiHargaProduksis()
+    {
+        return $this->hasMany(ReferensiHargaProduksi::class, 'id_jenis_kayu');
+    }
 }

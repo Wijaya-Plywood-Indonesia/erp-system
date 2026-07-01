@@ -44,6 +44,59 @@
             <div class="text-2xl font-black text-gray-800 dark:text-gray-100">{{ number_format($totalPekerja) }} <span class="text-sm font-medium opacity-60">Orang</span></div>
         </div>
 
+        {{-- ================= TARGET PROGRESS (PILIH PLYWOOD) ================= --}}
+        @php
+            $target = (float) ($summary['target'] ?? 450);
+            $totalAll = (float) ($summary['totalAll'] ?? 0);
+            $globalProgressVal = (float) ($summary['globalProgress'] ?? 0);
+            $globalProgressPercent = min(100, max(0, $globalProgressVal));
+            
+            // Resolve labels
+            $sizesLabel = empty($summary['dominantSizeName']) ? 'Pilih Plywood' : 'Ukuran ' . $summary['dominantSizeName'];
+        @endphp
+
+        <div class="space-y-4">
+            <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                Progress Target Pilih Plywood
+                <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
+                    ( Target {{ number_format($target, 4) }} )
+                </span>
+            </div>
+
+            <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:bg-gray-800 dark:border-gray-700 space-y-2">
+                {{-- Nama & Nilai --}}
+                <div class="flex justify-between text-sm">
+                    <span class="font-medium text-gray-700 dark:text-gray-300">
+                        {{ $sizesLabel }}
+                    </span>
+                    <span class="text-gray-600 dark:text-gray-400 font-bold">
+                        {{ number_format($totalAll) }} / {{ (float) $target }}
+                    </span>
+                </div>
+
+                {{-- Progress Bar --}}
+                <div class="w-full h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                    <div
+                        class="h-full rounded-full transition-all duration-500"
+                        style="
+                            width: {{ $globalProgressPercent }}%;
+                            background-color:
+                                {{ $globalProgressPercent >= 100
+                                    ? '#16a34a'   /* green-600 */
+                                    : ($globalProgressPercent >= 75
+                                        ? '#2563eb' /* blue-600 */
+                                        : '#f59e0b' /* amber-500 */) }};
+                        ">
+                    </div>
+                </div>
+
+                {{-- Persentase --}}
+                <div class="text-xs text-right text-gray-500 dark:text-gray-400 font-bold">
+                    {{ number_format($globalProgressVal, 1) }}%
+                </div>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div class="p-4 bg-white border border-gray-200 rounded-xl shadow-sm dark:bg-gray-900 dark:border-gray-800 border-l-4 border-l-gray-300 dark:border-l-gray-600">
                 <span class="text-xs font-semibold tracking-wider uppercase text-gray-500 dark:text-gray-400">Total Bahan</span>

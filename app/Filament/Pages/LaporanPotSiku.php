@@ -141,7 +141,22 @@ class LaporanPotSiku extends Page implements HasForms
     public function loadAllData()
     {
         // Pastikan format tanggal selalu Y-m-d untuk query database
-        $tanggal = $this->tanggal ? Carbon::parse($this->tanggal)->format('Y-m-d') : now()->format('Y-m-d');
+        $tanggal = now()->format('Y-m-d');
+        if ($this->tanggal) {
+            try {
+                if ($this->tanggal instanceof Carbon) {
+                    $tanggal = $this->tanggal->format('Y-m-d');
+                } elseif (is_string($this->tanggal)) {
+                    if (str_contains($this->tanggal, '/')) {
+                        $tanggal = Carbon::createFromFormat('d/m/Y', $this->tanggal)->format('Y-m-d');
+                    } else {
+                        $tanggal = Carbon::parse($this->tanggal)->format('Y-m-d');
+                    }
+                }
+            } catch (Exception $e) {
+                Log::error('Error parsing date in loadAllData LaporanPotSiku: ' . $e->getMessage());
+            }
+        }
 
         $produksiList = ProduksiPotSiku::with([
             'pegawaiPotSiku.pegawai',

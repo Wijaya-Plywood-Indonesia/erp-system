@@ -54,9 +54,25 @@ class TargetForm
                     ->numeric()
                     ->required(),
 
+                Select::make('jam_mulai')
+                    ->label('Jam Mulai')
+                    ->options(self::getHourOptions())
+                    ->required()
+                    ->reactive()
+                    ->afterStateUpdated(fn ($state, $get, $set) => self::updateJamKerja($get, $set)),
+
+                Select::make('jam_selesai')
+                    ->label('Jam Selesai')
+                    ->options(self::getHourOptions())
+                    ->required()
+                    ->reactive()
+                    ->afterStateUpdated(fn ($state, $get, $set) => self::updateJamKerja($get, $set)),
+
                 TextInput::make('jam')
-                    ->label('Jam Kerja')
+                    ->label('Jam Kerja (Akumulasi)')
                     ->numeric()
+                    ->disabled()
+                    ->dehydrated()
                     ->required(),
 
                 TextInput::make('gaji')
@@ -65,5 +81,40 @@ class TargetForm
                     ->prefix('Rp')
                     ->required(),
             ]);
+    }
+
+    public static function getHourOptions(): array
+    {
+        $options = [];
+        for ($i = 0; $i < 24; $i++) {
+            $key = sprintf('%02d:00:00', $i);
+            $label = sprintf('%02d:00', $i);
+            $options[$key] = $label;
+        }
+        return $options;
+    }
+
+    public static function updateJamKerja($get, $set)
+    {
+        $mulai = $get('jam_mulai');
+        $selesai = $get('jam_selesai');
+
+        if ($mulai && $selesai) {
+            try {
+                $start = \Carbon\Carbon::createFromFormat('H:i:s', $mulai);
+                $end = \Carbon\Carbon::createFromFormat('H:i:s', $selesai);
+                
+                if ($end->lessThan($start)) {
+                    $end->addDay();
+                }
+                
+                $diff = $start->diffInHours($end);
+                $set('jam', $diff);
+            } catch (\Exception $e) {
+                $set('jam', null);
+            }
+        } else {
+            $set('jam', null);
+        }
     }
 }

@@ -32,13 +32,6 @@ class AbsensiForm
                     ->multiple() // Mengizinkan upload lebih dari satu file
                     ->maxFiles(5) // Opsional: Batasi jumlah maksimal file, misalnya 5
                     ->reorderable() // Opsional: Memungkinkan pengguna mengatur urutan file
-                    ->acceptedFileTypes([
-                        'text/plain',
-                        'application/octet-stream',
-                        'text/tab-separated-values',
-                        'text/dat',
-                        'application/dat'
-                    ])
                     ->preserveFilenames()
                     ->required(),
                 TextInput::make('uploaded_by')

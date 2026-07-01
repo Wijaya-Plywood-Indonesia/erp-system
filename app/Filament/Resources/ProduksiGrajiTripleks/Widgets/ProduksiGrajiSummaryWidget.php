@@ -106,12 +106,18 @@ class ProduksiGrajiSummaryWidget extends Widget
             ->orderBy('ukuran')
             ->get();
 
+        $target = $totalPegawai * 750;
+        $globalProgress = $target > 0 ? ($totalAll / $target) * 100 : 0;
+        $globalProgress = round($globalProgress, 1);
+
         $this->summary = [
             'totalAll'              => $totalAll,
             'totalPegawai'          => $totalPegawai,
             'globalUkuranKw'        => $globalUkuranKw,
             'globalUkuran'          => $globalUkuran,
             'globalJenisKayuUkuran' => $globalJenisKayuUkuran,
+            'target'                => $target,
+            'globalProgress'        => $globalProgress,
         ];
     }
 }

@@ -29,9 +29,8 @@ class HasilSandingForm
                                 $q->whereIn('nama_kategori', ['PLATFORM', 'PLYWOOD']);
                             })
                             ->get()
-                            ->mapWithKeys(fn ($g) => [
-                                $g->id =>
-                                    ($g->kategoriBarang?->nama_kategori ?? '-') .
+                            ->mapWithKeys(fn($g) => [
+                                $g->id => ($g->kategoriBarang?->nama_kategori ?? '-') .
                                     ' - ' .
                                     $g->nama_grade
                             ])
@@ -138,13 +137,13 @@ class HasilSandingForm
                 TextInput::make('jumlah_sanding_face')
                     ->label('Jumlah Sanding Face (Pass)')
                     ->numeric()
-                    ->minValue(1)
+                    ->minValue(0)
                     ->required(),
 
                 TextInput::make('jumlah_sanding_back')
                     ->label('Jumlah Sanding Back (Pass)')
                     ->numeric()
-                    ->minValue(1)
+                    ->minValue(0)
                     ->required(),
 
                 TextInput::make('no_palet')

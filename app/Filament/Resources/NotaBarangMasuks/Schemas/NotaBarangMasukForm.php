@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\NotaBarangMasuks\Schemas;
 
+use App\Models\NotaBarangMasuk;
 use App\Services\NomorNotaService;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -21,11 +22,7 @@ class NotaBarangMasukForm
             ->components([
                 DatePicker::make('tanggal')
                     ->default(today())
-                    ->required()
-                    ->live()
-                    ->afterStateUpdated(function (Get $get, Set $set) {
-                        self::refreshNomorNota($get, $set);
-                    }),
+                    ->required(),
 
                 Select::make('tipe_nota')
                     ->label('Tipe Nota')
@@ -34,29 +31,20 @@ class NotaBarangMasukForm
                         'BML' => 'BML – Barang Masuk (Lain-lain)',
                     ])
                     ->required()
-                    ->native(false)
-                    ->live()
-                    ->afterStateUpdated(function (Get $get, Set $set) {
-                        self::refreshNomorNota($get, $set);
-                    }),
+                    ->native(false),
 
-                // Bisa diedit manual, sync ke no_nota hidden
-                TextInput::make('no_nota_display')
+                TextInput::make('no_nota')
                     ->label('No. Nota')
-                    ->placeholder('(pilih tipe nota dulu)')
-                    ->dehydrated(false)
-                    ->live()
-                    ->afterStateHydrated(function ($component, $record) {
-                        if ($record) {
-                            $component->state($record->no_nota);
-                        }
-                    })
-                    ->afterStateUpdated(function (Get $get, Set $set, $state) {
-                        $set('no_nota', $state);
-                    }),
-
-                // Yang dikirim ke DB
-                Hidden::make('no_nota'),
+                    ->required()
+                    ->maxLength(255)
+                    ->unique(
+                        table: NotaBarangMasuk::class,
+                        column: 'no_nota',
+                        ignoreRecord: true
+                    )
+                    ->validationMessages([
+                        'unique' => 'Nomor nota ini sudah terdaftar di sistem. Silakan gunakan nomor lain.',
+                    ]),
 
                 TextInput::make('tujuan_nota')
                     ->label('Kepada')
@@ -75,27 +63,27 @@ class NotaBarangMasukForm
             ]);
     }
 
-    private static function refreshNomorNota(Get $get, Set $set): void
-    {
-        $tipe    = $get('tipe_nota');
-        $tanggal = $get('tanggal');
+    // private static function refreshNomorNota(Get $get, Set $set): void
+    // {
+    //     $tipe    = $get('tipe_nota');
+    //     $tanggal = $get('tanggal');
 
-        if (! $tipe || ! $tanggal) {
-            $set('no_nota_display', null);
-            $set('no_nota', null);
-            return;
-        }
+    //     if (! $tipe || ! $tanggal) {
+    //         $set('no_nota_display', null);
+    //         $set('no_nota', null);
+    //         return;
+    //     }
 
-        // 1. Ambil format asli dari service (Misal: BML-1231-0608)
-        $nomorOriginal = NomorNotaService::generateBarangMasuk($tipe, Carbon::parse($tanggal));
+    //     // 1. Ambil format asli dari service (Misal: BML-1231-0608)
+    //     $nomorOriginal = NomorNotaService::generateBarangMasuk($tipe, Carbon::parse($tanggal));
 
-        // 2. Ganti tanda hubung pertama setelah kode tipe dengan spasi
-        $nomorCustom = Str::replaceFirst('-', ' ', $nomorOriginal);
+    //     // 2. Ganti tanda hubung pertama setelah kode tipe dengan spasi
+    //     $nomorCustom = Str::replaceFirst('-', ' ', $nomorOriginal);
 
-        // 3. Ubah menjadi huruf kecil semua (bml 1231-0608)
-        $nomorFinal = Str::lower($nomorCustom);
+    //     // 3. Ubah menjadi huruf kecil semua (bml 1231-0608)
+    //     $nomorFinal = Str::lower($nomorCustom);
 
-        $set('no_nota_display', $nomorFinal);
-        $set('no_nota', $nomorFinal);
-    }
+    //     $set('no_nota_display', $nomorFinal);
+    //     $set('no_nota', $nomorFinal);
+    // }
 }

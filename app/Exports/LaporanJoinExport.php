@@ -149,12 +149,16 @@ class LaporanJoinSummarySheet implements FromCollection, WithHeadings, WithTitle
 
     public function collection()
     {
-        $rows      = collect();
-        $allGroups = [];
+        $rows = collect();
+        $blocks = [];
+
+        $grandTotalTotal = 0;
+        $grandTotalByk = 0;
 
         foreach ($this->rawCollection as $produksi) {
-            $tanggal = Carbon::parse($produksi->tanggal_produksi)->format('d-m-yy');
+            $tanggal = Carbon::parse($produksi->tanggal_produksi)->format('d-m-Y');
 
+            // 1. Build bahan list
             $bahanRows = [];
             try {
                 foreach ($produksi->bahanProduksi ?? collect() as $bahan) {
@@ -165,9 +169,7 @@ class LaporanJoinSummarySheet implements FromCollection, WithHeadings, WithTitle
                         ?? 0
                     );
                     $jumlah = (float) ($bahan->jumlah ?? 0);
-
                     $namaBahanTerbaca = $bahan->nama_bahan_penolong ?? $bahan->nama_bahan ?? '-';
-
                     $bahanRows[] = [
                         'nama'   => strtoupper($namaBahanTerbaca),
                         'jumlah' => $jumlah > 0 ? $jumlah : '-',
@@ -186,32 +188,77 @@ class LaporanJoinSummarySheet implements FromCollection, WithHeadings, WithTitle
                 'total'  => 0,
             ];
 
+            // 2. Build hasil list
             $hasilGroups = $produksi->hasilJoint
                 ->groupBy(fn($h) => $h->id_ukuran . '|' . $h->kw);
 
+            $hasilRows = [];
             foreach ($hasilGroups as $groupKey => $hasilItems) {
                 $firstHasil  = $hasilItems->first();
                 $ukuranModel = $firstHasil->ukuran;
-
                 $byk = (int) $hasilItems->sum('jumlah');
-
-                $allGroups[] = [
-                    'tanggal' => $tanggal,
-                    'p'       => $ukuranModel->panjang ?? '',
-                    'l'       => $ukuranModel->lebar   ?? '',
-                    't'       => $ukuranModel->tebal   ?? '',
-                    'byk'     => $byk,
-                    'kw'      => $firstHasil->kw ?? '-',
-                    'bahan'   => $bahanRows,
+                $hasilRows[] = [
+                    'p'   => $ukuranModel->panjang ?? '',
+                    'l'   => $ukuranModel->lebar   ?? '',
+                    't'   => $ukuranModel->tebal   ?? '',
+                    'byk' => $byk,
+                    'kw'  => $firstHasil->kw ?? '-',
                 ];
             }
+
+            // 3. Align side-by-side
+            $maxRows = max(count($bahanRows), count($hasilRows));
+            $blockRows = [];
+            $totalBahanForBlock = 0;
+            $totalHasilForBlock = 0;
+
+            for ($i = 0; $i < $maxRows; $i++) {
+                $row = [
+                    'tanggal' => ($i === 0) ? $tanggal : '',
+                    'bahan_nama' => '',
+                    'bahan_jumlah' => '',
+                    'bahan_harga' => '',
+                    'bahan_total' => '',
+                    'p' => '',
+                    'l' => '',
+                    't' => '',
+                    'byk' => '',
+                    'kw' => '',
+                ];
+
+                if ($i < count($bahanRows)) {
+                    $b = $bahanRows[$i];
+                    $row['bahan_nama'] = $b['nama'];
+                    $row['bahan_jumlah'] = $b['jumlah'];
+                    $row['bahan_harga'] = $b['harga'] > 0 ? number_format($b['harga'], 3, '.', '') : '-';
+                    $row['bahan_total'] = $b['total'] > 0 ? number_format($b['total'], 3, '.', '') : 0;
+                    $totalBahanForBlock += $b['total'];
+                }
+
+                if ($i < count($hasilRows)) {
+                    $h = $hasilRows[$i];
+                    $row['p'] = $h['p'];
+                    $row['l'] = $h['l'];
+                    $row['t'] = $h['t'];
+                    $row['byk'] = $h['byk'];
+                    $row['kw'] = $h['kw'];
+                    $totalHasilForBlock += $h['byk'];
+                }
+
+                $blockRows[] = $row;
+            }
+
+            $blocks[] = [
+                'rows' => $blockRows,
+                'totalBahan' => $totalBahanForBlock,
+                'totalHasil' => $totalHasilForBlock,
+            ];
+
+            $grandTotalTotal += $totalBahanForBlock;
+            $grandTotalByk += $totalHasilForBlock;
         }
 
-        $grandTotalByk   = collect($allGroups)->sum('byk');
-        $grandTotalTotal = collect($allGroups)->sum(
-            fn($g) => collect($g['bahan'])->sum('total')
-        );
-
+        // Push grand total row at the top (Row 2)
         $rows->push([
             '',
             '',
@@ -226,45 +273,39 @@ class LaporanJoinSummarySheet implements FromCollection, WithHeadings, WithTitle
         ]);
 
         $currentExcelRow = 3;
-
-        foreach ($allGroups as $group) {
+        foreach ($blocks as $block) {
             $this->firstRowOfGroup[] = $currentExcelRow;
 
-            foreach ($group['bahan'] as $i => $bahan) {
-                $isFirst = ($i === 0);
-
+            foreach ($block['rows'] as $row) {
                 $rows->push([
-                    $isFirst ? $group['tanggal'] : '',
-                    $bahan['nama'],
-                    $bahan['jumlah'],
-                    $bahan['harga'] > 0 ? number_format($bahan['harga'], 3, '.', '') : '-',
-                    $bahan['total'] > 0 ? number_format($bahan['total'], 3, '.', '') : 0,
-                    $isFirst ? $group['p'] : '',
-                    $isFirst ? $group['l'] : '',
-                    $isFirst ? $group['t'] : '',
-                    $isFirst ? $group['byk'] : '',
-                    $isFirst ? $group['kw'] : '',
+                    $row['tanggal'],
+                    $row['bahan_nama'],
+                    $row['bahan_jumlah'],
+                    $row['bahan_harga'],
+                    $row['bahan_total'],
+                    $row['p'],
+                    $row['l'],
+                    $row['t'],
+                    $row['byk'],
+                    $row['kw'],
                 ]);
-
                 $currentExcelRow++;
             }
 
-            $groupTotal            = collect($group['bahan'])->sum('total');
-            $this->totalRows[]     = $currentExcelRow;
-
+            // Total row for this block
+            $this->totalRows[] = $currentExcelRow;
             $rows->push([
                 '',
                 'TOTAL :',
                 '',
                 '',
-                $groupTotal > 0 ? number_format($groupTotal, 3, '.', '') : 0,
+                $block['totalBahan'] > 0 ? number_format($block['totalBahan'], 3, '.', '') : 0,
                 '',
                 '',
                 '',
-                $group['byk'],
+                $block['totalHasil'],
                 '',
             ]);
-
             $currentExcelRow++;
         }
 
@@ -448,21 +489,27 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             ? ($jns === 'Sengon' ? ['faceback'] : ['face', 'back'])
             : ($kelompok === 'ppc_faceback' ? ['ppc_faceback'] : [$kelompok]);
 
-        $hargaVeneer = \App\Models\HargaVeneer::where('id_jenis_kayu', $jenisKayu->id)
-            ->whereIn('ukuran', $ukuranOptions)
+        $kwOptions = array_map(function($opt) {
+            return 'KW 1 - ' . ucfirst(str_replace('_', ' ', $opt));
+        }, $ukuranOptions);
+
+        $tipeKualitasMap = [
+            'basah' => 'Veneer Basah',
+            'kering' => 'Veneer Kering',
+            'jadi' => 'Veneer Jadi',
+        ];
+        $jenisBarang = $tipeKualitasMap[strtolower($tipeKualitas)] ?? 'Veneer Jadi';
+
+        $hargaVeneer = \App\Models\ReferensiHargaProduksi::where('id_jenis_kayu', $jenisKayu->id)
+            ->where('jenis_barang', $jenisBarang)
+            ->whereIn('kw', $kwOptions)
             ->first();
 
         if (!$hargaVeneer) {
             return 0;
         }
 
-        if ($tipeKualitas === 'basah') {
-            return (int) $hargaVeneer->harga_basah;
-        } elseif ($tipeKualitas === 'kering') {
-            return (int) $hargaVeneer->harga_kering;
-        } else {
-            return (int) $hargaVeneer->harga_jadi;
-        }
+        return (int) $hargaVeneer->harga;
     }
 
     private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $total, $hitKbk = 'm'): array

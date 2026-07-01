@@ -21,6 +21,7 @@ Route::middleware(['auth', 'verified'])->prefix('admin')->group(function () {
 
     Route::get('/persentase-kayu/export-excel', [PreviewPersentaseKayu::class, 'exportExcel'])->name('produksi.export-excel');
 
+    Route::resource('referensi-harga-produksi', \App\Http\Controllers\ReferensiHargaProduksiController::class);
 });
 
 

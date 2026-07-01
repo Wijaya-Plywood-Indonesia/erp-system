@@ -96,23 +96,34 @@ class LaporanProduksiDetailSheet implements FromCollection, WithHeadings, WithTi
                 if (count($daftarKendala) === 0) {
                     $kendalaCellValues[0] = 'Tidak ada kendala';
                     if ($N > 1) {
-                        $this->mergeRanges[] = "K{$workerStartRow}:K" . ($workerStartRow + $N - 1);
+                        $this->mergeRanges[] = "K{$workerStartRow}:K{$workerEndRow}";
                     }
                 } else {
                     $M = count($daftarKendala);
-                    $chunkSize = (int) ceil($N / $M);
+                    
+                    if ($N < $M) {
+                        // Jika jumlah pekerja lebih sedikit dari kendala, gabungkan semua kendala dengan newline
+                        $text = implode("\n", array_column($daftarKendala, 'text'));
+                        $kendalaCellValues[0] = $text;
+                        if ($N > 1) {
+                            $this->mergeRanges[] = "K{$workerStartRow}:K{$workerEndRow}";
+                        }
+                    } else {
+                        // Jika pekerja cukup, bagi rata secara chunk
+                        $chunkSize = (int) ceil($N / $M);
 
-                    for ($i = 0; $i < $M; $i++) {
-                        $startIdx = $i * $chunkSize;
-                        $endIdx = min(($i + 1) * $chunkSize - 1, $N - 1);
+                        for ($i = 0; $i < $M; $i++) {
+                            $startIdx = $i * $chunkSize;
+                            $endIdx = min(($i + 1) * $chunkSize - 1, $N - 1);
 
-                        if ($startIdx < $N) {
-                            $kendalaCellValues[$startIdx] = $daftarKendala[$i]['text'] ?? '';
-                            $chunkStartRow = $workerStartRow + $startIdx;
-                            $chunkEndRow = $workerStartRow + $endIdx;
+                            if ($startIdx < $N) {
+                                $kendalaCellValues[$startIdx] = $daftarKendala[$i]['text'] ?? '';
+                                $chunkStartRow = $workerStartRow + $startIdx;
+                                $chunkEndRow = $workerStartRow + $endIdx;
 
-                            if ($chunkStartRow < $chunkEndRow) {
-                                $this->mergeRanges[] = "K{$chunkStartRow}:K{$chunkEndRow}";
+                                if ($chunkStartRow < $chunkEndRow) {
+                                    $this->mergeRanges[] = "K{$chunkStartRow}:K{$chunkEndRow}";
+                                }
                             }
                         }
                     }
@@ -340,7 +351,11 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
     protected $titleRows = [];
     protected $headerRows = [];
     protected $dataRanges = [];
-
+ 
+    // Cache agar tidak query DB berulang
+    private array $kayuCache     = [];
+    private array $kategoriCache = [];
+ 
     public function bindValue(Cell $cell, $value)
     {
         if ($cell->getColumn() === 'D') {
@@ -354,49 +369,115 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
         }
         return parent::bindValue($cell, $value);
     }
-
+ 
     public function __construct($tanggal)
     {
         $this->tanggal = $tanggal;
     }
-
+ 
+    // =========================================================================
+    // DATABASE REFERENCE HELPERS (revisi mengikuti struktur tabel baru)
+    // =========================================================================
+ 
+    /**
+     * Ambil id jenis kayu berdasarkan nama persis (dengan cache).
+     * Beda dari LIKE karena di rotary nama kayu sudah pasti exact dari tabel jenis kayu.
+     */
+    private function getIdKayuByNama(string $namaKayu): ?int
+    {
+        $key = strtolower(trim($namaKayu));
+        if (!array_key_exists($key, $this->kayuCache)) {
+            $kayu = \App\Models\JenisKayu::where('nama_kayu', $namaKayu)->first();
+            $this->kayuCache[$key] = $kayu?->id;
+        }
+        return $this->kayuCache[$key];
+    }
+ 
+    /**
+     * Ambil id kategori barang berdasarkan nama (dengan cache).
+     * PENTING: kolom di tabel kategori_barang adalah `nama_kategori`, bukan `nama`.
+     */
+    private function getIdKategoriBarang(string $namaKategori): ?int
+    {
+        $key = strtolower(trim($namaKategori));
+        if (!array_key_exists($key, $this->kategoriCache)) {
+            try {
+                $kategori = \App\Models\KategoriBarang::whereRaw("LOWER(nama_kategori) LIKE ?", ["%{$key}%"])->first();
+                $this->kategoriCache[$key] = $kategori?->id;
+            } catch (\Throwable $e) {
+                $this->kategoriCache[$key] = null;
+            }
+        }
+        return $this->kategoriCache[$key];
+    }
+ 
+    /**
+     * Ambil harga veneer basah dari DB menggunakan findReferensi().
+     *
+     * Di rotary, semua hasil produksi adalah veneer basah (tidak ada kw jadi/kering/af),
+     * jadi kw dikirim null (sesuai struktur tabel: veneer basah punya kw_min/kw_max null).
+     * Pembeda face/back vs core otomatis via t_min/t_max — karena rotary tidak punya
+     * data tebal eksplisit per item, kita tentukan tebal representatif dari $isCore:
+     *   core     → kirim tebal yang pasti masuk range core (>= 1)
+     *   face/back→ kirim tebal yang pasti masuk range face/back (< 1)
+     *
+     * Guard: jika id kategori atau id jenis kayu tidak ditemukan, return 0
+     * (tidak melebar mengambil referensi dari kategori/kayu lain).
+     */
+    private function getHargaVeneerBasahDb(string $jenisKayu, bool $isCore): float
+    {
+        $idJenisKayu      = $this->getIdKayuByNama($jenisKayu);
+        $idKategoriBarang = $this->getIdKategoriBarang('veneer basah');
+ 
+        if (!$idJenisKayu || !$idKategoriBarang) {
+            return 0.0;
+        }
+ 
+        // Tebal representatif: cukup untuk masuk range t_min/t_max yang sesuai,
+        // karena rotary tidak mengirim tebal aktual per item.
+        $tebalRepresentatif = $isCore ? 1.5 : 0.5;
+ 
+        $ref = \App\Models\ReferensiHargaProduksi::findReferensi(
+            idJenisKayu      : $idJenisKayu,
+            idKategoriBarang : $idKategoriBarang,
+            kw               : null, // veneer basah: kw_min/kw_max null di tabel
+            tebal            : $tebalRepresentatif,
+        );
+ 
+        return (float) ($ref->harga ?? 0.0);
+    }
+ 
     public function collection()
     {
         $rows = collect();
         $service = new \App\Services\Akuntansi\RotaryJurnalService();
         $payload = $service->buildJurnalPayloadPreview($this->tanggal);
-
+ 
         if (!$payload || empty($payload['jurnal_items'])) {
             $rows->push(['Tidak ada data jurnal produksi untuk tanggal ini.']);
             return $rows;
         }
-
+ 
         $rawRows = [];
-
+ 
         // Preload mesin dan jenis kayu untuk pencarian dinamis
         $mesins = \App\Models\Mesin::all()->keyBy(fn($m) => strtoupper(trim($m->nama_mesin)));
         $jenisKayus = \App\Models\JenisKayu::all()->keyBy(fn($jk) => strtoupper(trim($jk->nama_kayu)));
-
-        // Preload harga veneer kering
-        $hargaVeneerMap = [];
-        foreach (\App\Models\HargaVeneer::all() as $hv) {
-            $hargaVeneerMap[$hv->id_jenis_kayu][strtolower($hv->ukuran)] = (float) $hv->harga_kering;
-        }
-
+ 
         foreach ($payload['jurnal_items'] as $item) {
             $namaAkun = $item['nama_akun'];
             $noAkun   = $item['no_akun'];
             $mapDK    = $item['map'];
-
+ 
             // Skip Upah Tenaga Kerja (510-01) — struktur baru tidak memunculkan sisi debit upah
             if ($noAkun === '510-01') {
                 continue;
             }
-
+ 
             foreach ($item['items'] as $subItem) {
                 $bagian = '-';
                 $keteranganSpesifikasi = $subItem['keterangan'] ?? '-';
-
+ 
                 if (($subItem['jenis_pihak'] ?? '') === 'produksi') {
                     $bagian = $subItem['nama_pihak'] ?? '-';
                     if (($subItem['nama_barang'] ?? '') !== 'Mesin' && ($subItem['nama_barang'] ?? '') !== '-') {
@@ -415,65 +496,55 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $bagian = '-';
                     $keteranganSpesifikasi = $subItem['keterangan'] ?? '-';
                 }
-
+ 
                 $tipe = 'b';
                 if (($subItem['jenis_pihak'] ?? '') === 'produksi') {
                     $tipe = 'm';
                 }
-
+ 
                 $banyak = $subItem['banyak'];
                 if (($subItem['jenis_pihak'] ?? '') === 'karyawan') {
                     $banyak = 1; // set to 1 so we can sum the total workers
                 }
-
+ 
                 $volume = $subItem['m3'];
                 $harga  = $subItem['harga'];
                 $jumlah = $subItem['jumlah'];
-
-                // Khusus export Excel: harga veneer mengikuti harga veneer kering dari tabel harga_veneers
+ 
+                // Khusus export Excel: harga veneer (ongkos mesin) sekarang
+                // mengambil dari kategori 'veneer basah' di tabel referensi.
                 if (($subItem['jenis_pihak'] ?? '') === 'produksi') {
                     $namaM = strtoupper(trim($bagian));
                     $jenisHasil = isset($mesins[$namaM]) ? $mesins[$namaM]->jenis_hasil : 'core';
-
+ 
                     // Parse jenis kayu dari keterangan
                     $keterangan = $subItem['keterangan'] ?? '';
                     $parts = explode(' - ', $keterangan);
                     $namaKayu = count($parts) > 2 ? trim($parts[2]) : '';
-                    $namaKayuUpper = strtoupper(trim($namaKayu));
-                    $jenisKayuObj = $jenisKayus[$namaKayuUpper] ?? null;
-                    $idJenisKayu = $jenisKayuObj ? $jenisKayuObj->id : null;
-
-                    $ongkos = 0;
-                    if ($idJenisKayu) {
-                        $options = strtolower($jenisHasil) === 'f/b' ? ['faceback', 'face', 'back'] : ['core'];
-                        foreach ($options as $opt) {
-                            if (isset($hargaVeneerMap[$idJenisKayu][$opt])) {
-                                $ongkos = $hargaVeneerMap[$idJenisKayu][$opt];
-                                break;
-                            }
-                        }
-                    }
-
-                    // Fallback to legacy if no match found
-                    if ($ongkos === 0) {
+ 
+                    $isCore = strtolower($jenisHasil) !== 'f/b';
+                    $ongkos = $this->getHargaVeneerBasahDb($namaKayu, $isCore);
+ 
+                    // Fallback ke harga ongkos mesin legacy jika tidak ditemukan di referensi
+                    if ($ongkos === 0.0) {
                         $ongkos = isset($mesins[$namaM]) ? (float)($mesins[$namaM]->ongkos_mesin ?? 0) : 0;
                     }
-
+ 
                     $harga  = $ongkos;
                     $jumlah = $volume !== null ? round((float)$volume * $ongkos, 4) : null;
                 }
-
+ 
                 // Khusus export Excel: harga pekerja di-hardcode 150.000
                 // (tidak ambil dari database HargaPegawai)
                 if (($subItem['jenis_pihak'] ?? '') === 'karyawan') {
                     $harga  = 150_000;
                     $jumlah = 150_000; // 1 orang × 150.000
                 }
-
+ 
                 // Map original accounts (115-07, 115-08, 210-02) based on wood type (Sengon vs Meranti)
                 $mappedNoAkun = $noAkun;
                 $mappedNamaAkun = $namaAkun;
-
+ 
                 if ($noAkun === '115-07' || $noAkun === '115-08') {
                     $isWHN = false;
                     if (request()) {
@@ -482,7 +553,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                             $isWHN = true;
                         }
                     }
-
+ 
                     $isSengon = (stripos($subItem['keterangan'] ?? '', 'sengon') !== false);
                     if ($noAkun === '115-07') {
                         // Veneer Basah F/B
@@ -508,7 +579,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $mappedNoAkun = '2231.00';
                     $mappedNamaAkun = 'Hutang Gaji';
                 }
-
+ 
                 $rawRows[] = [
                     'nama_akun'  => $mappedNamaAkun,
                     'no_akun'    => $mappedNoAkun,
@@ -523,7 +594,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                 ];
             }
         }
-
+ 
         // Group raw rows by machine (bagian)
         $rawRowsByMachine = [];
         foreach ($rawRows as $row) {
@@ -533,13 +604,13 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
             }
             $rawRowsByMachine[$machine][] = $row;
         }
-
+ 
         $machineTables = [];
         foreach ($rawRowsByMachine as $machine => $rowsOfMachine) {
             $grouped = [];
             $totalDebit = 0.0;
             $totalKredit = 0.0;
-
+ 
             foreach ($rowsOfMachine as $row) {
                 $key = implode('|', [
                     $row['no_akun'],
@@ -548,7 +619,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $row['tipe'],
                     $row['nama_akun']
                 ]);
-
+ 
                 if (!isset($grouped[$key])) {
                     $grouped[$key] = [
                         'nama_akun'  => $row['nama_akun'],
@@ -565,7 +636,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                         'has_vol'    => $row['volume'] !== null,
                     ];
                 }
-
+ 
                 if ($row['banyak'] !== null) {
                     $grouped[$key]['banyak'] += $row['banyak'];
                     $grouped[$key]['has_qty'] = true;
@@ -578,7 +649,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $grouped[$key]['jumlah'] += $row['jumlah'];
                 }
             }
-
+ 
             foreach ($grouped as $g) {
                 $isVeneer = in_array($g['no_akun'], ['115-07', '115-08', '1421.00', '1421.01', '1422.00', '1422.01', '1426.00', '1426.01', '1427.00', '1427.01']);
                 $isHutangGaji = in_array($g['no_akun'], ['210-02', '2231.00']);
@@ -587,16 +658,20 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     '1411.01', '1411.02', '1411.03', '1411.04', '1411.05', '1411.06', '1411.07', '1411.08',
                     '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00'
                 ]);
-
+ 
                 $rowHarga = 0.0;
                 if ($isVeneer) {
                     $noAkunVal = $g['no_akun'] ?? '';
                     $namaAkunVal = strtolower($g['nama_akun'] ?? '');
-                    
-                    $dbHarga = $this->getHargaVeneerBasahDb($noAkunVal, $namaAkunVal);
+                    $isCoreVal = str_contains($namaAkunVal, 'core');
+                    $isSengonVal = str_contains($namaAkunVal, 'sengon');
+                    $namaKayuVal = $isSengonVal ? 'Sengon' : 'Meranti';
+ 
+                    $dbHarga = $this->getHargaVeneerBasahDb($namaKayuVal, $isCoreVal);
                     if ($dbHarga > 0) {
                         $rowHarga = $dbHarga;
                     } else {
+                        // Fallback hardcode jika referensi belum diisi di DB
                         if ($noAkunVal === '1421.00' || $noAkunVal === '1421.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'sengon'))) {
                             $rowHarga = 2700000.0;
                         } elseif ($noAkunVal === '1422.00' || $noAkunVal === '1422.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'meranti'))) {
@@ -620,23 +695,23 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                 } else {
                     $rowHarga = (float)($g['jumlah'] ?? 0.0);
                 }
-
+ 
                 $rowTotal = 0.0;
                 if ($g['has_vol'] && $g['volume'] !== null && $g['volume'] > 0) {
-                    $rowTotal = (float)$g['volume'] * $rowHarga;
+                    $rowTotal = round((float)$g['volume'], 4) * $rowHarga;
                 } elseif ($g['has_qty'] && $g['banyak'] !== null && $g['banyak'] > 0) {
                     $rowTotal = (float)$g['banyak'] * $rowHarga;
                 } else {
                     $rowTotal = $rowHarga;
                 }
-
+ 
                 if ($g['dk'] === 'd') {
                     $totalDebit += $rowTotal;
                 } else {
                     $totalKredit += $rowTotal;
                 }
             }
-
+ 
             // Selisih → selalu masuk ke 'hpp triplek' (6111.00) sebagai KREDIT
             $selisih = round($totalDebit - $totalKredit, 2);
             $grouped[] = [
@@ -653,13 +728,13 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                 'has_qty'    => false,
                 'has_vol'    => false,
             ];
-
+ 
             $machineTables[$machine] = $grouped;
         }
-
+ 
         $dateStr = \Carbon\Carbon::parse($this->tanggal)->format('Ymd');
         $currentRow = 1;
-
+ 
         foreach ($machineTables as $machine => $groupedRows) {
             // Title Row
             $noJurnal = 'ROT/' . $dateStr . '/' . strtoupper(str_replace(' ', '', $machine));
@@ -668,7 +743,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
             ]);
             $this->titleRows[] = $currentRow;
             $currentRow++;
-
+ 
             // Header Row
             $rows->push([
                 'Nama Akun',
@@ -688,7 +763,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
             ]);
             $this->headerRows[] = $currentRow;
             $currentRow++;
-
+ 
             // Data Rows
             $dataStart = $currentRow;
             $tglVal = \Carbon\Carbon::parse($this->tanggal)->format('d-m-Y');
@@ -701,14 +776,14 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     '1411.01', '1411.02', '1411.03', '1411.04', '1411.05', '1411.06', '1411.07', '1411.08',
                     '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00'
                 ]);
-
+ 
                 // Format `Nama` (Col 7 / G)
                 if ($isVeneer) {
                     $namaVal = 'kupasan (m - ' . strtolower($g['bagian']) . ')';
                 } else {
                     $namaVal = 'kupasan';
                 }
-
+ 
                 // Format `hit kbk` (Col 10 / J)
                 $hitKbkVal = '';
                 if ($isVeneer || $isWood) {
@@ -716,17 +791,21 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                 } elseif ($isHutangGaji) {
                     $hitKbkVal = 'b';
                 }
-
+ 
                 // Format `Harga` (Col 13 / M)
                 $hargaVal = null;
                 if ($isVeneer) {
                     $noAkunVal = $g['no_akun'] ?? '';
                     $namaAkunVal = strtolower($g['nama_akun'] ?? '');
-                    
-                    $dbHarga = $this->getHargaVeneerBasahDb($noAkunVal, $namaAkunVal);
+                    $isCoreVal = str_contains($namaAkunVal, 'core');
+                    $isSengonVal = str_contains($namaAkunVal, 'sengon');
+                    $namaKayuVal = $isSengonVal ? 'Sengon' : 'Meranti';
+ 
+                    $dbHarga = $this->getHargaVeneerBasahDb($namaKayuVal, $isCoreVal);
                     if ($dbHarga > 0) {
                         $hargaVal = $dbHarga;
                     } else {
+                        // Fallback hardcode jika referensi belum diisi di DB
                         if ($noAkunVal === '1421.00' || $noAkunVal === '1421.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'sengon'))) {
                             $hargaVal = 2700000;
                         } elseif ($noAkunVal === '1422.00' || $noAkunVal === '1422.01' || ($noAkunVal === '115-07' && str_contains($namaAkunVal, 'meranti'))) {
@@ -750,10 +829,10 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                 } else {
                     $hargaVal = $g['jumlah'];
                 }
-
+ 
                 // Calculate Total as an Excel formula referencing 'hit kbk' (Col J), Harga (Col M), M3 (Col L), and Banyak (Col K)
                 $totalVal = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
-
+ 
                 $rows->push([
                     $g['nama_akun'],                                    // 1. Nama Akun
                     $tglVal,                                            // 2. tgl
@@ -766,7 +845,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $g['dk'],                                           // 9. map
                     $hitKbkVal,                                         // 10. hit kbk
                     $g['has_qty'] ? $g['banyak'] : null,                // 11. Banyak
-                    $g['has_vol'] ? $g['volume'] : null,                // 12. M3
+                    $g['has_vol'] ? round($g['volume'], 4) : null,      // 12. M3
                     $hargaVal,                                          // 13. Harga
                     $totalVal                                           // 14. Total
                 ]);
@@ -774,32 +853,32 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
             }
             $dataEnd = $currentRow - 1;
             $this->dataRanges[] = ['start' => $dataStart, 'end' => $dataEnd];
-
+ 
             // 2 Blank separating rows
             $rows->push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
             $rows->push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
             $currentRow += 2;
         }
-
+ 
         return $rows;
     }
-
+ 
     public function title(): string
     {
         return 'jurnal produksi';
     }
-
+ 
     public function styles(Worksheet $sheet)
     {
         return [];
     }
-
+ 
     public function registerEvents(): array
     {
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-
+ 
                 // Style Title Rows
                 foreach ($this->titleRows as $row) {
                     $sheet->mergeCells("A{$row}:N{$row}");
@@ -813,7 +892,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     ]);
                     $sheet->getRowDimension($row)->setRowHeight(25);
                 }
-
+ 
                 // Style Header Rows
                 foreach ($this->headerRows as $row) {
                     $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
@@ -830,29 +909,29 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     ]);
                     $sheet->getRowDimension($row)->setRowHeight(25);
                 }
-
+ 
                 // Style Data Rows
                 foreach ($this->dataRanges as $range) {
                     $start = $range['start'];
                     $end = $range['end'];
                     if ($start > $end) continue;
-
+ 
                     $sheet->getStyle("A{$start}:N{$end}")->applyFromArray([
                         'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
                     ]);
-
+ 
                     $sheet->getStyle("A{$start}:A{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("B{$start}:F{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     $sheet->getStyle("G{$start}:H{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("I{$start}:J{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     $sheet->getStyle("K{$start}:N{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-
+ 
                     $sheet->getStyle("K{$start}:K{$end}")->getNumberFormat()->setFormatCode('#,##0');
                     $sheet->getStyle("L{$start}:L{$end}")->getNumberFormat()->setFormatCode('#,##0.0000');
                     $sheet->getStyle("M{$start}:M{$end}")->getNumberFormat()->setFormatCode('#,##0');
                     $sheet->getStyle("N{$start}:N{$end}")->getNumberFormat()->setFormatCode('#,##0');
                 }
-
+ 
                 // Column Widths
                 $sheet->getColumnDimension('A')->setWidth(25); // Nama Akun
                 $sheet->getColumnDimension('B')->setWidth(15); // tgl
@@ -867,38 +946,5 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                 $sheet->getColumnDimension('N')->setWidth(18); // Total
             }
         ];
-    }
-
-    private function getHargaVeneerBasahDb(string $noAkun, string $namaAkun): float
-    {
-        $noAkunVal = trim($noAkun);
-        $namaAkunVal = strtolower(trim($namaAkun));
-
-        $isSengon = str_contains($namaAkunVal, 'sengon');
-        $isMeranti = str_contains($namaAkunVal, 'meranti') || (!str_contains($namaAkunVal, 'sengon') && !str_contains($namaAkunVal, 'jabon') && !str_contains($namaAkunVal, 'mahoni'));
-        
-        $jns = $isSengon ? 'Sengon' : 'Meranti';
-        $jenisKayu = \App\Models\JenisKayu::where('nama_kayu', $jns)->first();
-        if (!$jenisKayu) {
-            return 0.0;
-        }
-
-        // Determine if it's faceback or core
-        $isCore = str_contains($namaAkunVal, 'core') 
-            || $noAkunVal === '1426.00' 
-            || $noAkunVal === '1426.01' 
-            || $noAkunVal === '1427.00' 
-            || $noAkunVal === '1427.01' 
-            || ($noAkunVal === '115-08');
-
-        $ukuranOptions = !$isCore
-            ? ($jns === 'Sengon' ? ['faceback'] : ['face', 'back'])
-            : ['core'];
-
-        $hargaVeneer = \App\Models\HargaVeneer::where('id_jenis_kayu', $jenisKayu->id)
-            ->whereIn('ukuran', $ukuranOptions)
-            ->first();
-
-        return (float) ($hargaVeneer->harga_basah ?? 0.0);
     }
 }

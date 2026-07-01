@@ -37,13 +37,22 @@ class ProduksiDataMap
 
             // 1. KENDALA: Dari Kendala Rotary Baru (kendalaRotaries)
             if (!empty($item->kendalaRotaries) && $item->kendalaRotaries->count() > 0) {
+                $intervals = [];
+
                 foreach ($item->kendalaRotaries as $knd) {
                     if ($knd->status === 'selesai' && !is_null($knd->durasi_menit)) {
                         $durasiMenit = (int)$knd->durasi_menit;
-                        $totalDowntimeMenit += $durasiMenit;
 
                         $mulai = $knd->waktu_mulai ? Carbon::parse($knd->waktu_mulai) : null;
                         $selesai = $knd->waktu_selesai ? Carbon::parse($knd->waktu_selesai) : null;
+
+                        if ($mulai && $selesai) {
+                            $startTs = $mulai->timestamp;
+                            $endTs = $selesai->timestamp;
+                            if ($endTs > $startTs) {
+                                $intervals[] = ['start' => $startTs, 'end' => $endTs];
+                            }
+                        }
 
                         $timeStr = ($mulai && $selesai) ? ': ' . $mulai->format('H:i') . '-' . $selesai->format('H:i') : '';
                         $formattedText = ($knd->kendala ?? 'Tidak disebutkan') . ' (' . $durasiMenit . ' menit' . $timeStr . ')';
@@ -71,6 +80,34 @@ class ProduksiDataMap
                             'text' => $formattedText,
                         ];
                     }
+                }
+
+                // Merge overlapping intervals to calculate totalDowntimeMenit
+                if (!empty($intervals)) {
+                    usort($intervals, function ($a, $b) {
+                        return $a['start'] <=> $b['start'];
+                    });
+
+                    $merged = [];
+                    foreach ($intervals as $interval) {
+                        if (empty($merged)) {
+                            $merged[] = $interval;
+                        } else {
+                            $lastIndex = count($merged) - 1;
+                            $last = &$merged[$lastIndex];
+                            if ($interval['start'] <= $last['end']) {
+                                $last['end'] = max($last['end'], $interval['end']);
+                            } else {
+                                $merged[] = $interval;
+                            }
+                        }
+                    }
+
+                    $totalDowntimeSeconds = 0;
+                    foreach ($merged as $interval) {
+                        $totalDowntimeSeconds += ($interval['end'] - $interval['start']);
+                    }
+                    $totalDowntimeMenit = (int) round($totalDowntimeSeconds / 60.0);
                 }
             }
 
@@ -128,6 +165,14 @@ class ProduksiDataMap
                 $potonganPerLembar = $targetModel?->potongan ?? 0;
                 $kodeUkuran = $targetModel?->kode_ukuran;
 
+                // If Friday, reduce target and jam kerja by 2 hours
+                $prodDate = Carbon::parse($item->tgl_produksi);
+                if ($prodDate->isFriday() && $targetHarian > 0 && $jamKerja > 2) {
+                    $targetPerJamBase = $targetHarian / $jamKerja;
+                    $targetHarian = $targetHarian - (2 * $targetPerJamBase);
+                    $jamKerja = $jamKerja - 2;
+                }
+
                 // Format kode ukuran
                 if ($kodeUkuran && trim($kodeUkuran) !== '') {
                     $ukuranDisplay = preg_replace('/^(SPINDLESS|YUEQUN|MERANTI|SANJI|DRYER\s*PAGI)/i', '', $kodeUkuran);
@@ -154,11 +199,15 @@ class ProduksiDataMap
             // Target per menit (normal)
             $targetPerMenit = $jamKerjaMenit > 0 ? round($targetHarian / $jamKerjaMenit, 4) : 0;
 
-            // Target tetap menggunakan target harian normal (tidak terpengaruh downtime)
-            $targetDisesuaikan = $targetHarian;
+            // Jam downtime dalam bentuk float
+            $downtimeHours = $totalKendalaMenit / 60.0;
+            $targetReduction = $downtimeHours * $targetPerJam;
 
-            // Selisih berdasarkan target normal
-            $selisihProduksi = $totalHasil - $targetHarian;
+            // Target disesuaikan: target harian dikurangi target selama downtime
+            $targetDisesuaikan = (int) max(0, round($targetHarian - $targetReduction));
+
+            // Selisih berdasarkan target yang telah disesuaikan dengan downtime
+            $selisihProduksi = $totalHasil - $targetDisesuaikan;
 
             $jumlahPekerja = $item->detailPegawaiRotary->count();
             $potonganTotal = 0;

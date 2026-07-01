@@ -3,8 +3,8 @@
 namespace App\Exports\Sheets;
 
 use App\Models\ProduksiHp;
-use App\Models\BahanPenolongProduksi;
-use App\Models\HargaPegawai;
+use App\Models\ReferensiHargaProduksi;
+use App\Models\JenisKayu;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
@@ -22,20 +22,38 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
     protected string $domain;
     protected int $rowIndex = 0;
 
+    protected ?int $idKayuSengon  = null;
+    protected ?int $idKayuMeranti = null;
+    protected string $kolomNamaKayu = 'nama';
+
     public function __construct(string $tanggal, string $domain)
     {
         $this->tanggal = $tanggal;
         $this->domain  = $domain;
     }
 
-    public function title(): string { return 'jurnal produksi'; }
+    public function title(): string
+    {
+        return 'jurnal produksi';
+    }
 
     public function columnWidths(): array
     {
         return [
-            'A' => 42, 'B' => 15, 'C' => 10, 'D' => 12, 'E' => 10,
-            'F' => 10, 'G' => 18, 'H' => 42, 'I' => 6,  'J' => 10,
-            'K' => 10, 'L' => 15, 'M' => 15, 'N' => 20,
+            'A' => 42,
+            'B' => 15,
+            'C' => 10,
+            'D' => 12,
+            'E' => 10,
+            'F' => 10,
+            'G' => 18,
+            'H' => 42,
+            'I' => 6,
+            'J' => 10,
+            'K' => 10,
+            'L' => 15,
+            'M' => 15,
+            'N' => 20,
         ];
     }
 
@@ -50,8 +68,7 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
             'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1F4E79']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
         ]);
-
-        $sheet->getStyle("D2:D{$lastRow}")->getNumberFormat()->setFormatCode('0.00');
+        $sheet->getStyle("D2:D{$lastRow}")->getNumberFormat()->setFormatCode('@');
         $sheet->getStyle("L2:L{$lastRow}")->getNumberFormat()->setFormatCode('0.0000');
         $sheet->getStyle("M2:N{$lastRow}")->getNumberFormat()->setFormatCode('#,##0');
         $sheet->getRowDimension(1)->setRowHeight(20);
@@ -72,171 +89,423 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
     {
         $namaLower = strtolower($namaMesin);
         $shiftStr  = strtolower(trim($shift));
-
         if (str_contains($namaLower, '1')) return "hp 1 {$shiftStr}";
         if (str_contains($namaLower, '2')) return "hp 2 {$shiftStr}";
         if (str_contains($namaLower, '3')) return "hp 3 {$shiftStr}";
-
         return "hp 1 {$shiftStr}";
     }
 
-    // =========================================================================
-    // MAPPING AKUN PRODUK
-    // =========================================================================
-    private function getAkunProduk(string $tipe, float $tebal, string $jenisKayu, string $grade): array
+    private function domainSuffix(): array
     {
-        $tipeStr    = strtolower(trim($tipe));
-        // Normalisasi grade: underscore → spasi, lowercase, trim
-        // Agar "uty_lokal", "Uty Lokal", "uty lokal" semua jadi "uty lokal"
-        $gradeStr   = strtolower(str_replace('_', ' ', trim($grade)));
-        $kayuSingkat = str_contains(strtolower($jenisKayu), 'sengon') ? 's' : 'm';
-        $tebalBulat  = (int) $tebal;
+        return $this->isWhn() ? ['mth', 'whn'] : ['wjy'];
+    }
 
-        if ($tipeStr === 'platform') {
-            $namaAkun = "platform {$tebalBulat} {$gradeStr} MTH";
-        } else {
-            $namaAkun = "{$tebalBulat}{$kayuSingkat} {$gradeStr} MTH";
+    private function isAf(string $grade): bool
+    {
+        return str_contains(strtolower(trim($grade)), 'af');
+    }
+
+    private function isPlatformGrade(string $grade): bool
+    {
+        $g = strtolower(trim($grade));
+        return in_array($g, [
+            'better',
+            'better local',
+            'better lokal',
+            'better local mth',
+            'better lokal mth',
+        ]);
+    }
+
+    private function normalizeGrade(string $grade): array
+    {
+        $g     = strtolower(trim($grade));
+        $local = str_replace('lokal', 'local', $g);
+        $lokal = str_replace('local', 'lokal', $g);
+        
+        $variants = array_unique([$g, $local, $lokal]);
+
+        // Aturan spesifik pemetaan grade angka ke teks master data
+        if (in_array($g, ['1', '2'])) {
+            array_push($variants, 'face/back', 'face', 'back');
+        } elseif (in_array($g, ['3', '4'])) {
+            array_push($variants, 'core');
         }
 
-        $daftarAkun = [
-            '12m better mth'     => '1506.05',
-            '15s aj mth'         => '1506.14',
-            '15s uty lokal mth'  => '1506.13',
-            '18s aj mth'         => '1506.19',
-            '3m uty lokal mth'   => '1506.21',
-            '5s uty lokal mth'   => '1506.26',
-            'platform 18 aj mth' => '1506.51',
+        return $variants;
+    }
+
+    private function kategoriGrade(string $grade): string
+    {
+        $g = strtolower(trim($grade));
+        if (in_array($g, ['1', '2'])) return 'face';
+        if (in_array($g, ['3', '4'])) return 'back';
+        return $g;
+    }
+
+    private function getIdKayuByNama(string $namaLike): ?int
+    {
+        $kolom = ['nama', 'nama_kayu', 'nama_jenis_kayu', 'jenis_kayu'];
+        foreach ($kolom as $col) {
+            try {
+                $kayu = JenisKayu::whereRaw("LOWER({$col}) LIKE ?", ["%{$namaLike}%"])->first();
+                if ($kayu) return $kayu->id;
+            } catch (\Throwable $e) {
+                continue;
+            }
+        }
+        try {
+            $semua = JenisKayu::all();
+            $found = $semua->first(function ($item) use ($namaLike) {
+                foreach ($item->getAttributes() as $val) {
+                    if (is_string($val) && str_contains(strtolower($val), $namaLike)) return true;
+                }
+                return false;
+            });
+            return $found?->id;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private function getIdSengon(): ?int
+    {
+        if ($this->idKayuSengon === null) {
+            $this->idKayuSengon = $this->getIdKayuByNama('sengon') ?? 0;
+        }
+        return $this->idKayuSengon ?: null;
+    }
+
+    private function getIdMeranti(): ?int
+    {
+        if ($this->idKayuMeranti === null) {
+            $this->idKayuMeranti = $this->getIdKayuByNama('meranti') ?? 0;
+        }
+        return $this->idKayuMeranti ?: null;
+    }
+
+    private function resolveIdJenisKayu(?string $namaJenisBarang): ?int
+    {
+        if (!$namaJenisBarang) return null;
+        return $this->getIdKayuByNama(strtolower(trim($namaJenisBarang)));
+    }
+
+    // =========================================================================
+    // FILTER HELPERS — STRICT (tidak fallback ke data lain, tampilkan UNKNOWN)
+    // =========================================================================
+
+    /**
+     * Filter domain: cocok suffix → pakai. Tidak ada yang cocok → kembalikan semua.
+     * Hanya dipakai untuk plywood & platform (nama di DB mengandung suffix mth/whn/wjy).
+     */
+    private function filterByDomain(\Illuminate\Support\Collection $c): \Illuminate\Support\Collection
+    {
+        if ($c->isEmpty()) return $c;
+        $suffix   = $this->domainSuffix();
+        $filtered = $c->filter(function ($item) use ($suffix) {
+            $namaRef  = strtolower($item->nama ?? '');
+            $namaAkun = strtolower($item->subAnakAkun->kode_sub_anak_akun ?? '');
+            foreach ($suffix as $s) {
+                if (str_contains($namaRef, $s) || str_contains($namaAkun, $s)) return true;
+            }
+            return false;
+        });
+        return $filtered->isNotEmpty() ? $filtered : $c;
+    }
+
+    /**
+     * Filter bahan penolong: preferensi nama GENERIC (tanpa suffix wjy/whn/mth).
+     */
+    private function filterGenericFirst(\Illuminate\Support\Collection $c): \Illuminate\Support\Collection
+    {
+        if ($c->isEmpty()) return $c;
+        $allSuffix = ['wjy', 'whn', 'mth'];
+        $generic   = $c->filter(function ($item) use ($allSuffix) {
+            $namaRef = strtolower($item->nama ?? '');
+            foreach ($allSuffix as $s) {
+                if (str_contains($namaRef, $s)) return false;
+            }
+            return true;
+        });
+        return $generic->isNotEmpty() ? $generic : $c;
+    }
+
+    /**
+     * Filter ukuran STRICT:
+     * - Cocok id_ukuran spesifik → pakai
+     * - Tidak cocok → fallback ke id_ukuran NULL (referensi generic)
+     * - Tidak ada keduanya → return kosong → UNKNOWN
+     */
+    private function filterByUkuran(\Illuminate\Support\Collection $c, ?int $idUkuran): \Illuminate\Support\Collection
+    {
+        if ($c->isEmpty() || !$idUkuran) return $c;
+
+        // Coba exact match dulu
+        $exact = $c->filter(fn($i) => $i->id_ukuran == $idUkuran);
+        if ($exact->isNotEmpty()) return $exact;
+
+        // Cari dimensi dari id_ukuran yang diberikan, lalu cari mirror (dibalik)
+        try {
+            $ukuran = \App\Models\Ukuran::find($idUkuran);
+            if ($ukuran) {
+                $idMirror = \App\Models\Ukuran::where('tebal', $ukuran->tebal)
+                    ->where(
+                        fn($q) => $q
+                            ->where(
+                                fn($q2) => $q2
+                                    ->where('panjang', $ukuran->panjang)
+                                    ->where('lebar', $ukuran->lebar)
+                            )
+                            ->orWhere(
+                                fn($q2) => $q2
+                                    ->where('panjang', $ukuran->lebar)
+                                    ->where('lebar', $ukuran->panjang)
+                            )
+                    )->pluck('id');
+
+                $mirror = $c->filter(fn($i) => $idMirror->contains($i->id_ukuran));
+                if ($mirror->isNotEmpty()) return $mirror;
+            }
+        } catch (\Throwable $e) {
+            // Jika model Ukuran tidak ditemukan, lanjut ke fallback
+        }
+
+        // Fallback ke id_ukuran NULL (referensi generic tanpa ukuran spesifik)
+        return $c->filter(fn($i) => is_null($i->id_ukuran));
+    }
+
+    /**
+     * Filter kayu STRICT:
+     * - Cocok id_jenis_kayu → pakai
+     * - Tidak cocok → fallback ke id_jenis_kayu NULL (referensi generic)
+     * - Tidak ada keduanya → return kosong → UNKNOWN
+     */
+    private function filterByKayu(\Illuminate\Support\Collection $c, ?int $idJenisKayu): \Illuminate\Support\Collection
+    {
+        if ($c->isEmpty() || !$idJenisKayu) return $c;
+        $filtered = $c->filter(fn($i) => $i->id_jenis_kayu == $idJenisKayu);
+        if ($filtered->isNotEmpty()) return $filtered;
+        // Fallback ke referensi generic (id_jenis_kayu NULL) saja, tidak ke semua
+        return $c->filter(fn($i) => is_null($i->id_jenis_kayu));
+    }
+
+    /**
+     * Filter grade STRICT:
+     * - Cocok kw → pakai
+     * - Tidak cocok → fallback ke kw kosong (referensi generic)
+     * - Tidak ada keduanya → return kosong → UNKNOWN
+     */
+    private function filterByGrade(\Illuminate\Support\Collection $c, ?string $grade): \Illuminate\Support\Collection
+    {
+        if ($c->isEmpty() || !$grade) return $c;
+        $variants = $this->normalizeGrade($grade);
+        $filtered = $c->filter(function ($item) use ($variants) {
+            $kwDb = strtolower(trim($item->kw ?? ''));
+            if ($kwDb === '') return false;
+            foreach ($variants as $v) {
+                if ($kwDb === $v || str_contains($kwDb, $v) || str_contains($v, $kwDb)) return true;
+            }
+            return false;
+        });
+        if ($filtered->isNotEmpty()) return $filtered;
+        // Fallback ke kw kosong (referensi generic) saja, tidak ke semua
+        return $c->filter(fn($i) => empty(trim($i->kw ?? '')));
+    }
+
+    // =========================================================================
+    // BASE QUERY per tipe barang
+    // =========================================================================
+
+    private function baseQuery(string $tipe): \Illuminate\Database\Eloquent\Builder
+    {
+        $q         = ReferensiHargaProduksi::with('subAnakAkun');
+        $tipeLower = strtolower(trim($tipe));
+
+        if (in_array($tipeLower, ['triplek', 'plywood'])) {
+            $q->where(fn($s) => $s->whereRaw("LOWER(jenis_barang) IN ('plywood','triplek')"));
+        } elseif ($tipeLower === 'platform') {
+            $q->whereRaw("LOWER(jenis_barang) = 'platform'");
+        } elseif ($tipeLower === 'bahan') {
+            $q->where(
+                fn($s) => $s
+                    ->whereRaw("LOWER(jenis_barang) LIKE '%barang%'")
+                    ->orWhereRaw("LOWER(jenis_barang) LIKE '%veneer%'")
+            );
+        } elseif ($tipeLower === 'afalan') {
+            $q->whereRaw("LOWER(jenis_barang) LIKE '%afalan%'");
+        }
+
+        return $q;
+    }
+
+    // =========================================================================
+    // PENCARIAN REFERENSI
+    // =========================================================================
+
+    /**
+     * Fetch referensi umum (triplek, platform, bahan/veneer).
+     * Menggunakan filter STRICT — tidak ketemu → return null → UNKNOWN.
+     */
+    private function fetchReferensi(string $tipe, ?int $idUkuran, ?int $idJenisKayu, ?string $grade): ?ReferensiHargaProduksi
+    {
+        $all = $this->baseQuery($tipe)->get();
+        if ($all->isEmpty()) return null;
+
+        $results = $this->filterByUkuran($all, $idUkuran);
+        if ($results->isEmpty()) return null;
+
+        $results = $this->filterByKayu($results, $idJenisKayu);
+        if ($results->isEmpty()) return null;
+
+        $results = $this->filterByGrade($results, $grade);
+        if ($results->isEmpty()) return null;
+
+        // Filter domain hanya untuk plywood & platform
+        $tipeLower = strtolower(trim($tipe));
+        if (in_array($tipeLower, ['triplek', 'plywood', 'platform'])) {
+            $results = $this->filterByDomain($results);
+        }
+
+        return $results->first();
+    }
+
+    /**
+     * Khusus AF: sengon → cari afalan sengon; selain sengon → cari afalan meranti.
+     */
+    private function fetchReferensiAfalan(?int $idJenisKayu): ?ReferensiHargaProduksi
+    {
+        $idSengon  = $this->getIdSengon();
+        $idMeranti = $this->getIdMeranti();
+
+        $isSengon     = $idJenisKayu && $idJenisKayu === $idSengon;
+        $idKayuLookup = $isSengon ? $idSengon : $idMeranti;
+
+        $all = $this->baseQuery('afalan')->get();
+        if ($all->isEmpty()) return null;
+
+        // Strict: tidak fallback ke kayu lain
+        $byKayu = $all->filter(fn($i) => $i->id_jenis_kayu == $idKayuLookup);
+        $pool   = $byKayu->isNotEmpty() ? $byKayu : $all;
+
+        // Prioritas kw Standard
+        $standard = $pool->filter(fn($i) => strtolower(trim($i->kw ?? '')) === 'standard');
+
+        return ($standard->isNotEmpty() ? $standard : $pool)->first();
+    }
+
+    private function resolveRefBahan(?int $idUkuran, ?int $idJenisKayu, ?string $grade): ?ReferensiHargaProduksi
+    {
+        if ($grade && $this->isAf($grade)) {
+            return $this->fetchReferensiAfalan($idJenisKayu);
+        }
+        return $this->fetchReferensi('bahan', $idUkuran, $idJenisKayu, $grade);
+    }
+
+    private function aliasBahanPenolong(): array
+    {
+        return [
+            'hdr'         => 'hadner',
+            'isi_steples' => 'staples',
+            'isi steples' => 'staples',
         ];
-
-        $key = strtolower($namaAkun);
-
-        // Exact match
-        if (isset($daftarAkun[$key])) {
-            return ['nama' => $namaAkun, 'no' => $daftarAkun[$key]];
-        }
-
-        // Fuzzy match — semua kata dari pattern harus ada di key
-        foreach ($daftarAkun as $pattern => $no) {
-            $patternWords = explode(' ', $pattern);
-            $allMatch     = true;
-            foreach ($patternWords as $word) {
-                if (!str_contains($key, $word)) { $allMatch = false; break; }
-            }
-            if ($allMatch) return ['nama' => $namaAkun, 'no' => $no];
-        }
-
-        return ['nama' => $namaAkun, 'no' => '1506.99'];
     }
 
-    // =========================================================================
-    // MAPPING AKUN VENEER
-    // =========================================================================
-    private function getAkunVeneer(float $tebal, string $jenisKayu, string $grade = ''): array
-    {
-        $kayu = str_contains(strtolower($jenisKayu), 'sengon') ? 'sengon' : 'meranti';
-        $sf   = $this->isWhn() ? 'WHN' : 'WJY';
-        $ext  = $this->isWhn() ? '01'  : '00';
-
-        // Cek PPC: 260 F/B (tebal < 1) sengon dengan grade bukan 1,2,3,4 (alias AF/afkir)
-        $gradeStr = strtolower(trim($grade));
-        $isPpc    = ($tebal < 1)
-            && ($kayu === 'sengon')
-            && !in_array($gradeStr, ['1', '2', '3', '4', 'grade 1', 'grade 2', 'grade 3', 'grade 4']);
-
-        if ($isPpc) {
-            return [
-                'nama' => "Veneer Jadi ppc {$kayu} {$sf}",
-                'no'   => "1472.{$ext}",
-            ];
-        }
-
-        $kelompok = ($tebal < 1) ? '260 face/back' : '130 core';
-        $namaAkun = "Veneer Jadi {$kelompok} {$kayu} {$sf}";
-
-        if ($this->isWhn()) {
-            if ($kayu === 'meranti') {
-                $noAkun = ($tebal < 1) ? '1462.01' : '1467.01';
-            } else {
-                $noAkun = ($tebal < 1) ? '1461.01' : '1466.01';
-            }
-        } else {
-            if ($kayu === 'meranti') {
-                $noAkun = ($tebal < 1) ? "1442.{$ext}" : "1447.{$ext}";
-            } else {
-                $noAkun = ($tebal < 1) ? "1441.{$ext}" : "1446.{$ext}";
-            }
-        }
-
-        return ['nama' => $namaAkun, 'no' => $noAkun];
-    }
-
-    // =========================================================================
-    // MAPPING AKUN BAHAN PENOLONG
-    // FIX: Tambah variasi underscore (lem_aruki, dll) untuk handle nama DB
-    // =========================================================================
-    private function getAkunPenolong(string $namaBahan): array
+    /**
+     * Fetch referensi bahan penolong.
+     * Tahap 1: nama lengkap / LIKE
+     * Tahap 2: alias mapping
+     * Tahap 3: per kata (terpanjang dulu)
+     * Tidak ketemu di semua tahap → return null → UNKNOWN
+     */
+    private function fetchReferensiPenolong(string $namaBahan): ?ReferensiHargaProduksi
     {
         $namaLower = strtolower(trim($namaBahan));
+        $namaClean = str_replace('_', ' ', $namaLower);
 
-        $daftarPenolong = [
-            // Lem Aruki — dengan dan tanpa underscore
-            'lem_aruki'      => ['nama' => 'Lem Aruki',          'no' => '1507.20'],
-            'lem aruki'      => ['nama' => 'Lem Aruki',          'no' => '1507.20'],
-            // Lem HQ
-            'lem_hq'         => ['nama' => 'Lem HQ',             'no' => '1507.57'],
-            'lem hq'         => ['nama' => 'Lem HQ',             'no' => '1507.57'],
-            // Tepung WJY harus dicek duluan (lebih spesifik)
-            'tepung_wjy'     => ['nama' => 'Tepung',             'no' => '1507.62'],
-            'tepung wjy'     => ['nama' => 'Tepung',             'no' => '1507.62'],
-            // Tepung biasa
-            'tepung'         => ['nama' => 'Tepung',             'no' => '1507.16'],
-            // Hadner / Hardener
-            'hadner'         => ['nama' => 'Hadner',             'no' => '1507.11'],
-            'hardener'       => ['nama' => 'Hadner',             'no' => '1507.11'],
-            'hdr'            => ['nama' => 'Hadner',             'no' => '1507.11'],
-            // Pewarna
-            'pewarna'        => ['nama' => 'Pewarna',            'no' => '1507.49'],
-            // Isolasi coklat (cek duluan sebelum isolasi putih)
-            'isolasi_coklat' => ['nama' => 'isolasi coklat WHN', 'no' => '1507.35'],
-            'isolasi coklat' => ['nama' => 'isolasi coklat WHN', 'no' => '1507.35'],
-            // Isolasi putih
-            'isolasi_putih'  => ['nama' => 'isolasi putih',      'no' => '1507.36'],
-            'isolasi putih'  => ['nama' => 'isolasi putih',      'no' => '1507.36'],
-            'solasi putih'   => ['nama' => 'isolasi putih',      'no' => '1507.36'],
-            'solasi'         => ['nama' => 'isolasi putih',      'no' => '1507.36'],
-            // Isi Staples / Steples
-            'isi_staples'    => ['nama' => 'Isi Staples',        'no' => '1507.13'],
-            'isi_steples'    => ['nama' => 'Isi Staples',        'no' => '1507.13'],
-            'isi staples'    => ['nama' => 'Isi Staples',        'no' => '1507.13'],
-            'isi steples'    => ['nama' => 'Isi Staples',        'no' => '1507.13'],
-            'staples'        => ['nama' => 'Isi Staples',        'no' => '1507.13'],
-            'steples'        => ['nama' => 'Isi Staples',        'no' => '1507.13'],
-        ];
+        // Tahap 1: full match / LIKE
+        $results = ReferensiHargaProduksi::with('subAnakAkun')
+            ->where(
+                fn($q) => $q
+                    ->whereRaw("LOWER(nama) = ?", [$namaLower])
+                    ->orWhereRaw("REPLACE(LOWER(nama), '_', ' ') = ?", [$namaClean])
+                    ->orWhereRaw("LOWER(nama) LIKE ?", ["%{$namaClean}%"])
+                    ->orWhereRaw("REPLACE(LOWER(nama), '_', ' ') LIKE ?", ["%{$namaClean}%"])
+            )->get();
 
-        foreach ($daftarPenolong as $keyword => $data) {
-            if (str_contains($namaLower, $keyword)) {
-                return $data;
+        if ($results->isNotEmpty()) {
+            return $this->filterGenericFirst($results)->first();
+        }
+
+        // Tahap 2: alias mapping
+        $alias      = $this->aliasBahanPenolong();
+        $cariDengan = $alias[$namaLower] ?? $alias[$namaClean] ?? null;
+
+        if ($cariDengan) {
+            $byAlias = ReferensiHargaProduksi::with('subAnakAkun')
+                ->whereRaw("LOWER(nama) LIKE ?", ["%{$cariDengan}%"])
+                ->get();
+            if ($byAlias->isNotEmpty()) {
+                return $this->filterGenericFirst($byAlias)->first();
             }
         }
 
-        return ['nama' => $namaBahan, 'no' => '1507.99'];
+        // Tahap 3: per kata (terpanjang dulu, min 3 huruf)
+        $kata = array_filter(explode(' ', $namaClean), fn($k) => strlen($k) >= 3);
+        usort($kata, fn($a, $b) => strlen($b) - strlen($a));
+
+        foreach ($kata as $k) {
+            $byKata = ReferensiHargaProduksi::with('subAnakAkun')
+                ->whereRaw("LOWER(nama) LIKE ?", ["%{$k}%"])
+                ->get();
+            if ($byKata->isNotEmpty()) {
+                return $this->filterGenericFirst($byKata)->first();
+            }
+        }
+
+        // Tidak ditemukan → return null → UNKNOWN
+        return null;
     }
 
     // =========================================================================
-    // MAPPING AKUN HPP
+    // EXTRACT AKUN
     // =========================================================================
-    private function getAkunHpp(string $tipe): array
+
+    private function extractAkun(?ReferensiHargaProduksi $ref): array
+    {
+        if (!$ref) {
+            return ['UNKNOWN', 'UNKNOWN', 0.0];
+        }
+
+        if (!$ref->relationLoaded('subAnakAkun')) {
+            $ref->load('subAnakAkun');
+        }
+
+        $sub = $ref->subAnakAkun;
+
+        if (!$sub) {
+            \Illuminate\Support\Facades\Log::warning("ReferensiHargaProduksi id={$ref->id} tidak punya subAnakAkun");
+            return ['UNKNOWN', 'UNKNOWN', (float) $ref->harga];
+        }
+
+        $namaAkun = trim($sub->nama_sub_anak_akun ?? '');
+        $noAkun   = trim($sub->kode_sub_anak_akun ?? '');
+
+        if ($namaAkun === '') $namaAkun = 'UNKNOWN';
+        if ($noAkun   === '') $noAkun   = 'UNKNOWN';
+
+        return [$namaAkun, $noAkun, (float) $ref->harga];
+    }
+
+    // =========================================================================
+    // AKUN HPP & GAJI
+    // =========================================================================
+
+    private function getAkunHpp(): array
     {
         $ext = $this->isWhn() ? '01' : '00';
-        if (strtolower(trim($tipe)) === 'platform') {
-            return ['nama' => 'hpp platform', 'no' => "6111.{$ext}"];
-        }
-        return ['nama' => 'hpp triplek', 'no' => "6111.{$ext}"];
+        return ['nama' => 'hpp', 'no' => "6111.{$ext}"];
     }
 
-    // =========================================================================
-    // MAPPING AKUN GAJI
-    // =========================================================================
     private function getAkunGaji(): array
     {
         $ext = $this->isWhn() ? '01' : '00';
@@ -247,111 +516,44 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
     }
 
     // =========================================================================
-    // HARGA HPP PRODUK
+    // ROW BUILDER
     // =========================================================================
-    private function getHargaHpp(string $tipe, float $tebal, string $jenisKayu, string $grade): float
-    {
-        if (strtolower(trim($tipe)) === 'platform') return 2000000;
 
-        $kayu = strtolower($jenisKayu);
-        $gr   = strtolower($grade);
-        $tbl  = (string) round($tebal, 1);
-
-        if (str_contains($kayu, 'sengon')) {
-            if (str_contains($gr, 'better')) {
-                $p = [
-                    '4.7'  => 65400,
-                    '7.7'  => 96800,
-                    '9.1'  => 100800,
-                    '12.1' => 97400,
-                    '12.4' => 103300,
-                    '15.1' => 132300,
-                    '15.5' => 153800,
-                    '18.5' => 173800,
-                ];
-                return $p[$tbl] ?? 96800;
-            } elseif (str_contains($gr, 'fm')) {
-                $p = ['9' => 156843, '12' => 207903, '15' => 258963, '18' => 291708];
-                return $p[(string) round($tebal)] ?? 207903;
-            } else {
-                // HPP S UTY
-                $p = [
-                    '4.7'  => 47000,
-                    '7.7'  => 66400,
-                    '9.1'  => 47000,
-                    '12.1' => 107100,
-                    '12.4' => 106400,
-                    '15.1' => 122900,
-                    '15.5' => 125400,
-                    '18.5' => 135900,
-                ];
-                return $p[$tbl] ?? 47000;
-            }
-        } else {
-            // Meranti
-            if (str_contains($gr, 'better')) {
-                $p = ['5.1' => 70300, '8.2' => 78300, '8.7' => 94300];
-                return $p[$tbl] ?? 78300;
-            } elseif (str_contains($gr, 'lokal')) {
-                $p = [
-                    '5.1'  => 70300,
-                    '8.2'  => 90800,
-                    '11.9' => 95800,
-                    '14.8' => 126300,
-                    '17.8' => 156800,
-                    '16.1' => 126300,
-                    '19.1' => 177300,
-                ];
-                return $p[$tbl] ?? 90800;
-            } else {
-                // HPP M UTY
-                $p = [
-                    '2.8'  => 40000,
-                    '5.1'  => 65500,
-                    '8.2'  => 79500,
-                    '8.7'  => 76500,
-                    '11.9' => 103500,
-                    '14.8' => 125500,
-                    '17.8' => 150300,
-                    '16.1' => 125500,
-                    '19.1' => 150300,
-                ];
-                return $p[$tbl] ?? 79500;
-            }
-        }
-    }
-
-    // =========================================================================
-    // HARGA VENEER
-    // =========================================================================
-    private function getHargaVeneer(float $tebal, string $jenisKayu, bool $isPpc = false): float
-    {
-        if ($isPpc) return 1700000;
-
-        $kayu = str_contains(strtolower($jenisKayu), 'sengon') ? 'sengon' : 'meranti';
-
-        if ($tebal >= 1) {
-            // 130 core
-            return ($kayu === 'sengon') ? 2250000 : 2800000;
-        } else {
-            // 260 F/B
-            return ($kayu === 'sengon') ? 4000000 : 10000000;
-        }
-    }
-
-    // =========================================================================
-    // HELPER ROW BUILDER
-    // =========================================================================
     private function makeRow(
-        $namaAkun, $noAkun, $tgl, $namaProduksi,
-        $ket, $map, $hitKbk, $banyak, $m3, $harga
+        string $namaAkun,
+        string $noAkun,
+        string $tgl,
+        string $namaProduksi,
+        string $ket,
+        string $map,
+        string $hitKbk,
+        $banyak,
+        $m3,
+        $harga,
+        $total = null
     ): array {
-        return [$namaAkun, $tgl, '', $noAkun, '', '', $namaProduksi, $ket, $map, $hitKbk, $banyak, $m3, $harga, null];
+        return [
+            $namaAkun,
+            $tgl,
+            '',
+            "\t" . $noAkun,
+            '',
+            '',
+            $namaProduksi,
+            $ket,
+            $map,
+            $hitKbk,
+            $banyak,
+            $m3,
+            $harga,
+            $total,
+        ];
     }
 
     // =========================================================================
     // MAIN: array()
     // =========================================================================
+
     public function array(): array
     {
         $rows   = [];
@@ -376,27 +578,33 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
         if ($produksis->isEmpty()) return $rows;
 
         $tglStr             = Carbon::parse($this->tanggal)->format('d-m-Y');
-        $hargaPegawaiMaster = HargaPegawai::first()->harga ?? 150000;
+        $hargaPegawaiMaster = 150000;
 
         foreach ($produksis as $prod) {
-            $shiftStr    = $prod->shift ?? 'pagi';
+            $shiftStr     = $prod->shift ?? 'pagi';
             $hasilByMesin = [];
 
-            foreach ($prod->triplekHasilHp as $t) {
-                $hasilByMesin[$t->id_mesin][] = ['tipe' => 'triplek',  'data' => $t];
-            }
-            foreach ($prod->platformHasilHp as $p) {
-                $hasilByMesin[$p->id_mesin][] = ['tipe' => 'platform', 'data' => $p];
-            }
+            foreach ($prod->triplekHasilHp  as $t) $hasilByMesin[$t->id_mesin][] = ['tipe' => 'triplek',  'data' => $t];
+            foreach ($prod->platformHasilHp as $p) $hasilByMesin[$p->id_mesin][] = ['tipe' => 'platform', 'data' => $p];
+
+            uasort($hasilByMesin, fn($a, $b) => strcmp(
+                strtolower($a[0]['data']->mesin->nama_mesin ?? ''),
+                strtolower($b[0]['data']->mesin->nama_mesin ?? '')
+            ));
 
             // Tentukan HP3
+            $jumlahMesin = count($hasilByMesin);
             $hp3Id = null;
-            foreach ($hasilByMesin as $mId => $items) {
-                $namaMesin = strtolower($items[0]['data']->mesin->nama_mesin ?? '');
-                if (str_contains($namaMesin, '3')) { $hp3Id = $mId; break; }
-            }
-            if (!$hp3Id && count($hasilByMesin) > 0) {
-                $hp3Id = array_key_last($hasilByMesin);
+            if ($jumlahMesin === 1) {
+                $hp3Id = array_key_first($hasilByMesin);
+            } else {
+                foreach ($hasilByMesin as $mId => $items) {
+                    if (str_contains(strtolower($items[0]['data']->mesin->nama_mesin ?? ''), '3')) {
+                        $hp3Id = $mId;
+                        break;
+                    }
+                }
+                if (!$hp3Id) $hp3Id = array_key_last($hasilByMesin);
             }
 
             $jumlahPekerja = $prod->detailPegawaiHp->count();
@@ -407,160 +615,194 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
 
                 $totalHargaProdukHp3   = 0;
                 $totalHargaBahanGlobal = 0;
+                $totalProdHp1Hp2       = 0;
 
-                // =============================================================
-                // 1. JURNAL HASIL PRODUKSI (Debit produk, Kredit HPP non-HP3)
-                // =============================================================
+                // =======================================================
+                // 1. HASIL PRODUKSI (DEBIT)
+                // =======================================================
                 foreach ($items as $item) {
-                    $tipe   = $item['tipe'];
-                    $data   = $item['data'];
+                    $tipe        = $item['tipe'];
+                    $data        = $item['data'];
+                    $u           = $data->barangSetengahJadi->ukuran ?? null;
+                    $idUkuran    = $u?->id;
+                    $jk          = $data->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? 'sengon';
+                    $idJenisKayu = $this->resolveIdJenisKayu($jk);
+                    $grStr       = $data->barangSetengahJadi->grade->nama_grade ?? '';
+                    $tebal       = $u?->tebal ?? 0;
+                    $banyak      = $data->isi ?? 0;
+                    $m3Round     = $u ? round(($u->panjang * $u->lebar * $tebal * $banyak) / 10_000_000, 4) : 0;
 
-                    $u      = $data->barangSetengahJadi->ukuran ?? null;
-                    $jk     = $data->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? 'sengon';
-                    $gr     = $data->barangSetengahJadi->grade->nama_grade ?? 'uty lokal';
-                    $tebal  = $u->tebal ?? 0;
-                    $banyak = $data->isi ?? 0;
-                    $m3     = ($u->panjang * $u->lebar * $tebal * $banyak) / 10_000_000;
+                    $ref = $this->fetchReferensi($tipe, $idUkuran, $idJenisKayu, $grStr);
+                    [$akunNama, $akunNo, $hargaHpp] = $this->extractAkun($ref);
 
-                    $akunProduk = $this->getAkunProduk($tipe, $tebal, $jk, $gr);
-                    $hargaHpp   = $this->getHargaHpp($tipe, $tebal, $jk, $gr);
-                    $m3Round    = round($m3, 4);
+                    // Keterangan: pakai nama dari referensi, fallback ke nama manual jika UNKNOWN
+                    if ($ref) {
+                        $keterangan = $ref->nama;
+                    } else {
+                        $tebalInt  = (int) $tebal;
+                        $jkSingkat = strtolower(substr($jk, 0, 1));
+                        $kwStr     = strtolower($grStr);
+                        $keterangan = "{$tebalInt}{$jkSingkat} {$kwStr} MTH [UNKNOWN - cek master data]";
+                    }
 
-                    // DEBIT — Hasil Produksi
-                    $rows[] = $this->makeRow(
-                        $akunProduk['nama'], $akunProduk['no'],
-                        $tglStr, $namaMesinSingkat,
-                        $akunProduk['nama'], 'd', 'b',
-                        $banyak, $m3Round, $hargaHpp
-                    );
+                    $rows[] = $this->makeRow($akunNama, $akunNo, $tglStr, $namaMesinSingkat, $keterangan, 'd', 'b', $banyak, $m3Round, $hargaHpp);
 
-                    $totalProdValue = $banyak * $hargaHpp;
-
+                    $totalProdValue = round($banyak * $hargaHpp, 0);
                     if ($mId != $hp3Id) {
-                        // KREDIT — HPP (HP1 & HP2)
-                        $akunHpp = $this->getAkunHpp($tipe);
-                        $rows[]  = $this->makeRow(
-                            $akunHpp['nama'], $akunHpp['no'],
-                            $tglStr, $namaMesinSingkat,
-                            '', 'k', '', '', '', $totalProdValue
-                        );
+                        $totalProdHp1Hp2 += $totalProdValue;
                     } else {
                         $totalHargaProdukHp3 += $totalProdValue;
                     }
                 }
 
-                // =============================================================
-                // 2. BIAYA & GAJI — hanya di HP3
-                // =============================================================
+                // KREDIT HPP untuk HP1 & HP2
+                if ($mId != $hp3Id && $totalProdHp1Hp2 > 0) {
+                    $hpp    = $this->getAkunHpp();
+                    $rows[] = $this->makeRow($hpp['nama'], $hpp['no'], $tglStr, $namaMesinSingkat, '', 'k', '', '', '', round($totalProdHp1Hp2, 0));
+                }
+
+                // =======================================================
+                // 2. BIAYA HP3 (KREDIT)
+                // =======================================================
                 if ($mId == $hp3Id) {
 
-                    // ---------------------------------------------------------
-                    // FIX: Kumpulkan & GABUNG bahan veneer berdasarkan no akun
-                    // Solusi untuk masalah C: 260 F/B sengon terpecah 2 baris
-                    // ---------------------------------------------------------
+                    // --- BAHAN HOTPRESS (veneer + platform sebagai bahan) ---
                     $veneerMap = [];
 
                     foreach ($prod->bahanHotpress as $bahan) {
-                        $u      = $bahan->barangSetengahJadi->ukuran ?? null;
-                        $jkAsli = $bahan->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? 'sengon';
-                        $grAsli = $bahan->barangSetengahJadi->grade->nama_grade ?? '';
-                        $tebal  = $u->tebal ?? 0;
-                        $banyak = $bahan->isi ?? 0;
-                        $m3     = ($u->panjang * $u->lebar * $tebal * $banyak) / 10_000_000;
+                        $u           = $bahan->barangSetengahJadi->ukuran ?? null;
+                        $idUkuran    = $u?->id;
+                        $p           = $u?->panjang ?? 0;
+                        $l           = $u?->lebar ?? 0;
+                        $jkAsli      = $bahan->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? 'sengon';
+                        $idJenisKayu = $this->resolveIdJenisKayu($jkAsli);
+                        $grAsli      = $bahan->barangSetengahJadi->grade->nama_grade ?? '';
+                        $tebal       = $u?->tebal ?? 0;
+                        $banyak      = $bahan->isi ?? 0;
+                        $m3          = ($p * $l * $tebal * $banyak) / 10_000_000;
 
-                        $akunVeneer  = $this->getAkunVeneer($tebal, $jkAsli, $grAsli);
-                        $isPpc       = str_contains($akunVeneer['nama'], 'ppc');
-                        $hargaVeneer = $this->getHargaVeneer($tebal, $jkAsli, $isPpc);
+                        // Deteksi status kelebihan/kehilangan
+                        $ketBahan = strtolower(trim($bahan->ket ?? ''));
+                        $isLebih  = str_contains($ketBahan, 'kelebihan');
+                        $isHilang = str_contains($ketBahan, 'kehilangan');
+                        $statusKey = $isLebih ? 'lebih' : ($isHilang ? 'hilang' : 'normal');
 
-                        $tipeVeneer = ($tebal < 1) ? '260 F/B' : '130 Core';
-                        $ketVeneer  = "{$tipeVeneer} {$jkAsli} uk {$tebal}";
+                        // Deteksi tipe bahan
+                        $isAf       = $this->isAf($grAsli);
+                        $isPlatform = !$isAf && $this->isPlatformGrade($grAsli);
 
-                        // Gabung berdasarkan no akun + tebal (pisah per ukuran agar
-                        // misal meranti 0.5 dan 0.3 tidak ikut tergabung jadi 1 baris)
-                        $groupKey = $akunVeneer['no'] . '_' . $tebal;
+                        // Cari referensi sesuai tipe
+                        $ref = $isPlatform
+                            ? $this->fetchReferensi('platform', $idUkuran, $idJenisKayu, $grAsli)
+                            : $this->resolveRefBahan($idUkuran, $idJenisKayu, $grAsli);
+
+                        [$akunNama, $akunNo, $hargaBahan] = $this->extractAkun($ref);
+
+                        // Keterangan:
+                        // - Platform → pakai nama dari referensi (misal: "platform 15 better lokal MTH")
+                        // - Veneer/AF → buat manual dari tipe + kayu + tebal
+                        if ($isPlatform) {
+                            $tipeVeneer = 'Platform';
+                            $ketVeneer  = $ref?->nama ?? "Platform {$jkAsli} uk {$tebal} [UNKNOWN - cek master data]";
+                        } else {
+                            $tipeVeneer = $isAf ? 'AF' : (($tebal < 1) ? '260 F/B' : '130 Core');
+                            $ketVeneer  = "{$tipeVeneer} {$jkAsli} uk {$tebal}";
+                        }
+
+                        // Tambah suffix status
+                        if ($isLebih)  $ketVeneer .= ' // kelebihan';
+                        if ($isHilang) $ketVeneer .= ' // kehilangan';
+
+                        // Group key: akun + tipe + dimensi + kategori grade + status
+                        $katGrade = $this->kategoriGrade($grAsli);
+                        $groupKey = "{$akunNo}_{$tipeVeneer}_{$tebal}_{$p}x{$l}_{$katGrade}_{$statusKey}";
 
                         if (!isset($veneerMap[$groupKey])) {
                             $veneerMap[$groupKey] = [
-                                'akun'   => $akunVeneer,
-                                'ket'    => $ketVeneer,
-                                'banyak' => 0,
-                                'm3'     => 0.0,
-                                'harga'  => $hargaVeneer,
+                                'akun_nama'   => $akunNama,
+                                'akun_no'     => $akunNo,
+                                'ket'         => $ketVeneer,
+                                'banyak'      => 0,
+                                'm3'          => 0.0,
+                                'harga'       => $hargaBahan,
+                                'map'         => $isLebih ? 'd' : 'k',
+                                'is_platform' => $isPlatform,
+                                'status'      => $statusKey,
                             ];
                         }
                         $veneerMap[$groupKey]['banyak'] += $banyak;
                         $veneerMap[$groupKey]['m3']     += $m3;
                     }
 
-                    // Tulis baris veneer yang sudah digabung
-                    foreach ($veneerMap as $v) {
+                    // Urutkan: normal → kelebihan → kehilangan
+                    $veneerNormal = array_filter($veneerMap, fn($v) => $v['status'] === 'normal');
+                    $veneerLebih  = array_filter($veneerMap, fn($v) => $v['status'] === 'lebih');
+                    $veneerHilang = array_filter($veneerMap, fn($v) => $v['status'] === 'hilang');
+                    $veneerUrut   = array_merge($veneerNormal, $veneerLebih, $veneerHilang);
+
+                    foreach ($veneerUrut as $v) {
+                        // Platform: hit kbk = b (per lembar), Veneer: hit kbk = m (per m3)
+                        $hitKbk  = $v['is_platform'] ? 'b' : 'm';
                         $m3Round = round($v['m3'], 4);
-                        $totalHargaBahanGlobal += ($m3Round * $v['harga']);
+
+                        $totalHargaBahanGlobal += $v['is_platform']
+                            ? round($v['banyak'] * $v['harga'], 0)
+                            : round($m3Round * $v['harga'], 0);
 
                         $rows[] = $this->makeRow(
-                            $v['akun']['nama'], $v['akun']['no'],
-                            $tglStr, $namaMesinSingkat,
-                            $v['ket'], 'k', 'm',
-                            $v['banyak'], $m3Round, $v['harga']
+                            $v['akun_nama'],
+                            $v['akun_no'],
+                            $tglStr,
+                            $namaMesinSingkat,
+                            $v['ket'],
+                            $v['map'],
+                            $hitKbk,
+                            $v['banyak'],
+                            $m3Round,
+                            $v['harga']
                         );
                     }
 
-                    // ---------------------------------------------------------
-                    // Bahan Penolong (Kredit)
-                    // ---------------------------------------------------------
+                    // --- BAHAN PENOLONG ---
                     foreach ($prod->bahanPenolongHp as $penolong) {
-                        $akunPenolong = $this->getAkunPenolong($penolong->nama_bahan);
-                        $banyak       = $penolong->jumlah;
+                        $namaBahanLower = strtolower(trim($penolong->nama_bahan));
 
-                        $masterPenolong = BahanPenolongProduksi::where('nama_bahan_penolong', $penolong->nama_bahan)->first();
-                        $hargaPenolong  = $masterPenolong ? $masterPenolong->harga : 50000;
+                        // Bahan yang dikecualikan
+                        if (
+                            str_contains($namaBahanLower, 'kalsium') ||
+                            str_contains($namaBahanLower, 'semen')   ||
+                            str_contains($namaBahanLower, 'pvac')
+                        ) continue;
 
-                        $totalHargaBahanGlobal += ($banyak * $hargaPenolong);
+                        $banyak = $penolong->jumlah;
+                        $ref    = $this->fetchReferensiPenolong($penolong->nama_bahan);
+                        [$akunNama, $akunNo, $hargaPenolong] = $this->extractAkun($ref);
 
-                        $rows[] = $this->makeRow(
-                            $akunPenolong['nama'], $akunPenolong['no'],
-                            $tglStr, $namaMesinSingkat,
-                            '', 'k', 'b', $banyak, '', $hargaPenolong
-                        );
+                        // Keterangan: nama bahan dari form produksi (selalu tampil meski UNKNOWN)
+                        $ketPenolong = $ref?->nama ?? $penolong->nama_bahan;
+
+                        $totalHargaBahanGlobal += round($banyak * $hargaPenolong, 0);
+                        $rows[] = $this->makeRow($akunNama, $akunNo, $tglStr, $namaMesinSingkat, $ketPenolong, 'k', 'b', $banyak, '', $hargaPenolong);
                     }
 
-                    // ---------------------------------------------------------
-                    // FIX: Hutang Gaji (Kredit) + masukkan ke totalHargaBahanGlobal
-                    // Solusi untuk masalah D: selisih hpp ~4,500,000
-                    // Jurnal hanya 1 baris Hutang Gaji (debit Biaya Gaji di modul penggajian)
-                    // ---------------------------------------------------------
+                    // --- HUTANG GAJI ---
                     if ($jumlahPekerja > 0) {
                         $akunGaji  = $this->getAkunGaji();
-                        $totalGaji = $jumlahPekerja * $hargaPegawaiMaster;
-
-                        // Gaji masuk ke total bahan agar hpp penyeimbang akurat
+                        $totalGaji = round($jumlahPekerja * $hargaPegawaiMaster, 0);
                         $totalHargaBahanGlobal += $totalGaji;
-
-                        $rows[] = $this->makeRow(
-                            $akunGaji['hutang']['nama'], $akunGaji['hutang']['no'],
-                            $tglStr, $namaMesinSingkat,
-                            '', 'k', 'b', $jumlahPekerja, '', $hargaPegawaiMaster
-                        );
+                        $rows[] = $this->makeRow($akunGaji['hutang']['nama'], $akunGaji['hutang']['no'], $tglStr, $namaMesinSingkat, '', 'k', 'b', $jumlahPekerja, '', $hargaPegawaiMaster);
                     }
 
-                    // ---------------------------------------------------------
-                    // HPP Penyeimbang HP3 (Debit)
-                    // nilaiHppHp3 = total bahan − total nilai produk HP3
-                    // ---------------------------------------------------------
+                    // --- HPP PENYEIMBANG HP3 ---
                     $nilaiHppHp3 = $totalHargaBahanGlobal - $totalHargaProdukHp3;
-
-                    if ($nilaiHppHp3 != 0) {
-                        $akunHppGlobal = $this->getAkunHpp('triplek');
-                        $rows[]        = $this->makeRow(
-                            $akunHppGlobal['nama'], $akunHppGlobal['no'],
-                            $tglStr, $namaMesinSingkat,
-                            '', 'd', '', '', '', $nilaiHppHp3
-                        );
+                    if (round(abs($nilaiHppHp3), 0) != 0) {
+                        $hpp    = $this->getAkunHpp();
+                        $mapHpp = $nilaiHppHp3 > 0 ? 'd' : 'k';
+                        $rows[] = $this->makeRow($hpp['nama'], $hpp['no'], $tglStr, $namaMesinSingkat, '', $mapHpp, '', '', '', round(abs($nilaiHppHp3), 0));
                     }
                 }
             }
 
-            // Baris kosong pemisah antar shift
             $rows[] = array_fill(0, 14, '');
         }
 
@@ -568,19 +810,19 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
     }
 
     // =========================================================================
-    // MAP: inject formula Excel di kolom Total (N)
+    // MAP: inject formula Excel untuk kolom N (Total)
     // =========================================================================
+
     public function map($row): array
     {
         $this->rowIndex++;
 
-        // Header & baris kosong → langsung return
         if ($this->rowIndex === 1 || implode('', (array) $row) === '') {
             return $row;
         }
 
-        $r        = $this->rowIndex;
-        $row[13]  = "=IF(J{$r}=\"m\", M{$r}*L{$r}, IF(J{$r}=\"b\", M{$r}*K{$r}, M{$r}))";
+        $r       = $this->rowIndex;
+        $row[13] = "=ROUND(IF(J{$r}=\"m\", M{$r}*L{$r}, IF(J{$r}=\"b\", M{$r}*K{$r}, M{$r})), 0)";
 
         return $row;
     }

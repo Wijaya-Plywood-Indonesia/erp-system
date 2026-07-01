@@ -18,11 +18,12 @@ class AnakAkun extends Model
         'keterangan',
         'parent',
         'status',
+        'saldo_normal',
         'created_by',
     ];
 
     protected $casts = [
-        'status' => 'boolean',
+        // 'status' removed from boolean cast to treat it as string ('aktif' / 'nonaktif')
     ];
 
     /*
@@ -117,7 +118,12 @@ class AnakAkun extends Model
      */
     public function scopeActive($query)
     {
-        return $query->where('status', true);
+        return $query->where('status', 'aktif');
+    }
+
+    public function scopeAktif($query)
+    {
+        return $query->where('status', 'aktif');
     }
 
     /**

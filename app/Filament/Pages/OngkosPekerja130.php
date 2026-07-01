@@ -8,8 +8,8 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 
-use App\Filament\Pages\LaporanHarian\Services\LoadOngkosPekerja130;
-use App\Filament\Pages\LaporanHarian\Transformers\OngkosPekerja130DataMap;
+use App\Filament\Pages\OngkosPekerja130\Queries\LoadOngkosPekerja130;
+use App\Filament\Pages\OngkosPekerja130\Transformers\OngkosPekerja130DataMap;
 use App\Exports\OngkosPekerja130Export;
 use BackedEnum;
 use Maatwebsite\Excel\Facades\Excel;

@@ -2,15 +2,20 @@
 
 namespace App\Filament\Resources\TempatKayus\Tables;
 
+use App\Models\DetailTurusanKayu;
+use App\Models\HppAverageLog;
 use App\Models\HppAverageSummarie;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Enums\RecordActionsPosition;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -18,13 +23,110 @@ use Illuminate\Support\Facades\Log;
 class TempatKayusTable
 {
     private const ROLE_GRADER = ['Grader Kayu 1', 'Grader Kayu 2'];
+
     private const ROLE_PENGAWAS = ['pengawas_rotary_1', 'pengawas_rotary_2'];
+
     private const ROLE_ADMIN = ['super_admin', 'Super Admin', 'admin_kayu'];
 
     public const MESIN_MAP = [
         130 => ['SANJI', 'YUEQUN'],
         260 => ['SPINDLESS', 'MERANTI'],
     ];
+
+    /** @var array<int, Collection> */
+    private static array $snapshot = [];
+
+    private static function getKayuAktif(int $lahanId): Collection
+    {
+        if (isset(self::$snapshot[$lahanId])) {
+            return self::$snapshot[$lahanId];
+        }
+
+        $lastReset = HppAverageLog::where('id_lahan', $lahanId)
+            ->where('tipe_transaksi', 'keluar')
+            ->where('stok_batang_after', 0)
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $lastReset) {
+            $startNotaId = null;
+        } else {
+            $lastNotaBeforeReset = HppAverageLog::where('id_lahan', $lahanId)
+                ->where('tipe_transaksi', 'masuk')
+                ->where('id', '<', $lastReset->id)
+                ->orderByDesc('id')
+                ->first();
+
+            $startNotaId = $lastNotaBeforeReset?->referensi_id;
+        }
+
+        $data = DetailTurusanKayu::with([
+            'lahan',
+            'kayuMasuk.penggunaanSupplier',
+            'kayuMasuk.notaKayu',
+        ])
+            ->where('lahan_id', $lahanId)
+            ->when($startNotaId, function ($q) use ($startNotaId) {
+                $q->whereHas('kayuMasuk.notaKayu', fn ($q) => $q->where('id', '>=', $startNotaId));
+            })
+            ->get()
+            ->groupBy('id_kayu_masuk')
+            ->map(function ($rows) {
+                $first = $rows->first();
+
+                $statusPelunasan = $first->kayuMasuk?->notaKayu?->status_pelunasan;
+                $isLunas = str_starts_with(strtolower(trim($statusPelunasan ?? '')), 'lunas');
+
+                return [
+                    'ID Kayu' => $first->id_kayu_masuk,
+                    'ID Nota' => $first->kayuMasuk?->notaKayu?->id,
+                    'No Nota' => $first->kayuMasuk?->notaKayu?->no_nota,
+                    'Seri' => $first->kayuMasuk?->seri,
+                    'Supplier' => trim($first->kayuMasuk?->penggunaanSupplier?->nama_supplier ?? ''),
+                    'Status Pelunasan' => $statusPelunasan,
+                    'Batang' => (int) $rows->sum('kuantitas'),
+                    // ✅ DIUBAH: ikut pola NotaKayuController → round PER-ITEM (4 desimal) dulu,
+                    // baru di-sum. Ini memastikan total kubikasi selalu match dengan
+                    // angka per-baris yang dilihat user (round-then-sum), bukan sebaliknya.
+                    'Kubikasi' => (float) $rows->sum(fn ($r) => round($r->kubikasi, 4)),
+                    'Panjang' => $rows->pluck('panjang')->unique()->sort()->implode(', '),
+                    'Grade' => $rows->pluck('grade')->unique()->sort()->implode(', '),
+                    'is_lunas' => $isLunas,
+                ];
+            })
+            ->sortBy('ID Nota')
+            ->values();
+
+        if ($startNotaId) {
+            $data = $data
+                ->reject(fn ($row) => $row['ID Nota'] == $startNotaId)
+                ->values();
+        }
+
+        self::$snapshot[$lahanId] = $data;
+
+        return $data;
+    }
+
+    private static function semuaLunas(int $lahanId): bool
+    {
+        $data = self::getKayuAktif($lahanId);
+
+        if ($data->isEmpty()) {
+            return true;
+        }
+
+        return $data->every(fn ($row) => $row['is_lunas']);
+    }
+
+    private static function seriiBelumLunas(int $lahanId): Collection
+    {
+        return self::getKayuAktif($lahanId)
+            ->filter(fn ($row) => ! $row['is_lunas'])
+            ->pluck('Seri')
+            ->filter()
+            ->values();
+    }
 
     public static function configure(Table $table): Table
     {
@@ -39,255 +141,241 @@ class TempatKayusTable
 
         return $table
             ->paginated(false)
-            ->modifyQueryUsing(function (Builder $query) {
-                return $query
-                    // Join ke summary agar kita bisa group berdasarkan data asli stok
+            ->recordUrl(null)
+            ->recordAction('cek_detail')
+            ->modifyQueryUsing(function (Builder $query) use ($bisaSerah, $bisaTerima) {
+                $query
                     ->join('hpp_average_summaries', 'tempat_kayus.id_lahan', '=', 'hpp_average_summaries.id_lahan')
                     ->select(
                         DB::raw('MIN(tempat_kayus.id) as id'),
                         'tempat_kayus.id_lahan',
-                        'hpp_average_summaries.panjang as group_panjang', // Ambil langsung dari tabel stok
-                        'hpp_average_summaries.grade as group_grade',     // Ambil langsung dari tabel stok
+                        'hpp_average_summaries.panjang as group_panjang',
+                        'hpp_average_summaries.grade as group_grade',
                         'tempat_kayus.status',
                         'tempat_kayus.diserahkan_oleh',
                         'tempat_kayus.diterima_oleh',
                     )
                     ->groupBy(
                         'tempat_kayus.id_lahan',
-                        'hpp_average_summaries.panjang', // GROUPING UTAMA
-                        'hpp_average_summaries.grade',   // GROUPING UTAMA
+                        'hpp_average_summaries.panjang',
+                        'hpp_average_summaries.grade',
                         'tempat_kayus.status',
                         'tempat_kayus.diserahkan_oleh',
                         'tempat_kayus.diterima_oleh',
                     );
+
+                if ($bisaTerima) {
+                    $query
+                        ->orderByRaw("
+                            CASE
+                                WHEN tempat_kayus.status = 'sudah diserahkan'                           THEN 0
+                                WHEN tempat_kayus.status = 'sudah diterima'                             THEN 1
+                                WHEN (tempat_kayus.status IS NULL OR tempat_kayus.status = 'belum serah')
+                                AND SUM(hpp_average_summaries.stok_batang) > 0                        THEN 2
+                                WHEN (tempat_kayus.status IS NULL OR tempat_kayus.status = 'belum serah')
+                                AND SUM(hpp_average_summaries.stok_batang) <= 0                       THEN 3
+                                ELSE 3
+                            END ASC
+                        ")
+                        ->orderBy('hpp_average_summaries.panjang', 'asc')
+                        ->orderBy('tempat_kayus.id_lahan', 'asc');
+                } elseif ($bisaSerah) {
+                    $query
+                        ->orderByRaw("
+                            CASE
+                                WHEN (tempat_kayus.status IS NULL OR tempat_kayus.status = 'belum serah')
+                                AND SUM(hpp_average_summaries.stok_batang) > 0  THEN 0
+                                WHEN tempat_kayus.status = 'sudah diserahkan'     THEN 1
+                                WHEN tempat_kayus.status = 'sudah diterima'       THEN 2
+                                WHEN (tempat_kayus.status IS NULL OR tempat_kayus.status = 'belum serah')
+                                AND SUM(hpp_average_summaries.stok_batang) <= 0 THEN 3
+                                ELSE 3
+                            END ASC
+                        ")
+                        ->orderBy('hpp_average_summaries.panjang', 'asc')
+                        ->orderByRaw('SUM(hpp_average_summaries.stok_batang) DESC')
+                        ->orderBy('tempat_kayus.id_lahan', 'asc');
+                }
+
+                return $query;
             })
             ->columns([
                 TextColumn::make('lahan.kode_lahan')
                     ->label('Lahan')
                     ->sortable()
-                    ->searchable(),
-
-                // ✅ Seri diimplode menjadi satu baris
-                // TextColumn::make('seri_kayu_gabungan')
-                //     ->label('Daftar Seri')
-                //     ->getStateUsing(function ($record) {
-                //         return DB::table('tempat_kayus')
-                //             ->join('kayu_masuks', 'tempat_kayus.id_kayu_masuk', '=', 'kayu_masuks.id')
-                //             ->where('tempat_kayus.id_lahan', $record->id_lahan)
-                //             ->distinct()
-                //             ->orderBy('kayu_masuks.seri')
-                //             ->pluck('kayu_masuks.seri')
-                //             ->filter()
-                //             ->implode(', ');
-                //     })
-                //     ->wrap()
-                //     ->color('primary')
-                //     ->weight('bold'),
-
-                // ✅ Jumlah batang dari HppAverageSummarie sesuai stok aktual
-                TextColumn::make('total_batang_riil')
-                    ->label('Batang')
-                    ->getStateUsing(function ($record) {
-                        return (int) max(
-                            0,
-                            HppAverageSummarie::where('id_lahan', $record->id_lahan)
-                                ->where('panjang', $record->group_panjang)
-                                ->where('grade', $record->group_grade)
-                                ->sum('stok_batang')
-                        );
-                    })
-                    ->numeric()
-                    ->alignCenter(),
-
-                // ✅ Kubikasi dari HppAverageSummarie sesuai stok aktual
-                TextColumn::make('kubikasi_riil')
-                    ->label('Volume (m³)')
-                    ->getStateUsing(function ($record) {
-                        $val = HppAverageSummarie::where('id_lahan', $record->id_lahan)
-                            ->where('panjang', $record->group_panjang)
-                            ->whereNull('grade')
-                            ->sum('stok_kubikasi');
-
-                        return number_format(max(0, $val), 4);
-                    })
-                    ->color(
-                        fn($record) =>
-                        HppAverageSummarie::where('id_lahan', $record->id_lahan)
-                            ->where('panjang', $record->group_panjang)
-                            ->sum('stok_kubikasi') < 0 ? 'danger' : 'primary'
-                    ),
+                    ->searchable()
+                    ->toggleable(),
 
                 TextColumn::make('group_panjang')
                     ->label('Pjg')
                     ->sortable()
                     ->badge()
-                    ->color(fn($state) => $state == 260 ? 'success' : 'info'),
+                    ->color(fn ($state) => $state == 260 ? 'success' : 'info')
+                    ->toggleable(),
+
+                TextColumn::make('total_batang_riil')
+                    ->label('Batang')
+                    ->getStateUsing(function ($record) {
+                        return (int) self::getKayuAktif((int) $record->id_lahan)->sum('Batang');
+                    })
+                    ->numeric()
+                    ->alignCenter()
+                    ->toggleable(),
+
+                TextColumn::make('kubikasi_riil')
+                    ->label('Volume (m³)')
+                    ->getStateUsing(function ($record) {
+                        // ✅ DIUBAH: 'Kubikasi' di getKayuAktif() sudah hasil round-then-sum
+                        // per item (4 desimal). Tidak perlu round lagi di sini agar tidak dobel
+                        // pembulatan dan tetap konsisten dengan pola NotaKayuController.
+                        $total = self::getKayuAktif((int) $record->id_lahan)->sum('Kubikasi');
+
+                        return number_format((float) $total, 4, '.', ',');
+                    })
+                    ->color('primary')
+                    ->toggleable(),
 
                 TextColumn::make('diserahkan_oleh')
                     ->label('Diserahkan Oleh')
                     ->sortable()
-                    ->default('-'),
+                    ->default('-')
+                    ->toggleable(),
 
                 TextColumn::make('diterima_oleh')
                     ->sortable()
                     ->label('Diterima Oleh')
-                    ->default('-'),
+                    ->default('-')
+                    ->toggleable(),
 
-                // ✅ Status langsung dari kolom tempat_kayus
                 TextColumn::make('status')
                     ->sortable()
                     ->label('Status')
                     ->badge()
-                    ->formatStateUsing(fn($state) => match ($state) {
+                    ->formatStateUsing(fn ($state) => match ($state) {
                         'sudah diserahkan' => 'Diserahkan',
                         'sudah diterima' => 'Diterima',
                         default => 'Belum Diserahkan',
                     })
-                    ->color(fn($state) => match ($state) {
+                    ->color(fn ($state) => match ($state) {
                         'sudah diterima' => 'success',
                         'sudah diserahkan' => 'warning',
                         default => 'gray',
-                    }),
+                    })
+                    ->toggleable(),
             ])
-            ->filters([])
+            ->filters([
+                TernaryFilter::make('status_serah')
+                    ->label('Status Serah')
+                    ->placeholder('Semua Data')
+                    ->trueLabel('Sudah Diserahkan')
+                    ->falseLabel('Belum Diserahkan')
+                    ->queries(
+                        true: fn (Builder $query) => $query->where('tempat_kayus.status', 'sudah diserahkan'),
+                        false: fn (Builder $query) => $query->where(function ($q) {
+                            $q->whereNull('tempat_kayus.status')
+                                ->orWhere('tempat_kayus.status', '!=', 'sudah diserahkan');
+                        }),
+                        blank: fn (Builder $query) => $query,
+                    ),
+            ], layout: FiltersLayout::AboveContent)
+            ->filtersFormColumns(1)
+            ->deferFilters(false)
             ->recordActions([
-                // ... di dalam recordActions
+
+                // ── MODAL DETAIL ─────────────────────────────────────────────
                 Action::make('cek_detail')
-                    ->label('Cek Detail')
-                    ->icon('heroicon-m-magnifying-glass')
+                    ->label('')
+                    ->icon('')
                     ->color('gray')
+                    ->extraAttributes(['style' => 'display: none;'])
                     ->modalHeading('Detail Seri & Stok Kayu')
                     ->modalSubmitAction(false)
                     ->modalWidth('4xl')
-                    // Di dalam modalContent pada file TempatKayusTable.php
                     ->modalContent(function ($record) {
-                        // Find the latest reset log ID (where stock became 0) for this combination
-                        $lastResetLogId = \App\Models\HppAverageLog::where('id_lahan', $record->id_lahan)
-                            ->where('panjang', $record->group_panjang)
-                            ->where('stok_batang_after', 0)
-                            ->latest('id')
-                            ->value('id');
+                        $kayuAktif = self::getKayuAktif((int) $record->id_lahan);
 
-                        $query = \App\Models\HppAverageLog::where('id_lahan', $record->id_lahan)
-                            ->where('panjang', $record->group_panjang);
+                        $totalStokRiil = (int) $kayuAktif->sum('Batang');
 
-                        if ($lastResetLogId) {
-                            $query->where('id', '>', $lastResetLogId);
-                        }
-
-                        $logs = $query->orderBy('tanggal', 'asc')
-                            ->orderBy('id', 'asc')
-                            ->get();
-
-                        $queue = [];
-
-                        foreach ($logs as $log) {
-                            $isM = $log->tipe_transaksi === 'masuk';
-
-                            $seri = 'Tanpa Seri';
-                            if ($log->referensi_type === \App\Models\NotaKayu::class || $log->referensi_type === 'NotaKayu') {
-                                if (!$log->relationLoaded('referensi')) {
-                                    $log->load('referensi');
-                                }
-                                if ($log->referensi) {
-                                    $log->referensi->loadMissing('kayuMasuk');
-                                    $seri = $log->referensi->kayuMasuk->seri ?? 'Tanpa Seri';
-                                }
-                            }
-
-                            if ($seri === 'Tanpa Seri') {
-                                if (preg_match('/SERI:\s*(\d+)/i', $log->keterangan, $matches)) {
-                                    $seri = $matches[1];
-                                }
-                            }
-
-                            if ($isM) {
-                                $queue[] = [
-                                    'seri' => $seri,
-                                    'qty_left' => $log->total_batang,
-                                    'kubikasi_left' => (float) $log->total_kubikasi,
-                                ];
-                            } else {
-                                $qtyKeluar = $log->total_batang;
-                                $kubikasiKeluar = (float) $log->total_kubikasi;
-
-                                while ($qtyKeluar > 0 && !empty($queue)) {
-                                    $firstKey = array_key_first($queue);
-                                    $item = &$queue[$firstKey];
-
-                                    if ($item['qty_left'] <= $qtyKeluar) {
-                                        $qtyKeluar -= $item['qty_left'];
-                                        $kubikasiKeluar -= $item['kubikasi_left'];
-                                        unset($queue[$firstKey]);
-                                    } else {
-                                        $fraction = $qtyKeluar / $item['qty_left'];
-                                        $item['qty_left'] -= $qtyKeluar;
-                                        $consumedKubikasi = $item['kubikasi_left'] * $fraction;
-                                        $item['qty_left'] = max(0, $item['qty_left']);
-                                        $item['kubikasi_left'] = max(0.0, $item['kubikasi_left'] - $consumedKubikasi);
-                                        $qtyKeluar = 0;
-                                        $kubikasiKeluar = max(0.0, $kubikasiKeluar - $consumedKubikasi);
-                                    }
-                                }
-                                // Re-index queue
-                                $queue = array_values($queue);
-                            }
-                        }
-
-                        $groupedBySeri = collect($queue)
-                            ->groupBy('seri')
-                            ->map(function ($group, $seri) {
-                                return [
-                                    'seri' => $seri,
-                                    'total_batang' => $group->sum('qty_left'),
-                                    'total_kubikasi' => $group->sum('kubikasi_left'),
-                                ];
-                            })
-                            ->sortBy('seri')
-                            ->values();
-
-                        $totalStokRiil = (int) \App\Models\HppAverageSummarie::where('id_lahan', $record->id_lahan)
-                            ->where('panjang', $record->group_panjang)
-                            ->where('grade', $record->group_grade)
-                            ->sum('stok_batang');
-
-                        $totalKubikasiRiil = (float) \App\Models\HppAverageSummarie::where('id_lahan', $record->id_lahan)
-                            ->where('panjang', $record->group_panjang)
-                            ->where('grade', $record->group_grade)
-                            ->sum('stok_kubikasi');
+                        // ✅ DIUBAH: 'Kubikasi' sudah round-then-sum per item di getKayuAktif().
+                        // Tidak perlu round lagi di sini (hindari dobel pembulatan).
+                        $totalKubikasiRiil = (float) $kayuAktif->sum('Kubikasi');
 
                         return view('filament.components.detail-kayu-modal', [
                             'record' => $record,
-                            'details' => $groupedBySeri,
+                            'details' => $kayuAktif,
                             'totalBatang' => $totalStokRiil,
                             'totalKubikasi' => $totalKubikasiRiil,
                         ]);
                     }),
 
-                EditAction::make()
-                    ->visible($isAdmin),
-                // ACTION SERAH
+                // ── ACTION SERAH ─────────────────────────────────────────────
                 Action::make('serah_kayu')
                     ->label('Lahan Penuh')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('primary')
                     ->requiresConfirmation()
                     ->modalHeading('Serahkan Kayu?')
-                    ->modalDescription(
-                        fn($record) =>
-                        "Kayu dari lahan {$record->lahan?->kode_lahan} akan diserahkan ke rotary."
-                    )
+                    ->modalDescription(function ($record) {
+                        $belumLunas = self::seriiBelumLunas((int) $record->id_lahan);
+
+                        if ($belumLunas->isNotEmpty()) {
+                            return '⚠️ Seri berikut belum lunas: '.$belumLunas->implode(', ').'. Tidak dapat diserahkan.';
+                        }
+
+                        return "Kayu dari lahan {$record->lahan?->kode_lahan} akan diserahkan ke rotary. Semua seri sudah lunas.";
+                    })
                     ->modalSubmitActionLabel('Ya, Serahkan')
                     ->visible(function ($record) use ($bisaSerah, $isAdmin) {
-                        if (!$bisaSerah)
+                        if (! $bisaSerah) {
                             return false;
-                        if ($isAdmin)
-                            return true;
+                        }
 
-                        // Grader: hanya muncul jika belum diserahkan
-                        return $record->status === 'belum serah' || $record->status === null;
+                        // Tombol disembunyikan untuk SEMUA role jika batang = 0
+                        $totalBatangRiil = (int) self::getKayuAktif((int) $record->id_lahan)->sum('Batang');
+                        if ($totalBatangRiil <= 0) {
+                            return false;
+                        }
+
+                        // Tombol disembunyikan untuk SEMUA role jika ada seri belum lunas
+                        if (! self::semuaLunas((int) $record->id_lahan)) {
+                            return false;
+                        }
+
+                        if ($isAdmin) {
+                            return true;
+                        }
+
+                        if ($record->status !== 'belum serah' && $record->status !== null) {
+                            return false;
+                        }
+
+                        $totalBatang = HppAverageSummarie::where('id_lahan', $record->id_lahan)
+                            ->where('panjang', $record->group_panjang)
+                            ->where('grade', $record->group_grade)
+                            ->sum('stok_batang');
+
+                        if ($totalBatang <= 0) {
+                            return false;
+                        }
+
+                        return true;
                     })
                     ->action(function ($record) {
+
+                        // Server-side guard (tetap ada sebagai double-check)
+                        $belumLunas = self::seriiBelumLunas((int) $record->id_lahan);
+
+                        if ($belumLunas->isNotEmpty()) {
+                            Notification::make()
+                                ->title('Tidak dapat diserahkan!')
+                                ->body('Seri '.$belumLunas->implode(', ').' belum lunas. Selesaikan pembayaran terlebih dahulu.')
+                                ->danger()
+                                ->persistent()
+                                ->send();
+
+                            return;
+                        }
+
                         try {
                             DB::transaction(function () use ($record) {
                                 $totalBatang = HppAverageSummarie::where('id_lahan', $record->id_lahan)
@@ -295,12 +383,15 @@ class TempatKayusTable
                                     ->whereNull('grade')
                                     ->sum('stok_batang');
 
-                                $kubikasi = HppAverageSummarie::where('id_lahan', $record->id_lahan)
-                                    ->where('panjang', $record->group_panjang)
-                                    ->whereNull('grade')
-                                    ->sum('stok_kubikasi');
+                                // Bulatkan kubikasi setelah diambil dari DB
+                                $kubikasi = round(
+                                    (float) HppAverageSummarie::where('id_lahan', $record->id_lahan)
+                                        ->where('panjang', $record->group_panjang)
+                                        ->whereNull('grade')
+                                        ->sum('stok_kubikasi'),
+                                    4
+                                );
 
-                                // ✅ Cek pivot ada atau belum untuk hindari masalah updateOrInsert
                                 $pivotAda = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
                                     ->where('id_lahan', $record->id_lahan)
                                     ->where('tipe', 'lahan_rotary')
@@ -335,7 +426,6 @@ class TempatKayusTable
                                         ]);
                                 }
 
-                                // ✅ Update semua row tempat_kayus dengan id_lahan yang sama
                                 DB::table('tempat_kayus')
                                     ->where('id_lahan', $record->id_lahan)
                                     ->update([
@@ -350,6 +440,7 @@ class TempatKayusTable
                                 ->title('Kayu berhasil diserahkan')
                                 ->success()
                                 ->send();
+
                         } catch (\Throwable $e) {
                             Log::channel('single')->error('Serah Kayu FAILED', [
                                 'message' => $e->getMessage(),
@@ -364,7 +455,7 @@ class TempatKayusTable
                         }
                     }),
 
-                // ACTION TERIMA
+                // ── ACTION TERIMA ─────────────────────────────────────────────
                 Action::make('terima_kayu')
                     ->label('Terima Kayu')
                     ->icon('heroicon-o-check-circle')
@@ -372,14 +463,14 @@ class TempatKayusTable
                     ->requiresConfirmation()
                     ->modalHeading('Terima Kayu dari Grader?')
                     ->modalDescription(
-                        fn($record) =>
-                        "Kayu dari lahan {$record->lahan?->kode_lahan} akan diterima atas nama " .
-                        Auth::user()->name . "."
+                        fn ($record) => "Kayu dari lahan {$record->lahan?->kode_lahan} akan diterima atas nama ".
+                            Auth::user()->name.'.'
                     )
                     ->modalSubmitActionLabel('Ya, Terima')
                     ->visible(function ($record) use ($bisaTerima) {
-                        if (!$bisaTerima)
+                        if (! $bisaTerima) {
                             return false;
+                        }
 
                         return $record->status === 'sudah diserahkan';
                     })
@@ -395,7 +486,6 @@ class TempatKayusTable
                                         'updated_at' => now(),
                                     ]);
 
-                                // ✅ Update semua row tempat_kayus dengan id_lahan yang sama
                                 DB::table('tempat_kayus')
                                     ->where('id_lahan', $record->id_lahan)
                                     ->update([
@@ -410,6 +500,7 @@ class TempatKayusTable
                                 ->body('Status lahan diperbarui menjadi Sudah Diterima.')
                                 ->success()
                                 ->send();
+
                         } catch (\Throwable $e) {
                             Log::channel('single')->error('Terima Kayu FAILED', [
                                 'message' => $e->getMessage(),
@@ -424,7 +515,8 @@ class TempatKayusTable
                                 ->send();
                         }
                     }),
-            ])
+
+            ], position: RecordActionsPosition::BeforeColumns)
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()->visible($isAdmin),

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Pages\LaporanHarian\Transformers;
+namespace App\Filament\Pages\OngkosPekerja130\Transformers;
 
 use App\Models\HargaPegawai;
 use App\Models\HargaSolasi;

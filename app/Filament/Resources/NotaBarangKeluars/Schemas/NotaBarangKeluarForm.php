@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\NotaBarangKeluars\Schemas;
 
+use App\Models\NotaBarangKeluar;
 use App\Services\NomorNotaService;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -22,9 +23,6 @@ class NotaBarangKeluarForm
                 DatePicker::make('tanggal')
                     ->default(today())
                     ->required()
-                    ->afterStateUpdated(function (Get $get, Set $set, $state) {
-                        self::refreshNomorNota($get, $set);
-                    })
                     ->live(),
 
                 Select::make('tipe_nota')
@@ -34,29 +32,21 @@ class NotaBarangKeluarForm
                         'BKL' => 'BKL – Barang Keluar (Lain-lain)',
                     ])
                     ->required()
-                    ->native(false)
-                    ->live()
-                    ->afterStateUpdated(function (Get $get, Set $set, $state) {
-                        self::refreshNomorNota($get, $set);
-                    }),
+                    ->native(false),
 
-                // Tampilan + input — bisa diedit manual
-                TextInput::make('no_nota_display')
+                TextInput::make('no_nota')
                     ->label('No. Nota')
-                    ->placeholder('(pilih tipe nota dulu)')
-                    ->dehydrated(false)
-                    ->live()
-                    ->afterStateHydrated(function ($component, $record) {
-                        if ($record) {
-                            $component->state($record->no_nota);
-                        }
-                    })
-                    ->afterStateUpdated(function (Get $get, Set $set, $state) {
-                        $set('no_nota', $state);
-                    }),
-
-                // Yang dikirim ke DB
-                Hidden::make('no_nota'),
+                    ->required()
+                    ->maxLength(255)
+                    ->live(onBlur: true)
+                    ->unique(
+                        table: NotaBarangKeluar::class,
+                        column: 'no_nota',
+                        ignoreRecord: true
+                    )
+                    ->validationMessages([
+                        'unique' => 'Nomor nota ini sudah terdaftar di sistem. Silakan gunakan nomor lain.',
+                    ]),
 
                 TextInput::make('tujuan_nota')
                     ->label('Kepada')
@@ -83,32 +73,32 @@ class NotaBarangKeluarForm
      * Generate nomor nota dan set ke field display + hidden.
      * Dipanggil setiap kali tipe_nota atau tanggal berubah.
      */
-    private static function refreshNomorNota(Get $get, Set $set): void
-    {
-        $tipe    = $get('tipe_nota');
-        $tanggal = $get('tanggal');
+    // private static function refreshNomorNota(Get $get, Set $set): void
+    // {
+    //     $tipe    = $get('tipe_nota');
+    //     $tanggal = $get('tanggal');
 
-        if (! $tipe || ! $tanggal) {
-            $set('no_nota_display', null);
-            $set('no_nota', null);
-            return;
-        }
+    //     if (! $tipe || ! $tanggal) {
+    //         $set('no_nota_display', null);
+    //         $set('no_nota', null);
+    //         return;
+    //     }
 
-        // 1. Generate nomor nota default bawaan Service (Misal: BKL-1231-0608)
-        $nomorOriginal = NomorNotaService::generate(
-            $tipe,
-            Carbon::parse($tanggal),
-            \App\Models\NotaBarangKeluar::class
-        );
+    //     // 1. Generate nomor nota default bawaan Service (Misal: BKL-1231-0608)
+    //     $nomorOriginal = NomorNotaService::generate(
+    //         $tipe,
+    //         Carbon::parse($tanggal),
+    //         \App\Models\NotaBarangKeluar::class
+    //     );
 
-        // 2. Manipulasi format: Ganti tanda hubung pertama setelah kode dengan spasi
-        // Di sini kita batasi hanya me-replace 1 kali saja menggunakan Str::replaceFirst
-        $nomorCustom = Str::replaceFirst('-', ' ', $nomorOriginal);
+    //     // 2. Manipulasi format: Ganti tanda hubung pertama setelah kode dengan spasi
+    //     // Di sini kita batasi hanya me-replace 1 kali saja menggunakan Str::replaceFirst
+    //     $nomorCustom = Str::replaceFirst('-', ' ', $nomorOriginal);
 
-        // 3. Paksa outputnya kecil semua (bkl 1231-0608)
-        $nomorFinal = Str::lower($nomorCustom);
+    //     // 3. Paksa outputnya kecil semua (bkl 1231-0608)
+    //     $nomorFinal = Str::lower($nomorCustom);
 
-        $set('no_nota_display', $nomorFinal);
-        $set('no_nota', $nomorFinal);
-    }
+    //     $set('no_nota_display', $nomorFinal);
+    //     $set('no_nota', $nomorFinal);
+    // }
 }

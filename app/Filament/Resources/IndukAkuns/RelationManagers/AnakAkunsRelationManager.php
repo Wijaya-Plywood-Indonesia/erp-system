@@ -3,16 +3,18 @@
 namespace App\Filament\Resources\IndukAkuns\RelationManagers;
 
 use App\Models\AnakAkun;
-use App\Models\IndukAkun;
 use Closure;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Select;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
+use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
@@ -22,6 +24,7 @@ class AnakAkunsRelationManager extends RelationManager
     protected static string $relationship = 'anakAkuns';
 
     protected static ?string $title = 'Anak Akun';
+
     public function isReadOnly(): bool
     {
         return false;
@@ -31,92 +34,80 @@ class AnakAkunsRelationManager extends RelationManager
     {
         return $schema
             ->components([
+                // ── Kode Anak Akun ───────────────────────────────────────────
                 TextInput::make('kode_anak_akun')
                     ->label('Kode Anak Akun')
                     ->required()
-                    ->length(4)
                     ->numeric()
-                    ->unique(ignoreRecord: true)
-                    ->hint(function () {
-                        $induk = $this->ownerRecord;
+                    ->rules([
+                        function () {
+                            return function (string $attribute, $value, Closure $fail) {
+                                $induk = $this->ownerRecord;
+                                if (!$induk) return;
 
-                        if (!$induk)
-                            return 'Induk Akun tidak ditemukan.';
+                                $kodeAnak  = (int) $value;
+                                $prefix    = substr($induk->kode_induk_akun, 0, 1);
+                                $min       = ((int) $prefix) * 1000 + 1;
+                                $max       = ((int) $prefix + 1) * 1000 - 1;
 
-                        $kodeInduk = $induk->kode_induk_akun;
+                                if (strlen((string) $value) !== 4) {
+                                    $fail('Kode Anak Akun harus 4 digit.');
+                                    return;
+                                }
+                                if ($kodeAnak < $min || $kodeAnak > $max) {
+                                    $fail("Kode harus berada pada range {$min} – {$max}.");
+                                }
+                            };
+                        },
+                    ]),
 
-                        $prefix = substr($kodeInduk, 0, 1);
-                        $min = ((int) $prefix) * 1000 + 1;
-                        $max = ((int) $prefix + 1) * 1000 - 1;
-
-                        return "Kode induk: {$kodeInduk}. Range valid anak: {$min} – {$max}.";
-                    })
-                    ->rule(function () {
-                        return function (string $attribute, $value, Closure $fail) {
-                            $induk = $this->ownerRecord;
-
-                            if (!$induk)
-                                return;
-
-                            $kodeInduk = (int) $induk->kode_induk_akun;
-                            $kodeAnak = (int) $value;
-
-                            // Validasi 4 digit
-                            if (strlen($value) !== 4) {
-                                $fail('Kode Anak Akun harus 4 digit.');
-                                return;
-                            }
-
-                            // Harus lebih besar dari induk
-                            if ($kodeAnak <= $kodeInduk) {
-                                $fail('Kode anak akun harus lebih besar dari kode induk.');
-                                return;
-                            }
-
-                            // Hitung range
-                            $prefix = substr($induk->kode_induk_akun, 0, 1);
-                            $min = ((int) $prefix) * 1000 + 1;
-                            $max = ((int) $prefix + 1) * 1000 - 1;
-
-                            if ($kodeAnak < $min || $kodeAnak > $max) {
-                                $fail("Kode anak akun harus berada pada range {$min} – {$max}.");
-                                return;
-                            }
-                        };
-                    }),
-
+                // ── Nama ─────────────────────────────────────────────────────
                 TextInput::make('nama_anak_akun')
                     ->label('Nama Anak Akun')
                     ->required()
                     ->maxLength(255),
 
+                // ── Parent (self-reference, hanya anak dari induk yg sama) ───
                 Select::make('parent')
                     ->label('Parent')
                     ->relationship(
                         name: 'parentAkun',
                         titleAttribute: 'nama_anak_akun',
-                        modifyQueryUsing: function ($query) {
-                            $indukId = $this->ownerRecord->id;
-
-                            return $query->where('id_induk_akun', $indukId);
-                        }
+                        modifyQueryUsing: fn($query) => $query
+                            ->where('id_induk_akun', $this->ownerRecord->id)
+                    )
+                    ->getOptionLabelFromRecordUsing(
+                        fn($record) => "[{$record->kode_anak_akun}] {$record->nama_anak_akun}"
                     )
                     ->searchable()
                     ->preload()
-                    ->nullable(),
+                    ->nullable()
+                    ->placeholder('— Tanpa Parent —'),
 
+                // ── Saldo Normal ──────────────────────────────────────────────
+                Select::make('saldo_normal')
+                    ->label('Saldo Normal')
+                    ->options([
+                        'debet'  => 'Debet',
+                        'kredit' => 'Kredit',
+                    ])
+                    ->required()
+                    ->native(false),
+
+                // ── Status ───────────────────────────────────────────────────
                 Select::make('status')
                     ->label('Status')
                     ->options([
-                        'aktif' => 'Aktif',
+                        'aktif'     => 'Aktif',
                         'non-aktif' => 'Non-Aktif',
                     ])
                     ->default('aktif')
                     ->required()
                     ->native(false),
 
+                // ── Keterangan ───────────────────────────────────────────────
                 Textarea::make('keterangan')
-                    ->label('Deskripsi')
+                    ->label('Keterangan')
                     ->rows(3)
                     ->columnSpanFull(),
             ]);
@@ -128,14 +119,7 @@ class AnakAkunsRelationManager extends RelationManager
             ->recordTitleAttribute('nama_anak_akun')
             ->columns([
                 TextColumn::make('kode_anak_akun')
-                    ->label('Kode Akun')
-                    ->sortable()
-                    ->searchable(),
-
-
-                TextColumn::make('parentAkun.nama_anak_akun')
-                    ->label('Parent')
-                    ->placeholder('-')
+                    ->label('Kode')
                     ->sortable()
                     ->searchable(),
 
@@ -144,28 +128,33 @@ class AnakAkunsRelationManager extends RelationManager
                     ->sortable()
                     ->searchable(),
 
-                TextColumn::make('status')
-                    ->label('Status')
-                    ->badge()
-                    ->formatStateUsing(function ($state) {
-                        // Antisipasi jika DB masih berisi 0/1 atau string aktif
-                        if ($state === '1' || $state === 1)
-                            return 'Aktif';
-                        if ($state === '0' || $state === 0)
-                            return 'Non-Aktif';
-                        return ucfirst($state);
-                    })
-                    ->color(fn($state): string => match ((string) $state) {
-                        'aktif', '1' => 'success',
-                        'non-aktif', '0' => 'danger',
-                        default => 'gray',
-                    })
+                TextColumn::make('parentAkun.nama_anak_akun')
+                    ->label('Parent')
+                    ->placeholder('-')
                     ->sortable(),
+
+                BadgeColumn::make('saldo_normal')
+                    ->label('Saldo Normal')
+                    ->colors([
+                        'success' => 'debet',
+                        'danger'  => 'kredit',
+                    ]),
+
+                BadgeColumn::make('status')
+                    ->label('Status')
+                    ->formatStateUsing(fn($state) => match ((string) $state) {
+                        'aktif', '1'      => 'Aktif',
+                        'non-aktif', '0'  => 'Non-Aktif',
+                        default           => ucfirst($state),
+                    })
+                    ->colors([
+                        'success' => fn($state) => in_array((string) $state, ['aktif', '1']),
+                        'danger'  => fn($state) => in_array((string) $state, ['non-aktif', '0']),
+                    ]),
             ])
             ->headerActions([
                 CreateAction::make()
                     ->mutateFormDataUsing(function (array $data): array {
-                        // Menggunakan Auth::id() agar IDE tidak bingung
                         $data['created_by'] = Auth::id();
                         return $data;
                     }),
@@ -173,6 +162,11 @@ class AnakAkunsRelationManager extends RelationManager
             ->actions([
                 EditAction::make(),
                 DeleteAction::make(),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
             ]);
     }
 }

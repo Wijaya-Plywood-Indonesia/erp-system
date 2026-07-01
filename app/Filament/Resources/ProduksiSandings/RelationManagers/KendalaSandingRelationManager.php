@@ -24,7 +24,7 @@ use Carbon\Carbon;
 class KendalaSandingRelationManager extends RelationManager
 {
     protected static string $relationship = 'kendalaSandings';
-    protected static ?string $title = 'Downtime & Kendala Mesin';
+    protected static ?string $title = 'Kendala';
 
     public function isReadOnly(): bool
     {
@@ -35,18 +35,6 @@ class KendalaSandingRelationManager extends RelationManager
     {
         return $schema
             ->components([
-                Select::make('mesin_id')
-                    ->label('Mesin')
-                    ->relationship('mesin', 'nama_mesin', function (Builder $query) {
-                        $query->whereHas('kategoriMesin', function ($q) {
-                            $q->where('nama_kategori_mesin', 'like', '%sanding%')
-                              ->orWhere('nama_kategori_mesin', 'like', '%finish%');
-                        });
-                    })
-                    ->required()
-                    ->searchable()
-                    ->preload(),
-
                 DateTimePicker::make('waktu_mulai')
                     ->label('Waktu Kendala Mulai')
                     ->default(now())
@@ -135,7 +123,14 @@ class KendalaSandingRelationManager extends RelationManager
                     ->label('Tambah Kendala')
                     ->mutateFormDataUsing(function (array $data): array {
                         $data['status'] = 'pending';
-                        $data['waktu_mulai'] = now()->format('Y-m-d') . ' ' . Carbon::parse($data['waktu_mulai'])->format('H:i') . ':00';
+                        
+                        $parent = $this->getOwnerRecord();
+                        $parentDate = $parent?->tanggal ?? now()->format('Y-m-d');
+                        $parentDateStr = Carbon::parse($parentDate)->format('Y-m-d');
+                        $data['waktu_mulai'] = $parentDateStr . ' ' . Carbon::parse($data['waktu_mulai'])->format('H:i') . ':00';
+                        
+                        $data['mesin_id'] = $parent->id_mesin;
+                        
                         return $data;
                     }),
             ])

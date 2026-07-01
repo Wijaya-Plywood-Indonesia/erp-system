@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiRotaries\RelationManagers;
 
+use App\Models\ValidasiHasilRotary;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -20,6 +21,9 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\TimePicker;
+use Filament\Schemas\Components\Grid;
 
 class KendalaRotaryRelationManager extends RelationManager
 {
@@ -28,7 +32,36 @@ class KendalaRotaryRelationManager extends RelationManager
 
     public function isReadOnly(): bool
     {
-        return false;
+        $user = \Filament\Facades\Filament::auth()->user();
+
+        // Hanya role ini yang terdampak lock
+        $rolesAffectedByLock = [
+            'pengawas_rotary_1',
+            'pengawas_rotary_2',
+            'kepala_produksi_wijaya',
+        ];
+
+        // Jika user bukan salah satu dari role di atas, tidak terkunci
+        if (!$user?->hasAnyRole($rolesAffectedByLock)) {
+            return false;
+        }
+
+        $ownerRecord = $this->getOwnerRecord();
+
+        $validated = \App\Models\ValidasiHasilRotary::where('id_produksi', $ownerRecord->id)
+            ->where('status', 'disetujui')
+            ->pluck('role')
+            ->toArray();
+
+        $kepalaSudah = collect($validated)->contains(
+            fn($role) => str_contains(strtolower($role), 'kepala_produksi')
+        );
+
+        $pengawasSudah = collect($validated)->contains(
+            fn($role) => str_contains(strtolower($role), 'pengawas_rotary')
+        );
+
+        return $kepalaSudah && $pengawasSudah;
     }
 
     public function form(Schema $schema): Schema
@@ -65,11 +98,6 @@ class KendalaRotaryRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('kendala')
             ->columns([
-                TextColumn::make('mesin.nama_mesin')
-                    ->label('Mesin')
-                    ->searchable()
-                    ->sortable(),
-
                 TextColumn::make('waktu_mulai')
                     ->label('Waktu Mulai')
                     ->dateTime('H:i')
@@ -85,15 +113,11 @@ class KendalaRotaryRelationManager extends RelationManager
                         'onclick' => "event.stopPropagation(); window.open(this.src, '_blank');",
                     ]),
 
-                TextColumn::make('status')
-                    ->label('Status')
-                    ->badge()
-                    ->color(fn(string $state): string => match ($state) {
-                        'pending' => 'danger',
-                        'selesai' => 'success',
-                        default   => 'gray',
-                    })
-                    ->formatStateUsing(fn(string $state): string => ucfirst($state)),
+                TextColumn::make('waktu_selesai')
+                    ->label('Waktu Selesai')
+                    ->dateTime('H:i')
+                    ->placeholder('-')
+                    ->sortable(),
 
                 ImageColumn::make('foto_selesai')
                     ->label('Bukti Selesai')
@@ -105,17 +129,25 @@ class KendalaRotaryRelationManager extends RelationManager
                         'onclick' => "event.stopPropagation(); window.open(this.src, '_blank');",
                     ]),
 
-                TextColumn::make('waktu_selesai')
-                    ->label('Waktu Selesai')
-                    ->dateTime('H:i')
-                    ->placeholder('-')
-                    ->sortable(),
-
                 TextColumn::make('durasi_menit')
                     ->label('Durasi')
                     ->placeholder('-')
                     ->numeric()
                     ->suffix(' menit'),
+
+                TextColumn::make('kendala')
+                    ->label('Detail Kendala')
+                    ->wrap(),
+
+                TextColumn::make('status')
+                    ->label('Status')
+                    ->badge()
+                    ->color(fn(string $state): string => match ($state) {
+                        'pending' => 'danger',
+                        'selesai' => 'success',
+                        default   => 'gray',
+                    })
+                    ->formatStateUsing(fn(string $state): string => ucfirst($state)),
             ])
             ->filters([])
             ->headerActions([
@@ -123,14 +155,14 @@ class KendalaRotaryRelationManager extends RelationManager
                     ->label('Tambah Kendala')
                     ->mutateFormDataUsing(function (array $data): array {
                         $data['status'] = 'pending';
-                        
+
                         $parent = $this->getOwnerRecord();
                         $parentDate = $parent?->tgl_produksi ?? now()->format('Y-m-d');
                         $parentDateStr = Carbon::parse($parentDate)->format('Y-m-d');
                         $data['waktu_mulai'] = $parentDateStr . ' ' . Carbon::parse($data['waktu_mulai'])->format('H:i') . ':00';
-                        
+
                         $data['mesin_id'] = $parent->id_mesin;
-                        
+
                         return $data;
                     }),
             ])
@@ -177,7 +209,52 @@ class KendalaRotaryRelationManager extends RelationManager
                     ->modalHeading('Tandai Kendala Selesai'),
 
                 ViewAction::make(),
-                EditAction::make(),
+                EditAction::make()
+                    ->form([
+                        Grid::make(2)
+                            ->schema([
+                                TimePicker::make('waktu_mulai')
+                                    ->label('Waktu Mulai')
+                                    ->required(),
+
+                                // 2. Bukti Kendala (Image Upload)
+                                FileUpload::make('foto_kendala')
+                                    ->label('Bukti Kendala')
+                                    ->image()
+                                    ->directory('kendala-files')
+                                    ->imageEditor(),
+
+                                // 3. Waktu Selesai
+                                TimePicker::make('waktu_selesai')
+                                    ->label('Waktu Selesai'),
+
+                                // 4. Bukti Selesai (Image Upload)
+                                FileUpload::make('foto_selesai')
+                                    ->label('Bukti Selesai')
+                                    ->image()
+                                    ->directory('selesai-files'),
+
+                                // 5. Durasi Menit
+                                TextInput::make('durasi_menit')
+                                    ->label('Durasi')
+                                    ->numeric()
+                                    ->suffix('menit'),
+
+                                // 6. Status
+                                Select::make('status')
+                                    ->label('Status')
+                                    ->options([
+                                        'pending' => 'Pending',
+                                        'selesai' => 'Selesai',
+                                    ])
+                                    ->required(),
+
+                                Textarea::make('kendala')
+                                    ->label('Detail Kendala')
+                                    ->rows(3)
+                                    ->columnSpanFull(),
+                            ]),
+                    ]),
                 DeleteAction::make(),
             ])
             ->toolbarActions([

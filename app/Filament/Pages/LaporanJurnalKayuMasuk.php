@@ -306,7 +306,7 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
                     'nama_supplier' => $nota->kayuMasuk->penggunaanSupplier?->nama_supplier ?? '-',
                     'lahan' => $group['kode_lahan'],
                     'm' => 'd',
-                    'hit_kbk' => 'm',
+                    'hit_kbk' => null,
                     'banyak' => $group['total_batang'],
                     'm3' => $group['total_kubikasi'],
                     'harga' => $group['total_harga'],

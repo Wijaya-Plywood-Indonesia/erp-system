@@ -10,8 +10,8 @@ use Filament\Schemas\Components\Section;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 
-use App\Filament\Pages\LaporanHarian\Services\LoadOngkosPekerja260;
-use App\Filament\Pages\LaporanHarian\Transformers\OngkosPekerja260DataMap;
+use App\Filament\Pages\OngkosPekerja260\Queries\LoadOngkosPekerja260;
+use App\Filament\Pages\OngkosPekerja260\Transformers\OngkosPekerja260DataMap;
 use BackedEnum;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Log;

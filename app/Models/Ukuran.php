@@ -94,4 +94,9 @@ class Ukuran extends Model
 
         return $panjang * $lebar * $tebal;
     }
+
+    public function referensiHargaProduksis()
+    {
+        return $this->hasMany(ReferensiHargaProduksi::class, 'id_ukuran');
+    }
 }

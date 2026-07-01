@@ -68,27 +68,10 @@ class ProduksiStikSummaryWidget extends Widget
             ');
 
         // 3. GLOBAL UKURAN + KW
-        $globalUkuranKw = (clone $baseQuery)
-            ->selectRaw('
-                detail_hasil_stik.kw,
-                SUM(CAST(detail_hasil_stik.total_lembar AS UNSIGNED)) AS total
-            ')
-            ->groupBy('ukuran', 'detail_hasil_stik.kw')
-            ->orderBy('ukuran')
-            ->get();
-
-        // 4. GLOBAL UKURAN (SEMUA KW)
-        $globalUkuran = (clone $baseQuery)
-            ->selectRaw('SUM(CAST(detail_hasil_stik.total_lembar AS UNSIGNED)) AS total')
-            ->groupBy('ukuran')
-            ->orderBy('ukuran')
-            ->get();
-
-        // 5. GLOBAL JENIS KAYU & UKURAN
-        $globalJenisKayuUkuran = DetailHasilStik::query()
-            ->where('id_produksi_stik', $produksiId)
+        $globalUkuranKw = DetailHasilStik::query()
+            ->where('detail_hasil_stik.id_produksi_stik', $produksiId)
             ->join('ukurans', 'ukurans.id', '=', 'detail_hasil_stik.id_ukuran')
-            ->join('jenis_kayus', 'jenis_kayus.id', '=', 'detail_hasil_stik.id_jenis_kayu')
+            ->join('jenis_kayus', 'jenis_kayus.id', '=', 'detail_hasil_stik.id_jenis_kayu') // Tambahan Join
             ->selectRaw('
                 jenis_kayus.nama_kayu as jenis_kayu,
                 CONCAT(
@@ -96,15 +79,62 @@ class ProduksiStikSummaryWidget extends Widget
                     TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
                     TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
                 ) AS ukuran,
-                detail_hasil_stik.kw as kw,
+                detail_hasil_stik.kw,
                 SUM(CAST(detail_hasil_stik.total_lembar AS UNSIGNED)) AS total
             ')
-            ->groupBy('jenis_kayus.nama_kayu', 'ukuran', 'detail_hasil_stik.kw')
+            ->groupBy('jenis_kayus.nama_kayu', 'ukuran', 'detail_hasil_stik.kw') // Tambah group by jenis_kayu
             ->orderBy('jenis_kayus.nama_kayu')
             ->orderBy('ukuran')
             ->get();
+        // 4. GLOBAL UKURAN (SEMUA KW)
+        $globalUkuran = (clone $baseQuery)
+            ->selectRaw('SUM(CAST(detail_hasil_stik.total_lembar AS UNSIGNED)) AS total')
+            ->groupBy('ukuran')
+            ->orderBy('ukuran')
+            ->get();
 
-        // 6. TARGET PROGRESS (MESIN STIK - GLOBAL DARI UKURAN 0x0x0 / ID 33)
+        $totalPekerjaStik = DetailPegawaiStik::where('id_produksi_stik', $produksiId)
+            ->whereNotNull('id_pegawai')
+            ->distinct('id_pegawai')
+            ->count('id_pegawai');
+
+        // 5. GLOBAL JENIS KAYU & UKURAN (Ditambahkan Total Pekerja Unik per baris kelompok)
+        $globalJenisKayuUkuran = DetailHasilStik::query()
+            ->where('detail_hasil_stik.id_produksi_stik', $produksiId)
+            ->join('ukurans', 'ukurans.id', '=', 'detail_hasil_stik.id_ukuran')
+            ->join('jenis_kayus', 'jenis_kayus.id', '=', 'detail_hasil_stik.id_jenis_kayu')
+            ->selectRaw("
+                jenis_kayus.id AS id_jenis_kayu,
+                ukurans.id AS id_ukuran,
+                jenis_kayus.nama_kayu AS jenis_kayu,
+                CONCAT(
+                    TRIM(TRAILING '.00' FROM CAST(ukurans.panjang AS CHAR)), ' x ',
+                    TRIM(TRAILING '.00' FROM CAST(ukurans.lebar AS CHAR)), ' x ',
+                    TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(ukurans.tebal AS CHAR)))
+                ) AS ukuran,
+                detail_hasil_stik.kw AS kw,
+                SUM(CAST(detail_hasil_stik.total_lembar AS UNSIGNED)) AS total_hasil
+            ")
+            ->groupBy('jenis_kayus.id', 'ukurans.id', 'jenis_kayus.nama_kayu', 'ukuran', 'detail_hasil_stik.kw')
+            ->orderBy('jenis_kayus.nama_kayu')
+            ->orderBy('ukuran')
+            ->orderBy('detail_hasil_stik.kw')
+            ->get();
+
+        // 💡 Ambil total_bahan secara terpisah lewat Map Collection agar tidak terjadi duplikasi duplikat SQL
+        $globalJenisKayuUkuran->transform(function ($row) use ($produksiId) {
+            $totalBahan = DB::table('detail_masuk_stik')
+                ->where('id_produksi_stik', $produksiId)
+                ->where('id_jenis_kayu', $row->id_jenis_kayu)
+                ->where('id_ukuran', $row->id_ukuran)
+                ->where('kw', $row->kw)
+                ->sum(DB::raw('CAST(isi AS UNSIGNED)'));
+
+            $row->total_bahan = $totalBahan;
+            return $row;
+        });
+
+        // 6. TARGET PROGRESS (MESIN STIK)
         $stikMachineIds = DB::table('mesins')
             ->join('kategori_mesins', 'mesins.kategori_mesin_id', '=', 'kategori_mesins.id')
             ->where('kategori_mesins.nama_kategori_mesin', 'STIK')
@@ -115,7 +145,6 @@ class ProduksiStikSummaryWidget extends Widget
             $stikMachineIds = [8];
         }
 
-        // Ambil target untuk ukuran 0x0x0 (id_ukuran = 33)
         $tgt = DB::table('targets')
             ->whereIn('id_mesin', $stikMachineIds)
             ->where('id_ukuran', 33)
@@ -149,11 +178,12 @@ class ProduksiStikSummaryWidget extends Widget
         }
 
         $this->summary = [
-            'totalAll'       => $totalAll,
-            'totalPegawai'   => $totalPegawai,
+            'totalAll' => $totalAll,
+            'totalPegawai' => $totalPegawai,
             'globalUkuranKw' => $globalUkuranKw,
-            'globalUkuran'   => $globalUkuran,
+            'globalUkuran' => $globalUkuran,
             'globalJenisKayuUkuran' => $globalJenisKayuUkuran,
+            'totalPekerjaStik'      => $totalPekerjaStik,
             'targetProgress' => $targetProgress,
         ];
     }

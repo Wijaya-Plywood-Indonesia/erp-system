@@ -44,13 +44,57 @@ class ProduksiPilihPlywoodSummaryWidget extends Widget
 
         $produksiId = $this->record->id;
 
-        // Hitung Total Hasil
-        $totalAll = HasilPilihPlywood::where('id_produksi_pilih_plywood', $produksiId)->sum('jumlah');
+        // Hitung Total Hasil (jumlah_bagus)
+        $totalAll = HasilPilihPlywood::where('id_produksi_pilih_plywood', $produksiId)->sum('jumlah_bagus');
 
         // Hitung Headcount Pegawai
         $totalPegawai = PegawaiPilihPlywood::where('id_produksi_pilih_plywood', $produksiId)
             ->distinct('id_pegawai')
             ->count('id_pegawai');
+
+        // Determine target based on the dominant item
+        $baseTarget = 450;
+        $maxQty = -1;
+        $dominantHasil = HasilPilihPlywood::where('id_produksi_pilih_plywood', $produksiId)
+            ->with(['barangSetengahJadiHp.ukuran', 'barangSetengahJadiHp.grade.kategoriBarang', 'barangSetengahJadiHp.jenisBarang'])
+            ->get();
+
+        $dominantSizeName = '';
+
+        foreach ($dominantHasil as $hasil) {
+            $qty = $hasil->jumlah_bagus ?? 0;
+            if ($qty > $maxQty) {
+                $maxQty = $qty;
+                $b = $hasil->barangSetengahJadiHp;
+                if ($b) {
+                    $isSengon = ($b->jenisBarang && stripos($b->jenisBarang->nama_jenis_barang, 'sengon') !== false);
+                    
+                    if ($isSengon) {
+                        $kategoriId = $b->grade?->id_kategori_barang ?? 0;
+                        $kategoriNama = $b->grade?->kategoriBarang?->nama_kategori ?? '';
+                        
+                        $isNonSanding = ($kategoriId == 2 || stripos($kategoriNama, 'mentah') !== false || stripos($kategoriNama, 'non') !== false);
+                        $isSanding = ($kategoriId == 1 || (stripos($kategoriNama, 'plywood') !== false && stripos($kategoriNama, 'mentah') === false));
+                        
+                        if ($isNonSanding) {
+                            $baseTarget = 2200; // Sengon Non Sanding
+                        } elseif ($isSanding) {
+                            $baseTarget = 1950; // Sengon Sanding
+                        } else {
+                            $baseTarget = 450; // Selain 2 itu
+                        }
+                    } else {
+                        $baseTarget = 450; // Selain 2 itu
+                    }
+                    $dominantSizeName = $b->ukuran?->nama_ukuran ?? '';
+                }
+            }
+        }
+
+        $target = $totalPegawai > 0 ? ($totalPegawai / 2.0) * $baseTarget : $baseTarget;
+
+        $globalProgress = $target > 0 ? ($totalAll / $target) * 100 : 0;
+        $globalProgress = round($globalProgress, 1);
 
         // Detail per Ukuran & Grade
         $listHasil = HasilPilihPlywood::query()
@@ -74,6 +118,9 @@ class ProduksiPilihPlywoodSummaryWidget extends Widget
             'totalAll' => $totalAll,
             'totalPegawai' => $totalPegawai,
             'listHasil' => $listHasil,
+            'target' => $target,
+            'globalProgress' => $globalProgress,
+            'dominantSizeName' => $dominantSizeName,
         ];
     }
 }

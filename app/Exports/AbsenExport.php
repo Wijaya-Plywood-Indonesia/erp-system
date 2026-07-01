@@ -20,33 +20,19 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
 
     public function __construct(array $data)
     {
-        // --- 1. LOGIKA CUSTOM SORTING ---
-        // Kita urutkan data sebelum disimpan ke property $this->data
+        // --- 1. LOGIKA SORTING NUMERIK ASCENDING (Terkecil ke Terbesar) ---
+        // Kita urutkan data berdasarkan kodep secara menaik (dari 1000 s.d terbesar)
         usort($data, function ($a, $b) {
-            $kodeA = (string)($a['kodep'] ?? '');
-            $kodeB = (string)($b['kodep'] ?? '');
+            $kodeA = $a['kodep'] ?? '';
+            $kodeB = $b['kodep'] ?? '';
 
-            // Menentukan bobot prioritas
-            $getWeight = function ($kode) {
-                if (str_starts_with($kode, '8') || str_starts_with($kode, '9')) {
-                    return 1; // Prioritas pertama (Paling Atas)
-                }
-                if (str_starts_with($kode, '7')) {
-                    return 3; // Prioritas terakhir (Paling Bawah)
-                }
-                return 2; // Kode lainnya (1, 2, 3, 4, 5, 6) ada di tengah
-            };
-
-            $weightA = $getWeight($kodeA);
-            $weightB = $getWeight($kodeB);
-
-            // Jika prioritas grup berbeda, gunakan perbandingan bobot
-            if ($weightA !== $weightB) {
-                return $weightA <=> $weightB;
+            // Jika keduanya berupa angka, bandingkan secara numerik agar akurat
+            if (is_numeric($kodeA) && is_numeric($kodeB)) {
+                return (float)$kodeA <=> (float)$kodeB;
             }
 
-            // Jika berada dalam grup yang sama, urutkan berdasarkan nomor secara alami
-            return strnatcasecmp($kodeA, $kodeB);
+            // Fallback menggunakan pengurutan alami (natural sort) jika terdapat karakter non-angka
+            return strnatcasecmp((string)$kodeA, (string)$kodeB);
         });
 
         $this->data = $data;

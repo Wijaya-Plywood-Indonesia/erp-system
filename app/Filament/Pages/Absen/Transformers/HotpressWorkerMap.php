@@ -51,8 +51,11 @@ class HotpressWorkerMap
                 }
             }
 
-            // 2. Calculate deficit and total denda for this session
-            $totalDenda = 0;
+            // 2. Calculate target achievement ratio, total target, total actual, etc.
+            $targetHotpress = 0;
+            $gaji = 115000;
+            $stdJam = 10;
+
             foreach ($combinedActuals as $id_ukuran => $actual) {
                 $tgt = $targets->first(function ($t) use ($id_ukuran) {
                     return $t->id_ukuran == $id_ukuran;
@@ -67,21 +70,30 @@ class HotpressWorkerMap
 
                 if ($tgt) {
                     $targetVal = (float) $tgt->target;
-                    $potonganPerPcs = (float) $tgt->potongan;
+                    if ($targetVal > 0) {
+                        $targetHotpress += $actual / $targetVal;
+                    }
 
-                    $deficit = $targetVal - $actual;
-                    if ($deficit > 0 && $potonganPerPcs > 0) {
-                        $totalDenda += $deficit * $potonganPerPcs;
+                    if (isset($tgt->gaji) && $tgt->gaji > 0) {
+                        $gaji = (float) $tgt->gaji;
+                    }
+                    if (isset($tgt->jam) && $tgt->jam > 0) {
+                        $stdJam = (int) $tgt->jam;
                     }
                 }
             }
 
             // 3. Share deduction among workers in this session
             $potonganPerOrang = 0;
-            if ($totalDenda > 0) {
-                $jumlahPekerja = $produksi->detailPegawaiHp ? $produksi->detailPegawaiHp->count() : 0;
-                if ($jumlahPekerja > 0) {
-                    $potonganRaw = $totalDenda / $jumlahPekerja;
+            $jumlahPekerja = $produksi->detailPegawaiHp ? $produksi->detailPegawaiHp->count() : 0;
+            if ($jumlahPekerja > 0) {
+                if ($targetHotpress >= 1.0) {
+                    $potonganPerOrang = 0;
+                } else {
+                    $potonganRaw = (($gaji - ($targetHotpress * $gaji)) * (0.1 * $stdJam)) / ($jumlahPekerja * 0.1);
+                    if ($potonganRaw < 0) {
+                        $potonganRaw = 0;
+                    }
 
                     // --- RUMUS PEMBULATAN KHUSUS (0, 500, 1000) ---
                     $ribuan = floor($potonganRaw / 1000);
@@ -113,7 +125,7 @@ class HotpressWorkerMap
                         'hasil' => $labelHasil,
                         'ijin' => $dp->ijin ?? '-',
                         'potongan_targ' => (int) $potonganPerOrang,
-                        'keterangan' => $dp->ket ?? $produksi->kendala ?? '',
+                        'keterangan' => $dp->ket ?? '',
                     ];
                 }
             }

@@ -34,8 +34,8 @@ class LaporanProduksiHotPress extends Page implements HasForms
 
     public function mount(): void
     {
-        $this->form->fill(['tanggal' => $this->tanggal]);
         $this->tanggal = now()->format('Y-m-d');
+        $this->form->fill(['tanggal' => $this->tanggal]);
         $this->loadAllData();
     }
 
@@ -101,81 +101,83 @@ class LaporanProduksiHotPress extends Page implements HasForms
 
     public function loadAllData()
     {
-        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+        try {
+            $tanggal = $this->tanggal ?? now()->format('Y-m-d');
 
-        $produksiList = ProduksiHp::with([
-            'detailPegawaiHp.pegawaiHp',
-            'triplekHasilHp.ukuran',
-            'triplekHasilHp.jenisKayu',
-            'triplekHasilHp.barangSetengahJadi.jenisBarang',
-            'triplekHasilHp.barangSetengahJadi.grade',
-            'triplekHasilHp.mesin',
-            'platformHasilHp.ukuran',
-            'platformHasilHp.jenisKayu',
-            'platformHasilHp.barangSetengahJadi.jenisBarang',
-            'platformHasilHp.barangSetengahJadi.grade',
-            'platformHasilHp.mesin',
-            'bahanPenolongHp'
-        ])
-            ->whereDate('tanggal_produksi', $tanggal)
-            ->get();
+            $produksiList = ProduksiHp::with([
+                'detailPegawaiHp.pegawaiHp',
+                'triplekHasilHp.ukuran',
+                'triplekHasilHp.jenisKayu',
+                'triplekHasilHp.barangSetengahJadi.jenisBarang',
+                'triplekHasilHp.barangSetengahJadi.grade',
+                'triplekHasilHp.mesin',
+                'platformHasilHp.ukuran',
+                'platformHasilHp.jenisKayu',
+                'platformHasilHp.barangSetengahJadi.jenisBarang',
+                'platformHasilHp.barangSetengahJadi.grade',
+                'platformHasilHp.mesin',
+                'bahanPenolongHp'
+            ])
+                ->whereDate('tanggal_produksi', $tanggal)
+                ->get();
 
-        $bahanPenolongList = BahanPenolongProduksi::where('kategori_produksi', 'hot_press')->get();
-        $hargaPegawai = HargaPegawai::first()->harga ?? 115000;
-        $dempulNames = ['Kalsium', 'Semen putih', 'Tepung', 'Lem PVAC', 'lem Dempul', 'Semen'];
+            $bahanPenolongList = BahanPenolongProduksi::where('kategori_produksi', 'hot_press')->get();
+            $hargaPegawai = HargaPegawai::first()->harga ?? 115000;
+            $dempulNames = ['Kalsium', 'Semen putih', 'Tepung', 'Lem PVAC', 'lem Dempul', 'Semen'];
 
-        $this->dataHp = [];
+            $this->dataHp = [];
 
-        $grouped = $produksiList->groupBy(function ($p) {
-            return 'HOTPRESS ' . strtoupper($p->shift) . ' BESAR';
-        });
+            $grouped = $produksiList->groupBy(function ($p) {
+                return 'HOTPRESS ' . strtoupper($p->shift) . ' BESAR';
+            });
 
-        foreach ($grouped as $machineName => $records) {
-            $hasil = [];
-            foreach ($records as $prod) {
-                // Triplek Loop
-                foreach ($prod->triplekHasilHp as $t) {
-                    $u = $t->barangSetengahJadi->ukuran ?? null;
-                    $p = $u->panjang ?? 0;
-                    $l = $u->lebar ?? 0;
-                    $tebal = $u->tebal ?? 0;
-                    $banyak = $t->isi;
-                    $kubikasi = ($p * $l * $tebal * $banyak) / 1000000000;
+            foreach ($grouped as $machineName => $records) {
+                $hasil = [];
+                foreach ($records as $prod) {
+                    // Triplek Loop
+                    foreach ($prod->triplekHasilHp as $t) {
+                        $u = $t->barangSetengahJadi->ukuran ?? null;
+                        $p = $u->panjang ?? 0;
+                        $l = $u->lebar ?? 0;
+                        $tebal = $u->tebal ?? 0;
+                        $banyak = $t->isi;
+                        $kubikasi = ($p * $l * $tebal * $banyak) / 1000000000;
 
-                    $hasil[] = [
-                        'no_palet' => $t->no_palet,
-                        'p' => $p,
-                        'l' => $l,
-                        't' => $tebal,
-                        'isi' => $banyak,
-                        'jenis_kayu' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? '-',
-                        'kwalitas' => strtoupper('TRIPLEK ' . ($t->barangSetengahJadi->grade->nama_grade ?? '-')),
-                        'nama_barang' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? 'Plywood',
-                        'kubikasi' => round($kubikasi, 4),
-                        'tipe' => 'Triplek',
-                    ];
-                }
-                // Platform Loop
-                foreach ($prod->platformHasilHp as $t) {
-                    $u = $t->barangSetengahJadi->ukuran ?? null;
-                    $p = $u->panjang ?? 0;
-                    $l = $u->lebar ?? 0;
-                    $tebal = $u->tebal ?? 0;
-                    $banyak = $t->isi;
-                    $kubikasi = ($p * $l * $tebal * $banyak) / 1000000000;
+                        $hasil[] = [
+                            'no_palet' => $t->no_palet,
+                            'p' => $p,
+                            'l' => $l,
+                            't' => $tebal,
+                            'isi' => $banyak,
+                            'jenis_kayu' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? '-',
+                            'kwalitas' => strtoupper('TRIPLEK ' . ($t->barangSetengahJadi->grade->nama_grade ?? '-')),
+                            'nama_barang' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? 'Plywood',
+                            'kubikasi' => round($kubikasi, 4),
+                            'tipe' => 'Triplek',
+                        ];
+                    }
+                    // Platform Loop
+                    foreach ($prod->platformHasilHp as $t) {
+                        $u = $t->barangSetengahJadi->ukuran ?? null;
+                        $p = $u->panjang ?? 0;
+                        $l = $u->lebar ?? 0;
+                        $tebal = $u->tebal ?? 0;
+                        $banyak = $t->isi;
+                        $kubikasi = ($p * $l * $tebal * $banyak) / 1000000000;
 
-                    $hasil[] = [
-                        'no_palet' => $t->no_palet,
-                        'p' => $p,
-                        'l' => $l,
-                        't' => $tebal,
-                        'isi' => $banyak,
-                        'jenis_kayu' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? '-',
-                        'kwalitas' => strtoupper('PLATFORM ' . ($t->barangSetengahJadi->grade->nama_grade ?? '-')),
-                        'nama_barang' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? 'Platform',
-                        'kubikasi' => round($kubikasi, 4),
-                        'tipe' => 'Platform',
-                    ];
+                        $hasil[] = [
+                            'no_palet' => $t->no_palet,
+                            'p' => $p,
+                            'l' => $l,
+                            't' => $tebal,
+                            'isi' => $banyak,
+                            'jenis_kayu' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? '-',
+                            'kwalitas' => strtoupper('PLATFORM ' . ($t->barangSetengahJadi->grade->nama_grade ?? '-')),
+                            'nama_barang' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? 'Platform',
+                            'kubikasi' => round($kubikasi, 4),
+                            'tipe' => 'Platform',
+                        ];
+                    }
                 }
             }
 
@@ -218,6 +220,8 @@ class LaporanProduksiHotPress extends Page implements HasForms
                 'penyusutan' => 1905000,
                 'bulanan' => 220000,
             ];
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error loading hot press data: ' . $e->getMessage());
         }
     }
 }

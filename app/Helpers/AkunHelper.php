@@ -40,7 +40,7 @@ class AkunHelper
             }
 
             foreach ($anak->subAnakAkuns as $sub) {
-                $kode = "{$anak->kode_anak_akun}.{$sub->kode_sub_anak_akun}";
+                $kode = $sub->kode_sub_anak_akun;
                 $options[$kode] = "{$kode} — {$sub->nama_sub_anak_akun}";
             }
         }

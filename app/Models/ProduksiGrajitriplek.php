@@ -40,4 +40,9 @@ class ProduksiGrajitriplek extends Model
     {
         return $this->hasOne(ValidasiGrajiTriplek::class, 'id_produksi_graji_triplek')->latestOfMany();
     }
+
+    public function kendalaGrajiTripleks()
+    {
+        return $this->hasMany(KendalaGrajiTriplek::class, 'produksi_graji_triplek_id');
+    }
 }

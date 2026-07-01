@@ -7,7 +7,7 @@ use App\Filament\Resources\IndukAkuns\Pages\EditIndukAkun;
 use App\Filament\Resources\IndukAkuns\Pages\ListIndukAkuns;
 use App\Filament\Resources\IndukAkuns\Pages\ViewIndukAkun;
 use App\Filament\Resources\IndukAkuns\RelationManagers\AnakAkunsRelationManager;
-use App\Filament\Resources\IndukAkuns\RelationManagers\SubAnakAkunsRelationManager;
+use App\Filament\Resources\IndukAkuns\RelationManagers\SubAnakAkunRelationManager;
 use App\Filament\Resources\IndukAkuns\Schemas\IndukAkunForm;
 use App\Filament\Resources\IndukAkuns\Schemas\IndukAkunInfolist;
 use App\Filament\Resources\IndukAkuns\Tables\IndukAkunsTable;
@@ -22,13 +22,13 @@ use UnitEnum;
 class IndukAkunResource extends Resource
 {
     protected static ?string $model = IndukAkun::class;
-    protected static ?string $label = 'Master Akun';
+    protected static ?string $label = 'Induk Akun';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocument;
     protected static string|UnitEnum|null $navigationGroup = 'Jurnal';
-    protected static ?string $navigationLabel = 'Master Akun';
-    protected static ?string $pluralModelLabel = 'Master Akun';
-    protected static ?string $modelLabel = 'Master Akun';
+    protected static ?string $navigationLabel = 'Induk Akun';
+    protected static ?string $pluralModelLabel = 'Induk Akun';
+    protected static ?string $modelLabel = 'Induk Akun';
 
 
     public static function form(Schema $schema): Schema
@@ -50,7 +50,7 @@ class IndukAkunResource extends Resource
     {
         return [
             AnakAkunsRelationManager::class,
-            SubAnakAkunsRelationManager::class,
+            SubAnakAkunRelationManager::class,
             //
         ];
     }

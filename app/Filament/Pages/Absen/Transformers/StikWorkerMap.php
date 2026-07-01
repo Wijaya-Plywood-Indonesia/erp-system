@@ -25,7 +25,7 @@ class StikWorkerMap
             $labelDivisi = "STIK";
 
             // 2. Ambil Hasil Produksi
-            $totalHasil = $item->detailHasilStik ? $item->detailHasilStik->sum(function($dh) {
+            $totalHasil = $item->detailHasilStik ? $item->detailHasilStik->sum(function ($dh) {
                 return (int) $dh->total_lembar;
             }) : 0;
 
@@ -78,7 +78,7 @@ class StikWorkerMap
                         'hasil' => $labelDivisi,
                         'ijin' => $dp->ijin ?? '',
                         'potongan_targ' => (int) $potonganFinal,
-                        'keterangan' => $dp->keterangan ?? '',
+                        'keterangan' => $dp->ket  ?? '',
                     ];
                 }
             }

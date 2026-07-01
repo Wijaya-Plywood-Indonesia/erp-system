@@ -114,6 +114,42 @@
             </div>
             @endif
 
+            {{-- ================= DOWNTIME & KENDALA MESIN ================= --}}
+            @if(!empty($data['kendala_kedis']))
+            <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+                <h4 class="font-semibold mb-3 text-red-600 dark:text-red-400">Downtime & Kendala Mesin</h4>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-gray-600 dark:text-gray-300">
+                        <thead class="text-xs uppercase bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                            <tr>
+                                <th class="px-4 py-2 w-12 text-center">No</th>
+                                <th class="px-4 py-2">Tanggal</th>
+                                <th class="px-4 py-2">Mesin</th>
+                                <th class="px-4 py-2 text-center">Waktu Mulai</th>
+                                <th class="px-4 py-2 text-center">Waktu Selesai</th>
+                                <th class="px-4 py-2 text-center">Durasi</th>
+                                <th class="px-4 py-2">Keterangan Kendala</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($data['kendala_kedis'] as $index => $row)
+                            <tr class="border-b border-gray-100 dark:border-gray-850 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-4 py-2 text-center">{{ $index + 1 }}</td>
+                                <td class="px-4 py-2">{{ $row['tanggal'] }}</td>
+                                <td class="px-4 py-2">{{ $row['mesin'] }}</td>
+                                <td class="px-4 py-2 text-center">{{ $row['waktu_mulai'] }}</td>
+                                <td class="px-4 py-2 text-center">{{ $row['waktu_selesai'] }}</td>
+                                <td class="px-4 py-2 text-center font-semibold text-amber-600 dark:text-amber-400">{{ $row['durasi_menit'] ? $row['durasi_menit'] . ' menit' : '-' }}</td>
+                                <td class="px-4 py-2 font-medium text-red-600 dark:text-red-400">{{ $row['kendala'] }}</td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            @endif
+
         </div>
 
         @empty

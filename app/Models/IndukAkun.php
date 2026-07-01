@@ -12,6 +12,9 @@ class IndukAkun extends Model
         'kode_induk_akun',
         'nama_induk_akun',
         'keterangan',
+        'saldo_normal',
+        'status',
+        'created_by',
     ];
 
     /**
@@ -21,6 +24,21 @@ class IndukAkun extends Model
     public function anakAkuns()
     {
         return $this->hasMany(AnakAkun::class, 'id_induk_akun');
+    }
+
+    public function allAnakAkuns()
+    {
+        return $this->hasMany(AnakAkun::class, 'id_induk_akun');
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function scopeAktif($query)
+    {
+        return $query->where('status', 'aktif');
     }
     public function subAnakAkuns()
     {

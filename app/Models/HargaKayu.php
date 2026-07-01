@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class HargaKayu extends Model
 {
@@ -20,8 +21,10 @@ class HargaKayu extends Model
         'harga_baru',
         'updated_by',
         'approved_by',
-        'status'
+        'status',
+        'catatan_penolakan',
     ];
+
     protected $casts = [
         'panjang' => 'integer',
         'diameter_terkecil' => 'decimal:2',
@@ -42,11 +45,13 @@ class HargaKayu extends Model
     {
         return $this->belongsTo(User::class, 'approved_by');
     }
+
     //
     public function jenisKayu()
     {
         return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu', 'id');
     }
+
     public function getRentangDiameterAttribute(): string
     {
         if ($this->diameter_terkecil && $this->diameter_terbesar) {
@@ -54,5 +59,10 @@ class HargaKayu extends Model
         }
 
         return '-';
+    }
+
+    public function logs(): HasMany
+    {
+        return $this->hasMany(HargaKayuLog::class, 'id_harga_kayu');
     }
 }

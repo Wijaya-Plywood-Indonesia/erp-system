@@ -35,6 +35,48 @@ class GrajiTriplekWorkerMap
 
             $labelHasil = "GRAJI TRIPLEK: " . (empty($detailProduksi) ? '-' : implode('; ', $detailProduksi));
 
+            // Calculate actual production (sum of isi from hasilGrajiTriplek)
+            $totalActual = 0;
+            if ($produksi->hasilGrajiTriplek) {
+                foreach ($produksi->hasilGrajiTriplek as $detail) {
+                    $totalActual += $detail->isi ?? 0;
+                }
+            }
+
+            // Calculate worker salary deduction using the old formula
+            // Target is dynamic based on worker count: N * 750
+            $pekerjaList = [];
+            if ($produksi->pegawaiGrajiTriplek) {
+                foreach ($produksi->pegawaiGrajiTriplek as $pg) {
+                    if ($pg->pegawaiGrajiTriplek) {
+                        $pekerjaList[] = $pg;
+                    }
+                }
+            }
+            $N = count($pekerjaList);
+            $potonganPerOrang = 0;
+
+            if ($N > 0) {
+                $target = $N * 750;
+                $deficit = $target - $totalActual;
+                if ($deficit > 0) {
+                    // Rumus lama: (deficit * (Gaji / Target)) / N
+                    $potonganRaw = ($deficit * 115000) / ($target * $N);
+
+                    // --- RUMUS PEMBULATAN KHUSUS (0, 500, 1000) ---
+                    $ribuan = floor($potonganRaw / 1000);
+                    $ratusan = $potonganRaw % 1000;
+
+                    if ($ratusan < 300) {
+                        $potonganPerOrang = $ribuan * 1000;
+                    } elseif ($ratusan < 800) {
+                        $potonganPerOrang = ($ribuan * 1000) + 500;
+                    } else {
+                        $potonganPerOrang = ($ribuan + 1) * 1000;
+                    }
+                }
+            }
+
             // 2. Looping Pegawai Graji Triplek
             if ($produksi->pegawaiGrajiTriplek) {
                 foreach ($produksi->pegawaiGrajiTriplek as $pg) {
@@ -51,7 +93,7 @@ class GrajiTriplekWorkerMap
                         'pulang' => $jamPulang,
                         'hasil' => $labelHasil,
                         'ijin' => $pg->ijin ?? '-',
-                        'potongan_targ' => 0,
+                        'potongan_targ' => (int) $potonganPerOrang,
                         'keterangan' => $pg->ket ?? $produksi->kendala ?? '',
                     ];
                 }

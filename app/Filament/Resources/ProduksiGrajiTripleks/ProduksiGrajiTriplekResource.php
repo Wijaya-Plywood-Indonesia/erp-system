@@ -51,6 +51,7 @@ class ProduksiGrajiTriplekResource extends Resource
             RelationManagers\MasukGrajiTriplekRelationManager::class,
             RelationManagers\HasilGrajiTriplekRelationManager::class,
             RelationManagers\ValidasiGrajiTriplekRelationManager::class,
+            RelationManagers\KendalaGrajiTriplekRelationManager::class,
         ];
     }
 

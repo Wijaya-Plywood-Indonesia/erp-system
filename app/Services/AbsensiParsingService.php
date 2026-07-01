@@ -127,7 +127,24 @@ class AbsensiParsingService
         if (($extension === 'txt' || $extension === 'dat') && str_contains($line, "\t")) {
             $tabSeparatedParts = preg_split('/\t+/', $line);
 
-            return $this->normalizeParts($tabSeparatedParts);
+            $result = [];
+            foreach ($tabSeparatedParts as $part) {
+                $trimmed = trim($part);
+                if ($trimmed === '') {
+                    continue;
+                }
+
+                // If this part contains a date followed by spaces (like "2026/06/01  06:01:57")
+                if (preg_match('/\d{4}[\/\-]\d{2}[\/\-]\d{2}\s+/', $trimmed)) {
+                    $subParts = preg_split('/\s+/', $trimmed);
+                    foreach ($subParts as $sp) {
+                        $result[] = trim($sp);
+                    }
+                } else {
+                    $result[] = $trimmed;
+                }
+            }
+            return array_values(array_filter($result));
         }
 
         $spaceSeparatedParts = preg_split('/\s+/', $line);

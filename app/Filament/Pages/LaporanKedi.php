@@ -109,6 +109,7 @@ class LaporanKedi extends Page
             'detailBongkarKedi.jenisKayu',
             'detailPegawaiKedi',
             'validasiTerakhir',
+            'kendalaKedis.mesin',
         ])
             ->whereDate('tanggal_actual_bongkar', $this->tanggal)
             ->orderBy('tanggal_actual_bongkar')
@@ -173,6 +174,14 @@ class LaporanKedi extends Page
                 'validasi_oleh' => $produksi->validasiTerakhir?->role ?? '-',
                 'total_pekerja' => $produksi->detailPegawaiKedi->count(),
                 'ongkos_mesin' => (float) ($produksi->mesin?->ongkos_mesin ?? 0),
+                'kendala_kedis' => $produksi->kendalaKedis->map(fn($k) => [
+                    'tanggal' => $k->waktu_mulai ? Carbon::parse($k->waktu_mulai)->format('d/m/Y') : '-',
+                    'mesin' => $k->mesin?->nama_mesin ?? '-',
+                    'waktu_mulai' => $k->waktu_mulai ? Carbon::parse($k->waktu_mulai)->format('H:i') : '-',
+                    'waktu_selesai' => $k->waktu_selesai ? Carbon::parse($k->waktu_selesai)->format('H:i') : '-',
+                    'durasi_menit' => $k->durasi_menit,
+                    'kendala' => $k->kendala,
+                ])->toArray(),
             ];
         }
 

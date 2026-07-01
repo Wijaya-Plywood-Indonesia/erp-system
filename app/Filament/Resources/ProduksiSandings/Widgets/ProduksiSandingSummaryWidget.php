@@ -106,12 +106,66 @@ class ProduksiSandingSummaryWidget extends Widget
             ->orderBy('ukuran')
             ->get();
 
+        // Determine dominant item in Sanding
+        $idMesin = $this->record->id_mesin;
+        $namaMesin = $this->record->mesin?->nama_mesin ?? '';
+        
+        $isSengon = true;
+        $maxQty = -1;
+        $dominantHasil = HasilSanding::where('id_produksi_sanding', $produksiId)
+            ->with(['barangSetengahJadi.jenisBarang'])
+            ->get();
+        foreach ($dominantHasil as $hasil) {
+            $qty = $hasil->kuantitas ?? 0;
+            if ($qty > $maxQty) {
+                $maxQty = $qty;
+                $b = $hasil->barangSetengahJadi;
+                if ($b) {
+                    $isSengon = ($b->jenisBarang && stripos($b->jenisBarang->nama_jenis_barang, 'sengon') !== false);
+                }
+            }
+        }
+
+        if (!$isSengon) {
+            $target = 450;
+        } else {
+            $target = 250;
+            if ($idMesin == 24 || stripos($namaMesin, 'besar') !== false) {
+                $target = 800;
+            }
+        }
+
+        $globalProgress = $target > 0 ? ($totalAll / $target) * 100 : 0;
+        $globalProgress = round($globalProgress, 1);
+
+        $deficit = $target - $totalAll;
+        $potonganPerOrang = 0;
+        if ($deficit > 0 && $totalPegawai > 0) {
+            $potonganRaw = ($deficit * 115000) / ($target * $totalPegawai);
+
+            // --- RUMUS PEMBULATAN KHUSUS (0, 500, 1000) ---
+            $ribuan = floor($potonganRaw / 1000);
+            $ratusan = $potonganRaw % 1000;
+
+            if ($ratusan < 300) {
+                $potonganPerOrang = $ribuan * 1000;
+            } elseif ($ratusan < 800) {
+                $potonganPerOrang = ($ribuan * 1000) + 500;
+            } else {
+                $potonganPerOrang = ($ribuan + 1) * 1000;
+            }
+        }
+
         $this->summary = [
             'totalAll'              => $totalAll,
             'totalPegawai'          => $totalPegawai,
             'globalUkuranKw'        => $globalUkuranKw,
             'globalUkuran'          => $globalUkuran,
             'globalJenisKayuUkuran' => $globalJenisKayuUkuran,
+            'target'                => $target,
+            'globalProgress'        => $globalProgress,
+            'potonganPerOrang'      => $potonganPerOrang,
+            'deficit'               => $deficit,
         ];
     }
 }

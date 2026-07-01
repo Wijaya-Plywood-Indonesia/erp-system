@@ -14,6 +14,9 @@ class SubAnakAkun extends Model
         'kode_sub_anak_akun',
         'nama_sub_anak_akun',
         'keterangan',
+        'saldo_normal',
+        'status',
+        'created_by',
     ];
 
     /**
@@ -23,6 +26,16 @@ class SubAnakAkun extends Model
     public function anakAkun()
     {
         return $this->belongsTo(AnakAkun::class, 'id_anak_akun');
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function scopeAktif($query)
+    {
+        return $query->where('status', 'aktif');
     }
     public function indukAkun()
     {

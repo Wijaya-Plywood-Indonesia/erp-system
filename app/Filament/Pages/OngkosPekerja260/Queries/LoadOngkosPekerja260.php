@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Pages\LaporanHarian\Services;
+namespace App\Filament\Pages\OngkosPekerja260\Queries;
 
 use App\Models\ProduksiRotary;
 use Illuminate\Database\Eloquent\Collection;

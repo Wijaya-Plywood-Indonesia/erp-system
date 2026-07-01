@@ -194,7 +194,7 @@ class LaporanJurnalKayuMasukSheet2 extends DefaultValueBinder implements FromCol
 
                 $acc = $this->getAccountDetails($jenisKayuNama, $panjang);
 
-                $hargaVal = $group['total_kubikasi'] > 0 ? (float)($group['total_harga'] / $group['total_kubikasi']) : 0.0;
+                $hargaVal = $group['total_harga'];
                 $totalVal = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
 
                 $flatRows[] = [
@@ -207,7 +207,7 @@ class LaporanJurnalKayuMasukSheet2 extends DefaultValueBinder implements FromCol
                     $table['nama_supplier'],
                     $kodeLahan,
                     'd',
-                    'm',
+                    null,
                     $group['total_batang'],
                     $group['total_kubikasi'],
                     $hargaVal,

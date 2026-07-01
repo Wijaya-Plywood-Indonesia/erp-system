@@ -390,7 +390,8 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
             'platformHasilHp.jenisKayu',
             'platformHasilHp.barangSetengahJadi.jenisBarang',
             'platformHasilHp.mesin',
-            'detailPegawaiHp.pegawaiHp'
+            'detailPegawaiHp.pegawaiHp',
+            'kendalaHps.mesin',
         ])
             ->whereDate('tanggal_produksi', $this->tanggal)
             ->get();
@@ -443,10 +444,11 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                 }
             }
 
-            // 2. Calculate deficit and total denda for this session
-            $totalDenda = 0;
+            // 2. Calculate target achievement ratio, total target, total actual, etc.
             $totalTargetVal = 0;
             $totalActualVal = 0;
+            $targetHotpress = 0;
+            $gaji = 115000;
             $stdJam = 10;
 
             foreach ($combinedActuals as $id_ukuran => $actual) {
@@ -463,37 +465,47 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
 
                 if ($tgt) {
                     $targetVal = (float) $tgt->target;
-                    $potonganPerPcs = (float) $tgt->potongan;
-                    $stdJam = (int) $tgt->jam ?: 10;
-
                     $totalTargetVal += $targetVal;
                     $totalActualVal += $actual;
 
-                    $deficit = $targetVal - $actual;
-                    if ($deficit > 0 && $potonganPerPcs > 0) {
-                        $totalDenda += $deficit * $potonganPerPcs;
+                    if ($targetVal > 0) {
+                        $targetHotpress += $actual / $targetVal;
+                    }
+
+                    if (isset($tgt->gaji) && $tgt->gaji > 0) {
+                        $gaji = (float) $tgt->gaji;
+                    }
+                    if (isset($tgt->jam) && $tgt->jam > 0) {
+                        $stdJam = (int) $tgt->jam;
                     }
                 }
             }
 
-            // 3. Share deduction among workers in this session
+            // 3. Calculate worker salary deduction using the new formula
             $pekerjaList = $produksi->detailPegawaiHp ?? [];
             $N = count($pekerjaList);
             $potonganPerOrang = 0;
 
-            if ($totalDenda > 0 && $N > 0) {
-                $potonganRaw = $totalDenda / $N;
-
-                // --- RUMUS PEMBULATAN KHUSUS (0, 500, 1000) ---
-                $ribuan = floor($potonganRaw / 1000);
-                $ratusan = $potonganRaw % 1000;
-
-                if ($ratusan < 300) {
-                    $potonganPerOrang = $ribuan * 1000;
-                } elseif ($ratusan < 800) {
-                    $potonganPerOrang = ($ribuan * 1000) + 500;
+            if ($N > 0) {
+                if ($targetHotpress >= 1.0) {
+                    $potonganPerOrang = 0;
                 } else {
-                    $potonganPerOrang = ($ribuan + 1) * 1000;
+                    $potonganRaw = (($gaji - ($targetHotpress * $gaji)) * (0.1 * $stdJam)) / ($N * 0.1);
+                    if ($potonganRaw < 0) {
+                        $potonganRaw = 0;
+                    }
+
+                    // --- RUMUS PEMBULATAN KHUSUS (0, 500, 1000) ---
+                    $ribuan = floor($potonganRaw / 1000);
+                    $ratusan = $potonganRaw % 1000;
+
+                    if ($ratusan < 300) {
+                        $potonganPerOrang = $ribuan * 1000;
+                    } elseif ($ratusan < 800) {
+                        $potonganPerOrang = ($ribuan * 1000) + 500;
+                    } else {
+                        $potonganPerOrang = ($ribuan + 1) * 1000;
+                    }
                 }
             }
 
@@ -502,7 +514,7 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                 $allRows[] = array_fill(0, 11, '');
 
                 $headerRow = count($allRows) + 1;
-                $allRows[] = ['ID', 'Nama', 'Potongan Gaji', 'Keterangan', '', 'Target Harian', 'Jam Kerja', 'Target/Jam', 'Hasil', 'Selisih', 'Kendala'];
+                $allRows[] = ['ID', 'Nama', 'Potongan Gaji', 'Keterangan', '', 'Target Harian', 'Jam Kerja', 'Target/Jam', 'Hasil', 'Pencapaian', 'Kendala'];
 
                 $workerStartRow = count($allRows) + 1;
                 $workerEndRow = $workerStartRow + $N - 1;
@@ -517,9 +529,30 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                     $this->mergeRanges[] = "K{$workerStartRow}:K{$workerEndRow}";
                 }
 
-                $kendala = $produksi->kendala ?? 'Tidak ada kendala.';
-                $targetPerJam = $stdJam > 0 ? $totalTargetVal / $stdJam : 0;
-                $selisihTampil = $totalActualVal - $totalTargetVal;
+                $kendalaText = 'Tidak ada kendala.';
+                if ($produksi->kendalaHps && $produksi->kendalaHps->isNotEmpty()) {
+                    $kendalaParts = [];
+                    foreach ($produksi->kendalaHps as $k) {
+                        $mesinLabel = $k->mesin?->nama_mesin;
+                        $mulai = $k->waktu_mulai ? Carbon::parse($k->waktu_mulai)->format('H:i') : '';
+                        $selisihTime = $k->waktu_selesai ? Carbon::parse($k->waktu_selesai)->format('H:i') : '';
+                        $durasi = $k->durasi_menit ? "{$k->durasi_menit} menit" : '';
+                        
+                        $timeStr = '';
+                        if ($mulai || $selisihTime) {
+                            $timeStr = " (" . ($durasi ? "{$durasi}: " : "") . "{$mulai}-{$selisihTime})";
+                        }
+                        
+                        $mesinPart = $mesinLabel ? "{$mesinLabel}: " : "";
+                        $kendalaParts[] = $mesinPart . $k->kendala . $timeStr;
+                    }
+                    $kendalaText = implode("\n", $kendalaParts);
+                } else if (!empty($produksi->kendala) && $produksi->kendala !== '-') {
+                    $kendalaText = $produksi->kendala;
+                }
+                $kendala = $kendalaText;
+                $targetPerJam = $stdJam > 0 ? 1 / $stdJam : 0;
+                $pencapaianVal = $totalTargetVal > 0 ? $totalActualVal / $totalTargetVal : 0;
 
                 foreach ($pekerjaList as $idx => $dp) {
                     $jamMasuk = $dp->masuk ? Carbon::parse($dp->masuk)->format('H:i') : '-';
@@ -543,11 +576,11 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                         (int) $potonganPerOrang,
                         $ketString,
                         '',
-                        $idx === 0 ? (int) $totalTargetVal : '',
+                        $idx === 0 ? 1 : '',
                         $idx === 0 ? (int) $stdJam : '',
-                        $idx === 0 ? round((float) $targetPerJam, 2) : '',
+                        $idx === 0 ? (float) $targetPerJam : '',
                         $idx === 0 ? (int) $totalActualVal : '',
-                        $idx === 0 ? (int) $selisihTampil : '',
+                        $idx === 0 ? (float) $pencapaianVal : '',
                         $idx === 0 ? $kendala : ''
                     ];
                 }
@@ -559,11 +592,11 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                     $N > 0 ? "=SUM(C{$workerStartRow}:C{$workerEndRow})" : 0,
                     '',
                     '',
-                    $N > 0 ? "=SUM(F{$workerStartRow}:F{$workerEndRow})" : 0,
+                    1,
                     (int) $stdJam,
-                    $N > 0 ? "=SUM(H{$workerStartRow}:H{$workerEndRow})" : 0,
+                    $stdJam > 0 ? 1 / $stdJam : 0,
                     $N > 0 ? "=SUM(I{$workerStartRow}:I{$workerEndRow})" : 0,
-                    $N > 0 ? "=SUM(J{$workerStartRow}:J{$workerEndRow})" : 0,
+                    $N > 0 ? "=J{$workerStartRow}" : 0,
                     ''
                 ];
 
@@ -667,10 +700,10 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
 
                         // Number formats
                         $sheet->getStyle("C{$startRow}:C{$totalRow}")->getNumberFormat()->setFormatCode('#,##0;(#,##0);"-"');
-                        $sheet->getStyle("F{$startRow}:F{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
-                        $sheet->getStyle("H{$startRow}:H{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
+                        $sheet->getStyle("F{$startRow}:F{$totalRow}")->getNumberFormat()->setFormatCode('0%');
+                        $sheet->getStyle("H{$startRow}:H{$totalRow}")->getNumberFormat()->setFormatCode('0.0%');
                         $sheet->getStyle("I{$startRow}:I{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
-                        $sheet->getStyle("J{$startRow}:J{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
+                        $sheet->getStyle("J{$startRow}:J{$totalRow}")->getNumberFormat()->setFormatCode('0.00%');
                     }
                 }
 
