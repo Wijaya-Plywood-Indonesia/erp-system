@@ -6,6 +6,9 @@ use App\Filament\Resources\OpnameStoks\OpnameStokResource;
 use App\Models\BarangSetengahJadiHp;
 use App\Models\HppVeneerBasahSummary;
 use App\Models\HppVeneerBasahLog;
+use App\Models\StokVeneerJadi;
+use App\Models\HppVeneerJadiLog;
+use App\Models\StokVeneerKering;
 use App\Models\Ukuran;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +20,7 @@ class ListOpnameStoks extends CreateRecord
 
     public function getTitle(): string
     {
-        return 'Stock Opname Veneer Basah';
+        return 'Stock Opname Veneer';
     }
 
     public function getMaxContentWidth(): string
@@ -35,10 +38,22 @@ class ListOpnameStoks extends CreateRecord
 
     protected function handleRecordCreation(array $data): BarangSetengahJadiHp
     {
+        return match ($data['jenis_stok']) {
+            'veneer_basah'  => $this->opnameVeneerBasah($data),
+            'veneer_jadi'   => $this->opnameVeneerJadi($data),
+            'veneer_kering' => $this->opnameVeneerKering($data),
+            default         => throw new \InvalidArgumentException('Jenis stok tidak dikenali.'),
+        };
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // VENEER BASAH
+    // ────────────────────────────────────────────────────────────
+    protected function opnameVeneerBasah(array $data): BarangSetengahJadiHp
+    {
         return DB::transaction(function () use ($data) {
             $ukuran = Ukuran::findOrFail($data['id_ukuran']);
 
-            // 1. Ambil Summary, jika belum ada buat baru
             $summary = HppVeneerBasahSummary::where([
                 'id_jenis_kayu' => $data['id_jenis_kayu'],
                 'panjang'       => (float) $ukuran->panjang,
@@ -61,7 +76,6 @@ class ListOpnameStoks extends CreateRecord
                 ]);
             }
 
-            // 2. Ambil nilai dari input user
             $stokSistem     = (int) $summary->stok_lembar;
             $stokFisik      = (int) $data['stok_fisik'];
             $kubikasiFisik  = (float) $data['kubikasi_fisik'];
@@ -70,37 +84,31 @@ class ListOpnameStoks extends CreateRecord
             $selisihLembar   = $stokFisik - $stokSistem;
             $selisihKubikasi = $kubikasiFisik - $kubikasiSistem;
 
-            // Stop hanya jika KEDUANYA tidak ada perubahan
             if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) {
                 Notification::make()->title('Tidak ada perubahan stok')->warning()->send();
                 return new BarangSetengahJadiHp();
             }
 
-            // Tipe berdasarkan lembar dulu, jika sama pakai kubikasi
             $tipe = $selisihLembar !== 0
                 ? ($selisihLembar > 0 ? 'masuk' : 'keluar')
                 : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
 
-            // 3. Format Keterangan
             $tgl = now()->format('d/m/Y');
             $ket = "OPNAME VENEER BASAH TANGGAL {$tgl}";
             if (!empty($data['catatan'])) {
                 $ket .= ". CATATAN: " . strtoupper($data['catatan']);
             }
 
-            // 4. Kalkulasi Kubikasi & Nilai
             $kubikasiSelisih = round(abs($kubikasiFisik - $kubikasiSistem), 6);
             $nilaiStokBaru   = round($kubikasiFisik * $summary->hpp_average, 2);
             $nilaiStokBefore = $summary->nilai_stok;
 
-            // 5. Update Summary
             $summary->update([
                 'stok_lembar'   => $stokFisik,
                 'stok_kubikasi' => $kubikasiFisik,
                 'nilai_stok'    => $nilaiStokBaru,
             ]);
 
-            // 6. Simpan Log
             HppVeneerBasahLog::create([
                 'id_jenis_kayu'        => $summary->id_jenis_kayu,
                 'panjang'              => $summary->panjang,
@@ -123,7 +131,177 @@ class ListOpnameStoks extends CreateRecord
 
             Notification::make()
                 ->title('Opname Berhasil')
-                ->body("Stok telah disesuaikan menjadi {$stokFisik} lembar.")
+                ->body("Stok veneer basah disesuaikan menjadi {$stokFisik} lembar.")
+                ->success()
+                ->send();
+
+            return new BarangSetengahJadiHp();
+        });
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // VENEER JADI (pola sama seperti basah: ada tabel summary)
+    // ────────────────────────────────────────────────────────────
+    protected function opnameVeneerJadi(array $data): BarangSetengahJadiHp
+    {
+        return DB::transaction(function () use ($data) {
+            $ukuran = Ukuran::findOrFail($data['id_ukuran']);
+
+            $summary = StokVeneerJadi::where([
+                'id_jenis_kayu' => $data['id_jenis_kayu'],
+                'panjang'       => (float) $ukuran->panjang,
+                'lebar'         => (float) $ukuran->lebar,
+                'tebal'         => (float) $ukuran->tebal,
+                'kw_grade'      => $data['kw'],
+            ])->lockForUpdate()->first();
+
+            if (!$summary) {
+                $summary = StokVeneerJadi::create([
+                    'id_jenis_kayu' => $data['id_jenis_kayu'],
+                    'panjang'       => (float) $ukuran->panjang,
+                    'lebar'         => (float) $ukuran->lebar,
+                    'tebal'         => (float) $ukuran->tebal,
+                    'kw_grade'      => $data['kw'],
+                    'stok_lembar'   => 0,
+                    'stok_kubikasi' => 0,
+                    'nilai_stok'    => 0,
+                    'hpp_average'   => 0,
+                ]);
+            }
+
+            $stokSistem     = (int) $summary->stok_lembar;
+            $stokFisik      = (int) $data['stok_fisik'];
+            $kubikasiFisik  = (float) $data['kubikasi_fisik'];
+            $kubikasiSistem = (float) $summary->stok_kubikasi;
+
+            $selisihLembar   = $stokFisik - $stokSistem;
+            $selisihKubikasi = $kubikasiFisik - $kubikasiSistem;
+
+            if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) {
+                Notification::make()->title('Tidak ada perubahan stok')->warning()->send();
+                return new BarangSetengahJadiHp();
+            }
+
+            $tipe = $selisihLembar !== 0
+                ? ($selisihLembar > 0 ? 'masuk' : 'keluar')
+                : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
+
+            $tgl = now()->format('d/m/Y');
+            $ket = "OPNAME VENEER JADI TANGGAL {$tgl}";
+            if (!empty($data['catatan'])) {
+                $ket .= ". CATATAN: " . strtoupper($data['catatan']);
+            }
+
+            $kubikasiSelisih = round(abs($kubikasiFisik - $kubikasiSistem), 6);
+            $nilaiStokBaru   = round($kubikasiFisik * $summary->hpp_average, 2);
+            $nilaiStokBefore = $summary->nilai_stok;
+
+            $summary->update([
+                'stok_lembar'   => $stokFisik,
+                'stok_kubikasi' => $kubikasiFisik,
+                'nilai_stok'    => $nilaiStokBaru,
+            ]);
+
+            $log = HppVeneerJadiLog::create([
+                'id_jenis_kayu'        => $summary->id_jenis_kayu,
+                'panjang'              => $summary->panjang,
+                'lebar'                => $summary->lebar,
+                'tebal'                => $summary->tebal,
+                'kw_grade'             => $summary->kw_grade,
+                'tanggal'              => now(),
+                'tipe_transaksi'       => $tipe,
+                'keterangan'           => $ket,
+                'total_lembar'         => abs($selisihLembar),
+                'total_kubikasi'       => $kubikasiSelisih,
+                'stok_lembar_before'   => $stokSistem,
+                'stok_lembar_after'    => $stokFisik,
+                'stok_kubikasi_before' => $kubikasiSistem,
+                'stok_kubikasi_after'  => $kubikasiFisik,
+                'hpp_average'          => $summary->hpp_average,
+                'nilai_stok'           => $nilaiStokBaru,
+                'nilai_stok_before'    => $nilaiStokBefore,
+                'nilai_stok_after'     => $nilaiStokBaru,
+            ]);
+
+            // Update pointer ke log terakhir supaya kolom "HPP Sebelum → Sekarang"
+            // di halaman Stok Veneer Jadi ikut ter-refresh.
+            $summary->update(['id_last_log' => $log->id]);
+
+            Notification::make()
+                ->title('Opname Berhasil')
+                ->body("Stok veneer jadi disesuaikan menjadi {$stokFisik} lembar.")
+                ->success()
+                ->send();
+
+            return new BarangSetengahJadiHp();
+        });
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // VENEER KERING (tidak ada tabel summary — setiap baris adalah
+    // transaksi. Stok sekarang = akumulasi seluruh transaksi sebelumnya.
+    // Opname di sini berarti insert satu baris transaksi baru bertipe
+    // masuk/keluar sesuai selisih fisik vs sistem)
+    // ────────────────────────────────────────────────────────────
+    protected function opnameVeneerKering(array $data): BarangSetengahJadiHp
+    {
+        return DB::transaction(function () use ($data) {
+            $idUkuran    = (int) $data['id_ukuran'];
+            $idJenisKayu = (int) $data['id_jenis_kayu'];
+            $kw          = (string) $data['kw'];
+
+            $stokLembarSistem = StokVeneerKering::saldoLembarTerakhir($idUkuran, $idJenisKayu, $kw);
+            $snapshot         = StokVeneerKering::snapshotTerakhir($idUkuran, $idJenisKayu, $kw);
+
+            $stokFisik      = (int) $data['stok_fisik'];
+            $kubikasiFisik  = (float) $data['kubikasi_fisik'];
+            $kubikasiSistem = (float) $snapshot['stok_m3'];
+            $hppAverage     = (float) $snapshot['hpp_average'];
+
+            $selisihLembar   = $stokFisik - $stokLembarSistem;
+            $selisihKubikasi = $kubikasiFisik - $kubikasiSistem;
+
+            if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) {
+                Notification::make()->title('Tidak ada perubahan stok')->warning()->send();
+                return new BarangSetengahJadiHp();
+            }
+
+            $tipe = $selisihLembar !== 0
+                ? ($selisihLembar > 0 ? 'masuk' : 'keluar')
+                : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
+
+            $tgl = now()->format('d/m/Y');
+            $ket = "OPNAME VENEER KERING TANGGAL {$tgl}";
+            if (!empty($data['catatan'])) {
+                $ket .= ". CATATAN: " . strtoupper($data['catatan']);
+            }
+
+            $nilaiStokSebelum = (float) $snapshot['nilai_stok'];
+            $nilaiStokSesudah = round($kubikasiFisik * $hppAverage, 2);
+
+            StokVeneerKering::create([
+                'id_ukuran'           => $idUkuran,
+                'id_jenis_kayu'       => $idJenisKayu,
+                'kw'                  => $kw,
+                'jenis_transaksi'     => $tipe,
+                'tanggal_transaksi'   => now(),
+                'qty'                 => abs($selisihLembar),
+                'm3'                  => round(abs($kubikasiFisik - $kubikasiSistem), 6),
+                'stok_lembar_sebelum' => $stokLembarSistem,
+                'stok_lembar_sesudah' => $stokFisik,
+                'hpp_kering_per_m3'   => $hppAverage,
+                'nilai_transaksi'     => round(abs($nilaiStokSesudah - $nilaiStokSebelum), 2),
+                'stok_m3_sebelum'     => $kubikasiSistem,
+                'nilai_stok_sebelum'  => $nilaiStokSebelum,
+                'stok_m3_sesudah'     => $kubikasiFisik,
+                'nilai_stok_sesudah'  => $nilaiStokSesudah,
+                'hpp_average'         => $hppAverage,
+                'keterangan'          => $ket,
+            ]);
+
+            Notification::make()
+                ->title('Opname Berhasil')
+                ->body("Stok veneer kering disesuaikan menjadi {$stokFisik} lembar.")
                 ->success()
                 ->send();
 
