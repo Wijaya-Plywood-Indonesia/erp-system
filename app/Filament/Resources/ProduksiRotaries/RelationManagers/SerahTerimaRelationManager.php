@@ -2,40 +2,48 @@
 
 namespace App\Filament\Resources\ProduksiRotaries\RelationManagers;
 
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use App\Models\DetailHasilPaletRotary;
 use App\Models\ProduksiPressDryer;
 use App\Models\ProduksiRotary;
 use App\Models\ProduksiStik;
 use App\Services\Akuntansi\RotaryJurnalService;
 use Filament\Actions\Action;
-use Filament\Schemas\Schema;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
-use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Filament\Notifications\Notification;
-use Illuminate\Database\Eloquent\Builder;
 
 class SerahTerimaRelationManager extends RelationManager
 {
-
-    private const ROLE_ADMIN    = ['super_admin', 'Super Admin', 'admin_kayu'];
+    private const ROLE_ADMIN = ['super_admin', 'Super Admin', 'admin_kayu'];
 
     protected static string $relationship = 'serahTerima';
+
+    public static function getTitle(Model $ownerRecord, string $pageClass): string
+    {
+        return match (get_class($ownerRecord)) {
+            ProduksiPressDryer::class => 'Terima Veneer',
+            default => 'Serah Terima',
+        };
+    }
 
     protected function getTipePenerima(): string
     {
         return match (get_class($this->getOwnerRecord())) {
-            ProduksiRotary::class     => 'rotary',
+            ProduksiRotary::class => 'rotary',
             ProduksiPressDryer::class => 'dryer',
-            ProduksiStik::class       => 'stik',
-            default                   => 'unknown',
+            ProduksiStik::class => 'stik',
+            default => 'unknown',
         };
     }
 
@@ -44,9 +52,9 @@ class SerahTerimaRelationManager extends RelationManager
         $owner = $this->getOwnerRecord();
 
         return match (get_class($owner)) {
-            ProduksiRotary::class     => 'rotary',
+            ProduksiRotary::class => 'rotary',
             ProduksiPressDryer::class => 'dryer',
-            default                   => 'umum',
+            default => 'umum',
         };
     }
 
@@ -54,7 +62,7 @@ class SerahTerimaRelationManager extends RelationManager
     {
         return match ($tipe) {
             'rotary' => 'Serah Barang',
-            default  => 'Terima Barang',
+            default => 'Terima Barang',
         };
     }
 
@@ -62,12 +70,11 @@ class SerahTerimaRelationManager extends RelationManager
     {
         return match ($tipe) {
             'rotary' => 'Diserahkan Oleh',
-            default  => 'Diterima Oleh',
+            default => 'Diterima Oleh',
         };
     }
 
     public function form(Schema $schema): Schema
-
     {
         return $schema
             ->schema([
@@ -86,10 +93,11 @@ class SerahTerimaRelationManager extends RelationManager
                             return DetailHasilPaletRotary::where('id_produksi', $idProduksi)
                                 ->whereNotIn('id', $sudahSerah)
                                 ->get()
-                                ->mapWithKeys(fn($d) => [
-                                    $d->id => "{$d->kode_palet} - {$d->total_lembar} lembar"
+                                ->mapWithKeys(fn ($d) => [
+                                    $d->id => "{$d->kode_palet} - {$d->total_lembar} lembar",
                                 ]);
                         }
+
                         return [];
                     })
                     ->searchable()
@@ -97,17 +105,17 @@ class SerahTerimaRelationManager extends RelationManager
                     ->columnSpanFull(),
 
                 TextInput::make('diserahkan_oleh')
-                    ->label(fn() => $this->getLabelByTipe($this->getTipePenerima()))
-                    ->default(fn() => Auth::user()->name)
+                    ->label(fn () => $this->getLabelByTipe($this->getTipePenerima()))
+                    ->default(fn () => Auth::user()->name)
                     ->readOnly()
                     ->columnSpanFull(),
 
                 // Hidden field untuk menyimpan tipe default saat create
-                \Filament\Forms\Components\Hidden::make('tipe')
-                    ->default(fn() => $this->getTipePenerima()),
+                Hidden::make('tipe')
+                    ->default(fn () => $this->getTipePenerima()),
 
-                \Filament\Forms\Components\Hidden::make('status')
-                    ->default(fn() => $this->getStatusByTipe($this->getTipePenerima())),
+                Hidden::make('status')
+                    ->default(fn () => $this->getStatusByTipe($this->getTipePenerima())),
             ]);
     }
 
@@ -148,7 +156,7 @@ class SerahTerimaRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('detailHasilPalet.palet')
                     ->label('Nomor Palet')
-                    ->getStateUsing(fn($record) => $record->detailHasilPalet?->kode_palet ?? '-')
+                    ->getStateUsing(fn ($record) => $record->detailHasilPalet?->kode_palet ?? '-')
                     ->searchable(query: function ($query, string $search) {
 
                         $kodeMapping = [
@@ -158,10 +166,10 @@ class SerahTerimaRelationManager extends RelationManager
                             'YQ' => 'YUEQUN',
                         ];
 
-                        $parts      = explode('-', strtoupper(trim($search)));
-                        $kodeInput  = $parts[0] ?? null;
+                        $parts = explode('-', strtoupper(trim($search)));
+                        $kodeInput = $parts[0] ?? null;
                         $nomorPalet = isset($parts[1]) && is_numeric($parts[1]) ? (int) $parts[1] : null;
-                        $namaMesin  = $kodeMapping[$kodeInput] ?? null;
+                        $namaMesin = $kodeMapping[$kodeInput] ?? null;
 
                         $query->whereHas('detailHasilPalet', function ($q) use ($search, $namaMesin, $nomorPalet) {
                             // Join ke produksi dan mesin untuk bisa filter nama mesin
@@ -193,8 +201,7 @@ class SerahTerimaRelationManager extends RelationManager
                 TextColumn::make('ukuran')
                     ->label('Ukuran')
                     ->getStateUsing(
-                        fn($record) =>
-                        $record->detailHasilPalet?->ukuran
+                        fn ($record) => $record->detailHasilPalet?->ukuran
                             ? "{$record->detailHasilPalet->ukuran->panjang} x {$record->detailHasilPalet->ukuran->lebar} x {$record->detailHasilPalet->ukuran->tebal}"
                             : '-'
                     ),
@@ -208,11 +215,13 @@ class SerahTerimaRelationManager extends RelationManager
                     ->label('Jenis Kayu')
                     ->getStateUsing(function ($record) {
                         $palet = $record->detailHasilPalet;
-                        if (!$palet) return '-';
+                        if (! $palet) {
+                            return '-';
+                        }
 
                         $jenisKayu = $palet->penggunaanLahan?->jenisKayu?->nama_kayu;
 
-                        if (!$jenisKayu) {
+                        if (! $jenisKayu) {
                             $jenisKayu = $palet->produksi?->detailLahanRotary?->first()?->jenisKayu?->nama_kayu;
                         }
 
@@ -224,11 +233,13 @@ class SerahTerimaRelationManager extends RelationManager
                     ->label('Jenis Kayu')
                     ->getStateUsing(function ($record) {
                         $palet = $record->detailHasilPalet;
-                        if (!$palet) return '-';
+                        if (! $palet) {
+                            return '-';
+                        }
 
                         $jenisKayu = $palet->penggunaanLahan?->jenisKayu?->nama_kayu;
 
-                        if (!$jenisKayu) {
+                        if (! $jenisKayu) {
                             $jenisKayu = $palet->produksi?->detailLahanRotary?->first()?->jenisKayu?->nama_kayu;
                         }
 
@@ -242,12 +253,12 @@ class SerahTerimaRelationManager extends RelationManager
 
                 TextColumn::make('diterima_oleh')
                     ->badge()
-                    ->color(fn($state) => $state === '-' ? 'gray' : 'success')
-                    ->formatStateUsing(fn($state) => $state === '-' ? 'Menunggu' : $state),
+                    ->color(fn ($state) => $state === '-' ? 'gray' : 'success')
+                    ->formatStateUsing(fn ($state) => $state === '-' ? 'Menunggu' : $state),
 
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn($state) => match ($state) {
+                    ->color(fn ($state) => match ($state) {
                         'Terima Barang' => 'success',
                         'Serah Barang' => 'warning',
                         default => 'gray'
@@ -261,9 +272,9 @@ class SerahTerimaRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make()
                     ->label('Serahkan Palet')
-                    ->visible(fn() => $this->getTipePenerima() === 'rotary')
+                    ->visible(fn () => $this->getTipePenerima() === 'rotary')
                     // Logic stok TIDAK ADA di sini agar tidak otomatis masuk saat serah
-                    ->after(fn() => Notification::make()->title('Palet Berhasil Diserahkan')->info()->send()),
+                    ->after(fn () => Notification::make()->title('Palet Berhasil Diserahkan')->info()->send()),
             ])
             ->actions([
                 Action::make('terima')
@@ -271,13 +282,13 @@ class SerahTerimaRelationManager extends RelationManager
                     ->color('success')
                     ->icon('heroicon-o-check-circle')
                     ->requiresConfirmation()
-                    ->visible(fn($record) => $tipe !== 'rotary' && $record?->diterima_oleh === '-')
+                    ->visible(fn ($record) => $tipe !== 'rotary' && $record?->diterima_oleh === '-')
                     ->action(function ($record) use ($tipe) {
                         DB::transaction(function () use ($record, $tipe) {
                             $unitAsal = 'ROTARY';
                             $unitTujuan = match ($tipe) {
                                 'dryer' => 'DRYER',
-                                'stik'  => 'STIK',
+                                'stik' => 'STIK',
                                 default => 'GUDANG',
                             };
 
@@ -293,12 +304,12 @@ class SerahTerimaRelationManager extends RelationManager
                             // Insert Sisi Penerima
                             DB::table('detail_hasil_palet_rotary_serah_terima_pivot')->insert([
                                 'id_detail_hasil_palet_rotary' => $record->id_detail_hasil_palet_rotary,
-                                'diserahkan_oleh'              => $userSerah,
-                                'diterima_oleh'                => $diterimaOleh,
-                                'tipe'                         => $tipe,
-                                'id_produksi'                  => $this->getOwnerRecord()->id,
-                                'status'                       => 'Terima Barang',
-                                'created_at'                   => now(),
+                                'diserahkan_oleh' => $userSerah,
+                                'diterima_oleh' => $diterimaOleh,
+                                'tipe' => $tipe,
+                                'id_produksi' => $this->getOwnerRecord()->id,
+                                'status' => 'Terima Barang',
+                                'created_at' => now(),
                                 'updated_at' => now(),
                             ]);
 
@@ -318,7 +329,7 @@ class SerahTerimaRelationManager extends RelationManager
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->label('Hapus Terpilih')
-                        ->visible(fn() => Auth::user()->hasAnyRole(self::ROLE_ADMIN)),
+                        ->visible(fn () => Auth::user()->hasAnyRole(self::ROLE_ADMIN)),
                 ]),
             ]);
     }

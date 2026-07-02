@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SerahTerimaVeneerKering extends Model
 {
@@ -16,6 +17,7 @@ class SerahTerimaVeneerKering extends Model
         'id_produksi_repair',
         'diserahkan_oleh',
         'diterima_oleh',
+        'jenis_terima',
         'status',
     ];
 
@@ -40,6 +42,15 @@ class SerahTerimaVeneerKering extends Model
     public function produksiRepair(): BelongsTo
     {
         return $this->belongsTo(ProduksiRepair::class, 'id_produksi_repair');
+    }
+
+    /**
+     * Semua pemakaian palet ini sebagai bahan (modal) Repair,
+     * lintas produksi repair manapun.
+     */
+    public function modalRepairs(): HasMany
+    {
+        return $this->hasMany(ModalRepair::class, 'id_serah_terima_veneer_kering');
     }
 
     // ─────────────────────────────────────────────
@@ -74,5 +85,42 @@ class SerahTerimaVeneerKering extends Model
             'kedi' => 'Kedi',
             default => '-',
         };
+    }
+
+    /**
+     * Label jenis penerimaan (Kering/Jadi)
+     */
+    public function getLabelJenisTerimaAttribute(): string
+    {
+        return match ($this->jenis_terima) {
+            'kering' => 'Kering',
+            'jadi' => 'Jadi',
+            default => '-',
+        };
+    }
+
+    /**
+     * Qty asli dari sumber (DetailHasil->isi atau DetailBongkarKedi->jumlah)
+     */
+    public function getQtyAsliAttribute(): float
+    {
+        return (float) ($this->sumber->isi ?? $this->sumber->jumlah ?? 0);
+    }
+
+    /**
+     * Total lembar yang sudah dipakai sebagai bahan (modal) Repair,
+     * dijumlahkan lintas semua produksi repair.
+     */
+    public function getTotalDigunakanAttribute(): float
+    {
+        return (float) $this->modalRepairs()->sum('jumlah');
+    }
+
+    /**
+     * Sisa lembar yang masih bisa dipakai sebagai bahan Repair.
+     */
+    public function getSisaAttribute(): float
+    {
+        return $this->qty_asli - $this->total_digunakan;
     }
 }

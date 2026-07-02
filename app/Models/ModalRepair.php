@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ModalRepair extends Model
 {
@@ -11,6 +11,7 @@ class ModalRepair extends Model
 
     protected $fillable = [
         'id_produksi_repair',
+        'id_serah_terima_veneer_kering',
         'id_ukuran',
         'id_jenis_kayu',
         'jumlah',
@@ -46,5 +47,10 @@ class ModalRepair extends Model
     public function rencanaRepairs()
     {
         return $this->hasMany(RencanaRepair::class, 'id_modal_repair');
+    }
+
+    public function serahTerimaVeneerKering(): BelongsTo
+    {
+        return $this->belongsTo(SerahTerimaVeneerKering::class, 'id_serah_terima_veneer_kering');
     }
 }

@@ -52,7 +52,7 @@ class ModalRepairsTable
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('keterangan')
-                    ->label('Kehilangan/Kelebihan'),
+                    ->label('Keterangan'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -75,11 +75,11 @@ class ModalRepairsTable
                     ->label('Keterangan')
                     ->icon('heroicon-o-pencil-square')
                     ->form([
-                        Textarea::make('keterangan')->label('Kehilangan/Kelebihan'),
+                        Textarea::make('keterangan')->label('Keterangan'),
                     ])
                     ->action(function ($record, array $data) {
                         $record->update([
-                            'keterangan'  => $data['keterangan'],
+                            'keterangan' => $data['keterangan'],
                         ]);
                     }),
             ])
