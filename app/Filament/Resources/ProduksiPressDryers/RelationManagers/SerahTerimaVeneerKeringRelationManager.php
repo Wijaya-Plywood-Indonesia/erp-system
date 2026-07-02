@@ -11,9 +11,11 @@ use App\Services\StokVeneerKeringService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Components\Grid;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
@@ -43,6 +45,50 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
             ProduksiRepair::class => 'repair',
             default => 'unknown',
         };
+    }
+
+    /**
+     * Ambil data ringkas dari record untuk ditampilkan di preview modal terima.
+     */
+    protected function getPreviewData($record): array
+    {
+        return [
+            'no_palet' => match ($record->tipe_sumber) {
+                'dryer' => $record->detailHasil?->no_palet,
+                'kedi' => $record->detailBongkarKedi?->no_palet,
+                default => null,
+            } ?? '-',
+
+            'ukuran' => match ($record->tipe_sumber) {
+                'dryer' => $record->detailHasil?->ukuran?->nama_ukuran,
+                'kedi' => $record->detailBongkarKedi?->ukuran?->nama_ukuran,
+                default => null,
+            } ?? '-',
+
+            'kode_kayu' => strtoupper(match ($record->tipe_sumber) {
+                'dryer' => $record->detailHasil?->jenisKayu?->kode_kayu,
+                'kedi' => $record->detailBongkarKedi?->jenisKayu?->kode_kayu,
+                default => null,
+            } ?? '-'),
+
+            'kw' => match ($record->tipe_sumber) {
+                'dryer' => $record->detailHasil?->kw,
+                'kedi' => $record->detailBongkarKedi?->kw,
+                default => null,
+            } ?? '-',
+
+            'isi' => match ($record->tipe_sumber) {
+                'dryer' => $record->detailHasil?->isi,
+                'kedi' => $record->detailBongkarKedi?->jumlah,
+                default => null,
+            } ?? '-',
+
+            'dari_mesin' => match ($record->tipe_sumber) {
+                'dryer' => 'Press Dryer',
+                'kedi' => 'Kedi',
+                default => '-',
+            },
+        ];
     }
 
     public function table(Table $table): Table
@@ -110,20 +156,23 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
 
                 TextColumn::make('ukuran')
                     ->label('Ukuran')
-                    ->getStateUsing(fn ($record) => match ($record->tipe_sumber) {
-                        'dryer' => $record->detailHasil?->ukuran?->nama_ukuran ?? '-',
-                        'kedi' => $record->detailBongkarKedi?->ukuran?->nama_ukuran ?? '-',
-                        default => '-',
-                    }),
+                    ->getStateUsing(function ($record) {
+                        $ukuran = match ($record->tipe_sumber) {
+                            'dryer' => $record->detailHasil?->ukuran?->nama_ukuran,
+                            'kedi' => $record->detailBongkarKedi?->ukuran?->nama_ukuran,
+                            default => null,
+                        } ?? '-';
 
-                TextColumn::make('jenis_kayu')
-                    ->label('Jenis Kayu')
-                    ->getStateUsing(fn ($record) => match ($record->tipe_sumber) {
-                        'dryer' => $record->detailHasil?->jenisKayu?->nama_kayu ?? '-',
-                        'kedi' => $record->detailBongkarKedi?->jenisKayu?->nama_kayu ?? '-',
-                        default => '-',
-                    })
-                    ->badge(),
+                        $kodeKayu = match ($record->tipe_sumber) {
+                            'dryer' => $record->detailHasil?->jenisKayu?->kode_kayu,
+                            'kedi' => $record->detailBongkarKedi?->jenisKayu?->kode_kayu,
+                            default => null,
+                        };
+
+                        $kodeKayu = $kodeKayu ? strtoupper($kodeKayu) : '-';
+
+                        return "{$ukuran} | {$kodeKayu}";
+                    }),
 
                 TextColumn::make('kw')
                     ->label('KW')
@@ -145,7 +194,8 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
 
                 TextColumn::make('diserahkan_oleh')
                     ->label('Diserahkan Oleh')
-                    ->badge(),
+                    ->badge()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('diterima_oleh')
                     ->label('Diterima Oleh')
@@ -155,6 +205,7 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
 
                 TextColumn::make('status')
                     ->badge()
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->color(fn ($state) => match ($state) {
                         'Terima Veneer' => 'success',
                         'Serah Veneer' => 'warning',
@@ -187,22 +238,53 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                     ->icon('heroicon-o-check-circle')
                     ->requiresConfirmation()
                     ->modalHeading('Terima Veneer Kering ini?')
-                    ->modalDescription('Pilih jenis penerimaan. Pilihan ini akan menentukan pengaruhnya ke stok veneer.')
-                    ->schema([
-                        Radio::make('jenis_terima')
-                            ->label('Terima Sebagai')
-                            ->options([
-                                'kering' => 'Veneer Kering',
-                                'jadi' => 'Veneer Jadi',
-                            ])
-                            ->descriptions([
-                                'kering' => 'Masuk ke stok Veneer Kering.',
-                                'jadi' => 'Masuk ke stok Veneer Jadi.',
-                            ])
-                            ->default('kering')
-                            ->required()
-                            ->inline(),
-                    ])
+                    ->modalDescription('Periksa data veneer berikut, lalu pilih jenis penerimaan. Pilihan ini akan menentukan pengaruhnya ke stok veneer.')
+                    ->schema(function ($record) {
+                        $preview = $this->getPreviewData($record);
+
+                        return [
+                            Grid::make(2)
+                                ->schema([
+                                    Placeholder::make('preview_no_palet')
+                                        ->label('No. Palet')
+                                        ->content($preview['no_palet']),
+
+                                    Placeholder::make('preview_ukuran')
+                                        ->label('Ukuran')
+                                        ->content($preview['ukuran']),
+
+                                    Placeholder::make('preview_jenis_kayu')
+                                        ->label('Kode Kayu')
+                                        ->content($preview['kode_kayu']),
+
+                                    Placeholder::make('preview_kw')
+                                        ->label('KW')
+                                        ->content($preview['kw']),
+
+                                    Placeholder::make('preview_isi')
+                                        ->label('Isi / Jumlah')
+                                        ->content($preview['isi']),
+
+                                    Placeholder::make('preview_dari_mesin')
+                                        ->label('Dari Mesin')
+                                        ->content($preview['dari_mesin']),
+                                ]),
+
+                            Radio::make('jenis_terima')
+                                ->label('Terima Sebagai')
+                                ->options([
+                                    'kering' => 'Veneer Kering',
+                                    'jadi' => 'Veneer Jadi',
+                                ])
+                                ->descriptions([
+                                    'kering' => 'Masuk ke stok Veneer Kering.',
+                                    'jadi' => 'Masuk ke stok Veneer Jadi.',
+                                ])
+                                ->default('kering')
+                                ->required()
+                                ->inline(),
+                        ];
+                    })
                     // Hanya muncul kalau dibuka dari Repair DAN belum diterima
                     ->visible(fn ($record) => $tipe === 'repair' && $record->diterima_oleh === '-')
                     ->action(function ($record, array $data) use ($ownerId) {
