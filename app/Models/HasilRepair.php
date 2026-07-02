@@ -13,6 +13,8 @@ class HasilRepair extends Model
         'id_produksi_repair',
         'id_rencana_repair',
         'jumlah',
+        'diserahkan_at',
+        'diserahkan_by',
         'keterangan'
     ];
 

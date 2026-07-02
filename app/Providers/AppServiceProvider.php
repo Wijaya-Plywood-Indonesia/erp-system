@@ -31,8 +31,8 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         FilamentView::registerRenderHook(
-    PanelsRenderHook::BODY_END,
-    fn (): HtmlString => new HtmlString(<<<'HTML'
+            PanelsRenderHook::BODY_END,
+            fn(): HtmlString => new HtmlString(<<<'HTML'
         <!-- Lightbox Overlay untuk preview foto -->
         <div id="foto-lightbox"
              style="display:none; position:fixed; inset:0; z-index:9999;
@@ -73,7 +73,7 @@ class AppServiceProvider extends ServiceProvider
             });
         </script>
     HTML),
-);
+        );
     }
 
     /**
