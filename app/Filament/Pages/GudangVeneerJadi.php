@@ -4,196 +4,248 @@ namespace App\Filament\Pages;
 
 use Filament\Pages\Page;
 use App\Models\GudangVeneerJadi as GudangModel;
+use App\Models\StokVeneerJadi;
+use App\Models\HppVeneerJadiLog;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class GudangVeneerJadi extends Page
 {
-    // Icon menu navigasi di sidebar Filament
-    protected static ?string $navigationIcon = 'heroicon-o-circle-stack';
     protected static ?string $title = 'Gudang Veneer Jadi';
-
-    // Path view Blade custom
     protected string $view = 'filament.pages.gudang-veneer-jadi';
 
-    // State pencarian Livewire (.live)
     public string $searchQuery = '';
     public string $tableSearchQuery = '';
 
-    // State Antrean Masuk dari Divisi Repair (Section 2)
-    // Dalam riil database, Anda dapat membind ini ke tabel / model tersendiri (misal: AntreanRepair)
-    public array $antreanMasuk = [];
+    // ✅ Properti untuk modal konfirmasi
+    public bool $showConfirmModal = false;
+    public ?int $selectedItemId = null;
 
-    /**
-     * Inisialisasi data dummy antrean awal saat halaman pertama dimuat.
-     */
-    public function mount(): void
-    {
-        $this->antreanMasuk = [
-            [
-                'id' => 101,
-                'tanggal' => '02/07/2026 14:30',
-                'jenis_kayu' => 'Sengon',
-                'panjang' => 244,
-                'lebar' => 122,
-                'tebal' => 0.5,
-                'kw' => '3',
-                'jumlah' => 500,
-            ],
-            [
-                'id' => 102,
-                'tanggal' => '02/07/2026 15:10',
-                'jenis_kayu' => 'Sengon',
-                'panjang' => 244,
-                'lebar' => 122,
-                'tebal' => 1.2,
-                'kw' => '4',
-                'jumlah' => 800,
-            ],
-            [
-                'id' => 103,
-                'tanggal' => '02/07/2026 16:00',
-                'jenis_kayu' => 'Sengon',
-                'panjang' => 244,
-                'lebar' => 122,
-                'tebal' => 0.8,
-                'kw' => '3',
-                'jumlah' => 1250,
-            ],
-            [
-                'id' => 104,
-                'tanggal' => '02/07/2026 16:30',
-                'jenis_kayu' => 'Sengon',
-                'panjang' => 122,
-                'lebar' => 244,
-                'tebal' => 2.2,
-                'kw' => '3',
-                'jumlah' => 350,
-            ],
-            [
-                'id' => 105,
-                'tanggal' => '02/07/2026 17:00',
-                'jenis_kayu' => 'Sengon',
-                'panjang' => 244,
-                'lebar' => 122,
-                'tebal' => 0.6,
-                'kw' => 'Af',
-                'jumlah' => 125,
-            ]
-        ];
-    }
-
-    /**
-     * Fungsi menghitung volume kubikasi presisi (P cm * L cm * T mm * Lembar / 1 Milyar)
-     */
     public function hitungKubikasi(float $p, float $l, float $t, int $lembar): float
     {
         return ($p * $l * $t * $lembar) / 10000000;
     }
 
     /**
-     * Handler Penerimaan: Memindahkan data antrean fisik ke saldo stok utama database (Section 1)
+     * ✅ BUKA MODAL KONFIRMASI
      */
-    public function terimaBarang(int $id): void
+    public function confirmTerima(int $id): void
     {
-        // Cari item dalam antrean lokal
-        $itemIndex = collect($this->antreanMasuk)->search(fn($q) => $q['id'] === $id);
-
-        if ($itemIndex === false) {
-            Notification::make()
-                ->danger()
-                ->title('Gagal menerima barang')
-                ->body('Data transaksi antrean tidak ditemukan.')
-                ->send();
-            return;
-        }
-
-        $item = $this->antreanMasuk[$itemIndex];
-
-        // 1. Dapatkan Jenis Kayu (Relasi ke tabel jenis_kayu)
-        // Jika belum ada, buat record baru
-        $jenisKayu = \DB::table('jenis_kayus')->firstOrCreate(
-            ['nama' => $item['jenis_kayu']],
-            ['created_at' => now(), 'updated_at' => now()]
-        );
-
-        // 2. Tambah/Perbarui Saldo ke Database GudangVeneerJadi
-        $stokGudang = GudangModel::firstOrCreate(
-            [
-                'id_jenis_kayu' => $jenisKayu->id,
-                'panjang' => $item['panjang'],
-                'lebar' => $item['lebar'],
-                'tebal' => $item['tebal'],
-                'kw_grade' => $item['kw'],
-            ],
-            [
-                'stok_lembar' => 0,
-                'stok_kubikasi' => 0.0,
-                'nilai_stok' => 0.0,
-                'hpp_average' => 0.0,
-            ]
-        );
-
-        // Update nilai stok lembar & hitung kubikasi barunya
-        $newLembar = $stokGudang->stok_lembar + $item['jumlah'];
-        $newKubikasi = $this->hitungKubikasi($item['panjang'], $item['lebar'], $item['tebal'], $newLembar);
-
-        $stokGudang->update([
-            'stok_lembar' => $newLembar,
-            'stok_kubikasi' => $newKubikasi,
-        ]);
-
-        // 3. Hapus dari antrean tampilan
-        unset($this->antreanMasuk[$itemIndex]);
-        $this->antreanMasuk = array_values($this->antreanMasuk);
-
-        // Kirim Notifikasi Sukses Bawaan Filament
-        Notification::make()
-            ->success()
-            ->title('Penerimaan Sukses')
-            ->body("Berhasil memverifikasi {$item['jumlah']} lbr Veneer {$item['panjang']}x{$item['lebar']}x{$item['tebal']} mm ke Gudang Jadi.")
-            ->send();
+        $this->selectedItemId = $id;
+        $this->showConfirmModal = true;
     }
 
     /**
-     * Helper memisahkan stok utama dari Database ke Faceback & Core dengan live-search
+     * ✅ BATAL KONFIRMASI
+     */
+    public function cancelConfirm(): void
+    {
+        $this->showConfirmModal = false;
+        $this->selectedItemId = null;
+    }
+
+    /**
+     * ✅ PROSES TERIMA BARANG (Dipanggil dari tombol 'Ya' di dalam modal konfirmasi)
+     */
+    /**
+     * ✅ PROSES TERIMA BARANG (Dipanggil dari tombol 'Ya' di dalam modal konfirmasi)
+     */
+    public function terimaBarang(): void
+    {
+        if (!$this->selectedItemId) {
+            return;
+        }
+
+        $id = $this->selectedItemId;
+
+        try {
+            DB::transaction(function () use ($id) {
+                $record = GudangModel::where('id', $id)->lockForUpdate()->first();
+
+                if (!$record) {
+                    throw new \Exception('Data tidak ditemukan.');
+                }
+
+                // ✅ throw, bukan return — supaya transaksi rollback dan user dapat feedback
+                if ($record->status_gudang === 'sudah diterima') {
+                    throw new \Exception('Barang ini sudah pernah diterima sebelumnya.');
+                }
+
+                $user     = Auth::user();
+                $userName = $user?->name ?? 'System';
+
+                $stokInduk = StokVeneerJadi::where('id_jenis_kayu', $record->id_jenis_kayu)
+                    ->where('panjang', $record->panjang)
+                    ->where('lebar', $record->lebar)
+                    ->where('tebal', $record->tebal)
+                    ->where('kw_grade', $record->kw_grade)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$stokInduk) {
+                    $stokInduk = StokVeneerJadi::create([
+                        'id_jenis_kayu'           => $record->id_jenis_kayu,
+                        'panjang'                 => $record->panjang,
+                        'lebar'                   => $record->lebar,
+                        'tebal'                   => $record->tebal,
+                        'kw_grade'                => $record->kw_grade,
+                        'stok_lembar'             => 0,
+                        'stok_kubikasi'           => 0,
+                        'nilai_stok'              => 0,
+                        'hpp_average'             => 0,
+                        'hpp_pekerja_last'        => 0,
+                        'hpp_bahan_penolong_last' => 0,
+                        'id_last_log'             => null,
+                    ]);
+                }
+
+                $stokLembarBefore    = $stokInduk->stok_lembar;
+                $stokKubikasiBefore  = $stokInduk->stok_kubikasi;
+                $nilaiStokBefore     = $stokInduk->nilai_stok;
+
+                $stokLembarAfter     = $stokLembarBefore + $record->stok_lembar;
+                $stokKubikasiAfter   = $stokKubikasiBefore + $record->stok_kubikasi;
+                $nilaiStokAfter      = $nilaiStokBefore + $record->nilai_stok;
+                $hppAverageAfter     = $stokLembarAfter > 0
+                    ? ($nilaiStokAfter / $stokLembarAfter)
+                    : 0;
+
+                $log = HppVeneerJadiLog::create([
+                    'id_jenis_kayu'        => $record->id_jenis_kayu,
+                    'panjang'              => $record->panjang,
+                    'lebar'                => $record->lebar,
+                    'tebal'                => $record->tebal,
+                    'kw_grade'             => $record->kw_grade,
+                    'tanggal'              => now(),
+                    'tipe_transaksi'       => 'MASUK',
+                    'referensi_type'       => GudangModel::class,
+                    'referensi_id'         => $record->id,
+                    'total_lembar'         => $record->stok_lembar,
+                    'total_kubikasi'       => $record->stok_kubikasi,
+                    'hpp_pekerja'          => $record->hpp_pekerja_last ?? 0,
+                    'hpp_bahan_penolong'   => $record->hpp_bahan_penolong_last ?? 0,
+                    'hpp_average'          => $hppAverageAfter,
+                    'nilai_stok'           => $record->nilai_stok,
+                    'stok_lembar_before'   => $stokLembarBefore,
+                    'stok_kubikasi_before' => $stokKubikasiBefore,
+                    'nilai_stok_before'    => $nilaiStokBefore,
+                    'stok_lembar_after'    => $stokLembarAfter,
+                    'stok_kubikasi_after'  => $stokKubikasiAfter,
+                    'nilai_stok_after'     => $nilaiStokAfter,
+                    'keterangan'           => sprintf(
+                        "%s, diterima oleh: %s pada %s",
+                        $record->keterangan ?? 'Produksi Repair',
+                        $userName,
+                        now()->translatedFormat('d F Y H:i')
+                    ),
+                ]);
+
+                $stokInduk->update([
+                    'stok_lembar'   => $stokLembarAfter,
+                    'stok_kubikasi' => $stokKubikasiAfter,
+                    'nilai_stok'    => $nilaiStokAfter,
+                    'hpp_average'   => $hppAverageAfter,
+                    'id_last_log'   => $log->id,
+                ]);
+
+                $record->update([
+                    'status_gudang' => 'sudah diterima',
+                    'diterima_by'   => $user?->id,
+                    'diterima_at'   => now(),
+                ]);
+            });
+
+            Notification::make()
+                ->success()
+                ->title('Sukses Diterima!')
+                ->body('Barang resmi masuk gudang dan stok telah diperbarui.')
+                ->send();
+        } catch (\Exception $e) {
+            Notification::make()
+                ->danger()
+                ->title('Gagal Menerima Barang')
+                ->body($e->getMessage())
+                ->send();
+        }
+
+        $this->showConfirmModal = false;
+        $this->selectedItemId   = null;
+        $this->dispatch('$refresh');
+    }
+
+    /**
+     * 📦 STOK UTAMA (Sudah di StokVeneerJadi)
      */
     public function getSplitStokProperty(): array
     {
-        $allStok = GudangModel::with('jenisKayu')
+        // Eager load jenisKayu dan lastLog untuk melacak history transaksi/opname terakhir
+        $allStok = StokVeneerJadi::with(['jenisKayu', 'lastLog'])
             ->get()
             ->filter(function ($item) {
                 if (empty($this->searchQuery)) return true;
                 $q = strtolower($this->searchQuery);
 
-                $namaKayu = $item->jenisKayu ? strtolower($item->jenisKayu->nama) : '';
+                // Menggunakan kolom nama_kayu sesuai relasi database Anda
+                $namaKayu = $item->jenisKayu ? strtolower($item->jenisKayu->nama_kayu) : '';
+
                 return str_contains($namaKayu, $q) ||
                     str_contains(strtolower($item->kw_grade), $q) ||
-                    str_contains(strtolower("{$item->panjang}x{$item->lebar}x{$item->tebal}"), $q);
+                    str_contains(strtolower(($item->panjang + 0) . "x" . ($item->lebar + 0) . "x" . ($item->tebal + 0)), $q);
             });
 
-        $faceback = $allStok->filter(fn($item) => $item->tebal < 1.0);
-        $core = $allStok->filter(fn($item) => $item->tebal >= 1.0);
-
         return [
-            'faceback' => $faceback,
-            'core' => $core,
+            'faceback' => $allStok->filter(fn($item) => $item->tebal < 1.0),
+            'core'     => $allStok->filter(fn($item) => $item->tebal >= 1.0),
         ];
     }
 
     /**
-     * Helper menyaring antrean masuk (Section 2) dengan live-search
+     * 📥 ANTREAN: Data di GudangVeneerJadi (Tabel Sementara)
+     */
+    /**
+     * 📥 ANTREAN: Data di GudangVeneerJadi (Tabel Sementara)
      */
     public function getAntreanFilteredProperty(): Collection
     {
-        return collect($this->antreanMasuk)
-            ->filter(function ($item) {
-                if (empty($this->tableSearchQuery)) return true;
-                $q = strtolower($this->tableSearchQuery);
+        $query = GudangModel::with(['jenisKayu', 'penerima'])
+            ->select([
+                'gudang_veneer_jadis.*',
+                'jenis_kayus.nama_kayu as jenis_kayu_nama',
+            ])
+            ->join('jenis_kayus', 'jenis_kayus.id', '=', 'gudang_veneer_jadis.id_jenis_kayu')
+            ->orderByRaw("FIELD(gudang_veneer_jadis.status_gudang, 'belum diterima', 'sudah diterima') ASC")
+            ->orderBy('gudang_veneer_jadis.created_at', 'desc');
 
-                return str_contains(strtolower($item['jenis_kayu']), $q) ||
-                    str_contains(strtolower($item['kw']), $q) ||
-                    str_contains(strtolower("{$item['panjang']}x{$item['lebar']}x{$item['tebal']}"), $q);
+        if (!empty($this->tableSearchQuery)) {
+            $q = strtolower($this->tableSearchQuery);
+            $query->where(function ($query) use ($q) {
+                $query->whereRaw('LOWER(jenis_kayus.nama_kayu) LIKE ?', ["%{$q}%"])
+                    ->orWhereRaw('LOWER(gudang_veneer_jadis.kw_grade) LIKE ?', ["%{$q}%"])
+                    ->orWhereRaw('LOWER(gudang_veneer_jadis.keterangan) LIKE ?', ["%{$q}%"])
+                    ->orWhereRaw('LOWER(CONCAT(
+                        (gudang_veneer_jadis.panjang + 0), "x", 
+                        (gudang_veneer_jadis.lebar + 0), "x", 
+                        (gudang_veneer_jadis.tebal + 0)
+                    )) LIKE ?', ["%{$q}%"]);
             });
+        }
+        return $query->get()->map(fn($item) => [
+            'id'            => $item->id,
+            'jenis_kayu'    => $item->jenis_kayu_nama,
+            'panjang'       => $item->panjang,
+            'lebar'         => $item->lebar,
+            'tebal'         => $item->tebal,
+            'kw'            => $item->kw_grade,
+            'jumlah'        => $item->stok_lembar,
+            'stok_kubikasi' => $item->stok_kubikasi,
+            'created_at'    => $item->created_at,
+            'status_gudang' => $item->status_gudang ?? 'belum diterima',
+            'diterima_at'   => $item->diterima_at,
+            'diterima_by'   => $item->diterima_by,
+            'penerima_name' => $item->penerima?->name ?? 'N/A',
+            'keterangan'    => $item->keterangan,
+        ]);
     }
 }
