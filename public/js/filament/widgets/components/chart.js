@@ -14,7 +14,7 @@ var Sc=Object.defineProperty;var Mc=(s,t,e)=>t in s?Sc(s,t,{enumerable:!0,config
 chart.js/dist/chunks/helpers.dataset.js:
 chart.js/dist/chart.js:
   (*!
-   * Chart.js v4.5.1
+   * Chart.js v4.5.0
    * https://www.chartjs.org
    * (c) 2025 Chart.js Contributors
    * Released under the MIT License
