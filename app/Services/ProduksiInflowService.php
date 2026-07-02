@@ -95,7 +95,6 @@ class ProduksiInflowService
             $outflowCollection = collect($batch['outflow_detail']);
             $jenis_kayu = $outflowCollection->contains(function ($item) {
                 $namaMesin = strtoupper($item['mesin'] ?? '');
-
                 return str_contains($namaMesin, 'SPINDLESS') || str_contains($namaMesin, 'MERANTI');
             });
 
@@ -110,7 +109,7 @@ class ProduksiInflowService
                     'total_keluar_m3' => (float) number_format($batch['grand_total_outflow_m3'], 4),
                     'total_poin' => $total_poin,
                     'rendemen' => $dataMasuk->sum('kubikasi') > 0
-                        ? number_format(($batch['grand_total_outflow_m3'] / $dataMasuk->sum('kubikasi')) * 100, 2).'%'
+                        ? number_format(($batch['grand_total_outflow_m3'] / $dataMasuk->sum('kubikasi')) * 100, 2) . '%'
                         : '0%',
                     'harga_veneer' => $batch['grand_total_outflow_m3'] > 0
                         ? (float) ($dataMasuk->sum('poin') / $batch['grand_total_outflow_m3'])
@@ -224,7 +223,6 @@ class ProduksiInflowService
             $outflowCollection = collect($batch['outflow_detail']);
             $jenis_kayu = $outflowCollection->contains(function ($item) {
                 $namaMesin = strtoupper($item['mesin'] ?? '');
-
                 return str_contains($namaMesin, 'SPINDLESS') || str_contains($namaMesin, 'MERANTI');
             });
 
@@ -239,7 +237,7 @@ class ProduksiInflowService
                     'total_keluar_m3' => (float) number_format($batch['grand_total_outflow_m3'], 4),
                     'total_poin' => $total_poin,
                     'rendemen' => $dataMasuk->sum('kubikasi') > 0
-                        ? number_format(($batch['grand_total_outflow_m3'] / $dataMasuk->sum('kubikasi')) * 100, 2).'%'
+                        ? number_format(($batch['grand_total_outflow_m3'] / $dataMasuk->sum('kubikasi')) * 100, 2) . '%'
                         : '0%',
                     'harga_veneer' => $batch['grand_total_outflow_m3'] > 0
                         ? (float) ($dataMasuk->sum('poin') / $batch['grand_total_outflow_m3'])
@@ -273,7 +271,7 @@ class ProduksiInflowService
             }) ?? 0,
             'total_kubikasi_veneer' => $totalKeluarM3 ?? 0,
             'rata_rata_rendemen' => $totalMasukM3 > 0
-                ? number_format(($totalKeluarM3 / $totalMasukM3) * 100, 2).'%'
+                ? number_format(($totalKeluarM3 / $totalMasukM3) * 100, 2) . '%'
                 : '0%',
             'total_harga_veneer' => $totalHargaVeneer ?? 0,
             'total_harga_v_ongkos' => $laporanFinalCollection->avg('summary.harga_v_ongkos') ?? 0,
@@ -285,7 +283,7 @@ class ProduksiInflowService
     {
         $records = collect($tempGroup);
         $first = $records->first();
-        $last = $records->first(fn ($i) => $i->jumlah_batang > 0);
+        $last = $records->first(fn($i) => $i->jumlah_batang > 0);
 
         // ! ONGKOS PEKERJA
         $ongkosPekerja = HargaPegawai::first()
@@ -313,7 +311,6 @@ class ProduksiInflowService
             ->map(function ($details) {
                 return $details->sum(function ($d) {
                     $u = $d->setoranPaletUkuran;
-
                     return $u ? ($u->panjang * $u->lebar * $u->tebal * $d->total_lembar) / 10_000_000 : 0;
                 });
             });
@@ -339,15 +336,15 @@ class ProduksiInflowService
                 'ukuran' => $ukuran ? "{$ukuran->panjang} x {$ukuran->lebar} x {$ukuran->tebal}" : '-',
                 'banyak' => $totalLembar,
                 'kubikasi' => $m3,
-                'pekerja' => (string) $calculatePekerja.' Orang',
+                'pekerja' => (string) $calculatePekerja . ' Orang',
                 'ongkos' => $calculatePekerja * $ongkosPekerja,
                 'penyusutan' => $penyusutan,
                 'panjang' => $ukuran->panjang,
                 'lebar' => $ukuran->lebar,
                 'tebal' => $ukuran->tebal,
             ];
-        })->groupBy(fn ($item) => $item['tgl'].$item['mesin'].$item['ukuran'])
-            ->map(fn ($group) => [
+        })->groupBy(fn($item) => $item['tgl'] . $item['mesin'] . $item['ukuran'])
+            ->map(fn($group) => [
                 'tgl' => $group[0]['tgl'],
                 'mesin' => $group[0]['mesin'],
                 'jam_kerja' => $group[0]['jam_kerja'],
@@ -390,7 +387,7 @@ class ProduksiInflowService
         $query = NotaKayu::select('id', 'created_at', 'id_kayu_masuk', 'status')
             ->with([
                 'kayuMasuk:id,seri',
-                'kayuMasuk.detailTurusanKayus' => fn ($q) => $q->where('lahan_id', $idLahan)->where('jenis_kayu_id', $idJenisKayu),
+                'kayuMasuk.detailTurusanKayus' => fn($q) => $q->where('lahan_id', $idLahan)->where('jenis_kayu_id', $idJenisKayu),
             ])
             ->where('status', 'like', '%Sudah Diperiksa%');
 
@@ -399,7 +396,7 @@ class ProduksiInflowService
         if (! empty($notaIds)) {
             $query->whereIn('id', $notaIds);
         } else {
-            $query->whereHas('kayuMasuk.detailTurusanKayus', fn ($q) => $q->where('lahan_id', $idLahan)->where('jenis_kayu_id', $idJenisKayu));
+            $query->whereHas('kayuMasuk.detailTurusanKayus', fn($q) => $q->where('lahan_id', $idLahan)->where('jenis_kayu_id', $idJenisKayu));
             $query->where('created_at', '<=', $batasAtas);
             if ($start) {
                 $query->where('created_at', '>', $start);
@@ -459,13 +456,13 @@ class ProduksiInflowService
                 return [
                     'tanggal' => $nota->created_at->format('d-m-Y'),
                     'seri' => ($hargaKosongCount > 0)
-                        ? $nota->kayuMasuk->seri." ⚠️ (Harga Belum Atur: $hargaKosongCount Baris)"
+                        ? $nota->kayuMasuk->seri . " ⚠️ (Harga Belum Atur: $hargaKosongCount Baris)"
                         : $nota->kayuMasuk->seri,
                     'banyak' => $totalQty,
                     'kubikasi' => $totalKubikasi,
                     'poin' => $totalPoin,
                 ];
-            })->filter(fn ($x) => $x['banyak'] > 0)->values();
+            })->filter(fn($x) => $x['banyak'] > 0)->values();
         }
 
         // Ambil Data Stok Opname dari HppAverageLog
@@ -489,7 +486,7 @@ class ProduksiInflowService
 
             return [
                 'tanggal' => $log->created_at->format('d-m-Y'),
-                'seri' => '⚙️ OPNAME: '.$notes,
+                'seri' => '⚙️ OPNAME: ' . $notes,
                 'banyak' => $log->total_batang * $multiplier,
                 'kubikasi' => (float) $log->total_kubikasi * $multiplier,
                 'poin' => (float) $log->nilai_stok * $multiplier,
@@ -502,7 +499,6 @@ class ProduksiInflowService
     private function calculatePoin($item)
     {
         $harga = $this->getHargaSatuan($item->id_jenis_kayu ?? 1, $item->grade ?? 0, $item->panjang ?? 0, $item->diameter);
-
         return (float) (($harga ?? 0) * $item->kubikasi * 1000);
     }
 
@@ -555,7 +551,6 @@ class ProduksiInflowService
             }
         }
         $tempGroup = array_reverse($tempGroup);
-
         return $tempGroup[0] ? $tempGroup[0]->created_at : $closure->created_at;
     }
 
@@ -577,8 +572,10 @@ class ProduksiInflowService
             if ($totalMasuk == 0 && $totalKeluar > 0) {
                 $foundParentKey = null;
                 for ($i = count($mergedList) - 1; $i >= 0; $i--) {
-                    if ($mergedList[$i]['batch_info']['lahan'] === $item['batch_info']['lahan'] &&
-                        $mergedList[$i]['batch_info']['jenis_kayu'] === $item['batch_info']['jenis_kayu']) {
+                    if (
+                        $mergedList[$i]['batch_info']['lahan'] === $item['batch_info']['lahan'] &&
+                        $mergedList[$i]['batch_info']['jenis_kayu'] === $item['batch_info']['jenis_kayu']
+                    ) {
                         $foundParentKey = $i;
                         break;
                     }
@@ -591,7 +588,7 @@ class ProduksiInflowService
                     $parent['outflow'] = array_merge($parent['outflow'], $item['outflow']);
 
                     // Hitung ulang grand total outflow
-                    $totalOutflowM3 = collect($parent['outflow'])->sum(fn ($x) => (float) str_replace(',', '', $x['total_kubikasi']));
+                    $totalOutflowM3 = collect($parent['outflow'])->sum(fn($x) => (float) str_replace(',', '', $x['total_kubikasi']));
                     $totalOngkos = collect($parent['outflow'])->sum('ongkos');
                     $totalPenyusutan = collect($parent['outflow'])->sum('penyusutan');
 
@@ -600,7 +597,7 @@ class ProduksiInflowService
 
                     $totalInflowM3 = (float) $parent['summary']['total_masuk_m3'];
                     $parent['summary']['rendemen'] = $totalInflowM3 > 0
-                        ? number_format(($totalOutflowM3 / $totalInflowM3) * 100, 2).'%'
+                        ? number_format(($totalOutflowM3 / $totalInflowM3) * 100, 2) . '%'
                         : '0%';
 
                     $totalPoinVal = (float) str_replace(['.', ','], ['', '.'], $parent['summary']['total_poin']);

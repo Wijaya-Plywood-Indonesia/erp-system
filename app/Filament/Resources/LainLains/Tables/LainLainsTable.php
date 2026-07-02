@@ -60,7 +60,7 @@ class LainLainsTable
                     ->default('-')
                     ->limit(30)
                     ->toggleable(isToggledHiddenByDefault: false),
-                    
+
                 TextColumn::make('creator.name')
                     ->label('Dibuat Oleh')
                     ->sortable()

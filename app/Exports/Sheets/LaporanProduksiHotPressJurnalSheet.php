@@ -122,7 +122,7 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
         $g     = strtolower(trim($grade));
         $local = str_replace('lokal', 'local', $g);
         $lokal = str_replace('local', 'lokal', $g);
-        
+
         $variants = array_unique([$g, $local, $lokal]);
 
         // Aturan spesifik pemetaan grade angka ke teks master data
@@ -553,7 +553,6 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
     // =========================================================================
     // MAIN: array()
     // =========================================================================
-
     public function array(): array
     {
         $rows   = [];

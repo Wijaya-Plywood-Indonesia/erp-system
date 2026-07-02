@@ -13,23 +13,23 @@ use App\Filament\Resources\ProduksiKedis\RelationManagers\YesRelationManager;
 use App\Filament\Resources\ProduksiKedis\Schemas\ProduksiKediForm;
 use App\Filament\Resources\ProduksiKedis\Schemas\ProduksiKediInfolist;
 use App\Filament\Resources\ProduksiKedis\Tables\ProduksiKedisTable;
-use App\Filament\Resources\ProduksiRotaries\RelationManagers\SerahTerimaRelationManager;
-use App\Models\DetailPegawaiKedi;
+use App\Filament\Resources\ProduksiPressDryers\RelationManagers\SerahTerimaVeneerKeringRelationManager;
 use App\Models\ProduksiKedi;
 use BackedEnum;
-use UnitEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Route;
+use UnitEnum;
 
 class ProduksiKediResource extends Resource
 {
     protected static ?string $model = ProduksiKedi::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
     protected static string|UnitEnum|null $navigationGroup = 'Dryer';
+
     protected static ?int $navigationSort = 2;
 
     public static function form(Schema $schema): Schema
@@ -46,9 +46,11 @@ class ProduksiKediResource extends Resource
     {
         return ProduksiKedisTable::configure($table);
     }
+
     public static function getRelations(): array
     {
         return [
+            SerahTerimaVeneerKeringRelationManager::class,
             DetailMasukKediRelationManager::class,
             DetailBongkarRelationManager::class,
             PegawaiKediRelationManager::class,

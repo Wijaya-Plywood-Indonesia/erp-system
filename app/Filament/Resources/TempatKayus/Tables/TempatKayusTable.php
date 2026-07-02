@@ -67,7 +67,7 @@ class TempatKayusTable
         ])
             ->where('lahan_id', $lahanId)
             ->when($startNotaId, function ($q) use ($startNotaId) {
-                $q->whereHas('kayuMasuk.notaKayu', fn ($q) => $q->where('id', '>=', $startNotaId));
+                $q->whereHas('kayuMasuk.notaKayu', fn($q) => $q->where('id', '>=', $startNotaId));
             })
             ->get()
             ->groupBy('id_kayu_masuk')
@@ -88,7 +88,7 @@ class TempatKayusTable
                     // ✅ DIUBAH: ikut pola NotaKayuController → round PER-ITEM (4 desimal) dulu,
                     // baru di-sum. Ini memastikan total kubikasi selalu match dengan
                     // angka per-baris yang dilihat user (round-then-sum), bukan sebaliknya.
-                    'Kubikasi' => (float) $rows->sum(fn ($r) => round($r->kubikasi, 4)),
+                    'Kubikasi' => (float) $rows->sum(fn($r) => round($r->kubikasi, 4)),
                     'Panjang' => $rows->pluck('panjang')->unique()->sort()->implode(', '),
                     'Grade' => $rows->pluck('grade')->unique()->sort()->implode(', '),
                     'is_lunas' => $isLunas,
@@ -99,7 +99,7 @@ class TempatKayusTable
 
         if ($startNotaId) {
             $data = $data
-                ->reject(fn ($row) => $row['ID Nota'] == $startNotaId)
+                ->reject(fn($row) => $row['ID Nota'] == $startNotaId)
                 ->values();
         }
 
@@ -116,13 +116,13 @@ class TempatKayusTable
             return true;
         }
 
-        return $data->every(fn ($row) => $row['is_lunas']);
+        return $data->every(fn($row) => $row['is_lunas']);
     }
 
     private static function seriiBelumLunas(int $lahanId): Collection
     {
         return self::getKayuAktif($lahanId)
-            ->filter(fn ($row) => ! $row['is_lunas'])
+            ->filter(fn($row) => ! $row['is_lunas'])
             ->pluck('Seri')
             ->filter()
             ->values();
@@ -164,6 +164,7 @@ class TempatKayusTable
                         'tempat_kayus.diterima_oleh',
                     );
 
+                // ── Sorting berdasarkan role ──────────────────────────────────────
                 if ($bisaTerima) {
                     $query
                         ->orderByRaw("
@@ -210,7 +211,7 @@ class TempatKayusTable
                     ->label('Pjg')
                     ->sortable()
                     ->badge()
-                    ->color(fn ($state) => $state == 260 ? 'success' : 'info')
+                    ->color(fn($state) => $state == 260 ? 'success' : 'info')
                     ->toggleable(),
 
                 TextColumn::make('total_batang_riil')
@@ -251,12 +252,12 @@ class TempatKayusTable
                     ->sortable()
                     ->label('Status')
                     ->badge()
-                    ->formatStateUsing(fn ($state) => match ($state) {
+                    ->formatStateUsing(fn($state) => match ($state) {
                         'sudah diserahkan' => 'Diserahkan',
                         'sudah diterima' => 'Diterima',
                         default => 'Belum Diserahkan',
                     })
-                    ->color(fn ($state) => match ($state) {
+                    ->color(fn($state) => match ($state) {
                         'sudah diterima' => 'success',
                         'sudah diserahkan' => 'warning',
                         default => 'gray',
@@ -270,12 +271,12 @@ class TempatKayusTable
                     ->trueLabel('Sudah Diserahkan')
                     ->falseLabel('Belum Diserahkan')
                     ->queries(
-                        true: fn (Builder $query) => $query->where('tempat_kayus.status', 'sudah diserahkan'),
-                        false: fn (Builder $query) => $query->where(function ($q) {
+                        true: fn(Builder $query) => $query->where('tempat_kayus.status', 'sudah diserahkan'),
+                        false: fn(Builder $query) => $query->where(function ($q) {
                             $q->whereNull('tempat_kayus.status')
                                 ->orWhere('tempat_kayus.status', '!=', 'sudah diserahkan');
                         }),
-                        blank: fn (Builder $query) => $query,
+                        blank: fn(Builder $query) => $query,
                     ),
             ], layout: FiltersLayout::AboveContent)
             ->filtersFormColumns(1)
@@ -316,10 +317,36 @@ class TempatKayusTable
                     ->requiresConfirmation()
                     ->modalHeading('Serahkan Kayu?')
                     ->modalDescription(function ($record) {
-                        $belumLunas = self::seriiBelumLunas((int) $record->id_lahan);
+
+                        $semuaSeri = \App\Models\HppAverageLog::where('id_lahan', $record->id_lahan)
+                            ->where('panjang', $record->group_panjang)
+                            ->where('referensi_type', \App\Models\NotaKayu::class)
+                            ->with('referensi.kayuMasuk')
+                            ->get()
+                            ->map(fn($log) => (string) ($log->referensi?->kayuMasuk?->seri ?? null))
+                            ->filter()
+                            ->unique()
+                            ->values();
+
+                        $belumLunas = \App\Models\NotaKayu::whereHas(
+                            'kayuMasuk',
+                            fn($q) =>
+                            $q->whereIn('seri', $semuaSeri)
+                        )
+                            ->with('kayuMasuk')
+                            ->get()
+                            ->groupBy(fn($nota) => (string) $nota->kayuMasuk?->seri)     // ✅ Group by seri
+                            ->map(fn($group) => $group->sortByDesc('id')->first())         // ✅ Ambil terbaru
+                            ->filter(
+                                fn($nota) =>
+                                !str_starts_with(strtolower(trim($nota->status_pelunasan ?? '')), 'lunas')
+                            )
+                            ->map(fn($nota) => (string) $nota->kayuMasuk?->seri)
+                            ->filter()
+                            ->values();
 
                         if ($belumLunas->isNotEmpty()) {
-                            return '⚠️ Seri berikut belum lunas: '.$belumLunas->implode(', ').'. Tidak dapat diserahkan.';
+                            return '⚠️ Seri berikut belum lunas: ' . $belumLunas->implode(', ') . '. Tidak dapat diserahkan.';
                         }
 
                         return "Kayu dari lahan {$record->lahan?->kode_lahan} akan diserahkan ke rotary. Semua seri sudah lunas.";
@@ -348,7 +375,6 @@ class TempatKayusTable
                         if ($record->status !== 'belum serah' && $record->status !== null) {
                             return false;
                         }
-
                         $totalBatang = HppAverageSummarie::where('id_lahan', $record->id_lahan)
                             ->where('panjang', $record->group_panjang)
                             ->where('grade', $record->group_grade)
@@ -368,7 +394,7 @@ class TempatKayusTable
                         if ($belumLunas->isNotEmpty()) {
                             Notification::make()
                                 ->title('Tidak dapat diserahkan!')
-                                ->body('Seri '.$belumLunas->implode(', ').' belum lunas. Selesaikan pembayaran terlebih dahulu.')
+                                ->body('Seri ' . $belumLunas->implode(', ') . ' belum lunas. Selesaikan pembayaran terlebih dahulu.')
                                 ->danger()
                                 ->persistent()
                                 ->send();
@@ -440,7 +466,6 @@ class TempatKayusTable
                                 ->title('Kayu berhasil diserahkan')
                                 ->success()
                                 ->send();
-
                         } catch (\Throwable $e) {
                             Log::channel('single')->error('Serah Kayu FAILED', [
                                 'message' => $e->getMessage(),
@@ -463,8 +488,8 @@ class TempatKayusTable
                     ->requiresConfirmation()
                     ->modalHeading('Terima Kayu dari Grader?')
                     ->modalDescription(
-                        fn ($record) => "Kayu dari lahan {$record->lahan?->kode_lahan} akan diterima atas nama ".
-                            Auth::user()->name.'.'
+                        fn($record) => "Kayu dari lahan {$record->lahan?->kode_lahan} akan diterima atas nama " .
+                            Auth::user()->name . '.'
                     )
                     ->modalSubmitActionLabel('Ya, Terima')
                     ->visible(function ($record) use ($bisaTerima) {
@@ -500,7 +525,6 @@ class TempatKayusTable
                                 ->body('Status lahan diperbarui menjadi Sudah Diterima.')
                                 ->success()
                                 ->send();
-
                         } catch (\Throwable $e) {
                             Log::channel('single')->error('Terima Kayu FAILED', [
                                 'message' => $e->getMessage(),
