@@ -6,13 +6,17 @@ use App\Models\ProduksiKedi;
 use App\Models\ProduksiPressDryer;
 use App\Models\ProduksiRepair;
 use App\Models\SerahTerimaVeneerKering;
+use App\Services\StokVeneerJadiService;
+use App\Services\StokVeneerKeringService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Forms\Components\Radio;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -22,7 +26,14 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
 
     protected static string $relationship = 'serahTerimaVeneerKering';
 
-    protected static ?string $title = 'Serah Terima Veneer Kering';
+    public static function getTitle(Model $ownerRecord, string $pageClass): string
+    {
+        return match (get_class($ownerRecord)) {
+            ProduksiPressDryer::class, ProduksiKedi::class => 'Serah Veneer',
+            ProduksiRepair::class => 'Terima Veneer',
+            default => 'Serah Terima Veneer Kering',
+        };
+    }
 
     protected function getTipe(): string
     {
@@ -150,6 +161,20 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                         default => 'gray',
                     }),
 
+                TextColumn::make('jenis_terima')
+                    ->label('Diterima Sebagai')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => match ($state) {
+                        'kering' => 'Veneer Kering',
+                        'jadi' => 'Veneer Jadi',
+                        default => '-',
+                    })
+                    ->color(fn ($state) => match ($state) {
+                        'kering' => 'info',
+                        'jadi' => 'success',
+                        default => 'gray',
+                    }),
+
                 TextColumn::make('created_at')
                     ->label('Waktu')
                     ->dateTime('d/m/Y H:i:s')
@@ -162,32 +187,59 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                     ->icon('heroicon-o-check-circle')
                     ->requiresConfirmation()
                     ->modalHeading('Terima Veneer Kering ini?')
+                    ->modalDescription('Pilih jenis penerimaan. Pilihan ini akan menentukan pengaruhnya ke stok veneer.')
+                    ->schema([
+                        Radio::make('jenis_terima')
+                            ->label('Terima Sebagai')
+                            ->options([
+                                'kering' => 'Veneer Kering',
+                                'jadi' => 'Veneer Jadi',
+                            ])
+                            ->descriptions([
+                                'kering' => 'Masuk ke stok Veneer Kering.',
+                                'jadi' => 'Masuk ke stok Veneer Jadi.',
+                            ])
+                            ->default('kering')
+                            ->required()
+                            ->inline(),
+                    ])
                     // Hanya muncul kalau dibuka dari Repair DAN belum diterima
                     ->visible(fn ($record) => $tipe === 'repair' && $record->diterima_oleh === '-')
-                    ->action(function ($record) use ($ownerId) {
-                        DB::transaction(function () use ($record, $ownerId) {
-                            $fresh = SerahTerimaVeneerKering::lockForUpdate()->find($record->id);
+                    ->action(function ($record, array $data) use ($ownerId) {
+                        try {
+                            DB::transaction(function () use ($record, $ownerId, $data) {
+                                $fresh = SerahTerimaVeneerKering::lockForUpdate()->find($record->id);
 
-                            if (! $fresh || $fresh->diterima_oleh !== '-') {
-                                Notification::make()
-                                    ->title('Gagal: Veneer ini sudah diambil produksi lain')
-                                    ->danger()
-                                    ->send();
+                                if (! $fresh || $fresh->diterima_oleh !== '-') {
+                                    throw new \RuntimeException('Veneer ini sudah diambil produksi lain.');
+                                }
 
-                                return;
-                            }
+                                $fresh->update([
+                                    'diterima_oleh' => Auth::user()->name.' - Produksi REPAIR',
+                                    'id_produksi_repair' => $ownerId,
+                                    'jenis_terima' => $data['jenis_terima'],
+                                    'status' => 'Terima Veneer',
+                                ]);
 
-                            $fresh->update([
-                                'diterima_oleh' => Auth::user()->name.' - Produksi REPAIR',
-                                'id_produksi_repair' => $ownerId,
-                                'status' => 'Terima Veneer',
-                            ]);
-                        });
+                                if ($data['jenis_terima'] === 'kering') {
+                                    app(StokVeneerKeringService::class)->terimaRepair($fresh);
+                                } else {
+                                    app(StokVeneerJadiService::class)->terimaRepair($fresh);
+                                }
+                            });
 
-                        Notification::make()
-                            ->title('Veneer Kering Berhasil Diterima')
-                            ->success()
-                            ->send();
+                            Notification::make()
+                                ->title('Veneer Kering Berhasil Diterima')
+                                ->success()
+                                ->send();
+
+                        } catch (\Throwable $e) {
+                            Notification::make()
+                                ->title('Gagal')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
                     }),
             ])
             ->toolbarActions([

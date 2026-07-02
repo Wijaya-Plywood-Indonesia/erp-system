@@ -5,7 +5,6 @@ namespace App\Filament\Resources\ProduksiPressDryers\RelationManagers;
 use App\Models\DetailHasil;
 use App\Models\DetailMasuk;
 use App\Models\SerahTerimaVeneerKering;
-use App\Services\SerahHasilDryerService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -97,19 +96,18 @@ class DetailHasilsRelationManager extends RelationManager
     {
         return $table
             ->modifyQueryUsing(fn ($query) => $query->with([
-                'stokMasuk',
                 'ukuran',
                 'jenisKayu',
                 'produksiDryer',
-                'serahTerimaVeneerKering', // eager load untuk cek status repair
+                'serahTerimaVeneerKering', // eager load untuk cek status serah/repair
             ]))
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
                     ->searchable()
                     ->badge()
-                    ->color(fn ($record) => $record->stokMasuk ? 'success' : 'gray')
-                    ->description(fn ($record) => $record->stokMasuk ? 'Sudah Serah' : 'Belum Serah'),
+                    ->color(fn ($record) => $record->serahTerimaVeneerKering ? 'success' : 'gray')
+                    ->description(fn ($record) => $record->serahTerimaVeneerKering ? 'Sudah Serah' : 'Belum Serah'),
 
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
@@ -135,9 +133,9 @@ class DetailHasilsRelationManager extends RelationManager
                 TextColumn::make('isi')
                     ->label('Isi'),
 
-                // Kolom status repair — informatif
+                // Kolom status serah/repair — informatif
                 TextColumn::make('status_repair')
-                    ->label('Status Repair')
+                    ->label('Status')
                     ->badge()
                     ->getStateUsing(function (DetailHasil $record) {
                         $serahTerima = $record->serahTerimaVeneerKering;
@@ -145,11 +143,11 @@ class DetailHasilsRelationManager extends RelationManager
                             return 'Belum Diserahkan';
                         }
 
-                        return $serahTerima->diterima_oleh === '-' ? 'Menunggu Repair' : 'Sudah Diterima Repair';
+                        return $serahTerima->diterima_oleh === '-' ? 'Sudah Diserahkan' : 'Sudah Diterima Repair';
                     })
                     ->color(fn ($state) => match ($state) {
                         'Sudah Diterima Repair' => 'success',
-                        'Menunggu Repair' => 'warning',
+                        'Sudah Diserahkan' => 'warning',
                         default => 'gray',
                     }),
 
@@ -166,47 +164,36 @@ class DetailHasilsRelationManager extends RelationManager
                     ),
             ])
             ->recordActions([
-                Action::make('serahKeGudang')
-                    ->label('Serahkan Hasil')
+                Action::make('serah')
+                    ->label('Serah')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->visible(function (DetailHasil $record) {
-                        return ! DB::table('stok_veneer_kerings')
-                            ->where('id_detail_hasil_dryer', $record->id)
-                            ->exists();
-                    })
+                    ->modalHeading('Serahkan Veneer Kering ini ke Repair?')
+                    ->visible(fn (DetailHasil $record) => ! $record->serahTerimaVeneerKering)
                     ->action(function (DetailHasil $record) {
                         try {
                             DB::transaction(function () use ($record) {
-                                // Step 1: serah ke gudang (logic lama)
-                                app(SerahHasilDryerService::class)->serahkan($record);
-
-                                // Step 2: otomatis serah ke repair sekaligus
-                                $sudahKeRepair = DB::table('serah_terima_veneer_kering')
-                                    ->where('id_detail_hasil', $record->id)
-                                    ->exists();
-
-                                if (! $sudahKeRepair) {
-                                    SerahTerimaVeneerKering::create([
-                                        'id_detail_hasil' => $record->id,
-                                        'id_detail_bongkar_kedi' => null,
-                                        'tipe_sumber' => 'dryer',
-                                        'id_produksi_repair' => null,
-                                        'diserahkan_oleh' => Auth::user()->name,
-                                        'diterima_oleh' => '-',
-                                        'status' => 'Serah Veneer',
-                                    ]);
-                                }
+                                // Catat serah terima saja — stok BELUM ditambahkan di sini.
+                                // Stok veneer kering baru bertambah saat Repair menekan "Terima"
+                                // dan memilih jenis "Kering" (lihat SerahTerimaVeneerKeringRelationManager).
+                                SerahTerimaVeneerKering::create([
+                                    'id_detail_hasil' => $record->id,
+                                    'id_detail_bongkar_kedi' => null,
+                                    'tipe_sumber' => 'dryer',
+                                    'id_produksi_repair' => null,
+                                    'diserahkan_oleh' => Auth::user()->name,
+                                    'diterima_oleh' => '-',
+                                    'status' => 'Serah Veneer',
+                                ]);
                             });
 
-                            $record->unsetRelation('stokMasuk');
                             $record->unsetRelation('serahTerimaVeneerKering');
                             $record->refresh();
 
                             Notification::make()
                                 ->title('Penyerahan Berhasil')
-                                ->body('Veneer kering telah masuk gudang dan siap diterima Repair.')
+                                ->body('Palet telah masuk ke daftar Serah Terima Veneer Kering.')
                                 ->success()
                                 ->send();
 
@@ -218,8 +205,6 @@ class DetailHasilsRelationManager extends RelationManager
                                 ->send();
                         }
                     }),
-
-                // Action serahKeRepair dihapus — sudah otomatis di atas
 
                 EditAction::make()
                     ->hidden(
