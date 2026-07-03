@@ -10,7 +10,7 @@ use Illuminate\Support\Collection;
 class GudangVeneerJadi extends Page
 {
     // Icon menu navigasi di sidebar Filament
-    protected static ?string $navigationIcon = 'heroicon-o-circle-stack';
+    // protected static ?string $navigationIcon = 'heroicon-o-circle-stack';
     protected static ?string $title = 'Gudang Veneer Jadi';
 
     // Path view Blade custom
