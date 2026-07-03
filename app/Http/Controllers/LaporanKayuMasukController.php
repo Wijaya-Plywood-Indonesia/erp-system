@@ -90,7 +90,10 @@ class LaporanKayuMasukController extends Controller
                 'jenis_kayus.nama_kayu',
                 'lahans.kode_lahan',
             ])
-            ->orderByDesc('kayu_masuks.tgl_kayu_masuk');
+            ->orderByDesc('kayu_masuks.tgl_kayu_masuk')
+            ->orderBy('kayu_masuks.seri')
+            ->orderBy('jenis_kayus.nama_kayu')
+            ->orderBy('lahans.kode_lahan');
     }
 
     public function index(Request $request)
