@@ -113,7 +113,7 @@
         $menunggu    = $serahTerima->filter(fn ($vm) => ! $vm->sudahDiterima())->count();
     @endphp
 
-    <div class="mt-8">
+    <div class="mt-8" x-data="{ confirmOpen: false, target: null }">
         <div class="flex items-center justify-between mb-3">
             <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Serah Terima Veneer Kering</span>
             <span class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">
@@ -158,22 +158,29 @@
                             </div>
 
                             @unless($sudah)
+                                @php
+                                    $itemsJson = $vm->details->map(fn ($d) => [
+                                        'dimensi' => number_format((float) $d->ukuran?->panjang, 2) . '×' . number_format((float) $d->ukuran?->lebar, 2) . '×' . number_format((float) $d->ukuran?->tebal, 2) . ' mm',
+                                        'kw'      => $d->kw ?? '-',
+                                        'kayu'    => $d->jenisKayu?->nama_kayu ?? '-',
+                                        'qty'     => number_format((float) $d->qty),
+                                    ])->values();
+                                @endphp
                                 <button
                                     type="button"
-                                    wire:click="terima({{ $vm->id }})"
-                                    wire:confirm="Terima barang dari nota {{ $vm->no_nota }} ke Gudang Veneer Kering?"
-                                    wire:target="terima({{ $vm->id }})"
-                                    wire:loading.attr="disabled"
-                                    class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                    <svg wire:loading.remove wire:target="terima({{ $vm->id }})" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    x-on:click="target = {
+                                        id: {{ $vm->id }},
+                                        noNota: @js($vm->no_nota ?? '—'),
+                                        tanggal: @js(optional($vm->tanggal)->translatedFormat('d M Y')),
+                                        keterangan: @js($vm->keterangan),
+                                        totalLbr: @js(number_format($vm->details->sum('qty'))),
+                                        items: @js($itemsJson)
+                                    }; confirmOpen = true"
+                                    class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 transition-colors">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
                                     </svg>
-                                    <svg wire:loading wire:target="terima({{ $vm->id }})" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                                    </svg>
-                                    <span wire:loading.remove wire:target="terima({{ $vm->id }})">Terima</span>
-                                    <span wire:loading wire:target="terima({{ $vm->id }})">Memproses…</span>
+                                    <span>Terima</span>
                                 </button>
                             @else
                                 <div class="shrink-0 text-right">
@@ -220,6 +227,107 @@
                 @endforelse
             </div>
         </div>
+
+        {{-- ═══ MODAL KONFIRMASI TERIMA ═══ --}}
+        <template x-teleport="body">
+            <div
+                x-show="confirmOpen"
+                x-cloak
+                class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                style="display: none;"
+            >
+                {{-- Backdrop --}}
+                <div
+                    x-show="confirmOpen"
+                    x-transition:enter="transition ease-out duration-200"
+                    x-transition:enter-start="opacity-0"
+                    x-transition:enter-end="opacity-100"
+                    x-transition:leave="transition ease-in duration-150"
+                    x-transition:leave-start="opacity-100"
+                    x-transition:leave-end="opacity-0"
+                    class="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                    x-on:click="confirmOpen = false"
+                ></div>
+
+                {{-- Card --}}
+                <div
+                    x-show="confirmOpen"
+                    x-transition:enter="transition ease-out duration-200"
+                    x-transition:enter-start="opacity-0 scale-95 translate-y-2"
+                    x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                    x-transition:leave="transition ease-in duration-150"
+                    x-transition:leave-start="opacity-100 scale-100"
+                    x-transition:leave-end="opacity-0 scale-95"
+                    class="relative w-full max-w-md bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden"
+                    x-cloak
+                >
+                    {{-- Header --}}
+                    <div class="px-5 py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0l-6.16-3.422a2 2 0 00-1.94 0L4 13" />
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="text-sm font-black text-white">Konfirmasi Terima Barang</div>
+                            <div class="text-[11px] text-emerald-100 truncate" x-text="'Nota ' + (target?.noNota ?? '') + ' · ' + (target?.tanggal ?? '')"></div>
+                        </div>
+                    </div>
+
+                    {{-- Body --}}
+                    <div class="px-5 py-4 max-h-[50vh] overflow-y-auto">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                            Barang berikut akan masuk ke <span class="font-bold text-gray-700 dark:text-gray-300">Gudang Veneer Kering</span> dan menambah stok resmi. Pastikan rinciannya sudah sesuai fisik barang sebelum konfirmasi.
+                        </p>
+
+                        <div class="rounded-sm border border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800 overflow-hidden">
+                            <template x-for="(item, idx) in (target?.items ?? [])" :key="idx">
+                                <div class="px-3 py-2 flex items-center justify-between gap-3 bg-gray-50 dark:bg-gray-800/40">
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-mono text-[11px] text-gray-500 dark:text-gray-400" x-text="item.dimensi"></span>
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" x-text="'KW ' + item.kw"></span>
+                                        </div>
+                                        <div class="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase truncate" x-text="item.kayu"></div>
+                                    </div>
+                                    <span class="text-sm font-black text-amber-500 dark:text-amber-400 whitespace-nowrap" x-text="item.qty + ' Lbr'"></span>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div class="mt-3 flex items-center justify-between px-1">
+                            <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Total</span>
+                            <span class="text-sm font-black text-gray-800 dark:text-gray-200" x-text="(target?.totalLbr ?? '0') + ' Lembar'"></span>
+                        </div>
+
+                        <template x-if="target?.keterangan">
+                            <div class="mt-3 px-3 py-2 rounded-sm bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 text-[11px] text-amber-700 dark:text-amber-400">
+                                <span class="font-bold">Catatan:</span> <span x-text="target?.keterangan"></span>
+                            </div>
+                        </template>
+                    </div>
+
+                    {{-- Footer --}}
+                    <div class="px-5 py-3 bg-gray-50 dark:bg-gray-800/60 border-t border-gray-100 dark:border-gray-800 flex items-center justify-end gap-2">
+                        <button
+                            type="button"
+                            x-on:click="confirmOpen = false"
+                            class="px-3.5 py-1.5 rounded-sm text-[11px] font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            Batal
+                        </button>
+                        <button
+                            type="button"
+                            x-on:click="$wire.terima(target.id); confirmOpen = false"
+                            class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 transition-colors">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                            </svg>
+                            Ya, Terima Barang
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
     </div>
 
 </x-filament-panels::page>
