@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exports\LaporanKayu;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -13,36 +14,25 @@ class LaporanKayuMasukController extends Controller
      * Prefix status "sudah lunas" di kolom nota_kayus.status_pelunasan.
      * Format aslinya gabungan: "Lunas - 30/05/2026 14:52 (via)" — jadi
      * dicocokkan pakai LIKE prefix, bukan pencocokan persis (=).
-     * Yang BELUM lunas kemungkinan diawali teks lain (mis. "Belum Lunas"
-     * atau kosong) sehingga otomatis tidak lolos filter ini.
      */
     private const STATUS_LUNAS_PREFIX = 'Lunas%';
 
-    private function baseQuery(Request $request)
+    /**
+     * Ambil baris MENTAH per detail_turusan_kayus (tidak diagregasi di SQL).
+     * Semua penjumlahan & pembulatan sengaja dilakukan di PHP (lihat
+     * buildLaporanData()) supaya identik dengan cara NotaKayuController
+     * menghitung, dan tidak ada lagi selisih akibat perbedaan presisi
+     * antara MySQL (DECIMAL) dan PHP (float/round()).
+     */
+    private function rawQuery(Request $request)
     {
-        $m3Formula = '
-            CAST(
-                detail_turusan_kayus.panjang
-              * detail_turusan_kayus.diameter
-              * detail_turusan_kayus.diameter
-              * detail_turusan_kayus.kuantitas
-              * 0.785 / 1000000
-            AS DECIMAL(18,8))
-        ';
-
-        // PENTING: Harga TIDAK diambil dari master harga_kayus / harga_kayu_logs.
-        // Sumber kebenaran harga adalah SNAPSHOT yang sudah dikunci per baris
-        // di kolom detail_turusan_kayus.harga, persis seperti yang dipakai
-        // NotaKayuController saat mencetak nota. Ini memastikan angka di
-        // laporan SELALU sama dengan angka yang tertera di nota cetak,
-        // berapa pun kali harga master berubah setelah transaksi terjadi.
         $query = DB::table('detail_turusan_kayus')
             ->join('kayu_masuks', 'kayu_masuks.id', '=', 'detail_turusan_kayus.id_kayu_masuk')
             ->join('supplier_kayus', 'supplier_kayus.id', '=', 'kayu_masuks.id_supplier_kayus')
             ->join('jenis_kayus', 'jenis_kayus.id', '=', 'detail_turusan_kayus.jenis_kayu_id')
             ->leftJoin('lahans', 'lahans.id', '=', 'detail_turusan_kayus.lahan_id');
 
-        // FILTER TANGGAL: Menggunakan when agar fleksibel jika salah satu kosong
+        // FILTER TANGGAL
         $query->when($request->dari, function ($q, $dari) {
             return $q->whereDate('kayu_masuks.tgl_kayu_masuk', '>=', $dari);
         })
@@ -50,21 +40,13 @@ class LaporanKayuMasukController extends Controller
                 return $q->whereDate('kayu_masuks.tgl_kayu_masuk', '<=', $sampai);
             });
 
-        // FILTER PELUNASAN: kayu masuk yang notanya BELUM lunas tidak ikut
-        // dilaporkan. Pakai whereExists (bukan join biasa) supaya tidak
-        // menggandakan baris kalau suatu saat satu kayu_masuk punya lebih
-        // dari satu nota_kayus.
+        // FILTER PELUNASAN: hanya kayu masuk yang notanya sudah lunas
         $query->whereExists(function ($sub) {
             $sub->select(DB::raw(1))
                 ->from('nota_kayus')
                 ->whereColumn('nota_kayus.id_kayu_masuk', 'kayu_masuks.id')
                 ->where('nota_kayus.status_pelunasan', 'LIKE', self::STATUS_LUNAS_PREFIX);
         });
-
-        // Harga = snapshot kolom detail_turusan_kayus.harga (sama seperti NotaKayuController).
-        // Kalau kolomnya NULL/belum diisi, dianggap 0 — konsisten dengan aturan bisnis
-        // "kalau harganya 0 di database, di nota juga muncul 0".
-        $hargaEfektifSql = 'COALESCE(detail_turusan_kayus.harga, 0)';
 
         return $query->select([
             DB::raw('DATE(kayu_masuks.tgl_kayu_masuk) AS tanggal'),
@@ -73,32 +55,91 @@ class LaporanKayuMasukController extends Controller
             'detail_turusan_kayus.panjang',
             'jenis_kayus.nama_kayu AS jenis',
             'lahans.kode_lahan AS lahan',
-            DB::raw('SUM(detail_turusan_kayus.kuantitas) AS banyak'),
-            DB::raw("ROUND(SUM(ROUND($m3Formula, 4)), 4) AS m3"),
-            // PENTING: pembulatan per baris (ke bilangan bulat) dilakukan DULU,
-            // baru dijumlah — persis seperti NotaKayuController:
-            //   round($harga * $kubikasi * 1000)  →  dijumlahkan
-            // Kalau dibalik (jumlah dulu baru dibulatkan), hasilnya bisa
-            // selisih ±1 rupiah dibanding nota karena titik pembulatan beda.
-            DB::raw("SUM(ROUND(ROUND($m3Formula, 4) * CAST( $hargaEfektifSql AS DECIMAL(12,2) ) * 1000, 0)) AS poin"),
+            'detail_turusan_kayus.diameter',
+            'detail_turusan_kayus.kuantitas',
+            'detail_turusan_kayus.harga',
         ])
-            ->groupBy([
-                DB::raw('DATE(kayu_masuks.tgl_kayu_masuk)'),
-                'supplier_kayus.nama_supplier',
-                'kayu_masuks.seri',
-                'detail_turusan_kayus.panjang',
-                'jenis_kayus.nama_kayu',
-                'lahans.kode_lahan',
-            ])
             ->orderByDesc('kayu_masuks.tgl_kayu_masuk')
             ->orderBy('kayu_masuks.seri')
             ->orderBy('jenis_kayus.nama_kayu')
             ->orderBy('lahans.kode_lahan');
     }
 
+    /**
+     * Hitung kubikasi per baris, PERSIS meniru formula & titik pembulatan
+     * yang dipakai NotaKayuController / accessor kubikasi:
+     *   panjang * diameter * diameter * kuantitas * 0.785 / 1.000.000
+     * lalu dibulatkan 4 desimal.
+     *
+     * CATATAN: kalau accessor kubikasi di model DetailTurusanKayu ternyata
+     * pakai rumus lain, cukup ganti isi method ini saja.
+     */
+    private function hitungKubikasi($panjang, $diameter, $kuantitas): float
+    {
+        $raw = $panjang * $diameter * $diameter * $kuantitas * 0.785 / 1000000;
+
+        return round($raw, 4);
+    }
+
+    /**
+     * Ambil data mentah lalu agregasi & bulatkan di PHP — persis meniru
+     * urutan operasi NotaKayuController:
+     *   $kubikasi = round($item->kubikasi, 4);
+     *   $grandTotal += round($harga * $kubikasi * 1000);
+     * yaitu: bulatkan poin PER BARIS dulu (ke bilangan bulat), baru dijumlah.
+     */
+    private function buildLaporanData(Request $request): Collection
+    {
+        $rows = $this->rawQuery($request)->get();
+
+        $grouped = $rows->groupBy(function ($row) {
+            // Kunci grup: tanggal + nama + seri + panjang + jenis + lahan
+            return implode('|', [
+                $row->tanggal,
+                $row->nama,
+                $row->seri,
+                $row->panjang,
+                $row->jenis,
+                $row->lahan,
+            ]);
+        });
+
+        $hasil = $grouped->map(function ($items) {
+            $first = $items->first();
+
+            $banyak = 0;
+            $totalM3 = 0.0;
+            $totalPoin = 0;
+
+            foreach ($items as $item) {
+                $harga = $item->harga ?? 0;
+                $kubikasi = $this->hitungKubikasi($item->panjang, $item->diameter, $item->kuantitas);
+
+                $banyak += $item->kuantitas;
+                $totalM3 += $kubikasi;
+                // Bulatkan poin PER BARIS dulu, baru dijumlah — sama seperti nota.
+                $totalPoin += round($harga * $kubikasi * 1000);
+            }
+
+            return (object) [
+                'tanggal' => $first->tanggal,
+                'nama' => $first->nama,
+                'seri' => $first->seri,
+                'panjang' => $first->panjang,
+                'jenis' => $first->jenis,
+                'lahan' => $first->lahan,
+                'banyak' => $banyak,
+                'm3' => round($totalM3, 4),
+                'poin' => (int) round($totalPoin),
+            ];
+        })->values();
+
+        return $hasil;
+    }
+
     public function index(Request $request)
     {
-        $data = $this->baseQuery($request)->get();
+        $data = $this->buildLaporanData($request);
 
         return view('nota-kayu.laporan-kayu', compact('data'));
     }
@@ -117,25 +158,28 @@ class LaporanKayuMasukController extends Controller
             ['label' => 'Poin', 'field' => 'poin'],
         ];
 
-        // Logika Pengondisian Nama File
         if ($request->filled('dari') && $request->filled('sampai')) {
-            // Jika filter tanggal diisi keduanya
             $labelTanggal = $request->dari.'_sd_'.$request->sampai;
         } elseif ($request->filled('dari')) {
-            // Jika hanya tanggal 'dari' yang diisi
             $labelTanggal = 'dari_'.$request->dari;
         } elseif ($request->filled('sampai')) {
-            // Jika hanya tanggal 'sampai' yang diisi
             $labelTanggal = 'sampai_'.$request->sampai;
         } else {
-            // Jika tidak ada filter sama sekali (Default: Tanggal Hari Ini)
             $labelTanggal = now()->format('Y-m-d');
         }
 
         $fileName = 'laporan_kayu_'.$labelTanggal.'.xlsx';
 
+        // PENTING: baseQuery() lama mengembalikan Query Builder (untuk
+        // FromQuery). Sekarang data sudah berupa Collection hasil agregasi
+        // PHP. Kalau class LaporanKayu mengimplementasikan FromQuery,
+        // constructor ini perlu diubah di sisi class Export-nya untuk
+        // menerima Collection (mis. implements FromCollection) — lihat
+        // catatan di bawah.
+        $data = $this->buildLaporanData($request);
+
         return Excel::download(
-            new LaporanKayu($this->baseQuery($request), $columns),
+            new LaporanKayu($data, $columns),
             $fileName
         );
     }
