@@ -221,7 +221,7 @@ class HasilRepairsTable
                             if (!$modal || !$modal->ukuran) {
                                 throw new \Exception("Gagal: Spesifikasi dimensi ukuran pada Modal Repair ID #{$record->id_modal_repair} tidak ditemukan.");
                             }
-                            $tanggalFormat = \Carbon\Carbon::parse($tanggalProduksi)->translatedFormat('d F Y');
+                            $tanggalFormat = \Carbon\Carbon::parse($tanggalProduksi)->format('d/m/Y');
 
                             self::prosesMasukGudangUtama(
                                 $modal->id_jenis_kayu,
