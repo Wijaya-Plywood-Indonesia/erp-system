@@ -21,6 +21,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\HtmlString;
 
 class DetailHasilsRelationManager extends RelationManager
 {
@@ -106,8 +107,24 @@ class DetailHasilsRelationManager extends RelationManager
                     ->label('No. Palet')
                     ->searchable()
                     ->badge()
-                    ->color(fn ($record) => $record->serahTerimaVeneerKering ? 'success' : 'gray')
-                    ->description(fn ($record) => $record->serahTerimaVeneerKering ? 'Sudah Serah' : 'Belum Serah'),
+                    ->color(function ($record) {
+                        $serahTerima = $record->serahTerimaVeneerKering;
+
+                        if (! $serahTerima) {
+                            return 'gray';
+                        }
+
+                        return $serahTerima->diterima_oleh === '-' ? 'warning' : 'success';
+                    })
+                    ->description(function ($record) {
+                        $serahTerima = $record->serahTerimaVeneerKering;
+
+                        if (! $serahTerima) {
+                            return 'Belum Serah';
+                        }
+
+                        return $serahTerima->diterima_oleh === '-' ? 'Sudah Diserahkan' : 'Sudah Diterima Repair';
+                    }),
 
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
@@ -170,13 +187,39 @@ class DetailHasilsRelationManager extends RelationManager
                     ->color('success')
                     ->requiresConfirmation()
                     ->modalHeading('Serahkan Veneer Kering ini ke Repair?')
+                    ->modalDescription('Pastikan data berikut sudah sesuai sebelum diserahkan.')
+                    ->modalContent(function (DetailHasil $record) {
+                        $jenisKayu = $record->jenisKayu?->nama_kayu ?? '-';
+                        $ukuranModel = $record->ukuran;
+                        $ukuran = $ukuranModel
+                            ? "{$ukuranModel->panjang} x {$ukuranModel->lebar} x {$ukuranModel->tebal}"
+                            : '-';
+
+                        return new HtmlString(<<<HTML
+            <div class="space-y-2 text-sm">
+                <div class="grid grid-cols-3 gap-1">
+                    <span class="font-medium text-gray-500">No. Palet</span>
+                    <span class="col-span-2">: {$record->no_palet}</span>
+
+                    <span class="font-medium text-gray-500">Jenis Kayu</span>
+                    <span class="col-span-2">: {$jenisKayu}</span>
+
+                    <span class="font-medium text-gray-500">Ukuran</span>
+                    <span class="col-span-2">: {$ukuran}</span>
+
+                    <span class="font-medium text-gray-500">Kualitas (KW)</span>
+                    <span class="col-span-2">: {$record->kw}</span>
+
+                    <span class="font-medium text-gray-500">Isi</span>
+                    <span class="col-span-2">: {$record->isi}</span>
+                </div>
+            </div>
+        HTML);
+                    })
                     ->visible(fn (DetailHasil $record) => ! $record->serahTerimaVeneerKering)
                     ->action(function (DetailHasil $record) {
                         try {
                             DB::transaction(function () use ($record) {
-                                // Catat serah terima saja — stok BELUM ditambahkan di sini.
-                                // Stok veneer kering baru bertambah saat Repair menekan "Terima"
-                                // dan memilih jenis "Kering" (lihat SerahTerimaVeneerKeringRelationManager).
                                 SerahTerimaVeneerKering::create([
                                     'id_detail_hasil' => $record->id,
                                     'id_detail_bongkar_kedi' => null,
@@ -207,13 +250,18 @@ class DetailHasilsRelationManager extends RelationManager
                     }),
 
                 EditAction::make()
-                    ->hidden(
-                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    ->hidden(function ($livewire, DetailHasil $record) {
+                        $serahTerima = $record->serahTerimaVeneerKering;
+                        $sudahDiterima = $serahTerima && $serahTerima->diterima_oleh !== '-';
+
+                        return $sudahDiterima
+                            || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi';
+                    }),
 
                 DeleteAction::make()
                     ->hidden(
-                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        fn ($livewire, DetailHasil $record) => $record->serahTerimaVeneerKering
+                            || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
             ->toolbarActions([

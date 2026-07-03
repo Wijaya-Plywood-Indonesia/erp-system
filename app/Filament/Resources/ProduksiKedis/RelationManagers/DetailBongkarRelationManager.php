@@ -21,6 +21,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\HtmlString;
 
 class DetailBongkarRelationManager extends RelationManager
 {
@@ -105,8 +106,24 @@ class DetailBongkarRelationManager extends RelationManager
                     ->label('No. Palet')
                     ->searchable()
                     ->badge()
-                    ->color(fn ($record) => $record->serahTerimaVeneerKering ? 'success' : 'gray')
-                    ->description(fn ($record) => $record->serahTerimaVeneerKering ? 'Sudah Serah' : 'Belum Serah'),
+                    ->color(function ($record) {
+                        $serahTerima = $record->serahTerimaVeneerKering;
+
+                        if (! $serahTerima) {
+                            return 'gray';
+                        }
+
+                        return $serahTerima->diterima_oleh === '-' ? 'warning' : 'success';
+                    })
+                    ->description(function ($record) {
+                        $serahTerima = $record->serahTerimaVeneerKering;
+
+                        if (! $serahTerima) {
+                            return 'Belum Serah';
+                        }
+
+                        return $serahTerima->diterima_oleh === '-' ? 'Sudah Diserahkan' : 'Sudah Diterima Repair';
+                    }),
 
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
@@ -132,7 +149,6 @@ class DetailBongkarRelationManager extends RelationManager
                 TextColumn::make('jumlah')
                     ->label('Jumlah'),
 
-                // Kolom status serah — informatif, sama seperti di Dryer
                 // Kolom status serah — informatif
                 TextColumn::make('status_repair')
                     ->label('Status')
@@ -173,6 +189,35 @@ class DetailBongkarRelationManager extends RelationManager
                     ->color('success')
                     ->requiresConfirmation()
                     ->modalHeading('Serahkan Veneer Kering ini ke Repair?')
+                    ->modalDescription('Pastikan data berikut sudah sesuai sebelum diserahkan.')
+                    ->modalContent(function ($record) {
+                        $jenisKayu = $record->jenisKayu?->nama_kayu ?? '-';
+                        $ukuranModel = $record->ukuran;
+                        $ukuran = $ukuranModel
+                            ? "{$ukuranModel->panjang} x {$ukuranModel->lebar} x {$ukuranModel->tebal}"
+                            : '-';
+
+                        return new HtmlString(<<<HTML
+            <div class="space-y-2 text-sm">
+                <div class="grid grid-cols-3 gap-1">
+                    <span class="font-medium text-gray-500">No. Palet</span>
+                    <span class="col-span-2">: {$record->no_palet}</span>
+
+                    <span class="font-medium text-gray-500">Jenis Kayu</span>
+                    <span class="col-span-2">: {$jenisKayu}</span>
+
+                    <span class="font-medium text-gray-500">Ukuran</span>
+                    <span class="col-span-2">: {$ukuran}</span>
+
+                    <span class="font-medium text-gray-500">Kualitas (KW)</span>
+                    <span class="col-span-2">: {$record->kw}</span>
+
+                    <span class="font-medium text-gray-500">Jumlah</span>
+                    <span class="col-span-2">: {$record->jumlah}</span>
+                </div>
+            </div>
+        HTML);
+                    })
                     ->visible(fn ($record) => ! $record->serahTerimaVeneerKering)
                     ->action(function ($record) {
                         try {
@@ -207,13 +252,18 @@ class DetailBongkarRelationManager extends RelationManager
                     }),
 
                 EditAction::make()
-                    ->hidden(
-                        fn ($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()
-                    ),
+                    ->hidden(function ($livewire, $record) {
+                        $serahTerima = $record->serahTerimaVeneerKering;
+                        $sudahDiterima = $serahTerima && $serahTerima->diterima_oleh !== '-';
+
+                        return $sudahDiterima
+                            || $livewire->ownerRecord?->isBongkarDivalidasi();
+                    }),
 
                 DeleteAction::make()
                     ->hidden(
-                        fn ($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()
+                        fn ($livewire, $record) => $record->serahTerimaVeneerKering
+                            || $livewire->ownerRecord?->isBongkarDivalidasi()
                     ),
             ])
             ->toolbarActions([
