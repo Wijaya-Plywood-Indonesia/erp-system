@@ -7,6 +7,7 @@ use App\Models\JenisKayu;
 use App\Models\KategoriBarang;
 use App\Models\SubAnakAkun;
 use App\Models\Ukuran;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
@@ -28,7 +29,7 @@ class ReferensiHargaProduksiForm
                     ->options(
                         JenisKayu::query()
                             ->get()
-                            ->mapWithKeys(fn ($j) => [$j->id => "{$j->kode_kayu} - {$j->nama_kayu}"])
+                            ->mapWithKeys(fn($j) => [$j->id => "{$j->kode_kayu} - {$j->nama_kayu}"])
                     )
                     ->searchable()
                     ->preload()
@@ -40,7 +41,7 @@ class ReferensiHargaProduksiForm
                     ->options(
                         Ukuran::query()
                             ->get()
-                            ->mapWithKeys(fn ($u) => [$u->id => "{$u->panjang}mm x {$u->lebar}mm x {$u->tebal}mm"])
+                            ->mapWithKeys(fn($u) => [$u->id => "{$u->panjang}mm x {$u->lebar}mm x {$u->tebal}mm"])
                     )
                     ->searchable()
                     ->preload()
@@ -52,14 +53,14 @@ class ReferensiHargaProduksiForm
                     ->options(
                         KategoriBarang::query()
                             ->get()
-                            ->mapWithKeys(fn ($k) => [$k->id => $k->nama_kategori])
+                            ->mapWithKeys(fn($k) => [$k->id => $k->nama_kategori])
                     )
                     ->searchable()
                     ->preload()
                     ->native(false)
                     ->placeholder('Pilih Kategori Barang')
                     ->live()
-                    ->afterStateUpdated(fn ($set) => $set('id_grade', null)),
+                    ->afterStateUpdated(fn($set) => $set('id_grade', null)),
 
                 Select::make('id_grade')
                     ->label('Grade')
@@ -67,9 +68,9 @@ class ReferensiHargaProduksiForm
                         $idKategori = $get('id_kategori_barang');
 
                         return Grade::query()
-                            ->when($idKategori, fn ($q) => $q->where('id_kategori_barang', $idKategori))
+                            ->when($idKategori, fn($q) => $q->where('id_kategori_barang', $idKategori))
                             ->get()
-                            ->mapWithKeys(fn ($g) => [$g->id => $g->nama_grade]);
+                            ->mapWithKeys(fn($g) => [$g->id => $g->nama_grade]);
                     })
                     ->searchable()
                     ->preload()
@@ -106,8 +107,8 @@ class ReferensiHargaProduksiForm
                     ->label('Harga Produksi')
                     ->prefix('Rp')
                     ->mask(RawJs::make('$money($input, \',\', \'.\', 0)'))
-                    ->formatStateUsing(fn ($state) => $state ? number_format($state, 0, ',', '.') : null)
-                    ->dehydrateStateUsing(fn ($state) => blank($state) ? null : str_replace('.', '', $state))
+                    ->formatStateUsing(fn($state) => $state ? number_format($state, 0, ',', '.') : null)
+                    ->dehydrateStateUsing(fn($state) => blank($state) ? null : str_replace('.', '', $state))
                     ->placeholder('0'),
 
                 Select::make('id_sub_anak_akun')
@@ -115,12 +116,15 @@ class ReferensiHargaProduksiForm
                     ->options(
                         SubAnakAkun::query()
                             ->get()
-                            ->mapWithKeys(fn ($s) => [$s->id => "{$s->kode_sub_anak_akun} - {$s->nama_sub_anak_akun}"])
+                            ->mapWithKeys(fn($s) => [$s->id => "{$s->kode_sub_anak_akun} - {$s->nama_sub_anak_akun}"])
                     )
                     ->searchable()
                     ->preload()
                     ->native(false)
                     ->placeholder('Pilih Sub Anak Akun'),
+                Hidden::make('created_by') // Sesuaikan dengan nama kolom di database Anda (bisa 'dibuat_oleh' atau 'created_by')
+                    ->default(fn() => auth()->id())
+                    ->dehydrated(fn($context) => $context === 'create'),
             ]);
     }
 }
