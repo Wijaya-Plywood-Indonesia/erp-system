@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use BackedEnum;
 use Filament\Pages\Page;
 use App\Models\GudangVeneerJadi as GudangModel;
 use Filament\Notifications\Notification;
@@ -10,7 +11,7 @@ use Illuminate\Support\Collection;
 class GudangVeneerJadi extends Page
 {
     // Icon menu navigasi di sidebar Filament
-    protected static ?string $navigationIcon = 'heroicon-o-circle-stack';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-check';
     protected static ?string $title = 'Gudang Veneer Jadi';
 
     // Path view Blade custom
@@ -163,7 +164,8 @@ class GudangVeneerJadi extends Page
         $allStok = GudangModel::with('jenisKayu')
             ->get()
             ->filter(function ($item) {
-                if (empty($this->searchQuery)) return true;
+                if (empty($this->searchQuery))
+                    return true;
                 $q = strtolower($this->searchQuery);
 
                 $namaKayu = $item->jenisKayu ? strtolower($item->jenisKayu->nama) : '';
@@ -188,7 +190,8 @@ class GudangVeneerJadi extends Page
     {
         return collect($this->antreanMasuk)
             ->filter(function ($item) {
-                if (empty($this->tableSearchQuery)) return true;
+                if (empty($this->tableSearchQuery))
+                    return true;
                 $q = strtolower($this->tableSearchQuery);
 
                 return str_contains(strtolower($item['jenis_kayu']), $q) ||
