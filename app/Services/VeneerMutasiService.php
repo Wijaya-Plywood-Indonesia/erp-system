@@ -238,7 +238,7 @@ class VeneerMutasiService
             'tanggal'              => $mutasi->tanggal,
             'tipe_transaksi'       => $mutasi->tipe_transaksi,
             'keterangan'           => strtoupper(($isKeluar ? "Veneer Keluar #" : "Veneer Masuk #") . $mutasi->no_nota)
-                                      . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
+                . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
             'referensi_type'       => VeneerMutasiDetail::class,
             'referensi_id'         => $detail->id,
             'total_lembar'         => $detail->qty,
@@ -281,7 +281,7 @@ class VeneerMutasiService
             'nilai_stok_sesudah'      => 0,
             'hpp_average'             => 0,
             'keterangan'              => strtoupper(($isKeluar ? "Veneer Keluar #" : "Veneer Masuk #") . $mutasi->no_nota)
-                                         . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
+                . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
             'id_veneer_mutasi'        => $mutasi->id,
             'id_veneer_mutasi_detail' => $detail->id,
         ]);
@@ -433,7 +433,10 @@ class VeneerMutasiService
                 $nilaiTx   = round($hppAverage * (float) $record->m3, 4);
                 $nilaiStok -= $nilaiTx;
 
-                if ($stokM3 <= 0) { $stokM3 = 0.0; $nilaiStok = 0.0; }
+                if ($stokM3 <= 0) {
+                    $stokM3 = 0.0;
+                    $nilaiStok = 0.0;
+                }
 
                 $record->update([
                     'hpp_kering_per_m3'   => round($hppAverage, 4),

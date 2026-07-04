@@ -413,7 +413,7 @@
                 @endforelse
             </div>
 
-            {{-- 🖥️ DESKTOP VIEW TABLE (MUTASI KELUAR - RESPONSIVE OPTIMIZED) --}}
+            {{-- 🖥️ DESKTOP VIEW TABLE (MUTASI KELUAR - ACCORDION FULL ROW) --}}
             <div class="hidden md:block border overflow-x-auto max-h-[450px] overflow-y-auto rounded-none bg-white border-zinc-200 shadow-sm dark:bg-zinc-950 dark:border-zinc-800 dark:shadow-none">
                 <table class="w-full text-left border-collapse text-sm">
                     <thead class="sticky top-0 z-10 bg-zinc-50 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400 text-[11px] uppercase font-bold border-b border-zinc-200 dark:border-zinc-800">
@@ -431,36 +431,40 @@
                             <th class="py-3 px-4">Keterangan</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-200 dark:divide-zinc-800 text-zinc-800 dark:text-zinc-300">
-                        @forelse($this->riwayatKeluarFiltered as $item)
-                        <tr class="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-colors">
-                            <td class="py-3 px-4 text-xs text-zinc-500 whitespace-nowrap">{{ $item['created_at'] }}</td>
+
+                    @forelse($this->riwayatKeluarFiltered as $item)
+                    <tbody x-data="{ open: false }" class="divide-y divide-zinc-200 dark:divide-zinc-800 text-zinc-800 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-800">
+
+                        {{-- BARIS UTAMA: seluruh baris jadi trigger accordion --}}
+                        <tr @click="open = !open" class="cursor-pointer hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-colors">
+                            <td class="py-3 px-4 text-xs text-zinc-500 whitespace-nowrap">
+                                <span class="inline-flex items-center gap-2">
+                                    <svg class="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 transition-transform duration-150 flex-shrink-0"
+                                        :class="{ 'rotate-90': open }"
+                                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                                    </svg>
+                                    {{ $item['created_at'] }}
+                                </span>
+                            </td>
                             <td class="py-3 px-4 font-bold text-zinc-900 dark:text-white text-base">{{ $item['jenis_kayu'] }}</td>
                             <td class="py-3 px-3 text-center text-sm text-zinc-600 dark:text-zinc-300 font-mono">{{ ($item['panjang'] + 0) }}</td>
                             <td class="py-3 px-3 text-center text-sm text-zinc-600 dark:text-zinc-300 font-mono">{{ ($item['lebar'] + 0) }}</td>
                             <td class="py-3 px-3 text-center text-sm text-amber-600 dark:text-amber-500 font-bold font-mono">{{ ($item['tebal'] + 0) }}</td>
-                            <td class="py-3 px-3 text-center"><span class="inline-block border border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 font-black text-xs px-2.5 py-0.5 rounded-none shadow-sm">KW {{ $item['kw'] }}</span></td>
+                            <td class="py-3 px-3 text-center">
+                                <span class="inline-block border border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 font-black text-xs px-2.5 py-0.5 rounded-none shadow-sm">KW {{ $item['kw'] }}</span>
+                            </td>
 
+                            {{-- Ringkasan saja, rincian per palet dipindah ke baris accordion --}}
                             <td class="py-3 px-4">
-                                <div class="flex flex-col gap-1 max-w-xs">
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="text-sm font-bold font-mono text-red-500 dark:text-red-400">
-                                            -{{ number_format(($item['stok_lembar'] ?? 0), 0, ',', '.') }}
-                                        </span>
-                                        <span class="text-[10px] text-zinc-400">lbr</span>
-                                        <span class="text-xs px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-400 border dark:border-zinc-700 rounded font-medium">
-                                            {{ $item['jumlah_palet'] }} plt
-                                        </span>
-                                    </div>
-                                    @if(!empty($item['rincian_palet']))
-                                    <div class="flex flex-wrap gap-1 items-center">
-                                        @foreach($item['rincian_palet'] as $idx => $qty)
-                                        <span class="text-xs font-mono px-1.5 py-0.5 bg-zinc-50 dark:bg-zinc-950 text-zinc-500 rounded border border-zinc-200 dark:border-zinc-900">
-                                            P{{ $idx + 1 }}:<strong class="text-zinc-700 dark:text-zinc-300">{{ $qty }}</strong>
-                                        </span>
-                                        @endforeach
-                                    </div>
-                                    @endif
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-sm font-bold font-mono text-red-500 dark:text-red-400">
+                                        -{{ number_format(($item['stok_lembar'] ?? 0), 0, ',', '.') }}
+                                    </span>
+                                    <span class="text-[10px] text-zinc-400">lbr</span>
+                                    <span class="text-xs px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 rounded font-medium">
+                                        {{ $item['jumlah_palet'] }} plt
+                                    </span>
                                 </div>
                             </td>
 
@@ -475,12 +479,29 @@
                             </td>
                             <td class="py-3 px-4 text-xs text-zinc-600 dark:text-zinc-400 max-w-xs truncate">{{ $item['keterangan'] ?? '-' }}</td>
                         </tr>
-                        @empty
+
+                        {{-- BARIS ACCORDION: rincian per palet dalam bentuk badge --}}
+                        @if(!empty($item['rincian_palet']))
+                        <tr x-show="open" x-cloak class="bg-zinc-50/60 dark:bg-zinc-900/40">
+                            <td colspan="11" class="py-3 px-4 pl-12">
+                                <div class="flex flex-wrap gap-2">
+                                    @foreach($item['rincian_palet'] as $idx => $qty)
+                                    <span class="inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-1.5 bg-zinc-100 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 rounded">
+                                        P{{ $idx + 1 }}: <strong class="text-zinc-800 dark:text-zinc-100">{{ $qty }}</strong>
+                                    </span>
+                                    @endforeach
+                                </div>
+                            </td>
+                        </tr>
+                        @endif
+                    </tbody>
+                    @empty
+                    <tbody>
                         <tr>
                             <td colSpan="11" class="py-8 text-center text-zinc-400 italic">Belum ada riwayat pengeluaran yang terdaftar.</td>
                         </tr>
-                        @endforelse
                     </tbody>
+                    @endforelse
                 </table>
             </div>
         </section>
