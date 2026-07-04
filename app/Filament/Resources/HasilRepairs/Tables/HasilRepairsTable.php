@@ -40,8 +40,17 @@ class HasilRepairsTable
      * CORE LOGIC: Serah terima masuk ke GudangVeneerJadi terlebih dahulu,
      * kemudian update StokVeneerJadi dan catat HppVeneerJadiLog.
      */
-    protected static function prosesMasukGudangUtama($idJenisKayu, $panjang, $lebar, $tebal, $kwGrade, $totalLembar, $tanggalProduksi)
-    {
+    protected static function prosesMasukGudangUtama(
+        $idJenisKayu,
+        $panjang,
+        $lebar,
+        $tebal,
+        $kwGrade,
+        $totalLembar,
+        $tanggalProduksi,
+        $keteranganProduksi = null,
+        $idProduksiRepair = null
+    ) {
         if ($totalLembar <= 0) return;
 
         $volumePerLembar = ($panjang * $lebar * $tebal) / 10000000;
@@ -66,7 +75,12 @@ class HasilRepairsTable
             'hpp_pekerja_last'        => $hppPekerjaMasuk,
             'hpp_bahan_penolong_last' => $hppBahanPenolongMasuk,
             'id_last_log'             => null,
-            'tanggal_produksi'        => $tanggalProduksi, // PASTIKAN INI ADA
+            'tanggal_produksi'        => $tanggalProduksi,
+            'status_gudang'           => 'belum diterima',
+            'keterangan'              => $keteranganProduksi
+                ?? "Dari ProduksiRepair #{$idProduksiRepair}",
+            'diterima_by'             => null,
+            'diterima_at'             => null,
         ]);
     }
 
@@ -191,20 +205,23 @@ class HasilRepairsTable
                     ->icon('heroicon-s-arrow-right-end-on-rectangle')
                     ->color('success')
                     ->requiresConfirmation()
-                    // Gembok tombol otomatis hilang/hidden jika status_diserahkan_at tidak kosong
                     ->hidden(fn($record) => !empty($record->status_diserahkan_at))
                     ->action(function ($record) use ($idProduksiRepair, $tanggalProduksi) {
-                        if ($record->total_hasil <= 0) {
+                        $rencanaIds = self::getGroupRencanaIds($record, $idProduksiRepair);
+                        $totalHasilMeja = \App\Models\HasilRepair::whereIn('id_rencana_repair', $rencanaIds)->sum('jumlah');
+
+                        if ($totalHasilMeja <= 0) {
                             Notification::make()->danger()->title('Gagal: Hasil Produksi masih 0 lembar.')->send();
                             return;
                         }
 
-                        DB::transaction(function () use ($record, $idProduksiRepair, $tanggalProduksi) {
+                        DB::transaction(function () use ($record, $idProduksiRepair, $tanggalProduksi, $rencanaIds, $totalHasilMeja) {
                             $modal = \App\Models\ModalRepair::with('ukuran')->find($record->id_modal_repair);
 
                             if (!$modal || !$modal->ukuran) {
                                 throw new \Exception("Gagal: Spesifikasi dimensi ukuran pada Modal Repair ID #{$record->id_modal_repair} tidak ditemukan.");
                             }
+                            $tanggalFormat = \Carbon\Carbon::parse($tanggalProduksi)->format('d/m/Y');
 
                             self::prosesMasukGudangUtama(
                                 $modal->id_jenis_kayu,
@@ -212,19 +229,19 @@ class HasilRepairsTable
                                 $modal->ukuran->lebar,
                                 $modal->ukuran->tebal,
                                 $record->kw,
-                                $record->total_hasil,
-                                $idProduksiRepair,
-                                $tanggalProduksi
+                                $totalHasilMeja,
+                                $tanggalProduksi,
+                                "Produksi Repair Tanggal {$tanggalFormat}",
+                                $idProduksiRepair
                             );
 
-                            $rencanaIds = self::getGroupRencanaIds($record, $idProduksiRepair);
                             HasilRepair::whereIn('id_rencana_repair', $rencanaIds)->update([
                                 'diserahkan_at' => now(),
                                 'diserahkan_by' => Auth::id()
                             ]);
                         });
 
-                        Notification::make()->success()->title("Meja {$record->nomor_meja} Berhasil Diserahkan!")->send();
+                        Notification::make()->success()->title('Berhasil Diserahkan!')->send();
                     }),
                 // ACTION TAMBAH (Sudah disesuaikan untuk membagi rata inputan)
                 Action::make('tambah')
