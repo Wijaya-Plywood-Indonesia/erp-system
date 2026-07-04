@@ -117,6 +117,13 @@ class VeneerMutasiService
      * Step 2 — Called when validator clicks "Validasi Nota" on BK or BM.
      * Actually updates the stock. Validator must be a different user from creator.
      *
+     * Aturan stok saat validasi:
+     *   - Veneer BASAH  (masuk & keluar) -> langsung ubah stok + log.
+     *   - Veneer KERING KELUAR           -> langsung kurangi stok + log (sama seperti basah).
+     *   - Veneer KERING MASUK            -> DITUNDA. Baru masuk StokVeneerKering saat
+     *                                       tombol "Terima" di Gudang Veneer Kering diklik.
+     *                                       Lihat: SerahTerimaVeneerKeringService::terima()
+     *
      * @param  NotaBarangKeluar|NotaBarangMasuk  $nota
      * @throws \Exception if validator is the same as creator, or stock is insufficient
      */
@@ -164,9 +171,16 @@ class VeneerMutasiService
                     . " - KW " . $detail->kw;
 
                 if ($detail->tipe_veneer === 'basah') {
+                    // Basah: masuk & keluar langsung ke stok saat validasi.
                     $this->updateStokBasah($mutasi, $detail, $ukuran, $namaBarang, $isKeluar);
                 } else {
-                    $this->updateStokKering($mutasi, $detail, $isKeluar);
+                    // Kering:
+                    //  - KELUAR -> langsung kurangi stok + log saat validasi (seperti basah).
+                    //  - MASUK  -> DITUNDA ke SerahTerimaVeneerKeringService::terima()
+                    //              (tombol "Terima" di Gudang Veneer Kering).
+                    if ($isKeluar) {
+                        $this->updateStokKering($mutasi, $detail, true);
+                    }
                 }
             }
 
@@ -256,16 +270,30 @@ class VeneerMutasiService
     }
 
     /* ──────────────────────────────────────────────────
-     *  Private: kering stock update
+     *  Private: kering stock update — KELUAR SAJA.
+     *
+     *  Veneer KERING MASUK TIDAK diproses di sini. Penulisan stok kering
+     *  masuk terjadi di SerahTerimaVeneerKeringService::terima(), dipicu
+     *  tombol "Terima" di halaman Gudang Veneer Kering.
+     *
+     *  Method ini hanya untuk KELUAR: langsung membuat baris StokVeneerKering
+     *  bertipe 'keluar' lalu recalculate ledger, agar stok berkurang + tercatat
+     *  di log tepat saat nota divalidasi (perilaku setara veneer basah).
      * ────────────────────────────────────────────────── */
     private function updateStokKering(VeneerMutasi $mutasi, VeneerMutasiDetail $detail, bool $isKeluar): void
     {
+        // Safety: method ini sekarang khusus transaksi KELUAR.
+        // Kering MASUK harus lewat alur "Terima" di Gudang Veneer Kering.
+        if (!$isKeluar) {
+            return;
+        }
+
         StokVeneerKering::create([
             'id_produksi_dryer'       => null,
             'id_ukuran'               => $detail->id_ukuran,
             'id_jenis_kayu'           => $detail->id_jenis_kayu,
             'kw'                      => $detail->kw,
-            'jenis_transaksi'         => $mutasi->tipe_transaksi,
+            'jenis_transaksi'         => $mutasi->tipe_transaksi, // 'keluar'
             'tanggal_transaksi'       => $mutasi->tanggal,
             'qty'                     => $detail->qty,
             'm3'                      => $detail->m3,
@@ -280,7 +308,7 @@ class VeneerMutasiService
             'nilai_stok_sebelum'      => 0,
             'nilai_stok_sesudah'      => 0,
             'hpp_average'             => 0,
-            'keterangan'              => strtoupper(($isKeluar ? "Veneer Keluar #" : "Veneer Masuk #") . $mutasi->no_nota)
+            'keterangan'              => strtoupper("Veneer Keluar #" . $mutasi->no_nota)
                                          . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
             'id_veneer_mutasi'        => $mutasi->id,
             'id_veneer_mutasi_detail' => $detail->id,
@@ -370,6 +398,10 @@ class VeneerMutasiService
                             $summary->update(['id_last_log' => $lastLog?->id]);
                         }
                     } else {
+                        // Kering: hapus baris ledger yang berasal dari mutasi ini
+                        // (untuk kering KELUAR yang dibuat updateStokKering()), lalu recalculate.
+                        // Untuk kering MASUK, jika stok gudang sudah di-"Terima", pastikan
+                        // record tersebut juga mengisi id_veneer_mutasi_detail agar ikut terhapus.
                         StokVeneerKering::where('id_veneer_mutasi_detail', $detail->id)->delete();
                         $this->recalculateStokKering($detail->id_ukuran, $detail->id_jenis_kayu, $detail->kw);
                     }
