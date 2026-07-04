@@ -45,4 +45,20 @@ class VeneerMutasi extends Model
     {
         return $this->belongsTo(User::class, 'dibuat_oleh');
     }
+
+    public function sudahDiterima(): bool
+{
+    return $this->details->contains(fn ($d) => $d->gudangKering !== null);
+}
+
+/**
+ * Baris ledger penerimaan pertama — untuk menampilkan nama penerima & waktu.
+ */
+public function penerimaanKering(): ?GudangVeneerKering
+{
+    return $this->details
+        ->map(fn ($d) => $d->gudangKering)
+        ->filter()
+        ->first();
+}
 }

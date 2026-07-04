@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Auth;
 
 class GudangVeneerJadi extends Page
 {
+    // Icon menu navigasi di sidebar Filament
+    // protected static ?string $navigationIcon = 'heroicon-o-circle-stack';
     protected static ?string $title = 'Gudang Veneer Jadi';
     protected string $view = 'filament.pages.gudang-veneer-jadi';
     public string $activeTab = 'masuk';
