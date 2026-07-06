@@ -39,6 +39,6 @@ class StokPlatformMth extends Model
 
     public function lastLog(): BelongsTo
     {
-        return $this->belongsTo(HppVeneerJadiLog::class, 'id_last_log');
+        return $this->belongsTo(HppPlatformMthLog::class, 'id_last_log');
     }
 }
