@@ -1,4 +1,4 @@
-{{-- resources/views/filament/pages/hpp-platform-mth-page.blade.php --}}
+{{-- resources/views/filament/pages/hpp-triplek-mth-page.blade.php --}}
 <x-filament-panels::page>
 
     {{-- Filter bar --}}
@@ -198,7 +198,7 @@
                     @empty
                     <tr>
                         <td colspan="11" class="px-4 py-12 text-center text-sm text-gray-400 dark:text-gray-500">
-                            Belum ada log transaksi platform MTH
+                            Belum ada log transaksi triplek MTH
                         </td>
                     </tr>
                     @endforelse

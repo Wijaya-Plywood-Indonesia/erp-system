@@ -1,4 +1,4 @@
-{{-- resources/views/filament/pages/stok-platform-mth.blade.php --}}
+{{-- resources/views/filament/pages/stok-triplek-mth.blade.php --}}
 <x-filament-panels::page>
 
     @php
@@ -113,7 +113,7 @@
                                 </td>
 
                                 {{-- HPP Average Sebelum → Sekarang --}}
-                                {{-- @php
+                                @php
                                     $hppSekarang  = (float) ($row->hpp_average ?? 0);
                                     $lastLog      = $row->lastLog;
                                     $hppSebelum   = $lastLog ? (float) ($lastLog->stok_kubikasi_before > 0
@@ -121,7 +121,7 @@
                                         : 0)
                                         : 0;
                                 @endphp
-                                <td class="px-6 py-4 text-right bg-amber-50/20 dark:bg-amber-900/5">
+                                {{-- <td class="px-6 py-4 text-right bg-amber-50/20 dark:bg-amber-900/5">
                                     @if($hppSebelum > 0)
                                         <div class="flex items-center justify-end gap-1.5 font-mono text-xs tabular-nums mb-0.5">
                                             <span class="text-gray-400 dark:text-gray-500">Rp {{ number_format($hppSebelum, 0, ',', '.') }}</span>
@@ -132,9 +132,9 @@
                                         Rp {{ number_format($hppSekarang, 0, ',', '.') }}
                                     </span>
                                     <div class="text-[9px] text-gray-400 uppercase tracking-tight">/m³</div>
-                                </td> --}}
+                                </td>
 
-                                {{-- <td class="px-6 py-4 text-right">
+                                <td class="px-6 py-4 text-right">
                                     <span class="font-black text-gray-800 dark:text-gray-200 tabular-nums">
                                         Rp {{ number_format($row->nilai_stok ?? 0, 0, ',', '.') }}
                                     </span>
@@ -148,7 +148,7 @@
             </div>
             @empty
             <div class="py-12 text-center text-gray-400 dark:text-gray-600 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded">
-                Tidak ada stok platform MTH tersedia
+                Tidak ada stok triplek MTH tersedia
             </div>
             @endforelse
         </div>
@@ -165,7 +165,7 @@
                     <div class="text-2xl font-black text-gray-800 dark:text-gray-200 tabular-nums">
                         {{ number_format($this->totalLembar) }}
                     </div>
-                    <div class="text-xs text-gray-400 mt-0.5">lembar platform MTH</div>
+                    <div class="text-xs text-gray-400 mt-0.5">lembar triplek MTH</div>
                 </div>
                 <div class="px-6 py-5">
                     <div class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Total Kubikasi</div>
