@@ -210,7 +210,7 @@
                             @if(($item['status_gudang'] ?? 'belum diterima') === 'belum diterima')
                             <button
                                 type="button"
-                                wire:click="confirmTerima({{ $item['id'] }})"
+                                wire:click="confirmTerima('{{ $item['id'] }}')"
                                 wire:loading.attr="disabled"
                                 class="inline-flex items-center gap-1 border border-amber-400 bg-amber-500 hover:bg-amber-600 text-zinc-950 transition-all text-xs font-black uppercase px-4 py-1.5 rounded-none shadow-sm active:scale-95 w-full justify-center">
                                 <span>Terima</span>
@@ -258,7 +258,7 @@
                                 @if(($item['status_gudang'] ?? 'belum diterima') === 'belum diterima')
                                 <button
                                     type="button"
-                                    wire:click="confirmTerima({{ $item['id'] }})"
+                                    wire:click="confirmTerima('{{ $item['id'] }}')"
                                     wire:loading.attr="disabled"
                                     class="inline-flex items-center gap-1 border border-amber-400 bg-amber-500 hover:bg-amber-600 text-zinc-950 transition-all text-[11px] font-black uppercase px-3 py-1 rounded-none shadow-sm active:scale-95">
                                     <span>Terima</span>

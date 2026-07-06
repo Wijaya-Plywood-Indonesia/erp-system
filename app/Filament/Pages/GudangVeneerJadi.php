@@ -11,6 +11,7 @@ use App\Models\VeneerJadiMutasiKeluarPalet;
 use App\Models\VeneerMutasi;
 use App\Models\VeneerMutasiDetail;
 use App\Services\SerahTerimaVeneerJadiService;
+use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -285,11 +286,9 @@ class GudangVeneerJadi extends Page
         return $dariGudang
             ->concat($dariMutasi)
             ->sortBy([
-                // "belum diterima" tampil duluan, lalu terbaru duluan.
-                // Kedua callback WAJIB mengembalikan tipe primitif (int di sini),
-                // bukan objek, supaya sortBy() bisa membandingkannya dengan aman.
                 fn($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
-                fn($item) => -$item['created_at_ts'], // negatif = urutan terbaru dulu (descending)
+                fn($item) => -$item['created_at_ts'],
+                fn($item) => $item['id'],
             ], SORT_REGULAR)
             ->values();
     }
@@ -409,6 +408,9 @@ class GudangVeneerJadi extends Page
                     }
                 }
 
+                $waktuNota = $mutasi->created_at ?? $mutasi->tanggal ?? now();
+                $timestamp = $waktuNota instanceof Carbon ? $waktuNota->timestamp : strtotime($waktuNota);
+
                 $hasil->push([
                     'id'            => 'mutasi-' . $detail->id,
                     'source'        => 'mutasi',
@@ -419,8 +421,8 @@ class GudangVeneerJadi extends Page
                     'kw'            => $detail->kw,
                     'jumlah'        => $detail->qty,
                     'stok_kubikasi' => $detail->m3,
-                    'created_at'    => $detail->created_at, // dipakai untuk tampilan (masih Carbon)
-                    'created_at_ts' => $detail->created_at?->timestamp ?? 0, // dipakai untuk sorting (integer)
+                    'created_at'    => $waktuNota,
+                    'created_at_ts' => $timestamp,
                     'status_gudang' => $sudahTerima ? 'sudah diterima' : 'belum diterima',
                     'diterima_at'   => null,
                     'diterima_by'   => null,
