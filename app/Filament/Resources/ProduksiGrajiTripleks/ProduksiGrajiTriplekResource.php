@@ -9,24 +9,27 @@ use App\Filament\Resources\ProduksiGrajiTripleks\Pages\ViewProduksiGrajiTriplek;
 use App\Filament\Resources\ProduksiGrajiTripleks\Schemas\ProduksiGrajiTriplekForm;
 use App\Filament\Resources\ProduksiGrajiTripleks\Schemas\ProduksiGrajiTriplekInfoList;
 use App\Filament\Resources\ProduksiGrajiTripleks\Tables\ProduksiGrajiTripleksTable;
+use App\Filament\Resources\ProduksiHotPresses\RelationManagers\SerahTerimaHpRelationManager;
 use App\Models\ProduksiGrajitriplek;
 use BackedEnum;
-use Filament\Resources\RelationManagers\RelationManager;
-use UnitEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class ProduksiGrajiTriplekResource extends Resource
 {
-    protected static ?string $model = ProduksiGrajiTriplek::class;
+    protected static ?string $model = ProduksiGrajitriplek::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
     protected static string|UnitEnum|null $navigationGroup = 'Finishing';
+
     protected static ?int $navigationSort = 1;
 
     protected static ?string $modelLabel = 'Produksi Graji Triplek';
+
     protected static ?string $pluralModelLabel = 'Produksi Graji Triplek';
 
     public static function form(Schema $schema): Schema
@@ -47,6 +50,7 @@ class ProduksiGrajiTriplekResource extends Resource
     public static function getRelations(): array
     {
         return [
+            SerahTerimaHpRelationManager::class,
             RelationManagers\PegawaiGrajiTriplekRelationManager::class,
             RelationManagers\MasukGrajiTriplekRelationManager::class,
             RelationManagers\HasilGrajiTriplekRelationManager::class,
