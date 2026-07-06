@@ -68,4 +68,16 @@ class ProduksiHp extends Model
     {
         return $this->hasMany(KendalaHp::class, 'produksi_hp_id');
     }
+
+    public function mutasiMasuk()
+    {
+        return $this->hasManyThrough(
+            VeneerJadiMutasiKeluarPalet::class,
+            VeneerJadiMutasiKeluar::class,
+            'id_produksi_hp',
+            'id_mutasi_keluar',
+            'id',
+            'id'
+        );
+    }
 }

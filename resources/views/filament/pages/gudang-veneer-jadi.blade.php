@@ -152,6 +152,21 @@
                 </div>
             </div>
 
+            <div class="flex gap-2 p-1 bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900">
+                <button
+                    type="button"
+                    wire:click="$set('activeSubTab', 'produksi')"
+                    class="flex-1 md:flex-none px-4 py-2 text-xs font-black uppercase tracking-widest transition-all {{ $activeSubTab === 'produksi' ? 'bg-amber-500 text-zinc-950 shadow-sm border border-amber-400' : 'text-zinc-400 hover:text-zinc-200 bg-transparent border border-transparent' }}">
+                    <span>Terima dari Produksi</span>
+                </button>
+                <button
+                    type="button"
+                    wire:click="$set('activeSubTab', 'mutasi')"
+                    class="flex-1 md:flex-none px-4 py-2 text-xs font-black uppercase tracking-widest transition-all {{ $activeSubTab === 'mutasi' ? 'bg-amber-500 text-zinc-950 shadow-sm border border-amber-400' : 'text-zinc-400 hover:text-zinc-200 bg-transparent border border-transparent' }}">
+                    <span>Terima dari BM</span>
+                </button>
+            </div>
+
             {{-- 📱 VIEW HP / MOBILE (Hanya muncul di md:hidden atau layar < 768px) --}}
             <div class="block md:hidden space-y-3 max-h-[500px] overflow-y-auto pr-1">
                 @forelse($this->antreanFiltered as $item)

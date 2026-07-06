@@ -11,4 +11,8 @@ class VeneerJadiMutasiKeluarPalet extends Model
         'nomor_palet',
         'jumlah_lembar'
     ];
+    public function mutasiKeluar()
+    {
+        return $this->belongsTo(VeneerJadiMutasiKeluar::class, 'id_mutasi_keluar');
+    }
 }
