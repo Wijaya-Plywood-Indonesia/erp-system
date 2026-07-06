@@ -48,6 +48,8 @@ class ProduksiGrajitriplek extends Model
 
     public function serahTerimaHp()
     {
-        return $this->hasMany(SerahTerimaHp::class, 'id_produksi_graji_triplek');
+        // Base relation asal-asalan (akan di-override sepenuhnya di modifyQueryUsing
+        // relation manager, sama seperti pola tipe graji/sanding)
+        return $this->hasMany(SerahTerimaHp::class, 'id_triplek_hasil_hp', 'id');
     }
 }

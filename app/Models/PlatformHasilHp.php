@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\ProductionUpdated;
 use Illuminate\Database\Eloquent\Model;
 
 class PlatformHasilHp extends Model
@@ -24,7 +25,7 @@ class PlatformHasilHp extends Model
     public function barangSetengahJadi()
     {
         return $this->belongsTo(
-            \App\Models\BarangSetengahJadiHp::class,
+            BarangSetengahJadiHp::class,
             'id_barang_setengah_jadi'
         );
     }
@@ -49,14 +50,19 @@ class PlatformHasilHp extends Model
         // Menggunakan static::saved mencakup Created dan Updated
         static::saved(function ($model) {
             if ($model->id_produksi_hp) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_hp, 'hotpress');
+                ProductionUpdated::dispatch($model->id_produksi_hp, 'hotpress');
             }
         });
 
         static::deleted(function ($model) {
             if ($model->id_produksi_hp) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_hp, 'hotpress');
+                ProductionUpdated::dispatch($model->id_produksi_hp, 'hotpress');
             }
         });
+    }
+
+    public function serahTerimaHp()
+    {
+        return $this->hasOne(SerahTerimaHp::class, 'id_platform_hasil_hp');
     }
 }
