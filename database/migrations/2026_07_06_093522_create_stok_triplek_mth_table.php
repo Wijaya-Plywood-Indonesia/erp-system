@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('stok_platform_mth', function (Blueprint $table) {
+        Schema::create('stok_triplek_mth', function (Blueprint $table) {
             $table->id();
             $table->foreignId('id_jenis_kayu')
                 ->constrained('jenis_kayus')
@@ -38,7 +38,7 @@ return new class extends Migration
             // Referensi ke log terakhir
             $table->foreignId('id_last_log')
                 ->nullable()
-                ->constrained('hpp_platform_mth_log')
+                ->constrained('hpp_triplek_mth_log')
                 ->nullOnDelete();
             $table->timestamps();
         });
@@ -49,6 +49,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('stok_platform_mth');
+        Schema::dropIfExists('stok_triplek_mth');
     }
 };

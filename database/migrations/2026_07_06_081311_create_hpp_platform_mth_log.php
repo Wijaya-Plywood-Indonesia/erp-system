@@ -53,7 +53,7 @@ return new class extends Migration
 
             $table->index(
                 ['id_jenis_kayu', 'panjang', 'lebar', 'tebal', 'kw_grade', 'tanggal', 'id'],
-                'idx_hpp_vj_log_kombinasi'
+                'idx_hpp_platform_mth_log_kombinasi'
             );
         });
     }
