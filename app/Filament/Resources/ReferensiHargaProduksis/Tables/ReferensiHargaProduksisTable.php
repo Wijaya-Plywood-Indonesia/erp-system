@@ -19,7 +19,24 @@ class ReferensiHargaProduksisTable
                 TextColumn::make('nama')
                     ->label('Nama')
                     ->searchable()
-                    ->placeholder('-'),
+                    ->placeholder('-')
+                ,
+                TextColumn::make('harga')
+                    ->label('Harga')
+                    ->money('IDR')
+                    ->placeholder('-')
+                    ->sortable(),
+
+                TextColumn::make('sub_anak_akun')
+                    ->label('Sub Anak Akun')
+                    ->placeholder('-')
+                    ->getStateUsing(function ($record) {
+                        if (!$record->subAnakAkun) {
+                            return '-';
+                        }
+
+                        return "{$record->subAnakAkun->kode_sub_anak_akun} - {$record->subAnakAkun->nama_sub_anak_akun}";
+                    }),
 
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
@@ -38,40 +55,17 @@ class ReferensiHargaProduksisTable
                     ->label('Grade')
                     ->placeholder('-'),
 
-                TextColumn::make('kw_min')
-                    ->label('KW Min')
+                TextColumn::make('kw_range')
+                    ->label('KW')
+                    ->getStateUsing(fn($record) => self::formatRange($record->kw_min, $record->kw_max))
                     ->placeholder('-'),
 
-                TextColumn::make('kw_max')
-                    ->label('KW Max')
+                TextColumn::make('t_range')
+                    ->label('Tebal')
+                    ->getStateUsing(fn($record) => self::formatRange($record->t_min, $record->t_max, 'mm'))
                     ->placeholder('-'),
 
-                TextColumn::make('t_min')
-                    ->label('T Min')
-                    ->suffix(' mm')
-                    ->placeholder('-'),
 
-                TextColumn::make('t_max')
-                    ->label('T Max')
-                    ->suffix(' mm')
-                    ->placeholder('-'),
-
-                TextColumn::make('harga')
-                    ->label('Harga')
-                    ->money('IDR')
-                    ->placeholder('-')
-                    ->sortable(),
-
-                TextColumn::make('sub_anak_akun')
-                    ->label('Sub Anak Akun')
-                    ->placeholder('-')
-                    ->getStateUsing(function ($record) {
-                        if (! $record->subAnakAkun) {
-                            return '-';
-                        }
-
-                        return "{$record->subAnakAkun->kode_sub_anak_akun} - {$record->subAnakAkun->nama_sub_anak_akun}";
-                    }),
             ])
             ->filters([
                 SelectFilter::make('id_jenis_kayu')
@@ -97,5 +91,30 @@ class ReferensiHargaProduksisTable
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * Gabungkan pasangan nilai min/max jadi satu string range.
+     * Contoh: (1, 4, 'mm') -> "1 - 4 mm"
+     *         (5, null)    -> "5"  (kalau cuma salah satu terisi)
+     *         (null, null) -> null (biar placeholder '-' yang jalan)
+     */
+    protected static function formatRange($min, $max, ?string $suffix = null): ?string
+    {
+        if (is_null($min) && is_null($max)) {
+            return null;
+        }
+
+        $suffix = $suffix ? " {$suffix}" : '';
+
+        if (!is_null($min) && !is_null($max)) {
+            if ($min == $max) {
+                return "{$min}{$suffix}";
+            }
+
+            return "{$min} - {$max}{$suffix}";
+        }
+
+        return ($min ?? $max) . $suffix;
     }
 }

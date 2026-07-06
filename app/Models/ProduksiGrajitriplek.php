@@ -13,7 +13,7 @@ class ProduksiGrajitriplek extends Model
         'tanggal_produksi',
         'status',
         'kendala',
-        'shift'
+        'shift',
     ];
 
     public function pegawaiGrajiTriplek()
@@ -44,5 +44,10 @@ class ProduksiGrajitriplek extends Model
     public function kendalaGrajiTripleks()
     {
         return $this->hasMany(KendalaGrajiTriplek::class, 'produksi_graji_triplek_id');
+    }
+
+    public function serahTerimaHp()
+    {
+        return $this->hasMany(SerahTerimaHp::class, 'id_produksi_graji_triplek');
     }
 }

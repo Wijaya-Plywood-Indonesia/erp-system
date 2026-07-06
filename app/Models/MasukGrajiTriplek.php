@@ -10,6 +10,7 @@ class MasukGrajiTriplek extends Model
 
     protected $fillable = [
         'id_produksi_graji_triplek',
+        'id_serah_terima_hp',
         'id_barang_setengah_jadi_hp',
         'no_palet',
         'isi',
@@ -20,8 +21,13 @@ class MasukGrajiTriplek extends Model
         return $this->belongsTo(ProduksiGrajitriplek::class, 'id_produksi_graji_triplek');
     }
 
+    public function serahTerimaHp()
+    {
+        return $this->belongsTo(SerahTerimaHp::class, 'id_serah_terima_hp');
+    }
+
     public function barangSetengahJadiHp()
     {
-        return $this->belongsTo(BarangSetengahJadiHp::class,'id_barang_setengah_jadi_hp');
+        return $this->belongsTo(BarangSetengahJadiHp::class, 'id_barang_setengah_jadi_hp');
     }
 }

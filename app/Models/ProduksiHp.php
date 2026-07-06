@@ -68,4 +68,16 @@ class ProduksiHp extends Model
     {
         return $this->hasMany(KendalaHp::class, 'produksi_hp_id');
     }
+
+    public function serahTerimaHp()
+    {
+        return $this->hasManyThrough(
+            SerahTerimaHp::class,
+            TriplekHasilHp::class,
+            'id_produksi_hp',       // FK di triplek_hasil_hp
+            'id_triplek_hasil_hp',  // FK di serah_terima_hp
+            'id',                   // local key produksi_hp
+            'id'                    // local key triplek_hasil_hp
+        );
+    }
 }
