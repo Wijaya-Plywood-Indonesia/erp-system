@@ -17,7 +17,9 @@ class VeneerJadiMutasiKeluar extends Model
         'stok_kubikasi',
         'tujuan',
         'dikeluarkan_by',
-        'keterangan'
+        'keterangan',
+        'diterima_by',
+        'diterima_at'
     ];
 
     public function jenisKayu()
@@ -28,6 +30,11 @@ class VeneerJadiMutasiKeluar extends Model
     public function operator()
     {
         return $this->belongsTo(User::class, 'dikeluarkan_by');
+    }
+
+    public function penerima()
+    {
+        return $this->belongsTo(User::class, 'diterima_by');
     }
 
     public function palets()

@@ -16,7 +16,7 @@ class HppAveragePage extends Page
     protected string $view = 'filament.pages.hpp-average-page';
     protected static ?string $navigationLabel = 'Log HPP Kayu';
     protected static string|UnitEnum|null $navigationGroup = 'Log';
-    protected static ?string $title = 'Log Histori HPP Kayu';
+    protected static ?string $title = 'Log HPP Kayu';
     protected static ?int $navigationSort = 10;
 
     // ── State ──────────────────────────────────────────────────
@@ -25,17 +25,6 @@ class HppAveragePage extends Page
     public string $filterLahan = '';
     public string $filterTipeTransaksi = ''; // ✅ Tambahan filter tipe transaksi
     public string $limitPerLahan = '15';
-
-    // Role untuk yang bisa melihat log HPP
-    private const ROLE_ALLOWED = ['super_admin', 'admin', 'finance', 'manager'];
-
-    /**
-     * Tentukan apakah halaman ini visible atau tidak
-     */
-    public static function canAccess(): bool
-    {
-        return Auth::user()?->hasAnyRole(self::ROLE_ALLOWED) ?? false;
-    }
 
     /**
      * Tampilkan informasi tentang log HPP

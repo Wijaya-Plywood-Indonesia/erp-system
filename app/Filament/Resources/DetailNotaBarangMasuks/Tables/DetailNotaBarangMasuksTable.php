@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\DetailNotaBarangMasuks\Tables;
 
+use App\Models\StokVeneerJadi;
+use App\Models\Ukuran;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -52,6 +54,7 @@ class DetailNotaBarangMasuksTable
                             ->options([
                                 'basah' => 'Veneer Basah',
                                 'kering' => 'Veneer Kering',
+                                'jadi' => 'Veneer Jadi',
                             ])
                             ->required()
                             ->live(),
@@ -88,13 +91,13 @@ class DetailNotaBarangMasuksTable
                                 $idUkuran = $get('id_ukuran');
                                 $idJenisKayu = $get('id_jenis_kayu');
                                 $kw = $get('kw');
+                                $ukuran = $idUkuran ? Ukuran::find($idUkuran) : null;
 
                                 if (!$tipe || !$idUkuran || !$idJenisKayu || !$kw) {
                                     return new \Illuminate\Support\HtmlString('<span class="text-gray-400 dark:text-gray-500">Silakan lengkapi pilihan di atas...</span>');
                                 }
 
                                 if ($tipe === 'basah') {
-                                    $ukuran = \App\Models\Ukuran::find($idUkuran);
                                     if (!$ukuran) {
                                         return new \Illuminate\Support\HtmlString('<strong class="text-danger-600 dark:text-danger-400">0 Lembar</strong>');
                                     }
@@ -108,15 +111,25 @@ class DetailNotaBarangMasuksTable
                                     ])->first();
 
                                     $stok = $summary ? (int) $summary->stok_lembar : 0;
+                                } elseif ($tipe === 'jadi') {
+                                    $summaryJadi = StokVeneerJadi::where([
+                                        'id_jenis_kayu' => $idJenisKayu,
+                                        'panjang'       => $ukuran->panjang,
+                                        'lebar'         => $ukuran->lebar,
+                                        'tebal'         => $ukuran->tebal,
+                                        'kw_grade'      => $kw,
+                                    ])->first();
+
+                                    $stok = $summaryJadi ? (int) $summaryJadi->stok_lembar : 0;
                                 } else {
                                     $latest = \App\Models\StokVeneerKering::where([
                                         'id_ukuran'     => $idUkuran,
                                         'id_jenis_kayu' => $idJenisKayu,
                                         'kw'            => $kw,
                                     ])
-                                    ->orderBy('tanggal_transaksi', 'desc')
-                                    ->orderBy('id', 'desc')
-                                    ->first();
+                                        ->orderBy('tanggal_transaksi', 'desc')
+                                        ->orderBy('id', 'desc')
+                                        ->first();
 
                                     $stok = $latest ? (int) $latest->stok_lembar_sesudah : 0;
                                 }
@@ -262,8 +275,6 @@ class DetailNotaBarangMasuksTable
                         }
                     })
                     ->after(fn($livewire) => $livewire->dispatch('$refresh')),
-
-
             ])
 
             ->filters([
@@ -279,6 +290,7 @@ class DetailNotaBarangMasuksTable
                                     ->options([
                                         'basah' => 'Veneer Basah',
                                         'kering' => 'Veneer Kering',
+                                        'jadi' => 'Veneer Jadi',
                                     ])
                                     ->required()
                                     ->live(),
@@ -315,13 +327,13 @@ class DetailNotaBarangMasuksTable
                                         $idUkuran = $get('id_ukuran');
                                         $idJenisKayu = $get('id_jenis_kayu');
                                         $kw = $get('kw');
+                                        $ukuran = $idUkuran ? \App\Models\Ukuran::find($idUkuran) : null;
 
                                         if (!$tipe || !$idUkuran || !$idJenisKayu || !$kw) {
                                             return new \Illuminate\Support\HtmlString('<span class="text-gray-400 dark:text-gray-500">Silakan lengkapi pilihan di atas...</span>');
                                         }
 
                                         if ($tipe === 'basah') {
-                                            $ukuran = \App\Models\Ukuran::find($idUkuran);
                                             if (!$ukuran) {
                                                 return new \Illuminate\Support\HtmlString('<strong class="text-danger-600 dark:text-danger-400">0 Lembar</strong>');
                                             }
@@ -335,15 +347,26 @@ class DetailNotaBarangMasuksTable
                                             ])->first();
 
                                             $stok = $summary ? (int) $summary->stok_lembar : 0;
+                                        } elseif ($tipe === 'jadi') {
+                                            // Mengambil stok dari model StokVeneerJadi dengan mencocokkan dimensi & kw_grade
+                                            $summaryJadi = StokVeneerJadi::where([
+                                                'id_jenis_kayu' => $idJenisKayu,
+                                                'panjang'       => $ukuran->panjang,
+                                                'lebar'         => $ukuran->lebar,
+                                                'tebal'         => $ukuran->tebal,
+                                                'kw_grade'      => $kw, // Menggunakan kolom kw_grade sesuai properti model
+                                            ])->first();
+
+                                            $stok = $summaryJadi ? (int) $summaryJadi->stok_lembar : 0;
                                         } else {
                                             $latest = \App\Models\StokVeneerKering::where([
                                                 'id_ukuran'     => $idUkuran,
                                                 'id_jenis_kayu' => $idJenisKayu,
                                                 'kw'            => $kw,
                                             ])
-                                            ->orderBy('tanggal_transaksi', 'desc')
-                                            ->orderBy('id', 'desc')
-                                            ->first();
+                                                ->orderBy('tanggal_transaksi', 'desc')
+                                                ->orderBy('id', 'desc')
+                                                ->first();
 
                                             $stok = $latest ? (int) $latest->stok_lembar_sesudah : 0;
                                         }

@@ -95,6 +95,7 @@ class ProduksiInflowService
             $outflowCollection = collect($batch['outflow_detail']);
             $jenis_kayu = $outflowCollection->contains(function ($item) {
                 $namaMesin = strtoupper($item['mesin'] ?? '');
+
                 return str_contains($namaMesin, 'SPINDLESS') || str_contains($namaMesin, 'MERANTI');
             });
 
@@ -223,6 +224,7 @@ class ProduksiInflowService
             $outflowCollection = collect($batch['outflow_detail']);
             $jenis_kayu = $outflowCollection->contains(function ($item) {
                 $namaMesin = strtoupper($item['mesin'] ?? '');
+
                 return str_contains($namaMesin, 'SPINDLESS') || str_contains($namaMesin, 'MERANTI');
             });
 
@@ -311,6 +313,7 @@ class ProduksiInflowService
             ->map(function ($details) {
                 return $details->sum(function ($d) {
                     $u = $d->setoranPaletUkuran;
+
                     return $u ? ($u->panjang * $u->lebar * $u->tebal * $d->total_lembar) / 10_000_000 : 0;
                 });
             });
@@ -499,6 +502,7 @@ class ProduksiInflowService
     private function calculatePoin($item)
     {
         $harga = $this->getHargaSatuan($item->id_jenis_kayu ?? 1, $item->grade ?? 0, $item->panjang ?? 0, $item->diameter);
+
         return (float) (($harga ?? 0) * $item->kubikasi * 1000);
     }
 
@@ -551,6 +555,7 @@ class ProduksiInflowService
             }
         }
         $tempGroup = array_reverse($tempGroup);
+
         return $tempGroup[0] ? $tempGroup[0]->created_at : $closure->created_at;
     }
 
