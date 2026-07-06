@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiSandings;
 
+use App\Filament\Resources\ProduksiHotPresses\RelationManagers\SerahTerimaHpRelationManager;
 use App\Filament\Resources\ProduksiSandings\Pages\CreateProduksiSanding;
 use App\Filament\Resources\ProduksiSandings\Pages\EditProduksiSanding;
 use App\Filament\Resources\ProduksiSandings\Pages\ListProduksiSandings;
@@ -13,7 +14,6 @@ use App\Filament\Resources\ProduksiSandings\RelationManagers\ValidasiSandingRela
 use App\Filament\Resources\ProduksiSandings\Schemas\ProduksiSandingForm;
 use App\Filament\Resources\ProduksiSandings\Schemas\ProduksiSandingInfolist;
 use App\Filament\Resources\ProduksiSandings\Tables\ProduksiSandingsTable;
-use App\Filament\Resources\ValidasiHasilRotaries\Tables\ValidasiHasilRotariesTable;
 use App\Models\ProduksiSanding;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -25,10 +25,14 @@ use UnitEnum;
 class ProduksiSandingResource extends Resource
 {
     protected static ?string $model = ProduksiSanding::class;
+
     protected static ?string $modelLabel = 'Produksi Sanding';
+
     protected static ?string $pluralModelLabel = 'Produksi Sanding';
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDivide;
-    protected static string|UnitEnum|null $navigationGroup = "Finishing";
+
+    protected static string|UnitEnum|null $navigationGroup = 'Finishing';
 
     public static function form(Schema $schema): Schema
     {
@@ -49,6 +53,7 @@ class ProduksiSandingResource extends Resource
     {
         return [
             //
+            SerahTerimaHpRelationManager::class,
             ModalSandingRelationManager::class,
             HasilSandingRelationManager::class,
             PegawaiSandingRelationManager::class,

@@ -2,24 +2,35 @@
 
 namespace App\Filament\Resources\PlatformHasilHps\Tables;
 
+use App\Models\PlatformHasilHp;
+use App\Models\SerahTerimaHp;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
-use Filament\Tables\Table;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\HtmlString;
 
 class PlatformHasilHpsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn ($query) => $query->with([
+                'mesin',
+                'barangSetengahJadi.jenisBarang',
+                'barangSetengahJadi.grade',
+                'barangSetengahJadi.ukuran',
+                'serahTerimaHp',
+            ]))
             ->columns([
 
-                /*
-                 * MESIN
-                 */
                 TextColumn::make('mesin.nama_mesin')
                     ->label('Mesin')
                     ->searchable()
@@ -27,27 +38,37 @@ class PlatformHasilHpsTable
 
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
-                    ->searchable(),
+                    ->searchable()
+                    ->badge()
+                    ->color(function ($record) {
+                        $serahTerima = $record->serahTerimaHp;
 
-                /*
-                 * JENIS BARANG
-                 */
+                        if (! $serahTerima) {
+                            return 'gray';
+                        }
+
+                        return $serahTerima->diterima_oleh === '-' ? 'warning' : 'success';
+                    })
+                    ->description(function ($record) {
+                        $serahTerima = $record->serahTerimaHp;
+
+                        if (! $serahTerima) {
+                            return 'Belum Serah';
+                        }
+
+                        return $serahTerima->diterima_oleh === '-' ? 'Menunggu Diterima' : 'Sudah Diterima';
+                    }),
+
                 TextColumn::make('barangSetengahJadi.jenisBarang.nama_jenis_barang')
                     ->label('Jenis Barang')
                     ->searchable()
                     ->placeholder('-'),
 
-                /*
-                 * GRADE
-                 */
                 TextColumn::make('barangSetengahJadi.grade.nama_grade')
                     ->label('Grade')
                     ->searchable()
                     ->placeholder('-'),
 
-                /*
-                 * UKURAN
-                 */
                 TextColumn::make('barangSetengahJadi.ukuran.nama_ukuran')
                     ->label('Ukuran')
                     ->searchable(query: function ($query, string $search) {
@@ -60,32 +81,156 @@ class PlatformHasilHpsTable
                     })
                     ->placeholder('-'),
 
-                /*
-                 * ISI
-                 */
                 TextColumn::make('isi')
                     ->label('Jumlah Lembar'),
+
+                /*
+                 * STATUS SERAH — toggleable, default hidden
+                 */
+                TextColumn::make('status_serah')
+                    ->label('Status')
+                    ->badge()
+                    ->getStateUsing(function (PlatformHasilHp $record) {
+                        $serahTerima = $record->serahTerimaHp;
+
+                        if (! $serahTerima) {
+                            return 'Belum Diserahkan';
+                        }
+
+                        return $serahTerima->diterima_oleh === '-' ? 'Menunggu Diterima' : 'Sudah Diterima';
+                    })
+                    ->color(fn ($state) => match ($state) {
+                        'Sudah Diterima' => 'success',
+                        'Menunggu Diterima' => 'warning',
+                        default => 'gray',
+                    })
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                /*
+                 * DISERAHKAN OLEH — toggleable, default hidden
+                 */
+                TextColumn::make('serahTerimaHp.diserahkan_oleh')
+                    ->label('Diserahkan Oleh')
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                /*
+                 * DITERIMA OLEH — toggleable, default hidden
+                 */
+                TextColumn::make('serahTerimaHp.diterima_oleh')
+                    ->label('Diterima Oleh')
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                /*
+                 * CREATED AT — toggleable, default hidden
+                 */
+                TextColumn::make('created_at')
+                    ->label('Dibuat Pada')
+                    ->dateTime('d M Y H:i')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                /*
+                 * UPDATED AT — toggleable, default hidden
+                 */
+                TextColumn::make('updated_at')
+                    ->label('Diperbarui Pada')
+                    ->dateTime('d M Y H:i')
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
 
             ->headerActions([
                 CreateAction::make()
                     ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
 
             ->recordActions([
+                Action::make('serah')
+                    ->label('Serah')
+                    ->icon('heroicon-o-paper-airplane')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->modalHeading('Serahkan Platform ini ke Sanding?')
+                    ->modalDescription('Pastikan data berikut sudah sesuai sebelum diserahkan.')
+                    ->modalContent(function (PlatformHasilHp $record) {
+                        $mesin = $record->mesin?->nama_mesin ?? '-';
+                        $jenis = $record->barangSetengahJadi?->jenisBarang?->nama_jenis_barang ?? '-';
+                        $grade = $record->barangSetengahJadi?->grade?->nama_grade ?? '-';
+                        $ukuranModel = $record->barangSetengahJadi?->ukuran;
+                        $ukuran = $ukuranModel
+                            ? "{$ukuranModel->panjang}mm x {$ukuranModel->lebar}mm x {$ukuranModel->tebal}mm"
+                            : '-';
+
+                        return new HtmlString(<<<HTML
+            <div class="space-y-2 text-sm">
+                <div class="grid grid-cols-3 gap-1">
+                    <span class="font-medium text-gray-500">Mesin</span>
+                    <span class="col-span-2">: {$mesin}</span>
+
+                    <span class="font-medium text-gray-500">No. Palet</span>
+                    <span class="col-span-2">: {$record->no_palet}</span>
+
+                    <span class="font-medium text-gray-500">Jenis Barang</span>
+                    <span class="col-span-2">: {$jenis}</span>
+
+                    <span class="font-medium text-gray-500">Grade</span>
+                    <span class="col-span-2">: {$grade}</span>
+
+                    <span class="font-medium text-gray-500">Ukuran</span>
+                    <span class="col-span-2">: {$ukuran}</span>
+
+                    <span class="font-medium text-gray-500">Jumlah Lembar</span>
+                    <span class="col-span-2">: {$record->isi}</span>
+                </div>
+            </div>
+        HTML);
+                    })
+                    ->visible(fn (PlatformHasilHp $record) => ! $record->serahTerimaHp)
+                    ->action(function (PlatformHasilHp $record) {
+                        try {
+                            DB::transaction(function () use ($record) {
+                                SerahTerimaHp::create([
+                                    'id_platform_hasil_hp' => $record->id,
+                                    'id_produksi_sanding' => null,
+                                    'diserahkan_oleh' => Auth::user()->name,
+                                    'diterima_oleh' => '-',
+                                    'status' => 'Serah Platform',
+                                ]);
+                            });
+
+                            $record->unsetRelation('serahTerimaHp');
+                            $record->refresh();
+
+                            Notification::make()
+                                ->title('Penyerahan Berhasil')
+                                ->body('Palet telah masuk ke daftar Serah Terima ke Sanding.')
+                                ->success()
+                                ->send();
+
+                        } catch (\Throwable $e) {
+                            Notification::make()
+                                ->title('Gagal')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
+
                 EditAction::make()
-                    ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    ->hidden(function ($livewire, PlatformHasilHp $record) {
+                        $serahTerima = $record->serahTerimaHp;
+                        $sudahDiterima = $serahTerima && $serahTerima->diterima_oleh !== '-';
+
+                        return $sudahDiterima
+                            || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi';
+                    }),
 
                 DeleteAction::make()
                     ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        fn ($livewire, PlatformHasilHp $record) => $record->serahTerimaHp
+                            || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
 
@@ -93,8 +238,7 @@ class PlatformHasilHpsTable
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->hidden(
-                            fn($livewire) =>
-                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                            fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                         ),
                 ]),
             ]);

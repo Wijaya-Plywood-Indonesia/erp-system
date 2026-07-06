@@ -139,6 +139,7 @@ class MasukGrajiTriplekForm
         $currentIsi = (float) ($record?->isi ?? 0);
 
         return SerahTerimaHp::query()
+            ->whereNotNull('id_triplek_hasil_hp')   // <-- tambahan: khusus sumber triplek
             ->where('diterima_oleh', '!=', '-')
             ->with([
                 'triplekHasilHp.barangSetengahJadi.ukuran',
@@ -163,8 +164,6 @@ class MasukGrajiTriplekForm
                     : '-';
                 $kodeJenisBarang = strtoupper($barang?->jenisBarang?->kode_jenis_barang ?? '-');
                 $gradeLabel = $barang?->grade?->nama_grade ?? '-';
-
-                // format sisa biar rapi (misal: 12.5 batang)
                 $sisaLabel = rtrim(rtrim(number_format($sisa, 2, '.', ''), '0'), '.');
 
                 $label = "Palet {$hasil?->no_palet} - {$ukuranLabel} {$kodeJenisBarang} {$gradeLabel} — Sisa: {$sisaLabel}";

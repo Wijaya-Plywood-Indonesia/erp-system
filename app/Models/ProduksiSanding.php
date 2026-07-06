@@ -20,18 +20,22 @@ class ProduksiSanding extends Model
     protected $casts = [
         'tanggal' => 'date',
     ];
+
     public function modalSandings()
     {
         return $this->hasMany(ModalSanding::class, 'id_produksi_sanding');
     }
+
     public function hasilSandings()
     {
         return $this->hasMany(HasilSanding::class, 'id_produksi_sanding');
     }
+
     public function pegawaiSandings()
     {
         return $this->hasMany(PegawaiSanding::class, 'id_produksi_sanding');
     }
+
     public function validasiSanding()
     {
         return $this->hasMany(ValidasiSanding::class, 'id_produksi_sanding');
@@ -50,5 +54,12 @@ class ProduksiSanding extends Model
     public function kendalaSandings()
     {
         return $this->hasMany(KendalaSanding::class, 'produksi_sanding_id');
+    }
+
+    public function serahTerimaHp()
+    {
+        // Base relation asal-asalan (akan di-override sepenuhnya di modifyQueryUsing
+        // relation manager, sama seperti pola tipe graji/sanding)
+        return $this->hasMany(SerahTerimaHp::class, 'id_triplek_hasil_hp', 'id');
     }
 }
