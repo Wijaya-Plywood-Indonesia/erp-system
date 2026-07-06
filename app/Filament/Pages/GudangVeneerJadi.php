@@ -8,6 +8,9 @@ use App\Models\StokVeneerJadi;
 use App\Models\HppVeneerJadiLog;
 use App\Models\VeneerJadiMutasiKeluar;
 use App\Models\VeneerJadiMutasiKeluarPalet;
+use App\Models\VeneerMutasi;
+use App\Models\VeneerMutasiDetail;
+use App\Services\SerahTerimaVeneerJadiService;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +18,8 @@ use Illuminate\Support\Facades\Auth;
 
 class GudangVeneerJadi extends Page
 {
+    // Icon menu navigasi di sidebar Filament
+    // protected static ?string $navigationIcon = 'heroicon-o-circle-stack';
     protected static ?string $title = 'Gudang Veneer Jadi';
     protected string $view = 'filament.pages.gudang-veneer-jadi';
     public string $activeTab = 'masuk';
@@ -24,7 +29,8 @@ class GudangVeneerJadi extends Page
 
     // Properti untuk modal konfirmasi
     public bool $showConfirmModal = false;
-    public ?int $selectedItemId = null;
+    // 🌟 Sekarang menyimpan composite id, contoh: "gudang-5" atau "mutasi-12"
+    public ?string $selectedItemId = null;
 
     // Modal Form Keluar Barang
     public bool $showFormKeluarModal = false;
@@ -46,10 +52,15 @@ class GudangVeneerJadi extends Page
 
     /**
      * ✅ BUKA MODAL KONFIRMASI
+     *
+     * $compositeId formatnya "{source}-{id_asli}", misal "gudang-5" atau
+     * "mutasi-12". Ini WAJIB dipakai (bukan id polos) karena kita menggabung
+     * dua tabel berbeda yang ruang id-nya terpisah — id 5 di GudangVeneerJadi
+     * dan id 5 di VeneerMutasiDetail adalah dua baris yang sama sekali beda.
      */
-    public function confirmTerima(int $id): void
+    public function confirmTerima(string $compositeId): void
     {
-        $this->selectedItemId = $id;
+        $this->selectedItemId = $compositeId;
         $this->showConfirmModal = true;
     }
 
@@ -64,6 +75,11 @@ class GudangVeneerJadi extends Page
 
     /**
      * ✅ PROSES TERIMA BARANG
+     *
+     * Percabangan berdasarkan sumber data:
+     *  - "gudang-{id}" -> logika lama, dari tabel GudangVeneerJadi (Produksi/Repair).
+     *  - "mutasi-{id}" -> baru, dari VeneerMutasiDetail (alur Barang Masuk),
+     *                     didelegasikan ke SerahTerimaVeneerJadiService.
      */
     public function terimaBarang(): void
     {
@@ -71,8 +87,28 @@ class GudangVeneerJadi extends Page
             return;
         }
 
-        $id = $this->selectedItemId;
+        [$source, $rawId] = array_pad(explode('-', $this->selectedItemId, 2), 2, null);
 
+        if ($source === 'mutasi') {
+            $this->terimaDariMutasi((int) $rawId);
+        } else {
+            // Default ke perilaku lama supaya backward-compatible kalau
+            // suatu saat composite id belum sempat dipakai di tempat lain.
+            $this->terimaDariGudang((int) $rawId);
+        }
+
+        $this->showConfirmModal = false;
+        $this->selectedItemId   = null;
+        $this->dispatch('$refresh');
+    }
+
+    /**
+     * Terima barang dari tabel GudangVeneerJadi (alur Produksi/Repair).
+     * Ini adalah logika ASLI yang sudah ada sebelumnya — tidak diubah,
+     * cuma dipindah ke method sendiri.
+     */
+    protected function terimaDariGudang(int $id): void
+    {
         try {
             DB::transaction(function () use ($id) {
                 $record = GudangModel::where('id', $id)->lockForUpdate()->first();
@@ -181,10 +217,31 @@ class GudangVeneerJadi extends Page
                 ->body($e->getMessage())
                 ->send();
         }
+    }
 
-        $this->showConfirmModal = false;
-        $this->selectedItemId   = null;
-        $this->dispatch('$refresh');
+    /**
+     * Terima barang dari VeneerMutasiDetail (alur Barang Masuk / Nota BM).
+     * Cukup delegasikan ke service — semua logika hitung sudah ada di sana.
+     */
+    protected function terimaDariMutasi(int $detailId): void
+    {
+        try {
+            $detail = VeneerMutasiDetail::findOrFail($detailId);
+
+            app(SerahTerimaVeneerJadiService::class)->terimaSatuDetail($detail, (int) Auth::id());
+
+            Notification::make()
+                ->success()
+                ->title('Sukses Diterima!')
+                ->body('Barang dari Nota Barang Masuk resmi masuk gudang dan stok telah diperbarui.')
+                ->send();
+        } catch (\Exception $e) {
+            Notification::make()
+                ->danger()
+                ->title('Gagal Menerima Barang')
+                ->body($e->getMessage())
+                ->send();
+        }
     }
 
     /**
@@ -211,9 +268,37 @@ class GudangVeneerJadi extends Page
     }
 
     /**
-     * 📥 ANTREAN: Data di GudangVeneerJadi (Tabel Sementara)
+     * 📥 ANTREAN GABUNGAN: GudangVeneerJadi (Produksi/Repair) + VeneerMutasiDetail
+     * (Barang Masuk yang sudah divalidasi tapi belum "Diterima").
+     *
+     * Setiap baris hasil diberi:
+     *  - id          => composite id "{source}-{id_asli}", dipakai confirmTerima()
+     *  - source      => 'gudang' | 'mutasi', dipakai terimaBarang() untuk branching
+     * Field lain (jenis_kayu, jumlah, dst) dibuat SERAGAM di kedua sumber supaya
+     * view Blade tidak perlu tahu bedanya sama sekali.
      */
     public function getAntreanFilteredProperty(): Collection
+    {
+        $dariGudang = $this->ambilAntreanDariGudang();
+        $dariMutasi = $this->ambilAntreanDariMutasiJadi();
+
+        return $dariGudang
+            ->concat($dariMutasi)
+            ->sortBy([
+                // "belum diterima" tampil duluan, lalu terbaru duluan.
+                // Kedua callback WAJIB mengembalikan tipe primitif (int di sini),
+                // bukan objek, supaya sortBy() bisa membandingkannya dengan aman.
+                fn($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
+                fn($item) => -$item['created_at_ts'], // negatif = urutan terbaru dulu (descending)
+            ], SORT_REGULAR)
+            ->values();
+    }
+
+    /**
+     * Sumber 1: tabel GudangVeneerJadi (Produksi/Repair) — logika ASLI,
+     * cuma ditambah 'id' composite dan 'source'.
+     */
+    protected function ambilAntreanDariGudang(): Collection
     {
         $query = GudangModel::with(['jenisKayu', 'penerima'])
             ->select([
@@ -237,8 +322,10 @@ class GudangVeneerJadi extends Page
                     )) LIKE ?', ["%{$q}%"]);
             });
         }
+
         return $query->get()->map(fn($item) => [
-            'id'            => $item->id,
+            'id'            => 'gudang-' . $item->id,
+            'source'        => 'gudang',
             'jenis_kayu'    => $item->jenis_kayu_nama,
             'panjang'       => $item->panjang,
             'lebar'         => $item->lebar,
@@ -246,13 +333,104 @@ class GudangVeneerJadi extends Page
             'kw'            => $item->kw_grade,
             'jumlah'        => $item->stok_lembar,
             'stok_kubikasi' => $item->stok_kubikasi,
-            'created_at'    => $item->created_at,
+            'created_at'    => $item->created_at, // dipakai untuk tampilan (masih Carbon)
+            'created_at_ts' => $item->created_at?->timestamp ?? 0, // dipakai untuk sorting (integer)
             'status_gudang' => $item->status_gudang ?? 'belum diterima',
             'diterima_at'   => $item->diterima_at,
             'diterima_by'   => $item->diterima_by,
             'penerima_name' => $item->penerima?->name ?? 'N/A',
             'keterangan'    => $item->keterangan,
         ]);
+    }
+
+    /**
+     * Sumber 2: VeneerMutasi (arah masuk) yang punya detail bertipe 'jadi',
+     * dari nota yang SUDAH divalidasi.
+     *
+     * Struktur query di sini SENGAJA ditulis top-down (mulai dari VeneerMutasi,
+     * bukan dari VeneerMutasiDetail) meniru pola yang sudah terbukti jalan di
+     * GudangVeneerKering::getSerahTerimaProperty() — termasuk nama relasi
+     * `notaBm` dan `details` yang sudah terverifikasi dari kode itu.
+     *
+     * BEDA dengan versi Kering: status "sudah diterima" TIDAK saya ambil dari
+     * method $vm->sudahDiterima() (karena isi method itu kemungkinan spesifik
+     * untuk kering — mengecek relasi gudangKering — dan bisa salah kalau
+     * dipakai untuk jadi). Untuk jadi, sumber kebenaran status tetap
+     * HppVeneerJadiLog (tipe_transaksi = 'masuk'), sama seperti yang dipakai
+     * SerahTerimaVeneerJadiService sejak awal.
+     *
+     * Optimisasi: pengecekan "sudah diterima / belum" dilakukan SEKALI lewat
+     * whereIn atas semua id detail, bukan whereNotExists per baris — supaya
+     * tidak jadi query database berulang kalau baris detail-nya banyak.
+     */
+    protected function ambilAntreanDariMutasiJadi(): Collection
+    {
+        $jadiLike = SerahTerimaVeneerJadiService::TIPE_JADI_LIKE;
+
+        $mutasiRows = VeneerMutasi::query()
+            ->whereNotNull('id_nota_bm') // proxy "arah masuk", sama seperti versi Kering
+            ->whereHas('notaBm', fn($q) => $q->whereNotNull('divalidasi_oleh'))
+            ->whereHas('details', fn($q) => $q->where('tipe_veneer', 'like', $jadiLike))
+            ->with([
+                'details' => fn($q) => $q
+                    ->where('tipe_veneer', 'like', $jadiLike)
+                    ->with(['ukuran', 'jenisKayu']),
+            ])
+            ->orderByDesc('tanggal')
+            ->orderByDesc('id')
+            ->get();
+
+        // Kumpulkan semua id detail dari semua mutasi di atas, lalu cek SEKALI
+        // mana saja yang sudah punya log 'masuk' (artinya: sudah "Diterima").
+        $semuaDetailIds = $mutasiRows->flatMap(fn($vm) => $vm->details->pluck('id'));
+
+        $sudahDiterimaIds = HppVeneerJadiLog::query()
+            ->where('referensi_type', VeneerMutasiDetail::class)
+            ->whereIn('referensi_id', $semuaDetailIds)
+            ->where('tipe_transaksi', 'masuk')
+            ->pluck('referensi_id')
+            ->flip(); // supaya isset($sudahDiterimaIds[$id]) O(1), bukan in_array O(n)
+
+        $hasil = collect();
+
+        foreach ($mutasiRows as $mutasi) {
+            foreach ($mutasi->details as $detail) {
+                $ukuran      = $detail->ukuran;
+                $sudahTerima = isset($sudahDiterimaIds[$detail->id]);
+
+                // Filter search dilakukan manual di sini (bukan di query SQL)
+                // karena kita sudah eager-load semuanya sekaligus per mutasi.
+                if (!empty($this->tableSearchQuery)) {
+                    $q    = strtolower($this->tableSearchQuery);
+                    $kayu = strtolower((string) $detail->jenisKayu?->nama_kayu);
+                    $kw   = strtolower((string) $detail->kw);
+                    if (!str_contains($kayu, $q) && !str_contains($kw, $q)) {
+                        continue;
+                    }
+                }
+
+                $hasil->push([
+                    'id'            => 'mutasi-' . $detail->id,
+                    'source'        => 'mutasi',
+                    'jenis_kayu'    => $detail->jenisKayu?->nama_kayu,
+                    'panjang'       => $ukuran?->panjang,
+                    'lebar'         => $ukuran?->lebar,
+                    'tebal'         => $ukuran?->tebal,
+                    'kw'            => $detail->kw,
+                    'jumlah'        => $detail->qty,
+                    'stok_kubikasi' => $detail->m3,
+                    'created_at'    => $detail->created_at, // dipakai untuk tampilan (masih Carbon)
+                    'created_at_ts' => $detail->created_at?->timestamp ?? 0, // dipakai untuk sorting (integer)
+                    'status_gudang' => $sudahTerima ? 'sudah diterima' : 'belum diterima',
+                    'diterima_at'   => null,
+                    'diterima_by'   => null,
+                    'penerima_name' => 'N/A',
+                    'keterangan'    => 'No Nota: ' . ($mutasi->no_nota ?? '-'),
+                ]);
+            }
+        }
+
+        return $hasil;
     }
 
     /**
