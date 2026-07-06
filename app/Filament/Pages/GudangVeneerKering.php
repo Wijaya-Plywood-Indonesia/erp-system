@@ -2,7 +2,7 @@
 
 namespace App\Filament\Pages;
 
-use App\Models\GudangVeneerKering as GudangVeneerKeringModel;
+use App\Models\SerahTerimaVeneerKering;
 use App\Models\StokVeneerKering;
 use App\Models\Ukuran;
 use App\Models\VeneerKeringMutasiKeluar;
@@ -10,7 +10,6 @@ use App\Models\VeneerKeringMutasiKeluarPalet;
 use App\Models\VeneerMutasi;
 use App\Models\VeneerMutasiDetail;
 use App\Services\SerahTerimaVeneerKeringService;
-use App\Services\VeneerMutasiService;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -249,11 +248,20 @@ class GudangVeneerKering extends Page
     }
 
     /**
-     * Proses pengeluaran veneer kering:
-     * 1. Validasi stok cukup (saldo lembar per kombinasi).
-     * 2. Simpan header VeneerKeringMutasiKeluar + rincian palet.
-     * 3. Catat baris KELUAR di stok_veneer_kerings + recalc, sehingga
-     *    Stok & Log HPP langsung terpotong.
+     * Proses pengeluaran veneer kering — ALUR BARU:
+     *
+     * Klik "Proses Barang Keluar" di sini TIDAK LAGI langsung memotong stok.
+     * Yang terjadi hanya:
+     *   1. Simpan header VeneerKeringMutasiKeluar + rincian tiap palet
+     *      (murni pencatatan "barang apa yang dikeluarkan dari gudang").
+     *   2. Untuk tiap palet dengan qty > 0, buat satu baris antrean
+     *      SerahTerimaVeneerKering (tipe_sumber='gudang', diterima_oleh='-').
+     *
+     * Palet-palet itu baru akan memotong stok & tercatat di Log HPP saat
+     * di-"Terima" satu-per-satu di RelationManager Produksi Repair — lihat
+     * StokVeneerKeringService::terimaKeluarGudang(). Kalau dari 5 palet yang
+     * dikeluarkan cuma 3 yang diterima, maka stok/log hanya terpotong 3 palet;
+     * sisanya tetap menunggu di antrean tanpa memengaruhi stok.
      */
     public function prosesKeluar(): void
     {
@@ -280,6 +288,9 @@ class GudangVeneerKering extends Page
                 $idJenisKayu = (int) $ref->id_jenis_kayu;
                 $kw          = (string) $ref->kw;
 
+                // Validasi saldo tetap di sini (early feedback), meskipun stok
+                // baru benar-benar terpotong nanti saat masing-masing palet
+                // diterima di Produksi Repair.
                 $saldo = StokVeneerKering::saldoLembarTerakhir($idUkuran, $idJenisKayu, $kw);
                 if ($totalLembar > $saldo) {
                     throw new \Exception("Stok tidak mencukupi. Tersedia: {$saldo} lembar.");
@@ -288,10 +299,9 @@ class GudangVeneerKering extends Page
                 $ukuran = $ref->ukuran ?? Ukuran::findOrFail($idUkuran);
                 $m3 = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $totalLembar) / 10000000;
 
-                $user     = Auth::user();
-                $userName = $user?->name ?? 'System';
+                $user = Auth::user();
 
-                // 1. Header mutasi keluar
+                // 1. Header mutasi keluar — murni pencatatan, TIDAK menyentuh stok/log.
                 $mutasi = VeneerKeringMutasiKeluar::create([
                     'id_ukuran'        => $idUkuran,
                     'id_jenis_kayu'    => $idJenisKayu,
@@ -304,57 +314,28 @@ class GudangVeneerKering extends Page
                     'keterangan'       => trim($this->keteranganKeluar) !== '' ? trim($this->keteranganKeluar) : null,
                 ]);
 
-                // 2. Rincian palet + 3. baris KELUAR di ledger PER PALET,
-                //    supaya log menampilkan tiap palet sebagai transaksi sendiri
-                //    (contoh: P1 -20 (50->30), lalu P2 -29 (30->1)).
-                $ketDasar = 'Keluar ke [' . trim($this->tujuanKeluar) . ']'
-                    . ' | Oleh: ' . $userName
-                    . ' | Ket: ' . (trim($this->keteranganKeluar) !== '' ? trim($this->keteranganKeluar) : '-');
-
-                $totalPalet = count($this->paletQuantities);
-
+                // 2. Rincian per palet + antrean Serah Terima (BELUM potong stok/log).
                 foreach ($this->paletQuantities as $index => $qty) {
                     $qtyPalet = intval($qty);
 
-                    VeneerKeringMutasiKeluarPalet::create([
+                    $palet = VeneerKeringMutasiKeluarPalet::create([
                         'id_mutasi_keluar' => $mutasi->id,
                         'no_palet'         => $index + 1,
                         'qty'              => $qtyPalet,
                     ]);
 
                     if ($qtyPalet <= 0) {
-                        continue; // palet kosong tidak perlu baris ledger
+                        continue; // palet kosong tidak perlu masuk antrean
                     }
 
-                    $m3Palet = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $qtyPalet) / 10000000;
-
-                    StokVeneerKering::create([
-                        'id_produksi_dryer'       => null,
-                        'id_ukuran'               => $idUkuran,
-                        'id_jenis_kayu'           => $idJenisKayu,
-                        'kw'                      => $kw,
-                        'jenis_transaksi'         => 'keluar',
-                        'tanggal_transaksi'       => now()->toDateString(),
-                        'qty'                     => $qtyPalet,
-                        'm3'                      => $m3Palet,
-                        'hpp_veneer_basah_per_m3' => 0,
-                        'ongkos_dryer_per_m3'     => 0,
-                        'hpp_kering_per_m3'       => 0,
-                        'nilai_transaksi'         => 0,
-                        'stok_lembar_sebelum'     => 0,
-                        'stok_lembar_sesudah'     => 0,
-                        'stok_m3_sebelum'         => 0,
-                        'stok_m3_sesudah'         => 0,
-                        'nilai_stok_sebelum'      => 0,
-                        'nilai_stok_sesudah'      => 0,
-                        'hpp_average'             => 0,
-                        'keterangan'              => 'Palet ' . ($index + 1) . '/' . $totalPalet . ' | ' . $ketDasar,
+                    SerahTerimaVeneerKering::create([
+                        'id_mutasi_keluar_palet' => $palet->id,
+                        'tipe_sumber'            => 'gudang',
+                        'diserahkan_oleh'        => $user?->name ?? 'System',
+                        'diterima_oleh'          => '-',
+                        'status'                 => 'Serah Veneer',
                     ]);
                 }
-
-                // Recalc sekali di akhir: snapshot sebelum/sesudah tiap baris
-                // (termasuk antar-palet) terhitung berantai dengan benar.
-                app(VeneerMutasiService::class)->recalculateStokKering($idUkuran, $idJenisKayu, $kw);
             });
 
             // Reset form
@@ -367,8 +348,8 @@ class GudangVeneerKering extends Page
 
             Notification::make()
                 ->success()
-                ->title('Mutasi Keluar Berhasil')
-                ->body("{$totalLembar} lembar veneer kering berhasil dikeluarkan dari stok.")
+                ->title('Barang Keluar Tercatat')
+                ->body("{$totalLembar} lembar veneer kering menunggu diterima di Serah Terima (Produksi Repair). Stok baru berkurang setelah diterima.")
                 ->send();
         } catch (\Exception $e) {
             Notification::make()
@@ -381,6 +362,8 @@ class GudangVeneerKering extends Page
 
     /**
      * Riwayat mutasi keluar (terbaru dulu), dengan pencarian bebas.
+     * Menampilkan SEMUA mutasi keluar apa adanya (mis. 5 palet dikeluarkan),
+     * terlepas dari berapa banyak yang sudah diterima di Produksi Repair.
      */
     public function getRiwayatKeluarProperty(): Collection
     {
