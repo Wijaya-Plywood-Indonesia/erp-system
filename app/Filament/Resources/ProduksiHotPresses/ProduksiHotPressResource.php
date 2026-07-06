@@ -10,7 +10,6 @@ use App\Filament\Resources\ProduksiHotPresses\RelationManagers\MutasiMasukRelati
 use App\Filament\Resources\ProduksiHotPresses\Schemas\ProduksiHotPressForm;
 use App\Filament\Resources\ProduksiHotPresses\Schemas\ProduksiHotPressInfoList;
 use App\Filament\Resources\ProduksiHotPresses\Tables\ProduksiHotPressesTable;
-use App\Filament\Resources\ProduksiHotPresses\Schemas\ProduksiStikInfoList;
 use App\Models\ProduksiHp;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -24,10 +23,13 @@ class ProduksiHotPressResource extends Resource
     protected static ?string $model = ProduksiHp::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
     protected static string|UnitEnum|null $navigationGroup = 'Hot Press';
+
     protected static ?int $navigationSort = 1;
 
     protected static ?string $modelLabel = 'Produksi Hot Press';
+
     protected static ?string $pluralModelLabel = 'Produksi Hot Press';
 
     public static function form(Schema $schema): Schema
@@ -50,6 +52,8 @@ class ProduksiHotPressResource extends Resource
         return [
             // RelationManagers\RencanaKerjaHpRelationManager::class,
             MutasiMasukRelationManager::class,
+            RelationManagers\SerahTerimaHpRelationManager::class,
+            RelationManagers\RencanaKerjaHpRelationManager::class,
             RelationManagers\DetailPegawaiHpRelationManager::class,
             // RelationManagers\VeneerBahanHpRelationManager::class,
             // RelationManagers\PlatformBahanHpRelationManager::class,

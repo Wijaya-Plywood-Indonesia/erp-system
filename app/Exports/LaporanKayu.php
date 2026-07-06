@@ -2,19 +2,23 @@
 
 namespace App\Exports;
 
+use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize; // Tambahan agar kolom rapi
 
-class LaporanKayu implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize
+ // Tambahan agar kolom rapi
+
+class LaporanKayu implements FromCollection, ShouldAutoSize, WithHeadings, WithMapping
 {
     protected $query;
+
     protected array $columns;
 
     /**
-     * @param \Illuminate\Database\Query\Builder $query
-     * @param array $columns
+     * @param  Builder|Collection  $query
      */
     public function __construct($query, array $columns)
     {
@@ -24,10 +28,20 @@ class LaporanKayu implements FromCollection, WithHeadings, WithMapping, ShouldAu
     }
 
     /**
-     * Mengambil data dari Query Builder
+     * Mengambil data dari Query Builder ATAU Collection.
+     *
+     * Sebelumnya $query selalu berupa Query Builder, jadi selalu perlu
+     * ->get(). Sekarang controller kadang sudah mengirim Collection yang
+     * sudah jadi (hasil agregasi PHP) — Collection::get() butuh argumen
+     * key, jadi tidak boleh dipanggil tanpa parameter. Maka: kalau sudah
+     * Collection, pakai langsung; kalau masih Builder, baru panggil get().
      */
     public function collection()
     {
+        if ($this->query instanceof Collection) {
+            return $this->query;
+        }
+
         // Mengambil data akhir yang sudah difilter oleh baseQuery()
         return $this->query->get();
     }
@@ -37,7 +51,7 @@ class LaporanKayu implements FromCollection, WithHeadings, WithMapping, ShouldAu
      */
     public function headings(): array
     {
-        return array_map(fn($c) => $c['label'], $this->columns);
+        return array_map(fn ($c) => $c['label'], $this->columns);
     }
 
     /**
@@ -50,11 +64,11 @@ class LaporanKayu implements FromCollection, WithHeadings, WithMapping, ShouldAu
 
             // Formatting tambahan jika field adalah 'm3' atau 'poin'
             if ($col['field'] === 'm3') {
-                return number_format((float)$value, 4, '.', '');
+                return number_format((float) $value, 4, '.', '');
             }
 
             if ($col['field'] === 'poin') {
-                return (int)$value;
+                return (int) $value;
             }
 
             return $value;

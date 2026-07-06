@@ -3,66 +3,184 @@
 namespace App\Http\Controllers;
 
 use App\Exports\LaporanKayu;
-use Illuminate\Support\Facades\DB;
+use App\Models\HargaKayu;
+use App\Models\NotaKayu;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Facades\Excel;
 
 class LaporanKayuMasukController extends Controller
 {
-    private function baseQuery(Request $request)
+    private const STATUS_LUNAS_PREFIX = 'Lunas%';
+
+    /**
+     * Ekspresi SQL untuk parse tanggal lunas dari string status_pelunasan.
+     * Format string: "Lunas - 30/06/2026 15:48 (nia)"
+     */
+    private const SQL_TGL_LUNAS = "STR_TO_DATE(SUBSTRING_INDEX(SUBSTRING_INDEX(status_pelunasan, ' - ', -1), ' (', 1), '%d/%m/%Y %H:%i')";
+
+    /**
+     * Ambil semua NotaKayu berstatus lunas, difilter & diurutkan
+     * berdasarkan TANGGAL LUNAS (diparse dari string status_pelunasan).
+     */
+    private function ambilNota(Request $request): Collection
     {
-        $m3Formula = "
-            CAST(
-                detail_turusan_kayus.panjang
-              * detail_turusan_kayus.diameter
-              * detail_turusan_kayus.diameter
-              * detail_turusan_kayus.kuantitas
-              * 0.785 / 1000000
-            AS DECIMAL(18,8))
-        ";
-
-        $query = DB::table('detail_turusan_kayus')
-            ->join('kayu_masuks', 'kayu_masuks.id', '=', 'detail_turusan_kayus.id_kayu_masuk')
-            ->join('supplier_kayus', 'supplier_kayus.id', '=', 'kayu_masuks.id_supplier_kayus')
-            ->join('jenis_kayus', 'jenis_kayus.id', '=', 'detail_turusan_kayus.jenis_kayu_id')
-            ->leftJoin('lahans', 'lahans.id', '=', 'detail_turusan_kayus.lahan_id')
-            ->leftJoin('harga_kayus AS hk', function ($join) {
-                $join->on('hk.id', '=', DB::raw("(SELECT hx.id FROM harga_kayus hx WHERE hx.id_jenis_kayu = detail_turusan_kayus.jenis_kayu_id AND hx.grade = detail_turusan_kayus.grade AND hx.panjang = detail_turusan_kayus.panjang AND detail_turusan_kayus.diameter BETWEEN hx.diameter_terkecil AND hx.diameter_terbesar ORDER BY hx.diameter_terkecil DESC LIMIT 1)"));
-            });
-
-        // FILTER TANGGAL: Menggunakan when agar fleksibel jika salah satu kosong
-        $query->when($request->dari, function ($q, $dari) {
-            return $q->whereDate('kayu_masuks.tgl_kayu_masuk', '>=', $dari);
-        })
+        return NotaKayu::query()
+            ->where('status_pelunasan', 'LIKE', self::STATUS_LUNAS_PREFIX)
+            ->when($request->dari, function ($q, $dari) {
+                return $q->whereRaw('DATE('.self::SQL_TGL_LUNAS.') >= ?', [$dari]);
+            })
             ->when($request->sampai, function ($q, $sampai) {
-                return $q->whereDate('kayu_masuks.tgl_kayu_masuk', '<=', $sampai);
+                return $q->whereRaw('DATE('.self::SQL_TGL_LUNAS.') <= ?', [$sampai]);
+            })
+            ->with([
+                'kayuMasuk.detailTurusanKayus.jenisKayu',
+                'kayuMasuk.detailTurusanKayus.lahan',
+                'kayuMasuk.penggunaanSupplier', // TODO: sesuaikan nama relasi supplier kalau beda
+            ])
+            ->orderByRaw(self::SQL_TGL_LUNAS.' ASC')
+            ->get();
+    }
+
+    /**
+     * Ambil tanggal lunas (format Y-m-d) dari string status_pelunasan,
+     * contoh: "Lunas - 30/06/2026 15:48 (nia)" -> "2026-06-30".
+     */
+    private function tglLunas(?string $statusPelunasan): ?string
+    {
+        if (! $statusPelunasan) {
+            return null;
+        }
+
+        if (preg_match('#(\d{2})/(\d{2})/(\d{4})#', $statusPelunasan, $m)) {
+            return "{$m[3]}-{$m[2]}-{$m[1]}"; // Y-m-d
+        }
+
+        return null;
+    }
+
+    /**
+     * COPY PERSIS dari NotaKayuController::groupByRentangDiameter().
+     * Poin dihitung per rentang diameter master (harga snapshot dari baris
+     * PERTAMA di rentang), supaya totalnya identik dengan grand total nota.
+     */
+    private function groupByRentangDiameter($details, $idJenisKayu, $grade, $panjang)
+    {
+        $rentangList = HargaKayu::where('id_jenis_kayu', $idJenisKayu)
+            ->where('grade', $grade)
+            ->where('panjang', $panjang)
+            ->orderBy('diameter_terkecil')
+            ->get();
+
+        $hasil = collect();
+        $terpakaiIds = collect();
+
+        foreach ($rentangList as $rentang) {
+            $kelompok = $details->filter(function ($item) use ($rentang) {
+                return $item->diameter >= $rentang->diameter_terkecil
+                    && $item->diameter <= $rentang->diameter_terbesar;
             });
 
-        return $query->select([
-            DB::raw('DATE(kayu_masuks.tgl_kayu_masuk) AS tanggal'),
-            'supplier_kayus.nama_supplier AS nama',
-            'kayu_masuks.seri',
-            'detail_turusan_kayus.panjang',
-            'jenis_kayus.nama_kayu AS jenis',
-            'lahans.kode_lahan AS lahan',
-            DB::raw('SUM(detail_turusan_kayus.kuantitas) AS banyak'),
-            DB::raw("ROUND(SUM(ROUND($m3Formula, 4)), 4) AS m3"),
-            DB::raw("ROUND(SUM(ROUND($m3Formula, 4) * CAST( COALESCE(hk.harga_beli,0) AS DECIMAL(12,2) ) * 1000), 2) AS poin"),
-        ])
-            ->groupBy([
-                DB::raw('DATE(kayu_masuks.tgl_kayu_masuk)'),
-                'supplier_kayus.nama_supplier',
-                'kayu_masuks.seri',
-                'detail_turusan_kayus.panjang',
-                'jenis_kayus.nama_kayu',
-                'lahans.kode_lahan',
-            ])
-            ->orderByDesc('kayu_masuks.tgl_kayu_masuk');
+            if ($kelompok->isNotEmpty()) {
+                $totalBatang = $kelompok->sum('kuantitas');
+                $totalKubikasi = $kelompok->sum(fn ($item) => round($item->kubikasi, 4));
+
+                $harga = $kelompok->first()->harga ?? 0;
+
+                $hasil->push([
+                    'batang' => $totalBatang,
+                    'kubikasi' => round($totalKubikasi, 4),
+                    'total_harga' => round($harga * $totalKubikasi * 1000),
+                ]);
+
+                $terpakaiIds = $terpakaiIds->merge($kelompok->pluck('id'));
+            }
+        }
+
+        // Item sisa di luar rentang master (manual)
+        $sisa = $details->whereNotIn('id', $terpakaiIds);
+        foreach ($sisa as $item) {
+            $hasil->push([
+                'batang' => $item->kuantitas,
+                'kubikasi' => round($item->kubikasi, 4),
+                'total_harga' => round(($item->harga ?? 0) * round($item->kubikasi, 4) * 1000),
+            ]);
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * Bangun baris laporan: SATU BARIS per (nota + lahan + jenis + panjang).
+     * Poin dihitung per grade + rentang diameter dulu (biar sama dengan nota),
+     * baru dijumlahkan jadi satu baris per lahan.
+     */
+    private function buildLaporanData(Request $request): Collection
+    {
+        $notas = $this->ambilNota($request);
+        $hasil = collect();
+
+        foreach ($notas as $nota) {
+            $kayuMasuk = $nota->kayuMasuk;
+            $details = $kayuMasuk->detailTurusanKayus ?? collect();
+
+            if ($details->isEmpty()) {
+                continue;
+            }
+
+            $tanggalLunas = $this->tglLunas($nota->status_pelunasan);
+
+            // Grup PENYAJIAN: per lahan + jenis + panjang (tanpa grade)
+            $grupLahan = $details->groupBy(function ($item) {
+                return implode('|', [
+                    $item->lahan_id,
+                    $item->jenis_kayu_id,
+                    $item->panjang,
+                ]);
+            });
+
+            foreach ($grupLahan as $itemsLahan) {
+                $first = $itemsLahan->first();
+
+                $totalBatang = 0;
+                $totalM3 = 0;
+                $totalPoin = 0;
+
+                // Grup PERHITUNGAN: tetap per grade, karena master harga per grade
+                foreach ($itemsLahan->groupBy('grade') as $grade => $itemsGrade) {
+                    $rentangRows = $this->groupByRentangDiameter(
+                        $itemsGrade,
+                        $first->jenis_kayu_id,
+                        $grade,
+                        $first->panjang
+                    );
+
+                    $totalBatang += $rentangRows->sum('batang');
+                    $totalM3 += $rentangRows->sum('kubikasi');
+                    $totalPoin += $rentangRows->sum('total_harga');
+                }
+
+                $hasil->push((object) [
+                    'tanggal' => $tanggalLunas,
+                    'nama' => trim($kayuMasuk->penggunaanSupplier->nama_supplier ?? '-'),
+                    'seri' => $kayuMasuk->seri,
+                    'panjang' => $first->panjang,
+                    'jenis' => $first->jenisKayu?->nama_kayu,
+                    'lahan' => $first->lahan?->kode_lahan,
+                    'banyak' => $totalBatang,
+                    'm3' => round($totalM3, 4),
+                    'poin' => $totalPoin,
+                ]);
+            }
+        }
+
+        return $hasil->values();
     }
 
     public function index(Request $request)
     {
-        $data = $this->baseQuery($request)->get();
+        $data = $this->buildLaporanData($request);
+
         return view('nota-kayu.laporan-kayu', compact('data'));
     }
 
@@ -70,36 +188,29 @@ class LaporanKayuMasukController extends Controller
     {
         $columns = [
             ['label' => 'Tanggal', 'field' => 'tanggal'],
-            ['label' => 'Nama', 'field' => 'nama'],
+            ['label' => 'Nama Supplier', 'field' => 'nama'],
             ['label' => 'Seri', 'field' => 'seri'],
             ['label' => 'Panjang', 'field' => 'panjang'],
             ['label' => 'Jenis', 'field' => 'jenis'],
             ['label' => 'Lahan', 'field' => 'lahan'],
-            ['label' => 'Banyak', 'field' => 'banyak'],
+            ['label' => 'Batang', 'field' => 'banyak'],
             ['label' => 'M3', 'field' => 'm3'],
             ['label' => 'Poin', 'field' => 'poin'],
         ];
 
-        // Logika Pengondisian Nama File
         if ($request->filled('dari') && $request->filled('sampai')) {
-            // Jika filter tanggal diisi keduanya
-            $labelTanggal = $request->dari . '_sd_' . $request->sampai;
+            $labelTanggal = $request->dari.'_sd_'.$request->sampai;
         } elseif ($request->filled('dari')) {
-            // Jika hanya tanggal 'dari' yang diisi
-            $labelTanggal = 'dari_' . $request->dari;
+            $labelTanggal = 'dari_'.$request->dari;
         } elseif ($request->filled('sampai')) {
-            // Jika hanya tanggal 'sampai' yang diisi
-            $labelTanggal = 'sampai_' . $request->sampai;
+            $labelTanggal = 'sampai_'.$request->sampai;
         } else {
-            // Jika tidak ada filter sama sekali (Default: Tanggal Hari Ini)
             $labelTanggal = now()->format('Y-m-d');
         }
 
-        $fileName = 'laporan_kayu_' . $labelTanggal . '.xlsx';
+        $fileName = 'laporan_kayu_'.$labelTanggal.'.xlsx';
+        $data = $this->buildLaporanData($request);
 
-        return Excel::download(
-            new LaporanKayu($this->baseQuery($request), $columns),
-            $fileName
-        );
+        return Excel::download(new LaporanKayu($data, $columns), $fileName);
     }
 }
