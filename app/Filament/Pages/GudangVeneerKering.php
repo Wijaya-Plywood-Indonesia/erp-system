@@ -304,43 +304,56 @@ class GudangVeneerKering extends Page
                     'keterangan'       => trim($this->keteranganKeluar) !== '' ? trim($this->keteranganKeluar) : null,
                 ]);
 
-                // 2. Rincian palet
+                // 2. Rincian palet + 3. baris KELUAR di ledger PER PALET,
+                //    supaya log menampilkan tiap palet sebagai transaksi sendiri
+                //    (contoh: P1 -20 (50->30), lalu P2 -29 (30->1)).
+                $ketDasar = 'Keluar ke [' . trim($this->tujuanKeluar) . ']'
+                    . ' | Oleh: ' . $userName
+                    . ' | Ket: ' . (trim($this->keteranganKeluar) !== '' ? trim($this->keteranganKeluar) : '-');
+
+                $totalPalet = count($this->paletQuantities);
+
                 foreach ($this->paletQuantities as $index => $qty) {
+                    $qtyPalet = intval($qty);
+
                     VeneerKeringMutasiKeluarPalet::create([
                         'id_mutasi_keluar' => $mutasi->id,
                         'no_palet'         => $index + 1,
-                        'qty'              => intval($qty),
+                        'qty'              => $qtyPalet,
+                    ]);
+
+                    if ($qtyPalet <= 0) {
+                        continue; // palet kosong tidak perlu baris ledger
+                    }
+
+                    $m3Palet = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $qtyPalet) / 10000000;
+
+                    StokVeneerKering::create([
+                        'id_produksi_dryer'       => null,
+                        'id_ukuran'               => $idUkuran,
+                        'id_jenis_kayu'           => $idJenisKayu,
+                        'kw'                      => $kw,
+                        'jenis_transaksi'         => 'keluar',
+                        'tanggal_transaksi'       => now()->toDateString(),
+                        'qty'                     => $qtyPalet,
+                        'm3'                      => $m3Palet,
+                        'hpp_veneer_basah_per_m3' => 0,
+                        'ongkos_dryer_per_m3'     => 0,
+                        'hpp_kering_per_m3'       => 0,
+                        'nilai_transaksi'         => 0,
+                        'stok_lembar_sebelum'     => 0,
+                        'stok_lembar_sesudah'     => 0,
+                        'stok_m3_sebelum'         => 0,
+                        'stok_m3_sesudah'         => 0,
+                        'nilai_stok_sebelum'      => 0,
+                        'nilai_stok_sesudah'      => 0,
+                        'hpp_average'             => 0,
+                        'keterangan'              => 'Palet ' . ($index + 1) . '/' . $totalPalet . ' | ' . $ketDasar,
                     ]);
                 }
 
-                // 3. Baris KELUAR di ledger stok (snapshot 0, lalu recalc)
-                $ket = 'Keluar ke [' . trim($this->tujuanKeluar) . '] ' . count($this->paletQuantities)
-                    . ' palet | Oleh: ' . $userName
-                    . (trim($this->keteranganKeluar) !== '' ? ' | Ket: ' . trim($this->keteranganKeluar) : '');
-
-                StokVeneerKering::create([
-                    'id_produksi_dryer'       => null,
-                    'id_ukuran'               => $idUkuran,
-                    'id_jenis_kayu'           => $idJenisKayu,
-                    'kw'                      => $kw,
-                    'jenis_transaksi'         => 'keluar',
-                    'tanggal_transaksi'       => now()->toDateString(),
-                    'qty'                     => $totalLembar,
-                    'm3'                      => $m3,
-                    'hpp_veneer_basah_per_m3' => 0,
-                    'ongkos_dryer_per_m3'     => 0,
-                    'hpp_kering_per_m3'       => 0,
-                    'nilai_transaksi'         => 0,
-                    'stok_lembar_sebelum'     => 0,
-                    'stok_lembar_sesudah'     => 0,
-                    'stok_m3_sebelum'         => 0,
-                    'stok_m3_sesudah'         => 0,
-                    'nilai_stok_sebelum'      => 0,
-                    'nilai_stok_sesudah'      => 0,
-                    'hpp_average'             => 0,
-                    'keterangan'              => $ket,
-                ]);
-
+                // Recalc sekali di akhir: snapshot sebelum/sesudah tiap baris
+                // (termasuk antar-palet) terhitung berantai dengan benar.
                 app(VeneerMutasiService::class)->recalculateStokKering($idUkuran, $idJenisKayu, $kw);
             });
 
