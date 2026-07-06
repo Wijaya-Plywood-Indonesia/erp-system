@@ -5,9 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class GudangVeneerJadi extends Model
+class StokPlatformMth extends Model
 {
-    protected $table = 'gudang_veneer_jadis';
+    protected $table = 'stok_platform_mth';
 
     protected $fillable = [
         'id_jenis_kayu',
@@ -22,10 +22,6 @@ class GudangVeneerJadi extends Model
         'hpp_pekerja_last',
         'hpp_bahan_penolong_last',
         'id_last_log',
-        'status_gudang',
-        'keterangan',
-        'diterima_by',
-        'diterima_at',
     ];
 
     protected $casts = [
@@ -33,8 +29,7 @@ class GudangVeneerJadi extends Model
         'nilai_stok'             => 'float',
         'hpp_average'            => 'float',
         'hpp_pekerja_last'       => 'float',
-        'hpp_bahan_penolong_last' => 'float',
-        'diterima_at'             => 'datetime',
+        'hpp_bahan_penolong_last'=> 'float',
     ];
 
     public function jenisKayu(): BelongsTo
@@ -44,10 +39,6 @@ class GudangVeneerJadi extends Model
 
     public function lastLog(): BelongsTo
     {
-        return $this->belongsTo(HppVeneerJadiLog::class, 'id_last_log');
-    }
-    public function penerima(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'diterima_by');
+        return $this->belongsTo(HppPlatformMthLog::class, 'id_last_log');
     }
 }
