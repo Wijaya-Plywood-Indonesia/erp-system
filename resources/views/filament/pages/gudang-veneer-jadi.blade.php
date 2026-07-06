@@ -98,23 +98,6 @@
                         </span>
                     </div>
 
-<<<<<<< HEAD
-                    {{-- Scrollbar otomatis aktif jika item melebihi 5 data --}}
-                    <div class="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                        @forelse($this->splitStok['core'] as $item)
-                        <div class="p-2 border flex justify-between items-center text-xs transition-all bg-zinc-50 border-zinc-200 dark:bg-zinc-950/70 dark:border-zinc-900 dark:hover:border-zinc-800 hover:border-zinc-300">
-                            <div class="space-y-0.5">
-                                <p class="font-bold text-zinc-800 dark:text-zinc-100">
-                                    {{ $item->panjang }}x{{ $item->lebar }}x{{ $item->tebal }} <span class="text-[10px] text-zinc-400 dark:text-zinc-500">mm</span>
-                                    <span class="mx-2 text-zinc-300 dark:text-zinc-800">|</span>
-                                    <span class="text-amber-600 dark:text-amber-500 font-bold">KW {{ $item->kw_grade }}</span>
-                                    <span class="mx-2 text-zinc-300 dark:text-zinc-800">|</span>
-                                    <span class="text-zinc-500 dark:text-zinc-400 text-[10px]">{{ $item->jenisKayu->nama ?? 'Sengon' }}</span>
-                                </p>
-                            </div>
-                            <div class="text-right">
-                                <span class="bg-amber-500 border border-amber-400 text-zinc-950 text-[11px] font-bold px-2 py-0.5 rounded-none shadow-sm">
-=======
                     <div class="space-y-2 max-h-[135px] overflow-y-auto pr-1">
                         @forelse($this->splitStok['core'] as $item)
                         <div class="p-2 border flex justify-between items-center text-sm transition-all bg-zinc-50 border-zinc-200 dark:bg-zinc-950/70 dark:border-zinc-900 dark:hover:border-zinc-800 hover:border-zinc-300">
@@ -129,17 +112,12 @@
                             </div>
                             <div class="text-right flex-shrink-0 ml-4"> {{-- 🛠️ Menolak ciut & beri jarak aman dari teks kiri --}}
                                 <span class="bg-amber-500 border border-amber-400 text-zinc-950 text-sm font-bold px-3 py-0.5 rounded-none shadow-sm whitespace-nowrap"> {{-- 🛠️ Mengunci teks agar anti-wrap --}}
->>>>>>> 18eed72721ff9853e7c16b13aabfd86753fc173b
                                     {{ number_format($item->stok_lembar, 0, ',', '.') }} lbr
                                 </span>
                             </div>
                         </div>
                         @empty
-<<<<<<< HEAD
-                        <p class="text-xs text-zinc-400 dark:text-zinc-500 italic py-4 text-center">Tidak ada saldo Core</p>
-=======
                         <p class="text-sm text-zinc-400 dark:text-zinc-500 italic py-4 text-center">Tidak ada saldo Core</p>
->>>>>>> 18eed72721ff9853e7c16b13aabfd86753fc173b
                         @endforelse
                     </div>
                 </div>
@@ -148,19 +126,12 @@
         </section>
 
         {{-- SECTION 2: MEJA SERAH TERIMA BARANG (DIVISI REPAIR) --}}
-<<<<<<< HEAD
-=======
         @if($activeTab === 'masuk')
->>>>>>> 18eed72721ff9853e7c16b13aabfd86753fc173b
         <section class="space-y-3">
             <div class="flex flex-col md:flex-row md:items-end justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-2">
                 <div>
                     <h2 class="text-xs font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-<<<<<<< HEAD
-                        SERAH TERIMA
-=======
                         SERAH TERIMA VENEER JADI
->>>>>>> 18eed72721ff9853e7c16b13aabfd86753fc173b
                     </h2>
                 </div>
 
@@ -174,31 +145,26 @@
                         </span>
                         <input
                             type="text"
-<<<<<<< HEAD
-                            placeholder="Search antrean..."
-                            wire:model.live.debounce.300ms="tableSearchQuery"
-                            class="text-[11px] pl-8 pr-3 py-1.5 border rounded-none focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white border-zinc-300 text-zinc-900 placeholder-zinc-400 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-600 w-full" />
-                    </div>
-                </div>
-            </div>
-
-            {{-- TABEL SERAH TERIMA --}}
-            <div class="border overflow-x-auto rounded-none bg-white border-zinc-200 shadow-sm dark:bg-zinc-950 dark:border-zinc-800 dark:shadow-none">
-                <table class="w-full text-left border-collapse text-xs">
-
-                    {{-- Header Tabel --}}
-                    {{-- Header Tabel — tambahkan kolom Meja --}}
-                    <thead class="bg-zinc-50 text-zinc-500 dark:bg-zinc-900/80 dark:text-zinc-400 text-[10px] uppercase font-bold border-b border-zinc-200 dark:border-zinc-800">
-                        <tr>
-                            <th class="py-3 px-3 w-8">
-                                <input type="checkbox" disabled class="accent-amber-500 opacity-50 cursor-not-allowed" />
-                            </th>
-=======
                             placeholder="Cari antrean..."
                             wire:model.live.debounce.300ms="tableSearchQuery"
                             class="text-xs pl-8 pr-3 py-1.5 border rounded-none focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white border-zinc-300 text-zinc-900 placeholder-zinc-400 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-600 w-full" />
                     </div>
                 </div>
+            </div>
+
+            <div class="flex gap-2 p-1 bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900">
+                <button
+                    type="button"
+                    wire:click="$set('activeSubTab', 'produksi')"
+                    class="flex-1 md:flex-none px-4 py-2 text-xs font-black uppercase tracking-widest transition-all {{ $activeSubTab === 'produksi' ? 'bg-amber-500 text-zinc-950 shadow-sm border border-amber-400' : 'text-zinc-400 hover:text-zinc-200 bg-transparent border border-transparent' }}">
+                    <span>Terima dari Produksi</span>
+                </button>
+                <button
+                    type="button"
+                    wire:click="$set('activeSubTab', 'mutasi')"
+                    class="flex-1 md:flex-none px-4 py-2 text-xs font-black uppercase tracking-widest transition-all {{ $activeSubTab === 'mutasi' ? 'bg-amber-500 text-zinc-950 shadow-sm border border-amber-400' : 'text-zinc-400 hover:text-zinc-200 bg-transparent border border-transparent' }}">
+                    <span>Terima dari BM</span>
+                </button>
             </div>
 
             {{-- 📱 VIEW HP / MOBILE (Hanya muncul di md:hidden atau layar < 768px) --}}
@@ -259,7 +225,7 @@
                             @if(($item['status_gudang'] ?? 'belum diterima') === 'belum diterima')
                             <button
                                 type="button"
-                                wire:click="confirmTerima({{ $item['id'] }})"
+                                wire:click="confirmTerima('{{ $item['id'] }}')"
                                 wire:loading.attr="disabled"
                                 class="inline-flex items-center gap-1 border border-amber-400 bg-amber-500 hover:bg-amber-600 text-zinc-950 transition-all text-xs font-black uppercase px-4 py-1.5 rounded-none shadow-sm active:scale-95 w-full justify-center">
                                 <span>Terima</span>
@@ -284,21 +250,12 @@
                 <table class="w-full text-left border-collapse text-sm">
                     <thead class="sticky top-0 z-10 bg-zinc-50 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400 text-[11px] uppercase font-bold border-b border-zinc-200 dark:border-zinc-800">
                         <tr>
->>>>>>> 18eed72721ff9853e7c16b13aabfd86753fc173b
                             <th class="py-3 px-4 text-center w-24">Aksi</th>
                             <th class="py-3 px-4">Jenis Kayu</th>
                             <th class="py-3 px-3 text-right">Panjang</th>
                             <th class="py-3 px-3 text-right">Lebar</th>
                             <th class="py-3 px-3 text-right">Tebal</th>
                             <th class="py-3 px-3 text-center">Grade</th>
-<<<<<<< HEAD
-                            <th class="py-3 px-4 text-center">Stok (Lembar)</th>
-                            <th class="py-3 px-4 text-right">Stok (m³)</th>
-                        </tr>
-                    </thead>
-
-                    {{-- Body Tabel --}}
-=======
                             <th class="py-3 px-4 text-center">Stok</th>
                             <th class="py-3 px-4 text-right">Kubikasi</th>
                             <th class="py-3 px-4 text-center">Status</th>
@@ -306,63 +263,17 @@
                             <th class="py-3 px-4">Keterangan</th>
                         </tr>
                     </thead>
->>>>>>> 18eed72721ff9853e7c16b13aabfd86753fc173b
                     <tbody class="divide-y divide-zinc-200 dark:divide-zinc-800">
                         @forelse($this->antreanFiltered as $item)
                         @php
                         $volumeM3 = $this->hitungKubikasi($item['panjang'], $item['lebar'], $item['tebal'], $item['jumlah']);
                         @endphp
                         <tr class="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-colors text-zinc-800 dark:text-zinc-100">
-<<<<<<< HEAD
-
-                            <td class="py-3 px-3">
-                                <input type="checkbox" disabled class="accent-amber-500 opacity-50 cursor-not-allowed" />
-                            </td>
-
-                            {{-- Aksi Terima — parameter disesuaikan dengan signature method baru --}}
-                            <td class="py-3 px-4 text-center">
-                                <button
-                                    type="button"
-                                    wire:click="terimaBarang({{ $item['id'] }})"
-                                    wire:loading.attr="disabled"
-                                    wire:target="terimaBarang({{ $item['id'] }})"
-                                    class="inline-flex items-center gap-1 border border-amber-400 bg-amber-500 hover:bg-amber-600 text-zinc-950 transition-all text-[10px] font-black uppercase px-2.5 py-1 rounded-none shadow-sm active:scale-95">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    <span>Terima</span>
-                                </button>
-                            </td>
-                            <td class="py-3 px-4 font-bold text-sm">{{ $item['jenis_kayu'] }}</td>
-                            <td class="py-3 px-3 text-right text-sm text-zinc-600 dark:text-zinc-300">{{ $item['panjang'] }} cm</td>
-                            <td class="py-3 px-3 text-right text-sm text-zinc-600 dark:text-zinc-300">{{ $item['lebar'] }} cm</td>
-                            <td class="py-3 px-3 text-right text-sm text-amber-600 dark:text-amber-500 font-bold">{{ $item['tebal'] }} mm</td>
-
-                            <td class="py-3 px-3 text-center">
-                                <span class="inline-block border border-amber-400 bg-amber-500 text-zinc-950 font-black text-xs px-2 py-0.5 rounded-none shadow-sm">
-                                    {{ $item['kw'] }}
-                                </span>
-                            </td>
-
-                            <td class="py-3 px-4 text-center">
-                                <span class="inline-block border border-amber-400 bg-amber-500 text-zinc-950 font-bold text-xs px-2.5 py-0.5 rounded-none shadow-sm">
-                                    {{ number_format($item['jumlah'], 0, ',', '.') }}
-                                </span>
-                            </td>
-
-                            <td class="py-3 px-4 text-right font-bold text-zinc-500 dark:text-zinc-400 text-sm">
-                                {{ number_format($volumeM3, 4, '.', '') }}
-                            </td>
-                        </tr>
-                        @empty
-                        <tr>
-                            <td colSpan="10" class="py-8 text-center text-zinc-400 dark:text-zinc-500 italic">
-=======
                             <td class="py-3 px-4 text-center">
                                 @if(($item['status_gudang'] ?? 'belum diterima') === 'belum diterima')
                                 <button
                                     type="button"
-                                    wire:click="confirmTerima({{ $item['id'] }})"
+                                    wire:click="confirmTerima('{{ $item['id'] }}')"
                                     wire:loading.attr="disabled"
                                     class="inline-flex items-center gap-1 border border-amber-400 bg-amber-500 hover:bg-amber-600 text-zinc-950 transition-all text-[11px] font-black uppercase px-3 py-1 rounded-none shadow-sm active:scale-95">
                                     <span>Terima</span>
@@ -420,7 +331,6 @@
                         @empty
                         <tr>
                             <td colSpan="11" class="py-8 text-center text-zinc-400 dark:text-zinc-500 italic">
->>>>>>> 18eed72721ff9853e7c16b13aabfd86753fc173b
                                 Tidak ada antrean kiriman aktif saat ini.
                             </td>
                         </tr>
@@ -429,24 +339,6 @@
                 </table>
             </div>
 
-<<<<<<< HEAD
-            {{-- Footer Pagination Sederhana --}}
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                <div>
-                    Showing <span class="text-zinc-700 dark:text-zinc-200 font-bold">{{ count($this->antreanFiltered) }}</span> result(s)
-                </div>
-
-                <div class="flex items-center gap-2">
-                    <span>Per page</span>
-                    <select
-                        disabled
-                        class="text-xs p-1 border rounded-none bg-white border-zinc-300 text-zinc-700 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 opacity-60 cursor-not-allowed">
-                        <option value="10">10</option>
-                    </select>
-                </div>
-            </div>
-        </section>
-=======
         </section>
         @else
         {{-- TAB 2: KONTEN PENGELUARAN VENEER (OUT) --}}
@@ -536,7 +428,7 @@
                 @endforelse
             </div>
 
-            {{-- 🖥️ DESKTOP VIEW TABLE (MUTASI KELUAR - RESPONSIVE OPTIMIZED) --}}
+            {{-- 🖥️ DESKTOP VIEW TABLE (MUTASI KELUAR - ACCORDION FULL ROW) --}}
             <div class="hidden md:block border overflow-x-auto max-h-[450px] overflow-y-auto rounded-none bg-white border-zinc-200 shadow-sm dark:bg-zinc-950 dark:border-zinc-800 dark:shadow-none">
                 <table class="w-full text-left border-collapse text-sm">
                     <thead class="sticky top-0 z-10 bg-zinc-50 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400 text-[11px] uppercase font-bold border-b border-zinc-200 dark:border-zinc-800">
@@ -554,36 +446,40 @@
                             <th class="py-3 px-4">Keterangan</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-200 dark:divide-zinc-800 text-zinc-800 dark:text-zinc-300">
-                        @forelse($this->riwayatKeluarFiltered as $item)
-                        <tr class="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-colors">
-                            <td class="py-3 px-4 text-xs text-zinc-500 whitespace-nowrap">{{ $item['created_at'] }}</td>
+
+                    @forelse($this->riwayatKeluarFiltered as $item)
+                    <tbody x-data="{ open: false }" class="divide-y divide-zinc-200 dark:divide-zinc-800 text-zinc-800 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-800">
+
+                        {{-- BARIS UTAMA: seluruh baris jadi trigger accordion --}}
+                        <tr @click="open = !open" class="cursor-pointer hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-colors">
+                            <td class="py-3 px-4 text-xs text-zinc-500 whitespace-nowrap">
+                                <span class="inline-flex items-center gap-2">
+                                    <svg class="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 transition-transform duration-150 flex-shrink-0"
+                                        :class="{ 'rotate-90': open }"
+                                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                                    </svg>
+                                    {{ $item['created_at'] }}
+                                </span>
+                            </td>
                             <td class="py-3 px-4 font-bold text-zinc-900 dark:text-white text-base">{{ $item['jenis_kayu'] }}</td>
                             <td class="py-3 px-3 text-center text-sm text-zinc-600 dark:text-zinc-300 font-mono">{{ ($item['panjang'] + 0) }}</td>
                             <td class="py-3 px-3 text-center text-sm text-zinc-600 dark:text-zinc-300 font-mono">{{ ($item['lebar'] + 0) }}</td>
                             <td class="py-3 px-3 text-center text-sm text-amber-600 dark:text-amber-500 font-bold font-mono">{{ ($item['tebal'] + 0) }}</td>
-                            <td class="py-3 px-3 text-center"><span class="inline-block border border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 font-black text-xs px-2.5 py-0.5 rounded-none shadow-sm">KW {{ $item['kw'] }}</span></td>
+                            <td class="py-3 px-3 text-center">
+                                <span class="inline-block border border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 font-black text-xs px-2.5 py-0.5 rounded-none shadow-sm">KW {{ $item['kw'] }}</span>
+                            </td>
 
+                            {{-- Ringkasan saja, rincian per palet dipindah ke baris accordion --}}
                             <td class="py-3 px-4">
-                                <div class="flex flex-col gap-1 max-w-xs">
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="text-sm font-bold font-mono text-red-500 dark:text-red-400">
-                                            -{{ number_format(($item['stok_lembar'] ?? 0), 0, ',', '.') }}
-                                        </span>
-                                        <span class="text-[10px] text-zinc-400">lbr</span>
-                                        <span class="text-xs px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-400 border dark:border-zinc-700 rounded font-medium">
-                                            {{ $item['jumlah_palet'] }} plt
-                                        </span>
-                                    </div>
-                                    @if(!empty($item['rincian_palet']))
-                                    <div class="flex flex-wrap gap-1 items-center">
-                                        @foreach($item['rincian_palet'] as $idx => $qty)
-                                        <span class="text-xs font-mono px-1.5 py-0.5 bg-zinc-50 dark:bg-zinc-950 text-zinc-500 rounded border border-zinc-200 dark:border-zinc-900">
-                                            P{{ $idx + 1 }}:<strong class="text-zinc-700 dark:text-zinc-300">{{ $qty }}</strong>
-                                        </span>
-                                        @endforeach
-                                    </div>
-                                    @endif
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-sm font-bold font-mono text-red-500 dark:text-red-400">
+                                        -{{ number_format(($item['stok_lembar'] ?? 0), 0, ',', '.') }}
+                                    </span>
+                                    <span class="text-[10px] text-zinc-400">lbr</span>
+                                    <span class="text-xs px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 rounded font-medium">
+                                        {{ $item['jumlah_palet'] }} plt
+                                    </span>
                                 </div>
                             </td>
 
@@ -598,17 +494,33 @@
                             </td>
                             <td class="py-3 px-4 text-xs text-zinc-600 dark:text-zinc-400 max-w-xs truncate">{{ $item['keterangan'] ?? '-' }}</td>
                         </tr>
-                        @empty
+
+                        {{-- BARIS ACCORDION: rincian per palet dalam bentuk badge --}}
+                        @if(!empty($item['rincian_palet']))
+                        <tr x-show="open" x-cloak class="bg-zinc-50/60 dark:bg-zinc-900/40">
+                            <td colspan="11" class="py-3 px-4 pl-12">
+                                <div class="flex flex-wrap gap-2">
+                                    @foreach($item['rincian_palet'] as $idx => $qty)
+                                    <span class="inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-1.5 bg-zinc-100 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 rounded">
+                                        P{{ $idx + 1 }}: <strong class="text-zinc-800 dark:text-zinc-100">{{ $qty }}</strong>
+                                    </span>
+                                    @endforeach
+                                </div>
+                            </td>
+                        </tr>
+                        @endif
+                    </tbody>
+                    @empty
+                    <tbody>
                         <tr>
                             <td colSpan="11" class="py-8 text-center text-zinc-400 italic">Belum ada riwayat pengeluaran yang terdaftar.</td>
                         </tr>
-                        @endforelse
                     </tbody>
+                    @endforelse
                 </table>
             </div>
         </section>
         @endif
->>>>>>> 18eed72721ff9853e7c16b13aabfd86753fc173b
 
     </div>
 
