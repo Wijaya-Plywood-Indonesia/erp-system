@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('hpp_platform_jadi', function (Blueprint $table) {
+        Schema::create('hpp_triplek_jadi_log', function (Blueprint $table) {
             $table->id();
             $table->foreignId('id_jenis_kayu')
                 ->constrained('jenis_kayus')
@@ -53,9 +53,8 @@ return new class extends Migration
 
             $table->index(
                 ['id_jenis_kayu', 'panjang', 'lebar', 'tebal', 'kw_grade', 'tanggal', 'id'],
-                'idx_hpp_platform_jadi_log_kombinasi'
+                'idx_hpp_triplek_jadi_log_kombinasi'
             );
-            $table->timestamps();
         });
     }
 
@@ -64,6 +63,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('hpp_platform_jadi');
+        Schema::dropIfExists('hpp_triplek_jadi');
     }
 };
