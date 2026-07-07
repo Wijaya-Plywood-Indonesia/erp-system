@@ -49,8 +49,6 @@ return new class extends Migration
             $table->decimal('stok_kubikasi_after', 15, 6)->default(0)->nullable();
             $table->decimal('nilai_stok_after',    20, 2)->default(0)->nullable();
 
-            $table->timestamps();
-
             $table->index(
                 ['id_jenis_kayu', 'panjang', 'lebar', 'tebal', 'kw_grade', 'tanggal', 'id'],
                 'idx_hpp_platform_jadi_log_kombinasi'
@@ -64,6 +62,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('hpp_platform_jadi');
+        Schema::dropIfExists('hpp_platform_jadi_log');
     }
 };
