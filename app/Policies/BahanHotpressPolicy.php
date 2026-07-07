@@ -11,7 +11,7 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class BahanHotpressPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:BahanHotpress');
@@ -66,5 +66,4 @@ class BahanHotpressPolicy
     {
         return $authUser->can('Reorder:BahanHotpress');
     }
-
 }

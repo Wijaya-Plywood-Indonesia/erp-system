@@ -23,10 +23,25 @@ class MutasiMasukRelationManager extends RelationManager
 {
     protected static string $relationship = 'mutasiMasuk';
     protected static ?string $title = 'Serah Terima';
+
+    protected function modifyQueryUsing(Builder $query): Builder
+    {
+        return $query
+            // 🌟 Menggunakan subquery untuk mengecek status 'diterima_by' di tabel induk mutasiKeluar
+            ->orderByRaw('
+            (
+                SELECT CASE WHEN mk.diterima_by IS NULL THEN 0 ELSE 1 END 
+                FROM veneer_jadi_mutasi_keluars mk 
+                WHERE mk.id = veneer_jadi_mutasi_keluar_palets.id_mutasi_keluar
+                LIMIT 1
+            ) ASC
+        ');
+    }
+
     public function table(Table $table): Table
     {
         return $table
-            ->defaultSort('id', 'desc')
+            // ->defaultSort('id', 'desc')
             ->recordTitleAttribute('kw_grade')
             ->columns([
                 TextColumn::make('mutasiKeluar.created_at')
@@ -35,10 +50,18 @@ class MutasiMasukRelationManager extends RelationManager
                     ->color('gray'),
                 TextColumn::make('mutasiKeluar.jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
-                    ->weight('bold'),
+                    ->weight('bold')
+                    ->searchable(),
                 TextColumn::make('ukuran')
                     ->label('Ukuran')
-                    ->getStateUsing(fn($record) => ((float)$record->mutasiKeluar->panjang + 0) . 'x' . ((float)$record->mutasiKeluar->lebar + 0) . 'x' . ((float)$record->mutasiKeluar->tebal + 0)),
+                    ->getStateUsing(fn($record) => ((float)$record->mutasiKeluar->panjang + 0) . 'x' . ((float)$record->mutasiKeluar->lebar + 0) . 'x' . ((float)$record->mutasiKeluar->tebal + 0))
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->whereHas('mutasiKeluar', function (Builder $q) use ($search) {
+                            $q->where('panjang', 'like', "%{$search}%")
+                                ->orWhere('lebar', 'like', "%{$search}%")
+                                ->orWhere('tebal', 'like', "%{$search}%");
+                        });
+                    }),
                 TextColumn::make('mutasiKeluar.kw_grade')
                     ->label('KW')
                     ->badge()
@@ -48,7 +71,8 @@ class MutasiMasukRelationManager extends RelationManager
                     ->label('Nomor Palet')
                     ->alignCenter()
                     ->badge()
-                    ->color('gray'),
+                    ->color('gray')
+                    ->searchable(),
                 TextColumn::make('jumlah_lembar')
                     ->label('Jumlah Lembar')
                     ->formatStateUsing(fn($state) => number_format($state) . ' Lbr')
@@ -96,7 +120,7 @@ class MutasiMasukRelationManager extends RelationManager
                     ->label('TERIMA')
                     ->button()
                     ->color('warning') // Tombol warna emas/oranye solid
-                    ->visible(fn(VeneerJadiMutasiKeluarPalet $record) => is_null($record->diterima_by))
+                    ->visible(fn(VeneerJadiMutasiKeluarPalet $record) => is_null($record->mutasiKeluar->diterima_by))
                     ->requiresConfirmation()
                     ->modalHeading('Konfirmasi Penerimaan Material')
                     ->modalDescription('Apakah Anda yakin barang sudah dihitung fisik dan sesuai dengan dokumen dokumen? Tindakan ini akan langsung mendaftarkan palet ke antrean produksi Hotpress.')
@@ -122,10 +146,10 @@ class MutasiMasukRelationManager extends RelationManager
                     }),
 
                 Action::make('done_label')
-                    ->label('✓ DONE')
+                    ->label('✓ SELESAI')
                     ->color('success')
                     ->disabled()
-                    ->visible(fn(VeneerJadiMutasiKeluarPalet $record) => !is_null($record->diterima_by)),
+                    ->visible(fn(VeneerJadiMutasiKeluarPalet $record) => ! is_null($record->mutasiKeluar->diterima_by)),
             ]);
     }
 }

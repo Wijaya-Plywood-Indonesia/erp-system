@@ -6,6 +6,7 @@ use App\Filament\Resources\ProduksiHotPresses\Pages\CreateProduksiHotPress;
 use App\Filament\Resources\ProduksiHotPresses\Pages\EditProduksiHotPress;
 use App\Filament\Resources\ProduksiHotPresses\Pages\ListProduksiHotPresses;
 use App\Filament\Resources\ProduksiHotPresses\Pages\ViewProduksiHotPress;
+use App\Filament\Resources\ProduksiHotPresses\RelationManagers\BahanHotPressRelationManager;
 use App\Filament\Resources\ProduksiHotPresses\RelationManagers\MutasiMasukRelationManager;
 use App\Filament\Resources\ProduksiHotPresses\Schemas\ProduksiHotPressForm;
 use App\Filament\Resources\ProduksiHotPresses\Schemas\ProduksiHotPressInfoList;
@@ -50,14 +51,13 @@ class ProduksiHotPressResource extends Resource
     public static function getRelations(): array
     {
         return [
-            // RelationManagers\RencanaKerjaHpRelationManager::class,
-            MutasiMasukRelationManager::class,
+            // MutasiMasukRelationManager::class,
             RelationManagers\SerahTerimaHpRelationManager::class,
-            RelationManagers\RencanaKerjaHpRelationManager::class,
+            // RelationManagers\RencanaKerjaHpRelationManager::class,Sudah
             RelationManagers\DetailPegawaiHpRelationManager::class,
             // RelationManagers\VeneerBahanHpRelationManager::class,
             // RelationManagers\PlatformBahanHpRelationManager::class,
-            RelationManagers\BahanHotPressRelationManager::class,
+            BahanHotPressRelationManager::class,
             RelationManagers\PlatformHasilHpRelationManager::class,
             RelationManagers\TriplekHasilHpRelationManager::class,
             RelationManagers\BahanPenolongHpRelationManager::class,
