@@ -2,14 +2,13 @@
 
 namespace App\Filament\Resources\ModalSandings\Schemas;
 
-use App\Models\BarangSetengahJadiHp;
-use App\Models\Grade;
-use App\Models\JenisBarang;
 use App\Models\ModalSanding;
+use App\Models\SerahTerimaHp;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
-use Illuminate\Validation\Rule;
 
 class ModalSandingForm
 {
@@ -17,172 +16,223 @@ class ModalSandingForm
     {
         return $schema->components([
 
+            Hidden::make('id_produksi_sanding')
+                ->default(fn ($livewire) => $livewire->getOwnerRecord()?->id),
+
+            Hidden::make('id_barang_setengah_jadi'),
+
             /*
             |--------------------------------------------------------------------------
-            | FILTER GRADE
+            | PILIH PALET (SERAH TERIMA) — KHUSUS PLATFORM
             |--------------------------------------------------------------------------
             */
-            Select::make('grade_id')
+            Select::make('id_serah_terima_hp')
+                ->label('Pilih Palet (Serah Terima)')
+                ->options(fn (?ModalSanding $record) => self::getPaletOptions($record))
+                ->searchable()
+                ->live()
+                ->required()
+                ->afterStateUpdated(function ($state, $set, ?ModalSanding $record) {
+                    if (! $state) {
+                        $set('id_barang_setengah_jadi', null);
+                        $set('grade_label', null);
+                        $set('jenis_barang_label', null);
+                        $set('ukuran_label', null);
+                        $set('sisa_tersedia', null);
+                        $set('kuantitas', null);
+
+                        return;
+                    }
+
+                    $serahTerima = SerahTerimaHp::with([
+                        'platformHasilHp.barangSetengahJadi.jenisBarang',
+                        'platformHasilHp.barangSetengahJadi.grade',
+                        'platformHasilHp.barangSetengahJadi.ukuran',
+                    ])->find($state);
+
+                    $hasil = $serahTerima?->platformHasilHp;
+                    $barang = $hasil?->barangSetengahJadi;
+
+                    $sisa = $serahTerima?->sisa ?? 0;
+                    if ($record && $record->id_serah_terima_hp === (int) $state) {
+                        $sisa += (float) $record->kuantitas;
+                    }
+
+                    $set('id_barang_setengah_jadi', $barang?->id);
+                    $set('grade_label', $barang?->grade?->nama_grade ?? '-');
+                    $set('jenis_barang_label', $barang?->jenisBarang?->nama_jenis_barang ?? '-');
+                    $set('ukuran_label', $barang?->ukuran?->dimensi ?? '-');
+                    $set('sisa_tersedia', $sisa);
+                    $set('kuantitas', $sisa);
+                }),
+
+            TextInput::make('sisa_tersedia')
+                ->label('Sisa Tersedia')
+                ->disabled()
+                ->dehydrated(false)
+                ->afterStateHydrated(function ($set, ?ModalSanding $record) {
+                    if (! $record?->serahTerimaHp) {
+                        return;
+                    }
+
+                    $set('sisa_tersedia', $record->serahTerimaHp->sisa + (float) $record->kuantitas);
+                }),
+
+            TextInput::make('grade_label')
                 ->label('Grade')
-                ->default(fn(callable $get) => self::lastValue($get, 'grade_id'))
-                ->options(
-                    Grade::with('kategoriBarang')
-                        ->whereHas('kategoriBarang', function ($q) {
-                            $q->whereIn('nama_kategori', ['PLATFORM', 'PLYWOOD']);
-                        })
-                        ->get()
-                        ->mapWithKeys(fn($g) => [
-                            $g->id => ($g->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
-                                . ' - ' . $g->nama_grade
-                        ])
-                )
-                ->reactive()
-                ->searchable()
-                ->placeholder('Semua Grade'),
+                ->disabled()
+                ->dehydrated(false)
+                ->afterStateHydrated(function ($set, ?ModalSanding $record) {
+                    if (! $record?->barangSetengahJadi) {
+                        return;
+                    }
 
+                    $set('grade_label', $record->barangSetengahJadi->grade?->nama_grade);
+                }),
 
-            /*
-            |--------------------------------------------------------------------------
-            | FILTER JENIS BARANG
-            |--------------------------------------------------------------------------
-            */
-            Select::make('id_jenis_barang')
+            TextInput::make('jenis_barang_label')
                 ->label('Jenis Barang')
-                ->default(fn(callable $get) => self::lastValue($get, 'id_jenis_barang'))
-                ->options(JenisBarang::pluck('nama_jenis_barang', 'id'))
-                ->reactive()
-                ->searchable()
-                ->placeholder('Semua Jenis Barang'),
+                ->disabled()
+                ->dehydrated(false)
+                ->afterStateHydrated(function ($set, ?ModalSanding $record) {
+                    if (! $record?->barangSetengahJadi) {
+                        return;
+                    }
+
+                    $set('jenis_barang_label', $record->barangSetengahJadi->jenisBarang?->nama_jenis_barang);
+                }),
+
+            TextInput::make('ukuran_label')
+                ->label('Ukuran')
+                ->disabled()
+                ->dehydrated(false)
+                ->afterStateHydrated(function ($set, ?ModalSanding $record) {
+                    if (! $record?->barangSetengahJadi) {
+                        return;
+                    }
+
+                    $set('ukuran_label', $record->barangSetengahJadi->ukuran?->dimensi);
+                }),
 
             /*
             |--------------------------------------------------------------------------
-            | BARANG SETENGAH JADI (TERGANTUNG FILTER)
-            |--------------------------------------------------------------------------
-            */
-            Select::make('id_barang_setengah_jadi')
-                ->label('Barang Setengah Jadi')
-
-                // OPTIONS saat create / filter
-                ->options(function (callable $get) {
-                    $query = BarangSetengahJadiHp::query()
-                        ->with(['ukuran', 'jenisBarang', 'grade.kategoriBarang'])
-                        ->whereHas('grade.kategoriBarang', function ($q) {
-                            $q->whereIn('nama_kategori', ['PLATFORM', 'PLYWOOD']);
-                        });
-
-
-                    if ($get('grade_id')) {
-                        $query->where('id_grade', $get('grade_id'));
-                    }
-
-                    if ($get('jenis_barang_id')) {
-                        $query->where('id_jenis_barang', $get('jenis_barang_id'));
-                    }
-
-                    if (!$get('grade_id') && !$get('jenis_barang_id')) {
-                        $query->limit(50);
-                    }
-
-                    return $query->orderBy('id', 'desc')
-                        ->get()
-                        ->mapWithKeys(function ($b) {
-
-                            $kategori = $b->grade?->kategoriBarang?->nama_kategori ?? 'Kategori?';
-                            $ukuran = $b->ukuran?->dimensi ?? 'Ukuran?';
-                            $jenis = $b->jenisBarang?->nama_jenis_barang ?? 'Jenis?';
-                            $grade = $b->grade?->nama_grade ?? 'Grade?';
-
-                            return [
-                                $b->id => "{$kategori} — {$ukuran} — {$grade} — {$jenis}"
-                            ];
-                        });
-                })
-
-                // LABEL saat EDIT (ini yang kamu butuhkan!)
-                ->getOptionLabelUsing(function ($value) {
-                    $b = BarangSetengahJadiHp::with(['ukuran', 'jenisBarang', 'grade.kategoriBarang'])
-                        ->find($value);
-
-                    if (!$b)
-                        return $value; // fallback ID
-
-                    $kategori = $b->grade?->kategoriBarang?->nama_kategori ?? 'Kategori?';
-                    $ukuran = $b->ukuran?->dimensi ?? 'Ukuran?';
-                    $jenis = $b->jenisBarang?->nama_jenis_barang ?? 'Jenis?';
-                    $grade = $b->grade?->nama_grade ?? 'Grade?';
-
-                    return "{$kategori} — {$ukuran} — {$grade} — {$jenis}";
-                })
-
-                ->searchable()
-                ->placeholder('Pilih Barang'),
-
-            /*
-            |--------------------------------------------------------------------------
-            | KUANTITAS
+            | KUANTITAS — satu-satunya angka jumlah yang bisa diedit bebas
             |--------------------------------------------------------------------------
             */
             TextInput::make('kuantitas')
-                ->label('Kuantitas')
+                ->label('Kuantitas Dipakai')
                 ->numeric()
                 ->minValue(1)
-                ->default(fn(callable $get) => self::lastValue($get, 'kuantitas'))
-                ->required(),
+                ->required()
+                ->rules([
+                    fn (Get $get, ?ModalSanding $record) => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                        $idSerahTerima = $get('id_serah_terima_hp');
+
+                        if (! $idSerahTerima) {
+                            return;
+                        }
+
+                        $serahTerima = SerahTerimaHp::find($idSerahTerima);
+
+                        if (! $serahTerima) {
+                            return;
+                        }
+
+                        $sisa = $serahTerima->sisa;
+
+                        if ($record && $record->id_serah_terima_hp === (int) $idSerahTerima) {
+                            $sisa += (float) $record->kuantitas;
+                        }
+
+                        if ($value > $sisa) {
+                            $fail("Jumlah melebihi sisa yang tersedia ({$sisa}).");
+                        }
+                    },
+                ]),
 
             /*
             |--------------------------------------------------------------------------
-            | JUMLAH PASS SANDING
+            | JUMLAH PASS SANDING — tetap bisa diedit
             |--------------------------------------------------------------------------
             */
             TextInput::make('jumlah_sanding_face')
                 ->label('Jumlah Sanding Face (Pass)')
                 ->numeric()
                 ->minValue(1)
-                ->default(fn(callable $get) => self::lastValue($get, 'jumlah_sanding'))
                 ->required(),
+
             TextInput::make('jumlah_sanding_back')
                 ->label('Jumlah Sanding Back (Pass)')
                 ->numeric()
                 ->minValue(1)
-                ->default(fn(callable $get) => self::lastValue($get, 'jumlah_sanding'))
                 ->required(),
 
             /*
             |--------------------------------------------------------------------------
-            | NO PALET + VALIDASI UNIQUE
+            | NO PALET — auto-generate, disabled, tapi tetap tersimpan
             |--------------------------------------------------------------------------
             */
             TextInput::make('no_palet')
                 ->label('No Palet')
-                ->numeric()
-                ->required()
-                ->rule(function ($livewire) {
+                ->disabled()
+                ->dehydrated(true)
+                ->default(function (callable $get) {
+                    $idProduksi = $get('id_produksi_sanding');
+                    if (! $idProduksi) {
+                        return null;
+                    }
 
-                    $parent = $livewire->getOwnerRecord();
-
-                    $record = $livewire->getMountedTableActionRecord(); // record yang diedit
-
-                    return Rule::unique('modal_sandings', 'no_palet')
-                        ->where('id_produksi_sanding', $parent->id)
-                        ->ignore($record?->id);
-                })
+                    return self::generateNextNoPalet($idProduksi);
+                }),
         ]);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Helper: membaca data terakhir per id_produksi_sanding
-    |--------------------------------------------------------------------------
-    */
-    private static function lastValue(callable $get, string $column)
+    protected static function getPaletOptions(?ModalSanding $record): array
     {
-        $idProduksi = $get('id_produksi_sanding');
-        if (!$idProduksi) {
-            return null;
-        }
+        $currentId = $record?->id_serah_terima_hp;
+        $currentKuantitas = (float) ($record?->kuantitas ?? 0);
 
-        return ModalSanding::where('id_produksi_sanding', $idProduksi)
-            ->latest('id')
-            ->value($column);
+        return SerahTerimaHp::query()
+            ->whereNotNull('id_platform_hasil_hp')
+            ->where('diterima_oleh', '!=', '-')
+            ->with([
+                'platformHasilHp.barangSetengahJadi.ukuran',
+                'platformHasilHp.barangSetengahJadi.grade',
+                'platformHasilHp.barangSetengahJadi.jenisBarang',
+            ])
+            ->get()
+            ->map(function ($item) use ($currentId, $currentKuantitas) {
+                $sisa = $item->sisa + ($item->id === $currentId ? $currentKuantitas : 0);
+
+                return [$item, $sisa];
+            })
+            ->filter(fn ($pair) => $pair[1] > 0)
+            ->mapWithKeys(function ($pair) {
+                [$item, $sisa] = $pair;
+                $hasil = $item->platformHasilHp;
+                $barang = $hasil?->barangSetengahJadi;
+                $ukuran = $barang?->ukuran;
+
+                $ukuranLabel = $ukuran ? ($ukuran->dimensi ?? "{$ukuran->panjang}x{$ukuran->lebar}x{$ukuran->tebal}") : '-';
+                $kodeJenisBarang = strtoupper($barang?->jenisBarang?->kode_jenis_barang ?? '-');
+                $gradeLabel = $barang?->grade?->nama_grade ?? '-';
+                $sisaLabel = rtrim(rtrim(number_format($sisa, 2, '.', ''), '0'), '.');
+
+                $label = "Palet {$hasil?->no_palet} - {$ukuranLabel} {$kodeJenisBarang} {$gradeLabel} — Sisa: {$sisaLabel}";
+
+                return [$item->id => $label];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Nomor palet hasil sanding berikutnya untuk produksi ini (auto-increment per produksi).
+     */
+    protected static function generateNextNoPalet(int $idProduksi): int
+    {
+        $lastNoPalet = ModalSanding::where('id_produksi_sanding', $idProduksi)
+            ->max('no_palet');
+
+        return ((int) $lastNoPalet) + 1;
     }
 }

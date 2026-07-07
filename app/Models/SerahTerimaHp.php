@@ -11,7 +11,9 @@ class SerahTerimaHp extends Model
 
     protected $fillable = [
         'id_triplek_hasil_hp',
+        'id_platform_hasil_hp',
         'id_produksi_graji_triplek',
+        'id_produksi_sanding',
         'diserahkan_oleh',
         'diterima_oleh',
         'status',
@@ -26,14 +28,42 @@ class SerahTerimaHp extends Model
         return $this->belongsTo(TriplekHasilHp::class, 'id_triplek_hasil_hp');
     }
 
+    public function platformHasilHp(): BelongsTo
+    {
+        return $this->belongsTo(PlatformHasilHp::class, 'id_platform_hasil_hp');
+    }
+
     public function produksiGrajiTriplek(): BelongsTo
     {
         return $this->belongsTo(ProduksiGrajitriplek::class, 'id_produksi_graji_triplek');
     }
 
+    public function produksiSanding(): BelongsTo
+    {
+        return $this->belongsTo(ProduksiSanding::class, 'id_produksi_sanding');
+    }
+
     // ─────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────
+
+    /**
+     * Tipe sumber hasil: 'triplek' atau 'platform'.
+     */
+    public function getTipeSumberAttribute(): string
+    {
+        return $this->id_platform_hasil_hp ? 'platform' : 'triplek';
+    }
+
+    /**
+     * Ambil record hasil produksi apapun sumbernya (triplek atau platform).
+     */
+    public function getHasilAttribute()
+    {
+        return $this->tipeSumber === 'platform'
+            ? $this->platformHasilHp
+            : $this->triplekHasilHp;
+    }
 
     public function isMenunggu(): bool
     {
@@ -47,12 +77,19 @@ class SerahTerimaHp extends Model
 
     public function getQtyAsliAttribute(): float
     {
-        return (float) ($this->triplekHasilHp->isi ?? 0);
+        return (float) ($this->hasil->isi ?? 0);
     }
 
+    /**
+     * Sisa = qty asli dikurangi total pemakaian.
+     * - Sumber triplek: pemakaian dihitung dari MasukGrajiTriplek.
+     * - Sumber platform: pemakaian dihitung dari ModalSanding.
+     */
     public function getSisaAttribute(): float
     {
-        $terpakai = MasukGrajiTriplek::where('id_serah_terima_hp', $this->id)->sum('isi');
+        $terpakai = $this->tipeSumber === 'triplek'
+            ? MasukGrajiTriplek::where('id_serah_terima_hp', $this->id)->sum('isi')
+            : ModalSanding::where('id_serah_terima_hp', $this->id)->sum('kuantitas');
 
         return $this->qtyAsli - (float) $terpakai;
     }
