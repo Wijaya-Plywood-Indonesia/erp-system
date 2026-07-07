@@ -287,22 +287,12 @@ class GudangVeneerJadi extends Page
      */
     public function getAntreanFilteredProperty(): Collection
     {
-<<<<<<<<< Temporary merge branch 1
         $query = GudangModel::with(['jenisKayu', 'penerima'])
             ->select([
                 'gudang_veneer_jadis.*',
                 'jenis_kayus.nama_kayu as jenis_kayu_nama',
             ])
-            ->join('jenis_kayus', 'jenis_kayus.id', '=', 'gudang_veneer_jadis.id_jenis_kayu')
-            ->orderByRaw("FIELD(gudang_veneer_jadis.status_gudang, 'belum diterima', 'sudah diterima') ASC")
-            ->orderBy('gudang_veneer_jadis.created_at', 'desc');
-=========
-        return collect($this->antreanMasuk)
-            ->filter(function ($item) {
-                if (empty($this->tableSearchQuery))
-                    return true;
-                $q = strtolower($this->tableSearchQuery);
->>>>>>>>> Temporary merge branch 2
+            ->join('jenis_kayus', 'jenis_kayus.id', '=', 'gudang_veneer_jadis.id_jenis_kayu');
 
         if (!empty($this->tableSearchQuery)) {
             $q = strtolower($this->tableSearchQuery);
@@ -318,7 +308,8 @@ class GudangVeneerJadi extends Page
             });
         }
 
-        return $query->get()->map(fn($item) => [
+        // Sumber 1: GudangVeneerJadi (Produksi/Repair)
+        $antreanGudang = $query->get()->map(fn($item) => [
             'id' => 'gudang-' . $item->id,
             'source' => 'gudang',
             'jenis_kayu' => $item->jenis_kayu_nama,
@@ -336,6 +327,18 @@ class GudangVeneerJadi extends Page
             'penerima_name' => $item->penerima?->name ?? 'N/A',
             'keterangan' => $item->keterangan,
         ]);
+
+        // Sumber 2: VeneerMutasi (arah masuk) — lihat ambilAntreanDariMutasiJadi()
+        $antreanMutasi = $this->ambilAntreanDariMutasiJadi();
+
+        // Gabungkan kedua sumber, lalu urutkan: "belum diterima" dulu, baru terbaru dulu
+        return $antreanGudang->concat($antreanMutasi)
+            ->sortBy([
+                fn($a, $b) => ($a['status_gudang'] === 'belum diterima' ? 0 : 1)
+                <=> ($b['status_gudang'] === 'belum diterima' ? 0 : 1),
+                fn($a, $b) => $b['created_at_ts'] <=> $a['created_at_ts'],
+            ])
+            ->values();
     }
 
     /**
