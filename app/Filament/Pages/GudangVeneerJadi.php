@@ -287,33 +287,7 @@ class GudangVeneerJadi extends Page
      */
     public function getAntreanFilteredProperty(): Collection
     {
-        $dariGudang = $this->ambilAntreanDariGudang();
-        $dariMutasi = $this->ambilAntreanDariMutasiJadi();
-
-        return $dariGudang
-            ->concat($dariMutasi)
-            ->filter(function ($item) {
-                // Filter berdasarkan sub-tab aktif
-                if ($this->activeSubTab === 'produksi') {
-                    return $item['source'] === 'gudang';
-                } else {
-                    return $item['source'] === 'mutasi';
-                }
-            })
-            ->sortBy([
-                fn($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
-                fn($item) => -$item['created_at_ts'],
-                fn($item) => $item['id'],
-            ])
-            ->values();
-    }
-
-    /**
-     * Sumber 1: tabel GudangVeneerJadi (Produksi/Repair) — logika ASLI,
-     * cuma ditambah 'id' composite dan 'source'.
-     */
-    protected function ambilAntreanDariGudang(): Collection
-    {
+<<<<<<<<< Temporary merge branch 1
         $query = GudangModel::with(['jenisKayu', 'penerima'])
             ->select([
                 'gudang_veneer_jadis.*',
@@ -322,6 +296,13 @@ class GudangVeneerJadi extends Page
             ->join('jenis_kayus', 'jenis_kayus.id', '=', 'gudang_veneer_jadis.id_jenis_kayu')
             ->orderByRaw("FIELD(gudang_veneer_jadis.status_gudang, 'belum diterima', 'sudah diterima') ASC")
             ->orderBy('gudang_veneer_jadis.created_at', 'desc');
+=========
+        return collect($this->antreanMasuk)
+            ->filter(function ($item) {
+                if (empty($this->tableSearchQuery))
+                    return true;
+                $q = strtolower($this->tableSearchQuery);
+>>>>>>>>> Temporary merge branch 2
 
         if (!empty($this->tableSearchQuery)) {
             $q = strtolower($this->tableSearchQuery);
