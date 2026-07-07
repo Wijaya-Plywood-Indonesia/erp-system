@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 
 class VeneerKeringMutasiKeluarPalet extends Model
 {
@@ -25,14 +26,39 @@ class VeneerKeringMutasiKeluarPalet extends Model
     }
 
     // ─────────────────────────────────────────────
-    // Accessor proxy ke header VeneerKeringMutasiKeluar
+    // Proxy ke header VeneerKeringMutasiKeluar, supaya palet bisa
+    // diperlakukan SERAGAM seperti DetailHasil / DetailBongkarKedi.
     //
-    // Supaya model ini bisa diperlakukan SERAGAM seperti DetailHasil /
-    // DetailBongkarKedi (yang punya kolom id_ukuran/id_jenis_kayu/kw
-    // langsung) tanpa perlu ubah banyak logic existing di
-    // StokVeneerKeringService & SerahTerimaVeneerKering::getSumberAttribute().
+    // ukuran() & jenisKayu() harus berupa RELASI (bukan return model),
+    // karena Filament/kode lain mengaksesnya sebagai properti
+    // ($sumber->ukuran). Dipakai hasOneThrough menembus tabel header.
     // ─────────────────────────────────────────────
 
+    public function ukuran(): HasOneThrough
+    {
+        return $this->hasOneThrough(
+            Ukuran::class,                     // model tujuan
+            VeneerKeringMutasiKeluar::class,   // model perantara (header)
+            'id',                // FK di header yang dicocokkan ke palet (pakai id header)
+            'id',                // PK di ukurans
+            'id_mutasi_keluar',  // kolom lokal di palet -> header.id
+            'id_ukuran'          // kolom di header -> ukurans.id
+        );
+    }
+
+    public function jenisKayu(): HasOneThrough
+    {
+        return $this->hasOneThrough(
+            JenisKayu::class,
+            VeneerKeringMutasiKeluar::class,
+            'id',
+            'id',
+            'id_mutasi_keluar',
+            'id_jenis_kayu'
+        );
+    }
+
+    // Atribut skalar cukup lewat accessor (bukan relasi, aman).
     public function getIdUkuranAttribute()
     {
         return $this->mutasiKeluar?->id_ukuran;
@@ -46,15 +72,5 @@ class VeneerKeringMutasiKeluarPalet extends Model
     public function getKwAttribute()
     {
         return $this->mutasiKeluar?->kw;
-    }
-
-    public function ukuran()
-    {
-        return $this->mutasiKeluar?->ukuran;
-    }
-
-    public function jenisKayu()
-    {
-        return $this->mutasiKeluar?->jenisKayu;
     }
 }
