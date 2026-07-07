@@ -13,6 +13,8 @@ use App\Models\StokPlatformMth;
 use App\Models\HppPlatformMthLog;
 use App\Models\StokTriplekMth;
 use App\Models\HppTriplekMthLog;
+use App\Models\StokPlywoodSiapJual;
+use App\Models\HppPlywoodSiapJualLog;
 use App\Models\Ukuran;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\DB;
@@ -43,12 +45,13 @@ class ListOpnameStoks extends CreateRecord
     protected function handleRecordCreation(array $data): BarangSetengahJadiHp
     {
         return match ($data['jenis_stok']) {
-            'veneer_basah'   => $this->opnameVeneerBasah($data),
-            'veneer_jadi'    => $this->opnameVeneerJadi($data),
-            'veneer_kering'  => $this->opnameVeneerKering($data),
-            'platform_mth'   => $this->opnamePlatformMth($data),
-            'triplek_mth'    => $this->opnameTriplekMth($data),
-            default          => throw new \InvalidArgumentException('Jenis stok tidak dikenali.'),
+            'veneer_basah'  => $this->opnameVeneerBasah($data),
+            'veneer_jadi'   => $this->opnameVeneerJadi($data),
+            'veneer_kering' => $this->opnameVeneerKering($data),
+            'platform_mth'  => $this->opnamePlatformMth($data),
+            'triplek_mth'   => $this->opnameTriplekMth($data),
+            'plywood'       => $this->opnamePlywood($data),
+            default         => throw new \InvalidArgumentException('Jenis stok tidak dikenali.'),
         };
     }
 
@@ -495,6 +498,94 @@ class ListOpnameStoks extends CreateRecord
             Notification::make()
                 ->title('Opname Berhasil')
                 ->body("Stok triplek MTH disesuaikan menjadi {$stokFisik} lembar.")
+                ->success()
+                ->send();
+
+            return new BarangSetengahJadiHp();
+        });
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // PLYWOOD SIAP JUAL
+    // ────────────────────────────────────────────────────────────
+    protected function opnamePlywood(array $data): BarangSetengahJadiHp
+    {
+        return DB::transaction(function () use ($data) {
+            $ukuran = Ukuran::findOrFail($data['id_ukuran']);
+
+            $summary = StokPlywoodSiapJual::where([
+                'id_jenis_kayu' => $data['id_jenis_kayu'],
+                'panjang'       => (float) $ukuran->panjang,
+                'lebar'         => (float) $ukuran->lebar,
+                'tebal'         => (float) $ukuran->tebal,
+                'kw_grade'      => $data['kw'],
+            ])->lockForUpdate()->first();
+
+            if (!$summary) {
+                $summary = StokPlywoodSiapJual::create([
+                    'id_jenis_kayu' => $data['id_jenis_kayu'],
+                    'panjang'       => (float) $ukuran->panjang,
+                    'lebar'         => (float) $ukuran->lebar,
+                    'tebal'         => (float) $ukuran->tebal,
+                    'kw_grade'      => $data['kw'],
+                    'stok_lembar'   => 0,
+                    'stok_kubikasi' => 0,
+                ]);
+            }
+
+            $stokSistem     = (int) $summary->stok_lembar;
+            $stokFisik      = (int) $data['stok_fisik'];
+            $kubikasiFisik  = (float) $data['kubikasi_fisik'];
+            $kubikasiSistem = (float) $summary->stok_kubikasi;
+
+            $selisihLembar   = $stokFisik - $stokSistem;
+            $selisihKubikasi = $kubikasiFisik - $kubikasiSistem;
+
+            if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) {
+                Notification::make()->title('Tidak ada perubahan stok')->warning()->send();
+                return new BarangSetengahJadiHp();
+            }
+
+            $tipe = $selisihLembar !== 0
+                ? ($selisihLembar > 0 ? 'masuk' : 'keluar')
+                : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
+
+            $tgl = now()->format('d/m/Y');
+            $ket = "OPNAME PLYWOOD SIAP JUAL TANGGAL {$tgl}";
+            if (!empty($data['catatan'])) {
+                $ket .= ". CATATAN: " . strtoupper($data['catatan']);
+            }
+
+            $kubikasiSelisih = round(abs($kubikasiFisik - $kubikasiSistem), 6);
+
+            // Plywood tidak punya nilai_stok & hpp_average — update stok saja
+            $summary->update([
+                'stok_lembar'   => $stokFisik,
+                'stok_kubikasi' => $kubikasiFisik,
+            ]);
+
+            $log = HppPlywoodSiapJualLog::create([
+                'id_jenis_kayu'        => $summary->id_jenis_kayu,
+                'panjang'              => $summary->panjang,
+                'lebar'                => $summary->lebar,
+                'tebal'                => $summary->tebal,
+                'kw_grade'             => $summary->kw_grade,
+                'tanggal'              => now(),
+                'tipe_transaksi'       => $tipe,
+                'keterangan'           => $ket,
+                'total_lembar'         => abs($selisihLembar),
+                'total_kubikasi'       => $kubikasiSelisih,
+                'stok_lembar_before'   => $stokSistem,
+                'stok_lembar_after'    => $stokFisik,
+                'stok_kubikasi_before' => $kubikasiSistem,
+                'stok_kubikasi_after'  => $kubikasiFisik,
+            ]);
+
+            $summary->update(['id_last_log' => $log->id]);
+
+            Notification::make()
+                ->title('Opname Berhasil')
+                ->body("Stok plywood siap jual disesuaikan menjadi {$stokFisik} lembar.")
                 ->success()
                 ->send();
 

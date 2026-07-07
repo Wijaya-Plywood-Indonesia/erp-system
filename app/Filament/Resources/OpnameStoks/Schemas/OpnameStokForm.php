@@ -9,6 +9,7 @@ use App\Models\StokVeneerJadi;
 use App\Models\StokVeneerKering;
 use App\Models\StokPlatformMth;
 use App\Models\StokTriplekMth;
+use App\Models\StokPlywoodSiapJual;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
@@ -25,11 +26,12 @@ class OpnameStokForm
             Select::make('jenis_stok')
                 ->label('Jenis Stok')
                 ->options([
-                    'veneer_basah'  => 'Veneer Basah',
-                    'veneer_kering' => 'Veneer Kering',
-                    'veneer_jadi'   => 'Veneer Jadi',
-                    'platform_mth'  => 'Platform MTH',
-                    'triplek_mth'   => 'Triplek MTH',
+                    'veneer_basah'   => 'Veneer Basah',
+                    'veneer_kering'  => 'Veneer Kering',
+                    'veneer_jadi'    => 'Veneer Jadi',
+                    'platform_mth'   => 'Platform MTH',
+                    'triplek_mth'    => 'Triplek MTH',
+                    'plywood'        => 'Plywood Siap Jual',
                 ])
                 ->default('veneer_basah')
                 ->required()
@@ -121,6 +123,7 @@ class OpnameStokForm
             'veneer_kering' => self::bacaStokKering((int) $idJenisKayu, (int) $idUkuran, (string) $kw),
             'platform_mth'  => self::bacaStokPlatformMth((int) $idJenisKayu, $ukuran, (string) $kw),
             'triplek_mth'   => self::bacaStokTriplekMth((int) $idJenisKayu, $ukuran, (string) $kw),
+            'plywood'       => self::bacaStokPlywood((int) $idJenisKayu, $ukuran, (string) $kw),
             default         => [0, 0],
         };
 
@@ -187,6 +190,22 @@ class OpnameStokForm
     private static function bacaStokTriplekMth(int $idJenisKayu, Ukuran $ukuran, string $kw): array
     {
         $summary = StokTriplekMth::where([
+            'id_jenis_kayu' => $idJenisKayu,
+            'panjang'       => $ukuran->panjang,
+            'lebar'         => $ukuran->lebar,
+            'tebal'         => $ukuran->tebal,
+            'kw_grade'      => $kw,
+        ])->first();
+
+        return [
+            $summary ? (int) $summary->stok_lembar : 0,
+            $summary ? (float) $summary->stok_kubikasi : 0.0,
+        ];
+    }
+
+    private static function bacaStokPlywood(int $idJenisKayu, Ukuran $ukuran, string $kw): array
+    {
+        $summary = StokPlywoodSiapJual::where([
             'id_jenis_kayu' => $idJenisKayu,
             'panjang'       => $ukuran->panjang,
             'lebar'         => $ukuran->lebar,
