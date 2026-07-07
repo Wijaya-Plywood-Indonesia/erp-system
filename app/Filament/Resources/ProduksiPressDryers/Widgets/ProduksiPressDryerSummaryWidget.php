@@ -25,7 +25,8 @@ class ProduksiPressDryerSummaryWidget extends Widget
     public function getListeners(): array
     {
         $id = $this->record?->id;
-        if (!$id) return [];
+        if (!$id)
+            return [];
         return [
             "echo:production.dryer.{$id},.ProductionUpdated" => 'refreshSummary',
         ];
@@ -39,7 +40,8 @@ class ProduksiPressDryerSummaryWidget extends Widget
 
     public function refreshSummary(): void
     {
-        if (!$this->record) return;
+        if (!$this->record)
+            return;
 
         try {
             // Eager load necessary relationships safely
@@ -91,7 +93,8 @@ class ProduksiPressDryerSummaryWidget extends Widget
 
             // Mencatat LOG ke storage/logs/laravel.log
             Log::info("=== BREAKDOWN KUBIKASI DRYER ID: $produksiId ===");
-            foreach ($breakdownLog as $logLine) Log::info($logLine);
+            foreach ($breakdownLog as $logLine)
+                Log::info($logLine);
             Log::info("TOTAL KUBIKASI AKHIR: $totalKubikasi");
 
             // Query Dasar Ukuran (Untuk tampilan List)
@@ -143,64 +146,92 @@ class ProduksiPressDryerSummaryWidget extends Widget
                 ->orderBy('ukuran')
                 ->get();
 
-            // 6. LOGIKA TARGET
-            $firstMesin = $this->record->detailMesins->first();
-            $namaMesin = '-';
-            $mesinUtamaId = null;
-
-            if ($firstMesin) {
-                $namaMesin = $firstMesin->mesin->nama_mesin
-                    ?? $firstMesin->kategoriMesin->nama_kategori_mesin
-                    ?? 'MESIN ?';
-                $mesinUtamaId = $firstMesin->id_mesin_dryer;
-            }
-
-            $shift = strtoupper($this->record->shift ?? 'PAGI');
-            $targetModel = null;
-
-            if ($mesinUtamaId) {
-                if (stripos($namaMesin, 'DRYER') !== false) {
-                    if ($shift === 'PAGI') {
-                        $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER PAGI')->first();
-                    } else {
-                        $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER MALAM')->first();
-                    }
-                } elseif (stripos($namaMesin, 'DRYER 1') !== false || $mesinUtamaId == 17) {
-                    $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER PAGI')->first();
-                } elseif (stripos($namaMesin, 'DRYER 2') !== false || $mesinUtamaId == 18) {
-                    $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER MALAM')->first();
-                } else {
-                    $targetModel = \App\Models\Target::where('id_mesin', $mesinUtamaId)->first();
-                }
-            }
-
-            $targetValue = $targetModel ? (float) $targetModel->target : 0;
-            $isDryer = stripos($namaMesin, 'DRYER') !== false;
-            $progress = 0;
-
-            if ($targetValue > 0) {
-                $actual = $isDryer ? $totalKubikasi : $totalAll;
-                $progress = min(round(($actual / $targetValue) * 100, 1), 100);
-            }
-
-            $targetSummary = [
-                'hasTarget' => $targetModel !== null,
-                'targetName' => $targetModel->kode_ukuran ?? ($targetModel ? $namaMesin : 'TIDAK ADA TARGET'),
-                'targetValue' => $targetValue,
-                'unit' => $isDryer ? 'm³' : 'Lembar',
-                'actualValue' => $isDryer ? $totalKubikasi : $totalAll,
-                'progress' => $progress,
-            ];
-
+            // ==========================================================
+            // SIMPAN DULU DATA INTI YANG SUDAH PASTI BERHASIL DIHITUNG
+            // Ini memastikan kubikasi & data lain tetap tampil walaupun
+            // logika target di bawah nanti gagal / melempar exception.
+            // ==========================================================
             $this->summary = [
                 'totalAll' => $totalAll,
                 'totalPegawai' => $totalPegawai,
-                'totalKubikasi' => $totalKubikasi, // Data Baru
+                'totalKubikasi' => $totalKubikasi,
                 'globalUkuranKw' => $globalUkuranKw,
                 'globalUkuran' => $globalUkuran,
                 'globalJenisKayuUkuran' => $globalJenisKayuUkuran,
-                'targetSummary' => $targetSummary,
+                'targetSummary' => [
+                    'hasTarget' => false,
+                    'targetName' => 'TIDAK ADA TARGET',
+                    'targetValue' => 0,
+                    'unit' => 'm³',
+                    'actualValue' => $totalKubikasi,
+                    'progress' => 0,
+                ],
             ];
+
+            // ==========================================================
+            // 6. LOGIKA TARGET — dibungkus try-catch terpisah.
+            // Jika gagal (misal relasi mesin null), hanya targetSummary
+            // yang fallback ke default; data inti di atas tetap aman.
+            // ==========================================================
+            try {
+                $firstMesin = $this->record->detailMesins->first();
+                $namaMesin = '-';
+                $mesinUtamaId = null;
+
+                if ($firstMesin) {
+                    // Nullsafe operator (?->) mencegah error saat relasi
+                    // mesin/kategoriMesin bernilai null (data sudah dihapus)
+                    $namaMesin = $firstMesin->mesin?->nama_mesin
+                        ?? $firstMesin->kategoriMesin?->nama_kategori_mesin
+                        ?? 'MESIN ?';
+                    $mesinUtamaId = $firstMesin->id_mesin_dryer;
+                }
+
+                $shift = strtoupper($this->record->shift ?? 'PAGI');
+                $targetModel = null;
+
+                if ($mesinUtamaId) {
+                    if (stripos($namaMesin, 'DRYER') !== false) {
+                        if ($shift === 'PAGI') {
+                            $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER PAGI')->first();
+                        } else {
+                            $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER MALAM')->first();
+                        }
+                    } elseif (stripos($namaMesin, 'DRYER 1') !== false || $mesinUtamaId == 17) {
+                        $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER PAGI')->first();
+                    } elseif (stripos($namaMesin, 'DRYER 2') !== false || $mesinUtamaId == 18) {
+                        $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER MALAM')->first();
+                    } else {
+                        $targetModel = \App\Models\Target::where('id_mesin', $mesinUtamaId)->first();
+                    }
+                }
+
+                $targetValue = $targetModel ? (float) $targetModel->target : 0;
+                $isDryer = stripos($namaMesin, 'DRYER') !== false;
+                $progress = 0;
+
+                if ($targetValue > 0) {
+                    $actual = $isDryer ? $totalKubikasi : $totalAll;
+                    $progress = min(round(($actual / $targetValue) * 100, 1), 100);
+                }
+
+                $targetSummary = [
+                    'hasTarget' => $targetModel !== null,
+                    'targetName' => $targetModel->kode_ukuran ?? ($targetModel ? $namaMesin : 'TIDAK ADA TARGET'),
+                    'targetValue' => $targetValue,
+                    'unit' => $isDryer ? 'm³' : 'Lembar',
+                    'actualValue' => $isDryer ? $totalKubikasi : $totalAll,
+                    'progress' => $progress,
+                ];
+
+                // Hanya bagian targetSummary yang di-update di sini,
+                // data inti (kubikasi, total, breakdown) tidak disentuh lagi.
+                $this->summary['targetSummary'] = $targetSummary;
+            } catch (\Exception $e) {
+                Log::error("Gagal memuat target untuk dryer {$produksiId}: " . $e->getMessage());
+                // summary utama (termasuk kubikasi) tetap aman karena
+                // sudah di-assign sebelum blok try-catch ini dijalankan.
+            }
         } catch (\Exception $e) {
             Log::error("Error pada Summary Widget Dryer: " . $e->getMessage());
         }

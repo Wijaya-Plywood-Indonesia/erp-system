@@ -4,44 +4,26 @@
         {{-- ================= STAT UTAMA ================= --}}
         <div class="space-y-3 text-center py-4">
 
-            @php
-                $isDryer = false;
-                $firstMesin = $record->detailMesins->first();
-                if ($firstMesin) {
-                    $namaMesin =
-                        $firstMesin->mesin->nama_mesin ?? ($firstMesin->kategoriMesin->nama_kategori_mesin ?? '');
-                    $isDryer = stripos($namaMesin, 'DRYER') !== false;
-                }
-            @endphp
+            {{-- Widget ini khusus untuk Produksi Press Dryer, jadi kubikasi
+                 selalu relevan dan selalu ditampilkan bersama total lembar,
+                 tanpa bergantung pada pencocokan string nama mesin. --}}
+            <div>
+                <div class="text-4xl font-extrabold text-primary-600 dark:text-primary-500">
+                    {{ number_format($summary['totalKubikasi'] ?? 0, 4, ',', '.') }} m³
+                </div>
+                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Total Produksi (Kubikasi)
+                </div>
+            </div>
 
-            @if ($isDryer)
-                <div>
-                    <div class="text-4xl font-extrabold text-primary-600 dark:text-primary-500">
-                        {{ number_format($summary['totalKubikasi'] ?? 0, 4, ',', '.') }} m³
-                    </div>
-                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Total Produksi (Kubikasi)
-                    </div>
+            <div style="margin-top: 1.5rem;">
+                <div class="text-3xl font-extrabold text-amber-600 dark:text-amber-500">
+                    {{ number_format($summary['totalAll'] ?? 0) }} Lembar
                 </div>
-
-                <div style="margin-top: 1.5rem;">
-                    <div class="text-3xl font-extrabold text-amber-600 dark:text-amber-500">
-                        {{ number_format($summary['totalAll'] ?? 0) }} Lembar
-                    </div>
-                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Total Lembar Produksi
-                    </div>
+                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Total Lembar Produksi
                 </div>
-            @else
-                <div>
-                    <div class="text-4xl font-extrabold text-primary-600 dark:text-primary-500">
-                        {{ number_format($summary['totalAll'] ?? 0) }} Lembar
-                    </div>
-                    <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Total Produksi (Lembar)
-                    </div>
-                </div>
-            @endif
+            </div>
 
             <div style="margin-top: 1.5rem;">
                 <div class="text-2xl font-bold text-success-600 dark:text-success-500">
