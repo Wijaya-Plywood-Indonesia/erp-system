@@ -12,7 +12,10 @@ use App\Models\NotaBarangMasuk;
 use App\Models\DetailNotaBarangMasuk;
 use App\Models\HppVeneerBasahSummary;
 use App\Models\HppVeneerBasahLog;
+use App\Models\HppVeneerJadiLog;
+use App\Models\StokVeneerJadi;
 use App\Models\StokVeneerKering;
+use Exception;
 use Illuminate\Support\Facades\DB;
 
 class VeneerMutasiService
@@ -117,6 +120,13 @@ class VeneerMutasiService
      * Step 2 — Called when validator clicks "Validasi Nota" on BK or BM.
      * Actually updates the stock. Validator must be a different user from creator.
      *
+     * Aturan stok saat validasi:
+     *   - Veneer BASAH  (masuk & keluar) -> langsung ubah stok + log.
+     *   - Veneer KERING KELUAR           -> langsung kurangi stok + log (sama seperti basah).
+     *   - Veneer KERING MASUK            -> DITUNDA. Baru masuk StokVeneerKering saat
+     *                                       tombol "Terima" di Gudang Veneer Kering diklik.
+     *                                       Lihat: SerahTerimaVeneerKeringService::terima()
+     *
      * @param  NotaBarangKeluar|NotaBarangMasuk  $nota
      * @throws \Exception if validator is the same as creator, or stock is insufficient
      */
@@ -164,9 +174,24 @@ class VeneerMutasiService
                     . " - KW " . $detail->kw;
 
                 if ($detail->tipe_veneer === 'basah') {
+                    // Basah: masuk & keluar langsung ke stok saat validasi.
                     $this->updateStokBasah($mutasi, $detail, $ukuran, $namaBarang, $isKeluar);
+                } elseif ($detail->tipe_veneer === 'jadi') {
+                    // Jadi:
+                    //  - KELUAR -> langsung kurangi stok + log saat validasi (seperti basah).
+                    //  - MASUK  -> DITUNDA ke SerahTerimaVeneerJadiService::terima()
+                    //              (tombol "Terima" di Gudang Veneer Jadi).
+                    if ($isKeluar) {
+                        $this->updateStokJadi($mutasi, $detail, $ukuran, $namaBarang, true);
+                    }
                 } else {
-                    $this->updateStokKering($mutasi, $detail, $isKeluar);
+                    // Kering:
+                    //  - KELUAR -> langsung kurangi stok + log saat validasi (seperti basah).
+                    //  - MASUK  -> DITUNDA ke SerahTerimaVeneerKeringService::terima()
+                    //              (tombol "Terima" di Gudang Veneer Kering).
+                    if ($isKeluar) {
+                        $this->updateStokKering($mutasi, $detail, true);
+                    }
                 }
             }
 
@@ -238,7 +263,7 @@ class VeneerMutasiService
             'tanggal'              => $mutasi->tanggal,
             'tipe_transaksi'       => $mutasi->tipe_transaksi,
             'keterangan'           => strtoupper(($isKeluar ? "Veneer Keluar #" : "Veneer Masuk #") . $mutasi->no_nota)
-                                      . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
+                . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
             'referensi_type'       => VeneerMutasiDetail::class,
             'referensi_id'         => $detail->id,
             'total_lembar'         => $detail->qty,
@@ -256,16 +281,30 @@ class VeneerMutasiService
     }
 
     /* ──────────────────────────────────────────────────
-     *  Private: kering stock update
+     *  Private: kering stock update — KELUAR SAJA.
+     *
+     *  Veneer KERING MASUK TIDAK diproses di sini. Penulisan stok kering
+     *  masuk terjadi di SerahTerimaVeneerKeringService::terima(), dipicu
+     *  tombol "Terima" di halaman Gudang Veneer Kering.
+     *
+     *  Method ini hanya untuk KELUAR: langsung membuat baris StokVeneerKering
+     *  bertipe 'keluar' lalu recalculate ledger, agar stok berkurang + tercatat
+     *  di log tepat saat nota divalidasi (perilaku setara veneer basah).
      * ────────────────────────────────────────────────── */
     private function updateStokKering(VeneerMutasi $mutasi, VeneerMutasiDetail $detail, bool $isKeluar): void
     {
+        // Safety: method ini sekarang khusus transaksi KELUAR.
+        // Kering MASUK harus lewat alur "Terima" di Gudang Veneer Kering.
+        if (!$isKeluar) {
+            return;
+        }
+
         StokVeneerKering::create([
             'id_produksi_dryer'       => null,
             'id_ukuran'               => $detail->id_ukuran,
             'id_jenis_kayu'           => $detail->id_jenis_kayu,
             'kw'                      => $detail->kw,
-            'jenis_transaksi'         => $mutasi->tipe_transaksi,
+            'jenis_transaksi'         => $mutasi->tipe_transaksi, // 'keluar'
             'tanggal_transaksi'       => $mutasi->tanggal,
             'qty'                     => $detail->qty,
             'm3'                      => $detail->m3,
@@ -281,12 +320,87 @@ class VeneerMutasiService
             'nilai_stok_sesudah'      => 0,
             'hpp_average'             => 0,
             'keterangan'              => strtoupper(($isKeluar ? "Veneer Keluar #" : "Veneer Masuk #") . $mutasi->no_nota)
-                                         . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
+                . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
             'id_veneer_mutasi'        => $mutasi->id,
             'id_veneer_mutasi_detail' => $detail->id,
         ]);
 
         $this->recalculateStokKering($detail->id_ukuran, $detail->id_jenis_kayu, $detail->kw);
+    }
+
+
+    /* ──────────────────────────────────────────────────
+ *  Private: jadi stock update — KELUAR SAJA.
+ *
+ *  Veneer JADI MASUK TIDAK diproses di sini. Penulisan stok jadi
+ *  masuk terjadi di SerahTerimaVeneerJadiService::terima(), dipicu
+ *  tombol "Terima" di halaman Gudang Veneer Jadi.
+ * ────────────────────────────────────────────────── */
+    private function updateStokJadi(VeneerMutasi $mutasi, VeneerMutasiDetail $detail, Ukuran $ukuran, string $namaBarang, bool $isKeluar): void
+    {
+        // Safety: method ini khusus transaksi KELUAR.
+        if (!$isKeluar) {
+            return;
+        }
+
+        $summary = StokVeneerJadi::where([
+            'id_jenis_kayu' => $detail->id_jenis_kayu,
+            'panjang'       => $ukuran->panjang,
+            'lebar'         => $ukuran->lebar,
+            'tebal'         => $ukuran->tebal,
+            'kw_grade'      => $detail->kw,
+        ])->lockForUpdate()->first();
+
+        if (!$summary) {
+            throw new Exception("Stok veneer jadi tidak ditemukan untuk: {$namaBarang}.");
+        }
+
+        $stokSistem      = (int) $summary->stok_lembar;
+        $kubikasiSistem  = (float) $summary->stok_kubikasi;
+        $nilaiStokBefore = (float) $summary->nilai_stok;
+
+        if ($stokSistem < $detail->qty) {
+            throw new Exception("Stok veneer jadi tidak cukup untuk: {$namaBarang}. Tersedia: {$stokSistem} lembar.");
+        }
+
+        $stokFisik     = $stokSistem - $detail->qty;
+        $kubikasiFisik = max(0.0, round($kubikasiSistem - $detail->m3, 6));
+        $nilaiKeluar   = round($detail->m3 * $summary->hpp_average, 2);
+        $nilaiStokBaru = max(0.0, round($nilaiStokBefore - $nilaiKeluar, 2));
+
+        $summary->update([
+            'stok_lembar'   => $stokFisik,
+            'stok_kubikasi' => $kubikasiFisik,
+            'nilai_stok'    => $nilaiStokBaru,
+        ]);
+
+        $log = HppVeneerJadiLog::create([
+            'id_jenis_kayu'        => $detail->id_jenis_kayu,
+            'panjang'              => $ukuran->panjang,
+            'lebar'                => $ukuran->lebar,
+            'tebal'                => $ukuran->tebal,
+            'kw_grade'             => $detail->kw,
+            'tanggal'              => $mutasi->tanggal,
+            'tipe_transaksi'       => $mutasi->tipe_transaksi, // 'keluar'
+            'keterangan'           => strtoupper("Veneer Keluar #" . $mutasi->no_nota)
+                . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
+            'referensi_type'       => VeneerMutasiDetail::class,
+            'referensi_id'         => $detail->id,
+            'total_lembar'         => $detail->qty,
+            'total_kubikasi'       => $detail->m3,
+            'hpp_pekerja'          => (float) $summary->hpp_pekerja_last,
+            'hpp_bahan_penolong'   => (float) $summary->hpp_bahan_penolong_last,
+            'hpp_average'          => $summary->hpp_average,
+            'nilai_stok'           => $nilaiStokBaru,
+            'stok_lembar_before'   => $stokSistem,
+            'stok_lembar_after'    => $stokFisik,
+            'stok_kubikasi_before' => $kubikasiSistem,
+            'stok_kubikasi_after'  => $kubikasiFisik,
+            'nilai_stok_before'    => $nilaiStokBefore,
+            'nilai_stok_after'     => $nilaiStokBaru,
+        ]);
+
+        $summary->update(['id_last_log' => $log->id]);
     }
 
     /**
@@ -369,7 +483,58 @@ class VeneerMutasiService
 
                             $summary->update(['id_last_log' => $lastLog?->id]);
                         }
+                    } elseif ($detail->tipe_veneer === 'jadi') {
+                        $summary = StokVeneerJadi::where([
+                            'id_jenis_kayu' => $detail->id_jenis_kayu,
+                            'panjang'       => $ukuran->panjang,
+                            'lebar'         => $ukuran->lebar,
+                            'tebal'         => $ukuran->tebal,
+                            'kw_grade'      => $detail->kw,
+                        ])->lockForUpdate()->first();
+
+                        if ($summary) {
+                            $stokSistem      = (int) $summary->stok_lembar;
+                            $kubikasiSistem  = (float) $summary->stok_kubikasi;
+                            $nilaiStokBefore = (float) $summary->nilai_stok;
+
+                            if ($mutasi->tipe_transaksi === 'keluar') {
+                                // batalkan keluar -> kembalikan
+                                $stokFisik     = $stokSistem + $detail->qty;
+                                $kubikasiFisik = round($kubikasiSistem + $detail->m3, 6);
+                                $nilaiStokBaru = round($nilaiStokBefore + round($detail->m3 * $summary->hpp_average, 2), 2);
+                            } else {
+                                // batalkan masuk (yang sudah di-Terima) -> kurangi lagi
+                                $stokFisik     = max(0, $stokSistem - $detail->qty);
+                                $kubikasiFisik = max(0.0, round($kubikasiSistem - $detail->m3, 6));
+                                $nilaiStokBaru = max(0.0, round($nilaiStokBefore - round($detail->m3 * $summary->hpp_average, 2), 2));
+                            }
+
+                            $summary->update([
+                                'stok_lembar'   => $stokFisik,
+                                'stok_kubikasi' => $kubikasiFisik,
+                                'nilai_stok'    => $nilaiStokBaru,
+                            ]);
+
+                            HppVeneerJadiLog::where([
+                                'referensi_type' => VeneerMutasiDetail::class,
+                                'referensi_id'   => $detail->id,
+                            ])->delete();
+
+                            $lastLog = HppVeneerJadiLog::where([
+                                'id_jenis_kayu' => $detail->id_jenis_kayu,
+                                'panjang'       => $ukuran->panjang,
+                                'lebar'         => $ukuran->lebar,
+                                'tebal'         => $ukuran->tebal,
+                                'kw_grade'      => $detail->kw,
+                            ])->latest()->first();
+
+                            $summary->update(['id_last_log' => $lastLog?->id]);
+                        }
                     } else {
+                        // Kering: hapus baris ledger yang berasal dari mutasi ini
+                        // (untuk kering KELUAR yang dibuat updateStokKering()), lalu recalculate.
+                        // Untuk kering MASUK, jika stok gudang sudah di-"Terima", pastikan
+                        // record tersebut juga mengisi id_veneer_mutasi_detail agar ikut terhapus.
                         StokVeneerKering::where('id_veneer_mutasi_detail', $detail->id)->delete();
                         $this->recalculateStokKering($detail->id_ukuran, $detail->id_jenis_kayu, $detail->kw);
                     }
@@ -433,7 +598,10 @@ class VeneerMutasiService
                 $nilaiTx   = round($hppAverage * (float) $record->m3, 4);
                 $nilaiStok -= $nilaiTx;
 
-                if ($stokM3 <= 0) { $stokM3 = 0.0; $nilaiStok = 0.0; }
+                if ($stokM3 <= 0) {
+                    $stokM3 = 0.0;
+                    $nilaiStok = 0.0;
+                }
 
                 $record->update([
                     'hpp_kering_per_m3'   => round($hppAverage, 4),

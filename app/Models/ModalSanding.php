@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ModalSanding extends Model
 {
@@ -13,6 +14,7 @@ class ModalSanding extends Model
 
     protected $fillable = [
         'id_produksi_sanding',
+        'id_serah_terima_hp',
         'id_barang_setengah_jadi',
         'kuantitas',
         'jumlah_sanding_face',
@@ -36,5 +38,10 @@ class ModalSanding extends Model
     public function barangSetengahJadi()
     {
         return $this->belongsTo(BarangSetengahJadiHp::class, 'id_barang_setengah_jadi');
+    }
+
+    public function serahTerimaHp(): BelongsTo
+    {
+        return $this->belongsTo(SerahTerimaHp::class, 'id_serah_terima_hp');
     }
 }

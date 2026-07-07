@@ -13,7 +13,7 @@ class ProduksiGrajitriplek extends Model
         'tanggal_produksi',
         'status',
         'kendala',
-        'shift'
+        'shift',
     ];
 
     public function pegawaiGrajiTriplek()
@@ -44,5 +44,12 @@ class ProduksiGrajitriplek extends Model
     public function kendalaGrajiTripleks()
     {
         return $this->hasMany(KendalaGrajiTriplek::class, 'produksi_graji_triplek_id');
+    }
+
+    public function serahTerimaHp()
+    {
+        // Base relation asal-asalan (akan di-override sepenuhnya di modifyQueryUsing
+        // relation manager, sama seperti pola tipe graji/sanding)
+        return $this->hasMany(SerahTerimaHp::class, 'id_triplek_hasil_hp', 'id');
     }
 }

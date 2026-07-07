@@ -13,6 +13,7 @@ class SerahTerimaVeneerKering extends Model
     protected $fillable = [
         'id_detail_hasil',
         'id_detail_bongkar_kedi',
+        'id_mutasi_keluar_palet',
         'tipe_sumber',
         'id_produksi_repair',
         'diserahkan_oleh',
@@ -39,6 +40,15 @@ class SerahTerimaVeneerKering extends Model
         return $this->belongsTo(DetailBongkarKedi::class, 'id_detail_bongkar_kedi');
     }
 
+    /**
+     * Sumber dari mutasi keluar Gudang Veneer Kering (per palet),
+     * mis. dikeluarkan untuk kebutuhan Repair.
+     */
+    public function mutasiKeluarPalet(): BelongsTo
+    {
+        return $this->belongsTo(VeneerKeringMutasiKeluarPalet::class, 'id_mutasi_keluar_palet');
+    }
+
     public function produksiRepair(): BelongsTo
     {
         return $this->belongsTo(ProduksiRepair::class, 'id_produksi_repair');
@@ -63,14 +73,15 @@ class SerahTerimaVeneerKering extends Model
     }
 
     /**
-     * Ambil model sumber (DetailHasil atau DetailBongkarKedi)
-     * tanpa perlu tahu tipe_sumber di luar model.
+     * Ambil model sumber (DetailHasil, DetailBongkarKedi, atau
+     * VeneerKeringMutasiKeluarPalet) tanpa perlu tahu tipe_sumber di luar model.
      */
-    public function getSumberAttribute(): DetailHasil|DetailBongkarKedi|null
+    public function getSumberAttribute(): DetailHasil|DetailBongkarKedi|VeneerKeringMutasiKeluarPalet|null
     {
         return match ($this->tipe_sumber) {
             'dryer' => $this->detailHasil,
             'kedi' => $this->detailBongkarKedi,
+            'gudang' => $this->mutasiKeluarPalet,
             default => null,
         };
     }
@@ -83,6 +94,7 @@ class SerahTerimaVeneerKering extends Model
         return match ($this->tipe_sumber) {
             'dryer' => 'Press Dryer',
             'kedi' => 'Kedi',
+            'gudang' => 'Gudang',
             default => '-',
         };
     }
@@ -100,11 +112,14 @@ class SerahTerimaVeneerKering extends Model
     }
 
     /**
-     * Qty asli dari sumber (DetailHasil->isi atau DetailBongkarKedi->jumlah)
+     * Qty asli dari sumber:
+     * - DetailHasil        -> isi
+     * - DetailBongkarKedi  -> jumlah
+     * - VeneerKeringMutasiKeluarPalet -> qty
      */
     public function getQtyAsliAttribute(): float
     {
-        return (float) ($this->sumber->isi ?? $this->sumber->jumlah ?? 0);
+        return (float) ($this->sumber->isi ?? $this->sumber->jumlah ?? $this->sumber->qty ?? 0);
     }
 
     /**

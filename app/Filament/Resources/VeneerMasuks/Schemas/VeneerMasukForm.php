@@ -5,6 +5,7 @@ namespace App\Filament\Resources\VeneerMasuks\Schemas;
 use App\Models\Ukuran;
 use App\Models\JenisKayu;
 use App\Models\HppVeneerBasahSummary;
+use App\Models\StokVeneerJadi;
 use App\Models\StokVeneerKering;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -25,23 +26,23 @@ class VeneerMasukForm
                     ->label('Tanggal')
                     ->default(now())
                     ->required()
-                    ->disabled(fn ($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
+                    ->disabled(fn($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
 
                 TextInput::make('no_nota')
                     ->label('No. Nota BM')
                     ->required()
-                    ->unique('nota_barang_masuks', 'no_nota', ignorable: fn ($record) => $record?->notaBm)
-                    ->disabled(fn ($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
+                    ->unique('nota_barang_masuks', 'no_nota', ignorable: fn($record) => $record?->notaBm)
+                    ->disabled(fn($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
 
                 TextInput::make('tujuan_nota')
                     ->label('Supplier / Pengirim')
                     ->required()
-                    ->disabled(fn ($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
+                    ->disabled(fn($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
 
                 Textarea::make('keterangan')
                     ->label('Keterangan')
                     ->columnSpanFull()
-                    ->disabled(fn ($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
+                    ->disabled(fn($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
 
                 Repeater::make('details')
                     ->label('Detail Barang Masuk')
@@ -53,6 +54,7 @@ class VeneerMasukForm
                             ->options([
                                 'basah'  => 'Veneer Basah',
                                 'kering' => 'Veneer Kering',
+                                'jadi' => 'Veneer Jadi',
                             ])
                             ->required()
                             ->live()
@@ -62,12 +64,12 @@ class VeneerMasukForm
                                 $set('id_ukuran', null);
                                 $set('stok_sistem', 0);
                             })
-                            ->disabled(fn ($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
+                            ->disabled(fn($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
 
                         // 2. Jenis Kayu – semua jenis yang ada di DB
                         Select::make('id_jenis_kayu')
                             ->label('Jenis Kayu')
-                            ->options(fn () => JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id'))
+                            ->options(fn() => JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id'))
                             ->required()
                             ->searchable()
                             ->live()
@@ -76,7 +78,7 @@ class VeneerMasukForm
                                 $set('id_ukuran', null);
                                 $set('stok_sistem', 0);
                             })
-                            ->disabled(fn ($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
+                            ->disabled(fn($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
 
                         // 3. KW / Grade – filter ke yang sudah ada di sistem untuk tipe veneer yang dipilih
                         //    (VM menerima barang, jadi tampilkan KW yang ada di DB, bukan filter stok > 0)
@@ -109,7 +111,7 @@ class VeneerMasukForm
                                     return ['1' => 'KW 1', '2' => 'KW 2', '3' => 'KW 3', '4' => 'KW 4'];
                                 }
 
-                                return $kws->mapWithKeys(fn ($kw) => [$kw => "KW {$kw}"])->toArray();
+                                return $kws->mapWithKeys(fn($kw) => [$kw => "KW {$kw}"])->toArray();
                             })
                             ->required()
                             ->live()
@@ -117,7 +119,7 @@ class VeneerMasukForm
                                 $set('id_ukuran', null);
                                 self::updateStokInfo($get, $set);
                             })
-                            ->disabled(fn ($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
+                            ->disabled(fn($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
 
                         // 4. Ukuran – filter ke yang sudah ada di DB untuk kombinasi ini
                         Select::make('id_ukuran')
@@ -176,8 +178,8 @@ class VeneerMasukForm
                             ->searchable()
                             ->required()
                             ->live()
-                            ->afterStateUpdated(fn (Get $get, Set $set) => self::updateStokInfo($get, $set))
-                            ->disabled(fn ($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
+                            ->afterStateUpdated(fn(Get $get, Set $set) => self::updateStokInfo($get, $set))
+                            ->disabled(fn($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
 
                         // 5. Info stok (read-only)
                         TextInput::make('stok_sistem')
@@ -196,14 +198,14 @@ class VeneerMasukForm
                             ->numeric()
                             ->required()
                             ->suffix('Lembar')
-                            ->disabled(fn ($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
+                            ->disabled(fn($record) => $record && $record->notaBm?->divalidasi_oleh !== null),
                     ])
                     ->columns(2)
                     ->columnSpanFull()
                     ->addActionLabel('Tambah Barang')
-                    ->addable(fn ($record) => !$record || $record->notaBm?->divalidasi_oleh === null)
-                    ->deletable(fn ($record) => !$record || $record->notaBm?->divalidasi_oleh === null)
-                    ->reorderable(fn ($record) => !$record || $record->notaBm?->divalidasi_oleh === null),
+                    ->addable(fn($record) => !$record || $record->notaBm?->divalidasi_oleh === null)
+                    ->deletable(fn($record) => !$record || $record->notaBm?->divalidasi_oleh === null)
+                    ->reorderable(fn($record) => !$record || $record->notaBm?->divalidasi_oleh === null),
             ]);
     }
 
@@ -232,6 +234,14 @@ class VeneerMasukForm
             ])->first();
 
             $set('stok_sistem', $summary ? (int) $summary->stok_lembar : 0);
+        } elseif ($tipeVeneer === 'jadi') {
+            // 🌟 Ambil data stok lembar dari summary veneer jadi Anda
+            $summaryJadi = StokVeneerJadi::where([
+                'id_jenis_kayu' => $idJenisKayu,
+                'kw'            => $kw,
+            ])->first(); // sesuaikan field dimensi jika summary jadi memakai id_ukuran langsung
+
+            $set('stok_sistem', $summaryJadi ? (int) $summaryJadi->stok_lembar : 0);
         } else {
             $stokKering = StokVeneerKering::saldoLembarTerakhir($idUkuran, $idJenisKayu, $kw);
             $set('stok_sistem', $stokKering);

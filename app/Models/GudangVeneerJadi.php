@@ -22,6 +22,10 @@ class GudangVeneerJadi extends Model
         'hpp_pekerja_last',
         'hpp_bahan_penolong_last',
         'id_last_log',
+        'status_gudang',
+        'keterangan',
+        'diterima_by',
+        'diterima_at',
     ];
 
     protected $casts = [
@@ -30,6 +34,7 @@ class GudangVeneerJadi extends Model
         'hpp_average'            => 'float',
         'hpp_pekerja_last'       => 'float',
         'hpp_bahan_penolong_last' => 'float',
+        'diterima_at'             => 'datetime',
     ];
 
     public function jenisKayu(): BelongsTo
@@ -40,5 +45,9 @@ class GudangVeneerJadi extends Model
     public function lastLog(): BelongsTo
     {
         return $this->belongsTo(HppVeneerJadiLog::class, 'id_last_log');
+    }
+    public function penerima(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'diterima_by');
     }
 }

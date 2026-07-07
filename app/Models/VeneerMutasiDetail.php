@@ -37,4 +37,9 @@ class VeneerMutasiDetail extends Model
     {
         return $this->hasOne(StokVeneerKering::class, 'id_veneer_mutasi_detail');
     }
+
+    public function gudangKering()
+{
+    return $this->hasOne(GudangVeneerKering::class, 'id_veneer_mutasi_detail');
+}
 }
