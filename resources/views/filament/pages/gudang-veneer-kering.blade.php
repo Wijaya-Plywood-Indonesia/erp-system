@@ -6,6 +6,8 @@
         $core     = $this->core;
     @endphp
 
+    {{-- DINONAKTIFKAN: tab navigation (serah terima dihapus dari alur) --}}
+    @if(false)
     {{-- ═══ TAB NAVIGATION ═══ --}}
     <div class="flex border-b border-gray-200 dark:border-gray-800 mb-4">
         <button
@@ -27,7 +29,11 @@
             <span>Veneer Keluar</span>
         </button>
     </div>
+    @endif
 
+
+    {{-- DINONAKTIFKAN: detail stok --}}
+    @if(false)
     {{-- ═══ DETAIL STOK (tampil di kedua tab) ═══ --}}
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
         <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Detail Stok</span>
@@ -123,7 +129,10 @@
 
     </div>
 
-    @if($activeTab === 'masuk')
+    @endif
+
+    {{-- DINONAKTIFKAN: serah terima veneer kering --}}
+    @if(false)
     {{-- ══════════════════════════════════════════════════════════════════════
          TAB 1: SERAH TERIMA VENEER KERING
     ═══════════════════════════════════════════════════════════════════════ --}}
