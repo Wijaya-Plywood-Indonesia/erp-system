@@ -13,20 +13,24 @@ use App\Models\VeneerJadiMutasiKeluarPalet;
 use App\Models\VeneerMutasi;
 use App\Models\VeneerMutasiDetail;
 use App\Services\SerahTerimaVeneerJadiService;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use UnitEnum;
 
 class GudangVeneerJadi extends Page
 {
+    use HasPageShield;
     // Icon menu navigasi di sidebar Filament
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-check';
 
     protected static ?string $title = 'Gudang Veneer Jadi';
     protected string $view = 'filament.pages.gudang-veneer-jadi';
+    protected static string|UnitEnum|null $navigationGroup = 'Gudang';
     public string $activeTab = 'masuk';
     public string $searchQuery = '';
     public string $tableSearchQuery = '';
@@ -49,7 +53,7 @@ class GudangVeneerJadi extends Page
     public ?int $idProduksiHp = null;
 
     protected $queryString = ['activeTab'];
-    public string $activeSubTab = 'produksi';
+    // public string $activeSubTab = 'produksi';
 
     public function hitungKubikasi(float $p, float $l, float $t, ?int $lembar): float
     {
@@ -286,6 +290,31 @@ class GudangVeneerJadi extends Page
      * view Blade tidak perlu tahu bedanya sama sekali.
      */
     public function getAntreanFilteredProperty(): Collection
+    {
+        $dariGudang = $this->ambilAntreanDariGudang();
+
+        // 🔒 SEMENTARA DINONAKTIFKAN: sub-tab "Terima dari BM" (sumber mutasi)
+        // dihilangkan dari tampilan atas permintaan — hanya antrean Produksi/Repair
+        // yang ditampilkan. Method ambilAntreanDariMutasiJadi() & terimaDariMutasi()
+        // sengaja TIDAK dihapus (masih ada di bawah), supaya mudah diaktifkan lagi
+        // kalau fitur ini dibutuhkan kembali nanti.
+        // $dariMutasi = $this->ambilAntreanDariMutasiJadi();
+
+        return $dariGudang
+            // ->concat($dariMutasi)
+            ->sortBy([
+                fn($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
+                fn($item) => -$item['created_at_ts'],
+                fn($item) => $item['id'],
+            ])
+            ->values();
+    }
+
+    /**
+     * Sumber 1: tabel GudangVeneerJadi (Produksi/Repair) — logika ASLI,
+     * cuma ditambah 'id' composite dan 'source'.
+     */
+    protected function ambilAntreanDariGudang(): Collection
     {
         $query = GudangModel::with(['jenisKayu', 'penerima'])
             ->select([
