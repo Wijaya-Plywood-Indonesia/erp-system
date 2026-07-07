@@ -7,6 +7,9 @@ use App\Models\JenisKayu;
 use App\Models\HppVeneerBasahSummary;
 use App\Models\StokVeneerJadi;
 use App\Models\StokVeneerKering;
+use App\Models\StokPlatformMth;
+use App\Models\StokTriplekMth;
+use App\Models\StokPlywoodSiapJual;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
@@ -23,15 +26,17 @@ class OpnameStokForm
             Select::make('jenis_stok')
                 ->label('Jenis Stok')
                 ->options([
-                    'veneer_basah'  => 'Veneer Basah',
-                    'veneer_kering' => 'Veneer Kering',
-                    'veneer_jadi'   => 'Veneer Jadi',
+                    'veneer_basah'   => 'Veneer Basah',
+                    'veneer_kering'  => 'Veneer Kering',
+                    'veneer_jadi'    => 'Veneer Jadi',
+                    'platform_mth'   => 'Platform MTH',
+                    'triplek_mth'    => 'Triplek MTH',
+                    'plywood'        => 'Plywood Siap Jual',
                 ])
                 ->default('veneer_basah')
                 ->required()
                 ->live()
                 ->afterStateUpdated(function (Get $get, Set $set) {
-                    // Reset dulu supaya tidak nyangkut nilai jenis stok sebelumnya
                     $set('stok_sistem', 0);
                     $set('kubikasi_sistem', 0);
                     self::updateStokInfo($get, $set);
@@ -81,13 +86,13 @@ class OpnameStokForm
                 ->suffix('m³'),
 
             TextInput::make('kubikasi_fisik')
-    ->label('Kubikasi Fisik')
-    ->helperText('Pakai titik untuk desimal, contoh: 1.9883')
-    ->required()
-    ->numeric()
-    ->minValue(0)
-    ->step('0.0001')
-    ->suffix('m³'),
+                ->label('Kubikasi Fisik')
+                ->helperText('Pakai titik untuk desimal, contoh: 1.9883')
+                ->required()
+                ->numeric()
+                ->minValue(0)
+                ->step('0.0001')
+                ->suffix('m³'),
 
             Textarea::make('catatan')
                 ->label('Catatan')
@@ -96,10 +101,6 @@ class OpnameStokForm
         ])->columns(2);
     }
 
-    /**
-     * Baca stok sistem sesuai jenis_stok yang dipilih, lalu isi
-     * field stok_sistem & kubikasi_sistem secara live di form.
-     */
     private static function updateStokInfo(Get $get, Set $set): void
     {
         $jenisStok   = $get('jenis_stok');
@@ -120,6 +121,9 @@ class OpnameStokForm
             'veneer_basah'  => self::bacaStokBasah((int) $idJenisKayu, $ukuran, (string) $kw),
             'veneer_jadi'   => self::bacaStokJadi((int) $idJenisKayu, $ukuran, (string) $kw),
             'veneer_kering' => self::bacaStokKering((int) $idJenisKayu, (int) $idUkuran, (string) $kw),
+            'platform_mth'  => self::bacaStokPlatformMth((int) $idJenisKayu, $ukuran, (string) $kw),
+            'triplek_mth'   => self::bacaStokTriplekMth((int) $idJenisKayu, $ukuran, (string) $kw),
+            'plywood'       => self::bacaStokPlywood((int) $idJenisKayu, $ukuran, (string) $kw),
             default         => [0, 0],
         };
 
@@ -161,11 +165,57 @@ class OpnameStokForm
 
     private static function bacaStokKering(int $idJenisKayu, int $idUkuran, string $kw): array
     {
-        // Veneer kering tidak punya tabel summary terpisah — stok terkini
-        // dihitung dari akumulasi transaksi lewat helper di model.
         $stokLembar = StokVeneerKering::saldoLembarTerakhir($idUkuran, $idJenisKayu, $kw);
         $snapshot   = StokVeneerKering::snapshotTerakhir($idUkuran, $idJenisKayu, $kw);
 
         return [$stokLembar, (float) $snapshot['stok_m3']];
+    }
+
+    private static function bacaStokPlatformMth(int $idJenisKayu, Ukuran $ukuran, string $kw): array
+    {
+        $summary = StokPlatformMth::where([
+            'id_jenis_kayu' => $idJenisKayu,
+            'panjang'       => $ukuran->panjang,
+            'lebar'         => $ukuran->lebar,
+            'tebal'         => $ukuran->tebal,
+            'kw_grade'      => $kw,
+        ])->first();
+
+        return [
+            $summary ? (int) $summary->stok_lembar : 0,
+            $summary ? (float) $summary->stok_kubikasi : 0.0,
+        ];
+    }
+
+    private static function bacaStokTriplekMth(int $idJenisKayu, Ukuran $ukuran, string $kw): array
+    {
+        $summary = StokTriplekMth::where([
+            'id_jenis_kayu' => $idJenisKayu,
+            'panjang'       => $ukuran->panjang,
+            'lebar'         => $ukuran->lebar,
+            'tebal'         => $ukuran->tebal,
+            'kw_grade'      => $kw,
+        ])->first();
+
+        return [
+            $summary ? (int) $summary->stok_lembar : 0,
+            $summary ? (float) $summary->stok_kubikasi : 0.0,
+        ];
+    }
+
+    private static function bacaStokPlywood(int $idJenisKayu, Ukuran $ukuran, string $kw): array
+    {
+        $summary = StokPlywoodSiapJual::where([
+            'id_jenis_kayu' => $idJenisKayu,
+            'panjang'       => $ukuran->panjang,
+            'lebar'         => $ukuran->lebar,
+            'tebal'         => $ukuran->tebal,
+            'kw_grade'      => $kw,
+        ])->first();
+
+        return [
+            $summary ? (int) $summary->stok_lembar : 0,
+            $summary ? (float) $summary->stok_kubikasi : 0.0,
+        ];
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use BackedEnum;
 use Filament\Pages\Page;
 use App\Models\GudangVeneerJadi as GudangModel;
 use App\Models\StokVeneerJadi;
@@ -12,18 +13,24 @@ use App\Models\VeneerJadiMutasiKeluarPalet;
 use App\Models\VeneerMutasi;
 use App\Models\VeneerMutasiDetail;
 use App\Services\SerahTerimaVeneerJadiService;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use UnitEnum;
 
 class GudangVeneerJadi extends Page
 {
+    use HasPageShield;
     // Icon menu navigasi di sidebar Filament
-    // protected static ?string $navigationIcon = 'heroicon-o-circle-stack';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-check';
+
     protected static ?string $title = 'Gudang Veneer Jadi';
     protected string $view = 'filament.pages.gudang-veneer-jadi';
+    protected static string|UnitEnum|null $navigationGroup = 'Gudang';
     public string $activeTab = 'masuk';
     public string $searchQuery = '';
     public string $tableSearchQuery = '';
@@ -46,7 +53,7 @@ class GudangVeneerJadi extends Page
     public ?int $idProduksiHp = null;
 
     protected $queryString = ['activeTab'];
-    public string $activeSubTab = 'produksi';
+    // public string $activeSubTab = 'produksi';
 
     public function hitungKubikasi(float $p, float $l, float $t, ?int $lembar): float
     {
@@ -102,7 +109,7 @@ class GudangVeneerJadi extends Page
         }
 
         $this->showConfirmModal = false;
-        $this->selectedItemId   = null;
+        $this->selectedItemId = null;
         $this->dispatch('$refresh');
     }
 
@@ -125,7 +132,7 @@ class GudangVeneerJadi extends Page
                     throw new \Exception('Barang ini sudah pernah diterima sebelumnya.');
                 }
 
-                $user     = Auth::user();
+                $user = Auth::user();
                 $userName = $user?->name ?? 'System';
 
                 $stokInduk = StokVeneerJadi::where('id_jenis_kayu', $record->id_jenis_kayu)
@@ -138,55 +145,55 @@ class GudangVeneerJadi extends Page
 
                 if (!$stokInduk) {
                     $stokInduk = StokVeneerJadi::create([
-                        'id_jenis_kayu'           => $record->id_jenis_kayu,
-                        'panjang'                 => $record->panjang,
-                        'lebar'                   => $record->lebar,
-                        'tebal'                   => $record->tebal,
-                        'kw_grade'                => $record->kw_grade,
-                        'stok_lembar'             => 0,
-                        'stok_kubikasi'           => 0,
-                        'nilai_stok'              => 0,
-                        'hpp_average'             => 0,
-                        'hpp_pekerja_last'        => 0,
+                        'id_jenis_kayu' => $record->id_jenis_kayu,
+                        'panjang' => $record->panjang,
+                        'lebar' => $record->lebar,
+                        'tebal' => $record->tebal,
+                        'kw_grade' => $record->kw_grade,
+                        'stok_lembar' => 0,
+                        'stok_kubikasi' => 0,
+                        'nilai_stok' => 0,
+                        'hpp_average' => 0,
+                        'hpp_pekerja_last' => 0,
                         'hpp_bahan_penolong_last' => 0,
-                        'id_last_log'             => null,
+                        'id_last_log' => null,
                     ]);
                 }
 
-                $stokLembarBefore    = $stokInduk->stok_lembar;
-                $stokKubikasiBefore  = $stokInduk->stok_kubikasi;
-                $nilaiStokBefore     = $stokInduk->nilai_stok;
+                $stokLembarBefore = $stokInduk->stok_lembar;
+                $stokKubikasiBefore = $stokInduk->stok_kubikasi;
+                $nilaiStokBefore = $stokInduk->nilai_stok;
 
-                $stokLembarAfter     = $stokLembarBefore + $record->stok_lembar;
-                $stokKubikasiAfter   = $stokKubikasiBefore + $record->stok_kubikasi;
-                $nilaiStokAfter      = $nilaiStokBefore + $record->nilai_stok;
-                $hppAverageAfter     = $stokLembarAfter > 0
+                $stokLembarAfter = $stokLembarBefore + $record->stok_lembar;
+                $stokKubikasiAfter = $stokKubikasiBefore + $record->stok_kubikasi;
+                $nilaiStokAfter = $nilaiStokBefore + $record->nilai_stok;
+                $hppAverageAfter = $stokLembarAfter > 0
                     ? ($nilaiStokAfter / $stokLembarAfter)
                     : 0;
 
                 $log = HppVeneerJadiLog::create([
-                    'id_jenis_kayu'        => $record->id_jenis_kayu,
-                    'panjang'              => $record->panjang,
-                    'lebar'                => $record->lebar,
-                    'tebal'                => $record->tebal,
-                    'kw_grade'             => $record->kw_grade,
-                    'tanggal'              => now(),
-                    'tipe_transaksi'       => 'MASUK',
-                    'referensi_type'       => GudangModel::class,
-                    'referensi_id'         => $record->id,
-                    'total_lembar'         => $record->stok_lembar,
-                    'total_kubikasi'       => $record->stok_kubikasi,
-                    'hpp_pekerja'          => $record->hpp_pekerja_last ?? 0,
-                    'hpp_bahan_penolong'   => $record->hpp_bahan_penolong_last ?? 0,
-                    'hpp_average'          => $hppAverageAfter,
-                    'nilai_stok'           => $record->nilai_stok,
-                    'stok_lembar_before'   => $stokLembarBefore,
+                    'id_jenis_kayu' => $record->id_jenis_kayu,
+                    'panjang' => $record->panjang,
+                    'lebar' => $record->lebar,
+                    'tebal' => $record->tebal,
+                    'kw_grade' => $record->kw_grade,
+                    'tanggal' => now(),
+                    'tipe_transaksi' => 'MASUK',
+                    'referensi_type' => GudangModel::class,
+                    'referensi_id' => $record->id,
+                    'total_lembar' => $record->stok_lembar,
+                    'total_kubikasi' => $record->stok_kubikasi,
+                    'hpp_pekerja' => $record->hpp_pekerja_last ?? 0,
+                    'hpp_bahan_penolong' => $record->hpp_bahan_penolong_last ?? 0,
+                    'hpp_average' => $hppAverageAfter,
+                    'nilai_stok' => $record->nilai_stok,
+                    'stok_lembar_before' => $stokLembarBefore,
                     'stok_kubikasi_before' => $stokKubikasiBefore,
-                    'nilai_stok_before'    => $nilaiStokBefore,
-                    'stok_lembar_after'    => $stokLembarAfter,
-                    'stok_kubikasi_after'  => $stokKubikasiAfter,
-                    'nilai_stok_after'     => $nilaiStokAfter,
-                    'keterangan'           => sprintf(
+                    'nilai_stok_before' => $nilaiStokBefore,
+                    'stok_lembar_after' => $stokLembarAfter,
+                    'stok_kubikasi_after' => $stokKubikasiAfter,
+                    'nilai_stok_after' => $nilaiStokAfter,
+                    'keterangan' => sprintf(
                         "%s, diterima oleh: %s pada %s",
                         $record->keterangan ?? 'Produksi Repair',
                         $userName,
@@ -195,17 +202,17 @@ class GudangVeneerJadi extends Page
                 ]);
 
                 $stokInduk->update([
-                    'stok_lembar'   => $stokLembarAfter,
+                    'stok_lembar' => $stokLembarAfter,
                     'stok_kubikasi' => $stokKubikasiAfter,
-                    'nilai_stok'    => $nilaiStokAfter,
-                    'hpp_average'   => $hppAverageAfter,
-                    'id_last_log'   => $log->id,
+                    'nilai_stok' => $nilaiStokAfter,
+                    'hpp_average' => $hppAverageAfter,
+                    'id_last_log' => $log->id,
                 ]);
 
                 $record->update([
                     'status_gudang' => 'sudah diterima',
-                    'diterima_by'   => $user?->id,
-                    'diterima_at'   => now(),
+                    'diterima_by' => $user?->id,
+                    'diterima_at' => now(),
                 ]);
             });
 
@@ -256,7 +263,8 @@ class GudangVeneerJadi extends Page
         $allStok = StokVeneerJadi::with(['jenisKayu', 'lastLog'])
             ->get()
             ->filter(function ($item) {
-                if (empty($this->searchQuery)) return true;
+                if (empty($this->searchQuery))
+                    return true;
                 $q = strtolower($this->searchQuery);
                 $namaKayu = $item->jenisKayu ? strtolower($item->jenisKayu->nama_kayu) : '';
 
@@ -267,7 +275,7 @@ class GudangVeneerJadi extends Page
 
         return [
             'faceback' => $allStok->filter(fn($item) => $item->tebal < 1.0),
-            'core'     => $allStok->filter(fn($item) => $item->tebal >= 1.0),
+            'core' => $allStok->filter(fn($item) => $item->tebal >= 1.0),
         ];
     }
 
@@ -284,18 +292,16 @@ class GudangVeneerJadi extends Page
     public function getAntreanFilteredProperty(): Collection
     {
         $dariGudang = $this->ambilAntreanDariGudang();
-        $dariMutasi = $this->ambilAntreanDariMutasiJadi();
+
+        // 🔒 SEMENTARA DINONAKTIFKAN: sub-tab "Terima dari BM" (sumber mutasi)
+        // dihilangkan dari tampilan atas permintaan — hanya antrean Produksi/Repair
+        // yang ditampilkan. Method ambilAntreanDariMutasiJadi() & terimaDariMutasi()
+        // sengaja TIDAK dihapus (masih ada di bawah), supaya mudah diaktifkan lagi
+        // kalau fitur ini dibutuhkan kembali nanti.
+        // $dariMutasi = $this->ambilAntreanDariMutasiJadi();
 
         return $dariGudang
-            ->concat($dariMutasi)
-            ->filter(function ($item) {
-                // Filter berdasarkan sub-tab aktif
-                if ($this->activeSubTab === 'produksi') {
-                    return $item['source'] === 'gudang';
-                } else {
-                    return $item['source'] === 'mutasi';
-                }
-            })
+            // ->concat($dariMutasi)
             ->sortBy([
                 fn($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
                 fn($item) => -$item['created_at_ts'],
@@ -315,9 +321,7 @@ class GudangVeneerJadi extends Page
                 'gudang_veneer_jadis.*',
                 'jenis_kayus.nama_kayu as jenis_kayu_nama',
             ])
-            ->join('jenis_kayus', 'jenis_kayus.id', '=', 'gudang_veneer_jadis.id_jenis_kayu')
-            ->orderByRaw("FIELD(gudang_veneer_jadis.status_gudang, 'belum diterima', 'sudah diterima') ASC")
-            ->orderBy('gudang_veneer_jadis.created_at', 'desc');
+            ->join('jenis_kayus', 'jenis_kayus.id', '=', 'gudang_veneer_jadis.id_jenis_kayu');
 
         if (!empty($this->tableSearchQuery)) {
             $q = strtolower($this->tableSearchQuery);
@@ -333,24 +337,37 @@ class GudangVeneerJadi extends Page
             });
         }
 
-        return $query->get()->map(fn($item) => [
-            'id'            => 'gudang-' . $item->id,
-            'source'        => 'gudang',
-            'jenis_kayu'    => $item->jenis_kayu_nama,
-            'panjang'       => $item->panjang,
-            'lebar'         => $item->lebar,
-            'tebal'         => $item->tebal,
-            'kw'            => $item->kw_grade,
-            'jumlah'        => $item->stok_lembar,
+        // Sumber 1: GudangVeneerJadi (Produksi/Repair)
+        $antreanGudang = $query->get()->map(fn($item) => [
+            'id' => 'gudang-' . $item->id,
+            'source' => 'gudang',
+            'jenis_kayu' => $item->jenis_kayu_nama,
+            'panjang' => $item->panjang,
+            'lebar' => $item->lebar,
+            'tebal' => $item->tebal,
+            'kw' => $item->kw_grade,
+            'jumlah' => $item->stok_lembar,
             'stok_kubikasi' => $item->stok_kubikasi,
-            'created_at'    => $item->created_at, // dipakai untuk tampilan (masih Carbon)
+            'created_at' => $item->created_at, // dipakai untuk tampilan (masih Carbon)
             'created_at_ts' => $item->created_at?->timestamp ?? 0, // dipakai untuk sorting (integer)
             'status_gudang' => $item->status_gudang ?? 'belum diterima',
-            'diterima_at'   => $item->diterima_at,
-            'diterima_by'   => $item->diterima_by,
+            'diterima_at' => $item->diterima_at,
+            'diterima_by' => $item->diterima_by,
             'penerima_name' => $item->penerima?->name ?? 'N/A',
-            'keterangan'    => $item->keterangan,
+            'keterangan' => $item->keterangan,
         ]);
+
+        // Sumber 2: VeneerMutasi (arah masuk) — lihat ambilAntreanDariMutasiJadi()
+        $antreanMutasi = $this->ambilAntreanDariMutasiJadi();
+
+        // Gabungkan kedua sumber, lalu urutkan: "belum diterima" dulu, baru terbaru dulu
+        return $antreanGudang->concat($antreanMutasi)
+            ->sortBy([
+                fn($a, $b) => ($a['status_gudang'] === 'belum diterima' ? 0 : 1)
+                <=> ($b['status_gudang'] === 'belum diterima' ? 0 : 1),
+                fn($a, $b) => $b['created_at_ts'] <=> $a['created_at_ts'],
+            ])
+            ->values();
     }
 
     /**
@@ -405,15 +422,15 @@ class GudangVeneerJadi extends Page
 
         foreach ($mutasiRows as $mutasi) {
             foreach ($mutasi->details as $detail) {
-                $ukuran      = $detail->ukuran;
+                $ukuran = $detail->ukuran;
                 $sudahTerima = isset($sudahDiterimaIds[$detail->id]);
 
                 // Filter search dilakukan manual di sini (bukan di query SQL)
                 // karena kita sudah eager-load semuanya sekaligus per mutasi.
                 if (!empty($this->tableSearchQuery)) {
-                    $q    = strtolower($this->tableSearchQuery);
+                    $q = strtolower($this->tableSearchQuery);
                     $kayu = strtolower((string) $detail->jenisKayu?->nama_kayu);
-                    $kw   = strtolower((string) $detail->kw);
+                    $kw = strtolower((string) $detail->kw);
                     if (!str_contains($kayu, $q) && !str_contains($kw, $q)) {
                         continue;
                     }
@@ -423,22 +440,22 @@ class GudangVeneerJadi extends Page
                 $timestamp = $waktuNota instanceof Carbon ? $waktuNota->timestamp : strtotime($waktuNota);
 
                 $hasil->push([
-                    'id'            => 'mutasi-' . $detail->id,
-                    'source'        => 'mutasi',
-                    'jenis_kayu'    => $detail->jenisKayu?->nama_kayu,
-                    'panjang'       => $ukuran?->panjang,
-                    'lebar'         => $ukuran?->lebar,
-                    'tebal'         => $ukuran?->tebal,
-                    'kw'            => $detail->kw,
-                    'jumlah'        => $detail->qty,
+                    'id' => 'mutasi-' . $detail->id,
+                    'source' => 'mutasi',
+                    'jenis_kayu' => $detail->jenisKayu?->nama_kayu,
+                    'panjang' => $ukuran?->panjang,
+                    'lebar' => $ukuran?->lebar,
+                    'tebal' => $ukuran?->tebal,
+                    'kw' => $detail->kw,
+                    'jumlah' => $detail->qty,
                     'stok_kubikasi' => $detail->m3,
-                    'created_at'    => $waktuNota,
+                    'created_at' => $waktuNota,
                     'created_at_ts' => $timestamp,
                     'status_gudang' => $sudahTerima ? 'sudah diterima' : 'belum diterima',
-                    'diterima_at'   => null,
-                    'diterima_by'   => null,
+                    'diterima_at' => null,
+                    'diterima_by' => null,
                     'penerima_name' => 'N/A',
-                    'keterangan'    => 'No Nota: ' . ($mutasi->no_nota ?? '-'),
+                    'keterangan' => 'No Nota: ' . ($mutasi->no_nota ?? '-'),
                 ]);
             }
         }
@@ -505,72 +522,73 @@ class GudangVeneerJadi extends Page
 
                 // Header tetap dibuat sekali — ini tidak berubah dari sebelumnya
                 $mutasi = VeneerJadiMutasiKeluar::create([
-                    'id_jenis_kayu'  => $stok->id_jenis_kayu,
-                    'panjang'        => $stok->panjang,
-                    'lebar'          => $stok->lebar,
-                    'tebal'          => $stok->tebal,
-                    'kw_grade'       => $stok->kw_grade,
-                    'jumlah_palet'   => count($this->paletQuantities),
-                    'stok_lembar'    => $totalLembar,
-                    'stok_kubikasi'  => $this->hitungKubikasi($stok->panjang, $stok->lebar, $stok->tebal, $totalLembar),
-                    'tujuan'          => $this->tujuanKeluar,
+                    'id_jenis_kayu' => $stok->id_jenis_kayu,
+                    'panjang' => $stok->panjang,
+                    'lebar' => $stok->lebar,
+                    'tebal' => $stok->tebal,
+                    'kw_grade' => $stok->kw_grade,
+                    'jumlah_palet' => count($this->paletQuantities),
+                    'stok_lembar' => $totalLembar,
+                    'stok_kubikasi' => $this->hitungKubikasi($stok->panjang, $stok->lebar, $stok->tebal, $totalLembar),
+                    'tujuan' => $this->tujuanKeluar,
                     'dikeluarkan_by' => Auth::id(),
-                    'keterangan'     => $this->keteranganKeluar,
+                    'keterangan' => $this->keteranganKeluar,
                     'id_produksi_hp' => $this->tujuanKeluar === 'Hotpress'
                         ? ProduksiHp::latest()->first()?->id
                         : null,
                 ]);
 
                 // 🌟 Variabel "berjalan" — ini kuncinya. Nilainya bergerak turun tiap iterasi
-                $stokLembarBerjalan   = $stok->stok_lembar;
+                $stokLembarBerjalan = $stok->stok_lembar;
                 $stokKubikasiBerjalan = $stok->stok_kubikasi;
-                $nilaiStokBerjalan    = $stok->nilai_stok;
-                $lastLogId            = null;
+                $nilaiStokBerjalan = $stok->nilai_stok;
+                $lastLogId = null;
 
                 foreach ($this->paletQuantities as $index => $qty) {
                     $qtyPalet = intval($qty);
-                    if ($qtyPalet <= 0) continue; // lewati palet kosong, jangan sampai ganggu log
+                    if ($qtyPalet <= 0)
+                        continue; // lewati palet kosong, jangan sampai ganggu log
 
                     $palet = VeneerJadiMutasiKeluarPalet::create([
                         'id_mutasi_keluar' => $mutasi->id,
-                        'nomor_palet'      => $index + 1,
-                        'jumlah_lembar'    => $qtyPalet,
+                        'nomor_palet' => $index + 1,
+                        'jumlah_lembar' => $qtyPalet,
                     ]);
 
                     // Simpan kondisi "sebelum" dari nilai berjalan saat ini
-                    $stokLembarBefore   = $stokLembarBerjalan;
+                    $stokLembarBefore = $stokLembarBerjalan;
                     $stokKubikasiBefore = $stokKubikasiBerjalan;
-                    $nilaiStokBefore    = $nilaiStokBerjalan;
+                    $nilaiStokBefore = $nilaiStokBerjalan;
 
                     // Update nilai berjalan berdasarkan palet ini SAJA
-                    $stokLembarBerjalan   -= $qtyPalet;
-                    $stokKubikasiBerjalan  = $this->hitungKubikasi($stok->panjang, $stok->lebar, $stok->tebal, $stokLembarBerjalan);
-                    $nilaiTerpotongPalet   = $qtyPalet * $stok->hpp_average;
-                    $nilaiStokBerjalan     = max(0, $nilaiStokBerjalan - $nilaiTerpotongPalet);
+                    $stokLembarBerjalan -= $qtyPalet;
+                    $stokKubikasiBerjalan = $this->hitungKubikasi($stok->panjang, $stok->lebar, $stok->tebal, $stokLembarBerjalan);
+                    $nilaiTerpotongPalet = $qtyPalet * $stok->hpp_average;
+                    $nilaiStokBerjalan = max(0, $nilaiStokBerjalan - $nilaiTerpotongPalet);
 
                     $log = HppVeneerJadiLog::create([
-                        'id_jenis_kayu'        => $stok->id_jenis_kayu,
-                        'panjang'              => $stok->panjang,
-                        'lebar'                => $stok->lebar,
-                        'tebal'                => $stok->tebal,
-                        'kw_grade'             => $stok->kw_grade,
-                        'tanggal'              => now(),
-                        'tipe_transaksi'       => 'KELUAR',
-                        'referensi_type'       => VeneerJadiMutasiKeluarPalet::class, // ⬅️ diarahkan ke palet, bukan header
-                        'referensi_id'         => $palet->id,
-                        'total_lembar'         => $qtyPalet,
-                        'total_kubikasi'       => $this->hitungKubikasi($stok->panjang, $stok->lebar, $stok->tebal, $qtyPalet),
-                        'hpp_pekerja'          => $stok->hpp_pekerja_last ?? 0,
-                        'hpp_bahan_penolong'   => $stok->hpp_bahan_penolong_last ?? 0,
-                        'hpp_average'          => $stok->hpp_average,
-                        'nilai_stok'           => $nilaiTerpotongPalet,
-                        'stok_lembar_before'   => $stokLembarBefore,
+                        'id_jenis_kayu' => $stok->id_jenis_kayu,
+                        'panjang' => $stok->panjang,
+                        'lebar' => $stok->lebar,
+                        'tebal' => $stok->tebal,
+                        'kw_grade' => $stok->kw_grade,
+                        'tanggal' => now(),
+                        'tipe_transaksi' => 'KELUAR',
+                        'referensi_type' => VeneerJadiMutasiKeluarPalet::class, // ⬅️ diarahkan ke palet, bukan header
+                        'referensi_id' => $palet->id,
+                        'total_lembar' => $qtyPalet,
+                        'total_kubikasi' => $this->hitungKubikasi($stok->panjang, $stok->lebar, $stok->tebal, $qtyPalet),
+                        'hpp_pekerja' => $stok->hpp_pekerja_last ?? 0,
+                        'hpp_bahan_penolong' => $stok->hpp_bahan_penolong_last ?? 0,
+                        'hpp_average' => $stok->hpp_average,
+                        'nilai_stok' => $nilaiTerpotongPalet,
+                        'stok_lembar_before' => $stokLembarBefore,
                         'stok_kubikasi_before' => $stokKubikasiBefore,
-                        'nilai_stok_before'    => $nilaiStokBefore,
-                        'stok_lembar_after'    => $stokLembarBerjalan,
-                        'stok_kubikasi_after'  => $stokKubikasiBerjalan,
-                        'nilai_stok_after'     => $nilaiStokBerjalan,
-                        'keterangan'           => "Mutasi Keluar ke [{$this->tujuanKeluar}] — Palet #{$palet->nomor_palet} dari Gudang Veneer Jadi oleh {$userName}",
+                        'nilai_stok_before' => $nilaiStokBefore,
+                        'stok_lembar_after' => $stokLembarBerjalan,
+                        'stok_kubikasi_after' => $stokKubikasiBerjalan,
+                        'nilai_stok_after' => $nilaiStokBerjalan,
+                        'keterangan' => "Mutasi Keluar ke [{$this->tujuanKeluar}] — Palet #{$palet->nomor_palet} dari Gudang Veneer Jadi oleh {$userName}",
                     ]);
 
                     $lastLogId = $log->id;
@@ -578,10 +596,10 @@ class GudangVeneerJadi extends Page
 
                 // Update stok induk pakai nilai FINAL setelah semua palet diproses
                 $stok->update([
-                    'stok_lembar'   => $stokLembarBerjalan,
+                    'stok_lembar' => $stokLembarBerjalan,
                     'stok_kubikasi' => $stokKubikasiBerjalan,
-                    'nilai_stok'    => $nilaiStokBerjalan,
-                    'id_last_log'   => $lastLogId,
+                    'nilai_stok' => $nilaiStokBerjalan,
+                    'id_last_log' => $lastLogId,
                 ]);
             });
 
@@ -589,10 +607,10 @@ class GudangVeneerJadi extends Page
             unset($this->riwayatKeluarFiltered);
 
             // Reset Form ke keadaan bersih
-            $this->selectedStokId   = null;
-            $this->jumlahPalet      = 1;
-            $this->paletQuantities  = [0 => ''];
-            $this->tujuanKeluar     = 'Hotpress';
+            $this->selectedStokId = null;
+            $this->jumlahPalet = 1;
+            $this->paletQuantities = [0 => ''];
+            $this->tujuanKeluar = 'Hotpress';
             $this->keteranganKeluar = '';
             $this->showFormKeluarModal = false;
 
@@ -631,19 +649,19 @@ class GudangVeneerJadi extends Page
         }
 
         return $query->get()->map(fn($item) => [
-            'created_at'     => $item->created_at->format('d/m/Y H:i'),
-            'jenis_kayu'     => $item->jenisKayu->nama_kayu ?? '-',
-            'panjang'        => $item->panjang,
-            'lebar'          => $item->lebar,
-            'tebal'          => $item->tebal,
-            'kw'             => $item->kw_grade,
-            'stok_lembar'    => $item->stok_lembar ?? 0,
-            'stok_kubikasi'  => $item->stok_kubikasi ?? 0,
-            'jumlah_palet'   => $item->jumlah_palet,
-            'rincian_palet'  => $item->palets->pluck('jumlah_lembar')->toArray(),
-            'tujuan'         => $item->tujuan,
+            'created_at' => $item->created_at->format('d/m/Y H:i'),
+            'jenis_kayu' => $item->jenisKayu->nama_kayu ?? '-',
+            'panjang' => $item->panjang,
+            'lebar' => $item->lebar,
+            'tebal' => $item->tebal,
+            'kw' => $item->kw_grade,
+            'stok_lembar' => $item->stok_lembar ?? 0,
+            'stok_kubikasi' => $item->stok_kubikasi ?? 0,
+            'jumlah_palet' => $item->jumlah_palet,
+            'rincian_palet' => $item->palets->pluck('jumlah_lembar')->toArray(),
+            'tujuan' => $item->tujuan,
             'dikeluarkan_by' => $item->operator->name ?? 'System',
-            'keterangan'     => $item->keterangan,
+            'keterangan' => $item->keterangan,
         ]);
     }
 }

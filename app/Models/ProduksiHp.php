@@ -79,9 +79,7 @@ class ProduksiHp extends Model
             'id',
             'id'
         );
-
     }
-
     public function serahTerimaHp()
     {
         return $this->hasMany(SerahTerimaHp::class, 'id_triplek_hasil_hp', 'id');

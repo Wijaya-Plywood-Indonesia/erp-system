@@ -53,7 +53,7 @@ class BahanHotPressesTable
                  */
                 TextColumn::make('isi')
                     ->label('Jumlah Lembar'),
-                
+
                 TextColumn::make('ket')
                     ->label('Keterangan')
                     ->wrap()
@@ -65,7 +65,8 @@ class BahanHotPressesTable
             ])
             ->headerActions([
                 CreateAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
@@ -94,19 +95,22 @@ class BahanHotPressesTable
                     ->modalSubmitActionLabel('Simpan')
                     ->modalWidth('lg'),
                 EditAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
 
                 DeleteAction::make()
-                    ->hidden(fn ($livewire) =>
+                    ->hidden(
+                        fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(fn ($livewire) =>
+                        ->hidden(
+                            fn($livewire) =>
                             $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                         ),
                 ]),

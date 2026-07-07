@@ -121,6 +121,8 @@
                     </div>
                 @endforelse
             </div>
+<<<<<<< HEAD
+=======
         </div>
 
         {{-- [SECTION 3] GLOBAL UKURAN (REKAP SEMUA KW) --}}
@@ -193,5 +195,6 @@
             </div>
         @endif
 
+>>>>>>> 4228b14228a25c510b3814c2b8a3840673f65d97
     </x-filament::card>
 </x-filament::widget>
