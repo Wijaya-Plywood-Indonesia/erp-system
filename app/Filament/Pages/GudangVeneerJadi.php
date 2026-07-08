@@ -330,15 +330,15 @@ class GudangVeneerJadi extends Page
                     ->orWhereRaw('LOWER(gudang_veneer_jadis.kw_grade) LIKE ?', ["%{$q}%"])
                     ->orWhereRaw('LOWER(gudang_veneer_jadis.keterangan) LIKE ?', ["%{$q}%"])
                     ->orWhereRaw('LOWER(CONCAT(
-                        (gudang_veneer_jadis.panjang + 0), "x", 
-                        (gudang_veneer_jadis.lebar + 0), "x", 
-                        (gudang_veneer_jadis.tebal + 0)
-                    )) LIKE ?', ["%{$q}%"]);
+                    (gudang_veneer_jadis.panjang + 0), "x", 
+                    (gudang_veneer_jadis.lebar + 0), "x", 
+                    (gudang_veneer_jadis.tebal + 0)
+                )) LIKE ?', ["%{$q}%"]);
             });
         }
 
-        // Sumber 1: GudangVeneerJadi (Produksi/Repair)
-        $antreanGudang = $query->get()->map(fn($item) => [
+        // Sumber tunggal: GudangVeneerJadi (Produksi/Repair)
+        return $query->get()->map(fn($item) => [
             'id' => 'gudang-' . $item->id,
             'source' => 'gudang',
             'jenis_kayu' => $item->jenis_kayu_nama,
@@ -348,24 +348,17 @@ class GudangVeneerJadi extends Page
             'kw' => $item->kw_grade,
             'jumlah' => $item->stok_lembar,
             'stok_kubikasi' => $item->stok_kubikasi,
-            'created_at' => $item->created_at, // dipakai untuk tampilan (masih Carbon)
-            'created_at_ts' => $item->created_at?->timestamp ?? 0, // dipakai untuk sorting (integer)
+            'created_at' => $item->created_at,
+            'created_at_ts' => $item->created_at?->timestamp ?? 0,
             'status_gudang' => $item->status_gudang ?? 'belum diterima',
             'diterima_at' => $item->diterima_at,
             'diterima_by' => $item->diterima_by,
             'penerima_name' => $item->penerima?->name ?? 'N/A',
             'keterangan' => $item->keterangan,
-        ]);
-
-        // Sumber 2: VeneerMutasi (arah masuk) — lihat ambilAntreanDariMutasiJadi()
-        $antreanMutasi = $this->ambilAntreanDariMutasiJadi();
-
-        // Gabungkan kedua sumber, lalu urutkan: "belum diterima" dulu, baru terbaru dulu
-        return $antreanGudang->concat($antreanMutasi)
+        ])
             ->sortBy([
-                fn($a, $b) => ($a['status_gudang'] === 'belum diterima' ? 0 : 1)
-                <=> ($b['status_gudang'] === 'belum diterima' ? 0 : 1),
-                fn($a, $b) => $b['created_at_ts'] <=> $a['created_at_ts'],
+                fn($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
+                fn($item) => -$item['created_at_ts'],
             ])
             ->values();
     }
@@ -533,9 +526,7 @@ class GudangVeneerJadi extends Page
                     'tujuan' => $this->tujuanKeluar,
                     'dikeluarkan_by' => Auth::id(),
                     'keterangan' => $this->keteranganKeluar,
-                    'id_produksi_hp' => $this->tujuanKeluar === 'Hotpress'
-                        ? ProduksiHp::latest()->first()?->id
-                        : null,
+                    'id_produksi_hp' => null,
                 ]);
 
                 // 🌟 Variabel "berjalan" — ini kuncinya. Nilainya bergerak turun tiap iterasi

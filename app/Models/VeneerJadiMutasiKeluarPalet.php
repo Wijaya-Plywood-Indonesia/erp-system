@@ -15,4 +15,16 @@ class VeneerJadiMutasiKeluarPalet extends Model
     {
         return $this->belongsTo(VeneerJadiMutasiKeluar::class, 'id_mutasi_keluar');
     }
+
+    public function pemakaianHotpress()
+    {
+        return $this->hasMany(BahanHotpress::class, 'id_mutasi_keluar_palet');
+    }
+
+
+    public function getSisaAttribute(): float
+    {
+        $terpakai = $this->pemakaianHotpress()->sum('isi');
+        return (float) $this->jumlah_lembar - (float) $terpakai;
+    }
 }

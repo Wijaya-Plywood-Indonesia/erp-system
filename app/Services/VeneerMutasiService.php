@@ -12,7 +12,10 @@ use App\Models\NotaBarangMasuk;
 use App\Models\DetailNotaBarangMasuk;
 use App\Models\HppVeneerBasahSummary;
 use App\Models\HppVeneerBasahLog;
+use App\Models\HppVeneerJadiLog;
+use App\Models\StokVeneerJadi;
 use App\Models\StokVeneerKering;
+use Exception;
 use Illuminate\Support\Facades\DB;
 
 class VeneerMutasiService
@@ -166,7 +169,7 @@ class VeneerMutasiService
                 if ($detail->tipe_veneer === 'basah') {
                     $this->updateStokBasah($mutasi, $detail, $ukuran, $namaBarang, $isKeluar);
                 } elseif ($detail->tipe_veneer === 'jadi') {
-                      $this->updateStokJadi($mutasi, $detail, $ukuran, $namaBarang, $isKeluar);
+                    $this->updateStokJadi($mutasi, $detail, $ukuran, $namaBarang, $isKeluar);
                 } else {
                     // Veneer kering: MASUK maupun KELUAR langsung diproses
                     // saat validasi (alur serah terima gudang sudah dibatalkan).
@@ -242,7 +245,7 @@ class VeneerMutasiService
             'tanggal'              => $mutasi->tanggal,
             'tipe_transaksi'       => $mutasi->tipe_transaksi,
             'keterangan'           => strtoupper(($isKeluar ? "Veneer Keluar #" : "Veneer Masuk #") . $mutasi->no_nota)
-                                      . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
+                . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
             'referensi_type'       => VeneerMutasiDetail::class,
             'referensi_id'         => $detail->id,
             'total_lembar'         => $detail->qty,
@@ -562,7 +565,10 @@ class VeneerMutasiService
                 $nilaiTx   = round($hppAverage * (float) $record->m3, 4);
                 $nilaiStok -= $nilaiTx;
 
-                if ($stokM3 <= 0) { $stokM3 = 0.0; $nilaiStok = 0.0; }
+                if ($stokM3 <= 0) {
+                    $stokM3 = 0.0;
+                    $nilaiStok = 0.0;
+                }
 
                 $record->update([
                     'hpp_kering_per_m3'   => round($hppAverage, 4),

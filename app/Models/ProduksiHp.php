@@ -78,8 +78,9 @@ class ProduksiHp extends Model
             'id_mutasi_keluar',
             'id',
             'id'
-        );
+        )->orWhereHas('mutasiKeluar', fn($q) => $q->whereNull('diterima_by'));
     }
+
     public function serahTerimaHp()
     {
         return $this->hasMany(SerahTerimaHp::class, 'id_triplek_hasil_hp', 'id');

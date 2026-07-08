@@ -19,7 +19,8 @@ class VeneerJadiMutasiKeluar extends Model
         'dikeluarkan_by',
         'keterangan',
         'diterima_by',
-        'diterima_at'
+        'diterima_at',
+        'id_produksi_hp',
     ];
 
     public function jenisKayu()

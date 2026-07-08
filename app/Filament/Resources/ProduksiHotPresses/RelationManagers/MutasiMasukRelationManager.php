@@ -26,7 +26,17 @@ class MutasiMasukRelationManager extends RelationManager
 
     protected function modifyQueryUsing(Builder $query): Builder
     {
-        return $query
+        $produksiHpId = $this->getOwnerRecord()->id;
+
+        // Buang constraint id_produksi_hp bawaan hasManyThrough, ganti manual
+        $query->getQuery()->wheres = array_filter(
+            $query->getQuery()->wheres,
+            fn($w) => !(isset($w['column']) && str_contains($w['column'], 'id_produksi_hp'))
+        );;
+        return $query->whereHas('mutasiKeluar', function (Builder $q) use ($produksiHpId) {
+            $q->whereNull('diterima_by')
+                ->orWhere('id_produksi_hp', $produksiHpId);
+        })
             // 🌟 Menggunakan subquery untuk mengecek status 'diterima_by' di tabel induk mutasiKeluar
             ->orderByRaw('
             (
@@ -127,6 +137,7 @@ class MutasiMasukRelationManager extends RelationManager
                     ->action(function (VeneerJadiMutasiKeluarPalet $record) {
                         $mk = $record->mutasiKeluar;
                         $kubikasiAsli = ($mk->panjang * $mk->lebar * $mk->tebal * $record->jumlah_lembar) / 10000000;
+
                         $record->update([
                             'diterima_by' => Auth::id(),
                             'diterima_at' => now(),
@@ -136,13 +147,10 @@ class MutasiMasukRelationManager extends RelationManager
                         $mk->update([
                             'diterima_by' => Auth::id(),
                             'diterima_at' => now(),
+                            'id_produksi_hp' => $this->getOwnerRecord()->id, // ⬅️ ditentukan di sini
                         ]);
 
-                        Notification::make()
-                            ->success()
-                            ->title('Material Berhasil Diterima')
-                            ->body('Stok masuk terdaftar pada antrean produksi Hotpress.')
-                            ->send();
+                        Notification::make()->success()->title('Material Berhasil Diterima')->send();
                     }),
 
                 Action::make('done_label')
