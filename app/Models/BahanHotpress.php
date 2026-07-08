@@ -10,11 +10,13 @@ class BahanHotpress extends Model
 
     protected $fillable = [
         'id_mutasi_keluar_palet',
+        'id_mutasi_keluar_platform',
         'id_produksi_hp',
         'no_palet',
         'id_barang_setengah_jadi',
         'isi',
         'ket',
+        'sumber',
     ];
 
     public function produksiHp()
@@ -43,5 +45,10 @@ class BahanHotpress extends Model
     public function mutasiKeluarPalet()
     {
         return $this->belongsTo(VeneerJadiMutasiKeluarPalet::class, 'id_mutasi_keluar_palet');
+    }
+
+    public function mutasiKeluarPlatform()
+    {
+        return $this->belongsTo(PlatformJadiMutasiKeluarPalet::class, 'id_mutasi_keluar_platform');
     }
 }

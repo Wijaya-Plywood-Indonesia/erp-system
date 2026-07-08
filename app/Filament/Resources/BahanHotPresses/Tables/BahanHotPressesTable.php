@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\BahanHotPresses\Tables;
 
-use Dom\Text;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -19,26 +18,29 @@ class BahanHotPressesTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn($query) => $query->with([
+                'mutasiKeluarPalet.mutasiKeluar.jenisKayu',
+                'mutasiKeluarPlatform.mutasiKeluar.jenisBarang',
+            ]))
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
+                    ->placeholder('-')
                     ->searchable(),
 
                 TextColumn::make('jenis')
                     ->label('Tipe')
                     ->state(function ($record) {
-                        // Kalau relasi mutasiKeluarPalet berhasil ditemukan,
-                        // otomatis berarti sumbernya dari tabel veneer_jadi_mutasi_keluar_palets.
-                        // Tidak perlu cek nama gudang, karena kolom itu memang tidak ada di sana.
-                        if ($record->mutasiKeluarPalet?->mutasiKeluar) {
+                        $sumber = $record->sumber
+                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : null));
+
+                        if ($sumber === 'veneer' && $record->mutasiKeluarPalet?->mutasiKeluar) {
                             return 'Veneer';
                         }
 
-                        // Placeholder untuk sumber Platform, kalau nanti relasinya sudah ditambahkan
-                        // di model BahanHotpress, misal: $record->mutasiKeluarPlatform
-                        // if ($record->mutasiKeluarPlatform) {
-                        //     return 'Platform';
-                        // }Gudang
+                        if ($sumber === 'platform' && $record->mutasiKeluarPlatform?->mutasiKeluar) {
+                            return 'Platform';
+                        }
 
                         return '-';
                     })
@@ -49,26 +51,49 @@ class BahanHotPressesTable
                         default    => 'gray',
                     }),
 
-                /*
-                 * JENIS BARANG
-                 */
-                TextColumn::make('mutasiKeluarPalet.mutasiKeluar.jenisKayu.nama_kayu')
-                    ->label('Jenis Kayu'),
+                TextColumn::make('jenis_kayu')
+                    ->label('Jenis Barang')
+                    ->state(function ($record) {
+                        $sumber = $record->sumber
+                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : null));
 
-                /*
-                 * GRADE
-                 */
+                        if ($sumber === 'veneer') {
+                            return $record->mutasiKeluarPalet?->mutasiKeluar?->jenisKayu?->nama_kayu ?? '-';
+                        }
+
+                        if ($sumber === 'platform') {
+                            return $record->mutasiKeluarPlatform?->mutasiKeluar?->jenisBarang?->nama_jenis_barang ?? '-';
+                        }
+
+                        return '-';
+                    }),
+
                 TextColumn::make('grade')
                     ->label('Grade')
-                    ->state(fn($record) => $record->mutasiKeluarPalet?->mutasiKeluar?->kw_grade ?? '-'),
+                    ->state(function ($record) {
+                        $sumber = $record->sumber
+                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : null));
 
-                /*
-                 * UKURAN
-                 */
+                        if ($sumber === 'veneer') {
+                            return $record->mutasiKeluarPalet?->mutasiKeluar?->kw_grade ?? '-';
+                        }
+
+                        if ($sumber === 'platform') {
+                            return $record->mutasiKeluarPlatform?->mutasiKeluar?->kw_grade ?? '-';
+                        }
+
+                        return '-';
+                    }),
+
                 TextColumn::make('ukuran')
                     ->label('Ukuran')
                     ->state(function ($record) {
-                        $mk = $record->mutasiKeluarPalet?->mutasiKeluar;
+                        $sumber = $record->sumber
+                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : null));
+
+                        $mk = $sumber === 'veneer'
+                            ? $record->mutasiKeluarPalet?->mutasiKeluar
+                            : ($sumber === 'platform' ? $record->mutasiKeluarPlatform?->mutasiKeluar : null);
 
                         if (! $mk) {
                             return '-';
@@ -81,9 +106,6 @@ class BahanHotPressesTable
                         return "{$panjang} x {$lebar} x {$tebal}";
                     }),
 
-                /*
-                 * ISI
-                 */
                 TextColumn::make('isi')
                     ->label('Jumlah Lembar'),
 

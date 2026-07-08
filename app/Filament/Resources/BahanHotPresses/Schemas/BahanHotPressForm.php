@@ -9,7 +9,10 @@ use Filament\Forms\Components\TextInput;
 use App\Models\BarangSetengahJadiHp;
 use App\Models\JenisBarang;
 use App\Models\Grade;
+use App\Models\PlatformJadiMutasiKeluar;
+use App\Models\PlatformJadiMutasiKeluarPalet;
 use App\Models\VeneerJadiMutasiKeluarPalet;
+use Filament\Forms\Components\Hidden;
 use Filament\Schemas\Components\Utilities\Get;
 
 class BahanHotPressForm
@@ -60,51 +63,96 @@ class BahanHotPressForm
                 // =========================================================================
                 // 3. BARANG SETENGAH JADI (SELECT UTAMA) - DEHYDRATED (Disimpan)
                 // =========================================================================
-                Select::make('id_mutasi_keluar_palet')
+                Select::make('barang_setengah_jadi_selector') // ganti nama, bukan lagi id_mutasi_keluar_palet
                     ->label('Barang Setengah Jadi')
                     ->required()
                     ->searchable()
                     ->reactive()
-                    ->options(fn(?BahanHotpress $record) => self::getPaletOptions($record))
+                    ->dehydrated(false)   // <-- tidak disimpan langsung, cuma UI selector
+                    ->options(function (?BahanHotpress $record, $livewire) {
+                        $ownerId = $livewire->ownerRecord?->id;
+                        return self::getPaletOptions($record, $ownerId) + self::getPlatformOptions($record, $ownerId);
+                    })
+                    ->afterStateHydrated(function ($set, ?BahanHotpress $record) {
+                        // saat edit, prefill selector dari kolom asli record
+                        if ($record?->sumber === 'veneer' && $record->id_mutasi_keluar_palet) {
+                            $set('barang_setengah_jadi_selector', "veneer:{$record->id_mutasi_keluar_palet}");
+                        } elseif ($record?->sumber === 'platform' && $record->id_mutasi_keluar_platform) {
+                            $set('barang_setengah_jadi_selector', "platform:{$record->id_mutasi_keluar_platform}");
+                        }
+                    })
                     ->afterStateUpdated(function ($state, callable $set, ?BahanHotpress $record) {
-                        if (! $state) {
+                        if (! $state || ! str_contains($state, ':')) {
                             $set('isi', null);
                             $set('no_palet', null);
                             $set('sisa_tersedia', null);
+                            $set('sumber', null);
+                            $set('id_mutasi_keluar_palet', null);
+                            $set('id_mutasi_keluar_platform', null);
                             return;
                         }
 
-                        $palet = VeneerJadiMutasiKeluarPalet::find($state);
-                        if (! $palet) return;
+                        [$sumber, $id] = explode(':', $state, 2);
 
-                        $sisa = $palet->sisa;
-                        if ($record && $record->id_mutasi_keluar_palet === (int) $state) {
-                            $sisa += (float) $record->isi;
+                        if ($sumber === 'veneer') {
+                            $palet = VeneerJadiMutasiKeluarPalet::find($id);
+                            if (! $palet) return;
+
+                            $sisa = $palet->sisa;
+                            if ($record && $record->sumber === 'veneer' && $record->id_mutasi_keluar_palet === (int) $id) {
+                                $sisa += (float) $record->isi;
+                            }
+
+                            $set('no_palet', $palet->nomor_palet);
+                            $set('sisa_tersedia', $sisa);
+                            $set('isi', $sisa);
+                            $set('sumber', 'veneer');
+                            $set('id_mutasi_keluar_palet', (int) $id);
+                            $set('id_mutasi_keluar_platform', null);
+                        } else {
+                            $palet = PlatformJadiMutasiKeluarPalet::find($id);
+                            if (! $palet) return;
+
+                            $sisa = $palet->sisa;
+                            if ($record && $record->sumber === 'platform' && $record->id_mutasi_keluar_platform === (int) $id) {
+                                $sisa += (float) $record->isi;
+                            }
+
+                            $set('no_palet', $palet->nomor_palet);
+                            $set('sisa_tersedia', $sisa);
+                            $set('isi', $sisa);
+                            $set('sumber', 'platform');
+                            $set('id_mutasi_keluar_platform', (int) $id);
+                            $set('id_mutasi_keluar_palet', null);
                         }
-
-                        $set('no_palet', $palet->nomor_palet);
-                        $set('sisa_tersedia', $sisa);
-                        $set('isi', $sisa);
                     })
                     ->columnSpanFull(),
+
+                Hidden::make('sumber'),
+                Hidden::make('id_mutasi_keluar_palet'),
+                Hidden::make('id_mutasi_keluar_platform'),
 
                 TextInput::make('sisa_tersedia')
                     ->label('Sisa Tersedia (Lembar)')
                     ->numeric()
                     ->disabled()
                     ->dehydrated(false)
-                    ->afterStateHydrated(function ($set, ?BahanHotPress $record) {
-                        if (! $record?->id_barang_setengah_jadi) {
+                    ->afterStateHydrated(function ($set, ?BahanHotpress $record) {
+                        if (! $record?->sumber) {
                             return;
                         }
 
-                        $palet = VeneerJadiMutasiKeluarPalet::find($record->id_barang_setengah_jadi);
-
-                        if (! $palet) {
-                            return;
+                        if ($record->sumber === 'veneer' && $record->id_mutasi_keluar_palet) {
+                            $palet = VeneerJadiMutasiKeluarPalet::find($record->id_mutasi_keluar_palet);
+                            if ($palet) {
+                                $set('sisa_tersedia', $palet->sisa + (float) $record->isi);
+                            }
+                        } elseif ($record->sumber === 'platform' && $record->id_mutasi_keluar_platform) {
+                            $palet = PlatformJadiMutasiKeluarPalet::find($record->id_mutasi_keluar_platform);
+                            if ($palet) {
+                                $set('sisa_tersedia', $palet->sisa + (float) $record->isi);
+                            }
                         }
-
-                        $set('sisa_tersedia', $palet->sisa + (float) $record->isi);
                     }),
 
                 TextInput::make('isi')
@@ -114,21 +162,29 @@ class BahanHotPressForm
                     ->live()
                     ->rules([
                         fn(Get $get, ?BahanHotpress $record) => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
-                            $idPalet = $get('id_barang_setengah_jadi');
+                            $sumber = $get('sumber');
+                            $rawState = $get('barang_setengah_jadi_selector'); // <-- bukan lagi 'id_mutasi_keluar_palet'
 
-                            if (! $idPalet) {
+                            if (! $rawState || ! str_contains($rawState, ':')) {
                                 return;
                             }
 
-                            $palet = VeneerJadiMutasiKeluarPalet::find($idPalet);
+                            [$src, $id] = explode(':', $rawState, 2);
 
-                            if (! $palet) {
-                                return;
-                            }
-
-                            $sisa = $palet->sisa;
-                            if ($record && $record->id_barang_setengah_jadi === (int) $idPalet) {
-                                $sisa += (float) $record->isi;
+                            if ($src === 'veneer') {
+                                $palet = VeneerJadiMutasiKeluarPalet::find($id);
+                                if (! $palet) return;
+                                $sisa = $palet->sisa;
+                                if ($record && $record->sumber === 'veneer' && $record->id_mutasi_keluar_palet === (int) $id) {
+                                    $sisa += (float) $record->isi;
+                                }
+                            } else {
+                                $palet = PlatformJadiMutasiKeluarPalet::find($id);
+                                if (! $palet) return;
+                                $sisa = $palet->sisa;
+                                if ($record && $record->sumber === 'platform' && $record->id_mutasi_keluar_platform === (int) $id) {
+                                    $sisa += (float) $record->isi;
+                                }
                             }
 
                             if ($value > $sisa) {
@@ -145,13 +201,18 @@ class BahanHotPressForm
             ]);
     }
 
-    protected static function getPaletOptions(?BahanHotPress $record): array
+    protected static function getPaletOptions(?BahanHotpress $record, $ownerRecordId = null): array
     {
-        $currentId = $record?->id_barang_setengah_jadi;
+        $currentId = $record?->sumber === 'veneer' ? $record?->id_mutasi_keluar_palet : null;
         $currentIsi = (float) ($record?->isi ?? 0);
 
         return VeneerJadiMutasiKeluarPalet::query()
-            ->whereHas('mutasiKeluar', fn($q) => $q->whereNotNull('diterima_by'))
+            ->whereHas('mutasiKeluar', function ($q) use ($ownerRecordId) {
+                $q->whereNotNull('diterima_by');
+                if ($ownerRecordId) {
+                    $q->where('id_produksi_hp', $ownerRecordId);
+                }
+            })
             ->with('mutasiKeluar.jenisKayu')
             ->orderBy('id', 'desc')
             ->get()
@@ -174,7 +235,46 @@ class BahanHotPressForm
                 $label = "Veneer | {$panjang}mm x {$lebar}mm x {$tebal}mm | {$kw} | {$kayu} "
                     . "| Palet {$noPalet} | Sisa {$sisa} Lbr";
 
-                return [$palet->id => $label];
+                return ["veneer:{$palet->id}" => $label];
+            })
+            ->toArray();
+    }
+
+    protected static function getPlatformOptions(?BahanHotpress $record, $ownerRecordId = null): array
+    {
+        $currentId = $record?->sumber === 'platform' ? $record?->id_mutasi_keluar_platform : null;
+        $currentIsi = (float) ($record?->isi ?? 0);
+
+        return \App\Models\PlatformJadiMutasiKeluarPalet::query()
+            ->whereHas('mutasiKeluar', function ($q) use ($ownerRecordId) {
+                $q->whereNotNull('diterima_by');
+                if ($ownerRecordId) {
+                    $q->where('id_produksi_hp', $ownerRecordId);
+                }
+            })
+            ->with('mutasiKeluar.jenisBarang')
+            ->orderBy('id', 'desc')
+            ->get()
+            ->map(function ($palet) use ($currentId, $currentIsi) {
+                $sisa = $palet->sisa + ($palet->id === $currentId ? $currentIsi : 0);
+                return [$palet, $sisa];
+            })
+            ->filter(fn($pair) => $pair[1] > 0)
+            ->mapWithKeys(function ($pair) {
+                [$palet, $sisa] = $pair;
+                $mk = $palet->mutasiKeluar;
+
+                $panjang = (float) $mk->panjang + 0;
+                $lebar   = (float) $mk->lebar + 0;
+                $tebal   = (float) $mk->tebal + 0;
+                $kw      = $mk->kw_grade ?? '?';
+                $jenisBarang = $mk->jenisBarang?->nama_jenis_barang ?? '?';
+                $noPalet = $palet->nomor_palet ?? '?';
+
+                $label = "Platform | {$panjang}mm x {$lebar}mm x {$tebal}mm | {$kw} | {$jenisBarang} "
+                    . "| Palet {$noPalet} | Sisa {$sisa} Lbr";
+
+                return ["platform:{$palet->id}" => $label];
             })
             ->toArray();
     }
