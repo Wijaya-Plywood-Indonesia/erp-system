@@ -83,11 +83,11 @@ class GudangPlatformJadi extends Page
         $diterimaIds = SerahTerimaPlatformJadi::pluck('id_hasil_sanding');
 
         $rows = HasilSanding::with([
-                'barangSetengahJadi.ukuran',
-                'barangSetengahJadi.jenisBarang',
-                'barangSetengahJadi.grade',
-                'produksiSanding',
-            ])
+            'barangSetengahJadi.ukuran',
+            'barangSetengahJadi.jenisBarang',
+            'barangSetengahJadi.grade',
+            'produksiSanding',
+        ])
             ->where('tujuan_serah', 'platform_jadi')
             ->whereNotNull('diserahkan_at')
             ->get()
@@ -117,18 +117,19 @@ class GudangPlatformJadi extends Page
 
         if (trim($this->antreanSearch) !== '') {
             $q = strtolower(trim($this->antreanSearch));
-            $rows = $rows->filter(fn ($r) =>
+            $rows = $rows->filter(
+                fn($r) =>
                 str_contains(strtolower((string) $r->jenis_barang), $q)
-                || str_contains(strtolower((string) $r->grade), $q)
-                || str_contains(strtolower(($r->panjang + 0) . 'x' . ($r->lebar + 0) . 'x' . ($r->tebal + 0)), $q)
-                || str_contains(strtolower('palet ' . $r->no_palet), $q)
+                    || str_contains(strtolower((string) $r->grade), $q)
+                    || str_contains(strtolower(($r->panjang + 0) . 'x' . ($r->lebar + 0) . 'x' . ($r->tebal + 0)), $q)
+                    || str_contains(strtolower('palet ' . $r->no_palet), $q)
             );
         }
 
         // Belum diterima di atas (terbaru dulu), sudah diterima di bawah.
         return $rows
             ->sortByDesc('created_at')
-            ->sortBy(fn ($r) => $r->sudah ? 1 : 0)
+            ->sortBy(fn($r) => $r->sudah ? 1 : 0)
             ->values();
     }
 
@@ -299,8 +300,7 @@ class GudangPlatformJadi extends Page
                     throw new \Exception('Sisa stok tidak mencukupi. Tersedia: ' . $stok->stok_lembar . ' lembar.');
                 }
 
-                $user     = Auth::user();
-                $userName = $user?->name ?? 'System';
+                $user = Auth::user();
 
                 $mutasi = PlatformJadiMutasiKeluar::create([
                     'id_jenis_barang' => $stok->id_jenis_barang,
@@ -316,16 +316,9 @@ class GudangPlatformJadi extends Page
                     'keterangan'      => trim($this->keteranganKeluar) !== '' ? trim($this->keteranganKeluar) : null,
                 ]);
 
-                $ketDasar = 'Keluar ke [' . trim($this->tujuanKeluar) . ']'
-                    . ' | Oleh: ' . $userName
-                    . ' | Ket: ' . (trim($this->keteranganKeluar) !== '' ? trim($this->keteranganKeluar) : '-');
-
-                $totalPalet = count($this->paletQuantities);
-                $lembar     = (int) $stok->stok_lembar;
-                $kubikasi   = (float) $stok->stok_kubikasi;
-                $nilai      = (float) $stok->nilai_stok;
-                $lastLogId  = $stok->id_last_log;
-
+                // Catatan: stok TIDAK dipotong di sini. Baris palet di bawah ini
+                // hanya mencatat "niat kirim" per palet — angka jumlah_lembar
+                // inilah yang nanti dipakai untuk memotong stok saat diterima.
                 foreach ($this->paletQuantities as $index => $qtyRaw) {
                     $qty = intval($qtyRaw);
 
@@ -334,56 +327,7 @@ class GudangPlatformJadi extends Page
                         'nomor_palet'      => $index + 1,
                         'jumlah_lembar'    => $qty,
                     ]);
-
-                    if ($qty <= 0) {
-                        continue;
-                    }
-
-                    $kubPalet   = $this->hitungKubikasi($stok->panjang, $stok->lebar, $stok->tebal, $qty);
-                    $nilaiPalet = round($qty * (float) $stok->hpp_average, 2);
-
-                    $beforeLembar   = $lembar;
-                    $beforeKubikasi = $kubikasi;
-                    $beforeNilai    = $nilai;
-
-                    $lembar   -= $qty;
-                    $kubikasi  = max(0.0, round($kubikasi - $kubPalet, 6));
-                    $nilai     = max(0.0, round($nilai - $nilaiPalet, 2));
-
-                    $log = HppPlatformJadiLog::create([
-                        'id_jenis_barang'      => $stok->id_jenis_barang,
-                        'panjang'              => $stok->panjang,
-                        'lebar'                => $stok->lebar,
-                        'tebal'                => $stok->tebal,
-                        'kw_grade'             => $stok->kw_grade,
-                        'tanggal'              => now(),
-                        'tipe_transaksi'       => 'keluar',
-                        'referensi_type'       => PlatformJadiMutasiKeluar::class,
-                        'referensi_id'         => $mutasi->id,
-                        'total_lembar'         => $qty,
-                        'total_kubikasi'       => $kubPalet,
-                        'hpp_pekerja'          => 0,
-                        'hpp_bahan_penolong'   => 0,
-                        'hpp_average'          => (float) $stok->hpp_average,
-                        'nilai_stok'           => $nilaiPalet,
-                        'stok_lembar_before'   => $beforeLembar,
-                        'stok_kubikasi_before' => $beforeKubikasi,
-                        'nilai_stok_before'    => $beforeNilai,
-                        'stok_lembar_after'    => $lembar,
-                        'stok_kubikasi_after'  => $kubikasi,
-                        'nilai_stok_after'     => $nilai,
-                        'keterangan'           => 'Palet ' . ($index + 1) . '/' . $totalPalet . ' | ' . $ketDasar,
-                    ]);
-
-                    $lastLogId = $log->id;
                 }
-
-                $stok->update([
-                    'stok_lembar'   => $lembar,
-                    'stok_kubikasi' => $kubikasi,
-                    'nilai_stok'    => $nilai,
-                    'id_last_log'   => $lastLogId,
-                ]);
             });
 
             // Reset form
@@ -395,8 +339,8 @@ class GudangPlatformJadi extends Page
             $this->showFormKeluarModal = false;
 
             Notification::make()->success()
-                ->title('Mutasi Keluar Berhasil')
-                ->body("{$totalLembar} lembar berhasil dikeluarkan dari Gudang Platform Jadi.")
+                ->title('Mutasi Keluar Dicatat')
+                ->body("{$totalLembar} lembar tercatat dikirim. Stok akan terpotong setelah barang dikonfirmasi diterima di tujuan.")
                 ->send();
         } catch (\Exception $e) {
             Notification::make()->danger()
@@ -414,7 +358,7 @@ class GudangPlatformJadi extends Page
         if (trim($this->keluarSearchQuery) !== '') {
             $q = strtolower(trim($this->keluarSearchQuery));
             $query->where(function ($query) use ($q) {
-                $query->whereHas('jenisBarang', fn ($qr) => $qr->whereRaw('LOWER(nama_jenis_barang) LIKE ?', ["%{$q}%"]))
+                $query->whereHas('jenisBarang', fn($qr) => $qr->whereRaw('LOWER(nama_jenis_barang) LIKE ?', ["%{$q}%"]))
                     ->orWhereRaw('LOWER(kw_grade) LIKE ?', ["%{$q}%"])
                     ->orWhereRaw('LOWER(tujuan) LIKE ?', ["%{$q}%"])
                     ->orWhereRaw('LOWER(keterangan) LIKE ?', ["%{$q}%"]);
