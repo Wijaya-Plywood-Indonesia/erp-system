@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class HasilSanding extends Model
 {
-    //
     protected $table = 'hasil_sandings';
 
     protected $fillable = [
@@ -18,6 +17,14 @@ class HasilSanding extends Model
         'id_mesin',
         'no_palet',
         'status',
+        // ─── Serah hasil sanding (arah gudang) ───
+        'tujuan_serah',      // 'platform_jadi' | 'triplek_jadi' | null (belum diserahkan)
+        'diserahkan_oleh',
+        'diserahkan_at',
+    ];
+
+    protected $casts = [
+        'diserahkan_at' => 'datetime',
     ];
 
     public function produksiSanding()
@@ -29,9 +36,32 @@ class HasilSanding extends Model
     {
         return $this->belongsTo(BarangSetengahJadiHp::class, 'id_barang_setengah_jadi');
     }
+
     public function mesin()
     {
         return $this->belongsTo(Mesin::class, 'id_mesin');
+    }
+
+    /** User yang menyerahkan hasil sanding ke gudang. */
+    public function penyerah()
+    {
+        return $this->belongsTo(User::class, 'diserahkan_oleh');
+    }
+
+    // ─── Helper serah ─────────────────────────────────────────────
+
+    public function sudahDiserahkan(): bool
+    {
+        return $this->diserahkan_at !== null;
+    }
+
+    public function getLabelTujuanSerahAttribute(): string
+    {
+        return match ($this->tujuan_serah) {
+            'platform_jadi' => 'Gudang Platform Jadi',
+            'triplek_jadi'  => 'Gudang Triplek Jadi',
+            default         => '-',
+        };
     }
 
     protected static function booted()
