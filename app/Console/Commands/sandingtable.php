@@ -1,4 +1,4 @@
-<?php
+<!-- <?php
 
 namespace App\Filament\Resources\HasilSandings\Tables;
 
@@ -350,4 +350,4 @@ class HasilSandingsTable
                 ]),
             ]);
     }
-}
+} -->
