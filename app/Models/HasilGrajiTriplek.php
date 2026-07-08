@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\ProductionUpdated;
 use Illuminate\Database\Eloquent\Model;
 
 class HasilGrajiTriplek extends Model
@@ -30,14 +31,24 @@ class HasilGrajiTriplek extends Model
         // Menggunakan static::saved mencakup Created dan Updated
         static::saved(function ($model) {
             if ($model->id_produksi_graji_triplek) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_graji_triplek, 'graji_triplek');
+                ProductionUpdated::dispatch($model->id_produksi_graji_triplek, 'graji_triplek');
             }
         });
 
         static::deleted(function ($model) {
             if ($model->id_produksi_graji_triplek) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_graji_triplek, 'graji_triplek');
+                ProductionUpdated::dispatch($model->id_produksi_graji_triplek, 'graji_triplek');
             }
         });
+    }
+
+    public function serahTerimaHp()
+    {
+        return $this->hasOne(SerahTerimaHp::class, 'id_hasil_graji_triplek');
+    }
+
+    public function serahTerimaTriplekJadi()
+    {
+        return $this->hasOne(SerahTerimaTriplekJadi::class, 'id_hasil_graji_triplek');
     }
 }

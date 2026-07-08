@@ -56,7 +56,9 @@ class PlatformHasilHpsTable
                             return 'Belum Serah';
                         }
 
-                        return $serahTerima->diterima_oleh === '-' ? 'Menunggu Diterima' : 'Sudah Diterima';
+                        return $serahTerima->diterima_oleh === '-'
+                            ? 'Menunggu Diterima Sanding'
+                            : 'Sudah Diterima Sanding';
                     }),
 
                 TextColumn::make('barangSetengahJadi.jenisBarang.nama_jenis_barang')
@@ -97,11 +99,18 @@ class PlatformHasilHpsTable
                             return 'Belum Diserahkan';
                         }
 
-                        return $serahTerima->diterima_oleh === '-' ? 'Menunggu Diterima' : 'Sudah Diterima';
+                        $tujuan = match ($serahTerima->tujuan) {
+                            'sanding' => 'Sanding',
+                            default => '-',
+                        };
+
+                        return $serahTerima->diterima_oleh === '-'
+                            ? "Menunggu Diterima {$tujuan}"
+                            : "Sudah Diterima {$tujuan}";
                     })
-                    ->color(fn ($state) => match ($state) {
-                        'Sudah Diterima' => 'success',
-                        'Menunggu Diterima' => 'warning',
+                    ->color(fn ($state) => match (true) {
+                        str_contains($state, 'Sudah Diterima') => 'success',
+                        str_contains($state, 'Menunggu Diterima') => 'warning',
                         default => 'gray',
                     })
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -194,6 +203,7 @@ class PlatformHasilHpsTable
                                 SerahTerimaHp::create([
                                     'id_platform_hasil_hp' => $record->id,
                                     'id_produksi_sanding' => null,
+                                    'tujuan' => 'sanding',
                                     'diserahkan_oleh' => Auth::user()->name,
                                     'diterima_oleh' => '-',
                                     'status' => 'Serah Platform',
