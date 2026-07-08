@@ -88,6 +88,8 @@ class GudangPlatformJadi extends Page
                 'barangSetengahJadi.grade',
                 'produksiSanding',
             ])
+            ->where('tujuan_serah', 'platform_jadi')
+            ->whereNotNull('diserahkan_at')
             ->get()
             ->map(function (HasilSanding $hs) use ($diterimaIds) {
                 $bsj    = $hs->barangSetengahJadi;

@@ -23,6 +23,8 @@
         </button>
     </div>
 
+    {{-- DINONAKTIFKAN: Detail Stok (ubah false -> true bila dibutuhkan lagi) --}}
+    @if(false)
     {{-- ═══ DETAIL STOK (tampil di kedua tab) ═══ --}}
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
         <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Detail Stok Platform Jadi</span>
@@ -67,6 +69,8 @@
             @endforelse
         </div>
     </div>
+
+    @endif
 
     @if($activeTab === 'masuk')
     {{-- ══════════════════════════════════════════════════════════════════════
