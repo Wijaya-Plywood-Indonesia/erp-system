@@ -46,4 +46,9 @@ class HasilGrajiTriplek extends Model
     {
         return $this->hasOne(SerahTerimaHp::class, 'id_hasil_graji_triplek');
     }
+
+    public function serahTerimaTriplekJadi()
+    {
+        return $this->hasOne(SerahTerimaTriplekJadi::class, 'id_hasil_graji_triplek');
+    }
 }

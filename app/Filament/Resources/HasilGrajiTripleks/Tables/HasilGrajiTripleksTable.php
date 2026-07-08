@@ -3,9 +3,8 @@
 namespace App\Filament\Resources\HasilGrajiTripleks\Tables;
 
 use App\Models\HasilGrajiTriplek;
-use App\Models\JenisKayu;
 use App\Models\SerahTerimaHp;
-use App\Services\StokTriplekJadiService;
+use App\Models\SerahTerimaTriplekJadi;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -22,6 +21,38 @@ use Illuminate\Support\HtmlString;
 
 class HasilGrajiTripleksTable
 {
+    /**
+     * Ambil record serah-terima yang aktif untuk satu HasilGrajiTriplek,
+     * apapun sumbernya (SerahTerimaHp untuk Sanding, SerahTerimaTriplekJadi
+     * untuk Gudang). Return null kalau belum pernah diserahkan sama sekali.
+     *
+     * @return array{record: SerahTerimaHp|SerahTerimaTriplekJadi, tujuan: string}|null
+     */
+    protected static function resolveSerahTerima(HasilGrajiTriplek $record): ?array
+    {
+        if ($record->serahTerimaHp) {
+            $tujuan = match ($record->serahTerimaHp->tujuan) {
+                'gudang' => 'Gudang',
+                'sanding' => 'Sanding',
+                default => '-',
+            };
+
+            return [
+                'record' => $record->serahTerimaHp,
+                'tujuan' => $tujuan,
+            ];
+        }
+
+        if ($record->serahTerimaTriplekJadi) {
+            return [
+                'record' => $record->serahTerimaTriplekJadi,
+                'tujuan' => 'Gudang',
+            ];
+        }
+
+        return null;
+    }
+
     public static function configure(Table $table): Table
     {
         return $table
@@ -30,6 +61,7 @@ class HasilGrajiTripleksTable
                 'barangSetengahJadiHp.grade.kategoriBarang',
                 'barangSetengahJadiHp.ukuran',
                 'serahTerimaHp',
+                'serahTerimaTriplekJadi',
             ]))
             ->columns([
 
@@ -37,31 +69,27 @@ class HasilGrajiTripleksTable
                     ->label('No. Palet')
                     ->searchable()
                     ->badge()
-                    ->color(function ($record) {
-                        $serahTerima = $record->serahTerimaHp;
+                    ->color(function (HasilGrajiTriplek $record) {
+                        $info = static::resolveSerahTerima($record);
 
-                        if (! $serahTerima) {
+                        if (! $info) {
                             return 'gray';
                         }
 
-                        return $serahTerima->diterima_oleh === '-' ? 'warning' : 'success';
+                        return $info['record']->diterima_oleh === '-' ? 'warning' : 'success';
                     })
-                    ->description(function ($record) {
-                        $serahTerima = $record->serahTerimaHp;
+                    ->description(function (HasilGrajiTriplek $record) {
+                        $info = static::resolveSerahTerima($record);
 
-                        if (! $serahTerima) {
+                        if (! $info) {
                             return 'Belum Serah';
                         }
 
-                        $tujuan = match ($serahTerima->tujuan) {
-                            'gudang' => 'Gudang',
-                            'sanding' => 'Sanding',
-                            default => '-',
-                        };
+                        $tujuan = $info['tujuan'];
 
-                        return $serahTerima->diterima_oleh === '-'
-                            ? "Menunggu Diterima {$tujuan}"
-                            : "Sudah Diterima {$tujuan}";
+                        return $info['record']->diterima_oleh === '-'
+                            ? "Diserahkan ke {$tujuan} — Menunggu Diterima"
+                            : "Diserahkan ke {$tujuan} — Sudah Diterima";
                     }),
 
                 TextColumn::make('barangSetengahJadiHp.jenisBarang.nama_jenis_barang')
@@ -87,24 +115,22 @@ class HasilGrajiTripleksTable
 
                 /*
                  * STATUS SERAH — toggleable, default hidden
+                 * Mencerminkan status gabungan dari serahTerimaHp (Sanding)
+                 * ATAU serahTerimaTriplekJadi (Gudang), mana yang terisi.
                  */
                 TextColumn::make('status_serah')
                     ->label('Status')
                     ->badge()
                     ->getStateUsing(function (HasilGrajiTriplek $record) {
-                        $serahTerima = $record->serahTerimaHp;
+                        $info = static::resolveSerahTerima($record);
 
-                        if (! $serahTerima) {
+                        if (! $info) {
                             return 'Belum Diserahkan';
                         }
 
-                        $tujuan = match ($serahTerima->tujuan) {
-                            'gudang' => 'Gudang',
-                            'sanding' => 'Sanding',
-                            default => '-',
-                        };
+                        $tujuan = $info['tujuan'];
 
-                        return $serahTerima->diterima_oleh === '-'
+                        return $info['record']->diterima_oleh === '-'
                             ? "Menunggu Diterima {$tujuan}"
                             : "Sudah Diterima {$tujuan}";
                     })
@@ -116,19 +142,27 @@ class HasilGrajiTripleksTable
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 /*
+                 * TUJUAN — toggleable, default hidden
+                 */
+                TextColumn::make('tujuan_serah')
+                    ->label('Diserahkan Ke')
+                    ->getStateUsing(fn (HasilGrajiTriplek $record) => static::resolveSerahTerima($record)['tujuan'] ?? '-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                /*
                  * DISERAHKAN OLEH — toggleable, default hidden
                  */
-                TextColumn::make('serahTerimaHp.diserahkan_oleh')
+                TextColumn::make('diserahkan_oleh_display')
                     ->label('Diserahkan Oleh')
-                    ->placeholder('-')
+                    ->getStateUsing(fn (HasilGrajiTriplek $record) => static::resolveSerahTerima($record)['record']->diserahkan_oleh ?? '-')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 /*
                  * DITERIMA OLEH — toggleable, default hidden
                  */
-                TextColumn::make('serahTerimaHp.diterima_oleh')
+                TextColumn::make('diterima_oleh_display')
                     ->label('Diterima Oleh')
-                    ->placeholder('-')
+                    ->getStateUsing(fn (HasilGrajiTriplek $record) => static::resolveSerahTerima($record)['record']->diterima_oleh ?? '-')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 /*
@@ -159,7 +193,7 @@ class HasilGrajiTripleksTable
                     ->label('Serah')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('success')
-                    ->visible(fn (HasilGrajiTriplek $record) => ! $record->serahTerimaHp)
+                    ->visible(fn (HasilGrajiTriplek $record) => static::resolveSerahTerima($record) === null)
                     ->requiresConfirmation()
                     ->modalHeading('Serahkan Hasil Graji Triplek')
                     ->modalDescription('Pastikan data berikut sudah sesuai sebelum diserahkan.')
@@ -206,40 +240,19 @@ class HasilGrajiTripleksTable
                         try {
                             DB::transaction(function () use ($record, $data) {
                                 if ($data['tujuan'] === 'gudang') {
-                                    $barang = $record->barangSetengahJadiHp;
-                                    $ukuran = $barang?->ukuran;
-                                    $grade = $barang?->grade;
-                                    $namaJenis = $barang?->jenisBarang?->nama_jenis_barang;
-
-                                    $jenisKayu = JenisKayu::where('nama_kayu', $namaJenis)->first();
-
-                                    if (! $jenisKayu) {
-                                        throw new \RuntimeException("Jenis kayu \"{$namaJenis}\" tidak ditemukan di master Jenis Kayu. Tambahkan dulu di master data.");
-                                    }
-
-                                    app(StokTriplekJadiService::class)->tambah(
-                                        idJenisKayu: $jenisKayu->id, // ✅ ID dari tabel jenis_kayus, hasil mapping by nama
-                                        panjang: $ukuran?->panjang ?? 0,
-                                        lebar: $ukuran?->lebar ?? 0,
-                                        tebal: $ukuran?->tebal ?? 0,
-                                        kwGrade: $grade?->nama_grade ?? '-',
-                                        lembar: $record->isi,
-                                        kubikasi: 0, // TODO: isi rumus konversi kubikasi kalau sudah ada
-                                        keterangan: "Serah Graji Triplek ke Gudang - No. Palet {$record->no_palet}",
-                                        referensi: $record,
-                                    );
-
-                                    SerahTerimaHp::create([
+                                    // Gudang: hanya catat serah terima, stok BELUM ditambah.
+                                    // Stok baru ditambahkan nanti saat proses "Terima" (menyusul).
+                                    SerahTerimaTriplekJadi::create([
                                         'id_hasil_graji_triplek' => $record->id,
-                                        'tujuan' => 'gudang',
                                         'diserahkan_oleh' => Auth::user()->name,
-                                        'diterima_oleh' => Auth::user()->name,
-                                        'status' => 'Serah Graji Triplek',
+                                        'diterima_oleh' => '-',
+                                        'status' => 'Serah Graji Triplek ke Gudang',
                                     ]);
 
                                     return;
                                 }
 
+                                // Sanding: tetap seperti semula, pakai SerahTerimaHp.
                                 SerahTerimaHp::create([
                                     'id_hasil_graji_triplek' => $record->id,
                                     'tujuan' => 'sanding',
@@ -250,6 +263,7 @@ class HasilGrajiTripleksTable
                             });
 
                             $record->unsetRelation('serahTerimaHp');
+                            $record->unsetRelation('serahTerimaTriplekJadi');
                             $record->refresh();
 
                             $tujuanLabel = $data['tujuan'] === 'gudang' ? 'Gudang' : 'Sanding';
@@ -269,10 +283,54 @@ class HasilGrajiTripleksTable
                         }
                     }),
 
+                Action::make('batalServah')
+                    ->label('Batal Serahkan')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->visible(function (HasilGrajiTriplek $record) {
+                        $info = static::resolveSerahTerima($record);
+
+                        // Hanya bisa dibatalkan selagi belum diterima.
+                        return $info !== null && $info['record']->diterima_oleh === '-';
+                    })
+                    ->requiresConfirmation()
+                    ->modalHeading('Batalkan Penyerahan?')
+                    ->modalDescription('Palet akan kembali berstatus belum diserahkan.')
+                    ->action(function (HasilGrajiTriplek $record) {
+                        try {
+                            $info = static::resolveSerahTerima($record);
+
+                            if (! $info) {
+                                return;
+                            }
+
+                            DB::transaction(function () use ($info) {
+                                $info['record']->delete();
+                            });
+
+                            $record->unsetRelation('serahTerimaHp');
+                            $record->unsetRelation('serahTerimaTriplekJadi');
+                            $record->refresh();
+
+                            Notification::make()
+                                ->title('Penyerahan Dibatalkan')
+                                ->body('Palet kembali berstatus belum diserahkan.')
+                                ->success()
+                                ->send();
+
+                        } catch (\Throwable $e) {
+                            Notification::make()
+                                ->title('Gagal')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
+
                 EditAction::make()
                     ->hidden(function ($livewire, HasilGrajiTriplek $record) {
-                        $serahTerima = $record->serahTerimaHp;
-                        $sudahDiterima = $serahTerima && $serahTerima->diterima_oleh !== '-';
+                        $info = static::resolveSerahTerima($record);
+                        $sudahDiterima = $info !== null && $info['record']->diterima_oleh !== '-';
 
                         return $sudahDiterima
                             || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi';
@@ -280,7 +338,7 @@ class HasilGrajiTripleksTable
 
                 DeleteAction::make()
                     ->hidden(function ($livewire, HasilGrajiTriplek $record) {
-                        return (bool) $record->serahTerimaHp
+                        return static::resolveSerahTerima($record) !== null
                             || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi';
                     }),
             ])
