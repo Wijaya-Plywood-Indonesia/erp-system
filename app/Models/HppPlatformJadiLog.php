@@ -1,17 +1,17 @@
 <?php
 
 namespace App\Models;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
-use Illuminate\Database\Eloquent\Model;
 
 class HppPlatformJadiLog extends Model
 {
     protected $table = 'hpp_platform_jadi_log';
 
     protected $fillable = [
-        'id_jenis_kayu',
+        'id_jenis_barang',
         'panjang',
         'lebar',
         'tebal',
@@ -39,9 +39,7 @@ class HppPlatformJadiLog extends Model
         'tanggal'              => 'date',
         'total_lembar'         => 'integer',
         'total_kubikasi'       => 'float',
-        'hpp_kayu'             => 'float',
         'hpp_pekerja'          => 'float',
-        'hpp_mesin'            => 'float',
         'hpp_bahan_penolong'   => 'float',
         'hpp_average'          => 'float',
         'nilai_stok'           => 'float',
@@ -49,9 +47,9 @@ class HppPlatformJadiLog extends Model
         'stok_kubikasi_after'  => 'float',
     ];
 
-    public function jenisKayu(): BelongsTo
+    public function jenisBarang(): BelongsTo
     {
-        return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu');
+        return $this->belongsTo(JenisBarang::class, 'id_jenis_barang');
     }
 
     public function referensi(): MorphTo

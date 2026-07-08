@@ -10,7 +10,7 @@ class StokPlatformJadi extends Model
     protected $table = 'stok_platform_jadi';
 
     protected $fillable = [
-        'id_jenis_kayu',
+        'id_jenis_barang',
         'panjang',
         'lebar',
         'tebal',
@@ -25,16 +25,19 @@ class StokPlatformJadi extends Model
     ];
 
     protected $casts = [
-        'stok_kubikasi'          => 'float',
-        'nilai_stok'             => 'float',
-        'hpp_average'            => 'float',
-        'hpp_pekerja_last'       => 'float',
-        'hpp_bahan_penolong_last'=> 'float',
+        'panjang'                 => 'float',
+        'lebar'                   => 'float',
+        'tebal'                   => 'float',
+        'stok_kubikasi'           => 'float',
+        'nilai_stok'              => 'float',
+        'hpp_average'             => 'float',
+        'hpp_pekerja_last'        => 'float',
+        'hpp_bahan_penolong_last' => 'float',
     ];
 
-    public function jenisKayu(): BelongsTo
+    public function jenisBarang(): BelongsTo
     {
-        return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu');
+        return $this->belongsTo(JenisBarang::class, 'id_jenis_barang');
     }
 
     public function lastLog(): BelongsTo
