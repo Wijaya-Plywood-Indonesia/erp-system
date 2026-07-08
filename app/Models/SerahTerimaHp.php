@@ -12,11 +12,14 @@ class SerahTerimaHp extends Model
     protected $fillable = [
         'id_triplek_hasil_hp',
         'id_platform_hasil_hp',
+        'id_hasil_graji_triplek',
+        'id_hasil_sanding',
         'id_produksi_graji_triplek',
         'id_produksi_sanding',
         'diserahkan_oleh',
         'diterima_oleh',
         'status',
+        'tujuan',
     ];
 
     // ─────────────────────────────────────────────
@@ -31,6 +34,22 @@ class SerahTerimaHp extends Model
     public function platformHasilHp(): BelongsTo
     {
         return $this->belongsTo(PlatformHasilHp::class, 'id_platform_hasil_hp');
+    }
+
+    /**
+     * Hasil produksi Graji Triplek, dipakai saat serah manual Graji -> Sanding.
+     */
+    public function hasilGrajiTriplek(): BelongsTo
+    {
+        return $this->belongsTo(HasilGrajiTriplek::class, 'id_hasil_graji_triplek');
+    }
+
+    /**
+     * Hasil produksi Sanding, dipakai saat serah manual Sanding -> Graji.
+     */
+    public function hasilSanding(): BelongsTo
+    {
+        return $this->belongsTo(HasilSanding::class, 'id_hasil_sanding');
     }
 
     public function produksiGrajiTriplek(): BelongsTo
@@ -48,21 +67,65 @@ class SerahTerimaHp extends Model
     // ─────────────────────────────────────────────
 
     /**
-     * Tipe sumber hasil: 'triplek' atau 'platform'.
+     * Tipe sumber untuk keperluan hitungan stok/sisa (bukan asal literalnya):
+     * - 'triplek' -> barang ini menuju Graji Triplek (dari HP atau dari Sanding manual)
+     * - 'platform' -> barang ini menuju Sanding (dari HP atau dari Graji manual)
      */
     public function getTipeSumberAttribute(): string
     {
-        return $this->id_platform_hasil_hp ? 'platform' : 'triplek';
+        if ($this->id_platform_hasil_hp || $this->id_hasil_graji_triplek) {
+            return 'platform';
+        }
+
+        return 'triplek';
     }
 
     /**
-     * Ambil record hasil produksi apapun sumbernya (triplek atau platform).
+     * Label asal barang yang sebenarnya, untuk ditampilkan di UI.
+     */
+    public function getAsalLabelAttribute(): string
+    {
+        return match (true) {
+            (bool) $this->id_triplek_hasil_hp => 'Hotpress',
+            (bool) $this->id_platform_hasil_hp => 'Hotpress',
+            (bool) $this->id_hasil_graji_triplek => 'Graji Triplek',
+            (bool) $this->id_hasil_sanding => 'Sanding',
+            default => '-',
+        };
+    }
+
+    /**
+     * Ambil record hasil produksi apapun sumbernya
+     * (triplek HP, platform HP, hasil Graji Triplek, atau hasil Sanding).
      */
     public function getHasilAttribute()
     {
-        return $this->tipeSumber === 'platform'
-            ? $this->platformHasilHp
-            : $this->triplekHasilHp;
+        return $this->triplekHasilHp
+            ?? $this->platformHasilHp
+            ?? $this->hasilGrajiTriplek
+            ?? $this->hasilSanding;
+    }
+
+    /**
+     * Barang setengah jadi terkait, terlepas dari nama relasi yang beda-beda
+     * antar model hasil (TriplekHasilHp/PlatformHasilHp/HasilSanding pakai
+     * `barangSetengahJadi`, HasilGrajiTriplek pakai `barangSetengahJadiHp`).
+     */
+    public function getBarangSetengahJadiAttribute()
+    {
+        $hasil = $this->hasil;
+
+        return $hasil?->barangSetengahJadi ?? $hasil?->barangSetengahJadiHp ?? null;
+    }
+
+    /**
+     * Jumlah/isi barang, terlepas dari nama kolom yang beda-beda antar model
+     * hasil (TriplekHasilHp/PlatformHasilHp/HasilGrajiTriplek pakai `isi`,
+     * HasilSanding pakai `kuantitas`).
+     */
+    public function getJumlahAttribute()
+    {
+        return $this->hasil->isi ?? $this->hasil->kuantitas ?? null;
     }
 
     public function isMenunggu(): bool
@@ -77,13 +140,13 @@ class SerahTerimaHp extends Model
 
     public function getQtyAsliAttribute(): float
     {
-        return (float) ($this->hasil->isi ?? 0);
+        return (float) ($this->jumlah ?? 0);
     }
 
     /**
      * Sisa = qty asli dikurangi total pemakaian.
-     * - Sumber triplek: pemakaian dihitung dari MasukGrajiTriplek.
-     * - Sumber platform: pemakaian dihitung dari ModalSanding.
+     * - Menuju triplek (Graji): pemakaian dihitung dari MasukGrajiTriplek.
+     * - Menuju platform (Sanding): pemakaian dihitung dari ModalSanding.
      */
     public function getSisaAttribute(): float
     {
@@ -92,5 +155,10 @@ class SerahTerimaHp extends Model
             : ModalSanding::where('id_serah_terima_hp', $this->id)->sum('kuantitas');
 
         return $this->qtyAsli - (float) $terpakai;
+    }
+
+    public function serahTerimaHp()
+    {
+        return $this->hasOne(SerahTerimaHp::class, 'id_produksi_graji_triplek');
     }
 }

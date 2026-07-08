@@ -56,7 +56,9 @@ class TriplekHasilHpsTable
                             return 'Belum Serah';
                         }
 
-                        return $serahTerima->diterima_oleh === '-' ? 'Menunggu Diterima' : 'Sudah Diterima';
+                        return $serahTerima->diterima_oleh === '-'
+                            ? 'Menunggu Diterima Graji Triplek'
+                            : 'Sudah Diterima Graji Triplek';
                     }),
 
                 TextColumn::make('barangSetengahJadi.jenisBarang.nama_jenis_barang')
@@ -97,11 +99,18 @@ class TriplekHasilHpsTable
                             return 'Belum Diserahkan';
                         }
 
-                        return $serahTerima->diterima_oleh === '-' ? 'Menunggu Diterima' : 'Sudah Diterima';
+                        $tujuan = match ($serahTerima->tujuan) {
+                            'graji_triplek' => 'Graji Triplek',
+                            default => '-',
+                        };
+
+                        return $serahTerima->diterima_oleh === '-'
+                            ? "Menunggu Diterima {$tujuan}"
+                            : "Sudah Diterima {$tujuan}";
                     })
-                    ->color(fn ($state) => match ($state) {
-                        'Sudah Diterima' => 'success',
-                        'Menunggu Diterima' => 'warning',
+                    ->color(fn ($state) => match (true) {
+                        str_contains($state, 'Sudah Diterima') => 'success',
+                        str_contains($state, 'Menunggu Diterima') => 'warning',
                         default => 'gray',
                     })
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -194,6 +203,7 @@ class TriplekHasilHpsTable
                                 SerahTerimaHp::create([
                                     'id_triplek_hasil_hp' => $record->id,
                                     'id_produksi_graji_triplek' => null,
+                                    'tujuan' => 'graji_triplek',
                                     'diserahkan_oleh' => Auth::user()->name,
                                     'diterima_oleh' => '-',
                                     'status' => 'Serah Triplek',
