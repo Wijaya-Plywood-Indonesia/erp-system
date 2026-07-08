@@ -4,69 +4,67 @@
 
 namespace App\Filament\Resources\ProduksiHotPresses\RelationManagers;
 
+use App\Models\PlatformJadiMutasiKeluar;
+use App\Models\SerahTerimaMasukHp;
 use App\Models\VeneerJadiMutasiKeluar;
 use App\Models\VeneerJadiMutasiKeluarPalet;
 use Filament\Actions\Action;
-use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
-use Filament\Schemas\Components\Grid;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 
 class MutasiMasukRelationManager extends RelationManager
 {
     protected static string $relationship = 'mutasiMasuk';
     protected static ?string $title = 'Serah Terima';
 
-    protected function modifyQueryUsing(Builder $query): Builder
+    protected function getTableQuery(): Builder
     {
-        return $query
-            // 🌟 Menggunakan subquery untuk mengecek status 'diterima_by' di tabel induk mutasiKeluar
-            ->orderByRaw('
-            (
-                SELECT CASE WHEN mk.diterima_by IS NULL THEN 0 ELSE 1 END 
-                FROM veneer_jadi_mutasi_keluars mk 
-                WHERE mk.id = veneer_jadi_mutasi_keluar_palets.id_mutasi_keluar
-                LIMIT 1
-            ) ASC
-        ');
+        return SerahTerimaMasukHp::query()
+            ->orderByRaw('CASE WHEN diterima_by IS NULL THEN 0 ELSE 1 END ASC')
+            ->orderByDesc('tanggal_keluar');
     }
 
     public function table(Table $table): Table
     {
         return $table
-            // ->defaultSort('id', 'desc')
+            ->query($this->getTableQuery())
             ->recordTitleAttribute('kw_grade')
             ->columns([
-                TextColumn::make('mutasiKeluar.created_at')
+                TextColumn::make('tanggal_keluar')
                     ->label('Tanggal Masuk')
-                    ->getStateUsing(fn($record) => $record->mutasiKeluar->created_at->format('d/m/Y H:i'))
+                    ->dateTime('d/m/Y H:i')
                     ->color('gray'),
-                TextColumn::make('mutasiKeluar.jenisKayu.nama_kayu')
-                    ->label('Jenis Kayu')
+                TextColumn::make('sumber')
+                    ->label('Sumber')
+                    ->badge()
+                    ->color(fn(string $state) => $state === 'veneer' ? 'info' : 'purple')
+                    ->formatStateUsing(fn(string $state) => $state === 'veneer' ? 'Veneer Jadi' : 'Platform Jadi')
+                    ->searchable(),
+                TextColumn::make('jenis_nama')
+                    ->label('Jenis Barang')
                     ->weight('bold')
                     ->searchable(),
                 TextColumn::make('ukuran')
                     ->label('Ukuran')
-                    ->getStateUsing(fn($record) => ((float)$record->mutasiKeluar->panjang + 0) . 'x' . ((float)$record->mutasiKeluar->lebar + 0) . 'x' . ((float)$record->mutasiKeluar->tebal + 0))
+                    ->getStateUsing(fn($record) => ((float) $record->panjang + 0) . 'x' . ((float) $record->lebar + 0) . 'x' . ((float) $record->tebal + 0))
                     ->searchable(query: function (Builder $query, string $search): Builder {
-                        return $query->whereHas('mutasiKeluar', function (Builder $q) use ($search) {
+                        return $query->where(function (Builder $q) use ($search) {
                             $q->where('panjang', 'like', "%{$search}%")
                                 ->orWhere('lebar', 'like', "%{$search}%")
                                 ->orWhere('tebal', 'like', "%{$search}%");
                         });
                     }),
-                TextColumn::make('mutasiKeluar.kw_grade')
+                TextColumn::make('kw_grade')
                     ->label('KW')
                     ->badge()
                     ->color('warning')
-                    ->alignCenter(),
+                    ->alignCenter()
+                    ->searchable(),
                 TextColumn::make('nomor_palet')
                     ->label('Nomor Palet')
                     ->alignCenter()
@@ -82,36 +80,34 @@ class MutasiMasukRelationManager extends RelationManager
                 TextColumn::make('kubikasi')
                     ->label('Kubikasi')
                     ->color('warning')
-                    ->getStateUsing(function ($record) {
-                        $mk = $record->mutasiKeluar;
-                        return number_format(($mk->panjang * $mk->lebar * $mk->tebal * $record->jumlah_lembar) / 10000000, 4);
-                    })
+                    ->getStateUsing(fn(SerahTerimaMasukHp $record) => number_format($record->kubikasi(), 4))
                     ->alignRight(),
-                TextColumn::make('mutasiKeluar.operator.name')
+                TextColumn::make('operator.name')
                     ->label('Penyerah')
-                    ->color('gray'),
-                TextColumn::make('mutasiKeluar.penerima.name')
+                    ->color('gray')
+                    ->searchable(),
+                TextColumn::make('penerima.name')
                     ->label('Penerima')
                     ->color('gray')
-                    ->placeholder('-'),
-                TextColumn::make('mutasiKeluar.keterangan')
+                    ->placeholder('-')
+                    ->searchable(),
+                TextColumn::make('keterangan')
                     ->label('Keterangan')
                     ->wrap()
-                    ->color('gray'),
+                    ->color('gray')
+                    ->searchable(),
             ])
             ->filters([
-                SelectFilter::make('sumber_asal')
-                    ->label('Asal Material')
+                SelectFilter::make('sumber')
+                    ->label('Sumber Material')
                     ->options([
-                        'gudang' => 'Gudang Veneer Jadi',
-                        'sanding' => 'Produksi Sanding',
+                        'veneer'        => 'Veneer Jadi',
+                        'platform_jadi' => 'Platform Jadi',
                     ])
-                    ->default('gudang')
                     ->query(function (Builder $query, array $data) {
-                        if ($data['value'] === 'gudang') {
-                            $query->whereHas('mutasiKeluar', fn($q) => $q->whereRaw('LOWER(tujuan) LIKE ?', ['%hotpress%']));
-                        } elseif ($data['value'] === 'sanding') {
-                            $query->whereHas('mutasiKeluar', fn($q) => $q->whereRaw('LOWER(tujuan) LIKE ?', ['%sanding%']));
+                        logger('FILTER DATA', $data);
+                        if (! empty($data['value'])) {
+                            $query->where('sumber', $data['value']);
                         }
                     }),
             ])
@@ -119,37 +115,50 @@ class MutasiMasukRelationManager extends RelationManager
                 Action::make('terima_material')
                     ->label('TERIMA')
                     ->button()
-                    ->color('warning') // Tombol warna emas/oranye solid
-                    ->visible(fn(VeneerJadiMutasiKeluarPalet $record) => is_null($record->mutasiKeluar->diterima_by))
+                    ->color('warning')
+                    ->visible(fn(SerahTerimaMasukHp $record) => is_null($record->diterima_by))
                     ->requiresConfirmation()
                     ->modalHeading('Konfirmasi Penerimaan Material')
-                    ->modalDescription('Apakah Anda yakin barang sudah dihitung fisik dan sesuai dengan dokumen dokumen? Tindakan ini akan langsung mendaftarkan palet ke antrean produksi Hotpress.')
-                    ->action(function (VeneerJadiMutasiKeluarPalet $record) {
-                        $mk = $record->mutasiKeluar;
-                        $kubikasiAsli = ($mk->panjang * $mk->lebar * $mk->tebal * $record->jumlah_lembar) / 10000000;
-                        $record->update([
-                            'diterima_by' => Auth::id(),
-                            'diterima_at' => now(),
-                            'tebal' => $mk->tebal,
-                            'stok_kubikasi' => $kubikasiAsli,
-                        ]);
-                        $mk->update([
-                            'diterima_by' => Auth::id(),
-                            'diterima_at' => now(),
-                        ]);
+                    ->modalDescription('Apakah Anda yakin barang sudah dihitung fisik dan sesuai dengan dokumen? Tindakan ini akan langsung mendaftarkan palet ke antrean produksi Hotpress.')
+                    ->action(function (SerahTerimaMasukHp $record) {
+                        logger('TERIMA CLICKED', ['id' => $record->id, 'sumber' => $record->sumber]);
+                        $produksiHpId = $this->getOwnerRecord()->id;
 
-                        Notification::make()
-                            ->success()
-                            ->title('Material Berhasil Diterima')
-                            ->body('Stok masuk terdaftar pada antrean produksi Hotpress.')
-                            ->send();
+                        if ($record->sumber === 'veneer') {
+                            $palet = VeneerJadiMutasiKeluarPalet::findOrFail($record->id_asli);
+                            $mk    = VeneerJadiMutasiKeluar::findOrFail($record->id_mutasi_keluar);
+
+                            $kubikasiAsli = ($mk->panjang * $mk->lebar * $mk->tebal * $palet->jumlah_lembar) / 10000000;
+
+                            $palet->update([
+                                'diterima_by'   => Auth::id(),
+                                'diterima_at'   => now(),
+                                'tebal'         => $mk->tebal,
+                                'stok_kubikasi' => $kubikasiAsli,
+                            ]);
+                            $mk->update([
+                                'diterima_by'    => Auth::id(),
+                                'diterima_at'    => now(),
+                                'id_produksi_hp' => $produksiHpId,
+                            ]);
+                        } else {
+                            $mk = PlatformJadiMutasiKeluar::findOrFail($record->id_mutasi_keluar);
+
+                            $mk->update([
+                                'diterima_by'    => Auth::id(),
+                                'diterima_at'    => now(),
+                                'id_produksi_hp' => $produksiHpId,
+                            ]);
+                        }
+
+                        Notification::make()->success()->title('Material Berhasil Diterima')->send();
                     }),
 
                 Action::make('done_label')
                     ->label('✓ SELESAI')
                     ->color('success')
                     ->disabled()
-                    ->visible(fn(VeneerJadiMutasiKeluarPalet $record) => ! is_null($record->mutasiKeluar->diterima_by)),
+                    ->visible(fn(SerahTerimaMasukHp $record) => ! is_null($record->diterima_by)),
             ]);
     }
 }

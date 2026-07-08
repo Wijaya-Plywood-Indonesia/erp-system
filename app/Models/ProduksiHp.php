@@ -71,15 +71,9 @@ class ProduksiHp extends Model
 
     public function mutasiMasuk()
     {
-        return $this->hasManyThrough(
-            VeneerJadiMutasiKeluarPalet::class,
-            VeneerJadiMutasiKeluar::class,
-            'id_produksi_hp',
-            'id_mutasi_keluar',
-            'id',
-            'id'
-        );
+        return $this->hasMany(SerahTerimaMasukHp::class, 'id_produksi_hp');
     }
+
     public function serahTerimaHp()
     {
         return $this->hasMany(SerahTerimaHp::class, 'id_triplek_hasil_hp', 'id');

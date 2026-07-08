@@ -18,4 +18,15 @@ class PlatformJadiMutasiKeluarPalet extends Model
     {
         return $this->belongsTo(PlatformJadiMutasiKeluar::class, 'id_mutasi_keluar');
     }
+
+    public function bahanHotpress()
+    {
+        return $this->hasMany(BahanHotpress::class, 'id_mutasi_keluar_platform');
+    }
+
+    public function getSisaAttribute()
+    {
+        $terpakai = $this->bahanHotpress()->sum('isi');
+        return (float) $this->jumlah_lembar - $terpakai;
+    }
 }

@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\BahanHotPresses\Tables;
 
-use Dom\Text;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -19,38 +18,94 @@ class BahanHotPressesTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn($query) => $query->with([
+                'mutasiKeluarPalet.mutasiKeluar.jenisKayu',
+                'mutasiKeluarPlatform.mutasiKeluar.jenisBarang',
+            ]))
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
+                    ->placeholder('-')
                     ->searchable(),
 
-                /*
-                 * JENIS BARANG
-                 */
-                TextColumn::make('barangSetengahJadi.jenisBarang.nama_jenis_barang')
+                TextColumn::make('jenis')
+                    ->label('Tipe')
+                    ->state(function ($record) {
+                        $sumber = $record->sumber
+                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : null));
+
+                        if ($sumber === 'veneer' && $record->mutasiKeluarPalet?->mutasiKeluar) {
+                            return 'Veneer';
+                        }
+
+                        if ($sumber === 'platform' && $record->mutasiKeluarPlatform?->mutasiKeluar) {
+                            return 'Platform';
+                        }
+
+                        return '-';
+                    })
+                    ->badge()
+                    ->color(fn($state) => match ($state) {
+                        'Veneer'   => 'success',
+                        'Platform' => 'info',
+                        default    => 'gray',
+                    }),
+
+                TextColumn::make('jenis_kayu')
                     ->label('Jenis Barang')
-                    ->searchable()
-                    ->placeholder('-'),
+                    ->state(function ($record) {
+                        $sumber = $record->sumber
+                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : null));
 
-                /*
-                 * GRADE
-                 */
-                TextColumn::make('barangSetengahJadi.grade.nama_grade')
+                        if ($sumber === 'veneer') {
+                            return $record->mutasiKeluarPalet?->mutasiKeluar?->jenisKayu?->nama_kayu ?? '-';
+                        }
+
+                        if ($sumber === 'platform') {
+                            return $record->mutasiKeluarPlatform?->mutasiKeluar?->jenisBarang?->nama_jenis_barang ?? '-';
+                        }
+
+                        return '-';
+                    }),
+
+                TextColumn::make('grade')
                     ->label('Grade')
-                    ->searchable()
-                    ->placeholder('-'),
+                    ->state(function ($record) {
+                        $sumber = $record->sumber
+                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : null));
 
-                /*
-                 * UKURAN
-                 */
-                TextColumn::make('barangSetengahJadi.ukuran.nama_ukuran')
+                        if ($sumber === 'veneer') {
+                            return $record->mutasiKeluarPalet?->mutasiKeluar?->kw_grade ?? '-';
+                        }
+
+                        if ($sumber === 'platform') {
+                            return $record->mutasiKeluarPlatform?->mutasiKeluar?->kw_grade ?? '-';
+                        }
+
+                        return '-';
+                    }),
+
+                TextColumn::make('ukuran')
                     ->label('Ukuran')
-                    ->searchable()
-                    ->placeholder('-'),
+                    ->state(function ($record) {
+                        $sumber = $record->sumber
+                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : null));
 
-                /*
-                 * ISI
-                 */
+                        $mk = $sumber === 'veneer'
+                            ? $record->mutasiKeluarPalet?->mutasiKeluar
+                            : ($sumber === 'platform' ? $record->mutasiKeluarPlatform?->mutasiKeluar : null);
+
+                        if (! $mk) {
+                            return '-';
+                        }
+
+                        $panjang = (float) $mk->panjang + 0;
+                        $lebar   = (float) $mk->lebar + 0;
+                        $tebal   = (float) $mk->tebal + 0;
+
+                        return "{$panjang} x {$lebar} x {$tebal}";
+                    }),
+
                 TextColumn::make('isi')
                     ->label('Jumlah Lembar'),
 

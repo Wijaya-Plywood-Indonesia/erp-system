@@ -19,6 +19,9 @@ class PlatformJadiMutasiKeluar extends Model
         'stok_kubikasi',
         'tujuan',
         'dikeluarkan_by',
+        'diterima_by',
+        'diterima_at',
+        'id_produksi_hp',
         'keterangan',
     ];
 
@@ -27,6 +30,7 @@ class PlatformJadiMutasiKeluar extends Model
         'lebar' => 'float',
         'tebal' => 'float',
         'stok_kubikasi' => 'float',
+        'diterima_at' => 'datetime',
     ];
 
     public function jenisBarang()
@@ -37,6 +41,16 @@ class PlatformJadiMutasiKeluar extends Model
     public function operator()
     {
         return $this->belongsTo(User::class, 'dikeluarkan_by');
+    }
+
+    public function penerima()
+    {
+        return $this->belongsTo(User::class, 'diterima_by');
+    }
+
+    public function produksiHotPress()
+    {
+        return $this->belongsTo(ProduksiHp::class, 'id_produksi_hp');
     }
 
     public function palets()
