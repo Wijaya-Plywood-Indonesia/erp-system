@@ -511,9 +511,7 @@ class GudangVeneerJadi extends Page
                     throw new \Exception('Sisa stok fisik di gudang tidak mencukupi.');
                 }
 
-                $userName = Auth::user()?->name ?? 'System';
-
-                // Header tetap dibuat sekali — ini tidak berubah dari sebelumnya
+                // Header tetap dibuat sekali — tidak berubah dari sebelumnya
                 $mutasi = VeneerJadiMutasiKeluar::create([
                     'id_jenis_kayu' => $stok->id_jenis_kayu,
                     'panjang' => $stok->panjang,
@@ -529,69 +527,20 @@ class GudangVeneerJadi extends Page
                     'id_produksi_hp' => null,
                 ]);
 
-                // 🌟 Variabel "berjalan" — ini kuncinya. Nilainya bergerak turun tiap iterasi
-                $stokLembarBerjalan = $stok->stok_lembar;
-                $stokKubikasiBerjalan = $stok->stok_kubikasi;
-                $nilaiStokBerjalan = $stok->nilai_stok;
-                $lastLogId = null;
-
+                // Catatan: stok & HppVeneerJadiLog TIDAK dibuat di sini lagi.
+                // Baris palet di bawah cuma mencatat "niat kirim" per palet.
                 foreach ($this->paletQuantities as $index => $qty) {
                     $qtyPalet = intval($qty);
-                    if ($qtyPalet <= 0)
-                        continue; // lewati palet kosong, jangan sampai ganggu log
+                    if ($qtyPalet <= 0) {
+                        continue;
+                    }
 
-                    $palet = VeneerJadiMutasiKeluarPalet::create([
+                    VeneerJadiMutasiKeluarPalet::create([
                         'id_mutasi_keluar' => $mutasi->id,
                         'nomor_palet' => $index + 1,
                         'jumlah_lembar' => $qtyPalet,
                     ]);
-
-                    // Simpan kondisi "sebelum" dari nilai berjalan saat ini
-                    $stokLembarBefore = $stokLembarBerjalan;
-                    $stokKubikasiBefore = $stokKubikasiBerjalan;
-                    $nilaiStokBefore = $nilaiStokBerjalan;
-
-                    // Update nilai berjalan berdasarkan palet ini SAJA
-                    $stokLembarBerjalan -= $qtyPalet;
-                    $stokKubikasiBerjalan = $this->hitungKubikasi($stok->panjang, $stok->lebar, $stok->tebal, $stokLembarBerjalan);
-                    $nilaiTerpotongPalet = $qtyPalet * $stok->hpp_average;
-                    $nilaiStokBerjalan = max(0, $nilaiStokBerjalan - $nilaiTerpotongPalet);
-
-                    $log = HppVeneerJadiLog::create([
-                        'id_jenis_kayu' => $stok->id_jenis_kayu,
-                        'panjang' => $stok->panjang,
-                        'lebar' => $stok->lebar,
-                        'tebal' => $stok->tebal,
-                        'kw_grade' => $stok->kw_grade,
-                        'tanggal' => now(),
-                        'tipe_transaksi' => 'KELUAR',
-                        'referensi_type' => VeneerJadiMutasiKeluarPalet::class, // ⬅️ diarahkan ke palet, bukan header
-                        'referensi_id' => $palet->id,
-                        'total_lembar' => $qtyPalet,
-                        'total_kubikasi' => $this->hitungKubikasi($stok->panjang, $stok->lebar, $stok->tebal, $qtyPalet),
-                        'hpp_pekerja' => $stok->hpp_pekerja_last ?? 0,
-                        'hpp_bahan_penolong' => $stok->hpp_bahan_penolong_last ?? 0,
-                        'hpp_average' => $stok->hpp_average,
-                        'nilai_stok' => $nilaiTerpotongPalet,
-                        'stok_lembar_before' => $stokLembarBefore,
-                        'stok_kubikasi_before' => $stokKubikasiBefore,
-                        'nilai_stok_before' => $nilaiStokBefore,
-                        'stok_lembar_after' => $stokLembarBerjalan,
-                        'stok_kubikasi_after' => $stokKubikasiBerjalan,
-                        'nilai_stok_after' => $nilaiStokBerjalan,
-                        'keterangan' => "Mutasi Keluar ke [{$this->tujuanKeluar}] — Palet #{$palet->nomor_palet} dari Gudang Veneer Jadi oleh {$userName}",
-                    ]);
-
-                    $lastLogId = $log->id;
                 }
-
-                // Update stok induk pakai nilai FINAL setelah semua palet diproses
-                $stok->update([
-                    'stok_lembar' => $stokLembarBerjalan,
-                    'stok_kubikasi' => $stokKubikasiBerjalan,
-                    'nilai_stok' => $nilaiStokBerjalan,
-                    'id_last_log' => $lastLogId,
-                ]);
             });
 
             unset($this->splitStok);
@@ -607,8 +556,8 @@ class GudangVeneerJadi extends Page
 
             Notification::make()
                 ->success()
-                ->title('✓ Mutasi Keluar Berhasil!')
-                ->body("Sebanyak {$totalLembar} lembar veneer berhasil dipotong dari stok gudang.")
+                ->title('✓ Mutasi Keluar Dicatat')
+                ->body("Sebanyak {$totalLembar} lembar veneer tercatat dikirim. Stok akan terpotong setelah dikonfirmasi diterima.")
                 ->send();
         } catch (\Exception $e) {
             Notification::make()
