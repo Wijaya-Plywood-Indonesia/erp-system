@@ -42,4 +42,9 @@ class ProduksiPilihPlywood extends Model
     {
         return $this->hasOne(ValidasiPilihPlywood::class, 'id_produksi_pilih_plywood')->latestOfMany();
     }
+
+    public function serahTerimaTriplekJadi()
+    {
+        return $this->hasMany(SerahTerimaTriplekJadi::class, 'id_produksi_pilih_plywood');
+    }
 }
