@@ -2,8 +2,10 @@
 
 namespace App\Filament\Resources\ProduksiTerimaGudangSatus\RelationManagers;
 
+use App\Models\JenisKayu;
 use App\Models\ProduksiNyusup;
 use App\Models\SerahTerimaGudangSatu;
+use App\Services\StokGudangSatuService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -64,6 +66,52 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
             'jumlah' => $record->jumlah ?? '-',
             'dari_produksi' => $hasil?->produksiPilihPlywood?->tanggal_produksi ?? '-',
         ];
+    }
+
+    /**
+     * Tambahkan stok plywood siap jual ketika barang diterima di konteks Gudang Satu
+     * (khusus, tidak berlaku untuk konteks Nyusup).
+     */
+    protected function tambahStokPlywoodSiapJual(SerahTerimaGudangSatu $record): void
+    {
+        $record->loadMissing([
+            'hasilPilihPlywood.barangSetengahJadiHp.jenisBarang',
+            'hasilPilihPlywood.barangSetengahJadiHp.grade',
+            'hasilPilihPlywood.barangSetengahJadiHp.ukuran',
+        ]);
+
+        $bsj = $record->barang_setengah_jadi;
+        $ukuran = $bsj?->ukuran;
+        $grade = $bsj?->grade;
+        $jenisBarang = $bsj?->jenisBarang;
+
+        if (! $bsj || ! $ukuran || ! $grade || ! $jenisBarang) {
+            throw new \RuntimeException('Data ukuran, grade, atau jenis barang tidak lengkap. Stok tidak dapat ditambahkan.');
+        }
+
+        // "Jenis Barang" di sini sebenarnya merepresentasikan jenis kayu,
+        // tapi disimpan lewat tabel jenis_barang (bukan jenis_kayus) — dicocokkan by nama,
+        // sama seperti pola di SerahTerimaHpRelationManager.
+        $jenisKayu = JenisKayu::where('nama_kayu', $jenisBarang->nama_jenis_barang)->first();
+
+        if (! $jenisKayu) {
+            throw new \RuntimeException("Jenis kayu \"{$jenisBarang->nama_jenis_barang}\" tidak ditemukan di data Jenis Kayu. Mohon samakan penamaan atau tambahkan datanya terlebih dahulu.");
+        }
+
+        $lembar = (float) $record->jumlah;
+        $kubikasi = $lembar * (float) $ukuran->kubikasi / 10000000;
+
+        app(StokGudangSatuService::class)->tambah(
+            idJenisKayu: $jenisKayu->id,
+            panjang: $ukuran->panjang,
+            lebar: $ukuran->lebar,
+            tebal: $ukuran->tebal,
+            kwGrade: $grade->nama_grade,
+            lembar: $lembar,
+            kubikasi: $kubikasi,
+            keterangan: 'Terima barang dari Pilih Plywood - Gudang Satu (Serah Terima #'.$record->id.')',
+            referensi: $record,
+        );
     }
 
     public function table(Table $table): Table
@@ -205,9 +253,9 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                     })
                     // Hanya muncul kalau memang masih menunggu (belum lengket ke produksi manapun).
                     ->visible(fn ($record) => $record?->diterima_oleh === '-')
-                    ->action(function ($record) use ($ownerId, $foreignKey) {
+                    ->action(function ($record) use ($ownerId, $foreignKey, $isNyusup) {
                         try {
-                            DB::transaction(function () use ($record, $ownerId, $foreignKey) {
+                            DB::transaction(function () use ($record, $ownerId, $foreignKey, $isNyusup) {
                                 // Lock + re-check: mencegah 2 produksi menerima barang yang sama
                                 // secara bersamaan (race condition).
                                 $fresh = SerahTerimaGudangSatu::lockForUpdate()->find($record->id);
@@ -224,8 +272,11 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                                     'status' => 'Diterima',
                                 ]);
 
-                                // Jika ada pencatatan stok/jurnal saat barang diterima,
-                                // panggil service di sini, mengikuti pola StokTriplekMthService/StokPlatformMthService.
+                                // Tambah stok plywood siap jual — HANYA untuk konteks Gudang Satu.
+                                // Konteks Nyusup tidak menambah stok siap jual di sini.
+                                if (! $isNyusup) {
+                                    $this->tambahStokPlywoodSiapJual($fresh);
+                                }
                             });
 
                             Notification::make()
