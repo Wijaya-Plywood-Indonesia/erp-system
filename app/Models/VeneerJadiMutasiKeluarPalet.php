@@ -9,7 +9,9 @@ class VeneerJadiMutasiKeluarPalet extends Model
     protected $fillable = [
         'id_mutasi_keluar',
         'nomor_palet',
-        'jumlah_lembar'
+        'jumlah_lembar',
+        'diterima_by',
+        'diterima_at',
     ];
     public function mutasiKeluar()
     {
