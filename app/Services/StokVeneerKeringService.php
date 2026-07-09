@@ -180,7 +180,7 @@ class StokVeneerKeringService
             throw new \RuntimeException('Data ukuran/jenis kayu pada mutasi keluar tidak lengkap.');
         }
 
-        $ukuran = $palet->ukuran() ?? Ukuran::find($idUkuran);
+        $ukuran = $palet->ukuran ?? Ukuran::find($idUkuran);
         $m3PerLembar = $this->m3PerLembar($ukuran);
         $m3 = $qty * $m3PerLembar / 10000000;
 
