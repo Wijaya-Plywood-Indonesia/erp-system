@@ -24,6 +24,8 @@ class StokPlywoodSiapJual extends Page
     public string $filterTebal     = '';
     public string $filterKw        = '';
 
+    public bool $showKubikasi = false;
+
     public function getSummariesProperty()
     {
         return StokPlywoodSiapJualModel::with(['jenisKayu', 'lastLog'])
