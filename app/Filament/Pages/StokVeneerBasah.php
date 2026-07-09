@@ -30,6 +30,10 @@ class StokVeneerBasah extends Page
     public string $filterTebal     = '';
     public string $filterKw        = '';
 
+    public bool $showKubikasi   = false;
+public bool $showHppAverage = false;
+public bool $showNilaiStok  = false;
+
     /**
      * Header Action untuk Inisialisasi/Input Stok Manual
      */

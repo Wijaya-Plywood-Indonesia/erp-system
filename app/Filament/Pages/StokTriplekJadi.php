@@ -24,6 +24,10 @@ class StokTriplekJadi extends Page
     public string $filterTebal     = '';
     public string $filterKw        = '';
 
+    public bool $showKubikasi   = false;
+public bool $showHppAverage = false;
+public bool $showNilaiStok  = false;
+
     public function getSummariesProperty()
     {
         return StokTriplekJadiModel::with(['jenisKayu', 'lastLog'])

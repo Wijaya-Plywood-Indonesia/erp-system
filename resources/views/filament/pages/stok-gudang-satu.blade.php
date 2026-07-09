@@ -191,7 +191,7 @@
             </div>
             @empty
             <div class="py-12 text-center text-gray-400 dark:text-gray-600 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded">
-                Tidak ada stok triplek MTH tersedia
+                Tidak ada stok gudang satu tersedia
             </div>
             @endforelse
         </div>
@@ -213,7 +213,7 @@
                     <div class="text-2xl font-black text-gray-800 dark:text-gray-200 tabular-nums">
                         {{ number_format($this->totalLembar) }}
                     </div>
-                    <div class="text-xs text-gray-400 mt-0.5">lembar triplek MTH</div>
+                    <div class="text-xs text-gray-400 mt-0.5">lembar gudang satu</div>
                 </div>
 
                 @if($showKubikasi)

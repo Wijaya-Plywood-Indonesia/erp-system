@@ -22,6 +22,10 @@ class StokVeneerKering extends Page
 
     public string $filterJenisKayu = '';
 
+    public bool $showM3         = false;
+public bool $showHppAverage = false;
+public bool $showNilaiStok  = false;
+
     public function getLatestStokProperty()
     {
         // Ambil snapshot m3/hpp/nilai dari baris terakhir per kombinasi

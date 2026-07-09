@@ -30,7 +30,7 @@ class ListOpnameStoks extends CreateRecord
 
     public function getTitle(): string
     {
-        return 'Stock Opname Veneer';
+        return 'Opname Stok';
     }
 
     public function getMaxContentWidth(): string

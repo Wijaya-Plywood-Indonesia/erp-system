@@ -86,12 +86,12 @@
                         <th class="px-4 py-3 text-right border-l border-gray-100 dark:border-gray-700 whitespace-nowrap">
                             Stok Kubikasi<div class="text-[10px] font-medium normal-case text-gray-500 tracking-normal">Sebelum → Sesudah</div>
                         </th>
-                        <th class="px-4 py-3 text-right border-l border-gray-100 dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/5 whitespace-nowrap">
+                        {{-- <th class="px-4 py-3 text-right border-l border-gray-100 dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/5 whitespace-nowrap">
                             Komponen HPP/m³<div class="text-[10px] font-medium normal-case text-gray-500 tracking-normal">pekerja · bahan penolong</div>
                         </th>
                         <th class="px-4 py-3 text-right border-l border-gray-100 dark:border-gray-700 bg-amber-50/50 dark:bg-amber-900/10 whitespace-nowrap">
                             HPP Average<div class="text-[10px] font-medium normal-case text-amber-500 tracking-normal">per m³</div>
-                        </th>
+                        </th> --}}
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
@@ -173,7 +173,7 @@
                         </td>
 
                         {{-- Komponen HPP --}}
-                        <td class="px-4 py-3 border-l border-gray-50 dark:border-gray-800 bg-blue-50/10 dark:bg-blue-900/5 whitespace-nowrap">
+                        {{-- <td class="px-4 py-3 border-l border-gray-50 dark:border-gray-800 bg-blue-50/10 dark:bg-blue-900/5 whitespace-nowrap">
                             @if($isM)
                                 <div class="flex flex-col items-end gap-0.5 text-[10px] tabular-nums">
                                     <span class="text-blue-600 dark:text-blue-400 font-semibold">
@@ -186,14 +186,14 @@
                             @else
                                 <div class="text-right text-[10px] text-gray-400">—</div>
                             @endif
-                        </td>
+                        </td> --}}
 
                         {{-- HPP Average --}}
-                        <td class="px-4 py-3 text-right border-l border-gray-50 dark:border-gray-800 bg-amber-50/20 dark:bg-amber-900/5 whitespace-nowrap">
+                        {{-- <td class="px-4 py-3 text-right border-l border-gray-50 dark:border-gray-800 bg-amber-50/20 dark:bg-amber-900/5 whitespace-nowrap">
                             <span class="font-black text-xs text-amber-700 dark:text-amber-400 tabular-nums">
                                 {{ number_format($log->hpp_average, 0, ',', '.') }}
                             </span>
-                        </td>
+                        </td> --}}
                     </tr>
                     @empty
                     <tr>
@@ -227,9 +227,9 @@
                             {{ number_format(max(0, $m3Saldo), 4) }} m³
                         </td>
                         <td class="px-4 py-3 bg-blue-50/10 dark:bg-blue-900/5"></td>
-                        <td class="px-4 py-3 text-right tabular-nums bg-amber-50/50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 font-black">
+                        {{-- <td class="px-4 py-3 text-right tabular-nums bg-amber-50/50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 font-black">
                             {{ $lastLog ? number_format($lastLog->hpp_average, 0, ',', '.').' /m³' : '—' }}
-                        </td>
+                        </td> --}}
                     </tr>
                 </tfoot>
                 @endif

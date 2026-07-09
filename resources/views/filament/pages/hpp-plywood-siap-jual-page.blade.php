@@ -192,9 +192,9 @@
                             {{ $lastLog ? number_format($lastLog->stok_lembar_after) : '—' }} lbr
                         </td>
                         <td class="px-4 py-3 text-right text-gray-400">—</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-blue-600 dark:text-blue-400">
+                        {{-- <td class="px-4 py-3 text-right tabular-nums text-blue-600 dark:text-blue-400">
                             {{ number_format(max(0, $m3Saldo), 4) }} m³
-                        </td>
+                        </td> --}}
                     </tr>
                 </tfoot>
                 @endif
