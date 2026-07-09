@@ -240,15 +240,6 @@ jobs:
         with:
           php-version: "8.4"
 
-      - name: Install Composer Dependencies (Prod)
-        if: steps.changed.outputs.mode != 'skip'
-        env:
-          BROADCAST_CONNECTION: log
-          REVERB_APP_KEY: "dummy-key"
-          REVERB_APP_SECRET: "dummy-secret"
-          REVERB_APP_ID: "123456"
-        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction
-
       - name: Setup Node.js
         if: steps.frontend_check.outputs.rebuild == 'true'
         uses: actions/setup-node@v4
@@ -260,6 +251,15 @@ jobs:
         run: |
           npm ci
           npm run build
+
+      - name: Install Composer Dependencies (Prod)
+        if: steps.changed.outputs.mode != 'skip'
+        env:
+          BROADCAST_CONNECTION: log
+          REVERB_APP_KEY: "dummy-key"
+          REVERB_APP_SECRET: "dummy-secret"
+          REVERB_APP_ID: "123456"
+        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction
 
       # ----------------------------------------------------------
       # STEP 3B: Buat ZIP — full atau delta
