@@ -245,11 +245,15 @@ jobs:
         with:
           node-version: "20"
       
-      - name: Install NPM & Build Assets
+      - name: Setup Node.js
         if: steps.frontend_check.outputs.rebuild == 'true'
-        run: |
-          npm ci
-          npm run build
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      
+      - name: Install NPM Dependencies (no build yet)
+        if: steps.frontend_check.outputs.rebuild == 'true'
+        run: npm ci
       
       - name: Install Composer Dependencies (Prod)
         if: steps.changed.outputs.mode != 'skip'
@@ -258,7 +262,15 @@ jobs:
           REVERB_APP_KEY: "dummy-key"
           REVERB_APP_SECRET: "dummy-secret"
           REVERB_APP_ID: "123456"
-        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction
+        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
+      
+      - name: Build Assets
+        if: steps.frontend_check.outputs.rebuild == 'true'
+        run: npm run build
+      
+      - name: Run package discover
+        if: steps.changed.outputs.mode != 'skip'
+        run: php artisan package:discover --ansi          
 
       # ----------------------------------------------------------
       # STEP 3B: Buat ZIP — full atau delta
