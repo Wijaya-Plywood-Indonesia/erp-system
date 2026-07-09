@@ -2,8 +2,6 @@
 
 namespace App\Filament\Resources\ProduksiHotPresses\RelationManagers;
 
-use App\Models\HasilGrajiTriplek;
-use App\Models\HasilSanding;
 use App\Models\JenisKayu;
 use App\Models\PlatformHasilHp;
 use App\Models\ProduksiGrajitriplek;
@@ -17,7 +15,6 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Forms\Components\Placeholder;
-use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Grid;
@@ -220,99 +217,7 @@ class SerahTerimaHpRelationManager extends RelationManager
                     ->dateTime('d/m/Y H:i:s')
                     ->sortable(),
             ])
-            ->headerActions([
-                // Serah manual: pilih hasil produksi Graji Triplek yang belum pernah diserahkan,
-                // lalu kirim ke antrian penerimaan Sanding.
-                Action::make('serahKeSanding')
-                    ->label('Serah ke Sanding')
-                    ->color('warning')
-                    ->icon('heroicon-o-arrow-right-circle')
-                    ->visible(fn () => $tipe === 'graji')
-                    ->schema(function () use ($ownerId) {
-                        $options = HasilGrajiTriplek::where('id_produksi_graji_triplek', $ownerId)
-                            ->whereDoesntHave('serahTerimaHp')
-                            ->get()
-                            ->mapWithKeys(fn ($h) => [$h->id => ($h->no_palet ?? '-').' — '.$h->isi.' lembar'])
-                            ->toArray();
 
-                        return [
-                            Select::make('id_hasil_graji_triplek')
-                                ->label('Hasil Graji Triplek')
-                                ->options($options)
-                                ->searchable()
-                                ->required(),
-                        ];
-                    })
-                    ->action(function (array $data) use ($ownerId) {
-                        try {
-                            SerahTerimaHp::create([
-                                'id_hasil_graji_triplek' => $data['id_hasil_graji_triplek'],
-                                'id_produksi_graji_triplek' => $ownerId,
-                                'diserahkan_oleh' => Auth::user()->name,
-                                'diterima_oleh' => '-',
-                                'status' => 'Serah ke Sanding',
-                                'tujuan' => 'sanding',
-                            ]);
-
-                            Notification::make()
-                                ->title('Berhasil diserahkan ke Sanding')
-                                ->success()
-                                ->send();
-                        } catch (\Throwable $e) {
-                            Notification::make()
-                                ->title('Gagal')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
-
-                // Serah manual: pilih hasil produksi Sanding yang belum pernah diserahkan,
-                // lalu kirim ke antrian penerimaan Graji Triplek.
-                Action::make('serahKeGraji')
-                    ->label('Serah ke Graji Triplek')
-                    ->color('warning')
-                    ->icon('heroicon-o-arrow-left-circle')
-                    ->visible(fn () => $tipe === 'sanding')
-                    ->schema(function () use ($ownerId) {
-                        $options = HasilSanding::where('id_produksi_sanding', $ownerId)
-                            ->whereDoesntHave('serahTerimaHp')
-                            ->get()
-                            ->mapWithKeys(fn ($h) => [$h->id => ($h->no_palet ?? '-').' — '.$h->kuantitas.' pcs'])
-                            ->toArray();
-
-                        return [
-                            Select::make('id_hasil_sanding')
-                                ->label('Hasil Sanding')
-                                ->options($options)
-                                ->searchable()
-                                ->required(),
-                        ];
-                    })
-                    ->action(function (array $data) use ($ownerId) {
-                        try {
-                            SerahTerimaHp::create([
-                                'id_hasil_sanding' => $data['id_hasil_sanding'],
-                                'id_produksi_sanding' => $ownerId,
-                                'diserahkan_oleh' => Auth::user()->name,
-                                'diterima_oleh' => '-',
-                                'status' => 'Serah ke Graji',
-                                'tujuan' => 'graji_triplek',
-                            ]);
-
-                            Notification::make()
-                                ->title('Berhasil diserahkan ke Graji Triplek')
-                                ->success()
-                                ->send();
-                        } catch (\Throwable $e) {
-                            Notification::make()
-                                ->title('Gagal')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
-            ])
             ->actions([
                 Action::make('terima')
                     ->label('Terima')
