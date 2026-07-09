@@ -239,11 +239,9 @@ jobs:
         with:
           php-version: "8.4"
 
-      - name: Setup PHP for Production
-        if: steps.changed.outputs.mode != 'skip'
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.4"
+      - name: Install Composer Dependencies (Prod)
+        if: steps.rebuild_check.outputs.vendor == 'true'
+        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
 
       - name: Setup Node.js
         if: steps.frontend_check.outputs.rebuild == 'true'
