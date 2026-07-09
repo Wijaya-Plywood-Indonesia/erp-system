@@ -12,6 +12,9 @@ class SerahTerimaGudangSatu extends Model
     protected $fillable = [
         'id_hasil_pilih_plywood',
         'id_produksi_terima_gudang_satu',
+        'id_hasil_terima_gudang_satu',
+        'id_produksi_nyusup',
+        'tujuan',
         'diserahkan_oleh',
         'diterima_oleh',
         'status',
@@ -21,20 +24,24 @@ class SerahTerimaGudangSatu extends Model
     // Relations
     // ─────────────────────────────────────────────
 
-    /**
-     * Hasil produksi Pilih Plywood, sumber tunggal barang yang diserahkan.
-     */
     public function hasilPilihPlywood(): BelongsTo
     {
         return $this->belongsTo(HasilPilihPlywood::class, 'id_hasil_pilih_plywood');
     }
 
-    /**
-     * Produksi Terima Gudang Satu, tujuan penyerahan barang ini.
-     */
     public function produksiTerimaGudangSatu(): BelongsTo
     {
         return $this->belongsTo(ProduksiTerimaGudangSatu::class, 'id_produksi_terima_gudang_satu');
+    }
+
+    public function hasilTerimaGudangSatu(): BelongsTo
+    {
+        return $this->belongsTo(HasilTerimaGudangSatu::class, 'id_hasil_terima_gudang_satu');
+    }
+
+    public function produksiNyusup(): BelongsTo
+    {
+        return $this->belongsTo(ProduksiNyusup::class, 'id_produksi_nyusup');
     }
 
     // ─────────────────────────────────────────────
@@ -42,20 +49,42 @@ class SerahTerimaGudangSatu extends Model
     // ─────────────────────────────────────────────
 
     /**
-     * Barang setengah jadi terkait, diambil dari hasil Pilih Plywood.
+     * Sumber barang aktual: dari Pilih Plywood ATAU dari Hasil Terima Gudang Satu,
+     * tergantung mana yang terisi (mutually exclusive tergantung `tujuan`).
      */
-    public function getBarangSetengahJadiAttribute()
+    public function getSumberAttribute()
     {
-        return $this->hasilPilihPlywood?->barangSetengahJadiHp;
+        return $this->hasilPilihPlywood ?? $this->hasilTerimaGudangSatu;
     }
 
     /**
-     * Jumlah/isi barang, mengikuti kolom `jumlah_bagus` di HasilPilihPlywood
-     * (pakai jumlah_bagus karena itu yang layak diserahkan, bukan jumlah cacat).
+     * Barang setengah jadi terkait. Fallback: kalau dari Pilih Plywood pakai
+     * relasi barangSetengahJadiHp, kalau dari Hasil Terima Gudang Satu,
+     * bentuk objek serupa dari grade/jenisBarang/ukuran langsung.
+     */
+    public function getBarangSetengahJadiAttribute()
+    {
+        if ($this->hasilPilihPlywood) {
+            return $this->hasilPilihPlywood->barangSetengahJadiHp;
+        }
+
+        // HasilTerimaGudangSatu tidak punya barangSetengahJadiHp,
+        // tapi punya grade/jenisBarang/ukuran langsung.
+        return $this->hasilTerimaGudangSatu;
+    }
+
+    /**
+     * Jumlah/isi barang.
+     * - Dari Pilih Plywood: pakai `jumlah_bagus`.
+     * - Dari Hasil Terima Gudang Satu: pakai `jumlah`.
      */
     public function getJumlahAttribute()
     {
-        return $this->hasilPilihPlywood->jumlah_bagus ?? null;
+        if ($this->hasilPilihPlywood) {
+            return $this->hasilPilihPlywood->jumlah_bagus ?? null;
+        }
+
+        return $this->hasilTerimaGudangSatu->jumlah ?? null;
     }
 
     public function isMenunggu(): bool
@@ -74,17 +103,19 @@ class SerahTerimaGudangSatu extends Model
     }
 
     /**
-     * Sisa = qty asli dikurangi total pemakaian di Terima Gudang Satu.
-     *
-     * NOTE: asumsi ada model `BahanTerimaGudangSatu` dengan kolom
-     * `id_serah_terima_gudang_satu` dan `kuantitas` sebagai pencatat
-     * pemakaian. Sesuaikan nama model/kolom bila berbeda di skema Anda.
+     * Sisa = qty asli dikurangi total pemakaian.
+     * Pemakaian bisa berasal dari 2 sumber tergantung tujuan:
+     * - BahanTerimaGudangSatu (jalur produksi biasa)
+     * - DetailBarangDikerjakan (jalur nyusup, pakai kolom `modal`)
      */
     public function getSisaAttribute(): float
     {
-        $terpakai = BahanTerimaGudangSatu::where('id_serah_terima_gudang_satu', $this->id)
+        $terpakaiBahan = BahanTerimaGudangSatu::where('id_serah_terima_gudang_satu', $this->id)
             ->sum('jumlah');
 
-        return $this->qtyAsli - (float) $terpakai;
+        $terpakaiNyusup = DetailBarangDikerjakan::where('id_serah_terima_gudang_satu', $this->id)
+            ->sum('modal');
+
+        return $this->qtyAsli - (float) $terpakaiBahan - (float) $terpakaiNyusup;
     }
 }

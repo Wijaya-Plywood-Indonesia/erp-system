@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiTerimaGudangSatus\RelationManagers;
 
+use App\Models\ProduksiNyusup;
 use App\Models\SerahTerimaGudangSatu;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -18,13 +19,32 @@ use Illuminate\Support\Facades\DB;
 
 class SerahTerimaGudangSatuRelationManager extends RelationManager
 {
-    private const ROLE_ADMIN = ['super_admin', 'Super Admin', 'admin_kayu'];
-
     protected static string $relationship = 'serahTerima';
 
     public static function getTitle(Model $ownerRecord, string $pageClass): string
     {
-        return 'Terima Barang dari Pilih Plywood';
+        return $ownerRecord instanceof ProduksiNyusup
+            ? 'Terima Barang untuk Nyusup'
+            : 'Terima Barang dari Pilih Plywood';
+    }
+
+    /**
+     * Menentukan apakah relation manager ini sedang dipakai di konteks Nyusup.
+     */
+    protected function isNyusupContext(): bool
+    {
+        return $this->getOwnerRecord() instanceof ProduksiNyusup;
+    }
+
+    /**
+     * Nama kolom FK yang dipakai untuk "lengket"-kan record ke owner saat ini,
+     * tergantung konteks resource mana yang memanggil relation manager ini.
+     */
+    protected function ownerForeignKey(): string
+    {
+        return $this->isNyusupContext()
+            ? 'id_produksi_nyusup'
+            : 'id_produksi_terima_gudang_satu';
     }
 
     /**
@@ -49,12 +69,14 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         $ownerId = $this->getOwnerRecord()->id;
+        $isNyusup = $this->isNyusupContext();
+        $foreignKey = $this->ownerForeignKey();
 
         return $table
-            ->modifyQueryUsing(function ($query) use ($ownerId) {
+            ->modifyQueryUsing(function ($query) use ($ownerId, $isNyusup, $foreignKey) {
                 // Reset constraint bawaan dari relasi dasar (WHERE id_produksi_terima_gudang_satu = ownerId),
                 // supaya kondisi "masih menunggu" (diterima_oleh = '-') tidak ikut ke-AND-kan
-                // dan bisa muncul walau id_produksi_terima_gudang_satu masih NULL.
+                // dan bisa muncul walau kolom FK terkait masih NULL.
                 $query->getQuery()->wheres = [];
                 $query->getQuery()->bindings['where'] = [];
 
@@ -65,11 +87,22 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                     'hasilPilihPlywood.produksiPilihPlywood',
                 ]);
 
+                // Filter tujuan: kalau dipanggil dari ProduksiNyusup, hanya tampilkan
+                // yang tujuan = 'nyusup'. Kalau dari ProduksiTerimaGudangSatu,
+                // hanya tampilkan yang tujuan != 'nyusup' (mis. gudang_satu / null).
+                $query->when(
+                    $isNyusup,
+                    fn ($q) => $q->where('tujuan', 'nyusup'),
+                    fn ($q) => $q->where(function ($sub) {
+                        $sub->whereNull('tujuan')->orWhere('tujuan', '!=', 'nyusup');
+                    })
+                );
+
                 // Tampilkan yang masih menunggu (belum diterima siapapun, bisa diterima produksi manapun)
                 // ATAU yang sudah diterima dan memang lengket ke produksi ini.
-                return $query->where(function ($mainQuery) use ($ownerId) {
+                return $query->where(function ($mainQuery) use ($ownerId, $foreignKey) {
                     $mainQuery->where('diterima_oleh', '-')
-                        ->orWhere('id_produksi_terima_gudang_satu', $ownerId);
+                        ->orWhere($foreignKey, $ownerId);
                 })
                     ->orderBy('diterima_oleh', 'asc')
                     ->orderBy('created_at', 'desc');
@@ -124,7 +157,7 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                     ->sortable(),
             ])
             ->headerActions([
-                // Tidak ada CreateAction — barang masuk otomatis dari sisi Pilih Plywood.
+                // Tidak ada CreateAction — barang masuk otomatis dari sisi Pilih Plywood / Hasil Terima Gudang Satu.
             ])
             ->actions([
                 Action::make('terima')
@@ -172,9 +205,9 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                     })
                     // Hanya muncul kalau memang masih menunggu (belum lengket ke produksi manapun).
                     ->visible(fn ($record) => $record?->diterima_oleh === '-')
-                    ->action(function ($record) use ($ownerId) {
+                    ->action(function ($record) use ($ownerId, $foreignKey) {
                         try {
-                            DB::transaction(function () use ($record, $ownerId) {
+                            DB::transaction(function () use ($record, $ownerId, $foreignKey) {
                                 // Lock + re-check: mencegah 2 produksi menerima barang yang sama
                                 // secara bersamaan (race condition).
                                 $fresh = SerahTerimaGudangSatu::lockForUpdate()->find($record->id);
@@ -183,14 +216,15 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                                     throw new \RuntimeException('Barang ini sudah diambil produksi lain.');
                                 }
 
-                                // Begitu diterima, record ini lengket permanen ke produksi ini.
+                                // Begitu diterima, record ini lengket permanen ke produksi ini
+                                // (kolom FK yang dipakai tergantung konteks: nyusup atau gudang satu).
                                 $fresh->update([
                                     'diterima_oleh' => Auth::user()->name.' - Gudang Satu',
-                                    'id_produksi_terima_gudang_satu' => $ownerId,
+                                    $foreignKey => $ownerId,
                                     'status' => 'Diterima',
                                 ]);
 
-                                // Jika ada pencatatan stok/jurnal saat barang diterima gudang 1,
+                                // Jika ada pencatatan stok/jurnal saat barang diterima,
                                 // panggil service di sini, mengikuti pola StokTriplekMthService/StokPlatformMthService.
                             });
 
@@ -211,7 +245,7 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->label('Hapus Terpilih')
-                        ->visible(fn () => Auth::user()->hasAnyRole(self::ROLE_ADMIN)),
+                        ->visible(fn () => Auth::user()->hasAnyRole(['super-admin', 'admin'])),
                 ]),
             ]);
     }

@@ -164,6 +164,7 @@ class HasilPilihPlywoodsTable
                         try {
                             SerahTerimaGudangSatu::create([
                                 'id_hasil_pilih_plywood' => $record->id,
+                                'tujuan' => 'gudang_satu',
                                 'diserahkan_oleh' => Auth::user()->name,
                                 'diterima_oleh' => '-',
                                 'status' => 'Menunggu',
@@ -183,7 +184,9 @@ class HasilPilihPlywoodsTable
                     }),
 
                 EditAction::make(),
-                DeleteAction::make(),
+
+                DeleteAction::make()
+                    ->hidden(fn ($record) => (bool) $record->serahTerimaGudangSatu),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
