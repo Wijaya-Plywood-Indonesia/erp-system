@@ -66,7 +66,11 @@ class HppAveragePage extends Page
             $query->where('tipe_transaksi', $this->filterTipeTransaksi);
         }
 
-        return $query->orderByDesc('tanggal')
+        // return $query->orderByDesc('tanggal')
+        //     ->orderByDesc('id')
+        //     ->get();
+
+        return $query->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
     }
