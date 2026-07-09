@@ -15,6 +15,12 @@ class DetailBarangDikerjakan extends Model
         'no_palet',
         'modal',
         'hasil',
+        'diserahkan_at',
+        'diserahkan_by',
+    ];
+
+    protected $casts = [
+        'diserahkan_at' => 'datetime',
     ];
 
     public function produksiNyusup()
