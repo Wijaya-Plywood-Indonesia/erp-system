@@ -40,4 +40,9 @@ class ProduksiTerimaGudangSatu extends Model
     {
         return $this->hasMany(HasilTerimaGudangSatu::class, 'id_produksi_terima_gudang_satu');
     }
+
+    public function serahTerima(): HasMany
+    {
+        return $this->hasMany(SerahTerimaGudangSatu::class, 'id_produksi_terima_gudang_satu');
+    }
 }

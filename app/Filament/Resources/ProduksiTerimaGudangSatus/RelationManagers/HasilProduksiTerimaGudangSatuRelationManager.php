@@ -10,7 +10,7 @@ use Filament\Tables\Table;
 
 class HasilProduksiTerimaGudangSatuRelationManager extends RelationManager
 {
-    protected static ?string $title = 'Hasil';
+    protected static ?string $title = 'Hasil Terima Gudang Satu';
 
     protected static string $relationship = 'hasil';
 

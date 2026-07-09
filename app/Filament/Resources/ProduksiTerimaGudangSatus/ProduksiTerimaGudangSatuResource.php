@@ -9,6 +9,7 @@ use App\Filament\Resources\ProduksiTerimaGudangSatus\Pages\ViewProduksiTerimaGud
 use App\Filament\Resources\ProduksiTerimaGudangSatus\RelationManagers\BahanTerimaGudangSatuRelationManager;
 use App\Filament\Resources\ProduksiTerimaGudangSatus\RelationManagers\HasilProduksiTerimaGudangSatuRelationManager;
 use App\Filament\Resources\ProduksiTerimaGudangSatus\RelationManagers\PegawaiTerimaGudangSatuRelationManager;
+use App\Filament\Resources\ProduksiTerimaGudangSatus\RelationManagers\SerahTerimaGudangSatuRelationManager;
 use App\Filament\Resources\ProduksiTerimaGudangSatus\RelationManagers\ValidasiTerimaGudangSatuRelationManager;
 use App\Filament\Resources\ProduksiTerimaGudangSatus\Schemas\ProduksiTerimaGudangSatuForm;
 use App\Filament\Resources\ProduksiTerimaGudangSatus\Schemas\ProduksiTerimaGudangSatuInfolist;
@@ -55,6 +56,7 @@ class ProduksiTerimaGudangSatuResource extends Resource
     public static function getRelations(): array
     {
         return [
+            SerahTerimaGudangSatuRelationManager::class,
             BahanTerimaGudangSatuRelationManager::class,
             PegawaiTerimaGudangSatuRelationManager::class,
             HasilProduksiTerimaGudangSatuRelationManager::class,

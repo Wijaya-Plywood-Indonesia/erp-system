@@ -2,13 +2,13 @@
 
 namespace App\Filament\Resources\HasilTerimaGudangSatus\Schemas;
 
-use Filament\Schemas\Schema;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Textarea;
+use App\Models\BahanTerimaGudangSatu;
 use App\Models\Grade;
-use App\Models\JenisBarang;
-use App\Models\Ukuran;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Schema;
 
 class HasilTerimaGudangSatuForm
 {
@@ -16,6 +16,45 @@ class HasilTerimaGudangSatuForm
     {
         return $schema
             ->components([
+                Select::make('kombinasi_bahan')
+                    ->label('Ukuran (Jenis Barang | Ukuran)')
+                    ->searchable()
+                    ->required()
+                    ->dehydrated(false)
+                    ->options(function () {
+                        return BahanTerimaGudangSatu::query()
+                            ->with('barangSetengahJadiHp.jenisBarang', 'barangSetengahJadiHp.ukuran')
+                            ->get()
+                            ->map(fn ($b) => $b->barangSetengahJadiHp)
+                            ->filter(fn ($b) => $b?->jenisBarang && $b?->ukuran)
+                            ->unique(fn ($b) => $b->id_jenis_barang.'-'.$b->id_ukuran)
+                            ->sortBy(fn ($b) => $b->ukuran->tebal ?? 0)
+                            ->mapWithKeys(fn ($b) => [
+                                $b->id_jenis_barang.'-'.$b->id_ukuran => $b->jenisBarang->nama_jenis_barang.' | '.$b->ukuran->dimensi,
+                            ]);
+                    })
+                    ->afterStateUpdated(function ($state, callable $set) {
+                        [$idJenis, $idUkuran] = array_pad(explode('-', (string) $state, 2), 2, null);
+                        $set('id_jenis_barang', $idJenis);
+                        $set('id_ukuran', $idUkuran);
+                    })
+                    ->live()
+                    ->afterStateHydrated(function (callable $set, callable $get) {
+                        $idJenis = $get('id_jenis_barang');
+                        $idUkuran = $get('id_ukuran');
+                        if ($idJenis && $idUkuran) {
+                            $set('kombinasi_bahan', $idJenis.'-'.$idUkuran);
+                        }
+                    }),
+
+                Hidden::make('id_jenis_barang')->required(),
+                Hidden::make('id_ukuran')->required(),
+
+                TextInput::make('jumlah')
+                    ->label('Jumlah')
+                    ->numeric()
+                    ->required(),
+
                 Select::make('id_grade')
                     ->label('Grade')
                     ->options(
@@ -24,34 +63,12 @@ class HasilTerimaGudangSatuForm
                         })
                             ->orderBy('nama_grade')
                             ->get()
-                            ->mapWithKeys(fn($g) => [
+                            ->mapWithKeys(fn ($g) => [
                                 $g->id => ($g->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
-                                    . ' | ' . $g->nama_grade
+                                    .' | '.$g->nama_grade,
                             ])
                     )
                     ->searchable()
-                    ->required(),
-
-                Select::make('id_jenis_barang')
-                    ->label('Jenis Barang')
-                    ->options(
-                        JenisBarang::orderBy('nama_jenis_barang')
-                            ->pluck('nama_jenis_barang', 'id')
-                    )
-                    ->searchable()
-                    ->required(),
-
-                Select::make('id_ukuran')
-                    ->label('Ukuran')
-                    ->options(
-                        Ukuran::all()->pluck('dimensi', 'id')
-                    )
-                    ->searchable()
-                    ->required(),
-
-                TextInput::make('jumlah')
-                    ->label('Jumlah')
-                    ->numeric()
                     ->required(),
 
                 Textarea::make('ket')

@@ -2,16 +2,20 @@
 
 namespace App\Filament\Resources\HasilPilihPlywoods\Tables;
 
-use Filament\Tables\Table;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Grouping\Group;
-use Filament\Tables\Columns\Summarizers\Sum;
-use Filament\Actions\CreateAction;
-use Filament\Actions\EditAction;
+use App\Models\SerahTerimaGudangSatu;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
+use Filament\Tables\Columns\Summarizers\Sum;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Grouping\Group;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class HasilPilihPlywoodsTable
 {
@@ -20,12 +24,12 @@ class HasilPilihPlywoodsTable
         return $table
 
             ->modifyQueryUsing(
-                fn(Builder $query) =>
-                $query->with([
+                fn (Builder $query) => $query->with([
                     'pegawais',
                     'barangSetengahJadiHp.ukuran',
                     'barangSetengahJadiHp.jenisBarang',
                     'barangSetengahJadiHp.grade',
+                    'serahTerimaGudangSatu',
                 ])
             )
 
@@ -42,10 +46,10 @@ class HasilPilihPlywoodsTable
                             return 'Pegawai: -';
                         }
 
-                        return '' .
+                        return ''.
                             $record->pegawais
-                            ->pluck('nama_pegawai')
-                            ->implode(' & ');
+                                ->pluck('nama_pegawai')
+                                ->implode(' & ');
                     })
                     ->collapsible(),
             ])
@@ -63,10 +67,12 @@ class HasilPilihPlywoodsTable
                     ->label('Barang')
                     ->getStateUsing(function ($record) {
                         $b = $record->barangSetengahJadiHp;
-                        if (!$b) return '-';
+                        if (! $b) {
+                            return '-';
+                        }
 
-                        return ($b->jenisBarang?->nama_jenis_barang ?? '-') . ' | ' .
-                            ($b->ukuran?->nama_ukuran ?? '-') . ' | ' .
+                        return ($b->jenisBarang?->nama_jenis_barang ?? '-').' | '.
+                            ($b->ukuran?->nama_ukuran ?? '-').' | '.
                             ($b->grade?->nama_grade ?? '-');
                     })
                     ->wrap(),
@@ -79,11 +85,11 @@ class HasilPilihPlywoodsTable
                 TextColumn::make('kondisi')
                     ->label('Kondisi')
                     ->badge()
-                    ->color(fn($state) => match ($state) {
-                        'reject'   => 'danger',
+                    ->color(fn ($state) => match ($state) {
+                        'reject' => 'danger',
                         'reparasi' => 'warning',
-                        'selesai'  => 'success',
-                        default    => 'gray',
+                        'selesai' => 'success',
+                        default => 'gray',
                     }),
 
                 TextColumn::make('jumlah')
@@ -105,7 +111,7 @@ class HasilPilihPlywoodsTable
                 // Kolom perhitungan total yang dikerjakan (Bagus + Cacat)
                 TextColumn::make('total_kerja')
                     ->label('Total Dikerjakan')
-                    ->getStateUsing(fn($record) => $record->jumlah + $record->jumlah_bagus)
+                    ->getStateUsing(fn ($record) => $record->jumlah + $record->jumlah_bagus)
                     ->alignCenter()
                     ->weight('bold'),
 
@@ -113,6 +119,28 @@ class HasilPilihPlywoodsTable
                     ->label('Keterangan')
                     ->placeholder('-')
                     ->wrap(),
+
+                TextColumn::make('status_serah')
+                    ->label('Status Serah')
+                    ->getStateUsing(function ($record) {
+                        $serah = $record->serahTerimaGudangSatu;
+
+                        if (! $serah) {
+                            return 'Belum Diserahkan';
+                        }
+
+                        return $serah->diterima_oleh === '-' ? 'Menunggu Diterima' : 'Diterima';
+                    })
+                    ->badge()
+                    ->color(function ($record) {
+                        $serah = $record->serahTerimaGudangSatu;
+
+                        if (! $serah) {
+                            return 'gray';
+                        }
+
+                        return $serah->diterima_oleh === '-' ? 'warning' : 'success';
+                    }),
             ])
 
             /**
@@ -124,6 +152,36 @@ class HasilPilihPlywoodsTable
                 CreateAction::make(),
             ])
             ->recordActions([
+                Action::make('serah')
+                    ->label('Serah ke Gudang 1')
+                    ->color('warning')
+                    ->icon('heroicon-o-arrow-right-circle')
+                    ->requiresConfirmation()
+                    ->modalHeading('Serahkan barang ini ke Gudang 1?')
+                    ->modalDescription(fn ($record) => 'Jumlah bagus: '.($record->jumlah_bagus ?? 0).' pcs. Barang akan masuk antrian penerimaan Gudang 1.')
+                    ->visible(fn ($record) => ! $record->serahTerimaGudangSatu)
+                    ->action(function ($record) {
+                        try {
+                            SerahTerimaGudangSatu::create([
+                                'id_hasil_pilih_plywood' => $record->id,
+                                'diserahkan_oleh' => Auth::user()->name,
+                                'diterima_oleh' => '-',
+                                'status' => 'Menunggu',
+                            ]);
+
+                            Notification::make()
+                                ->title('Berhasil diserahkan ke Gudang 1')
+                                ->success()
+                                ->send();
+                        } catch (\Throwable $e) {
+                            Notification::make()
+                                ->title('Gagal')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
+
                 EditAction::make(),
                 DeleteAction::make(),
             ])
