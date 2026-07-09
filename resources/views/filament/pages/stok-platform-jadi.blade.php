@@ -66,11 +66,11 @@
                                 <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">Kw/Grade</th>
                                 <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">Stok Lembar</th>
                                 <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800">Kubikasi (m³)</th>
-                                <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800 bg-amber-50/50 dark:bg-amber-900/10">
+                                {{-- <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800 bg-amber-50/50 dark:bg-amber-900/10">
                                     HPP Average
                                     <div class="text-[9px] font-medium normal-case tracking-normal text-amber-500">Sebelum → Sekarang</div>
                                 </th>
-                                <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800">Nilai Stok</th>
+                                <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800">Nilai Stok</th> --}}
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
@@ -110,7 +110,7 @@
                                 </td>
 
                                 {{-- HPP Average Sebelum → Sekarang --}}
-                                @php
+                                {{-- @php
                                     $hppSekarang  = (float) ($row->hpp_average ?? 0);
                                     $lastLog      = $row->lastLog;
                                     $hppSebelum   = $lastLog ? (float) ($lastLog->stok_kubikasi_before > 0
@@ -135,7 +135,7 @@
                                     <span class="font-black text-gray-800 dark:text-gray-200 tabular-nums">
                                         Rp {{ number_format($row->nilai_stok ?? 0, 0, ',', '.') }}
                                     </span>
-                                </td>
+                                </td> --}}
                             </tr>
                             @endforeach
                         </tbody>
