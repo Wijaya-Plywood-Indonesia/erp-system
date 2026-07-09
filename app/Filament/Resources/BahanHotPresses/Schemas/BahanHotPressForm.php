@@ -41,7 +41,7 @@ class BahanHotPressForm
                                     . ' | ' . $g->nama_grade
                             ])
                     )
-                    ->reactive()
+                    ->live()
                     ->searchable()
                     ->placeholder('Semua Grade')
                     ->dehydrated(false),
@@ -55,7 +55,7 @@ class BahanHotPressForm
                         JenisBarang::orderBy('nama_jenis_barang')
                             ->pluck('nama_jenis_barang', 'id')
                     )
-                    ->reactive()
+                    ->live()
                     ->searchable()
                     ->placeholder('Semua Jenis Barang')
                     ->dehydrated(false),
@@ -69,9 +69,15 @@ class BahanHotPressForm
                     ->searchable()
                     ->reactive()
                     ->dehydrated(false)   // <-- tidak disimpan langsung, cuma UI selector
-                    ->options(function (?BahanHotpress $record, $livewire) {
-                        $ownerId = $livewire->ownerRecord?->id;
-                        return self::getPaletOptions($record, $ownerId) + self::getPlatformOptions($record, $ownerId);
+                    ->options(function (?BahanHotpress $record, $livewire, Get $get) {
+                        $ownerId    = $livewire->ownerRecord?->id;
+                        $gradeId    = $get('grade_id');
+                        $jenisId    = $get('jenis_barang_id_filter');
+
+                        $namaGrade = $gradeId ? Grade::find($gradeId)?->nama_grade : null;
+
+                        return self::getPaletOptions($record, $ownerId, $namaGrade, $jenisId)
+                            + self::getPlatformOptions($record, $ownerId, $namaGrade, $jenisId);
                     })
                     ->afterStateHydrated(function ($set, ?BahanHotpress $record) {
                         // saat edit, prefill selector dari kolom asli record
@@ -201,16 +207,22 @@ class BahanHotPressForm
             ]);
     }
 
-    protected static function getPaletOptions(?BahanHotpress $record, $ownerRecordId = null): array
+    protected static function getPaletOptions(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
     {
         $currentId = $record?->sumber === 'veneer' ? $record?->id_mutasi_keluar_palet : null;
         $currentIsi = (float) ($record?->isi ?? 0);
 
         return VeneerJadiMutasiKeluarPalet::query()
-            ->whereHas('mutasiKeluar', function ($q) use ($ownerRecordId) {
-                $q->whereNotNull('diterima_by');
+            ->whereNotNull('diterima_by')
+            ->whereHas('mutasiKeluar', function ($q) use ($ownerRecordId, $namaGrade, $jenisId) {
                 if ($ownerRecordId) {
                     $q->where('id_produksi_hp', $ownerRecordId);
+                }
+                if ($namaGrade) {
+                    $q->where('kw_grade', $namaGrade);
+                }
+                if ($jenisId) {
+                    $q->where('id_jenis_kayu', $jenisId);
                 }
             })
             ->with('mutasiKeluar.jenisKayu')
@@ -240,16 +252,22 @@ class BahanHotPressForm
             ->toArray();
     }
 
-    protected static function getPlatformOptions(?BahanHotpress $record, $ownerRecordId = null): array
+    protected static function getPlatformOptions(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
     {
         $currentId = $record?->sumber === 'platform' ? $record?->id_mutasi_keluar_platform : null;
         $currentIsi = (float) ($record?->isi ?? 0);
 
-        return \App\Models\PlatformJadiMutasiKeluarPalet::query()
-            ->whereHas('mutasiKeluar', function ($q) use ($ownerRecordId) {
-                $q->whereNotNull('diterima_by');
+        return PlatformJadiMutasiKeluarPalet::query()
+            ->whereNotNull('diterima_by')
+            ->whereHas('mutasiKeluar', function ($q) use ($ownerRecordId, $namaGrade, $jenisId) {
                 if ($ownerRecordId) {
                     $q->where('id_produksi_hp', $ownerRecordId);
+                }
+                if ($namaGrade) {
+                    $q->where('kw_grade', $namaGrade);
+                }
+                if ($jenisId) {
+                    $q->where('id_jenis_barang', $jenisId);
                 }
             })
             ->with('mutasiKeluar.jenisBarang')
