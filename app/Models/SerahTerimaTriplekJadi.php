@@ -131,8 +131,9 @@ class SerahTerimaTriplekJadi extends Model
      */
     public function getSisaAttribute(): float
     {
-        $terpakai = BahanPilihPlywood::where('id_serah_terima_triplek_jadi', $this->id)
-            ->sum('kuantitas');
+        // Pastikan Model BahanPilihPlywood sudah ter-import di atas jika belum
+        $terpakai = \App\Models\BahanPilihPlywood::where('id_serah_terima_triplek_jadi', $this->id)
+            ->sum('jumlah'); // Ubah menjadi jumlah
 
         return $this->qtyAsli - (float) $terpakai;
     }
