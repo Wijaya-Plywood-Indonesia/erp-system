@@ -22,12 +22,6 @@ class DetailBarangDikerjakansTable
     public static function configure(Table $table): Table
     {
         return $table
-
-            /*
-            |=====================================================
-            | 🔥 GROUP BY PEGAWAI
-            |=====================================================
-            */
             ->groups([
                 Group::make('id_pegawai_nyusup')
                     ->label('Pegawai')
@@ -36,14 +30,9 @@ class DetailBarangDikerjakansTable
                         $record->pegawaiNyusup?->pegawai?->nama_pegawai
                             ?? 'Pegawai Tidak Diketahui'
                     )
-                    ->collapsible(true), // default tertutup
+                    ->collapsible(true),
             ])
 
-            /*
-            |=====================================================
-            | 📋 COLUMNS
-            |=====================================================
-            */
             ->columns([
 
                 TextColumn::make('barang')
@@ -92,11 +81,6 @@ class DetailBarangDikerjakansTable
                     ->weight('bold'),
             ])
 
-            /*
-            |=====================================================
-            | ➕ HEADER ACTIONS
-            |=====================================================
-            */
             ->headerActions([
                 CreateAction::make()
                     ->hidden(
@@ -105,11 +89,6 @@ class DetailBarangDikerjakansTable
                     ),
             ])
 
-            /*
-            |=====================================================
-            | ✏️ RECORD ACTIONS
-            |=====================================================
-            */
             ->recordActions([
                 EditAction::make()
                     ->hidden(
@@ -124,22 +103,11 @@ class DetailBarangDikerjakansTable
                     ),
             ])
 
-            /*
-            |=====================================================
-            | 🧹 BULK ACTIONS
-            |=====================================================
-            */
             ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
             ])
-
-            /*
-            |=====================================================
-            | 📌 DEFAULT GROUP
-            |=====================================================
-            */
             ->defaultGroup('id_pegawai_nyusup');
     }
 }

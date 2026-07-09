@@ -596,14 +596,6 @@ jobs:
         with:
           php-version: "8.4"
 
-      - name: Install Composer Dependencies (Prod)
-        if: steps.rebuild_check.outputs.vendor == 'true'
-        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
-
-      - name: Run package discover
-        if: steps.rebuild_check.outputs.vendor == 'true'
-        run: php artisan package:discover --ansi
-
       - name: Setup Node.js
         if: steps.rebuild_check.outputs.frontend == 'true'
         uses: actions/setup-node@v4
@@ -615,6 +607,14 @@ jobs:
         run: |
           npm ci
           npm run build
+
+      - name: Install Composer Dependencies (Prod)
+        if: steps.rebuild_check.outputs.vendor == 'true'
+        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
+
+      - name: Run package discover
+        if: steps.rebuild_check.outputs.vendor == 'true'
+        run: php artisan package:discover --ansi
 
       # ----------------------------------------------------------
       # STEP 5: Buat ZIP (full atau delta) — nama unik per domain
