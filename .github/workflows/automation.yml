@@ -614,29 +614,33 @@ jobs:
           php-version: "8.4"
 
       - name: Setup Node.js
-        if: steps.frontend_check.outputs.rebuild == 'true'
+        if: steps.rebuild_check.outputs.frontend == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Install NPM & Build Assets
-        if: steps.frontend_check.outputs.rebuild == 'true'
-        run: |
-          npm ci
-          npm run build
+      - name: Install NPM Dependencies (no build yet)
+        if: steps.rebuild_check.outputs.frontend == 'true'
+        run: npm ci
 
-      - name: Install Composer Dependencies (Prod)
+      - name: Install Composer Dependencies (Prod, no scripts yet)
+        if: steps.changed.outputs.mode != 'skip'
+        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
+
+      - name: Build Assets
+        if: steps.rebuild_check.outputs.frontend == 'true'
+        run: npm run build
+
+      - name: Regenerate autoload & run discovery
         if: steps.changed.outputs.mode != 'skip'
         env:
           BROADCAST_CONNECTION: log
           REVERB_APP_KEY: "dummy-key"
           REVERB_APP_SECRET: "dummy-secret"
           REVERB_APP_ID: "123456"
-        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction
-
-      - name: Run package discover
-        if: steps.rebuild_check.outputs.vendor == 'true'
-        run: php artisan package:discover --ansi
+        run: |
+          composer dump-autoload --optimize --no-dev
+          php artisan package:discover --ansi
 
       # ----------------------------------------------------------
       # STEP 5: Buat ZIP (full atau delta) — nama unik per domain
