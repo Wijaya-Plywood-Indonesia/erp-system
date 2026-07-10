@@ -244,7 +244,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-      
+
       - name: Install NPM Dependencies (no build yet)
         if: steps.frontend_check.outputs.rebuild == 'true'
         run: npm ci
@@ -273,7 +273,7 @@ jobs:
           REVERB_APP_ID: "123456"
         run: |
           composer dump-autoload --optimize --no-dev
-          php artisan package:discover --ansi      
+          php artisan package:discover --ansi
 
       # ----------------------------------------------------------
       # STEP 3B: Buat ZIP — full atau delta
@@ -618,13 +618,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-      
+
       - name: Install NPM & Build Assets
         if: steps.frontend_check.outputs.rebuild == 'true'
         run: |
           npm ci
           npm run build
-      
+
       - name: Install Composer Dependencies (Prod)
         if: steps.changed.outputs.mode != 'skip'
         env:

@@ -166,7 +166,7 @@ class Absen extends Page implements HasForms
             $listSandingJoin = SandingJoinWorkerMap::make(ProduksiSandingJoint::with(['pegawaiSandingJoint.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listPotAfJoin = PotAfalanJoinWorkerMap::make(ProduksiPotAfJoint::with(['pegawaiPotAfJoint.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listLainLain = LainLainWorkerMap::make(DetailLainLain::with(['lainLains.pegawai'])->whereDate('tanggal', $tgl)->get());
-            $listDempul = DempulWorkerMap::make(ProduksiDempul::with(['rencanaPegawaiDempuls.pegawai'])->whereDate('tanggal', $tgl)->get());
+            $listDempul = DempulWorkerMap::make(ProduksiDempul::with(['rencanaPegawaiDempuls.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listGrajiTriplek = GrajiTriplekWorkerMap::make(ProduksiGrajitriplek::with(['pegawaiGrajiTriplek.pegawaiGrajiTriplek'])->whereDate('tanggal_produksi', $tgl)->get());
             $listNyusup = NyusupWorkerMap::make(ProduksiNyusup::with(['pegawaiNyusup.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listSanding = SandingWorkerMap::make(ProduksiSanding::with(['pegawaiSandings.pegawai'])->whereDate('tanggal', $tgl)->get());
@@ -286,15 +286,49 @@ class Absen extends Page implements HasForms
             // Gabungkan hasil untuk tabel utama (Terdaftar)
             $finalMerge = array_merge($pegawaiBekerja->values()->all(), $listLibur);
 
-            // PENGURUTAN BARU: Terkecil ke Terbesar secara Numerik
-            usort($finalMerge, function ($a, $b) {
-                // Pastikan kode diubah ke integer agar urutan numeriknya benar
-                // Contoh: '2' akan muncul sebelum '10' (kalau string, '10' muncul duluan)
-                $kodeA = (int)($a['kodep'] ?? 0);
-                $kodeB = (int)($b['kodep'] ?? 0);
+            // 🌟 DETEKSI DOMAIN HOST AKTIF
+            $currentHost = request()->getHost();
 
-                return $kodeA <=> $kodeB;
-            });
+            if (in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com'])) {
+                // 🔹 SORTING A: Numerik Murni untuk domain Kayu & Pra-release
+                usort($finalMerge, function ($a, $b) {
+                    $kodeA = (int)($a['kodep'] ?? 0);
+                    $kodeB = (int)($b['kodep'] ?? 0);
+
+                    return $kodeA <=> $kodeB;
+                });
+            } else {
+                // 🔹 SORTING B: Berbasis Grup Prioritas untuk domain selain di atas (Wahana, Localhost, dll)
+                usort($finalMerge, function ($a, $b) {
+                    $kodeA = trim((string)($a['kodep'] ?? ''));
+                    $kodeB = trim((string)($b['kodep'] ?? ''));
+
+                    // Fungsi pembantu untuk menentukan pembagian grup prioritas
+                    $getPriority = function ($kode) {
+                        // Prioritas 1: Kode berawalan angka 8 atau 9 (Paling atas)
+                        if (str_starts_with($kode, '8') || str_starts_with($kode, '9')) {
+                            return 1;
+                        }
+                        // Prioritas 3: Kode berawalan angka 7 (Paling bawah)
+                        if (str_starts_with($kode, '7')) {
+                            return 3;
+                        }
+                        // Prioritas 2: Kode berawalan lainnya (1-6, dll.) diletakkan di tengah
+                        return 2;
+                    };
+
+                    $prioA = $getPriority($kodeA);
+                    $prioB = $getPriority($kodeB);
+
+                    // Jika grup prioritasnya berbeda, urutkan berdasarkan nilai prioritas (1 -> 2 -> 3)
+                    if ($prioA !== $prioB) {
+                        return $prioA <=> $prioB;
+                    }
+
+                    // Jika berada di dalam grup prioritas yang sama, urutkan secara numerik menaik
+                    return (int)$kodeA <=> (int)$kodeB;
+                });
+            }
 
             $this->listAbsensi = array_values($finalMerge);
             $this->listUnregistered = $unregisteredFinal; // Masukkan ke tabel bawah

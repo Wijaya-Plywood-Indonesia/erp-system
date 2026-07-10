@@ -19,8 +19,8 @@ class ProduksiDempulsTable
     {
         return $table
             ->columns([
-                TextColumn::make('tanggal')
-                    ->label('Tanggal Repair')
+                TextColumn::make('tanggal_produksi')
+                    ->label('Tanggal Produksi')
                     ->date('d/m/Y')
                     ->sortable()
                     ->searchable(),
@@ -37,9 +37,9 @@ class ProduksiDempulsTable
             ])
             ->recordActions([
                 Action::make('kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn ($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'warning')
+                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Kendala')
@@ -61,7 +61,7 @@ class ProduksiDempulsTable
                             ->success()
                             ->send();
                     })
-                    ->modalHeading(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
                     ->modalSubmitActionLabel('Simpan'),
 
                 ViewAction::make(),

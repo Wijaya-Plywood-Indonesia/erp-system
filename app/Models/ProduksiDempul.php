@@ -10,7 +10,7 @@ class ProduksiDempul extends Model
     protected $table = 'produksi_dempuls';
 
     protected $fillable = [
-        'tanggal',
+        'tanggal_produksi',
         'kendala',
     ];
 
