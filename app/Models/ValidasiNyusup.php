@@ -9,7 +9,7 @@ class ValidasiNyusup extends Model
     protected $table = 'validasi_nyusup';
 
     protected $fillable = [
-        'id_produksi_nyusup ',
+        'id_produksi_nyusup',
         'role',
         'status',
 

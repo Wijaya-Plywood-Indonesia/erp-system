@@ -61,9 +61,10 @@ class StokGudangSatuService
     ): StokGudangSatu {
         $stok = $this->lockOrCreateStok($idJenisKayu, $panjang, $lebar, $tebal, $kwGrade);
 
-        if ($stok->stok_lembar < $lembar) {
-            throw new \RuntimeException("Stok gudang satu tidak cukup. Tersedia: {$stok->stok_lembar} lembar, diminta: {$lembar} lembar.");
-        }
+        // matikan validasi ini kalau minus biarkan aja minus
+        // if ($stok->stok_lembar < $lembar) {
+        //     throw new \RuntimeException("Stok gudang satu tidak cukup. Tersedia: {$stok->stok_lembar} lembar, diminta: {$lembar} lembar.");
+        // }
 
         $stokLembarBefore = $stok->stok_lembar;
         $stokKubikasiBefore = $stok->stok_kubikasi;
