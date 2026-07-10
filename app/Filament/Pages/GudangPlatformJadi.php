@@ -4,10 +4,13 @@ namespace App\Filament\Pages;
 
 use App\Models\HasilSanding;
 use App\Models\HppPlatformJadiLog;
+use App\Models\HppPlatformMthLog;
+use App\Models\JenisKayu;
 use App\Models\PlatformJadiMutasiKeluar;
 use App\Models\PlatformJadiMutasiKeluarPalet;
 use App\Models\SerahTerimaPlatformJadi;
 use App\Models\StokPlatformJadi;
+use App\Models\StokPlatformMth;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -135,7 +138,8 @@ class GudangPlatformJadi extends Page
 
     /**
      * Terima satu palet hasil sanding ke Gudang Platform Jadi:
-     * upsert stok + tulis log + catat serah terima. HPP sementara diabaikan (0).
+     * upsert stok jadi + tulis log + catat serah terima + KURANGI stok mentah.
+     * HPP sementara diabaikan (0).
      */
     public function terima(int $idHasilSanding): void
     {
@@ -144,6 +148,7 @@ class GudangPlatformJadi extends Page
                 $hs = HasilSanding::with([
                     'barangSetengahJadi.ukuran',
                     'barangSetengahJadi.grade',
+                    'barangSetengahJadi.jenisBarang',
                 ])->lockForUpdate()->findOrFail($idHasilSanding);
 
                 if (SerahTerimaPlatformJadi::where('id_hasil_sanding', $hs->id)->exists()) {
@@ -238,6 +243,9 @@ class GudangPlatformJadi extends Page
                     'diterima_by'      => $user?->id,
                     'diterima_at'      => now(),
                 ]);
+
+                // ── KURANGI STOK PLATFORM MENTAH (boleh minus, crosscheck) ──
+                $this->kurangiStokPlatformMth($bsj, $p, $l, $t, $kw, $qty, $hs);
             });
 
             Notification::make()->success()
@@ -249,6 +257,94 @@ class GudangPlatformJadi extends Page
                 ->body($e->getMessage())
                 ->send();
         }
+    }
+
+    /**
+     * Kurangi Stok Platform Mentah sesuai barang & qty yang diterima.
+     * Map jenis_barang -> jenis_kayu by nama. Boleh minus (crosscheck).
+     */
+    protected function kurangiStokPlatformMth($bsj, float $p, float $l, float $t, ?string $kw, int $qty, HasilSanding $hs): void
+    {
+        $namaJenis = $bsj->jenisBarang?->nama_jenis_barang;
+
+        $jenisKayu = $namaJenis
+            ? JenisKayu::where('nama_kayu', $namaJenis)->first()
+            : null;
+
+        if (! $jenisKayu) {
+            throw new \Exception("Jenis kayu \"{$namaJenis}\" tidak ditemukan di master Jenis Kayu. Samakan namanya dulu.");
+        }
+
+        $stokMth = StokPlatformMth::where('id_jenis_kayu', $jenisKayu->id)
+            ->where('panjang', $p)->where('lebar', $l)->where('tebal', $t)
+            ->where('kw_grade', $kw)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $stokMth) {
+            // baris belum ada -> buat mulai 0 supaya bisa minus
+            $stokMth = StokPlatformMth::create([
+                'id_jenis_kayu' => $jenisKayu->id,
+                'panjang'       => $p,
+                'lebar'         => $l,
+                'tebal'         => $t,
+                'kw_grade'      => $kw,
+                'stok_lembar'   => 0,
+                'stok_kubikasi' => 0,
+                'nilai_stok'    => 0,
+                'hpp_average'   => 0,
+            ]);
+        }
+
+        // Keperluan pemakaian bahan mentah (ubah di sini bila perlu)
+        $keperluan   = 'Sanding';
+        $namaPemakai = Auth::user()?->name ?? 'System';
+
+        $kubikasi = $this->hitungKubikasi($p, $l, $t, $qty);
+
+        $before = [
+            'lembar'   => (float) $stokMth->stok_lembar,
+            'kubikasi' => (float) $stokMth->stok_kubikasi,
+            'nilai'    => (float) $stokMth->nilai_stok,
+        ];
+
+        $after = [
+            'lembar'   => $before['lembar'] - $qty,
+            'kubikasi' => round($before['kubikasi'] - $kubikasi, 6),
+            'nilai'    => $before['nilai'], // HPP diabaikan
+        ];
+
+        $log = HppPlatformMthLog::create([
+            'id_jenis_kayu'        => $jenisKayu->id,
+            'panjang'              => $p,
+            'lebar'                => $l,
+            'tebal'                => $t,
+            'kw_grade'             => $kw,
+            'tanggal'              => now(),
+            'tipe_transaksi'       => 'keluar',
+            'referensi_type'       => HasilSanding::class,
+            'referensi_id'         => $hs->id,
+            'keterangan'           => "Dipakai produksi: {$keperluan} - Palet {$hs->no_palet} (oleh {$namaPemakai})",
+            'total_lembar'         => $qty,
+            'total_kubikasi'       => $kubikasi,
+            'hpp_pekerja'          => 0,
+            'hpp_bahan_penolong'   => 0,
+            'hpp_average'          => (float) $stokMth->hpp_average,
+            'nilai_stok'           => $after['nilai'],
+            'stok_lembar_before'   => $before['lembar'],
+            'stok_kubikasi_before' => $before['kubikasi'],
+            'nilai_stok_before'    => $before['nilai'],
+            'stok_lembar_after'    => $after['lembar'],
+            'stok_kubikasi_after'  => $after['kubikasi'],
+            'nilai_stok_after'     => $after['nilai'],
+        ]);
+
+        $stokMth->update([
+            'stok_lembar'   => $after['lembar'],
+            'stok_kubikasi' => $after['kubikasi'],
+            'nilai_stok'    => $after['nilai'],
+            'id_last_log'   => $log->id,
+        ]);
     }
 
     // ─── VENEER/PLATFORM KELUAR ──────────────────────────────────────────────
