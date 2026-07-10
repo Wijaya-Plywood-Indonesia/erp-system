@@ -248,6 +248,10 @@ jobs:
       - name: Install NPM Dependencies (no build yet)
         if: steps.frontend_check.outputs.rebuild == 'true'
         run: npm ci
+
+      - name: Build Assets
+        if: steps.frontend_check.outputs.rebuild == 'true'
+        run: npm run build
       
       - name: Install Composer Dependencies (Prod)
         if: steps.changed.outputs.mode != 'skip'
@@ -263,10 +267,6 @@ jobs:
         run: |
           find vendor/filament/filament/resources/views -iname "*grid*" || echo "NOT FOUND"
           ls -la vendor/filament/filament/resources/views/components/ 2>/dev/null || echo "components dir missing"
-            
-      - name: Build Assets
-        if: steps.frontend_check.outputs.rebuild == 'true'
-        run: npm run build
       
       - name: Run package discover
         if: steps.changed.outputs.mode != 'skip'
