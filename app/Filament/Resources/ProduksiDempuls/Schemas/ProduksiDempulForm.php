@@ -10,19 +10,22 @@ class ProduksiDempulForm
 {
     public static function configure(Schema $schema): Schema
     {
+        $currentHost = request()->getHost();
+        $kolomTanggal = in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com'])
+            ? 'tanggal'
+            : 'tanggal_produksi';
+
         return $schema
             ->components([
-                DatePicker::make('tanggal_produksi')
+                DatePicker::make($kolomTanggal)
                     ->label('Tanggal Produksi')
                     ->default(fn() => now()->addDay())
                     ->displayFormat('d F Y')
                     ->required()
-
-                    // ✅ VALIDASI TANGGAL TIDAK BOLEH SAMA
                     ->rules([
-                        function () {
-                            return function (string $attribute, $value, $fail) {
-                                $exists = ProduksiDempul::whereDate('tanggal_produksi', $value)->exists();
+                        function () use ($kolomTanggal) {
+                            return function (string $attribute, $value, $fail) use ($kolomTanggal) {
+                                $exists = ProduksiDempul::whereDate($kolomTanggal, $value)->exists();
 
                                 if ($exists) {
                                     $fail('Tanggal ini sudah digunakan. Pilih tanggal lain.');
