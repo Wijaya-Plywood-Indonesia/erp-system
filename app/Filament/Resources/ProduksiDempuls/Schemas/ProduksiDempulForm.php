@@ -12,9 +12,9 @@ class ProduksiDempulForm
     {
         return $schema
             ->components([
-                DatePicker::make('tanggal')
+                DatePicker::make('tanggal_produksi')
                     ->label('Tanggal Produksi')
-                    ->default(fn () => now()->addDay())
+                    ->default(fn() => now()->addDay())
                     ->displayFormat('d F Y')
                     ->required()
 
@@ -22,7 +22,7 @@ class ProduksiDempulForm
                     ->rules([
                         function () {
                             return function (string $attribute, $value, $fail) {
-                                $exists = ProduksiDempul::whereDate('tanggal', $value)->exists();
+                                $exists = ProduksiDempul::whereDate('tanggal_produksi', $value)->exists();
 
                                 if ($exists) {
                                     $fail('Tanggal ini sudah digunakan. Pilih tanggal lain.');
