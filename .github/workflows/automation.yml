@@ -256,8 +256,9 @@ jobs:
       - name: Debug - verify filament views exist
         if: steps.changed.outputs.mode != 'skip'
         run: |
-          find vendor/filament/filament/resources/views -iname "*grid*" || echo "NOT FOUND"
-          ls -la vendor/filament/filament/resources/views/components/ 2>/dev/null || echo "components dir missing"
+          find vendor/filament -iname "*grid*" 2>/dev/null
+          echo "---"
+          find vendor/filament -type d -iname "components" 2>/dev/null
 
       - name: Build Assets
         if: steps.frontend_check.outputs.rebuild == 'true'
