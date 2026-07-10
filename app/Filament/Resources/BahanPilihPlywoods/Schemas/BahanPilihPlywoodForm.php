@@ -2,14 +2,13 @@
 
 namespace App\Filament\Resources\BahanPilihPlywoods\Schemas;
 
-use Filament\Schemas\Schema;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use App\Models\BarangSetengahJadiHp;
 use App\Models\Grade;
-use Filament\Forms\Get;
 use App\Models\JenisBarang;
 use App\Models\SerahTerimaTriplekJadi;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Schema;
 
 class BahanPilihPlywoodForm
 {
@@ -28,33 +27,32 @@ class BahanPilihPlywoodForm
                     ->placeholder('-- Pilih Palet / Atau Abaikan untuk Input Manual di Bawah --')
                     ->options(function ($livewire) {
                         // Ambil ID Produksi Pilih Plywood yang sedang dibuka
-                        $ownerId = $livewire->ownerRecord?->id;
-                        
-                        if (! $ownerId) {
-                            return [];
-                        }
+                        // $ownerId = $livewire->ownerRecord?->id;
+
+                        // if (! $ownerId) {
+                        //     return [];
+                        // }
 
                         // Hanya tampilkan palet yang sudah DITERIMA pada produksi hari ini
                         return SerahTerimaTriplekJadi::with([
-                                'hasilSanding.barangSetengahJadi.jenisBarang',
-                                'hasilSanding.barangSetengahJadi.grade',
-                                'hasilGrajiTriplek.barangSetengahJadiHp.jenisBarang',
-                                'hasilGrajiTriplek.barangSetengahJadiHp.grade',
-                            ])
-                            ->where('id_produksi_pilih_plywood', $ownerId)
+                            'hasilSanding.barangSetengahJadi.jenisBarang',
+                            'hasilSanding.barangSetengahJadi.grade',
+                            'hasilGrajiTriplek.barangSetengahJadiHp.jenisBarang',
+                            'hasilGrajiTriplek.barangSetengahJadiHp.grade',
+                        ])
                             ->where('diterima_oleh', '!=', '-') // Pastikan statusnya sudah diterima
                             ->get()
                             ->mapWithKeys(function ($item) {
                                 $noPalet = $item->hasil?->no_palet ?? '-';
-                                $bsj     = $item->barang_setengah_jadi;
-                                $jenis   = $bsj?->jenisBarang?->nama_jenis_barang ?? 'Plywood';
-                                $grade   = $bsj?->grade?->nama_grade ?? '-';
-                                $sisa    = number_format($item->sisa);
-                                $total   = number_format($item->qty_asli);
+                                $bsj = $item->barang_setengah_jadi;
+                                $jenis = $bsj?->jenisBarang?->nama_jenis_barang ?? 'Plywood';
+                                $grade = $bsj?->grade?->nama_grade ?? '-';
+                                $sisa = number_format($item->sisa);
+                                $total = number_format($item->qty_asli);
 
                                 // Format tampilan di dropdown: Palet #2 — MERANTI (Grade FM) — Sisa: 1,243/1,243 Lbr
                                 return [
-                                    $item->id => "Palet #{$noPalet} — {$jenis} (Grade {$grade}) — Sisa: {$sisa} / {$total} Lbr"
+                                    $item->id => "Palet #{$noPalet} — {$jenis} (Grade {$grade}) — Sisa: {$sisa} / {$total} Lbr",
                                 ];
                             });
                     })
@@ -74,15 +72,15 @@ class BahanPilihPlywoodForm
                             return;
                         }
 
-                        $bsj   = $item->barang_setengah_jadi;
+                        $bsj = $item->barang_setengah_jadi;
                         $hasil = $item->hasil;
 
                         if ($bsj) {
-                            // 1. Set Filter Grade & Jenis Barang terlebih dahulu 
+                            // 1. Set Filter Grade & Jenis Barang terlebih dahulu
                             //    (PENTING: agar opsi barang setengah jadi di bawahnya bisa muncul/tervalidasi)
                             $set('grade_id', $bsj->id_grade);
                             $set('jenis_barang_id_filter', $bsj->id_jenis_barang);
-                            
+
                             // 2. Set ID Barang Setengah Jadi
                             $set('id_barang_setengah_jadi_hp', $bsj->id);
                         }
@@ -115,17 +113,19 @@ class BahanPilihPlywoodForm
                         })
                             ->orderBy('nama_grade')
                             ->get()
-                            ->mapWithKeys(fn($g) => [
+                            ->mapWithKeys(fn ($g) => [
                                 $g->id => ($g->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
-                                    . ' | ' . $g->nama_grade
+                                    .' | '.$g->nama_grade,
                             ])
                     )
                     // Tambahkan baris ini agar label yang benar muncul saat auto-fill
                     ->getOptionLabelUsing(function ($value) {
                         $g = Grade::with('kategoriBarang')->find($value);
-                        if (! $g) return '-';
-                        
-                        return ($g->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori') . ' | ' . $g->nama_grade;
+                        if (! $g) {
+                            return '-';
+                        }
+
+                        return ($g->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori').' | '.$g->nama_grade;
                     })
                     ->reactive()
                     ->searchable()
@@ -166,22 +166,24 @@ class BahanPilihPlywoodForm
 
                         return $query->get()->mapWithKeys(function ($b) {
                             return [
-                                $b->id => ($b->grade?->kategoriBarang?->nama_kategori ?? '-') . ' | ' .
-                                    ($b->ukuran?->nama_ukuran ?? '-') . ' | ' .
-                                    ($b->grade?->nama_grade ?? '-') . ' | ' .
-                                    ($b->jenisBarang?->nama_jenis_barang ?? '-')
+                                $b->id => ($b->grade?->kategoriBarang?->nama_kategori ?? '-').' | '.
+                                    ($b->ukuran?->nama_ukuran ?? '-').' | '.
+                                    ($b->grade?->nama_grade ?? '-').' | '.
+                                    ($b->jenisBarang?->nama_jenis_barang ?? '-'),
                             ];
                         });
                     })
                     // Tambahkan ini agar Filament tahu cara merender label saat state diubah via Set
                     ->getOptionLabelUsing(function ($value) {
                         $b = BarangSetengahJadiHp::with(['ukuran', 'jenisBarang', 'grade.kategoriBarang'])->find($value);
-                        
-                        if (! $b) return '-';
 
-                        return ($b->grade?->kategoriBarang?->nama_kategori ?? '-') . ' | ' .
-                               ($b->ukuran?->nama_ukuran ?? '-') . ' | ' .
-                               ($b->grade?->nama_grade ?? '-') . ' | ' .
+                        if (! $b) {
+                            return '-';
+                        }
+
+                        return ($b->grade?->kategoriBarang?->nama_kategori ?? '-').' | '.
+                               ($b->ukuran?->nama_ukuran ?? '-').' | '.
+                               ($b->grade?->nama_grade ?? '-').' | '.
                                ($b->jenisBarang?->nama_jenis_barang ?? '-');
                     })
                     ->columnSpanFull(),
@@ -201,10 +203,14 @@ class BahanPilihPlywoodForm
                         $idSerahTerima = $get('id_serah_terima_triplek_jadi');
                         $inputJumlah = (float) ($get('jumlah') ?? 0);
 
-                        if (! $idSerahTerima) return null;
+                        if (! $idSerahTerima) {
+                            return null;
+                        }
 
-                        $serahTerima = \App\Models\SerahTerimaTriplekJadi::find($idSerahTerima);
-                        if (! $serahTerima) return null;
+                        $serahTerima = SerahTerimaTriplekJadi::find($idSerahTerima);
+                        if (! $serahTerima) {
+                            return null;
+                        }
 
                         $sisaAkhir = $serahTerima->sisa - $inputJumlah;
 
@@ -212,15 +218,19 @@ class BahanPilihPlywoodForm
                     })
                     ->hintColor(function (callable $get) {
                         $idSerahTerima = $get('id_serah_terima_triplek_jadi');
-                        if (! $idSerahTerima) return 'gray';
+                        if (! $idSerahTerima) {
+                            return 'gray';
+                        }
 
-                        $serahTerima = \App\Models\SerahTerimaTriplekJadi::find($idSerahTerima);
-                        if (! $serahTerima) return 'gray';
+                        $serahTerima = SerahTerimaTriplekJadi::find($idSerahTerima);
+                        if (! $serahTerima) {
+                            return 'gray';
+                        }
 
                         $sisaAkhir = $serahTerima->sisa - (float) ($get('jumlah') ?? 0);
 
                         return $sisaAkhir < 0 ? 'danger' : 'success';
-                    })
+                    }),
             ]);
     }
 }
