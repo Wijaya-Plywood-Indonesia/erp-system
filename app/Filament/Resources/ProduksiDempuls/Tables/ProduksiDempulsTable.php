@@ -17,10 +17,17 @@ class ProduksiDempulsTable
 {
     public static function configure(Table $table): Table
     {
+        $currentHost = request()->getHost();
+
+        // 2. Tentukan nama kolom tanggal berdasarkan domain
+        $kolomTanggal = in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com'])
+            ? 'tanggal'
+            : 'tanggal_produksi';
+
         return $table
             ->columns([
-                TextColumn::make('tanggal_produksi')
-                    ->label('Tanggal Produksi')
+                TextColumn::make($kolomTanggal)
+                    ->label('Tanggal Dempul')
                     ->date('d/m/Y')
                     ->sortable()
                     ->searchable(),
