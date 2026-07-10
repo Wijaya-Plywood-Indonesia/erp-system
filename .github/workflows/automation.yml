@@ -270,7 +270,12 @@ jobs:
       
       - name: Run package discover
         if: steps.changed.outputs.mode != 'skip'
-        run: php artisan package:discover --ansi          
+        env:
+          BROADCAST_CONNECTION: log
+          REVERB_APP_KEY: "dummy-key"
+          REVERB_APP_SECRET: "dummy-secret"
+          REVERB_APP_ID: "123456"
+        run: php artisan package:discover --ansi        
 
       # ----------------------------------------------------------
       # STEP 3B: Buat ZIP — full atau delta
