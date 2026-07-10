@@ -263,10 +263,16 @@ jobs:
           REVERB_APP_SECRET: "dummy-secret"
           REVERB_APP_ID: "123456"
         run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
-      
-      - name: Build Assets
-        if: steps.frontend_check.outputs.rebuild == 'true'
-        run: npm run build
+
+      - name: Debug - verify filament views exist
+        if: steps.changed.outputs.mode != 'skip'
+        run: |
+          find vendor/filament/filament/resources/views -iname "*grid*" || echo "NOT FOUND"
+          ls -la vendor/filament/filament/resources/views/components/ 2>/dev/null || echo "components dir missing"
+            
+            - name: Build Assets
+              if: steps.frontend_check.outputs.rebuild == 'true'
+              run: npm run build
       
       - name: Run package discover
         if: steps.changed.outputs.mode != 'skip'
