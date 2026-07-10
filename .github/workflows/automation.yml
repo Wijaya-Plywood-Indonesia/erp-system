@@ -312,8 +312,8 @@ jobs:
           fi
 
           # Tambahkan vendor jika composer.lock berubah
-          if grep -q "^composer\.lock" /tmp/changed_files.txt 2>/dev/null; then
-            echo "📦 composer.lock berubah, include vendor/"
+          if grep -qE "^composer\.(json|lock)" /tmp/changed_files.txt 2>/dev/null; then
+            echo "📦 composer.json/lock berubah, include vendor/"
             find vendor -type f >> /tmp/changed_files.txt 2>/dev/null || true
           fi
 
