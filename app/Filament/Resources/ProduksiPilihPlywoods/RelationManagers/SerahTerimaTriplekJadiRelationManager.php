@@ -97,12 +97,13 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
                 TextColumn::make('pengaruh_stok')
                     ->label('Pengaruh Stok')
                     ->badge()
-                    ->state(fn ($record) => in_array($record->tipe_sumber, self::SUMBER_TANPA_STOK, true)
-                        ? 'Tidak Menambah Stok'
-                        : 'Menambah Stok')
-                    ->color(fn ($record) => in_array($record->tipe_sumber, self::SUMBER_TANPA_STOK, true)
-                        ? 'gray'
-                        : 'success'),
+                    ->state(function ($record) {
+                        return in_array($record->tipe_sumber, self::SUMBER_TANPA_STOK, true)
+                            ? 'Tidak Menambah Stok'
+                            : 'Menambah Stok';
+                    })
+                    ->color(fn ($state) => $state === 'Tidak Menambah Stok' ? 'gray' : 'success')
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('diterima_oleh')
                     ->label('Status Diterima')
