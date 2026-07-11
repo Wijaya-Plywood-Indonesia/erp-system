@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Symfony\Component\CssSelector\Node\FunctionNode;
 
 class ProduksiDempul extends Model
 {
@@ -32,5 +31,11 @@ class ProduksiDempul extends Model
     public function bahanDempuls()
     {
         return $this->hasMany(BahanDempul::class, 'id_produksi_dempul');
+    }
+
+    // ⬇️ INI YANG BELUM ADA — tambahkan method ini
+    public function serahTerimaTriplekCacat()
+    {
+        return $this->hasMany(SerahTerimaTriplekCacat::class, 'id_produksi_dempul');
     }
 }

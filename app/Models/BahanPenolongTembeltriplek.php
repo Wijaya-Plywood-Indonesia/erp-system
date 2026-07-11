@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BahanPenolongTembeltriplek extends Model
 {
@@ -22,5 +23,10 @@ class BahanPenolongTembeltriplek extends Model
     public function bahanPenolong()
     {
         return $this->belongsTo(BahanPenolongProduksi::class, 'id_bahan_penolong');
+    }
+
+    public function serahTerimaTriplekCacat(): BelongsTo
+    {
+        return $this->belongsTo(SerahTerimaTriplekCacat::class, 'id_serah_terima_triplek_cacat');
     }
 }

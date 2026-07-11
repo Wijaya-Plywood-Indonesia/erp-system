@@ -32,4 +32,10 @@ class ProduksiTembeltriplek extends Model
     {
         return $this->hasMany(BahanPenolongTembeltriplek::class, 'id_produksi_tembel_triplek');
     }
+
+    // ⬇️ INI YANG BELUM ADA — tambahkan method ini
+    public function serahTerimaTriplekCacat()
+    {
+        return $this->hasMany(SerahTerimaTriplekCacat::class, 'id_produksi_tembel_triplek');
+    }
 }
