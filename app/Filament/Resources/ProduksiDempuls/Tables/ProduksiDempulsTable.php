@@ -17,10 +17,17 @@ class ProduksiDempulsTable
 {
     public static function configure(Table $table): Table
     {
+        $currentHost = request()->getHost();
+
+        // 2. Tentukan nama kolom tanggal berdasarkan domain
+        $kolomTanggal = in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com'])
+            ? 'tanggal'
+            : 'tanggal_produksi';
+
         return $table
             ->columns([
-                TextColumn::make('tanggal')
-                    ->label('Tanggal Repair')
+                TextColumn::make($kolomTanggal)
+                    ->label('Tanggal Dempul')
                     ->date('d/m/Y')
                     ->sortable()
                     ->searchable(),
@@ -37,9 +44,9 @@ class ProduksiDempulsTable
             ])
             ->recordActions([
                 Action::make('kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn ($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'warning')
+                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Kendala')
@@ -61,7 +68,7 @@ class ProduksiDempulsTable
                             ->success()
                             ->send();
                     })
-                    ->modalHeading(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
                     ->modalSubmitActionLabel('Simpan'),
 
                 ViewAction::make(),

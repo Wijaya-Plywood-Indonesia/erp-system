@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers;
 
 use App\Models\HppTriplekJadiLog;
+use App\Models\HppTriplekMthLog;
 use App\Models\JenisKayu;
 use App\Models\SerahTerimaTriplekJadi;
 use App\Models\StokTriplekJadi;
+use App\Models\StokTriplekMth;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Placeholder;
 use Filament\Notifications\Notification;
@@ -288,5 +290,78 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
 
         // Simpan id log terakhir ke tabel stok jika kolomnya ada
         $stok->update(['id_last_log' => $log->id]);
+
+        // ── KURANGI STOK TRIPLEK MENTAH (boleh minus, crosscheck) ──
+        $this->kurangiStokTriplekMth($jenisKayu, $ukuran, $grade->nama_grade, $lembar, $serahTerima);
+    }
+
+    /**
+     * Kurangi Stok Triplek Mentah sesuai barang & qty yang diterima.
+     * Boleh minus (crosscheck).
+     */
+    protected function kurangiStokTriplekMth($jenisKayu, $ukuran, string $kwGrade, float $lembar, SerahTerimaTriplekJadi $serahTerima): void
+    {
+        $stokMth = StokTriplekMth::where('id_jenis_kayu', $jenisKayu->id)
+            ->where('panjang', $ukuran->panjang)
+            ->where('lebar', $ukuran->lebar)
+            ->where('tebal', $ukuran->tebal)
+            ->where('kw_grade', $kwGrade)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $stokMth) {
+            $stokMth = StokTriplekMth::create([
+                'id_jenis_kayu' => $jenisKayu->id,
+                'panjang' => $ukuran->panjang,
+                'lebar' => $ukuran->lebar,
+                'tebal' => $ukuran->tebal,
+                'kw_grade' => $kwGrade,
+                'stok_lembar' => 0,
+                'stok_kubikasi' => 0,
+                'nilai_stok' => 0,
+                'hpp_average' => 0,
+            ]);
+        }
+
+        $kubikasi = ($lembar * (float) $ukuran->panjang * (float) $ukuran->lebar * (float) $ukuran->tebal) / 10000000;
+
+        $stokLembarBefore = (float) $stokMth->stok_lembar;
+        $stokKubikasiBefore = (float) $stokMth->stok_kubikasi;
+        $nilaiStokBefore = (float) $stokMth->nilai_stok;
+
+        $stokMth->stok_lembar = $stokLembarBefore - $lembar;
+        $stokMth->stok_kubikasi = round($stokKubikasiBefore - $kubikasi, 6);
+        $stokMth->save();
+
+        $namaPenerima = Auth::user()->name;
+        $tanggalProduksi = date('d/m/Y', strtotime($this->getOwnerRecord()->tanggal_produksi));
+        $keperluan = 'Sanding';
+
+        $log = HppTriplekMthLog::create([
+            'id_jenis_kayu' => $jenisKayu->id,
+            'panjang' => $ukuran->panjang,
+            'lebar' => $ukuran->lebar,
+            'tebal' => $ukuran->tebal,
+            'kw_grade' => $kwGrade,
+            'tanggal' => now()->toDateString(),
+            'tipe_transaksi' => 'Keluar',
+            'keterangan' => "Dipakai produksi: {$keperluan} - Palet {$serahTerima->hasil?->no_palet} (oleh {$namaPenerima})",
+            'referensi_type' => SerahTerimaTriplekJadi::class,
+            'referensi_id' => $serahTerima->id,
+            'total_lembar' => $lembar,
+            'total_kubikasi' => $kubikasi,
+            'hpp_pekerja' => 0,
+            'hpp_bahan_penolong' => 0,
+            'hpp_average' => $stokMth->hpp_average,
+            'nilai_stok' => $nilaiStokBefore,
+            'stok_lembar_before' => $stokLembarBefore,
+            'stok_kubikasi_before' => $stokKubikasiBefore,
+            'nilai_stok_before' => $nilaiStokBefore,
+            'stok_lembar_after' => $stokMth->stok_lembar,
+            'stok_kubikasi_after' => $stokMth->stok_kubikasi,
+            'nilai_stok_after' => $nilaiStokBefore,
+        ]);
+
+        $stokMth->update(['id_last_log' => $log->id]);
     }
 }
