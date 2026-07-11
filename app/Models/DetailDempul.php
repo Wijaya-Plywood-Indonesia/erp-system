@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\ProductionUpdated;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -12,13 +13,16 @@ class DetailDempul extends Model
     protected $fillable = [
         'id_produksi_dempul',
         'id_barang_setengah_jadi_hp',
+        'id_serah_terima_triplek_cacat',
         'modal',
         'hasil',
         'nomor_palet',
         'jam_masuk',
         'jam_pulang',
         'ijin',
-        'keterangan'
+        'keterangan',
+        'diserahkan_oleh',
+        'diserahkan_at',
     ];
 
     public function produksiDempul(): BelongsTo
@@ -36,6 +40,11 @@ class DetailDempul extends Model
         return $this->belongsTo(BarangSetengahJadiHp::class, 'id_barang_setengah_jadi_hp');
     }
 
+    public function serahTerimaTriplekCacat(): BelongsTo
+    {
+        return $this->belongsTo(SerahTerimaTriplekCacat::class, 'id_serah_terima_triplek_cacat');
+    }
+
     public function pegawais()
     {
         return $this->belongsToMany(
@@ -48,17 +57,21 @@ class DetailDempul extends Model
 
     protected static function booted()
     {
-        // Menggunakan static::saved mencakup Created dan Updated
         static::saved(function ($model) {
             if ($model->id_produksi_dempul) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_dempul, 'dempul');
+                ProductionUpdated::dispatch($model->id_produksi_dempul, 'dempul');
             }
         });
 
         static::deleted(function ($model) {
             if ($model->id_produksi_dempul) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_dempul, 'dempul');
+                ProductionUpdated::dispatch($model->id_produksi_dempul, 'dempul');
             }
         });
+    }
+
+    public function serahTerimaTriplekJadi()
+    {
+        return $this->hasOne(SerahTerimaTriplekJadi::class, 'id_detail_dempul');
     }
 }

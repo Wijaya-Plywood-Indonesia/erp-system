@@ -18,4 +18,9 @@ class BahanDempul extends Model
     {
         return $this->belongsTo(ProduksiDempul::class, 'id_produksi_dempul');
     }
+
+    public function serahTerimaTriplekCacat(): BelongsTo
+    {
+        return $this->belongsTo(SerahTerimaTriplekCacat::class, 'id_serah_terima_triplek_cacat');
+    }
 }

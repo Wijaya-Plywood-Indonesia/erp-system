@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
-use Symfony\Component\CssSelector\Node\FunctionNode;
+use Illuminate\Support\Facades\Schema;
 
 class ProduksiDempul extends Model
 {
@@ -33,5 +34,33 @@ class ProduksiDempul extends Model
     public function bahanDempuls()
     {
         return $this->hasMany(BahanDempul::class, 'id_produksi_dempul');
+    }
+
+    // ⬇️ INI YANG BELUM ADA — tambahkan method ini
+    public function serahTerimaTriplekCacat()
+    {
+        return $this->hasMany(SerahTerimaTriplekCacat::class, 'id_produksi_dempul');
+    }
+
+    protected function tanggalDempul(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->{static::kolomTanggalAktif()},
+        );
+    }
+
+    public static function kolomTanggalAktif(): string
+    {
+        static $kolom = null;
+
+        if ($kolom !== null) {
+            return $kolom;
+        }
+
+        if (Schema::hasColumn('produksi_dempuls', 'tanggal')) {
+            return $kolom = 'tanggal';
+        }
+
+        return $kolom = 'tanggal_produksi';
     }
 }

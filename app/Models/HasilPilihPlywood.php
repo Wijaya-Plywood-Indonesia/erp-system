@@ -40,15 +40,14 @@ class HasilPilihPlywood extends Model
     {
         return $this->belongsToMany(
             Pegawai::class,
-            'hasil_pilih_plywood_pegawai', // Nama tabel pivot
-            'id_hasil_pilih_plywood',      // Foreign key model ini
-            'id_pegawai'                   // Foreign key model Pegawai
+            'hasil_pilih_plywood_pegawai',
+            'id_hasil_pilih_plywood',
+            'id_pegawai'
         );
     }
 
     protected static function booted()
     {
-        // Menggunakan static::saved mencakup Created dan Updated
         static::saved(function ($model) {
             if ($model->id_produksi_pilih_plywood) {
                 ProductionUpdated::dispatch($model->id_produksi_pilih_plywood, 'pilih_plywood');
@@ -62,9 +61,17 @@ class HasilPilihPlywood extends Model
         });
     }
 
-    // Tambahkan di HasilPilihPlywood.php
     public function serahTerimaGudangSatu()
     {
         return $this->hasOne(SerahTerimaGudangSatu::class, 'id_hasil_pilih_plywood');
+    }
+
+    /**
+     * Satu HasilPilihPlywood cacat hanya boleh diserahkan sekali (hasOne),
+     * dijamin juga oleh unique constraint di migration.
+     */
+    public function serahTerimaTriplekCacat()
+    {
+        return $this->hasOne(SerahTerimaTriplekCacat::class, 'id_hasil_pilih_plywood');
     }
 }

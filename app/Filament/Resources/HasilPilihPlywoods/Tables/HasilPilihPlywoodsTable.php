@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\HasilPilihPlywoods\Tables;
 
 use App\Models\SerahTerimaGudangSatu;
+use App\Models\SerahTerimaTriplekCacat;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -16,6 +17,7 @@ use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class HasilPilihPlywoodsTable
 {
@@ -30,6 +32,7 @@ class HasilPilihPlywoodsTable
                     'barangSetengahJadiHp.jenisBarang',
                     'barangSetengahJadiHp.grade',
                     'serahTerimaGudangSatu',
+                    'serahTerimaTriplekCacat',
                 ])
             )
 
@@ -108,7 +111,6 @@ class HasilPilihPlywoodsTable
                     ->weight('bold')
                     ->summarize(Sum::make()->label('Total Bagus')),
 
-                // Kolom perhitungan total yang dikerjakan (Bagus + Cacat)
                 TextColumn::make('total_kerja')
                     ->label('Total Dikerjakan')
                     ->getStateUsing(fn ($record) => $record->jumlah + $record->jumlah_bagus)
@@ -121,7 +123,7 @@ class HasilPilihPlywoodsTable
                     ->wrap(),
 
                 TextColumn::make('status_serah')
-                    ->label('Status Serah')
+                    ->label('Status Serah (Bagus)')
                     ->getStateUsing(function ($record) {
                         $serah = $record->serahTerimaGudangSatu;
 
@@ -134,6 +136,32 @@ class HasilPilihPlywoodsTable
                     ->badge()
                     ->color(function ($record) {
                         $serah = $record->serahTerimaGudangSatu;
+
+                        if (! $serah) {
+                            return 'gray';
+                        }
+
+                        return $serah->diterima_oleh === '-' ? 'warning' : 'success';
+                    }),
+
+                TextColumn::make('status_serah_cacat')
+                    ->label('Status Serah (Cacat)')
+                    ->getStateUsing(function ($record) {
+                        $serah = $record->serahTerimaTriplekCacat;
+
+                        if (! $serah) {
+                            return 'Belum Diserahkan';
+                        }
+
+                        $tujuan = $serah->labelTujuan;
+
+                        return $serah->diterima_oleh === '-'
+                            ? "Menunggu Diterima ({$tujuan})"
+                            : "Diterima ({$tujuan})";
+                    })
+                    ->badge()
+                    ->color(function ($record) {
+                        $serah = $record->serahTerimaTriplekCacat;
 
                         if (! $serah) {
                             return 'gray';
@@ -159,7 +187,7 @@ class HasilPilihPlywoodsTable
                     ->requiresConfirmation()
                     ->modalHeading('Serahkan barang ini ke Gudang 1?')
                     ->modalDescription(fn ($record) => 'Jumlah bagus: '.($record->jumlah_bagus ?? 0).' pcs. Barang akan masuk antrian penerimaan Gudang 1.')
-                    ->visible(fn ($record) => ! $record->serahTerimaGudangSatu)
+                    ->visible(fn ($record) => ! $record->serahTerimaGudangSatu && $record->jumlah_bagus > 0)
                     ->action(function ($record) {
                         try {
                             SerahTerimaGudangSatu::create([
@@ -183,10 +211,52 @@ class HasilPilihPlywoodsTable
                         }
                     }),
 
-                EditAction::make(),
+                Action::make('serah_cacat')
+                    ->label('Serah Barang Cacat')
+                    ->color('danger')
+                    ->icon('heroicon-o-arrow-right-circle')
+                    ->requiresConfirmation()
+                    ->modalHeading('Serahkan barang cacat ini?')
+                    ->modalDescription(fn ($record) => 'Jumlah cacat: '.($record->jumlah ?? 0).' pcs. Barang akan tersedia di Dempul dan Tembel Triplek — siapa yang menerima duluan yang dapat.')
+                    ->visible(fn ($record) => ! $record->serahTerimaTriplekCacat && $record->jumlah > 0)
+                    ->action(function ($record) {
+                        try {
+                            DB::transaction(function () use ($record) {
+                                $fresh = $record->newQuery()->lockForUpdate()->find($record->id);
+
+                                if ($fresh->serahTerimaTriplekCacat()->exists()) {
+                                    throw new \RuntimeException('Barang cacat ini sudah pernah diserahkan.');
+                                }
+
+                                SerahTerimaTriplekCacat::create([
+                                    'id_hasil_pilih_plywood' => $fresh->id,
+                                    'tujuan' => null, // belum ditentukan — diisi saat diterima
+                                    'diserahkan_oleh' => Auth::user()->name,
+                                    'diterima_oleh' => '-',
+                                    'status' => 'Menunggu Diterima',
+                                ]);
+                            });
+
+                            Notification::make()
+                                ->title('Berhasil diserahkan')
+                                ->body('Barang tersedia di Dempul dan Tembel Triplek.')
+                                ->success()
+                                ->send();
+                        } catch (\Throwable $e) {
+                            Notification::make()
+                                ->title('Gagal')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
+                EditAction::make()
+                    ->hidden(fn ($record) => (bool) $record->serahTerimaGudangSatu
+                        || ($record->serahTerimaTriplekCacat && $record->serahTerimaTriplekCacat->diterima_oleh !== '-')),
 
                 DeleteAction::make()
-                    ->hidden(fn ($record) => (bool) $record->serahTerimaGudangSatu),
+                    ->hidden(fn ($record) => (bool) $record->serahTerimaGudangSatu
+                        || (bool) $record->serahTerimaTriplekCacat),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

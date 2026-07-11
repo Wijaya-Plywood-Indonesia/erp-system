@@ -1,36 +1,29 @@
 <?php
 
-namespace App\Filament\Resources\ProduksiDempuls\Tables;
+namespace App\Filament\Resources\ProduksiTembelTripleks\Tables;
 
-use App\Models\ProduksiDempul;
-use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-use Filament\Forms\Components\Textarea;
-use Filament\Notifications\Notification;
-use Filament\Tables\Columns\TextColumn;
+use Filament\Actions\DeleteAction;
 use Filament\Tables\Table;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification;
+use Filament\Forms\Components\Textarea;
 
-class ProduksiDempulsTable
+class ProduksiTembelTripleksTable
 {
     public static function configure(Table $table): Table
     {
-        $kolomTanggal = ProduksiDempul::kolomTanggalAktif();
-
         return $table
             ->columns([
-                TextColumn::make('tanggal_dempul')
-                    ->label('Tanggal Dempul')
+                TextColumn::make('tanggal')
+                    ->label('Tanggal Produksi')
                     ->date('d/m/Y')
-                    ->sortable(query: function ($query, string $direction) use ($kolomTanggal) {
-                        return $query->orderBy($kolomTanggal, $direction);
-                    })
-                    ->searchable(query: function ($query, string $search) use ($kolomTanggal) {
-                        return $query->whereDate($kolomTanggal, 'like', "%{$search}%");
-                    }),
+                    ->sortable()
+                    ->searchable(),
 
                 TextColumn::make('kendala')
                     ->label('Kendala')
@@ -39,9 +32,8 @@ class ProduksiDempulsTable
                     ->sortable()
                     ->searchable(),
             ])
-            ->defaultSort($kolomTanggal, 'desc') // ⬅️ urutkan terbaru di atas secara default
             ->filters([
-                //
+                // Tambahkan filter jika diperlukan nanti
             ])
             ->recordActions([
                 Action::make('kendala')
@@ -79,17 +71,17 @@ class ProduksiDempulsTable
                 DeleteAction::make()
                     ->before(function ($record, DeleteAction $action) {
 
-                        // 🔒 cek relasi sebelum delete
+                        // 🔒 Cek relasi sebelum mendelete data produksi utama
                         $hasRelation =
-                            $record->rencanaPegawaiDempuls()->exists() ||
-                            $record->detailDempuls()->exists() ||
-                            $record->validasiDempuls()->exists() ||
-                            $record->bahanDempuls()->exists();
+                            $record->pegawaiTembeltriplek()->exists() ||
+                            $record->hasilTembeltriplek()->exists() ||
+                            $record->validasiTembeltriplek()->exists() ||
+                            $record->bahanPenolongTembeltriplek()->exists();
 
                         if ($hasRelation) {
                             Notification::make()
                                 ->title('Gagal menghapus data')
-                                ->body('Data produksi tidak dapat dihapus karena masih memiliki data terkait.')
+                                ->body('Data produksi tidak dapat dihapus karena masih memiliki data terkait (Pegawai, Hasil, Validasi, atau Bahan Penolong).')
                                 ->danger()
                                 ->send();
 

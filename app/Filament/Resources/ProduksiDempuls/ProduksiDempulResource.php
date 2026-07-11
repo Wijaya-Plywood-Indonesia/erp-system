@@ -6,28 +6,30 @@ use App\Filament\Resources\ProduksiDempuls\Pages\CreateProduksiDempul;
 use App\Filament\Resources\ProduksiDempuls\Pages\EditProduksiDempul;
 use App\Filament\Resources\ProduksiDempuls\Pages\ListProduksiDempuls;
 use App\Filament\Resources\ProduksiDempuls\Pages\ViewProduksiDempul;
+use App\Filament\Resources\ProduksiDempuls\RelationManagers\BahanDempulRelationManager;
+use App\Filament\Resources\ProduksiDempuls\RelationManagers\DetailDempulRelationManager;
+use App\Filament\Resources\ProduksiDempuls\RelationManagers\RencanaPegawaiDempulRelationManager;
 use App\Filament\Resources\ProduksiDempuls\RelationManagers\ValidasiDempulRelationManager;
 use App\Filament\Resources\ProduksiDempuls\Schemas\ProduksiDempulForm;
 use App\Filament\Resources\ProduksiDempuls\Schemas\ProduksiDempulInfolist;
 use App\Filament\Resources\ProduksiDempuls\Tables\ProduksiDempulsTable;
+use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\SerahTerimaTriplekCacatRelationManager;
 use App\Models\ProduksiDempul;
 use BackedEnum;
-use UnitEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-
-use App\Filament\Resources\ProduksiDempuls\RelationManagers\RencanaPegawaiDempulRelationManager;
-use App\Filament\Resources\ProduksiDempuls\RelationManagers\DetailDempulRelationManager;
-use App\Filament\Resources\ProduksiDempuls\RelationManagers\BahanDempulRelationManager;
+use UnitEnum;
 
 class ProduksiDempulResource extends Resource
 {
     protected static ?string $model = ProduksiDempul::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
     protected static string|UnitEnum|null $navigationGroup = 'Finishing';
+
     protected static ?int $navigationSort = 1;
 
     public static function form(Schema $schema): Schema
@@ -48,6 +50,7 @@ class ProduksiDempulResource extends Resource
     public static function getRelations(): array
     {
         return [
+            SerahTerimaTriplekCacatRelationManager::class,
             BahanDempulRelationManager::class,
             RencanaPegawaiDempulRelationManager::class,
             DetailDempulRelationManager::class,
