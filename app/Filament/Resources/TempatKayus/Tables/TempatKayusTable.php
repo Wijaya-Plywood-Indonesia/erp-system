@@ -214,6 +214,21 @@ class TempatKayusTable
                     ->color(fn($state) => $state == 260 ? 'success' : 'info')
                     ->toggleable(),
 
+                TextColumn::make('jenis_kayu')
+    ->label('Jenis Kayu')
+    ->getStateUsing(function ($record) {
+        // $record pada tabel ini sudah merupakan representasi dari HppAverageSummarie per lahan & panjang
+        $summary = \App\Models\HppAverageSummarie::with('jenisKayu')
+            ->where('id_lahan', $record->id_lahan)
+            ->where('panjang', $record->group_panjang)
+            ->where('stok_batang', '>', 0)
+            ->first();
+
+        return $summary?->jenisKayu?->nama_kayu ?: '-';
+    })
+    ->searchable()
+    ->toggleable(),
+
                 TextColumn::make('total_batang_riil')
                     ->label('Batang')
                     ->getStateUsing(function ($record) {
