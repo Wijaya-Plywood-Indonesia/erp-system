@@ -227,9 +227,9 @@
                             {{ number_format(max(0, $m3Saldo), 4) }} m³
                         </td>
                         <td class="px-4 py-3 bg-blue-50/10 dark:bg-blue-900/5"></td>
-                        <td class="px-4 py-3 text-right tabular-nums bg-amber-50/50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 font-black">
+                        {{-- <td class="px-4 py-3 text-right tabular-nums bg-amber-50/50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 font-black">
                             {{ $lastLog ? number_format($lastLog->hpp_average, 0, ',', '.').' /m³' : '—' }}
-                        </td>
+                        </td> --}}
                     </tr>
                 </tfoot>
                 @endif

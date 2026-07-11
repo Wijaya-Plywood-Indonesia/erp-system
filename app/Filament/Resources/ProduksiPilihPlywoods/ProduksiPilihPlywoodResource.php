@@ -7,9 +7,9 @@ use App\Filament\Resources\ProduksiPilihPlywoods\Pages\CreateProduksiPilihPlywoo
 use App\Filament\Resources\ProduksiPilihPlywoods\Pages\EditProduksiPilihPlywood;
 use App\Filament\Resources\ProduksiPilihPlywoods\Pages\ListProduksiPilihPlywoods;
 use App\Filament\Resources\ProduksiPilihPlywoods\Pages\ViewProduksiPilihPlywood;
+use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\SerahTerimaTriplekJadiRelationManager;
 use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\BahanPilihPlywoodRelationManager;
 use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\HasilPilihPlywoodRelationManager;
-use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\ListPekerjaanMenumpukRelationManager;
 use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\PegawaiPilihPlywoodRelationManager;
 use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\ValidasiPilihPlywoodRelationManager;
 use App\Filament\Resources\ProduksiPilihPlywoods\Schemas\ProduksiPilihPlywoodForm;
@@ -52,6 +52,7 @@ class ProduksiPilihPlywoodResource extends Resource
     public static function getRelations(): array
     {
         return [
+            SerahTerimaTriplekJadiRelationManager::class,
             BahanPilihPlywoodRelationManager::class,
             PegawaiPilihPlywoodRelationManager::class,
             HasilPilihPlywoodRelationManager::class,

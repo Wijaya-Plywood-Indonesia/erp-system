@@ -2,15 +2,15 @@
 
 namespace App\Filament\Resources\ProduksiHotPresses\RelationManagers;
 
-use App\Models\HppPlatformMthLog;
 use App\Models\JenisKayu;
 use App\Models\PlatformHasilHp;
 use App\Models\ProduksiGrajitriplek;
 use App\Models\ProduksiHp;
 use App\Models\ProduksiSanding;
 use App\Models\SerahTerimaHp;
-use App\Models\StokPlatformMth;
 use App\Models\TriplekHasilHp;
+use App\Services\StokPlatformMthService;
+use App\Services\StokTriplekMthService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -27,6 +27,15 @@ use Illuminate\Support\Facades\DB;
 class SerahTerimaHpRelationManager extends RelationManager
 {
     private const ROLE_ADMIN = ['super_admin', 'Super Admin', 'admin_kayu'];
+
+    /**
+     * Mapping dari `tipe` (tab yang sedang dibuka) ke value kolom `tujuan`.
+     * 'hp' tidak dipetakan karena tab HP adalah sumber, bukan tujuan.
+     */
+    private const TIPE_TO_TUJUAN = [
+        'graji' => 'graji_triplek',
+        'sanding' => 'sanding',
+    ];
 
     protected static string $relationship = 'serahTerimaHp';
 
@@ -52,19 +61,22 @@ class SerahTerimaHpRelationManager extends RelationManager
 
     /**
      * Ambil data ringkas dari record untuk ditampilkan di preview modal terima.
-     * Bekerja untuk sumber triplek maupun platform lewat accessor `hasil`.
+     * Bekerja untuk semua sumber (triplek HP, platform HP, hasil Graji, hasil Sanding)
+     * lewat accessor `hasil`, `barangSetengahJadi`, dan `jumlah` di model SerahTerimaHp.
      */
     protected function getPreviewData($record): array
     {
         $hasil = $record->hasil;
+        $bsj = $record->barangSetengahJadi;
 
         return [
             'no_palet' => $hasil?->no_palet ?? '-',
-            'jenis_barang' => $hasil?->barangSetengahJadi?->jenisBarang?->nama_jenis_barang ?? '-',
-            'grade' => $hasil?->barangSetengahJadi?->grade?->nama_grade ?? '-',
-            'ukuran' => $hasil?->barangSetengahJadi?->ukuran?->nama_ukuran ?? '-',
-            'isi' => $hasil?->isi ?? '-',
+            'jenis_barang' => $bsj?->jenisBarang?->nama_jenis_barang ?? '-',
+            'grade' => $bsj?->grade?->nama_grade ?? '-',
+            'ukuran' => $bsj?->ukuran?->nama_ukuran ?? '-',
+            'isi' => $record->jumlah ?? '-',
             'dari_mesin' => $hasil?->mesin?->nama_mesin ?? '-',
+            'asal' => $record->asalLabel,
         ];
     }
 
@@ -82,6 +94,13 @@ class SerahTerimaHpRelationManager extends RelationManager
             'platformHasilHp.barangSetengahJadi.jenisBarang',
             'platformHasilHp.barangSetengahJadi.grade',
             'platformHasilHp.barangSetengahJadi.ukuran',
+            'hasilGrajiTriplek.barangSetengahJadiHp.jenisBarang',
+            'hasilGrajiTriplek.barangSetengahJadiHp.grade',
+            'hasilGrajiTriplek.barangSetengahJadiHp.ukuran',
+            'hasilSanding.mesin',
+            'hasilSanding.barangSetengahJadi.jenisBarang',
+            'hasilSanding.barangSetengahJadi.grade',
+            'hasilSanding.barangSetengahJadi.ukuran',
         ];
 
         return $table
@@ -106,8 +125,10 @@ class SerahTerimaHpRelationManager extends RelationManager
                 }
 
                 if ($tipe === 'graji') {
+                    // Menuju Graji Triplek: cukup filter langsung dari kolom `tujuan`
+                    // (mencakup dari hotpress via id_triplek_hasil_hp ATAU serah manual dari Sanding).
                     return $query
-                        ->whereNotNull('id_triplek_hasil_hp')
+                        ->where('tujuan', self::TIPE_TO_TUJUAN['graji'])
                         ->where(function ($q) use ($ownerId) {
                             $q->where('diterima_oleh', '-')
                                 ->orWhere('id_produksi_graji_triplek', $ownerId);
@@ -117,8 +138,10 @@ class SerahTerimaHpRelationManager extends RelationManager
                 }
 
                 if ($tipe === 'sanding') {
+                    // Menuju Sanding: cukup filter langsung dari kolom `tujuan`
+                    // (mencakup dari hotpress via id_platform_hasil_hp ATAU serah manual dari Graji Triplek).
                     return $query
-                        ->whereNotNull('id_platform_hasil_hp')
+                        ->where('tujuan', self::TIPE_TO_TUJUAN['sanding'])
                         ->where(function ($q) use ($ownerId) {
                             $q->where('diterima_oleh', '-')
                                 ->orWhere('id_produksi_sanding', $ownerId);
@@ -136,37 +159,38 @@ class SerahTerimaHpRelationManager extends RelationManager
                     ->badge()
                     ->color('info'),
 
-                TextColumn::make('tipe_sumber')
-                    ->label('Jenis')
+                TextColumn::make('asal_label')
+                    ->label('Asal')
+                    ->state(fn ($record) => $record->asalLabel)
                     ->badge()
-                    ->state(fn ($record) => $record->tipeSumber === 'platform' ? 'Platform' : 'Triplek')
-                    ->color(fn ($record) => $record->tipeSumber === 'platform' ? 'purple' : 'info'),
+                    ->color(fn ($record) => match ($record->asalLabel) {
+                        'Hotpress' => 'info',
+                        'Graji Triplek' => 'warning',
+                        'Sanding' => 'purple',
+                        default => 'gray',
+                    }),
 
                 TextColumn::make('mesin')
                     ->label('Mesin')
-                    ->state(fn ($record) => $record->hasil?->mesin?->nama_mesin ?? '-')->toggleable(isToggledHiddenByDefault : true),
+                    ->state(fn ($record) => $record->hasil?->mesin?->nama_mesin ?? '-')
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('jenis_barang')
                     ->label('Jenis Barang')
-                    ->state(fn ($record) => $record->hasil?->barangSetengahJadi?->jenisBarang?->nama_jenis_barang ?? '-'),
+                    ->state(fn ($record) => $record->barangSetengahJadi?->jenisBarang?->nama_jenis_barang ?? '-'),
 
                 TextColumn::make('grade')
                     ->label('Grade')
-                    ->state(fn ($record) => $record->hasil?->barangSetengahJadi?->grade?->nama_grade ?? '-'),
+                    ->state(fn ($record) => $record->barangSetengahJadi?->grade?->nama_grade ?? '-'),
 
                 TextColumn::make('ukuran')
                     ->label('Ukuran')
-                    ->state(fn ($record) => $record->hasil?->barangSetengahJadi?->ukuran?->nama_ukuran ?? '-'),
+                    ->state(fn ($record) => $record->barangSetengahJadi?->ukuran?->nama_ukuran ?? '-'),
 
                 TextColumn::make('isi')
                     ->label('Jumlah Lembar')
-                    ->state(fn ($record) => $record->hasil?->isi ?? '-')
+                    ->state(fn ($record) => $record->jumlah ?? '-')
                     ->alignCenter(),
-
-                // Kolom "Jenis" (Platform/Triplek) — tampil default khusus di tab
-                // Serah (hp), karena di sana bisa campur dua sumber sekaligus.
-                // Di tab Graji/Sanding disembunyikan default karena sumbernya
-                // sudah pasti satu jenis saja.
 
                 TextColumn::make('diserahkan_oleh')
                     ->label('Diserahkan Oleh')
@@ -184,7 +208,7 @@ class SerahTerimaHpRelationManager extends RelationManager
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->color(fn ($state) => match ($state) {
                         'Terima Triplek', 'Terima Platform' => 'success',
-                        'Serah Triplek', 'Serah Platform' => 'warning',
+                        'Serah Triplek', 'Serah Platform', 'Serah ke Sanding', 'Serah ke Graji' => 'warning',
                         default => 'gray',
                     }),
 
@@ -193,6 +217,7 @@ class SerahTerimaHpRelationManager extends RelationManager
                     ->dateTime('d/m/Y H:i:s')
                     ->sortable(),
             ])
+
             ->actions([
                 Action::make('terima')
                     ->label('Terima')
@@ -210,6 +235,10 @@ class SerahTerimaHpRelationManager extends RelationManager
                                     Placeholder::make('preview_no_palet')
                                         ->label('No. Palet')
                                         ->content($preview['no_palet']),
+
+                                    Placeholder::make('preview_asal')
+                                        ->label('Asal')
+                                        ->content($preview['asal']),
 
                                     Placeholder::make('preview_jenis_barang')
                                         ->label('Jenis Barang')
@@ -233,19 +262,20 @@ class SerahTerimaHpRelationManager extends RelationManager
                                 ]),
                         ];
                     })
-                    // Muncul kalau dibuka dari Graji (khusus sumber triplek)
-                    // atau dari Sanding (khusus sumber platform), dan belum diterima
+                    // Muncul kalau tujuannya sesuai dengan tab yang sedang dibuka, dan belum diterima.
                     ->visible(function ($record) use ($tipe) {
                         if ($record->diterima_oleh !== '-') {
                             return false;
                         }
 
-                        return ($tipe === 'graji' && $record->id_triplek_hasil_hp !== null)
-                            || ($tipe === 'sanding' && $record->id_platform_hasil_hp !== null);
+                        return $record->tujuan === (self::TIPE_TO_TUJUAN[$tipe] ?? null);
                     })
                     ->action(function ($record) use ($ownerId, $tipe) {
+                        $stokTriplekService = app(StokTriplekMthService::class);
+                        $stokPlatformService = app(StokPlatformMthService::class);
+
                         try {
-                            DB::transaction(function () use ($record, $ownerId, $tipe) {
+                            DB::transaction(function () use ($record, $ownerId, $tipe, $stokTriplekService, $stokPlatformService) {
                                 $fresh = SerahTerimaHp::lockForUpdate()->find($record->id);
 
                                 if (! $fresh || $fresh->diterima_oleh !== '-') {
@@ -256,10 +286,15 @@ class SerahTerimaHpRelationManager extends RelationManager
                                     $fresh->update([
                                         'diterima_oleh' => Auth::user()->name.' - Graji Triplek',
                                         'id_produksi_graji_triplek' => $ownerId,
-                                        'status' => 'Terima Triplek',
+                                        'status' => $fresh->id_triplek_hasil_hp ? 'Terima Triplek' : 'Terima dari Sanding',
                                     ]);
 
-                                    // Stok triplek belum diupdate di sini — menyusul
+                                    // Stok triplek BERTAMBAH hanya kalau barang berasal dari hotpress.
+                                    // Serah manual dari Sanding -> Graji tidak mengubah stok (sementara).
+                                    if ($fresh->id_triplek_hasil_hp) {
+                                        $this->prosesTerimaTriplek($fresh, $stokTriplekService);
+                                    }
+
                                     return;
                                 }
 
@@ -267,10 +302,14 @@ class SerahTerimaHpRelationManager extends RelationManager
                                     $fresh->update([
                                         'diterima_oleh' => Auth::user()->name.' - Sanding',
                                         'id_produksi_sanding' => $ownerId,
-                                        'status' => 'Terima Platform',
+                                        'status' => $fresh->id_platform_hasil_hp ? 'Terima Platform' : 'Terima dari Graji',
                                     ]);
 
-                                    $this->tambahStokPlatform($fresh);
+                                    // Stok platform BERTAMBAH hanya kalau barang berasal dari hotpress.
+                                    // Serah manual dari Graji -> Sanding tidak mengubah stok (sementara).
+                                    if ($fresh->id_platform_hasil_hp) {
+                                        $this->prosesTerimaPlatform($fresh, $stokPlatformService);
+                                    }
                                 }
                             });
 
@@ -297,10 +336,56 @@ class SerahTerimaHpRelationManager extends RelationManager
     }
 
     /**
-     * Tambah stok platform mentah + catat log HPP saat sanding menerima
-     * hasil platform dari hotpress. HPP belum dihitung (0 dulu, menyusul).
+     * Resolve data dari hasil triplek HP, lalu delegasikan penambahan stok
+     * ke StokTriplekMthService. HPP belum dihitung (0 dulu, menyusul).
      */
-    protected function tambahStokPlatform(SerahTerimaHp $serahTerima): void
+    protected function prosesTerimaTriplek(SerahTerimaHp $serahTerima, StokTriplekMthService $service): void
+    {
+        $hasil = $serahTerima->triplekHasilHp()
+            ->with('barangSetengahJadi.ukuran', 'barangSetengahJadi.grade', 'barangSetengahJadi.jenisBarang')
+            ->first();
+
+        if (! $hasil || ! $hasil->barangSetengahJadi) {
+            throw new \RuntimeException('Data barang setengah jadi tidak ditemukan.');
+        }
+
+        $ukuran = $hasil->barangSetengahJadi->ukuran;
+        $grade = $hasil->barangSetengahJadi->grade;
+        $jenisBarang = $hasil->barangSetengahJadi->jenisBarang;
+
+        if (! $ukuran || ! $grade || ! $jenisBarang) {
+            throw new \RuntimeException('Data ukuran, grade, atau jenis barang tidak lengkap.');
+        }
+
+        // "Jenis Barang" pada hasil triplek sebenarnya merepresentasikan jenis kayu,
+        // tapi disimpan lewat tabel jenis_barang (bukan jenis_kayus) — dicocokkan by nama.
+        $jenisKayu = JenisKayu::where('nama_kayu', $jenisBarang->nama_jenis_barang)->first();
+
+        if (! $jenisKayu) {
+            throw new \RuntimeException("Jenis kayu \"{$jenisBarang->nama_jenis_barang}\" tidak ditemukan di data Jenis Kayu. Mohon samakan penamaan atau tambahkan datanya terlebih dahulu.");
+        }
+
+        $lembar = (float) $hasil->isi;
+        $kubikasi = $lembar * (float) $ukuran->kubikasi / 10000000;
+
+        $service->tambah(
+            idJenisKayu: $jenisKayu->id,
+            panjang: $ukuran->panjang,
+            lebar: $ukuran->lebar,
+            tebal: $ukuran->tebal,
+            kwGrade: $grade->nama_grade,
+            lembar: $lembar,
+            kubikasi: $kubikasi,
+            keterangan: 'Masuk dari Graji — terima triplek dari hotpress (via serah terima #'.$serahTerima->id.')',
+            referensi: $serahTerima,
+        );
+    }
+
+    /**
+     * Resolve data dari hasil platform HP, lalu delegasikan penambahan stok
+     * ke StokPlatformMthService. HPP belum dihitung (0 dulu, menyusul).
+     */
+    protected function prosesTerimaPlatform(SerahTerimaHp $serahTerima, StokPlatformMthService $service): void
     {
         $hasil = $serahTerima->platformHasilHp()
             ->with('barangSetengahJadi.ukuran', 'barangSetengahJadi.grade', 'barangSetengahJadi.jenisBarang')
@@ -326,62 +411,19 @@ class SerahTerimaHpRelationManager extends RelationManager
             throw new \RuntimeException("Jenis kayu \"{$jenisBarang->nama_jenis_barang}\" tidak ditemukan di data Jenis Kayu. Mohon samakan penamaan atau tambahkan datanya terlebih dahulu.");
         }
 
-        $idJenisKayu = $jenisKayu->id;
-
         $lembar = (float) $hasil->isi;
-        $kubikasi = $lembar * (float) $ukuran->kubikasi;
+        $kubikasi = $lembar * (float) $ukuran->kubikasi / 10000000;
 
-        $stok = StokPlatformMth::firstOrCreate(
-            [
-                'id_jenis_kayu' => $idJenisKayu,
-                'panjang' => $ukuran->panjang,
-                'lebar' => $ukuran->lebar,
-                'tebal' => $ukuran->tebal,
-                'kw_grade' => $grade->nama_grade,
-            ],
-            [
-                'stok_lembar' => 0,
-                'stok_kubikasi' => 0,
-                'nilai_stok' => 0,
-                'hpp_average' => 0,
-                'hpp_pekerja_last' => 0,
-                'hpp_bahan_penolong_last' => 0,
-            ]
+        $service->tambah(
+            idJenisKayu: $jenisKayu->id,
+            panjang: $ukuran->panjang,
+            lebar: $ukuran->lebar,
+            tebal: $ukuran->tebal,
+            kwGrade: $grade->nama_grade,
+            lembar: $lembar,
+            kubikasi: $kubikasi,
+            keterangan: 'Masuk dari Sanding — terima platform dari hotpress (via serah terima #'.$serahTerima->id.')',
+            referensi: $serahTerima,
         );
-
-        $stokLembarBefore = $stok->stok_lembar;
-        $stokKubikasiBefore = $stok->stok_kubikasi;
-        $nilaiStokBefore = $stok->nilai_stok;
-
-        $stok->stok_lembar += $lembar;
-        $stok->stok_kubikasi += $kubikasi;
-        $stok->save();
-
-        $log = HppPlatformMthLog::create([
-            'id_jenis_kayu' => $idJenisKayu,
-            'panjang' => $ukuran->panjang,
-            'lebar' => $ukuran->lebar,
-            'tebal' => $ukuran->tebal,
-            'kw_grade' => $grade->nama_grade,
-            'tanggal' => now()->toDateString(),
-            'tipe_transaksi' => 'Masuk dari Sanding',
-            'keterangan' => 'Terima platform dari hotpress (via serah terima #'.$serahTerima->id.')',
-            'referensi_type' => SerahTerimaHp::class,
-            'referensi_id' => $serahTerima->id,
-            'total_lembar' => $lembar,
-            'total_kubikasi' => $kubikasi,
-            'hpp_pekerja' => 0,
-            'hpp_bahan_penolong' => 0,
-            'hpp_average' => $stok->hpp_average,
-            'nilai_stok' => $stok->nilai_stok,
-            'stok_lembar_before' => $stokLembarBefore,
-            'stok_kubikasi_before' => $stokKubikasiBefore,
-            'nilai_stok_before' => $nilaiStokBefore,
-            'stok_lembar_after' => $stok->stok_lembar,
-            'stok_kubikasi_after' => $stok->stok_kubikasi,
-            'nilai_stok_after' => $stok->nilai_stok,
-        ]);
-
-        $stok->update(['id_last_log' => $log->id]);
     }
 }

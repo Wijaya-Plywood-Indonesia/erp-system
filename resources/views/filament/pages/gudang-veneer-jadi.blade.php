@@ -23,108 +23,6 @@
             </button>
         </div>
 
-        {{-- SECTION 1: DETAIL SALDO STOK UTAMA (KLASIFIKASI VENEER JADI) --}}
-        <section class="space-y-3">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <div>
-                    <h2 class="text-xs font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                        DETAIL STOK VENEER JADI
-                    </h2>
-                </div>
-
-                {{-- Input Pencarian Livewire untuk Stok Utama --}}
-                <div class="relative w-full sm:w-64">
-                    <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                        <svg class="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                    </span>
-                    <input
-                        type="text"
-                        placeholder="Cari Stok..."
-                        wire:model.live.debounce.300ms="searchQuery"
-                        class="w-full text-xs pl-8 pr-3 py-1.5 border rounded-none focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white border-zinc-300 text-zinc-900 placeholder-zinc-400 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-600" />
-                </div>
-            </div>
-
-            {{-- DUA KOLOM UTAMA: FACEBACK & CORE (DENGAN OVERFLOW SCROLL JIKA > 3 DATA) --}}
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-                {{-- KOLOM KEBELAH KIRI: FACEBACK (< 1.0 mm) --}}
-                <div class="border p-4 rounded-none bg-white border-zinc-200 shadow-sm dark:bg-zinc-900/40 dark:border-zinc-800 dark:shadow-none">
-                    <div class="border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-3 flex justify-between items-center">
-                        <span class="text-xs font-black uppercase tracking-widest text-amber-600 dark:text-amber-500 flex items-center gap-1.5">
-                            <span class="inline-block w-1.5 h-1.5 bg-amber-600 dark:bg-amber-500"></span>
-                            Kategori: Faceback
-                        </span>
-                        <span class="text-[10px] text-zinc-500 dark:text-zinc-400">
-                            {{ count($this->splitStok['faceback']) }} Item terdaftar
-                        </span>
-                    </div>
-
-                    <div class="space-y-2 max-h-[135px] overflow-y-auto pr-1">
-                        @forelse($this->splitStok['faceback'] as $item)
-                        <div class="p-2 border flex justify-between items-center text-sm transition-all bg-zinc-50 border-zinc-200 dark:bg-zinc-950/70 dark:border-zinc-900 dark:hover:border-zinc-800 hover:border-zinc-300">
-                            <div class="space-y-0.5">
-                                <p class="font-bold text-zinc-800 dark:text-zinc-100">
-                                    {{ ($item->panjang + 0) }}x{{ ($item->lebar + 0) }}x{{ ($item->tebal + 0) }}
-                                    <span class="mx-2 text-zinc-300 dark:text-zinc-800">|</span>
-                                    <span class="text-amber-600 dark:text-amber-500 font-bold">KW {{ $item->kw_grade }}</span>
-                                    <span class="mx-2 text-zinc-300 dark:text-zinc-800">|</span>
-                                    <span class="text-zinc-500 dark:text-zinc-400 text-xs">{{ $item->jenisKayu->nama_kayu ?? 'Sengon' }}</span>
-                                </p>
-                            </div>
-                            <div class="text-right flex-shrink-0 ml-4">
-                                <span class="bg-amber-500 border border-amber-400 text-zinc-950 text-sm font-bold px-3 py-0.5 rounded-none shadow-sm whitespace-nowrap">
-                                    {{ number_format($item->stok_lembar, 0, ',', '.') }} lbr
-                                </span>
-                            </div>
-                        </div>
-                        @empty
-                        <p class="text-sm text-zinc-400 dark:text-zinc-500 italic py-4 text-center">Tidak ada saldo Faceback</p>
-                        @endforelse
-                    </div>
-                </div>
-
-                {{-- KOLOM KEBELAH KANAN: CORE (>= 1.0 mm) --}}
-                <div class="border p-4 rounded-none bg-white border-zinc-200 shadow-sm dark:bg-zinc-900/40 dark:border-zinc-800 dark:shadow-none">
-                    <div class="border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-3 flex justify-between items-center">
-                        <span class="text-xs font-black uppercase tracking-widest text-amber-600 dark:text-amber-500 flex items-center gap-1.5">
-                            <span class="inline-block w-1.5 h-1.5 bg-amber-600 dark:bg-amber-500"></span>
-                            Kategori: Core
-                        </span>
-                        <span class="text-[10px] text-zinc-500 dark:text-zinc-400">
-                            {{ count($this->splitStok['core']) }} Item terdaftar
-                        </span>
-                    </div>
-
-                    <div class="space-y-2 max-h-[135px] overflow-y-auto pr-1">
-                        @forelse($this->splitStok['core'] as $item)
-                        <div class="p-2 border flex justify-between items-center text-sm transition-all bg-zinc-50 border-zinc-200 dark:bg-zinc-950/70 dark:border-zinc-900 dark:hover:border-zinc-800 hover:border-zinc-300">
-                            <div class="space-y-0.5">
-                                <p class="font-bold text-zinc-800 dark:text-zinc-100">
-                                    {{ ($item->panjang + 0) }}x{{ ($item->lebar + 0) }}x{{ ($item->tebal + 0) }}
-                                    <span class="mx-2 text-zinc-300 dark:text-zinc-800">|</span>
-                                    <span class="text-amber-600 dark:text-amber-500 font-bold">KW {{ $item->kw_grade }}</span>
-                                    <span class="mx-2 text-zinc-300 dark:text-zinc-800">|</span>
-                                    <span class="text-zinc-500 dark:text-zinc-400 text-xs">{{ $item->jenisKayu->nama_kayu ?? 'Sengon' }}</span>
-                                </p>
-                            </div>
-                            <div class="text-right flex-shrink-0 ml-4"> {{-- 🛠️ Menolak ciut & beri jarak aman dari teks kiri --}}
-                                <span class="bg-amber-500 border border-amber-400 text-zinc-950 text-sm font-bold px-3 py-0.5 rounded-none shadow-sm whitespace-nowrap"> {{-- 🛠️ Mengunci teks agar anti-wrap --}}
-                                    {{ number_format($item->stok_lembar, 0, ',', '.') }} lbr
-                                </span>
-                            </div>
-                        </div>
-                        @empty
-                        <p class="text-sm text-zinc-400 dark:text-zinc-500 italic py-4 text-center">Tidak ada saldo Core</p>
-                        @endforelse
-                    </div>
-                </div>
-
-            </div>
-        </section>
-
         {{-- SECTION 2: MEJA SERAH TERIMA BARANG (DIVISI REPAIR) --}}
         @if($activeTab === 'masuk')
         <section class="space-y-3">
@@ -150,21 +48,6 @@
                             class="text-xs pl-8 pr-3 py-1.5 border rounded-none focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white border-zinc-300 text-zinc-900 placeholder-zinc-400 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-600 w-full" />
                     </div>
                 </div>
-            </div>
-
-            <div class="flex gap-2 p-1 bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900">
-                <button
-                    type="button"
-                    wire:click="$set('activeSubTab', 'produksi')"
-                    class="flex-1 md:flex-none px-4 py-2 text-xs font-black uppercase tracking-widest transition-all {{ $activeSubTab === 'produksi' ? 'bg-amber-500 text-zinc-950 shadow-sm border border-amber-400' : 'text-zinc-400 hover:text-zinc-200 bg-transparent border border-transparent' }}">
-                    <span>Terima dari Produksi</span>
-                </button>
-                <button
-                    type="button"
-                    wire:click="$set('activeSubTab', 'mutasi')"
-                    class="flex-1 md:flex-none px-4 py-2 text-xs font-black uppercase tracking-widest transition-all {{ $activeSubTab === 'mutasi' ? 'bg-amber-500 text-zinc-950 shadow-sm border border-amber-400' : 'text-zinc-400 hover:text-zinc-200 bg-transparent border border-transparent' }}">
-                    <span>Terima dari BM</span>
-                </button>
             </div>
 
             {{-- 📱 VIEW HP / MOBILE (Hanya muncul di md:hidden atau layar < 768px) --}}

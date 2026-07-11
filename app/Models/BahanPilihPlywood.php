@@ -13,6 +13,7 @@ class BahanPilihPlywood extends Model
         'id_barang_setengah_jadi_hp',
         'no_palet',
         'jumlah',
+        'id_serah_terima_triplek_jadi',
     ];
 
     public function produksiPilihPlywood()

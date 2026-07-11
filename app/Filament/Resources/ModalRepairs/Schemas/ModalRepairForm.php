@@ -165,32 +165,43 @@ class ModalRepairForm
     }
 
     protected static function getPaletOptions(?ModalRepair $record): array
-    {
-        $currentId = $record?->id_serah_terima_veneer_kering;
-        $currentJumlah = (float) ($record?->jumlah ?? 0);
+{
+    $currentId = $record?->id_serah_terima_veneer_kering;
+    $currentJumlah = (float) ($record?->jumlah ?? 0);
 
-        return SerahTerimaVeneerKering::query()
-            ->where('diterima_oleh', '!=', '-')
-            ->with([
-                'detailHasil.ukuran', 'detailHasil.jenisKayu',
-                'detailBongkarKedi.ukuran', 'detailBongkarKedi.jenisKayu',
-            ])
-            ->get()
-            ->map(function ($item) use ($currentId, $currentJumlah) {
-                $sisa = $item->sisa + ($item->id === $currentId ? $currentJumlah : 0);
+    return SerahTerimaVeneerKering::query()
+        ->where('diterima_oleh', '!=', '-')
+        ->with([
+            'detailHasil.ukuran', 'detailHasil.jenisKayu',
+            'detailBongkarKedi.ukuran', 'detailBongkarKedi.jenisKayu',
+        ])
+        ->get()
+        ->map(function ($item) use ($currentId, $currentJumlah) {
+            $sisa = $item->sisa + ($item->id === $currentId ? $currentJumlah : 0);
 
-                return [$item, $sisa];
-            })
-            ->filter(fn ($pair) => $pair[1] > 0)
-            ->mapWithKeys(function ($pair) {
-                [$item, $sisa] = $pair;
-                $sumber = $item->sumber;
-                $jenisLabel = $item->label_jenis_terima;
-                // Bagian sumber (Press Dryer/Kedi) tidak ditampilkan lagi
-                $label = "Palet {$sumber?->no_palet} - ({$jenisLabel}) - Sisa {$sisa} lembar";
+            return [$item, $sisa];
+        })
+        ->filter(fn ($pair) => $pair[1] > 0)
+        ->mapWithKeys(function ($pair) {
+            [$item, $sisa] = $pair;
+            $sumber = $item->sumber;
 
-                return [$item->id => $label];
-            })
-            ->toArray();
-    }
+            // Dimensi ringkas: buang nol di belakang (244.00 -> 244, 2.20 -> 2.2)
+            $ukuran  = $sumber?->ukuran;
+            $dimensi = $ukuran
+                ? collect([$ukuran->panjang, $ukuran->lebar, $ukuran->tebal])
+                    ->map(fn ($v) => rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.'))
+                    ->implode('x')
+                : '-';
+
+            $kayu = $sumber?->jenisKayu?->nama_kayu ?? '-';
+            $kw   = $sumber?->kw ?? '-';
+
+            $label = "Palet {$sumber?->no_palet} · {$dimensi} {$kayu} KW{$kw}"
+                . " · ({$item->label_jenis_terima}) · Sisa {$sisa} lbr";
+
+            return [$item->id => $label];
+        })
+        ->toArray();
+}
 }

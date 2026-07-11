@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\HasilSandings\Tables;
 
 use App\Models\ModalSanding;
+use App\Models\SerahTerimaTriplekJadi; // Pastikan Model ini di-import
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -10,6 +11,12 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Radio;
+use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Grid;
+use Illuminate\Support\HtmlString;
 
 class HasilSandingsTable
 {
@@ -26,8 +33,7 @@ class HasilSandingsTable
                         $jenis = $record->barangSetengahJadi?->jenisBarang?->nama_jenis_barang ?? '-';
 
                         return "{$kategori} — {$ukuran} - {$jenis} - {$grade}";
-                    })
-                ,
+                    }),
 
                 TextColumn::make('kuantitas')
                     ->label('Qty')
@@ -42,12 +48,15 @@ class HasilSandingsTable
                 TextColumn::make('no_palet')
                     ->label('Palet')
                     ->sortable(),
+                
                 TextColumn::make('status')
                     ->searchable(),
+                
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+                
                 TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
@@ -67,8 +76,7 @@ class HasilSandingsTable
                             $q->whereRaw("CONCAT(panjang, ' x ', lebar, ' x ', tebal) LIKE ?", ["%{$search}%"]);
                         });
                     })
-                    ->toggleable(isToggledHiddenByDefault: true)
-                ,
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('barangSetengahJadi.grade.nama_grade')
                     ->label('Grade')
@@ -81,8 +89,12 @@ class HasilSandingsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->searchable(),
+                
+                TextColumn::make('label_tujuan_serah')
+                    ->label('Diserahkan Ke')
+                    ->badge()
+                    ->color(fn ($record) => $record->tujuan_serah ? 'success' : 'gray'),
             ])
-
             ->filters([
                 //
             ])
@@ -94,14 +106,123 @@ class HasilSandingsTable
                     ),
             ])
             ->recordActions([
-                // Edit Action — HILANG jika status sudah divalidasi
+                Action::make('serahkan')
+                    ->label('Serahkan')
+                    ->icon('heroicon-o-arrow-right-circle')
+                    ->color('success')
+                    ->visible(fn ($record) => $record->diserahkan_at === null)
+                    ->schema(function ($record) {
+                        $record->loadMissing(['barangSetengahJadi.ukuran', 'barangSetengahJadi.jenisBarang', 'barangSetengahJadi.grade']);
+
+                        $bsj    = $record->barangSetengahJadi;
+                        $ukuran = $bsj?->ukuran;
+
+                        $dimensi = $ukuran
+                            ? ($ukuran->panjang + 0) . ' × ' . ($ukuran->lebar + 0) . ' × ' . ($ukuran->tebal + 0)
+                            : '-';
+
+                        return [
+                            Grid::make(2)->schema([
+                                Placeholder::make('info_barang')
+                                    ->label('Barang')
+                                    ->content($bsj?->jenisBarang?->nama_jenis_barang ?? '-'),
+                                Placeholder::make('info_grade')
+                                    ->label('Grade')
+                                    ->content($bsj?->grade?->nama_grade ?? '-'),
+                                Placeholder::make('info_ukuran')
+                                    ->label('Ukuran (P × L × T)')
+                                    ->content($dimensi),
+                                Placeholder::make('info_palet')
+                                    ->label('No. Palet')
+                                    ->content((string) ($record->no_palet ?? '-')),
+                                Placeholder::make('info_qty')
+                                    ->label('Kuantitas')
+                                    ->content(new HtmlString('<strong>' . number_format((float) $record->kuantitas) . ' lembar</strong>')),
+                                Placeholder::make('info_status')
+                                    ->label('Status Sanding')
+                                    ->content((string) ($record->status ?? '-')),
+                            ]),
+
+                            Radio::make('tujuan_serah')
+                                ->label('Serahkan ke')
+                                ->options([
+                                    'platform_jadi' => 'Gudang Platform Jadi',
+                                    'triplek_jadi'  => 'Gudang Triplek Jadi',
+                                ])
+                                ->default('platform_jadi')
+                                ->required(),
+                        ];
+                    })
+                    ->modalHeading(fn ($record) => 'Serahkan Hasil Sanding — Palet ' . $record->no_palet)
+                    ->modalSubmitActionLabel('Serahkan')
+                    ->modalWidth('md')
+                    ->requiresConfirmation(false)
+                    ->action(function ($record, array $data) {
+                        // 1. Ambil ulang dari DB (hindari race condition)
+                        $fresh = $record->fresh(['barangSetengahJadi.ukuran']);
+
+                        if ($fresh->diserahkan_at !== null) {
+                            Notification::make()->warning()
+                                ->title('Palet ini sudah diserahkan')
+                                ->body('Diserahkan ke ' . $fresh->label_tujuan_serah . '. Muat ulang halaman.')
+                                ->send();
+                            return;
+                        }
+
+                        // 2. Kuantitas harus valid
+                        if ((float) $fresh->kuantitas <= 0) {
+                            Notification::make()->danger()
+                                ->title('Kuantitas tidak valid')
+                                ->body('Kuantitas palet ini 0. Perbaiki data hasil sanding.')
+                                ->send();
+                            return;
+                        }
+
+                        // 3. Data barang & ukuran harus lengkap
+                        if (! $fresh->barangSetengahJadi || ! $fresh->barangSetengahJadi->ukuran) {
+                            Notification::make()->danger()
+                                ->title('Data barang tidak lengkap')
+                                ->body('Barang setengah jadi / ukuran tidak ditemukan.')
+                                ->send();
+                            return;
+                        }
+
+                        if (! in_array($data['tujuan_serah'] ?? null, ['platform_jadi', 'triplek_jadi'], true)) {
+                            Notification::make()->danger()->title('Tujuan serah tidak valid.')->send();
+                            return;
+                        }
+
+                        // ── SIMPAN PERUBAHAN DI HASIL SANDING ────────
+                        $fresh->update([
+                            'tujuan_serah'    => $data['tujuan_serah'],
+                            'diserahkan_oleh' => auth()->id(),
+                            'diserahkan_at'   => now(),
+                        ]);
+
+                        // ── INSERT KE TABEL SERAH TERIMA TRIPLEK JADI ──
+                        if ($data['tujuan_serah'] === 'triplek_jadi') {
+                            SerahTerimaTriplekJadi::create([
+                                'id_hasil_sanding' => $fresh->id,
+                                'diserahkan_oleh'  => auth()->user()->name, // pakai nama sesuai tipe string
+                                'diterima_oleh'    => '-',
+                                'status'           => 'Serah Sanding',
+                            ]);
+                        }
+                        // *Jika butuh insert ke SerahTerimaPlatform, tambahkan else if disini*
+
+                        Notification::make()->success()
+                            ->title('Palet ' . $fresh->no_palet . ' diserahkan')
+                            ->body(number_format((float) $fresh->kuantitas) . ' lembar → '
+                                . ($data['tujuan_serah'] === 'platform_jadi' ? 'Gudang Platform Jadi' : 'Gudang Triplek Jadi'))
+                            ->send();
+                    }),
+
                 EditAction::make()
                     ->hidden(
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
 
-                // Delete Action — HILANG jika status sudah divalidasi
                 DeleteAction::make()
                     ->hidden(
                         fn($livewire) =>

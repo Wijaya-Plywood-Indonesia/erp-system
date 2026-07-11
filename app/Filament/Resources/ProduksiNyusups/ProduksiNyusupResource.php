@@ -2,31 +2,33 @@
 
 namespace App\Filament\Resources\ProduksiNyusups;
 
-use App\Filament\Resources\NotaBarangMasuks\RelationManagers\DetailBarangMasukRelationManager;
 use App\Filament\Resources\ProduksiNyusups\Pages\CreateProduksiNyusup;
 use App\Filament\Resources\ProduksiNyusups\Pages\EditProduksiNyusup;
 use App\Filament\Resources\ProduksiNyusups\Pages\ListProduksiNyusups;
 use App\Filament\Resources\ProduksiNyusups\Pages\ViewProduksiNyusup;
+use App\Filament\Resources\ProduksiNyusups\RelationManagers\DetailBarangDikerjakanRelationManager;
 use App\Filament\Resources\ProduksiNyusups\RelationManagers\PegawaiNyusupRelationManager;
 use App\Filament\Resources\ProduksiNyusups\RelationManagers\ValidasiNyusupRelationManager;
-use App\Filament\Resources\ProduksiNyusups\RelationManagers\DetailBarangDikerjakanRelationManager;
 use App\Filament\Resources\ProduksiNyusups\Schemas\ProduksiNyusupForm;
 use App\Filament\Resources\ProduksiNyusups\Schemas\ProduksiNyusupInfolist;
 use App\Filament\Resources\ProduksiNyusups\Tables\ProduksiNyusupsTable;
+use App\Filament\Resources\ProduksiTerimaGudangSatus\RelationManagers\SerahTerimaGudangSatuRelationManager;
 use App\Models\ProduksiNyusup;
 use BackedEnum;
-use UnitEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class ProduksiNyusupResource extends Resource
 {
     protected static ?string $model = ProduksiNyusup::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
     protected static string|UnitEnum|null $navigationGroup = 'Finishing';
+
     protected static ?int $navigationSort = 1;
 
     protected static ?string $recordTitleAttribute = 'no';
@@ -49,6 +51,7 @@ class ProduksiNyusupResource extends Resource
     public static function getRelations(): array
     {
         return [
+            SerahTerimaGudangSatuRelationManager::class,
             PegawaiNyusupRelationManager::class,
             DetailBarangDikerjakanRelationManager::class,
             ValidasiNyusupRelationManager::class,

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\ProductionUpdated;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
@@ -50,14 +51,20 @@ class HasilPilihPlywood extends Model
         // Menggunakan static::saved mencakup Created dan Updated
         static::saved(function ($model) {
             if ($model->id_produksi_pilih_plywood) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_pilih_plywood, 'pilih_plywood');
+                ProductionUpdated::dispatch($model->id_produksi_pilih_plywood, 'pilih_plywood');
             }
         });
 
         static::deleted(function ($model) {
             if ($model->id_produksi_pilih_plywood) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_pilih_plywood, 'pilih_plywood');
+                ProductionUpdated::dispatch($model->id_produksi_pilih_plywood, 'pilih_plywood');
             }
         });
+    }
+
+    // Tambahkan di HasilPilihPlywood.php
+    public function serahTerimaGudangSatu()
+    {
+        return $this->hasOne(SerahTerimaGudangSatu::class, 'id_hasil_pilih_plywood');
     }
 }

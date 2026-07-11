@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Events\ProductionUpdated;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DetailBarangDikerjakan extends Model
 {
@@ -15,6 +17,13 @@ class DetailBarangDikerjakan extends Model
         'no_palet',
         'modal',
         'hasil',
+        'diserahkan_at',
+        'diserahkan_by',
+        'id_serah_terima_gudang_satu',
+    ];
+
+    protected $casts = [
+        'diserahkan_at' => 'datetime',
     ];
 
     public function produksiNyusup()
@@ -37,14 +46,19 @@ class DetailBarangDikerjakan extends Model
         // Menggunakan static::saved mencakup Created dan Updated
         static::saved(function ($model) {
             if ($model->id_produksi_nyusup) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_nyusup, 'nyusup');
+                ProductionUpdated::dispatch($model->id_produksi_nyusup, 'nyusup');
             }
         });
 
         static::deleted(function ($model) {
             if ($model->id_produksi_nyusup) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_nyusup, 'nyusup');
+                ProductionUpdated::dispatch($model->id_produksi_nyusup, 'nyusup');
             }
         });
+    }
+
+    public function serahTerima(): BelongsTo
+    {
+        return $this->belongsTo(SerahTerimaGudangSatu::class, 'id_serah_terima_gudang_satu');
     }
 }

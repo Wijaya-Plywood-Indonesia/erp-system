@@ -11,6 +11,7 @@ class ProduksiDempul extends Model
 
     protected $fillable = [
         'tanggal',
+        'tanggal_produksi',
         'kendala',
     ];
 

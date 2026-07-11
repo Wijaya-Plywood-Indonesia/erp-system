@@ -41,6 +41,7 @@ class AdminPanelProvider extends PanelProvider
 
     public function panel(Panel $panel): Panel
     {
+        $currentHost = request()->getHost();
         return $panel
             ->default()
             ->id('admin')
@@ -67,7 +68,11 @@ class AdminPanelProvider extends PanelProvider
                 LaporanKayuKeluar::class,
                 LaporanJurnalKayuMasuk::class,
             ])
-            ->brandName('Wijaya')
+            ->brandName(
+                in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com'])
+                    ? 'Wijaya'
+                    : 'Wahana'
+            )
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
                 // AccountWidget::class,

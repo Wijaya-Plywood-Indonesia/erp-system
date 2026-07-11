@@ -1,81 +1,330 @@
 <?php
 
+
+
 namespace App\Filament\Resources\ProduksiHotPresses\RelationManagers;
 
+use App\Models\HppPlatformJadiLog;
+use App\Models\HppVeneerJadiLog;
+use App\Models\PlatformJadiMutasiKeluar;
+use App\Models\PlatformJadiMutasiKeluarPalet;
+use App\Models\SerahTerimaMasukHp;
+use App\Models\StokPlatformJadi;
+use App\Models\StokVeneerJadi;
+use App\Models\VeneerJadiMutasiKeluar;
 use App\Models\VeneerJadiMutasiKeluarPalet;
+use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
-use Illuminate\Contracts\View\View;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class MutasiMasukRelationManager extends RelationManager
 {
     protected static string $relationship = 'mutasiMasuk';
     protected static ?string $title = 'Serah Terima';
 
-    public string $sumberAsal = 'gudang';
-    public array $tebal_aktual = [];
-    public array $catatan_internal = [];
-    public function render(): View
+    protected function getTableQuery(): Builder
     {
-        $ownerRecord = $this->getOwnerRecord();
-
-        // 🌟 CUSTOM QUERY BERDASARKAN FILTER LIVEWIRE
-        $records = $ownerRecord->mutasiMasuk()
-            ->with(['mutasiKeluar.jenisKayu', 'mutasiKeluar.operator'])
-            ->whereHas('mutasiKeluar', function ($query) {
-                if ($this->sumberAsal === 'gudang') {
-                    $query->whereRaw('LOWER(tujuan) LIKE ?', ['%hotpress%']);
-                } else {
-                    $query->whereRaw('LOWER(tujuan) LIKE ?', ['%sanding%']);
-                }
-            })
-            ->orderBy('id', 'desc') // Selalu urutkan data terbaru di atas
-            ->get();
-
-        return view('filament.resources.produksi-hotpress.pages.serah-terima-custom-page', [
-            'records' => $records,
-        ]);
+        return SerahTerimaMasukHp::query()
+            ->orderByRaw('CASE WHEN diterima_by IS NULL THEN 0 ELSE 1 END ASC')
+            ->orderByDesc('tanggal_keluar');
     }
 
-    // 🌟 LOGIKA PROSES BACKEND UTK TOMBOL "TERIMA" KUSTOM
-    public function terimaMaterialKustom(int $recordId): void
+    public function table(Table $table): Table
     {
-        $record = VeneerJadiMutasiKeluarPalet::findOrFail($recordId);
+        return $table
+            ->query($this->getTableQuery())
+            ->recordTitleAttribute('kw_grade')
+            ->columns([
+                TextColumn::make('tanggal_keluar')
+                    ->label('Tanggal Masuk')
+                    ->dateTime('d/m/Y H:i')
+                    ->color('gray'),
+                TextColumn::make('sumber')
+                    ->label('Sumber')
+                    ->badge()
+                    ->color(fn(string $state) => $state === 'veneer' ? 'info' : 'purple')
+                    ->formatStateUsing(fn(string $state) => $state === 'veneer' ? 'Veneer Jadi' : 'Platform Jadi')
+                    ->searchable(),
+                TextColumn::make('jenis_nama')
+                    ->label('Jenis Barang')
+                    ->weight('bold')
+                    ->searchable(),
+                TextColumn::make('ukuran')
+                    ->label('Ukuran')
+                    ->getStateUsing(fn($record) => ((float) $record->panjang + 0) . 'x' . ((float) $record->lebar + 0) . 'x' . ((float) $record->tebal + 0))
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $q) use ($search) {
+                            $q->where('panjang', 'like', "%{$search}%")
+                                ->orWhere('lebar', 'like', "%{$search}%")
+                                ->orWhere('tebal', 'like', "%{$search}%");
+                        });
+                    }),
+                TextColumn::make('kw_grade')
+                    ->label('KW')
+                    ->badge()
+                    ->color('warning')
+                    ->alignCenter()
+                    ->searchable(),
+                TextColumn::make('nomor_palet')
+                    ->label('Nomor Palet')
+                    ->alignCenter()
+                    ->badge()
+                    ->color('gray')
+                    ->searchable(),
+                TextColumn::make('jumlah_lembar')
+                    ->label('Jumlah Lembar')
+                    ->formatStateUsing(fn($state) => number_format($state) . ' Lbr')
+                    ->badge()
+                    ->color('warning')
+                    ->alignCenter(),
+                TextColumn::make('kubikasi')
+                    ->label('Kubikasi')
+                    ->color('warning')
+                    ->getStateUsing(fn(SerahTerimaMasukHp $record) => number_format($record->kubikasi(), 4))
+                    ->alignRight(),
+                TextColumn::make('operator.name')
+                    ->label('Penyerah')
+                    ->color('gray')
+                    ->searchable(),
+                TextColumn::make('penerima.name')
+                    ->label('Penerima')
+                    ->color('gray')
+                    ->placeholder('-')
+                    ->searchable(),
+                TextColumn::make('keterangan')
+                    ->label('Keterangan')
+                    ->wrap()
+                    ->color('gray')
+                    ->searchable(),
+            ])
+            ->filters([
+                SelectFilter::make('sumber')
+                    ->label('Sumber Material')
+                    ->options([
+                        'veneer'        => 'Veneer Jadi',
+                        'platform_jadi' => 'Platform Jadi',
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        logger('FILTER DATA', $data);
+                        if (! empty($data['value'])) {
+                            $query->where('sumber', $data['value']);
+                        }
+                    }),
+            ])
+            ->actions([
+                Action::make('terima_material')
+                    ->label('TERIMA')
+                    ->button()
+                    ->color('warning')
+                    ->visible(fn(SerahTerimaMasukHp $record) => is_null($record->diterima_by))
+                    ->requiresConfirmation()
+                    ->modalHeading('Konfirmasi Penerimaan Material')
+                    ->modalDescription('Apakah Anda yakin barang sudah dihitung fisik dan sesuai dengan dokumen? Tindakan ini akan mendaftarkan palet ini ke antrean produksi Hotpress dan memotong stok gudang asal.')
+                    ->action(function (SerahTerimaMasukHp $record) {
+                        logger('TERIMA CLICKED', ['id' => $record->id, 'id_asli' => $record->id_asli, 'sumber' => $record->sumber]);
+                        $produksiHpId = $this->getOwnerRecord()->id;
+                        $userId       = Auth::id();
+                        $userName     = Auth::user()?->name ?? 'System';
 
-        // Jika tebal_aktual tidak diisi oleh operator, fallback ke tebal asli dokumen
-        $tebalBaru = (float) ($this->tebal_aktual[$recordId] ?? $record->mutasiKeluar->tebal);
-        $catatan = $this->catatan_internal[$recordId] ?? '';
+                        try {
+                            DB::transaction(function () use ($record, $produksiHpId, $userId, $userName) {
+                                if ($record->sumber === 'veneer') {
+                                    $palet = VeneerJadiMutasiKeluarPalet::lockForUpdate()->findOrFail($record->id_asli);
+                                    $mk    = VeneerJadiMutasiKeluar::findOrFail($record->id_mutasi_keluar);
 
-        // Hitung Kubikasi Baru
-        $kubikasiBaru = ($record->mutasiKeluar->panjang * $record->mutasiKeluar->lebar * $tebalBaru * $record->jumlah_lembar) / 10000000;
+                                    if (! is_null($palet->diterima_by)) {
+                                        throw new \Exception('Palet ini sudah pernah diterima sebelumnya.');
+                                    }
 
-        // Susun keterangan update
-        $keteranganUpdate = $record->mutasiKeluar->keterangan;
-        if ($tebalBaru !== (float)$record->mutasiKeluar->tebal) {
-            $keteranganUpdate .= " | Adjust Sanding: Tebal berubah dari {$record->mutasiKeluar->tebal}mm ke {$tebalBaru}mm.";
-        }
-        if (!empty($catatan)) {
-            $keteranganUpdate .= " (" . $catatan . ")";
-        }
+                                    $qty = (int) $palet->jumlah_lembar;
 
-        // Eksekusi Update ke Database
-        $record->update([
-            'diterima_by' => Auth::id(),
-            'diterima_at' => now(),
-            'tebal' => $tebalBaru,
-            'stok_kubikasi' => $kubikasiBaru,
-            'keterangan' => $keteranganUpdate
-        ]);
+                                    $stok = StokVeneerJadi::where('id_jenis_kayu', $mk->id_jenis_kayu)
+                                        ->where('panjang', $mk->panjang)
+                                        ->where('lebar', $mk->lebar)
+                                        ->where('tebal', $mk->tebal)
+                                        ->where('kw_grade', $mk->kw_grade)
+                                        ->lockForUpdate()
+                                        ->first();
 
-        // Bersihkan data input setelah submit berhasil
-        unset($this->tebal_aktual[$recordId], $this->catatan_internal[$recordId]);
+                                    if (! $stok) {
+                                        throw new \Exception('Stok Veneer Jadi sumber tidak ditemukan.');
+                                    }
+                                    if ($qty > (int) $stok->stok_lembar) {
+                                        throw new \Exception('Stok gudang asal tidak mencukupi. Tersedia: ' . $stok->stok_lembar . ' lembar.');
+                                    }
 
-        // Pemicu Notifikasi toast Filament v4
-        Notification::make()
-            ->success()
-            ->title('Material Berhasil Diterima')
-            ->body('Stok masuk terdaftar pada antrean produksi Hotpress.')
-            ->send();
+                                    $kubikasiPalet = ($mk->panjang * $mk->lebar * $mk->tebal * $qty) / 10000000;
+                                    $nilaiPalet    = round($qty * (float) $stok->hpp_average, 2);
+
+                                    $before = [
+                                        'lembar'   => (int) $stok->stok_lembar,
+                                        'kubikasi' => (float) $stok->stok_kubikasi,
+                                        'nilai'    => (float) $stok->nilai_stok,
+                                    ];
+                                    $after = [
+                                        'lembar'   => $before['lembar'] - $qty,
+                                        'kubikasi' => max(0.0, round($before['kubikasi'] - $kubikasiPalet, 6)),
+                                        'nilai'    => max(0.0, round($before['nilai'] - $nilaiPalet, 2)),
+                                    ];
+
+                                    $log = HppVeneerJadiLog::create([
+                                        'id_jenis_kayu'        => $mk->id_jenis_kayu,
+                                        'panjang'              => $mk->panjang,
+                                        'lebar'                => $mk->lebar,
+                                        'tebal'                => $mk->tebal,
+                                        'kw_grade'             => $mk->kw_grade,
+                                        'tanggal'              => now(),
+                                        'tipe_transaksi'       => 'KELUAR',
+                                        'referensi_type'       => VeneerJadiMutasiKeluarPalet::class,
+                                        'referensi_id'         => $palet->id,
+                                        'total_lembar'         => $qty,
+                                        'total_kubikasi'       => $kubikasiPalet,
+                                        'hpp_pekerja'          => $stok->hpp_pekerja_last ?? 0,
+                                        'hpp_bahan_penolong'   => $stok->hpp_bahan_penolong_last ?? 0,
+                                        'hpp_average'          => $stok->hpp_average,
+                                        'nilai_stok'           => $nilaiPalet,
+                                        'stok_lembar_before'   => $before['lembar'],
+                                        'stok_kubikasi_before' => $before['kubikasi'],
+                                        'nilai_stok_before'    => $before['nilai'],
+                                        'stok_lembar_after'    => $after['lembar'],
+                                        'stok_kubikasi_after'  => $after['kubikasi'],
+                                        'nilai_stok_after'     => $after['nilai'],
+                                        'keterangan'           => "Diterima di Hotpress — Palet #{$palet->nomor_palet} tujuan [{$mk->tujuan}] oleh {$userName}",
+                                    ]);
+
+                                    $stok->update([
+                                        'stok_lembar'   => $after['lembar'],
+                                        'stok_kubikasi' => $after['kubikasi'],
+                                        'nilai_stok'    => $after['nilai'],
+                                        'id_last_log'   => $log->id,
+                                    ]);
+
+                                    $kubikasiAsli = ($mk->panjang * $mk->lebar * $mk->tebal * $palet->jumlah_lembar) / 10000000;
+
+                                    // ⬅️ Status "diterima" ditulis di PALET, bukan header
+                                    $palet->update([
+                                        'diterima_by'   => $userId,
+                                        'diterima_at'   => now(),
+                                        'tebal'         => $mk->tebal,
+                                        'stok_kubikasi' => $kubikasiAsli,
+                                    ]);
+
+                                    // Header hanya dipakai untuk kaitan produksi HP,
+                                    // BUKAN penanda status diterima.
+                                    $mk->update([
+                                        'id_produksi_hp' => $produksiHpId,
+                                    ]);
+                                } else {
+                                    $palet = PlatformJadiMutasiKeluarPalet::lockForUpdate()->findOrFail($record->id_asli);
+                                    $mk    = PlatformJadiMutasiKeluar::findOrFail($record->id_mutasi_keluar);
+
+                                    if (! is_null($palet->diterima_by)) {
+                                        throw new \Exception('Palet ini sudah pernah diterima sebelumnya.');
+                                    }
+
+                                    $qty = (int) $palet->jumlah_lembar;
+
+                                    $stok = StokPlatformJadi::where('id_jenis_barang', $mk->id_jenis_barang)
+                                        ->where('panjang', $mk->panjang)
+                                        ->where('lebar', $mk->lebar)
+                                        ->where('tebal', $mk->tebal)
+                                        ->where('kw_grade', $mk->kw_grade)
+                                        ->lockForUpdate()
+                                        ->first();
+
+                                    if (! $stok) {
+                                        throw new \Exception('Stok Platform Jadi sumber tidak ditemukan.');
+                                    }
+                                    if ($qty > (int) $stok->stok_lembar) {
+                                        throw new \Exception('Stok gudang asal tidak mencukupi. Tersedia: ' . $stok->stok_lembar . ' lembar.');
+                                    }
+
+                                    $kubikasiPalet = ($mk->panjang * $mk->lebar * $mk->tebal * $qty) / 10000000;
+                                    $nilaiPalet    = round($qty * (float) $stok->hpp_average, 2);
+
+                                    $before = [
+                                        'lembar'   => (int) $stok->stok_lembar,
+                                        'kubikasi' => (float) $stok->stok_kubikasi,
+                                        'nilai'    => (float) $stok->nilai_stok,
+                                    ];
+                                    $after = [
+                                        'lembar'   => $before['lembar'] - $qty,
+                                        'kubikasi' => max(0.0, round($before['kubikasi'] - $kubikasiPalet, 6)),
+                                        'nilai'    => max(0.0, round($before['nilai'] - $nilaiPalet, 2)),
+                                    ];
+
+                                    $log = HppPlatformJadiLog::create([
+                                        'id_jenis_barang'      => $mk->id_jenis_barang,
+                                        'panjang'              => $mk->panjang,
+                                        'lebar'                => $mk->lebar,
+                                        'tebal'                => $mk->tebal,
+                                        'kw_grade'             => $mk->kw_grade,
+                                        'tanggal'              => now(),
+                                        'tipe_transaksi'       => 'keluar',
+                                        'referensi_type'       => PlatformJadiMutasiKeluarPalet::class,
+                                        'referensi_id'         => $palet->id,
+                                        'total_lembar'         => $qty,
+                                        'total_kubikasi'       => $kubikasiPalet,
+                                        'hpp_pekerja'          => 0,
+                                        'hpp_bahan_penolong'   => 0,
+                                        'hpp_average'          => (float) $stok->hpp_average,
+                                        'nilai_stok'           => $nilaiPalet,
+                                        'stok_lembar_before'   => $before['lembar'],
+                                        'stok_kubikasi_before' => $before['kubikasi'],
+                                        'nilai_stok_before'    => $before['nilai'],
+                                        'stok_lembar_after'    => $after['lembar'],
+                                        'stok_kubikasi_after'  => $after['kubikasi'],
+                                        'nilai_stok_after'     => $after['nilai'],
+                                        'keterangan'           => "Diterima di Hotpress — Palet #{$palet->nomor_palet} tujuan [{$mk->tujuan}] oleh {$userName}",
+                                    ]);
+
+                                    $stok->update([
+                                        'stok_lembar'   => $after['lembar'],
+                                        'stok_kubikasi' => $after['kubikasi'],
+                                        'nilai_stok'    => $after['nilai'],
+                                        'id_last_log'   => $log->id,
+                                    ]);
+
+                                    // ⬅️ Status "diterima" ditulis di PALET, bukan header
+                                    $palet->update([
+                                        'diterima_by' => $userId,
+                                        'diterima_at' => now(),
+                                    ]);
+
+                                    $mk->update([
+                                        'id_produksi_hp' => $produksiHpId,
+                                    ]);
+                                }
+                            });
+
+                            Notification::make()->success()->title('Material Berhasil Diterima')->send();
+                        } catch (\Throwable $e) {
+                            logger()->error('TERIMA GAGAL', [
+                                'id_asli' => $record->id_asli,
+                                'sumber'  => $record->sumber,
+                                'message' => $e->getMessage(),
+                                'trace'   => $e->getTraceAsString(),
+                            ]);
+
+                            Notification::make()
+                                ->danger()
+                                ->title('Gagal Menerima Material')
+                                ->body($e->getMessage())
+                                ->send();
+                        }
+                    }),
+
+                Action::make('done_label')
+                    ->label('✓ SELESAI')
+                    ->color('success')
+                    ->disabled()
+                    ->visible(fn(SerahTerimaMasukHp $record) => ! is_null($record->diterima_by)),
+            ]);
     }
 }

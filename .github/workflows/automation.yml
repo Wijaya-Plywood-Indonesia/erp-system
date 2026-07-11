@@ -3,7 +3,6 @@ name: Laravel 12 CI/CD Delta Deployment
 on:
   push:
     branches: ["main"]
-  create:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
@@ -66,7 +65,7 @@ jobs:
         run: php artisan key:generate
 
       - name: Set Permissions
-        run: chmod -R 777 storage bootstrap/cache
+        run: chmod -R 775 storage bootstrap/cache
 
       - name: Run Migrations (Testing)
         env:
@@ -161,14 +160,14 @@ jobs:
 
           # Daftar file/folder yang TIDAK BOLEH masuk ZIP apapun kondisinya
           ALWAYS_EXCLUDE=(
-            ".git"
-            ".github"
-            "node_modules"
-            "tests"
-            ".env"
-            ".env.*"
-            "storage"
-            "build_deploy"
+            "\.git/"
+            "\.github/"
+            "node_modules/"
+            "tests/"
+            "\.env$"
+            "\.env\."
+            "storage/"
+            "build_deploy/"
           )
 
           if [ "$LAST" = "FULL_DEPLOY" ] || [ -z "$LAST" ]; then
@@ -184,10 +183,10 @@ jobs:
               echo "mode=delta" >> $GITHUB_OUTPUT
 
               # File yang ditambah atau dimodifikasi
-              git diff --name-only --diff-filter=ACM "$LAST" "$CURRENT" > /tmp/changed_files.txt
+              git diff --no-renames --name-only --diff-filter=ACM "$LAST" "$CURRENT" > /tmp/changed_files.txt
 
               # File yang dihapus (perlu dikirim info ke server untuk di-rm)
-              git diff --name-only --diff-filter=D "$LAST" "$CURRENT" > /tmp/deleted_files.txt
+              git diff --no-renames --name-only --diff-filter=D "$LAST" "$CURRENT" > /tmp/deleted_files.txt
 
               echo "--- File berubah/baru ---"
               cat /tmp/changed_files.txt
@@ -240,26 +239,41 @@ jobs:
         with:
           php-version: "8.4"
 
-      - name: Install Composer Dependencies (Prod)
-        if: steps.changed.outputs.mode != 'skip'
-        env:
-          BROADCAST_CONNECTION: log
-          REVERB_APP_KEY: "dummy-key"
-          REVERB_APP_SECRET: "dummy-secret"
-          REVERB_APP_ID: "123456"
-        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction
-
       - name: Setup Node.js
         if: steps.frontend_check.outputs.rebuild == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Install NPM & Build Assets
+      - name: Install NPM Dependencies (no build yet)
         if: steps.frontend_check.outputs.rebuild == 'true'
+        run: npm ci
+
+      - name: Install Composer Dependencies (Prod, no scripts yet)
+        if: steps.changed.outputs.mode != 'skip'
+        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
+
+      - name: Debug - verify filament views exist
+        if: steps.changed.outputs.mode != 'skip'
         run: |
-          npm ci
-          npm run build
+          find vendor/filament -iname "*grid*" 2>/dev/null
+          echo "---"
+          find vendor/filament -type d -iname "components" 2>/dev/null
+
+      - name: Build Assets
+        if: steps.frontend_check.outputs.rebuild == 'true'
+        run: npm run build
+
+      - name: Regenerate autoload & run discovery
+        if: steps.changed.outputs.mode != 'skip'
+        env:
+          BROADCAST_CONNECTION: log
+          REVERB_APP_KEY: "dummy-key"
+          REVERB_APP_SECRET: "dummy-secret"
+          REVERB_APP_ID: "123456"
+        run: |
+          composer dump-autoload --optimize --no-dev
+          php artisan package:discover --ansi
 
       # ----------------------------------------------------------
       # STEP 3B: Buat ZIP — full atau delta
@@ -296,8 +310,8 @@ jobs:
           fi
 
           # Tambahkan vendor jika composer.lock berubah
-          if grep -q "^composer\.lock" /tmp/changed_files.txt 2>/dev/null; then
-            echo "📦 composer.lock berubah, include vendor/"
+          if grep -qE "^composer\.(json|lock)" /tmp/changed_files.txt 2>/dev/null; then
+            echo "📦 composer.json/lock berubah, include vendor/"
             find vendor -type f >> /tmp/changed_files.txt 2>/dev/null || true
           fi
 
@@ -363,7 +377,7 @@ jobs:
             STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_$DOMAIN"
 
             cd "$TARGET"
-            trap 'php artisan up || true' EXIT
+            trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — situs kembali online tapi state mungkin tidak konsisten, cek manual!"; fi' EXIT
             [ -f "artisan" ] && php artisan down || true
 
             rm -rf "$STAGING" && mkdir -p "$STAGING"
@@ -411,7 +425,7 @@ jobs:
             STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_$DOMAIN"
 
             cd "$TARGET"
-            trap 'php artisan up || true' EXIT
+            trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — situs kembali online tapi state mungkin tidak konsisten, cek manual!"; fi' EXIT
             [ -f "artisan" ] && php artisan down || true
 
             rm -rf "$STAGING" && mkdir -p "$STAGING"
@@ -465,7 +479,9 @@ jobs:
   deploy-production:
     name: "Deploy to ${{ matrix.site.domain }}"
     needs: laravel-tests
-    if: startsWith(github.ref, 'refs/tags/') && github.event_name != 'workflow_dispatch'
+    if: |
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target == 'production')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -518,14 +534,14 @@ jobs:
           CURRENT="${{ github.ref_name }}"
 
           ALWAYS_EXCLUDE=(
-            ".git"
-            ".github"
-            "node_modules"
-            "tests"
-            ".env"
-            ".env.*"
-            "storage"
-            "build_deploy"
+            "\.git/"
+            "\.github/"
+            "node_modules/"
+            "tests/"
+            "\.env$"
+            "\.env\."
+            "storage/"
+            "build_deploy/"
           )
 
           if [ "$MODE" = "full" ]; then
@@ -533,8 +549,8 @@ jobs:
           else
             echo "mode=delta" >> $GITHUB_OUTPUT
 
-            git diff --name-only --diff-filter=ACM "$PREV" "$CURRENT" > /tmp/changed_files.txt
-            git diff --name-only --diff-filter=D "$PREV" "$CURRENT" > /tmp/deleted_files.txt
+            git diff --no-renames --name-only --diff-filter=ACM "$PREV" "$CURRENT" > /tmp/changed_files.txt
+            git diff --no-renames --name-only --diff-filter=D "$PREV" "$CURRENT" > /tmp/deleted_files.txt
 
             for EXCL in "${ALWAYS_EXCLUDE[@]}"; do
               grep -v "^${EXCL}" /tmp/changed_files.txt > /tmp/cf_tmp.txt || true
@@ -592,17 +608,10 @@ jobs:
           echo "PUSHER_APP_CLUSTER=ap1" >> .env
 
       - name: Setup PHP for Production
+        if: steps.changed.outputs.mode != 'skip'
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.4"
-
-      - name: Install Composer Dependencies (Prod)
-        if: steps.rebuild_check.outputs.vendor == 'true'
-        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
-
-      - name: Run package discover
-        if: steps.rebuild_check.outputs.vendor == 'true'
-        run: php artisan package:discover --ansi
 
       - name: Setup Node.js
         if: steps.rebuild_check.outputs.frontend == 'true'
@@ -610,11 +619,28 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install NPM & Build Assets
+      - name: Install NPM Dependencies (no build yet)
         if: steps.rebuild_check.outputs.frontend == 'true'
+        run: npm ci
+
+      - name: Install Composer Dependencies (Prod, no scripts yet)
+        if: steps.changed.outputs.mode != 'skip'
+        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
+
+      - name: Build Assets
+        if: steps.rebuild_check.outputs.frontend == 'true'
+        run: npm run build
+
+      - name: Regenerate autoload & run discovery
+        if: steps.changed.outputs.mode != 'skip'
+        env:
+          BROADCAST_CONNECTION: log
+          REVERB_APP_KEY: "dummy-key"
+          REVERB_APP_SECRET: "dummy-secret"
+          REVERB_APP_ID: "123456"
         run: |
-          npm ci
-          npm run build
+          composer dump-autoload --optimize --no-dev
+          php artisan package:discover --ansi
 
       # ----------------------------------------------------------
       # STEP 5: Buat ZIP (full atau delta) — nama unik per domain
@@ -721,7 +747,7 @@ jobs:
             fi
 
             cd "$TARGET"
-            trap 'php artisan up || true' EXIT
+            trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — situs kembali online tapi state mungkin tidak konsisten, cek manual!"; fi' EXIT
             [ -f "artisan" ] && php artisan down || true
 
             rm -rf "$STAGING" && mkdir -p "$STAGING"
@@ -774,7 +800,7 @@ jobs:
             fi
 
             cd "$TARGET"
-            trap 'php artisan up || true' EXIT
+            trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — situs kembali online tapi state mungkin tidak konsisten, cek manual!"; fi' EXIT
             [ -f "artisan" ] && php artisan down || true
 
             rm -rf "$STAGING" && mkdir -p "$STAGING"

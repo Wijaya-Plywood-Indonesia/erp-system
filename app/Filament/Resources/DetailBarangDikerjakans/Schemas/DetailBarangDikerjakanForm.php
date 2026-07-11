@@ -2,16 +2,42 @@
 
 namespace App\Filament\Resources\DetailBarangDikerjakans\Schemas;
 
-use Filament\Schemas\Schema;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
-use App\Models\BarangSetengahJadiHp;
+use App\Models\DetailBarangDikerjakan;
 use App\Models\Grade;
 use App\Models\JenisBarang;
 use App\Models\PegawaiNyusup;
+use App\Models\SerahTerimaGudangSatu;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Schema;
 
 class DetailBarangDikerjakanForm
 {
+    /**
+     * Hitung sisa REAL dari sebuah SerahTerimaGudangSatu, dikecualikan dari
+     * modal milik record yang sedang diedit (kalau ada), supaya waktu edit
+     * form tidak salah menganggap modal lama sudah "makan" sisa dua kali.
+     */
+    private static function hitungSisaUntukForm(?SerahTerimaGudangSatu $serahTerima, $editingRecordId = null): float
+    {
+        if (! $serahTerima) {
+            return 0;
+        }
+
+        // getSisaAttribute() di model sudah menghitung total pemakaian dari
+        // BahanTerimaGudangSatu + semua DetailBarangDikerjakan (termasuk record
+        // yang sedang diedit kalau modalnya sudah tersimpan). Jadi kalau sedang
+        // edit, kita tambahkan kembali modal record ini supaya tidak dobel kurang.
+        $sisa = $serahTerima->sisa;
+
+        if ($editingRecordId) {
+            $modalRecordIni = DetailBarangDikerjakan::where('id', $editingRecordId)->value('modal') ?? 0;
+            $sisa += (float) $modalRecordIni;
+        }
+
+        return (float) $sisa;
+    }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -21,8 +47,6 @@ class DetailBarangDikerjakanForm
                     ->required()
                     ->searchable()
                     ->options(function ($livewire) {
-
-                        // 🔑 Ambil Produksi Nyusup (parent)
                         $produksi = $livewire->getOwnerRecord();
 
                         if (! $produksi) {
@@ -32,8 +56,8 @@ class DetailBarangDikerjakanForm
                         return PegawaiNyusup::with('pegawai')
                             ->where('id_produksi_nyusup', $produksi->id)
                             ->get()
-                            ->mapWithKeys(fn($p) => [
-                                $p->id => $p->pegawai->nama_pegawai
+                            ->mapWithKeys(fn ($p) => [
+                                $p->id => $p->pegawai->nama_pegawai,
                             ]);
                     })
                     ->columnSpanFull(),
@@ -51,11 +75,11 @@ class DetailBarangDikerjakanForm
                         })
                             ->orderBy('nama_grade')
                             ->get()
-                            ->mapWithKeys(fn($g) => [
-                                $g->id =>  $g->nama_grade
+                            ->mapWithKeys(fn ($g) => [
+                                $g->id => $g->nama_grade,
                             ])
                     )
-                    ->reactive()
+                    ->live()
                     ->searchable()
                     ->placeholder('Semua Grade')
                     ->dehydrated(false),
@@ -66,56 +90,98 @@ class DetailBarangDikerjakanForm
                         JenisBarang::orderBy('nama_jenis_barang')
                             ->pluck('nama_jenis_barang', 'id')
                     )
-                    ->reactive()
+                    ->live()
                     ->searchable()
                     ->placeholder('Semua Jenis Barang')
                     ->dehydrated(false),
 
-                Select::make('id_barang_setengah_jadi_hp')
-                    ->label('Barang Setengah Jadi (Plywood)')
+                /*
+                |--------------------------------------------------------------------------
+                | BARANG: diambil dari SerahTerimaGudangSatu yang sudah diterima
+                | dan tujuan = nyusup, lengket ke produksi nyusup ini.
+                |--------------------------------------------------------------------------
+                */
+                Select::make('id_serah_terima_gudang_satu')
+                    ->label('Barang (dari Serah Terima)')
                     ->required()
                     ->searchable()
-                    ->options(function (callable $get) {
+                    ->live()
+                    ->options(function (callable $get, $livewire, ?DetailBarangDikerjakan $record) {
+                        $produksi = $livewire->getOwnerRecord();
 
-                        $query = BarangSetengahJadiHp::query()
+                        if (! $produksi) {
+                            return [];
+                        }
+
+                        $editingRecordId = $record?->id;
+
+                        $records = SerahTerimaGudangSatu::query()
                             ->with([
-                                'ukuran',
-                                'jenisBarang',
-                                'grade.kategoriBarang',
+                                'hasilPilihPlywood.barangSetengahJadiHp.jenisBarang',
+                                'hasilPilihPlywood.barangSetengahJadiHp.grade',
+                                'hasilPilihPlywood.barangSetengahJadiHp.ukuran',
+                                'hasilTerimaGudangSatu.jenisBarang',
+                                'hasilTerimaGudangSatu.grade',
+                                'hasilTerimaGudangSatu.ukuran',
                             ])
-                            // 🔒 WAJIB PLYWOOD
-                            ->whereHas('grade.kategoriBarang', function ($q) {
-                                $q->where('nama_kategori', 'PLYWOOD');
+                            ->where('tujuan', 'nyusup')
+                            // ->where('id_produksi_nyusup', $produksi->id)
+                            ->where('diterima_oleh', '!=', '-')
+                            ->get();
+
+                        return $records
+                            ->filter(function ($r) use ($get, $editingRecordId) {
+                                $sisaUntukForm = self::hitungSisaUntukForm($r, $editingRecordId);
+
+                                // Sembunyikan yang sisanya sudah habis (atau minus karena race condition),
+                                // kecuali ini adalah record yang sedang diedit sendiri (supaya opsi lama tetap muncul).
+                                $isCurrentlySelected = $editingRecordId
+                                    && (string) $get('id_serah_terima_gudang_satu') === (string) $r->id;
+
+                                if ($sisaUntukForm <= 0 && ! $isCurrentlySelected) {
+                                    return false;
+                                }
+
+                                $b = $r->hasilPilihPlywood?->barangSetengahJadiHp ?? $r->hasilTerimaGudangSatu;
+
+                                if (! $b) {
+                                    return false;
+                                }
+
+                                if ($get('grade_id') && $b->id_grade != $get('grade_id')) {
+                                    return false;
+                                }
+
+                                if ($get('jenis_barang_id_filter') && $b->id_jenis_barang != $get('jenis_barang_id_filter')) {
+                                    return false;
+                                }
+
+                                return true;
                             })
-                            ->joinRelationship('jenisBarang')
-                            ->joinRelationship('ukuran');
+                            ->mapWithKeys(function ($r) use ($editingRecordId) {
+                                $b = $r->hasilPilihPlywood?->barangSetengahJadiHp ?? $r->hasilTerimaGudangSatu;
 
-                        // ✅ FILTER GRADE
-                        if ($get('grade_id')) {
-                            $query->where('barang_setengah_jadi_hp.id_grade', $get('grade_id'));
+                                $sisaUntukForm = self::hitungSisaUntukForm($r, $editingRecordId);
+
+                                $label = ($b?->ukuran?->tebal ?? $b?->ukuran?->nama_ukuran ?? '-').' | '.
+                                    ($b?->grade?->nama_grade ?? '-').' | '.
+                                    ($b?->jenisBarang?->nama_jenis_barang ?? '-').
+                                    ' (sisa: '.$sisaUntukForm.')';
+
+                                return [$r->id => $label];
+                            });
+                    })
+                    ->helperText(function (callable $get, ?DetailBarangDikerjakan $record) {
+                        $id = $get('id_serah_terima_gudang_satu');
+
+                        if (! $id) {
+                            return null;
                         }
 
-                        // ✅ FILTER JENIS BARANG (INI YANG KURANG!)
-                        if ($get('jenis_barang_id_filter')) {
-                            $query->where(
-                                'barang_setengah_jadi_hp.id_jenis_barang',
-                                $get('jenis_barang_id_filter')
-                            );
-                        }
+                        $serahTerima = SerahTerimaGudangSatu::find($id);
+                        $sisa = self::hitungSisaUntukForm($serahTerima, $record?->id);
 
-                        $query
-                            ->orderBy('ukurans.tebal', 'asc')
-                            ->orderBy('barang_setengah_jadi_hp.id', 'asc');
-
-                        return $query->get()->mapWithKeys(function ($b) {
-    return [
-        $b->id =>
-            ($b->ukuran?->tebal ?? '-') . ' | ' .
-            ($b->grade?->nama_grade ?? '-') . ' | ' .
-            ($b->jenisBarang?->nama_jenis_barang ?? '-')
-    ];
-});
-
+                        return "Sisa tersedia saat ini: {$sisa}";
                     })
                     ->columnSpanFull(),
 
@@ -123,7 +189,46 @@ class DetailBarangDikerjakanForm
                     ->label('Modal Nyusup')
                     ->numeric()
                     ->minValue(1)
-                    ->required(),
+                    ->live(onBlur: true)
+                    ->required()
+                    ->helperText(function (callable $get, ?DetailBarangDikerjakan $record) {
+                        $id = $get('id_serah_terima_gudang_satu');
+
+                        if (! $id) {
+                            return 'Pilih barang dari Serah Terima terlebih dahulu.';
+                        }
+
+                        $serahTerima = SerahTerimaGudangSatu::find($id);
+                        $sisa = self::hitungSisaUntukForm($serahTerima, $record?->id);
+
+                        return "Maksimal modal: {$sisa} (sesuai sisa Serah Terima).";
+                    })
+                    ->rules(function (callable $get, ?DetailBarangDikerjakan $record) {
+                        return [
+                            function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                                $id = $get('id_serah_terima_gudang_satu');
+
+                                if (! $id) {
+                                    // Biarkan validasi 'required' di field select yang menangani ini.
+                                    return;
+                                }
+
+                                $serahTerima = SerahTerimaGudangSatu::find($id);
+
+                                if (! $serahTerima) {
+                                    $fail('Data Serah Terima tidak ditemukan.');
+
+                                    return;
+                                }
+
+                                $sisa = self::hitungSisaUntukForm($serahTerima, $record?->id);
+
+                                if ((float) $value > $sisa) {
+                                    $fail("Modal ({$value}) melebihi sisa yang tersedia dari Serah Terima ini (sisa: {$sisa}).");
+                                }
+                            },
+                        ];
+                    }),
 
                 TextInput::make('hasil')
                     ->label('Hasil Nyusup')
