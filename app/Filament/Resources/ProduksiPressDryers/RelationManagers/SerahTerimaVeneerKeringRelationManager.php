@@ -125,12 +125,19 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                         'mutasiKeluarPalet.mutasiKeluar.ukuran',
                         'mutasiKeluarPalet.mutasiKeluar.jenisKayu',
                     ])
+                    // 🔒 SEMENTARA DINONAKTIFKAN: tab Repair hanya menampilkan antrean dari
+                    // Gudang saja (tipe_sumber = 'gudang'). Antrean dari Dryer/Kedi
+                    // langsung (tipe_sumber 'dryer'/'kedi') disembunyikan dulu atas
+                    // permintaan — filter ini bisa dihapus lagi kapan saja untuk
+                    // mengaktifkan kembali tampilan gabungan seperti semula.
+                    ->where('tipe_sumber', 'gudang')
                     ->where(function ($q) use ($ownerId) {
                         $q->where('diterima_oleh', '-')
                             ->orWhere('id_produksi_repair', $ownerId);
                     })
                     ->orderBy('diterima_oleh', 'asc')
                     ->orderBy('created_at', 'desc');
+
             })
             ->columns([
                 TextColumn::make('tipe_sumber')

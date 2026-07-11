@@ -7,9 +7,7 @@ use App\Models\StokVeneerKering;
 use App\Models\Ukuran;
 use App\Models\VeneerKeringMutasiKeluar;
 use App\Models\VeneerKeringMutasiKeluarPalet;
-use App\Models\VeneerMutasi;
-use App\Models\VeneerMutasiDetail;
-use App\Services\SerahTerimaVeneerKeringService;
+use App\Services\StokVeneerKeringService;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -25,9 +23,12 @@ class GudangVeneerKering extends Page
     protected string $view = 'filament.pages.gudang-veneer-kering';
 
     protected static ?string $navigationLabel = 'Gudang Veneer Kering';
+
     protected static string|UnitEnum|null $navigationGroup = 'Gudang';
-    protected static ?string $title          = 'Gudang Veneer Kering';
-    protected static ?int    $navigationSort = 21;
+
+    protected static ?string $title = 'Gudang Veneer Kering';
+
+    protected static ?int $navigationSort = 21;
 
     // Tab aktif: 'masuk' (Serah Terima) / 'keluar' (Veneer Keluar)
     public string $activeTab = 'masuk';
@@ -38,12 +39,20 @@ class GudangVeneerKering extends Page
     // Search riwayat keluar
     public string $keluarSearchQuery = '';
 
+    // Tab aktif untuk section Serah Terima Dryer/Kedi: 'aktif' / 'history'
+    public string $serahTerimaTab = 'aktif';
+
     // ── Form Barang Keluar ──
     public bool $showFormKeluarModal = false;
+
     public ?int $selectedStokId = null;          // id baris summary (StokVeneerKering latest per kombinasi)
+
     public $jumlahPalet = 1;
+
     public array $paletQuantities = [0 => ''];
+
     public string $tujuanKeluar = 'Repair';
+
     public string $keteranganKeluar = '';
 
     protected $queryString = ['activeTab'];
@@ -80,11 +89,11 @@ class GudangVeneerKering extends Page
 
             $rows = $rows->filter(function (StokVeneerKering $row) use ($needle) {
                 $dimensi = strtolower(
-                    rtrim(rtrim(number_format((float) $row->ukuran?->panjang, 2), '0'), '.') . 'x' .
-                    rtrim(rtrim(number_format((float) $row->ukuran?->lebar, 2), '0'), '.') . 'x' .
+                    rtrim(rtrim(number_format((float) $row->ukuran?->panjang, 2), '0'), '.').'x'.
+                    rtrim(rtrim(number_format((float) $row->ukuran?->lebar, 2), '0'), '.').'x'.
                     rtrim(rtrim(number_format((float) $row->ukuran?->tebal, 2), '0'), '.')
                 );
-                $kw   = strtolower((string) $row->kw);
+                $kw = strtolower((string) $row->kw);
                 $kayu = strtolower((string) $row->jenisKayu?->nama_kayu);
 
                 return str_contains($dimensi, $needle)
@@ -112,111 +121,95 @@ class GudangVeneerKering extends Page
             ->values();
     }
 
-    // ─── SERAH TERIMA ─────────────────────────────────────────────────────────
+    // ─── SERAH TERIMA (DARI DRYER / KEDI) ──────────────────────────────────────
 
-    public function getSerahTerimaProperty()
+    /**
+     * Daftar antrean SerahTerimaVeneerKering yang berasal dari Press Dryer atau
+     * Kedi dan BELUM diterima siapa pun (diterima_oleh = '-').
+     * Ini yang ditampilkan di tab "Serah Terima" halaman Gudang Veneer Kering,
+     * supaya admin gudang bisa langsung menerima hasil dryer ke stok gudang
+     * TANPA perlu lewat halaman Produksi Repair.
+     */
+    public function getSerahTerimaProperty(): Collection
     {
-        $keringLike = SerahTerimaVeneerKeringService::TIPE_KERING_LIKE;
-
-        $rows = VeneerMutasi::query()
-            ->whereNotNull('id_nota_bm')
-            ->whereHas('notaBm', fn ($q) => $q->whereNotNull('divalidasi_oleh'))
-            ->whereHas('details', fn ($q) => $q->where('tipe_veneer', 'like', $keringLike))
+        return SerahTerimaVeneerKering::query()
+            ->whereIn('tipe_sumber', ['dryer', 'kedi'])
+            ->where('jenis_terima', 'kering')
+            ->where('diterima_oleh', '-')
             ->with([
-                'details' => fn ($q) => $q
-                    ->where('tipe_veneer', 'like', $keringLike)
-                    ->with(['ukuran', 'jenisKayu', 'stokVeneerKering']),
-                'notaBm.detail',
+                'detailHasil.ukuran',
+                'detailHasil.jenisKayu',
+                'detailBongkarKedi.ukuran',
+                'detailBongkarKedi.jenisKayu',
             ])
-            ->orderByDesc('tanggal')
-            ->orderByDesc('id')
+            ->orderBy('created_at')
             ->get();
-
-        foreach ($rows as $vm) {
-            $kandidat = $vm->notaBm?->detail ?? collect();
-
-            foreach ($vm->details as $d) {
-                $d->keterangan_nota = $this->cocokkanKeterangan($d, $kandidat);
-            }
-        }
-
-        return $rows
-            ->sortBy(fn (VeneerMutasi $vm) => $vm->details->every(fn ($d) => $d->stokVeneerKering !== null) ? 1 : 0)
-            ->values();
     }
 
-    protected function cocokkanKeterangan(VeneerMutasiDetail $detail, Collection $kandidat): ?string
+    /**
+     * Riwayat veneer dari Dryer/Kedi yang SUDAH diterima ke Gudang Veneer
+     * Kering (untuk tab "History" — supaya bisa dilihat kapan diterimanya).
+     */
+    public function getRiwayatSerahTerimaProperty(): Collection
     {
-        $qty  = (int) round((float) $detail->qty);
-        $kw   = strtolower(trim((string) $detail->kw));
-        $kayu = strtolower(trim((string) ($detail->jenisKayu?->nama_kayu ?? '')));
-
-        $match = $kandidat->first(function ($nd) use ($qty, $kw, $kayu) {
-            $nama    = strtolower((string) ($nd->nama_barang ?? ''));
-            $namaTNS = str_replace(' ', '', $nama);
-            $jml     = (int) round((float) ($nd->jumlah ?? 0));
-
-            $cocokQty  = $qty > 0 && $jml === $qty;
-            $cocokKayu = $kayu !== '' && str_contains($nama, $kayu);
-            $cocokKw   = $kw !== '' && (
-                str_contains($nama, 'kw ' . $kw) ||
-                str_contains($namaTNS, 'kw' . $kw)
-            );
-
-            return $cocokQty && $cocokKayu && $cocokKw;
-        });
-
-        $ket = $match?->keterangan;
-
-        return ($ket !== null && trim((string) $ket) !== '') ? (string) $ket : null;
-    }
-
-    public function terima(int $id, array $detailIds = []): void
-    {
-        $keringLike = SerahTerimaVeneerKeringService::TIPE_KERING_LIKE;
-
-        $mutasi = VeneerMutasi::query()
+        return SerahTerimaVeneerKering::query()
+            ->whereIn('tipe_sumber', ['dryer', 'kedi'])
+            ->where('jenis_terima', 'kering')
+            ->where('diterima_oleh', '!=', '-')
             ->with([
-                'notaBm',
-                'details' => fn ($q) => $q->where('tipe_veneer', 'like', $keringLike),
+                'detailHasil.ukuran',
+                'detailHasil.jenisKayu',
+                'detailBongkarKedi.ukuran',
+                'detailBongkarKedi.jenisKayu',
             ])
-            ->findOrFail($id);
+            ->orderByDesc('updated_at')
+            ->get();
+    }
 
-        if (! $mutasi->id_nota_bm || ! $mutasi->notaBm || ! $mutasi->notaBm->divalidasi_oleh) {
-            Notification::make()->title('Nota belum divalidasi.')->danger()->send();
-            return;
+    /**
+     * Terima satu baris antrean dryer/kedi langsung ke stok Gudang Veneer
+     * Kering. Selalu diterima sebagai "kering" (bukan "jadi"), karena memang
+     * ini alur masuk ke Gudang Veneer Kering.
+     */
+    public function terimaDryer(int $id): void
+    {
+        try {
+            DB::transaction(function () use ($id) {
+                $fresh = SerahTerimaVeneerKering::lockForUpdate()->findOrFail($id);
+
+                if ($fresh->diterima_oleh !== '-') {
+                    throw new \RuntimeException('Veneer ini sudah diterima sebelumnya.');
+                }
+
+                if (! in_array($fresh->tipe_sumber, ['dryer', 'kedi'], true)) {
+                    throw new \RuntimeException('Sumber veneer tidak valid untuk diterima di Gudang Veneer Kering.');
+                }
+
+                if ($fresh->jenis_terima !== 'kering') {
+                    throw new \RuntimeException('Barang ini bukan veneer kering, tidak bisa diterima di sini.');
+                }
+
+                $user = Auth::user();
+
+                $fresh->update([
+                    'diterima_oleh' => ($user?->name ?? 'System').' - Gudang Veneer Kering',
+                    'status' => 'Terima Veneer',
+                ]);
+
+                app(StokVeneerKeringService::class)->terimaRepair($fresh);
+            });
+
+            Notification::make()
+                ->title('Veneer kering berhasil diterima ke Gudang.')
+                ->success()
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Gagal Menerima Veneer')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
         }
-
-        // Normalisasi pilihan: hanya id detail milik mutasi ini.
-        $detailIds = array_values(array_intersect(
-            array_map('intval', $detailIds),
-            $mutasi->details->pluck('id')->all()
-        ));
-
-        if (empty($detailIds)) {
-            Notification::make()->title('Pilih minimal satu barang untuk diterima.')->warning()->send();
-            return;
-        }
-
-        // Buang yang sudah pernah diterima (per-detail).
-        $sudahIds = StokVeneerKering::query()
-            ->whereIn('id_veneer_mutasi_detail', $detailIds)
-            ->pluck('id_veneer_mutasi_detail')
-            ->all();
-
-        $detailIds = array_values(array_diff($detailIds, $sudahIds));
-
-        if (empty($detailIds)) {
-            Notification::make()->title('Barang terpilih sudah diterima semua.')->warning()->send();
-            return;
-        }
-
-        app(SerahTerimaVeneerKeringService::class)->terima($mutasi, (int) auth()->id(), $detailIds);
-
-        Notification::make()
-            ->title(count($detailIds) . ' barang berhasil diterima ke Gudang Veneer Kering.')
-            ->success()
-            ->send();
     }
 
     // ─── VENEER KELUAR ────────────────────────────────────────────────────────
@@ -276,6 +269,7 @@ class GudangVeneerKering extends Page
                 ->title('Input Gagal')
                 ->body('Pilih stok, isi kuantitas palet, dan tujuan keluar wajib diisi.')
                 ->send();
+
             return;
         }
 
@@ -284,9 +278,9 @@ class GudangVeneerKering extends Page
                 // Baris summary yang dipilih = wakil kombinasi produk.
                 $ref = StokVeneerKering::with('ukuran')->findOrFail($this->selectedStokId);
 
-                $idUkuran    = (int) $ref->id_ukuran;
+                $idUkuran = (int) $ref->id_ukuran;
                 $idJenisKayu = (int) $ref->id_jenis_kayu;
-                $kw          = (string) $ref->kw;
+                $kw = (string) $ref->kw;
 
                 // Validasi saldo tetap di sini (early feedback), meskipun stok
                 // baru benar-benar terpotong nanti saat masing-masing palet
@@ -303,15 +297,15 @@ class GudangVeneerKering extends Page
 
                 // 1. Header mutasi keluar — murni pencatatan, TIDAK menyentuh stok/log.
                 $mutasi = VeneerKeringMutasiKeluar::create([
-                    'id_ukuran'        => $idUkuran,
-                    'id_jenis_kayu'    => $idJenisKayu,
-                    'kw'               => $kw,
-                    'jumlah_palet'     => count($this->paletQuantities),
-                    'qty'              => $totalLembar,
-                    'm3'               => $m3,
-                    'tujuan_keluar'    => trim($this->tujuanKeluar),
+                    'id_ukuran' => $idUkuran,
+                    'id_jenis_kayu' => $idJenisKayu,
+                    'kw' => $kw,
+                    'jumlah_palet' => count($this->paletQuantities),
+                    'qty' => $totalLembar,
+                    'm3' => $m3,
+                    'tujuan_keluar' => trim($this->tujuanKeluar),
                     'dikeluarkan_oleh' => $user?->id,
-                    'keterangan'       => trim($this->keteranganKeluar) !== '' ? trim($this->keteranganKeluar) : null,
+                    'keterangan' => trim($this->keteranganKeluar) !== '' ? trim($this->keteranganKeluar) : null,
                 ]);
 
                 // 2. Rincian per palet + antrean Serah Terima (BELUM potong stok/log).
@@ -320,8 +314,8 @@ class GudangVeneerKering extends Page
 
                     $palet = VeneerKeringMutasiKeluarPalet::create([
                         'id_mutasi_keluar' => $mutasi->id,
-                        'no_palet'         => $index + 1,
-                        'qty'              => $qtyPalet,
+                        'no_palet' => $index + 1,
+                        'qty' => $qtyPalet,
                     ]);
 
                     if ($qtyPalet <= 0) {
@@ -330,20 +324,20 @@ class GudangVeneerKering extends Page
 
                     SerahTerimaVeneerKering::create([
                         'id_mutasi_keluar_palet' => $palet->id,
-                        'tipe_sumber'            => 'gudang',
-                        'diserahkan_oleh'        => $user?->name ?? 'System',
-                        'diterima_oleh'          => '-',
-                        'status'                 => 'Serah Veneer',
+                        'tipe_sumber' => 'gudang',
+                        'diserahkan_oleh' => $user?->name ?? 'System',
+                        'diterima_oleh' => '-',
+                        'status' => 'Serah Veneer',
                     ]);
                 }
             });
 
             // Reset form
-            $this->selectedStokId      = null;
-            $this->jumlahPalet         = 1;
-            $this->paletQuantities     = [0 => ''];
-            $this->tujuanKeluar        = 'Repair';
-            $this->keteranganKeluar    = '';
+            $this->selectedStokId = null;
+            $this->jumlahPalet = 1;
+            $this->paletQuantities = [0 => ''];
+            $this->tujuanKeluar = 'Repair';
+            $this->keteranganKeluar = '';
             $this->showFormKeluarModal = false;
 
             Notification::make()
