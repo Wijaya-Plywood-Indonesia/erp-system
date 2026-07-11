@@ -11,6 +11,7 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -187,7 +188,19 @@ class DetailHasilsRelationManager extends RelationManager
                     ->color('success')
                     ->requiresConfirmation()
                     ->modalHeading('Serahkan Veneer Kering ini ke Repair?')
-                    ->modalDescription('Pastikan data berikut sudah sesuai sebelum diserahkan.')
+                    ->modalDescription('Pilih tujuan serah, lalu pastikan data berikut sudah sesuai.')
+                    ->schema([
+                        Radio::make('jenis_terima')
+                            ->label('Diserahkan Sebagai')
+                            ->options([
+                                'kering' => 'Veneer Kering',
+                                'jadi' => 'Veneer Jadi',
+                            ])
+                            ->inline()
+                            ->inlineLabel(false)
+                            ->default('kering')
+                            ->required(),
+                    ])
                     ->modalContent(function (DetailHasil $record) {
                         $jenisKayu = $record->jenisKayu?->nama_kayu ?? '-';
                         $ukuranModel = $record->ukuran;
@@ -196,30 +209,30 @@ class DetailHasilsRelationManager extends RelationManager
                             : '-';
 
                         return new HtmlString(<<<HTML
-            <div class="space-y-2 text-sm">
-                <div class="grid grid-cols-3 gap-1">
-                    <span class="font-medium text-gray-500">No. Palet</span>
-                    <span class="col-span-2">: {$record->no_palet}</span>
+    <div class="space-y-2 text-sm">
+        <div class="grid grid-cols-3 gap-1">
+            <span class="font-medium text-gray-500">No. Palet</span>
+            <span class="col-span-2">: {$record->no_palet}</span>
 
-                    <span class="font-medium text-gray-500">Jenis Kayu</span>
-                    <span class="col-span-2">: {$jenisKayu}</span>
+            <span class="font-medium text-gray-500">Jenis Kayu</span>
+            <span class="col-span-2">: {$jenisKayu}</span>
 
-                    <span class="font-medium text-gray-500">Ukuran</span>
-                    <span class="col-span-2">: {$ukuran}</span>
+            <span class="font-medium text-gray-500">Ukuran</span>
+            <span class="col-span-2">: {$ukuran}</span>
 
-                    <span class="font-medium text-gray-500">Kualitas (KW)</span>
-                    <span class="col-span-2">: {$record->kw}</span>
+            <span class="font-medium text-gray-500">Kualitas (KW)</span>
+            <span class="col-span-2">: {$record->kw}</span>
 
-                    <span class="font-medium text-gray-500">Isi</span>
-                    <span class="col-span-2">: {$record->isi}</span>
-                </div>
-            </div>
-        HTML);
+            <span class="font-medium text-gray-500">Isi</span>
+            <span class="col-span-2">: {$record->isi}</span>
+        </div>
+    </div>
+HTML);
                     })
                     ->visible(fn (DetailHasil $record) => ! $record->serahTerimaVeneerKering)
-                    ->action(function (DetailHasil $record) {
+                    ->action(function (DetailHasil $record, array $data) {
                         try {
-                            DB::transaction(function () use ($record) {
+                            DB::transaction(function () use ($record, $data) {
                                 SerahTerimaVeneerKering::create([
                                     'id_detail_hasil' => $record->id,
                                     'id_detail_bongkar_kedi' => null,
@@ -227,6 +240,7 @@ class DetailHasilsRelationManager extends RelationManager
                                     'id_produksi_repair' => null,
                                     'diserahkan_oleh' => Auth::user()->name,
                                     'diterima_oleh' => '-',
+                                    'jenis_terima' => $data['jenis_terima'],
                                     'status' => 'Serah Veneer',
                                 ]);
                             });
