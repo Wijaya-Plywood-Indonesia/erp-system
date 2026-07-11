@@ -5,11 +5,11 @@ namespace App\Filament\Resources\PenggunaanLahanRotaries\Schemas;
 use App\Models\JenisKayu;
 use App\Models\Lahan;
 use App\Models\PenggunaanLahanRotary;
+use App\Models\DetailKayuMasuk; // Tambahkan ini
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 use App\Models\TempatKayu;
-
 use Filament\Notifications\Notification;
 
 class PenggunaanLahanRotaryForm
@@ -21,13 +21,11 @@ class PenggunaanLahanRotaryForm
                 Select::make('id_lahan')
                     ->label('Lahan')
                     ->options(function () {
-                        // Ambil semua id_lahan dari tempat kayu yang status diterima
                         $lahanIds = TempatKayu::query()
                             ->where('status', 'sudah diterima')
                             ->pluck('id_lahan')
                             ->unique();
 
-                        // Ambil data lahan berdasarkan id tersebut
                         return Lahan::query()
                             ->whereIn('id', $lahanIds)
                             ->get()
@@ -37,9 +35,12 @@ class PenggunaanLahanRotaryForm
                     })
                     ->searchable()
                     ->required()
-                    ->live()->afterStateUpdated(function ($state, callable $get, callable $set, $livewire) {
-
+                    ->live() // Memicu re-render saat lahan diubah
+                    ->afterStateUpdated(function ($state, callable $get, callable $set, $livewire) {
+                        
+                        // 1. Jika lahan dikosongkan, kosongkan juga jenis kayunya
                         if (!$state) {
+                            $set('id_jenis_kayu', null);
                             return;
                         }
 
@@ -50,6 +51,7 @@ class PenggunaanLahanRotaryForm
                             ->where('id_lahan', $state)
                             ->exists();
 
+                        // 2. Validasi duplikat
                         if ($exists) {
                             Notification::make()
                                 ->title('Data sudah terdaftar')
@@ -58,8 +60,25 @@ class PenggunaanLahanRotaryForm
                                 ->send();
 
                             $set('id_lahan', null);
+                            $set('id_jenis_kayu', null);
+                            return;
+                        }
+
+                        // 3. AUTO-FILL JENIS KAYU
+                        // Cari detail kayu masuk terakhir untuk lahan yang dipilih
+                        $detailTerbaru = DetailKayuMasuk::query()
+                            ->where('id_lahan', $state)
+                            ->latest('id')
+                            ->first();
+
+                        if ($detailTerbaru && $detailTerbaru->id_jenis_kayu) {
+                            // Set nilai jenis kayu sesuai dengan ID yang ditemukan
+                            $set('id_jenis_kayu', $detailTerbaru->id_jenis_kayu);
+                        } else {
+                            $set('id_jenis_kayu', null);
                         }
                     }),
+                    
                 Select::make('id_jenis_kayu')
                     ->label('Jenis Kayu')
                     ->options(
@@ -72,13 +91,9 @@ class PenggunaanLahanRotaryForm
                             })
                     )
                     ->searchable()
-                    ->required(),
-                // TextInput::make('jumlah_batang')
-                //     ->required()
-                //     ->numeric()
-                //     ->default(0)
-                //     ->readOnly()
-                //     ->dehydrated(),
+                    ->required()
+                    ->disabled()
+                    ->dehydrated(),
             ]);
     }
 }
