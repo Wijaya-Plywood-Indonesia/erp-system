@@ -1,4 +1,4 @@
-name: Laravel 12 CI/CD Delta Deployment
+name: Automation Workflow ERP-System
 
 on:
   push:
@@ -26,6 +26,10 @@ on:
           - prarelease-wahana
           - kayu.wijayaplywoods.com
           - wahana.wijayaplywoods.com
+
+concurrency:
+  group: cicd-tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # ============================================================
