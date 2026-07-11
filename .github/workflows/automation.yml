@@ -15,6 +15,17 @@ on:
           - testing_only
           - prarelease
           - production
+      target_domain:
+        description: "Pilih domain untuk deploy"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - prarelease.wijayaplywoods.com
+          - prarelease-wahana
+          - kayu.wijayaplywoods.com
+          - wahana.wijayaplywoods.com
 
 jobs:
   # ============================================================
@@ -112,7 +123,26 @@ jobs:
       ZIP_NAME: "deploy-${{ matrix.site.domain }}.zip"
       DELETED_NAME: "deleted-${{ matrix.site.domain }}.txt"
     steps:
+      # Untuk running action yang lebih spesifik
+      - name: Determine if this domain should run
+        id: domain_filter
+        run: |
+          TARGET_DOMAIN="${{ github.event.inputs.target_domain }}"
+          CURRENT_DOMAIN="${{ matrix.site.domain }}"
+
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          elif [ -z "$TARGET_DOMAIN" ] || [ "$TARGET_DOMAIN" = "all" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          elif [ "$TARGET_DOMAIN" = "$CURRENT_DOMAIN" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+            echo "⏩ Skip domain ini ($CURRENT_DOMAIN), tidak sesuai pilihan target_domain: $TARGET_DOMAIN"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.domain_filter.outputs.run == 'true'
         with:
           fetch-depth: 0 # Wajib: butuh full history untuk git diff
 
@@ -122,6 +152,7 @@ jobs:
       # ----------------------------------------------------------
       - name: Get last deployed commit from server
         id: last_commit
+        if: steps.domain_filter.outputs.run == 'true'
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -139,6 +170,7 @@ jobs:
       # Simpan output dari SSH ke environment variable
       - name: Parse last commit output
         id: parse_commit
+        if: steps.domain_filter.outputs.run == 'true'
         run: |
           # Ambil baris terakhir dari output SSH (baris lain adalah banner/info)
           LAST=$(echo "${{ steps.last_commit.outputs.output }}" | tail -n 1 | tr -d '[:space:]')
@@ -150,6 +182,7 @@ jobs:
       # ----------------------------------------------------------
       - name: Detect changed files
         id: changed
+        if: steps.domain_filter.outputs.run == 'true'
         run: |
           LAST="${{ steps.parse_commit.outputs.last_commit }}"
           CURRENT="${{ github.sha }}"
@@ -218,7 +251,7 @@ jobs:
       # ----------------------------------------------------------
       - name: Check if frontend assets changed
         id: frontend_check
-        if: steps.changed.outputs.mode != 'skip'
+        if: steps.changed.outputs.mode != 'skip' && steps.domain_filter.outputs.run == 'true'
         run: |
           if [ "${{ steps.changed.outputs.mode }}" = "full" ]; then
             echo "rebuild=true" >> $GITHUB_OUTPUT
@@ -234,38 +267,38 @@ jobs:
           fi
 
       - name: Setup PHP for Production
-        if: steps.changed.outputs.mode != 'skip'
+        if: steps.changed.outputs.mode != 'skip' && steps.domain_filter.outputs.run == 'true'
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.4"
 
       - name: Setup Node.js
-        if: steps.frontend_check.outputs.rebuild == 'true'
+        if: steps.frontend_check.outputs.rebuild == 'true' && steps.domain_filter.outputs.run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Install NPM Dependencies (no build yet)
-        if: steps.frontend_check.outputs.rebuild == 'true'
+        if: steps.frontend_check.outputs.rebuild == 'true' && steps.domain_filter.outputs.run == 'true'
         run: npm ci
 
       - name: Install Composer Dependencies (Prod, no scripts yet)
-        if: steps.changed.outputs.mode != 'skip'
+        if: steps.changed.outputs.mode != 'skip' && steps.domain_filter.outputs.run == 'true'
         run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
 
       - name: Debug - verify filament views exist
-        if: steps.changed.outputs.mode != 'skip'
+        if: steps.changed.outputs.mode != 'skip' && steps.domain_filter.outputs.run == 'true'
         run: |
           find vendor/filament -iname "*grid*" 2>/dev/null
           echo "---"
           find vendor/filament -type d -iname "components" 2>/dev/null
 
       - name: Build Assets
-        if: steps.frontend_check.outputs.rebuild == 'true'
+        if: steps.frontend_check.outputs.rebuild == 'true' && steps.domain_filter.outputs.run == 'true'
         run: npm run build
 
       - name: Regenerate autoload & run discovery
-        if: steps.changed.outputs.mode != 'skip'
+        if: steps.changed.outputs.mode != 'skip' && steps.domain_filter.outputs.run == 'true'
         env:
           BROADCAST_CONNECTION: log
           REVERB_APP_KEY: "dummy-key"
@@ -281,7 +314,7 @@ jobs:
       # tabrakan saat 2 matrix job upload ke server yang sama
       # ----------------------------------------------------------
       - name: Create FULL ZIP package
-        if: steps.changed.outputs.mode == 'full'
+        if: steps.changed.outputs.mode == 'full' && steps.domain_filter.outputs.run == 'true'
         run: |
           set -euo pipefail
           BUILD_DIR=./build_deploy
@@ -300,7 +333,7 @@ jobs:
           echo "📦 Full ZIP size: $(du -sh "$ZIP_NAME")"
 
       - name: Create DELTA ZIP package
-        if: steps.changed.outputs.mode == 'delta'
+        if: steps.changed.outputs.mode == 'delta' && steps.domain_filter.outputs.run == 'true'
         run: |
           set -euo pipefail
 
@@ -325,8 +358,10 @@ jobs:
             zip -r "$ZIP_NAME" . -i@/tmp/changed_files.txt -q
             echo "📦 Delta ZIP size: $(du -sh "$ZIP_NAME")"
           else
-            echo "no_changes" > /tmp/no_changes_marker.txt
-            zip "$ZIP_NAME" /tmp/no_changes_marker.txt -q
+            touch /tmp/empty.placeholder
+            zip -j "$ZIP_NAME" /tmp/empty.placeholder -q
+            rm -f /tmp/empty.placeholder
+            echo "📦 Tidak ada file berubah, buat ZIP placeholder kosong"
           fi
 
           if [ -s /tmp/deleted_files.txt ]; then
@@ -337,7 +372,7 @@ jobs:
       # STEP 4: Upload ZIP (dan deleted_files jika ada)
       # ----------------------------------------------------------
       - name: Upload ZIP to Server
-        if: steps.changed.outputs.mode != 'skip'
+        if: steps.changed.outputs.mode != 'skip'  && steps.domain_filter.outputs.run == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -348,7 +383,7 @@ jobs:
           target: "/home/${{ secrets.SSH_USERNAME }}"
 
       - name: Upload deleted files list (jika ada)
-        if: steps.changed.outputs.mode == 'delta' && steps.changed.outputs.deleted_count != '0'
+        if: steps.changed.outputs.mode == 'delta' && steps.changed.outputs.deleted_count != '0' && steps.domain_filter.outputs.run == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -363,7 +398,7 @@ jobs:
       # TARGET dan STAGING sekarang memakai nama domain dari matrix
       # ----------------------------------------------------------
       - name: Execute Remote SSH Commands (Full Deploy)
-        if: steps.changed.outputs.mode == 'full'
+        if: steps.changed.outputs.mode == 'full' && steps.domain_filter.outputs.run == 'true'
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -398,10 +433,19 @@ jobs:
               -exec cp -r {} "$TARGET/" \;
 
             php artisan optimize:clear
+
+            # Buat symlink storage (skip jika sudah ada)
+            cd "$TARGET/public"
+            if [ ! -e "storage" ]; then
+              ln -s "$TARGET/storage/app/public" storage
+            fi
+            cd "$TARGET"
+
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
             php artisan migrate --force
+            php artisan shield:generate --all --panel=admin --no-interaction
 
             echo "${{ github.sha }}" > "$TARGET/.last_deploy_commit"
 
@@ -411,7 +455,7 @@ jobs:
             echo "🚀 [$DOMAIN] Full Deployment Success! [${{ github.sha }}]"
 
       - name: Execute Remote SSH Commands (Delta Deploy)
-        if: steps.changed.outputs.mode == 'delta'
+        if: steps.changed.outputs.mode == 'delta' && steps.domain_filter.outputs.run == 'true'
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -430,6 +474,13 @@ jobs:
 
             rm -rf "$STAGING" && mkdir -p "$STAGING"
             unzip -oq "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}" -d "$STAGING"
+
+            # Jika vendor ikut dikirim (composer.json/lock berubah), ganti seluruh
+            # folder vendor di server agar dependency yang sudah dihapus tidak nyangkut
+            if [ -d "$STAGING/vendor" ]; then
+              echo "📦 vendor/ ikut dikirim, replace penuh folder vendor di server"
+              rm -rf "$TARGET/vendor"
+            fi
 
             find "$STAGING" -mindepth 1 -maxdepth 1 \
               ! -name 'storage' \
@@ -454,11 +505,24 @@ jobs:
               rm -f "$DELETED_LIST"
             fi
 
+            if [ -d "vendor" ]; then
+              composer dump-autoload --optimize --no-dev --no-interaction || true
+            fi
+
             php artisan optimize:clear
+
+            # Buat symlink storage (skip jika sudah ada)
+            cd "$TARGET/public"
+            if [ ! -e "storage" ]; then
+              ln -s "$TARGET/storage/app/public" storage
+            fi
+            cd "$TARGET"
+
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
             php artisan migrate --force
+            php artisan shield:generate --all --panel=admin --no-interaction
 
             echo "${{ github.sha }}" > "$TARGET/.last_deploy_commit"
 
@@ -468,7 +532,7 @@ jobs:
             echo "⚡ [$DOMAIN] Delta Deployment Success! [${{ github.sha }}]"
 
       - name: Skip notification
-        if: steps.changed.outputs.mode == 'skip'
+        if: steps.changed.outputs.mode == 'skip' || steps.domain_filter.outputs.run == 'false'
         run: echo "✅ [${{ matrix.site.domain }}] Tidak ada perubahan yang perlu di-deploy, pipeline selesai."
 
   # ============================================================
@@ -497,7 +561,38 @@ jobs:
       DELETED_NAME: "deleted-${{ matrix.site.domain }}.txt"
 
     steps:
+      # Untuk running action yang lebih spesifik
+      - name: Determine if this domain should run
+        id: domain_filter
+        run: |
+          CURRENT_DOMAIN="${{ matrix.site.domain }}"
+          TAG_NAME="${{ github.ref_name }}"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TARGET_DOMAIN="${{ github.event.inputs.target_domain }}"
+            if [ -z "$TARGET_DOMAIN" ] || [ "$TARGET_DOMAIN" = "all" ]; then
+              echo "run=true" >> $GITHUB_OUTPUT
+            elif [ "$TARGET_DOMAIN" = "$CURRENT_DOMAIN" ]; then
+              echo "run=true" >> $GITHUB_OUTPUT
+            else
+              echo "run=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            # Trigger dari tag push, cek suffix nama tag
+            if [[ "$TAG_NAME" == *-kayu ]] && [ "$CURRENT_DOMAIN" = "kayu.wijayaplywoods.com" ]; then
+              echo "run=true" >> $GITHUB_OUTPUT
+            elif [[ "$TAG_NAME" == *-wahana ]] && [ "$CURRENT_DOMAIN" = "wahana.wijayaplywoods.com" ]; then
+              echo "run=true" >> $GITHUB_OUTPUT
+            elif [[ "$TAG_NAME" != *-kayu ]] && [[ "$TAG_NAME" != *-wahana ]]; then
+              echo "run=true" >> $GITHUB_OUTPUT
+              echo "ℹ️ Tag tanpa suffix domain, deploy ke semua domain"
+            else
+              echo "run=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.domain_filter.outputs.run == 'true'
         with:
           fetch-depth: 0 # Wajib: butuh full history untuk git diff antar tag
 
@@ -507,6 +602,7 @@ jobs:
       # ----------------------------------------------------------
       - name: Get previous tag
         id: prev_tag
+        if: steps.domain_filter.outputs.run == 'true'
         run: |
           CURRENT_TAG="${{ github.ref_name }}"
           echo "Current tag: $CURRENT_TAG"
@@ -528,6 +624,7 @@ jobs:
       # ----------------------------------------------------------
       - name: Detect changed files between tags
         id: changed
+        if: steps.domain_filter.outputs.run == 'true'
         run: |
           MODE="${{ steps.prev_tag.outputs.mode }}"
           PREV="${{ steps.prev_tag.outputs.prev_tag }}"
@@ -547,8 +644,6 @@ jobs:
           if [ "$MODE" = "full" ]; then
             echo "mode=full" >> $GITHUB_OUTPUT
           else
-            echo "mode=delta" >> $GITHUB_OUTPUT
-
             git diff --no-renames --name-only --diff-filter=ACM "$PREV" "$CURRENT" > /tmp/changed_files.txt
             git diff --no-renames --name-only --diff-filter=D "$PREV" "$CURRENT" > /tmp/deleted_files.txt
 
@@ -566,6 +661,13 @@ jobs:
             DELETED_COUNT=$(wc -l < /tmp/deleted_files.txt)
             echo "changed_count=$CHANGED_COUNT" >> $GITHUB_OUTPUT
             echo "deleted_count=$DELETED_COUNT" >> $GITHUB_OUTPUT
+
+            if [ "$CHANGED_COUNT" -eq 0 ] && [ "$DELETED_COUNT" -eq 0 ]; then
+              echo "✅ Tidak ada file yang berubah, skip deploy"
+              echo "mode=skip" >> $GITHUB_OUTPUT
+            else
+              echo "mode=delta" >> $GITHUB_OUTPUT
+            fi
           fi
 
       # ----------------------------------------------------------
@@ -573,6 +675,7 @@ jobs:
       # ----------------------------------------------------------
       - name: Check rebuild requirements
         id: rebuild_check
+        if: steps.changed.outputs.mode != 'skip' && steps.domain_filter.outputs.run == 'true'
         run: |
           MODE="${{ steps.changed.outputs.mode }}"
 
@@ -599,6 +702,7 @@ jobs:
       # STEP 4: Build
       # ----------------------------------------------------------
       - name: Create temporary .env
+        if: steps.changed.outputs.mode != 'skip' && steps.domain_filter.outputs.run == 'true'
         run: |
           echo "APP_KEY=base64:dummykeydummykeydummykeydummykey=" > .env
           echo "BROADCAST_CONNECTION=log" >> .env
@@ -608,31 +712,31 @@ jobs:
           echo "PUSHER_APP_CLUSTER=ap1" >> .env
 
       - name: Setup PHP for Production
-        if: steps.changed.outputs.mode != 'skip'
+        if: steps.changed.outputs.mode != 'skip' && steps.domain_filter.outputs.run == 'true'
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.4"
 
       - name: Setup Node.js
-        if: steps.rebuild_check.outputs.frontend == 'true'
+        if: steps.rebuild_check.outputs.frontend == 'true' && steps.domain_filter.outputs.run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Install NPM Dependencies (no build yet)
-        if: steps.rebuild_check.outputs.frontend == 'true'
+        if: steps.rebuild_check.outputs.frontend == 'true' && steps.domain_filter.outputs.run == 'true'
         run: npm ci
 
       - name: Install Composer Dependencies (Prod, no scripts yet)
-        if: steps.changed.outputs.mode != 'skip'
+        if: steps.changed.outputs.mode != 'skip' && steps.domain_filter.outputs.run == 'true'
         run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
 
       - name: Build Assets
-        if: steps.rebuild_check.outputs.frontend == 'true'
+        if: steps.rebuild_check.outputs.frontend == 'true' && steps.domain_filter.outputs.run == 'true'
         run: npm run build
 
       - name: Regenerate autoload & run discovery
-        if: steps.changed.outputs.mode != 'skip'
+        if: steps.changed.outputs.mode != 'skip' && steps.domain_filter.outputs.run == 'true'
         env:
           BROADCAST_CONNECTION: log
           REVERB_APP_KEY: "dummy-key"
@@ -646,7 +750,7 @@ jobs:
       # STEP 5: Buat ZIP (full atau delta) — nama unik per domain
       # ----------------------------------------------------------
       - name: Create FULL ZIP package
-        if: steps.changed.outputs.mode == 'full'
+        if: steps.changed.outputs.mode == 'full' && steps.domain_filter.outputs.run == 'true'
         run: |
           set -euo pipefail
           BUILD_DIR=./build_deploy
@@ -665,7 +769,7 @@ jobs:
           echo "📦 Full ZIP: $(du -sh "$ZIP_NAME")"
 
       - name: Create DELTA ZIP package
-        if: steps.changed.outputs.mode == 'delta'
+        if: steps.changed.outputs.mode == 'delta' && steps.domain_filter.outputs.run == 'true'
         run: |
           set -euo pipefail
 
@@ -683,8 +787,15 @@ jobs:
           wc -l /tmp/changed_files.txt
           head -30 /tmp/changed_files.txt
 
-          zip -r "$ZIP_NAME" . -i@/tmp/changed_files.txt -q
-          echo "📦 Delta ZIP: $(du -sh "$ZIP_NAME")"
+          if [ -s /tmp/changed_files.txt ]; then
+            zip -r "$ZIP_NAME" . -i@/tmp/changed_files.txt -q
+            echo "📦 Delta ZIP: $(du -sh "$ZIP_NAME")"
+          else
+            touch /tmp/empty.placeholder
+            zip -j "$ZIP_NAME" /tmp/empty.placeholder -q
+            rm -f /tmp/empty.placeholder
+            echo "📦 Tidak ada file berubah, buat ZIP placeholder kosong"
+          fi
 
           if [ -s /tmp/deleted_files.txt ]; then
             cp /tmp/deleted_files.txt "$DELETED_NAME"
@@ -694,6 +805,7 @@ jobs:
       # STEP 6: Setup SSH
       # ----------------------------------------------------------
       - name: Setup SSH Key
+        if: steps.changed.outputs.mode != 'skip' && steps.domain_filter.outputs.run == 'true'
         run: |
           mkdir -p $HOME/.ssh && chmod 700 $HOME/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > $HOME/.ssh/id_ed25519
@@ -704,6 +816,7 @@ jobs:
       # STEP 7: Upload ke server
       # ----------------------------------------------------------
       - name: Upload ZIP to Server
+        if: steps.changed.outputs.mode != 'skip' && steps.domain_filter.outputs.run == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -714,7 +827,7 @@ jobs:
           target: "/home/${{ secrets.SSH_USERNAME }}"
 
       - name: Upload deleted files list (jika ada)
-        if: steps.changed.outputs.mode == 'delta' && steps.changed.outputs.deleted_count != '0'
+        if: steps.changed.outputs.mode == 'delta' && steps.changed.outputs.deleted_count != '0' && steps.domain_filter.outputs.run == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -728,7 +841,7 @@ jobs:
       # STEP 8: Execute deploy di server
       # ----------------------------------------------------------
       - name: Execute Remote SSH Commands (Full Deploy)
-        if: steps.changed.outputs.mode == 'full'
+        if: steps.changed.outputs.mode == 'full' && steps.domain_filter.outputs.run == 'true'
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -768,10 +881,19 @@ jobs:
               -exec cp -r {} "$TARGET/" \;
 
             php artisan optimize:clear
+
+            # Buat symlink storage (skip jika sudah ada)
+            cd "$TARGET/public"
+            if [ ! -e "storage" ]; then
+              ln -s "$TARGET/storage/app/public" storage
+            fi
+            cd "$TARGET"
+
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
             php artisan migrate --force
+            php artisan shield:generate --all --panel=admin --no-interaction
 
             echo "${{ github.ref_name }}" > "$TARGET/.last_deploy_tag"
 
@@ -781,7 +903,7 @@ jobs:
             echo "🚀 [$DOMAIN] Production Full Deployment Success! [${{ github.ref_name }}]"
 
       - name: Execute Remote SSH Commands (Delta Deploy)
-        if: steps.changed.outputs.mode == 'delta'
+        if: steps.changed.outputs.mode == 'delta' && steps.domain_filter.outputs.run == 'true'
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -806,6 +928,13 @@ jobs:
             rm -rf "$STAGING" && mkdir -p "$STAGING"
             unzip -oq "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}" -d "$STAGING"
 
+            # Jika vendor ikut dikirim (composer.json/lock berubah), ganti seluruh
+            # folder vendor di server agar dependency yang sudah dihapus tidak nyangkut
+            if [ -d "$STAGING/vendor" ]; then
+              echo "📦 vendor/ ikut dikirim, replace penuh folder vendor di server"
+              rm -rf "$TARGET/vendor"
+            fi
+
             find "$STAGING" -mindepth 1 -maxdepth 1 \
               ! -name 'storage' \
               ! -name '.env' \
@@ -828,15 +957,31 @@ jobs:
               rm -f "$DELETED_LIST"
             fi
 
+            if [ -d "vendor" ]; then
+              composer dump-autoload --optimize --no-dev --no-interaction || true
+            fi
+
             php artisan optimize:clear
+
+            # Buat symlink storage (skip jika sudah ada)
+            cd "$TARGET/public"
+            if [ ! -e "storage" ]; then
+              ln -s "$TARGET/storage/app/public" storage
+            fi
+            cd "$TARGET"
+
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
             php artisan migrate --force
-
+            php artisan shield:generate --all --panel=admin --no-interaction
             echo "${{ github.ref_name }}" > "$TARGET/.last_deploy_tag"
 
             rm -rf "$STAGING"
             rm -f "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
 
             echo "⚡ [$DOMAIN] Production Delta Deployment Success! [${{ github.ref_name }}]"
+
+      - name: Skip notification
+        if: steps.changed.outputs.mode == 'skip' || steps.domain_filter.outputs.run == 'false'
+        run: echo "✅ [${{ matrix.site.domain }}] Tidak ada perubahan yang perlu di-deploy, pipeline selesai."
