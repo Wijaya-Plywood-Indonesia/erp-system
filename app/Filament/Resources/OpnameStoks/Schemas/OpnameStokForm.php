@@ -5,6 +5,7 @@ namespace App\Filament\Resources\OpnameStoks\Schemas;
 use App\Models\Ukuran;
 use App\Models\JenisKayu;
 use App\Models\JenisBarang;
+use App\Models\Grade;
 use App\Models\HppVeneerBasahSummary;
 use App\Models\StokVeneerJadi;
 use App\Models\StokVeneerKering;
@@ -35,10 +36,10 @@ class OpnameStokForm
                     'veneer_jadi'    => 'Veneer Jadi',
                     'platform_mth'   => 'Platform MTH',
                     'triplek_mth'    => 'Triplek MTH',
+                    'plywood'        => 'Plywood Siap Jual',
                     'platform_jadi'  => 'Platform Jadi',
                     'triplek_jadi'   => 'Triplek Jadi',
                     'gudang_satu'    => 'Gudang Satu',
-                    'plywood'        => 'Plywood Siap Jual',
                 ])
                 ->default('veneer_basah')
                 ->required()
@@ -73,8 +74,9 @@ class OpnameStokForm
 
             Select::make('kw')
                 ->label('KW / Grade')
-                ->options(['1' => '1', '2' => '2', '3' => '3', '4' => '4'])
+                ->options(fn() => Grade::orderBy('nama_grade')->pluck('nama_grade', 'nama_grade'))
                 ->required()
+                ->searchable()
                 ->live()
                 ->afterStateUpdated(fn(Get $get, Set $set) => self::updateStokInfo($get, $set)),
 
