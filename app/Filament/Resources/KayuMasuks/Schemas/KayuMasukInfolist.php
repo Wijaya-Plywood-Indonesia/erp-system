@@ -23,7 +23,6 @@ class KayuMasukInfolist
 
                         ImageEntry::make('upload_dokumen_angkut')
                             ->label('File Dokumen Angkut')
-                            ->badge()
                             ->square()
                             ->size(50),
 

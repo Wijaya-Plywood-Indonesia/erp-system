@@ -12,6 +12,8 @@ class SerahTerimaTriplekJadi extends Model
     protected $fillable = [
         'id_hasil_graji_triplek',
         'id_hasil_sanding',
+        'id_detail_dempul',
+        'id_hasil_tembel_triplek',
         'id_produksi_pilih_plywood',
         'diserahkan_oleh',
         'diterima_oleh',
@@ -39,6 +41,24 @@ class SerahTerimaTriplekJadi extends Model
     }
 
     /**
+     * Hasil perbaikan Dempul, dipakai saat serah dari Dempul -> Pilih Plywood
+     * (barang cacat yang sudah didempul dan sekarang jadi bagus).
+     */
+    public function detailDempul(): BelongsTo
+    {
+        return $this->belongsTo(DetailDempul::class, 'id_detail_dempul');
+    }
+
+    /**
+     * Hasil perbaikan Tembel Triplek, dipakai saat serah dari Tembel Triplek -> Pilih Plywood
+     * (barang cacat yang sudah ditembel dan sekarang jadi bagus).
+     */
+    public function hasilTembelTriplek(): BelongsTo
+    {
+        return $this->belongsTo(HasilTembeltriplek::class, 'id_hasil_tembel_triplek');
+    }
+
+    /**
      * Produksi Pilih Plywood tujuan penyerahan barang ini.
      */
     public function produksiPilihPlywood(): BelongsTo
@@ -52,16 +72,19 @@ class SerahTerimaTriplekJadi extends Model
 
     /**
      * Tipe sumber barang:
-     * - 'graji_triplek' -> berasal dari Graji Triplek
-     * - 'sanding' -> berasal dari Sanding
+     * - 'graji_triplek'   -> berasal dari Graji Triplek
+     * - 'sanding'         -> berasal dari Sanding
+     * - 'dempul'          -> berasal dari perbaikan Dempul
+     * - 'tembel_triplek'  -> berasal dari perbaikan Tembel Triplek
      */
     public function getTipeSumberAttribute(): string
     {
-        if ($this->id_hasil_graji_triplek) {
-            return 'graji_triplek';
-        }
-
-        return 'sanding';
+        return match (true) {
+            (bool) $this->id_hasil_graji_triplek => 'graji_triplek',
+            (bool) $this->id_detail_dempul => 'dempul',
+            (bool) $this->id_hasil_tembel_triplek => 'tembel_triplek',
+            default => 'sanding',
+        };
     }
 
     /**
@@ -72,24 +95,30 @@ class SerahTerimaTriplekJadi extends Model
         return match (true) {
             (bool) $this->id_hasil_graji_triplek => 'Graji Triplek',
             (bool) $this->id_hasil_sanding => 'Sanding',
+            (bool) $this->id_detail_dempul => 'Dempul (Perbaikan)',
+            (bool) $this->id_hasil_tembel_triplek => 'Tembel Triplek (Perbaikan)',
             default => '-',
         };
     }
 
     /**
      * Ambil record hasil produksi apapun sumbernya
-     * (hasil Graji Triplek atau hasil Sanding).
+     * (hasil Graji Triplek, Sanding, Dempul, atau Tembel Triplek).
      */
     public function getHasilAttribute()
     {
         return $this->hasilGrajiTriplek
-            ?? $this->hasilSanding;
+            ?? $this->hasilSanding
+            ?? $this->detailDempul
+            ?? $this->hasilTembelTriplek;
     }
 
     /**
      * Barang setengah jadi terkait, terlepas dari nama relasi yang beda-beda
-     * antar model hasil (HasilSanding pakai `barangSetengahJadi`,
-     * HasilGrajiTriplek pakai `barangSetengahJadiHp`).
+     * antar model hasil:
+     * - HasilSanding & HasilGrajiTriplek/DetailDempul/HasilTembeltriplek
+     *   sama-sama punya relasi barangSetengahJadi() / barangSetengahJadiHp(),
+     *   jadi kita coba dua-duanya untuk jaga kompatibilitas nama.
      */
     public function getBarangSetengahJadiAttribute()
     {
@@ -100,11 +129,20 @@ class SerahTerimaTriplekJadi extends Model
 
     /**
      * Jumlah/isi barang, terlepas dari nama kolom yang beda-beda antar model
-     * hasil (HasilGrajiTriplek pakai `isi`, HasilSanding pakai `kuantitas`).
+     * hasil:
+     * - HasilGrajiTriplek -> `isi`
+     * - HasilSanding      -> `kuantitas`
+     * - DetailDempul & HasilTembeltriplek -> `hasil`
+     *   (jumlah barang yang berhasil diperbaiki jadi bagus)
      */
     public function getJumlahAttribute()
     {
-        return $this->hasil->isi ?? $this->hasil->kuantitas ?? null;
+        $hasil = $this->hasil;
+
+        return $hasil->isi
+            ?? $hasil->kuantitas
+            ?? $hasil->hasil
+            ?? null;
     }
 
     public function isMenunggu(): bool
@@ -126,14 +164,13 @@ class SerahTerimaTriplekJadi extends Model
      * Sisa = qty asli dikurangi total pemakaian di Pilih Plywood.
      *
      * NOTE: asumsi ada model `BahanPilihPlywood` dengan kolom
-     * `id_serah_terima_triplek_jadi` dan `kuantitas` sebagai pencatat
+     * `id_serah_terima_triplek_jadi` dan `jumlah` sebagai pencatat
      * pemakaian. Sesuaikan nama model/kolom bila berbeda di skema Anda.
      */
     public function getSisaAttribute(): float
     {
-        // Pastikan Model BahanPilihPlywood sudah ter-import di atas jika belum
-        $terpakai = \App\Models\BahanPilihPlywood::where('id_serah_terima_triplek_jadi', $this->id)
-            ->sum('jumlah'); // Ubah menjadi jumlah
+        $terpakai = BahanPilihPlywood::where('id_serah_terima_triplek_jadi', $this->id)
+            ->sum('jumlah');
 
         return $this->qtyAsli - (float) $terpakai;
     }

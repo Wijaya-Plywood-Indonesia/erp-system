@@ -5,6 +5,7 @@ namespace App\Filament\Resources\TempatKayus\Tables;
 use App\Models\DetailTurusanKayu;
 use App\Models\HppAverageLog;
 use App\Models\HppAverageSummarie;
+use App\Models\NotaKayu;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -36,38 +37,96 @@ class TempatKayusTable
     /** @var array<int, Collection> */
     private static array $snapshot = [];
 
+    /**
+     * ✅ DISESUAIKAN AGAR SAMA PERSIS DENGAN LOGIKA `php artisan test3 {id}`
+     * (App\Console\Commands\Test3Command).
+     *
+     * Perubahan dari versi lama:
+     * 1) Cutoff dihitung dengan 3 skenario fallback yang sama seperti test3:
+     *    - Tidak ada reset -> tidak ada cutoff, tampilkan semua data lahan.
+     *    - Reset ada, tapi log 'masuk' sebelum reset tidak ketemu
+     *      -> cutoff = created_at reset itu sendiri (fallback).
+     *    - Log sebelum reset adalah OPNAME (referensi_type null)
+     *      -> cutoff = created_at log opname tsb.
+     *    - Log sebelum reset adalah NotaKayu asli
+     *      -> cutoff = updated_at NotaKayu tsb (fallback ke created_at reset
+     *         kalau NotaKayu-nya sudah tidak ada / terhapus).
+     * 2) Filter DetailTurusanKayu sekarang pakai kombinasi status pelunasan:
+     *      - Belum lunas -> aktif jika created_at nota > cutoff
+     *      - Sudah lunas -> aktif jika updated_at nota > cutoff
+     *    (bukan lagi "ID Nota >= startNotaId" seperti sebelumnya).
+     * 3) Opname yang terjadi SETELAH reset (referensi_id null, id > lastReset->id)
+     *    sekarang ikut dihitung sebagai baris tambahan bertipe 'OPNAME', dengan
+     *    delta batang/kubikasi (after - before) yang BISA MINUS, sehingga otomatis
+     *    mengurangi total pada kolom "Batang" dan "Kubikasi" di tabel/modal.
+     */
     private static function getKayuAktif(int $lahanId): Collection
     {
         if (isset(self::$snapshot[$lahanId])) {
             return self::$snapshot[$lahanId];
         }
 
+        // ------------------------------------------------------------------
+        // 1) Cari reset terakhir (log 'keluar' dengan stok_batang_after = 0)
+        // ------------------------------------------------------------------
         $lastReset = HppAverageLog::where('id_lahan', $lahanId)
             ->where('tipe_transaksi', 'keluar')
             ->where('stok_batang_after', 0)
             ->orderByDesc('id')
             ->first();
 
-        if (! $lastReset) {
-            $startNotaId = null;
-        } else {
+        $cutoff = null;
+
+        if ($lastReset) {
+            // ----------------------------------------------------------
+            // 2) Cari log 'masuk' terakhir SEBELUM reset
+            // ----------------------------------------------------------
             $lastNotaBeforeReset = HppAverageLog::where('id_lahan', $lahanId)
                 ->where('tipe_transaksi', 'masuk')
                 ->where('id', '<', $lastReset->id)
                 ->orderByDesc('id')
                 ->first();
 
-            $startNotaId = $lastNotaBeforeReset?->referensi_id;
+            if (! $lastNotaBeforeReset) {
+                // Reset ada, tapi tidak ada log acuan sebelumnya.
+                // Fallback aman: created_at reset itu sendiri.
+                $cutoff = $lastReset->created_at;
+            } elseif (is_null($lastNotaBeforeReset->referensi_type)) {
+                // Log sebelum reset berasal dari OPNAME STOK KAYU, bukan NotaKayu.
+                $cutoff = $lastNotaBeforeReset->created_at;
+            } else {
+                $referensiNota = $lastNotaBeforeReset->referensi_id
+                    ? NotaKayu::find($lastNotaBeforeReset->referensi_id)
+                    : null;
+
+                $cutoff = $referensiNota
+                    ? $referensiNota->updated_at
+                    : $lastReset->created_at; // fallback kalau nota sudah tidak ada
+            }
         }
 
+        // ------------------------------------------------------------------
+        // 3) Ambil data DetailTurusanKayu aktif berdasarkan cutoff
+        //    (belum lunas -> pakai created_at nota, sudah lunas -> updated_at nota)
+        // ------------------------------------------------------------------
         $data = DetailTurusanKayu::with([
             'lahan',
             'kayuMasuk.penggunaanSupplier',
             'kayuMasuk.notaKayu',
         ])
             ->where('lahan_id', $lahanId)
-            ->when($startNotaId, function ($q) use ($startNotaId) {
-                $q->whereHas('kayuMasuk.notaKayu', fn($q) => $q->where('id', '>=', $startNotaId));
+            ->when($cutoff, function ($q) use ($cutoff) {
+                $q->whereHas('kayuMasuk.notaKayu', function ($query) use ($cutoff) {
+                    $query->where(function ($sub) use ($cutoff) {
+                        $sub->where(function ($belumLunas) use ($cutoff) {
+                            $belumLunas->where('status_pelunasan', 'not like', 'Lunas%')
+                                ->where('created_at', '>', $cutoff);
+                        })->orWhere(function ($sudahLunas) use ($cutoff) {
+                            $sudahLunas->where('status_pelunasan', 'like', 'Lunas%')
+                                ->where('updated_at', '>', $cutoff);
+                        });
+                    });
+                });
             })
             ->get()
             ->groupBy('id_kayu_masuk')
@@ -85,22 +144,59 @@ class TempatKayusTable
                     'Supplier' => trim($first->kayuMasuk?->penggunaanSupplier?->nama_supplier ?? ''),
                     'Status Pelunasan' => $statusPelunasan,
                     'Batang' => (int) $rows->sum('kuantitas'),
-                    // ✅ DIUBAH: ikut pola NotaKayuController → round PER-ITEM (4 desimal) dulu,
-                    // baru di-sum. Ini memastikan total kubikasi selalu match dengan
-                    // angka per-baris yang dilihat user (round-then-sum), bukan sebaliknya.
-                    'Kubikasi' => (float) $rows->sum(fn($r) => round($r->kubikasi, 4)),
+                    // round-then-sum per item (4 desimal), konsisten dengan NotaKayuController.
+                    'Kubikasi' => (float) $rows->sum(fn ($r) => round($r->kubikasi, 4)),
                     'Panjang' => $rows->pluck('panjang')->unique()->sort()->implode(', '),
                     'Grade' => $rows->pluck('grade')->unique()->sort()->implode(', '),
                     'is_lunas' => $isLunas,
+                    'is_opname' => false,
                 ];
             })
             ->sortBy('ID Nota')
             ->values();
 
-        if ($startNotaId) {
-            $data = $data
-                ->reject(fn($row) => $row['ID Nota'] == $startNotaId)
-                ->values();
+        // ------------------------------------------------------------------
+        // 4) Opname SETELAH reset (referensi_id null, id > lastReset->id)
+        //    Ini bisa MINUS, jadi harus ikut mengurangi total Batang/Kubikasi.
+        // ------------------------------------------------------------------
+        if ($lastReset) {
+            $opnameSetelahReset = HppAverageLog::where('id_lahan', $lahanId)
+                ->where('id', '>', $lastReset->id)
+                ->whereNull('referensi_id')
+                ->orderBy('id')
+                ->get();
+
+            foreach ($opnameSetelahReset as $log) {
+                $deltaBatang = (int) $log->stok_batang_after - (int) $log->stok_batang_before;
+
+                // NOTE: sesuaikan nama kolom ini jika berbeda di skema Anda.
+                $deltaKubikasi = round(
+                    (float) ($log->stok_kubikasi_after ?? 0) - (float) ($log->stok_kubikasi_before ?? 0),
+                    4
+                );
+
+                if ($deltaBatang === 0 && $deltaKubikasi == 0.0) {
+                    continue;
+                }
+
+                $data->push([
+                    'ID Kayu' => null,
+                    'ID Nota' => null,
+                    'No Nota' => 'OPNAME #'.$log->id,
+                    'Seri' => 'OPNAME',
+                    'Supplier' => $log->keterangan ?? '-',
+                    'Status Pelunasan' => null,
+                    'Batang' => $deltaBatang,
+                    'Kubikasi' => $deltaKubikasi,
+                    'Panjang' => '',
+                    'Grade' => '',
+                    // Opname tidak boleh memblokir tombol "Lahan Penuh"
+                    'is_lunas' => true,
+                    'is_opname' => true,
+                ]);
+            }
+
+            $data = $data->values();
         }
 
         self::$snapshot[$lahanId] = $data;
@@ -116,13 +212,13 @@ class TempatKayusTable
             return true;
         }
 
-        return $data->every(fn($row) => $row['is_lunas']);
+        return $data->every(fn ($row) => $row['is_lunas']);
     }
 
     private static function seriiBelumLunas(int $lahanId): Collection
     {
         return self::getKayuAktif($lahanId)
-            ->filter(fn($row) => ! $row['is_lunas'])
+            ->filter(fn ($row) => ! $row['is_lunas'])
             ->pluck('Seri')
             ->filter()
             ->values();
@@ -211,7 +307,7 @@ class TempatKayusTable
                     ->label('Pjg')
                     ->sortable()
                     ->badge()
-                    ->color(fn($state) => $state == 260 ? 'success' : 'info')
+                    ->color(fn ($state) => $state == 260 ? 'success' : 'info')
                     ->toggleable(),
 
                 TextColumn::make('jenis_kayu')
@@ -241,9 +337,9 @@ class TempatKayusTable
                 TextColumn::make('kubikasi_riil')
                     ->label('Volume (m³)')
                     ->getStateUsing(function ($record) {
-                        // ✅ DIUBAH: 'Kubikasi' di getKayuAktif() sudah hasil round-then-sum
-                        // per item (4 desimal). Tidak perlu round lagi di sini agar tidak dobel
-                        // pembulatan dan tetap konsisten dengan pola NotaKayuController.
+                        // 'Kubikasi' di getKayuAktif() sudah hasil round-then-sum
+                        // per item (4 desimal), termasuk delta opname yang bisa minus.
+                        // Tidak perlu round lagi di sini agar tidak dobel pembulatan.
                         $total = self::getKayuAktif((int) $record->id_lahan)->sum('Kubikasi');
 
                         return number_format((float) $total, 4, '.', ',');
@@ -267,12 +363,12 @@ class TempatKayusTable
                     ->sortable()
                     ->label('Status')
                     ->badge()
-                    ->formatStateUsing(fn($state) => match ($state) {
+                    ->formatStateUsing(fn ($state) => match ($state) {
                         'sudah diserahkan' => 'Diserahkan',
                         'sudah diterima' => 'Diterima',
                         default => 'Belum Diserahkan',
                     })
-                    ->color(fn($state) => match ($state) {
+                    ->color(fn ($state) => match ($state) {
                         'sudah diterima' => 'success',
                         'sudah diserahkan' => 'warning',
                         default => 'gray',
@@ -286,12 +382,12 @@ class TempatKayusTable
                     ->trueLabel('Sudah Diserahkan')
                     ->falseLabel('Belum Diserahkan')
                     ->queries(
-                        true: fn(Builder $query) => $query->where('tempat_kayus.status', 'sudah diserahkan'),
-                        false: fn(Builder $query) => $query->where(function ($q) {
+                        true: fn (Builder $query) => $query->where('tempat_kayus.status', 'sudah diserahkan'),
+                        false: fn (Builder $query) => $query->where(function ($q) {
                             $q->whereNull('tempat_kayus.status')
                                 ->orWhere('tempat_kayus.status', '!=', 'sudah diserahkan');
                         }),
-                        blank: fn(Builder $query) => $query,
+                        blank: fn (Builder $query) => $query,
                     ),
             ], layout: FiltersLayout::AboveContent)
             ->filtersFormColumns(1)
@@ -312,7 +408,7 @@ class TempatKayusTable
 
                         $totalStokRiil = (int) $kayuAktif->sum('Batang');
 
-                        // ✅ DIUBAH: 'Kubikasi' sudah round-then-sum per item di getKayuAktif().
+                        // 'Kubikasi' sudah round-then-sum per item (termasuk opname) di getKayuAktif().
                         // Tidak perlu round lagi di sini (hindari dobel pembulatan).
                         $totalKubikasiRiil = (float) $kayuAktif->sum('Kubikasi');
 
@@ -333,35 +429,33 @@ class TempatKayusTable
                     ->modalHeading('Serahkan Kayu?')
                     ->modalDescription(function ($record) {
 
-                        $semuaSeri = \App\Models\HppAverageLog::where('id_lahan', $record->id_lahan)
+                        $semuaSeri = HppAverageLog::where('id_lahan', $record->id_lahan)
                             ->where('panjang', $record->group_panjang)
-                            ->where('referensi_type', \App\Models\NotaKayu::class)
+                            ->where('referensi_type', NotaKayu::class)
                             ->with('referensi.kayuMasuk')
                             ->get()
-                            ->map(fn($log) => (string) ($log->referensi?->kayuMasuk?->seri ?? null))
+                            ->map(fn ($log) => (string) ($log->referensi?->kayuMasuk?->seri ?? null))
                             ->filter()
                             ->unique()
                             ->values();
 
-                        $belumLunas = \App\Models\NotaKayu::whereHas(
+                        $belumLunas = NotaKayu::whereHas(
                             'kayuMasuk',
-                            fn($q) =>
-                            $q->whereIn('seri', $semuaSeri)
+                            fn ($q) => $q->whereIn('seri', $semuaSeri)
                         )
                             ->with('kayuMasuk')
                             ->get()
-                            ->groupBy(fn($nota) => (string) $nota->kayuMasuk?->seri)     // ✅ Group by seri
-                            ->map(fn($group) => $group->sortByDesc('id')->first())         // ✅ Ambil terbaru
+                            ->groupBy(fn ($nota) => (string) $nota->kayuMasuk?->seri)     // ✅ Group by seri
+                            ->map(fn ($group) => $group->sortByDesc('id')->first())         // ✅ Ambil terbaru
                             ->filter(
-                                fn($nota) =>
-                                !str_starts_with(strtolower(trim($nota->status_pelunasan ?? '')), 'lunas')
+                                fn ($nota) => ! str_starts_with(strtolower(trim($nota->status_pelunasan ?? '')), 'lunas')
                             )
-                            ->map(fn($nota) => (string) $nota->kayuMasuk?->seri)
+                            ->map(fn ($nota) => (string) $nota->kayuMasuk?->seri)
                             ->filter()
                             ->values();
 
                         if ($belumLunas->isNotEmpty()) {
-                            return '⚠️ Seri berikut belum lunas: ' . $belumLunas->implode(', ') . '. Tidak dapat diserahkan.';
+                            return '⚠️ Seri berikut belum lunas: '.$belumLunas->implode(', ').'. Tidak dapat diserahkan.';
                         }
 
                         return "Kayu dari lahan {$record->lahan?->kode_lahan} akan diserahkan ke rotary. Semua seri sudah lunas.";
@@ -409,7 +503,7 @@ class TempatKayusTable
                         if ($belumLunas->isNotEmpty()) {
                             Notification::make()
                                 ->title('Tidak dapat diserahkan!')
-                                ->body('Seri ' . $belumLunas->implode(', ') . ' belum lunas. Selesaikan pembayaran terlebih dahulu.')
+                                ->body('Seri '.$belumLunas->implode(', ').' belum lunas. Selesaikan pembayaran terlebih dahulu.')
                                 ->danger()
                                 ->persistent()
                                 ->send();
@@ -503,8 +597,8 @@ class TempatKayusTable
                     ->requiresConfirmation()
                     ->modalHeading('Terima Kayu dari Grader?')
                     ->modalDescription(
-                        fn($record) => "Kayu dari lahan {$record->lahan?->kode_lahan} akan diterima atas nama " .
-                            Auth::user()->name . '.'
+                        fn ($record) => "Kayu dari lahan {$record->lahan?->kode_lahan} akan diterima atas nama ".
+                            Auth::user()->name.'.'
                     )
                     ->modalSubmitActionLabel('Ya, Terima')
                     ->visible(function ($record) use ($bisaTerima) {
