@@ -303,7 +303,24 @@
                         <span class="px-2 py-0.5 text-[10px] font-semibold rounded uppercase bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                             {{ $item['tujuan'] }}
                         </span>
-                        <span class="text-[11px] text-zinc-400">By: {{ $item['dikeluarkan_by'] }}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] text-zinc-400">By: {{ $item['dikeluarkan_by'] }}</span>
+                            {{-- 🆕 TOMBOL EDIT MOBILE: hanya tampil kalau belum diterima di Hotpress --}}
+                            @if($item['bisa_diedit'])
+                            <button
+                                type="button"
+                                wire:click="editKeluar({{ $item['id'] }})"
+                                wire:loading.attr="disabled"
+                                class="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 border border-zinc-300 dark:border-zinc-700 hover:bg-amber-500 hover:border-amber-500 hover:text-zinc-950 text-zinc-500 dark:text-zinc-400 rounded-none transition-all">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                Edit
+                            </button>
+                            @else
+                            <span class="text-zinc-300 dark:text-zinc-700 text-[10px]" title="Sudah diterima di Hotpress">🔒</span>
+                            @endif
+                        </div>
                     </div>
                 </div>
                 @empty
@@ -316,6 +333,7 @@
                 <table class="w-full text-left border-collapse text-sm">
                     <thead class="sticky top-0 z-10 bg-zinc-50 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400 text-[11px] uppercase font-bold border-b border-zinc-200 dark:border-zinc-800">
                         <tr>
+                            <th class="py-3 px-4 text-center w-20">Aksi</th>
                             <th class="py-3 px-4">Waktu Keluar</th>
                             <th class="py-3 px-4">Jenis Kayu</th>
                             <th class="py-3 px-3 text-center">Panjang</th>
@@ -335,6 +353,22 @@
 
                         {{-- BARIS UTAMA: seluruh baris jadi trigger accordion --}}
                         <tr @click="open = !open" class="cursor-pointer hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-colors">
+                            {{-- 🆕 KOLOM AKSI: klik.stop supaya tidak ikut men-toggle accordion --}}
+                            <td class="py-3 px-4 text-center" @click.stop>
+                                @if($item['bisa_diedit'])
+                                <button
+                                    type="button"
+                                    wire:click="editKeluar({{ $item['id'] }})"
+                                    wire:loading.attr="disabled"
+                                    class="inline-flex items-center gap-1 border border-zinc-300 dark:border-zinc-700 hover:bg-amber-500 hover:border-amber-500 hover:text-zinc-950 text-zinc-500 dark:text-zinc-400 transition-all text-[11px] font-black uppercase px-2.5 py-1 rounded-none">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                </button>
+                                @else
+                                <span class="text-zinc-300 dark:text-zinc-700" title="Sudah diterima di Hotpress, terkunci">🔒</span>
+                                @endif
+                            </td>
                             <td class="py-3 px-4 text-xs text-zinc-500 whitespace-nowrap">
                                 <span class="inline-flex items-center gap-2">
                                     <svg class="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 transition-transform duration-150 flex-shrink-0"
@@ -381,7 +415,7 @@
                         {{-- BARIS ACCORDION: rincian per palet dalam bentuk badge --}}
                         @if(!empty($item['rincian_palet']))
                         <tr x-show="open" x-cloak class="bg-zinc-50/60 dark:bg-zinc-900/40">
-                            <td colspan="11" class="py-3 px-4 pl-12">
+                            <td colspan="12" class="py-3 px-4 pl-12">
                                 <div class="flex flex-wrap gap-2">
                                     @foreach($item['rincian_palet'] as $idx => $qty)
                                     <span class="inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-1.5 bg-zinc-100 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 rounded">
@@ -396,7 +430,7 @@
                     @empty
                     <tbody>
                         <tr>
-                            <td colSpan="11" class="py-8 text-center text-zinc-400 italic">Belum ada riwayat pengeluaran yang terdaftar.</td>
+                            <td colSpan="12" class="py-8 text-center text-zinc-400 italic">Belum ada riwayat pengeluaran yang terdaftar.</td>
                         </tr>
                     </tbody>
                     @endforelse
@@ -635,6 +669,84 @@
                 type="submit"
                 class="px-5 py-2 bg-amber-500 hover:bg-amber-600 border border-amber-400 text-zinc-950 transition-all rounded-none shadow-md">
                 Proses Barang Keluar
+            </button>
+        </div>
+
+        </form>
+    </div>
+    </div>
+    @endif
+
+    {{-- 🆕 MODAL EDIT RIWAYAT KELUAR --}}
+    @if($showEditKeluarModal)
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
+        <div class="w-full max-w-md border bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-none shadow-2xl p-6 font-mono text-zinc-800 dark:text-zinc-100 max-h-[90vh] overflow-y-auto">
+
+            <h3 class="text-base sm:text-lg font-black uppercase text-amber-500 border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-4 flex items-center gap-2">
+                <span class="inline-block w-1.5 h-3.5 bg-amber-500"></span>
+                Edit Rincian Palet
+            </h3>
+
+            <form wire:submit.prevent="updateKeluar" class="space-y-4 text-xs">
+
+                {{-- JUMLAH PALET --}}
+                <div class="space-y-1.5">
+                    <label class="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider block">Jumlah Palet</label>
+                    <input
+                        type="text" inputmode='numeric'
+                        wire:model.live="editJumlahPalet"
+                        required
+                        min="1"
+                        class="w-full text-sm p-2 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-none text-zinc-900 dark:text-zinc-100 focus:border-amber-500 focus:outline-none font-bold" />
+                </div>
+
+                {{-- DINAMIS INPUT LEMBAR PER-PALET --}}
+                <div class="space-y-1.5">
+                    <label class="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider block">Isi per palet</label>
+                    <div class="grid grid-cols-2 gap-2.5 max-h-[180px] overflow-y-auto border border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-950/30 p-3">
+                        @for($i = 0; $i < $editJumlahPalet; $i++)
+                            <div class="space-y-1">
+                            <span class="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase block">Palet #{{ $i + 1 }}</span>
+                            <div class="relative">
+                                <input
+                                    type="text" inputmode='numeric'
+                                    wire:model="editPaletQuantities.{{ $i }}"
+                                    placeholder="Kuantitas"
+                                    required
+                                    min="1"
+                                    class="w-full text-xs p-2 border border-zinc-300 dark:border-zinc-800 rounded-none bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:border-amber-500 focus:outline-none" />
+                                <span class="absolute right-2.5 top-2 text-[12px] text-zinc-400 dark:text-zinc-500">lbr</span>
+                            </div>
+                    </div>
+                    @endfor
+                </div>
+        </div>
+
+        {{-- LIVE INDIKATOR TOTAL LEMBAR TERKUMPUL --}}
+        @php
+        $editTotalLbr = array_sum(array_map('intval', $editPaletQuantities));
+        @endphp
+        @if($editTotalLbr > 0)
+        <div class="p-3 border border-dashed border-amber-500/20 bg-amber-500/5 text-zinc-800 dark:text-zinc-300 flex items-center justify-between">
+            <p class="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-widest font-black">Total Baru</p>
+            <span class="px-3 py-1 bg-amber-500 text-zinc-950 font-black text-base shadow-sm">
+                {{ number_format($editTotalLbr, 0, ',', '.') }} Lembar
+            </span>
+        </div>
+        @endif
+
+        {{-- TOMBOL AKSI --}}
+        <div class="pt-2 flex justify-end gap-3 text-xs sm:text-sm font-black uppercase">
+            <button
+                type="button"
+                wire:click="cancelEditKeluar"
+                class="px-4 py-2 border border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-all rounded-none">
+                Batal
+            </button>
+            <button
+                type="submit"
+                class="px-5 py-2 bg-amber-500 hover:bg-amber-600 border border-amber-400 text-zinc-950 transition-all rounded-none shadow-md">
+                Simpan Perubahan
             </button>
         </div>
 

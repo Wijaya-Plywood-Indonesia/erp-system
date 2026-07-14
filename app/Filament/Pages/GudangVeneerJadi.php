@@ -55,10 +55,169 @@ class GudangVeneerJadi extends Page
     protected $queryString = ['activeTab'];
     // public string $activeSubTab = 'produksi';
 
+
+    // Kebutuhan Edit
+    public bool $showEditKeluarModal = false;
+    public ?int $editKeluarId = null;
+    public $editJumlahPalet = 1;
+    public array $editPaletQuantities = [0 => ''];
+
     public function hitungKubikasi(float $p, float $l, float $t, ?int $lembar): float
     {
         $lembarAman = $lembar ?? 0;
         return ($p * $l * $t * $lembarAman) / 10000000;
+    }
+
+    public function editKeluar(int $id): void
+    {
+        $mutasi = VeneerJadiMutasiKeluar::with('palets')->find($id);
+
+        if (!$mutasi) {
+            Notification::make()->danger()->title('Data tidak ditemukan')->send();
+            return;
+        }
+
+        if (!is_null($mutasi->id_produksi_hp)) {
+            Notification::make()
+                ->danger()
+                ->title('Tidak Bisa Diedit')
+                ->body('Barang ini sudah diterima di sisi tujuan (Hotpress), rincian tidak bisa diubah lagi.')
+                ->send();
+            return;
+        }
+
+        $this->editKeluarId = $mutasi->id;
+
+        $palet = $mutasi->palets->sortBy('nomor_palet')->pluck('jumlah_lembar')->values()->toArray();
+        $this->editPaletQuantities = !empty($palet) ? $palet : [0 => ''];
+        $this->editJumlahPalet = count($this->editPaletQuantities);
+
+        $this->showEditKeluarModal = true;
+    }
+
+
+    public function cancelEditKeluar(): void
+    {
+        $this->showEditKeluarModal = false;
+        $this->editKeluarId = null;
+    }
+
+    /**
+     * Sinkronisasi dinamis jumlah palet di form EDIT — sama polanya
+     * dengan updatedJumlahPalet(), tapi khusus array editPaletQuantities.
+     */
+    public function updatedEditJumlahPalet($value): void
+    {
+        if ($value === '' || $value === null || $value === 0 || $value === '0') {
+            return;
+        }
+
+        $count = max(1, intval($value));
+        $this->editPaletQuantities = array_slice($this->editPaletQuantities, 0, $count);
+
+        while (count($this->editPaletQuantities) < $count) {
+            $this->editPaletQuantities[] = '';
+        }
+    }
+
+    public function hapusEditPalet(int $index): void
+    {
+        if (isset($this->editPaletQuantities[$index])) {
+            unset($this->editPaletQuantities[$index]);
+            $this->editPaletQuantities = array_values($this->editPaletQuantities);
+            $this->editJumlahPalet = count($this->editPaletQuantities);
+        }
+    }
+
+    /**
+     * 💾 SIMPAN PERUBAHAN RINCIAN KELUAR
+     * Baris palet lama dihapus lalu dibuat ulang — lebih sederhana dan aman
+     * daripada mencocokkan baris satu per satu, karena jumlah palet bisa
+     * bertambah/berkurang saat diedit.
+     */
+    public function updateKeluar(): void
+    {
+        if (!$this->editKeluarId) {
+            return;
+        }
+
+        $totalLembar = array_sum(array_map('intval', $this->editPaletQuantities));
+
+        if ($totalLembar <= 0) {
+            Notification::make()
+                ->danger()
+                ->title('Input Gagal')
+                ->body('Kuantitas palet wajib diisi.')
+                ->send();
+            return;
+        }
+
+        try {
+            DB::transaction(function () use ($totalLembar) {
+                $mutasi = VeneerJadiMutasiKeluar::where('id', $this->editKeluarId)->lockForUpdate()->first();
+
+                if (!$mutasi) {
+                    throw new \Exception('Data tidak ditemukan.');
+                }
+
+                // 🔒 Re-cek race condition: barang sudah keburu diterima di sisi
+                // tujuan sesaat setelah modal edit dibuka.
+                if (!is_null($mutasi->id_produksi_hp)) {
+                    throw new \Exception('Barang ini sudah diterima di sisi tujuan, tidak bisa diedit lagi.');
+                }
+
+                // Validasi sisa stok fisik masih cukup untuk kuantitas baru
+                $stok = StokVeneerJadi::where('id_jenis_kayu', $mutasi->id_jenis_kayu)
+                    ->where('panjang', $mutasi->panjang)
+                    ->where('lebar', $mutasi->lebar)
+                    ->where('tebal', $mutasi->tebal)
+                    ->where('kw_grade', $mutasi->kw_grade)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$stok || $totalLembar > $stok->stok_lembar) {
+                    throw new \Exception('Sisa stok fisik di gudang tidak mencukupi untuk kuantitas baru.');
+                }
+
+                $mutasi->update([
+                    'jumlah_palet' => count($this->editPaletQuantities),
+                    'stok_lembar' => $totalLembar,
+                    'stok_kubikasi' => $this->hitungKubikasi($mutasi->panjang, $mutasi->lebar, $mutasi->tebal, $totalLembar),
+                ]);
+
+                $mutasi->palets()->delete();
+
+                foreach ($this->editPaletQuantities as $index => $qty) {
+                    $qtyPalet = intval($qty);
+                    if ($qtyPalet <= 0) {
+                        continue;
+                    }
+
+                    VeneerJadiMutasiKeluarPalet::create([
+                        'id_mutasi_keluar' => $mutasi->id,
+                        'nomor_palet' => $index + 1,
+                        'jumlah_lembar' => $qtyPalet,
+                    ]);
+                }
+            });
+
+            unset($this->riwayatKeluarFiltered);
+
+            $this->showEditKeluarModal = false;
+            $this->editKeluarId = null;
+
+            Notification::make()
+                ->success()
+                ->title('✓ Rincian Diperbarui')
+                ->body("Rincian palet berhasil diubah menjadi {$totalLembar} lembar.")
+                ->send();
+        } catch (\Exception $e) {
+            Notification::make()
+                ->danger()
+                ->title('Gagal Memperbarui')
+                ->body($e->getMessage())
+                ->send();
+        }
     }
 
     /**
@@ -589,6 +748,8 @@ class GudangVeneerJadi extends Page
         }
 
         return $query->get()->map(fn($item) => [
+            'id' => $item->id,
+            'bisa_diedit' => is_null($item->id_produksi_hp),
             'created_at' => $item->created_at->format('d/m/Y H:i'),
             'jenis_kayu' => $item->jenisKayu->nama_kayu ?? '-',
             'panjang' => $item->panjang,

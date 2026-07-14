@@ -385,6 +385,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "${{ env.ZIP_NAME }}"
           target: "/home/${{ secrets.SSH_USERNAME }}"
+          debug: true
 
       - name: Upload deleted files list (jika ada)
         if: steps.changed.outputs.mode == 'delta' && steps.changed.outputs.deleted_count != '0' && steps.domain_filter.outputs.run == 'true'

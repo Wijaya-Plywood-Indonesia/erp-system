@@ -145,7 +145,7 @@ class VeneerMutasiService
             ? VeneerMutasi::where('id_nota_bk', $nota->id)->first()
             : VeneerMutasi::where('id_nota_bm', $nota->id)->first();
 
-        if (!$mutasi) {
+        if (!$mutasi || $mutasi->details()->doesntExist()) {
             // Nota is manual/general (not from Veneer Mutasi menu), e.g., for general items (karung, etc.)
             // We just validate the nota without changing veneer stock.
             $nota->update(['divalidasi_oleh' => auth()->id()]);
