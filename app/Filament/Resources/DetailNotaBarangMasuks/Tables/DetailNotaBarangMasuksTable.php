@@ -2,18 +2,33 @@
 
 namespace App\Filament\Resources\DetailNotaBarangMasuks\Tables;
 
+use App\Models\DetailNotaBarangKeluar;
+use App\Models\DetailNotaBarangMasuk;
+use App\Models\Grade;
+use App\Models\HppVeneerBasahSummary;
+use App\Models\JenisKayu;
+use App\Models\NotaBarangKeluar;
 use App\Models\StokVeneerJadi;
+use App\Models\StokVeneerKering;
 use App\Models\Ukuran;
+use App\Models\VeneerMutasi;
+use App\Models\VeneerMutasiDetail;
+use App\Services\VeneerMutasiService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\HtmlString;
 
 class DetailNotaBarangMasuksTable
 {
@@ -49,7 +64,7 @@ class DetailNotaBarangMasuksTable
                     ->icon('heroicon-o-plus-circle')
                     ->color('warning')
                     ->form([
-                        \Filament\Forms\Components\Select::make('tipe_veneer')
+                        Select::make('tipe_veneer')
                             ->label('Tipe Veneer')
                             ->options([
                                 'basah' => 'Veneer Basah',
@@ -59,32 +74,28 @@ class DetailNotaBarangMasuksTable
                             ->required()
                             ->live(),
 
-                        \Filament\Forms\Components\Select::make('id_ukuran')
+                        Select::make('id_ukuran')
                             ->label('Ukuran')
-                            ->options(\App\Models\Ukuran::all()->pluck('nama_ukuran', 'id'))
+                            ->options(Ukuran::all()->pluck('nama_ukuran', 'id'))
                             ->searchable()
                             ->required()
                             ->live(),
 
-                        \Filament\Forms\Components\Select::make('id_jenis_kayu')
+                        Select::make('id_jenis_kayu')
                             ->label('Jenis Kayu')
-                            ->options(\App\Models\JenisKayu::pluck('nama_kayu', 'id'))
+                            ->options(JenisKayu::pluck('nama_kayu', 'id'))
                             ->searchable()
                             ->required()
                             ->live(),
 
-                        \Filament\Forms\Components\Select::make('kw')
+                        Select::make('kw')
                             ->label('KW')
-                            ->options([
-                                '1' => 'KW 1',
-                                '2' => 'KW 2',
-                                '3' => 'KW 3',
-                                '4' => 'KW 4',
-                            ])
+                            ->options(Grade::orderBy('nama_grade')->pluck('nama_grade', 'nama_grade'))
+                            ->searchable()
                             ->required()
                             ->live(),
 
-                        \Filament\Forms\Components\Placeholder::make('stok_saat_ini')
+                        Placeholder::make('stok_saat_ini')
                             ->label('Stok Saat Ini')
                             ->content(function (callable $get) {
                                 $tipe = $get('tipe_veneer');
@@ -93,39 +104,39 @@ class DetailNotaBarangMasuksTable
                                 $kw = $get('kw');
                                 $ukuran = $idUkuran ? Ukuran::find($idUkuran) : null;
 
-                                if (!$tipe || !$idUkuran || !$idJenisKayu || !$kw) {
-                                    return new \Illuminate\Support\HtmlString('<span class="text-gray-400 dark:text-gray-500">Silakan lengkapi pilihan di atas...</span>');
+                                if (! $tipe || ! $idUkuran || ! $idJenisKayu || ! $kw) {
+                                    return new HtmlString('<span class="text-gray-400 dark:text-gray-500">Silakan lengkapi pilihan di atas...</span>');
                                 }
 
                                 if ($tipe === 'basah') {
-                                    if (!$ukuran) {
-                                        return new \Illuminate\Support\HtmlString('<strong class="text-danger-600 dark:text-danger-400">0 Lembar</strong>');
+                                    if (! $ukuran) {
+                                        return new HtmlString('<strong class="text-danger-600 dark:text-danger-400">0 Lembar</strong>');
                                     }
 
-                                    $summary = \App\Models\HppVeneerBasahSummary::where([
+                                    $summary = HppVeneerBasahSummary::where([
                                         'id_jenis_kayu' => $idJenisKayu,
-                                        'panjang'       => $ukuran->panjang,
-                                        'lebar'         => $ukuran->lebar,
-                                        'tebal'         => $ukuran->tebal,
-                                        'kw'            => $kw,
+                                        'panjang' => $ukuran->panjang,
+                                        'lebar' => $ukuran->lebar,
+                                        'tebal' => $ukuran->tebal,
+                                        'kw' => $kw,
                                     ])->first();
 
                                     $stok = $summary ? (int) $summary->stok_lembar : 0;
                                 } elseif ($tipe === 'jadi') {
                                     $summaryJadi = StokVeneerJadi::where([
                                         'id_jenis_kayu' => $idJenisKayu,
-                                        'panjang'       => $ukuran->panjang,
-                                        'lebar'         => $ukuran->lebar,
-                                        'tebal'         => $ukuran->tebal,
-                                        'kw_grade'      => $kw,
+                                        'panjang' => $ukuran->panjang,
+                                        'lebar' => $ukuran->lebar,
+                                        'tebal' => $ukuran->tebal,
+                                        'kw_grade' => $kw,
                                     ])->first();
 
                                     $stok = $summaryJadi ? (int) $summaryJadi->stok_lembar : 0;
                                 } else {
-                                    $latest = \App\Models\StokVeneerKering::where([
-                                        'id_ukuran'     => $idUkuran,
+                                    $latest = StokVeneerKering::where([
+                                        'id_ukuran' => $idUkuran,
                                         'id_jenis_kayu' => $idJenisKayu,
-                                        'kw'            => $kw,
+                                        'kw' => $kw,
                                     ])
                                         ->orderBy('tanggal_transaksi', 'desc')
                                         ->orderBy('id', 'desc')
@@ -135,79 +146,79 @@ class DetailNotaBarangMasuksTable
                                 }
 
                                 if ($stok <= 0) {
-                                    return new \Illuminate\Support\HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 Lembar (Stok Habis)</strong>');
+                                    return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 Lembar (Stok Habis)</strong>');
                                 }
 
-                                return new \Illuminate\Support\HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">' . number_format($stok) . ' Lembar</strong>');
+                                return new HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">'.number_format($stok).' Lembar</strong>');
                             }),
 
-                        \Filament\Forms\Components\TextInput::make('jumlah')
+                        TextInput::make('jumlah')
                             ->label('Jumlah (Lembar)')
                             ->numeric()
                             ->required(),
 
-                        \Filament\Forms\Components\Textarea::make('keterangan')
+                        Textarea::make('keterangan')
                             ->label('Keterangan')
                             ->rows(3)
                             ->required(),
                     ])
                     ->action(function (RelationManager $livewire, array $data) {
                         $nota = $livewire->getOwnerRecord();
-                        if (!$nota) {
+                        if (! $nota) {
                             return;
                         }
 
                         $mutasi = $nota->mutasi;
-                        $isKeluar = $nota instanceof \App\Models\NotaBarangKeluar;
+                        $isKeluar = $nota instanceof NotaBarangKeluar;
 
-                        if (!$mutasi) {
-                            $mutasi = \App\Models\VeneerMutasi::create([
-                                'tanggal'        => $nota->tanggal,
+                        if (! $mutasi) {
+                            $mutasi = VeneerMutasi::create([
+                                'tanggal' => $nota->tanggal,
                                 'tipe_transaksi' => $isKeluar ? 'keluar' : 'masuk',
-                                'no_nota'        => $nota->no_nota,
-                                'tujuan_nota'    => $nota->tujuan_nota ?? '-',
-                                'status'         => 'draft',
-                                'id_nota_bk'     => $isKeluar ? $nota->id : null,
-                                'id_nota_bm'     => $isKeluar ? null : $nota->id,
-                                'dibuat_oleh'    => auth()->id(),
+                                'no_nota' => $nota->no_nota,
+                                'tujuan_nota' => $nota->tujuan_nota ?? '-',
+                                'status' => 'draft',
+                                'id_nota_bk' => $isKeluar ? $nota->id : null,
+                                'id_nota_bm' => $isKeluar ? null : $nota->id,
+                                'dibuat_oleh' => auth()->id(),
                             ]);
                         }
 
-                        $ukuran = \App\Models\Ukuran::findOrFail($data['id_ukuran']);
-                        $jenisKayu = \App\Models\JenisKayu::findOrFail($data['id_jenis_kayu']);
+                        $ukuran = Ukuran::findOrFail($data['id_ukuran']);
+                        $jenisKayu = JenisKayu::findOrFail($data['id_jenis_kayu']);
 
-                        $m3 = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * (int)$data['jumlah']) / 10000000;
+                        $m3 = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * (int) $data['jumlah']) / 10000000;
 
-                        \App\Models\VeneerMutasiDetail::create([
+                        VeneerMutasiDetail::create([
                             'id_veneer_mutasi' => $mutasi->id,
-                            'tipe_veneer'      => $data['tipe_veneer'],
-                            'id_ukuran'        => $data['id_ukuran'],
-                            'id_jenis_kayu'    => $data['id_jenis_kayu'],
-                            'kw'               => $data['kw'],
-                            'qty'              => (int) $data['jumlah'],
-                            'm3'               => $m3,
+                            'tipe_veneer' => $data['tipe_veneer'],
+                            'id_ukuran' => $data['id_ukuran'],
+                            'id_jenis_kayu' => $data['id_jenis_kayu'],
+                            'kw' => $data['kw'],
+                            'qty' => (int) $data['jumlah'],
+                            'm3' => $m3,
                         ]);
 
-                        $namaBarang = "Veneer " . ucfirst($data['tipe_veneer'])
-                            . " - " . $ukuran->nama_ukuran
-                            . " - " . $jenisKayu->nama_kayu
-                            . " - KW " . $data['kw'];
+                        $namaBarang = 'Veneer '.ucfirst($data['tipe_veneer'])
+                            .' - '.$ukuran->nama_ukuran
+                            .' - '.$jenisKayu->nama_kayu
+                            .' - KW '.$data['kw'];
 
                         if ($isKeluar) {
-                            \App\Models\DetailNotaBarangKeluar::create([
-                                'id_nota_bk'  => $nota->id,
+                            DetailNotaBarangKeluar::create([
+                                'id_nota_bk' => $nota->id,
                                 'nama_barang' => $namaBarang,
-                                'jumlah'      => (int) $data['jumlah'],
-                                'satuan'      => 'Lembar',
-                                'keterangan'  => $data['keterangan'] ?? 'Otomatis dari Mutasi Veneer Keluar',
+                                'jumlah' => (int) $data['jumlah'],
+                                'satuan' => 'Lembar',
+                                'keterangan' => $data['keterangan'] ?? 'Otomatis dari Mutasi Veneer Keluar',
                             ]);
                         } else {
-                            \App\Models\DetailNotaBarangMasuk::create([
-                                'id_nota_bm'  => $nota->id,
+                            DetailNotaBarangMasuk::create([
+                                'id_nota_bm' => $nota->id,
                                 'nama_barang' => $namaBarang,
-                                'jumlah'      => (int) $data['jumlah'],
-                                'satuan'      => 'Lembar',
-                                'keterangan'  => $data['keterangan'] ?? 'Otomatis dari Mutasi Veneer Masuk',
+                                'jumlah' => (int) $data['jumlah'],
+                                'satuan' => 'Lembar',
+                                'keterangan' => $data['keterangan'] ?? 'Otomatis dari Mutasi Veneer Masuk',
                             ]);
                         }
 
@@ -215,6 +226,7 @@ class DetailNotaBarangMasuksTable
                     })
                     ->visible(function (RelationManager $livewire) {
                         $nota = $livewire->getOwnerRecord();
+
                         // Hanya muncul jika belum divalidasi
                         return $nota && empty($nota->divalidasi_oleh);
                     }),
@@ -223,10 +235,10 @@ class DetailNotaBarangMasuksTable
                     ->label('Tambah Barang')
                     ->visible(function (RelationManager $livewire) {
                         $nota = $livewire->getOwnerRecord();
+
                         // Muncul jika belum divalidasi
                         return $nota && empty($nota->divalidasi_oleh);
                     }),
-
 
                 Action::make('validasi_nota')
                     ->label('Validasi Nota')
@@ -236,11 +248,12 @@ class DetailNotaBarangMasuksTable
                     ->visible(function (RelationManager $livewire) {
                         $nota = $livewire->getOwnerRecord();
 
-                        if (!$nota)
+                        if (! $nota) {
                             return false;
+                        }
 
                         // Tombol hanya muncul jika BELUM divalidasi
-                        if (!empty($nota->divalidasi_oleh)) {
+                        if (! empty($nota->divalidasi_oleh)) {
                             return false;
                         }
 
@@ -257,9 +270,9 @@ class DetailNotaBarangMasuksTable
                         $nota = $livewire->getOwnerRecord();
 
                         try {
-                            $hasMutasi = \App\Models\VeneerMutasi::where('id_nota_bm', $nota->id)->exists();
+                            $hasMutasi = VeneerMutasi::where('id_nota_bm', $nota->id)->exists();
                             // Run the business service to add stock and set divalidasi_oleh
-                            app(\App\Services\VeneerMutasiService::class)->processStockFromNota($nota);
+                            app(VeneerMutasiService::class)->processStockFromNota($nota);
 
                             Notification::make()
                                 ->title('Nota berhasil divalidasi!')
@@ -274,7 +287,7 @@ class DetailNotaBarangMasuksTable
                                 ->send();
                         }
                     })
-                    ->after(fn($livewire) => $livewire->dispatch('$refresh')),
+                    ->after(fn ($livewire) => $livewire->dispatch('$refresh')),
             ])
 
             ->filters([
@@ -285,7 +298,7 @@ class DetailNotaBarangMasuksTable
                     ->form(function ($record) {
                         if (str_starts_with($record->nama_barang, 'Veneer ')) {
                             return [
-                                \Filament\Forms\Components\Select::make('tipe_veneer')
+                                Select::make('tipe_veneer')
                                     ->label('Tipe Veneer')
                                     ->options([
                                         'basah' => 'Veneer Basah',
@@ -295,55 +308,51 @@ class DetailNotaBarangMasuksTable
                                     ->required()
                                     ->live(),
 
-                                \Filament\Forms\Components\Select::make('id_ukuran')
+                                Select::make('id_ukuran')
                                     ->label('Ukuran')
-                                    ->options(\App\Models\Ukuran::all()->pluck('nama_ukuran', 'id'))
+                                    ->options(Ukuran::all()->pluck('nama_ukuran', 'id'))
                                     ->searchable()
                                     ->required()
                                     ->live(),
 
-                                \Filament\Forms\Components\Select::make('id_jenis_kayu')
+                                Select::make('id_jenis_kayu')
                                     ->label('Jenis Kayu')
-                                    ->options(\App\Models\JenisKayu::pluck('nama_kayu', 'id'))
+                                    ->options(JenisKayu::pluck('nama_kayu', 'id'))
                                     ->searchable()
                                     ->required()
                                     ->live(),
 
-                                \Filament\Forms\Components\Select::make('kw')
+                                Select::make('kw')
                                     ->label('KW')
-                                    ->options([
-                                        '1' => 'KW 1',
-                                        '2' => 'KW 2',
-                                        '3' => 'KW 3',
-                                        '4' => 'KW 4',
-                                    ])
+                                    ->options(Grade::orderBy('nama_grade')->pluck('nama_grade', 'nama_grade'))
+                                    ->searchable()
                                     ->required()
                                     ->live(),
 
-                                \Filament\Forms\Components\Placeholder::make('stok_saat_ini')
+                                Placeholder::make('stok_saat_ini')
                                     ->label('Stok Saat Ini')
                                     ->content(function (callable $get) {
                                         $tipe = $get('tipe_veneer');
                                         $idUkuran = $get('id_ukuran');
                                         $idJenisKayu = $get('id_jenis_kayu');
                                         $kw = $get('kw');
-                                        $ukuran = $idUkuran ? \App\Models\Ukuran::find($idUkuran) : null;
+                                        $ukuran = $idUkuran ? Ukuran::find($idUkuran) : null;
 
-                                        if (!$tipe || !$idUkuran || !$idJenisKayu || !$kw) {
-                                            return new \Illuminate\Support\HtmlString('<span class="text-gray-400 dark:text-gray-500">Silakan lengkapi pilihan di atas...</span>');
+                                        if (! $tipe || ! $idUkuran || ! $idJenisKayu || ! $kw) {
+                                            return new HtmlString('<span class="text-gray-400 dark:text-gray-500">Silakan lengkapi pilihan di atas...</span>');
                                         }
 
                                         if ($tipe === 'basah') {
-                                            if (!$ukuran) {
-                                                return new \Illuminate\Support\HtmlString('<strong class="text-danger-600 dark:text-danger-400">0 Lembar</strong>');
+                                            if (! $ukuran) {
+                                                return new HtmlString('<strong class="text-danger-600 dark:text-danger-400">0 Lembar</strong>');
                                             }
 
-                                            $summary = \App\Models\HppVeneerBasahSummary::where([
+                                            $summary = HppVeneerBasahSummary::where([
                                                 'id_jenis_kayu' => $idJenisKayu,
-                                                'panjang'       => $ukuran->panjang,
-                                                'lebar'         => $ukuran->lebar,
-                                                'tebal'         => $ukuran->tebal,
-                                                'kw'            => $kw,
+                                                'panjang' => $ukuran->panjang,
+                                                'lebar' => $ukuran->lebar,
+                                                'tebal' => $ukuran->tebal,
+                                                'kw' => $kw,
                                             ])->first();
 
                                             $stok = $summary ? (int) $summary->stok_lembar : 0;
@@ -351,18 +360,18 @@ class DetailNotaBarangMasuksTable
                                             // Mengambil stok dari model StokVeneerJadi dengan mencocokkan dimensi & kw_grade
                                             $summaryJadi = StokVeneerJadi::where([
                                                 'id_jenis_kayu' => $idJenisKayu,
-                                                'panjang'       => $ukuran->panjang,
-                                                'lebar'         => $ukuran->lebar,
-                                                'tebal'         => $ukuran->tebal,
-                                                'kw_grade'      => $kw, // Menggunakan kolom kw_grade sesuai properti model
+                                                'panjang' => $ukuran->panjang,
+                                                'lebar' => $ukuran->lebar,
+                                                'tebal' => $ukuran->tebal,
+                                                'kw_grade' => $kw, // Menggunakan kolom kw_grade sesuai properti model
                                             ])->first();
 
                                             $stok = $summaryJadi ? (int) $summaryJadi->stok_lembar : 0;
                                         } else {
-                                            $latest = \App\Models\StokVeneerKering::where([
-                                                'id_ukuran'     => $idUkuran,
+                                            $latest = StokVeneerKering::where([
+                                                'id_ukuran' => $idUkuran,
                                                 'id_jenis_kayu' => $idJenisKayu,
-                                                'kw'            => $kw,
+                                                'kw' => $kw,
                                             ])
                                                 ->orderBy('tanggal_transaksi', 'desc')
                                                 ->orderBy('id', 'desc')
@@ -372,18 +381,18 @@ class DetailNotaBarangMasuksTable
                                         }
 
                                         if ($stok <= 0) {
-                                            return new \Illuminate\Support\HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 Lembar (Stok Habis)</strong>');
+                                            return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 Lembar (Stok Habis)</strong>');
                                         }
 
-                                        return new \Illuminate\Support\HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">' . number_format($stok) . ' Lembar</strong>');
+                                        return new HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">'.number_format($stok).' Lembar</strong>');
                                     }),
 
-                                \Filament\Forms\Components\TextInput::make('jumlah')
+                                TextInput::make('jumlah')
                                     ->label('Jumlah (Lembar)')
                                     ->numeric()
                                     ->required(),
 
-                                \Filament\Forms\Components\Textarea::make('keterangan')
+                                Textarea::make('keterangan')
                                     ->label('Keterangan')
                                     ->rows(3)
                                     ->required(),
@@ -391,22 +400,22 @@ class DetailNotaBarangMasuksTable
                         }
 
                         return [
-                            \Filament\Forms\Components\TextInput::make('nama_barang')
+                            TextInput::make('nama_barang')
                                 ->label('Nama Barang')
                                 ->required()
                                 ->maxLength(255),
 
-                            \Filament\Forms\Components\TextInput::make('jumlah')
+                            TextInput::make('jumlah')
                                 ->label('Jumlah')
                                 ->numeric()
                                 ->required(),
 
-                            \Filament\Forms\Components\TextInput::make('satuan')
+                            TextInput::make('satuan')
                                 ->label('Satuan')
                                 ->required()
                                 ->maxLength(50),
 
-                            \Filament\Forms\Components\Textarea::make('keterangan')
+                            Textarea::make('keterangan')
                                 ->label('Keterangan')
                                 ->rows(3)
                                 ->required(),
@@ -427,12 +436,12 @@ class DetailNotaBarangMasuksTable
                                     $ukuran = $detail->ukuran;
                                     $jenisKayu = $detail->jenisKayu;
                                     if ($ukuran && $jenisKayu) {
-                                        $expectedName = "Veneer " . ucfirst($detail->tipe_veneer)
-                                            . " - " . $ukuran->nama_ukuran
-                                            . " - " . $jenisKayu->nama_kayu
-                                            . " - KW " . $detail->kw;
+                                        $expectedName = 'Veneer '.ucfirst($detail->tipe_veneer)
+                                            .' - '.$ukuran->nama_ukuran
+                                            .' - '.$jenisKayu->nama_kayu
+                                            .' - KW '.$detail->kw;
 
-                                        if ($expectedName === $record->nama_barang && (int)$detail->qty === (int)$record->jumlah) {
+                                        if ($expectedName === $record->nama_barang && (int) $detail->qty === (int) $record->jumlah) {
                                             $matchingDetail = $detail;
                                             break;
                                         }
@@ -447,6 +456,7 @@ class DetailNotaBarangMasuksTable
                                 }
                             }
                         }
+
                         return $data;
                     })
                     ->using(function ($record, array $data) {
@@ -461,12 +471,12 @@ class DetailNotaBarangMasuksTable
                                     $ukuran = $detail->ukuran;
                                     $jenisKayu = $detail->jenisKayu;
                                     if ($ukuran && $jenisKayu) {
-                                        $expectedName = "Veneer " . ucfirst($detail->tipe_veneer)
-                                            . " - " . $ukuran->nama_ukuran
-                                            . " - " . $jenisKayu->nama_kayu
-                                            . " - KW " . $detail->kw;
+                                        $expectedName = 'Veneer '.ucfirst($detail->tipe_veneer)
+                                            .' - '.$ukuran->nama_ukuran
+                                            .' - '.$jenisKayu->nama_kayu
+                                            .' - KW '.$detail->kw;
 
-                                        if ($expectedName === $record->nama_barang && (int)$detail->qty === (int)$record->jumlah) {
+                                        if ($expectedName === $record->nama_barang && (int) $detail->qty === (int) $record->jumlah) {
                                             $matchingDetail = $detail;
                                             break;
                                         }
@@ -475,39 +485,39 @@ class DetailNotaBarangMasuksTable
 
                                 if ($matchingDetail) {
                                     $matchingDetail->update([
-                                        'tipe_veneer'   => $data['tipe_veneer'],
-                                        'id_ukuran'     => $data['id_ukuran'],
+                                        'tipe_veneer' => $data['tipe_veneer'],
+                                        'id_ukuran' => $data['id_ukuran'],
                                         'id_jenis_kayu' => $data['id_jenis_kayu'],
-                                        'kw'            => $data['kw'],
-                                        'qty'           => (int) $data['jumlah'],
+                                        'kw' => $data['kw'],
+                                        'qty' => (int) $data['jumlah'],
                                     ]);
 
                                     // Recalculate m3
-                                    $ukuranObj = \App\Models\Ukuran::findOrFail($data['id_ukuran']);
+                                    $ukuranObj = Ukuran::findOrFail($data['id_ukuran']);
                                     $matchingDetail->m3 = ($ukuranObj->panjang * $ukuranObj->lebar * $ukuranObj->tebal * $matchingDetail->qty) / 10000000;
                                     $matchingDetail->save();
                                 }
                             }
 
                             // Generate new nama_barang
-                            $ukuran = \App\Models\Ukuran::findOrFail($data['id_ukuran']);
-                            $jenisKayu = \App\Models\JenisKayu::findOrFail($data['id_jenis_kayu']);
-                            $newNamaBarang = "Veneer " . ucfirst($data['tipe_veneer'])
-                                . " - " . $ukuran->nama_ukuran
-                                . " - " . $jenisKayu->nama_kayu
-                                . " - KW " . $data['kw'];
+                            $ukuran = Ukuran::findOrFail($data['id_ukuran']);
+                            $jenisKayu = JenisKayu::findOrFail($data['id_jenis_kayu']);
+                            $newNamaBarang = 'Veneer '.ucfirst($data['tipe_veneer'])
+                                .' - '.$ukuran->nama_ukuran
+                                .' - '.$jenisKayu->nama_kayu
+                                .' - KW '.$data['kw'];
 
                             $record->update([
                                 'nama_barang' => $newNamaBarang,
-                                'jumlah'      => (int) $data['jumlah'],
-                                'keterangan'  => $data['keterangan'] ?? $record->keterangan,
+                                'jumlah' => (int) $data['jumlah'],
+                                'keterangan' => $data['keterangan'] ?? $record->keterangan,
                             ]);
                         } else {
                             $record->update([
                                 'nama_barang' => $data['nama_barang'],
-                                'jumlah'      => (int) $data['jumlah'],
-                                'satuan'      => $data['satuan'],
-                                'keterangan'  => $data['keterangan'] ?? null,
+                                'jumlah' => (int) $data['jumlah'],
+                                'satuan' => $data['satuan'],
+                                'keterangan' => $data['keterangan'] ?? null,
                             ]);
                         }
 
@@ -515,11 +525,13 @@ class DetailNotaBarangMasuksTable
                     })
                     ->visible(function (RelationManager $livewire) {
                         $nota = $livewire->getOwnerRecord();
+
                         return $nota && empty($nota->divalidasi_oleh);
                     }),
                 DeleteAction::make()
                     ->visible(function (RelationManager $livewire) {
                         $nota = $livewire->getOwnerRecord();
+
                         // Hanya bisa delete jika belum divalidasi
                         return $nota && empty($nota->divalidasi_oleh);
                     })
@@ -534,12 +546,12 @@ class DetailNotaBarangMasuksTable
                                 $ukuran = $detail->ukuran;
                                 $jenisKayu = $detail->jenisKayu;
                                 if ($ukuran && $jenisKayu) {
-                                    $expectedName = "Veneer " . ucfirst($detail->tipe_veneer)
-                                        . " - " . $ukuran->nama_ukuran
-                                        . " - " . $jenisKayu->nama_kayu
-                                        . " - KW " . $detail->kw;
+                                    $expectedName = 'Veneer '.ucfirst($detail->tipe_veneer)
+                                        .' - '.$ukuran->nama_ukuran
+                                        .' - '.$jenisKayu->nama_kayu
+                                        .' - KW '.$detail->kw;
 
-                                    if ($expectedName === $record->nama_barang && (int)$detail->qty === (int)$record->jumlah) {
+                                    if ($expectedName === $record->nama_barang && (int) $detail->qty === (int) $record->jumlah) {
                                         $matchingDetail = $detail;
                                         break;
                                     }
