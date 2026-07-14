@@ -24,7 +24,11 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
 
     protected ?int $idKayuSengon  = null;
     protected ?int $idKayuMeranti = null;
-    protected string $kolomNamaKayu = 'nama';
+
+    // Cache agar tidak query DB berulang
+    private array $kayuCache     = [];
+    private array $kategoriCache = [];
+    private array $gradeCache    = [];
 
     public function __construct(string $tanggal, string $domain)
     {
@@ -117,24 +121,6 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
         ]);
     }
 
-    private function normalizeGrade(string $grade): array
-    {
-        $g     = strtolower(trim($grade));
-        $local = str_replace('lokal', 'local', $g);
-        $lokal = str_replace('local', 'lokal', $g);
-
-        $variants = array_unique([$g, $local, $lokal]);
-
-        // Aturan spesifik pemetaan grade angka ke teks master data
-        if (in_array($g, ['1', '2'])) {
-            array_push($variants, 'face/back', 'face', 'back');
-        } elseif (in_array($g, ['3', '4'])) {
-            array_push($variants, 'core');
-        }
-
-        return $variants;
-    }
-
     private function kategoriGrade(string $grade): string
     {
         $g = strtolower(trim($grade));
@@ -143,28 +129,41 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
         return $g;
     }
 
+    // =========================================================================
+    // DATABASE LOOKUP HELPERS (dengan cache)
+    // =========================================================================
+
     private function getIdKayuByNama(string $namaLike): ?int
     {
+        $key = strtolower(trim($namaLike));
+        if (array_key_exists($key, $this->kayuCache)) {
+            return $this->kayuCache[$key];
+        }
+
         $kolom = ['nama', 'nama_kayu', 'nama_jenis_kayu', 'jenis_kayu'];
         foreach ($kolom as $col) {
             try {
-                $kayu = JenisKayu::whereRaw("LOWER({$col}) LIKE ?", ["%{$namaLike}%"])->first();
-                if ($kayu) return $kayu->id;
+                $kayu = JenisKayu::whereRaw("LOWER({$col}) LIKE ?", ["%{$key}%"])->first();
+                if ($kayu) {
+                    return $this->kayuCache[$key] = $kayu->id;
+                }
             } catch (\Throwable $e) {
                 continue;
             }
         }
+
+        // Fallback: cari di semua kolom
         try {
             $semua = JenisKayu::all();
-            $found = $semua->first(function ($item) use ($namaLike) {
+            $found = $semua->first(function ($item) use ($key) {
                 foreach ($item->getAttributes() as $val) {
-                    if (is_string($val) && str_contains(strtolower($val), $namaLike)) return true;
+                    if (is_string($val) && str_contains(strtolower($val), $key)) return true;
                 }
                 return false;
             });
-            return $found?->id;
+            return $this->kayuCache[$key] = $found?->id;
         } catch (\Throwable $e) {
-            return null;
+            return $this->kayuCache[$key] = null;
         }
     }
 
@@ -190,13 +189,65 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
         return $this->getIdKayuByNama(strtolower(trim($namaJenisBarang)));
     }
 
+    /**
+     * Ambil id kategori barang berdasarkan nama (dengan cache).
+     * PENTING: kolom di tabel kategori_barang adalah `nama_kategori`, bukan `nama`.
+     */
+    private function getIdKategoriBarang(string $namaKategori): ?int
+    {
+        $key = strtolower(trim($namaKategori));
+        if (array_key_exists($key, $this->kategoriCache)) {
+            return $this->kategoriCache[$key];
+        }
+        try {
+            $kategori = \App\Models\KategoriBarang::whereRaw("LOWER(nama_kategori) LIKE ?", ["%{$key}%"])->first();
+            return $this->kategoriCache[$key] = $kategori?->id;
+        } catch (\Throwable $e) {
+            return $this->kategoriCache[$key] = null;
+        }
+    }
+
+    /**
+     * Ambil id grade berdasarkan nama (dengan cache).
+     * Dipakai untuk filter plywood & platform yang pencocokannya via id_grade.
+     *
+     * Grade dari form produksi bisa berupa string seperti 'better', 'better local',
+     * 'uty', 'af', dll. Kolom di tabel grade perlu dicek nama kolomnya — asumsi `nama_grade`.
+     * Pencocokan pakai LIKE agar variasi 'lokal'/'local' tetap ketemu.
+     */
+    private function getIdGrade(string $namaGrade): ?int
+    {
+        $key = strtolower(trim($namaGrade));
+        // Normalisasi lokal <-> local agar keduanya ketemu
+        $keyLocal = str_replace('lokal', 'local', $key);
+        $keyLokal = str_replace('local', 'lokal', $key);
+
+        $cacheKey = $key;
+        if (array_key_exists($cacheKey, $this->gradeCache)) {
+            return $this->gradeCache[$cacheKey];
+        }
+
+        try {
+            $grade = \App\Models\Grade::where(function ($q) use ($key, $keyLocal, $keyLokal) {
+                $q->whereRaw("LOWER(nama_grade) = ?", [$key])
+                  ->orWhereRaw("LOWER(nama_grade) = ?", [$keyLocal])
+                  ->orWhereRaw("LOWER(nama_grade) = ?", [$keyLokal])
+                  ->orWhereRaw("LOWER(nama_grade) LIKE ?", ["%{$key}%"]);
+            })->first();
+
+            return $this->gradeCache[$cacheKey] = $grade?->id;
+        } catch (\Throwable $e) {
+            return $this->gradeCache[$cacheKey] = null;
+        }
+    }
+
     // =========================================================================
-    // FILTER HELPERS — STRICT (tidak fallback ke data lain, tampilkan UNKNOWN)
+    // FILTER HELPERS — STRICT (tidak ketemu → UNKNOWN)
     // =========================================================================
 
     /**
-     * Filter domain: cocok suffix → pakai. Tidak ada yang cocok → kembalikan semua.
-     * Hanya dipakai untuk plywood & platform (nama di DB mengandung suffix mth/whn/wjy).
+     * Filter domain: cocok suffix → pakai.
+     * Hanya dipakai untuk plywood & platform.
      */
     private function filterByDomain(\Illuminate\Support\Collection $c): \Illuminate\Support\Collection
     {
@@ -233,51 +284,41 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
     /**
      * Filter ukuran STRICT:
      * - Cocok id_ukuran spesifik → pakai
-     * - Tidak cocok → fallback ke id_ukuran NULL (referensi generic)
+     * - Cari mirror ukuran (p x l dibalik) → pakai
+     * - Fallback ke id_ukuran NULL (referensi generic)
      * - Tidak ada keduanya → return kosong → UNKNOWN
      */
     private function filterByUkuran(\Illuminate\Support\Collection $c, ?int $idUkuran): \Illuminate\Support\Collection
     {
         if ($c->isEmpty() || !$idUkuran) return $c;
 
-        // Coba exact match dulu
         $exact = $c->filter(fn($i) => $i->id_ukuran == $idUkuran);
         if ($exact->isNotEmpty()) return $exact;
 
-        // Cari dimensi dari id_ukuran yang diberikan, lalu cari mirror (dibalik)
         try {
             $ukuran = \App\Models\Ukuran::find($idUkuran);
             if ($ukuran) {
                 $idMirror = \App\Models\Ukuran::where('tebal', $ukuran->tebal)
                     ->where(
                         fn($q) => $q
-                            ->where(
-                                fn($q2) => $q2
-                                    ->where('panjang', $ukuran->panjang)
-                                    ->where('lebar', $ukuran->lebar)
-                            )
-                            ->orWhere(
-                                fn($q2) => $q2
-                                    ->where('panjang', $ukuran->lebar)
-                                    ->where('lebar', $ukuran->panjang)
-                            )
+                            ->where(fn($q2) => $q2->where('panjang', $ukuran->panjang)->where('lebar', $ukuran->lebar))
+                            ->orWhere(fn($q2) => $q2->where('panjang', $ukuran->lebar)->where('lebar', $ukuran->panjang))
                     )->pluck('id');
 
                 $mirror = $c->filter(fn($i) => $idMirror->contains($i->id_ukuran));
                 if ($mirror->isNotEmpty()) return $mirror;
             }
         } catch (\Throwable $e) {
-            // Jika model Ukuran tidak ditemukan, lanjut ke fallback
+            // Lanjut ke fallback
         }
 
-        // Fallback ke id_ukuran NULL (referensi generic tanpa ukuran spesifik)
         return $c->filter(fn($i) => is_null($i->id_ukuran));
     }
 
     /**
      * Filter kayu STRICT:
      * - Cocok id_jenis_kayu → pakai
-     * - Tidak cocok → fallback ke id_jenis_kayu NULL (referensi generic)
+     * - Fallback ke id_jenis_kayu NULL (referensi generic)
      * - Tidak ada keduanya → return kosong → UNKNOWN
      */
     private function filterByKayu(\Illuminate\Support\Collection $c, ?int $idJenisKayu): \Illuminate\Support\Collection
@@ -285,54 +326,85 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
         if ($c->isEmpty() || !$idJenisKayu) return $c;
         $filtered = $c->filter(fn($i) => $i->id_jenis_kayu == $idJenisKayu);
         if ($filtered->isNotEmpty()) return $filtered;
-        // Fallback ke referensi generic (id_jenis_kayu NULL) saja, tidak ke semua
         return $c->filter(fn($i) => is_null($i->id_jenis_kayu));
     }
 
     /**
-     * Filter grade STRICT:
-     * - Cocok kw → pakai
-     * - Tidak cocok → fallback ke kw kosong (referensi generic)
-     * - Tidak ada keduanya → return kosong → UNKNOWN
+     * Filter grade via id_grade (menggantikan filter string kw lama).
+     *
+     * Alur:
+     * 1. Lookup id_grade dari nama grade yang diberikan
+     * 2. Cocokkan ke kolom id_grade di tabel referensi
+     * 3. Fallback ke id_grade NULL (referensi generic tanpa grade spesifik)
+     * 4. Tidak ada keduanya → return kosong → UNKNOWN
+     *
+     * Kenapa id_grade bukan kw_min/kw_max:
+     * Grade plywood/platform berupa string ('better', 'uty', 'af') yang tidak
+     * bisa direpresentasikan sebagai integer range — kolom id_grade dipakai
+     * sebagai foreign key ke tabel grade, berbeda dengan veneer yang pakai
+     * kw_min/kw_max integer untuk kw 1-4.
      */
     private function filterByGrade(\Illuminate\Support\Collection $c, ?string $grade): \Illuminate\Support\Collection
     {
         if ($c->isEmpty() || !$grade) return $c;
-        $variants = $this->normalizeGrade($grade);
-        $filtered = $c->filter(function ($item) use ($variants) {
-            $kwDb = strtolower(trim($item->kw ?? ''));
-            if ($kwDb === '') return false;
-            foreach ($variants as $v) {
-                if ($kwDb === $v || str_contains($kwDb, $v) || str_contains($v, $kwDb)) return true;
-            }
-            return false;
-        });
-        if ($filtered->isNotEmpty()) return $filtered;
-        // Fallback ke kw kosong (referensi generic) saja, tidak ke semua
-        return $c->filter(fn($i) => empty(trim($i->kw ?? '')));
+
+        $idGrade = $this->getIdGrade($grade);
+
+        if ($idGrade) {
+            $filtered = $c->filter(fn($i) => $i->id_grade == $idGrade);
+            if ($filtered->isNotEmpty()) return $filtered;
+        }
+
+        // Fallback ke referensi generic (id_grade NULL)
+        return $c->filter(fn($i) => is_null($i->id_grade));
     }
 
     // =========================================================================
-    // BASE QUERY per tipe barang
+    // BASE QUERY per tipe barang — sekarang pakai id_kategori_barang
     // =========================================================================
 
+    /**
+     * Query base referensi berdasarkan id_kategori_barang.
+     * Menggantikan filter string jenis_barang yang lama.
+     *
+     * Mapping nama kategori ke id (dari tabel kategori_barang):
+     *   'plywood'  → id kategori 'Plywood Mentah' atau 'Plywood'
+     *   'platform' → id kategori 'Platform'
+     *   'barang'   → id kategori 'Barang' (bahan penolong & veneer)
+     *   'afalan'   → id kategori 'Veneer Afalan'
+     */
     private function baseQuery(string $tipe): \Illuminate\Database\Eloquent\Builder
     {
         $q         = ReferensiHargaProduksi::with('subAnakAkun');
         $tipeLower = strtolower(trim($tipe));
 
         if (in_array($tipeLower, ['triplek', 'plywood'])) {
-            $q->where(fn($s) => $s->whereRaw("LOWER(jenis_barang) IN ('plywood','triplek')"));
+            // Plywood mentah: id_kategori_barang untuk 'Plywood Mentah'
+            $idKategori = $this->getIdKategoriBarang('Plywood Mentah');
+            if ($idKategori) {
+                $q->where('id_kategori_barang', $idKategori);
+            } else {
+                // Fallback: cari 'Plywood' biasa
+                $idKategori = $this->getIdKategoriBarang('Plywood');
+                if ($idKategori) $q->where('id_kategori_barang', $idKategori);
+            }
         } elseif ($tipeLower === 'platform') {
-            $q->whereRaw("LOWER(jenis_barang) = 'platform'");
+            $idKategori = $this->getIdKategoriBarang('Platform');
+            if ($idKategori) $q->where('id_kategori_barang', $idKategori);
         } elseif ($tipeLower === 'bahan') {
-            $q->where(
-                fn($s) => $s
-                    ->whereRaw("LOWER(jenis_barang) LIKE '%barang%'")
-                    ->orWhereRaw("LOWER(jenis_barang) LIKE '%veneer%'")
-            );
+            // Bahan: veneer basah/kering/jadi + barang
+            $idVeneerBasah  = $this->getIdKategoriBarang('Veneer Basah');
+            $idVeneerKering = $this->getIdKategoriBarang('Veneer Kering');
+            $idVeneerJadi   = $this->getIdKategoriBarang('Veneer Jadi');
+            $idBarang       = $this->getIdKategoriBarang('Barang');
+            $ids = array_filter([$idVeneerBasah, $idVeneerKering, $idVeneerJadi, $idBarang]);
+            if (!empty($ids)) $q->whereIn('id_kategori_barang', $ids);
         } elseif ($tipeLower === 'afalan') {
-            $q->whereRaw("LOWER(jenis_barang) LIKE '%afalan%'");
+            $idKategori = $this->getIdKategoriBarang('Veneer Afalan');
+            if ($idKategori) $q->where('id_kategori_barang', $idKategori);
+        } elseif ($tipeLower === 'barang_penolong') {
+            $idKategori = $this->getIdKategoriBarang('Barang');
+            if ($idKategori) $q->where('id_kategori_barang', $idKategori);
         }
 
         return $q;
@@ -344,7 +416,10 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
 
     /**
      * Fetch referensi umum (triplek, platform, bahan/veneer).
-     * Menggunakan filter STRICT — tidak ketemu → return null → UNKNOWN.
+     * Filter chain STRICT — tidak ketemu → return null → UNKNOWN.
+     *
+     * Untuk plywood & platform: filter via id_grade (bukan kw_min/kw_max).
+     * Untuk veneer/bahan: tidak pakai id_grade.
      */
     private function fetchReferensi(string $tipe, ?int $idUkuran, ?int $idJenisKayu, ?string $grade): ?ReferensiHargaProduksi
     {
@@ -357,12 +432,13 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
         $results = $this->filterByKayu($results, $idJenisKayu);
         if ($results->isEmpty()) return null;
 
-        $results = $this->filterByGrade($results, $grade);
-        if ($results->isEmpty()) return null;
-
-        // Filter domain hanya untuk plywood & platform
+        // Plywood & platform: filter via id_grade
+        // Veneer/bahan: tidak perlu filter grade (dibedakan oleh kategori + ukuran + kayu)
         $tipeLower = strtolower(trim($tipe));
         if (in_array($tipeLower, ['triplek', 'plywood', 'platform'])) {
+            $results = $this->filterByGrade($results, $grade);
+            if ($results->isEmpty()) return null;
+
             $results = $this->filterByDomain($results);
         }
 
@@ -371,6 +447,7 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
 
     /**
      * Khusus AF: sengon → cari afalan sengon; selain sengon → cari afalan meranti.
+     * Untuk afalan tidak ada filter grade maupun kw — cukup kategori + kayu.
      */
     private function fetchReferensiAfalan(?int $idJenisKayu): ?ReferensiHargaProduksi
     {
@@ -383,14 +460,10 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
         $all = $this->baseQuery('afalan')->get();
         if ($all->isEmpty()) return null;
 
-        // Strict: tidak fallback ke kayu lain
         $byKayu = $all->filter(fn($i) => $i->id_jenis_kayu == $idKayuLookup);
         $pool   = $byKayu->isNotEmpty() ? $byKayu : $all;
 
-        // Prioritas kw Standard
-        $standard = $pool->filter(fn($i) => strtolower(trim($i->kw ?? '')) === 'standard');
-
-        return ($standard->isNotEmpty() ? $standard : $pool)->first();
+        return $pool->first();
     }
 
     private function resolveRefBahan(?int $idUkuran, ?int $idJenisKayu, ?string $grade): ?ReferensiHargaProduksi
@@ -411,19 +484,25 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
     }
 
     /**
-     * Fetch referensi bahan penolong.
-     * Tahap 1: nama lengkap / LIKE
-     * Tahap 2: alias mapping
-     * Tahap 3: per kata (terpanjang dulu)
-     * Tidak ketemu di semua tahap → return null → UNKNOWN
+     * Fetch referensi bahan penolong dari kategori 'Barang'.
+     * Pencarian multi-tahap:
+     *   Tahap 1: nama lengkap / LIKE
+     *   Tahap 2: alias mapping
+     *   Tahap 3: per kata (terpanjang dulu, min 3 huruf)
+     * Tidak ketemu → return null → UNKNOWN
      */
     private function fetchReferensiPenolong(string $namaBahan): ?ReferensiHargaProduksi
     {
         $namaLower = strtolower(trim($namaBahan));
         $namaClean = str_replace('_', ' ', $namaLower);
 
-        // Tahap 1: full match / LIKE
+        $idKategori = $this->getIdKategoriBarang('Barang');
+        // Guard: kalau kategori 'Barang' tidak ada di DB, jangan lanjut
+        if (!$idKategori) return null;
+
+        // Tahap 1: full match / LIKE dalam kategori 'Barang'
         $results = ReferensiHargaProduksi::with('subAnakAkun')
+            ->where('id_kategori_barang', $idKategori)
             ->where(
                 fn($q) => $q
                     ->whereRaw("LOWER(nama) = ?", [$namaLower])
@@ -442,6 +521,7 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
 
         if ($cariDengan) {
             $byAlias = ReferensiHargaProduksi::with('subAnakAkun')
+                ->where('id_kategori_barang', $idKategori)
                 ->whereRaw("LOWER(nama) LIKE ?", ["%{$cariDengan}%"])
                 ->get();
             if ($byAlias->isNotEmpty()) {
@@ -455,6 +535,7 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
 
         foreach ($kata as $k) {
             $byKata = ReferensiHargaProduksi::with('subAnakAkun')
+                ->where('id_kategori_barang', $idKategori)
                 ->whereRaw("LOWER(nama) LIKE ?", ["%{$k}%"])
                 ->get();
             if ($byKata->isNotEmpty()) {
@@ -462,7 +543,6 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
             }
         }
 
-        // Tidak ditemukan → return null → UNKNOWN
         return null;
     }
 
@@ -634,13 +714,13 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
                     $ref = $this->fetchReferensi($tipe, $idUkuran, $idJenisKayu, $grStr);
                     [$akunNama, $akunNo, $hargaHpp] = $this->extractAkun($ref);
 
-                    // Keterangan: pakai nama dari referensi, fallback ke nama manual jika UNKNOWN
+                    // Keterangan: nama dari referensi, fallback ke nama manual jika UNKNOWN
                     if ($ref) {
                         $keterangan = $ref->nama;
                     } else {
-                        $tebalInt  = (int) $tebal;
-                        $jkSingkat = strtolower(substr($jk, 0, 1));
-                        $kwStr     = strtolower($grStr);
+                        $tebalInt   = (int) $tebal;
+                        $jkSingkat  = strtolower(substr($jk, 0, 1));
+                        $kwStr      = strtolower($grStr);
                         $keterangan = "{$tebalInt}{$jkSingkat} {$kwStr} MTH [UNKNOWN - cek master data]";
                     }
 
@@ -654,14 +734,14 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
                     }
                 }
 
-                // KREDIT HPP untuk HP1 & HP2
+                // KREDIT HPP untuk HP1 & HP2 (taruh langsung setelah debit masing-masing mesin)
                 if ($mId != $hp3Id && $totalProdHp1Hp2 > 0) {
                     $hpp    = $this->getAkunHpp();
                     $rows[] = $this->makeRow($hpp['nama'], $hpp['no'], $tglStr, $namaMesinSingkat, '', 'k', '', '', '', round($totalProdHp1Hp2, 0));
                 }
 
                 // =======================================================
-                // 2. BIAYA HP3 (KREDIT)
+                // 2. BIAYA HP3 (KREDIT) — taruh setelah semua debit HP3
                 // =======================================================
                 if ($mId == $hp3Id) {
 
@@ -680,39 +760,31 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
                         $banyak      = $bahan->isi ?? 0;
                         $m3          = ($p * $l * $tebal * $banyak) / 10_000_000;
 
-                        // Deteksi status kelebihan/kehilangan
                         $ketBahan = strtolower(trim($bahan->ket ?? ''));
                         $isLebih  = str_contains($ketBahan, 'kelebihan');
                         $isHilang = str_contains($ketBahan, 'kehilangan');
                         $statusKey = $isLebih ? 'lebih' : ($isHilang ? 'hilang' : 'normal');
 
-                        // Deteksi tipe bahan
                         $isAf       = $this->isAf($grAsli);
                         $isPlatform = !$isAf && $this->isPlatformGrade($grAsli);
 
-                        // Cari referensi sesuai tipe
                         $ref = $isPlatform
                             ? $this->fetchReferensi('platform', $idUkuran, $idJenisKayu, $grAsli)
                             : $this->resolveRefBahan($idUkuran, $idJenisKayu, $grAsli);
 
                         [$akunNama, $akunNo, $hargaBahan] = $this->extractAkun($ref);
 
-                        // Keterangan:
-                        // - Platform → pakai nama dari referensi (misal: "platform 15 better lokal MTH")
-                        // - Veneer/AF → buat manual dari tipe + kayu + tebal
                         if ($isPlatform) {
                             $tipeVeneer = 'Platform';
                             $ketVeneer  = $ref?->nama ?? "Platform {$jkAsli} uk {$tebal} [UNKNOWN - cek master data]";
                         } else {
                             $tipeVeneer = $isAf ? 'AF' : (($tebal < 1) ? '260 F/B' : '130 Core');
-                            $ketVeneer  = "{$tipeVeneer} {$jkAsli} uk {$tebal}";
+                            $ketVeneer  = "{$tipeVeneer} {$jkAsli} uk {$tebal}" . ($ref ? '' : ' [UNKNOWN - cek master data]');
                         }
 
-                        // Tambah suffix status
                         if ($isLebih)  $ketVeneer .= ' // kelebihan';
                         if ($isHilang) $ketVeneer .= ' // kehilangan';
 
-                        // Group key: akun + tipe + dimensi + kategori grade + status
                         $katGrade = $this->kategoriGrade($grAsli);
                         $groupKey = "{$akunNo}_{$tipeVeneer}_{$tebal}_{$p}x{$l}_{$katGrade}_{$statusKey}";
 
@@ -740,7 +812,6 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
                     $veneerUrut   = array_merge($veneerNormal, $veneerLebih, $veneerHilang);
 
                     foreach ($veneerUrut as $v) {
-                        // Platform: hit kbk = b (per lembar), Veneer: hit kbk = m (per m3)
                         $hitKbk  = $v['is_platform'] ? 'b' : 'm';
                         $m3Round = round($v['m3'], 4);
 
@@ -766,7 +837,6 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
                     foreach ($prod->bahanPenolongHp as $penolong) {
                         $namaBahanLower = strtolower(trim($penolong->nama_bahan));
 
-                        // Bahan yang dikecualikan
                         if (
                             str_contains($namaBahanLower, 'kalsium') ||
                             str_contains($namaBahanLower, 'semen')   ||
@@ -777,8 +847,7 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
                         $ref    = $this->fetchReferensiPenolong($penolong->nama_bahan);
                         [$akunNama, $akunNo, $hargaPenolong] = $this->extractAkun($ref);
 
-                        // Keterangan: nama bahan dari form produksi (selalu tampil meski UNKNOWN)
-                        $ketPenolong = $ref?->nama ?? $penolong->nama_bahan;
+                        $ketPenolong = $ref?->nama ?? "{$penolong->nama_bahan} [UNKNOWN - cek master data]";
 
                         $totalHargaBahanGlobal += round($banyak * $hargaPenolong, 0);
                         $rows[] = $this->makeRow($akunNama, $akunNo, $tglStr, $namaMesinSingkat, $ketPenolong, 'k', 'b', $banyak, '', $hargaPenolong);
@@ -792,7 +861,7 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
                         $rows[] = $this->makeRow($akunGaji['hutang']['nama'], $akunGaji['hutang']['no'], $tglStr, $namaMesinSingkat, '', 'k', 'b', $jumlahPekerja, '', $hargaPegawaiMaster);
                     }
 
-                    // --- HPP PENYEIMBANG HP3 ---
+                    // --- HPP PENYEIMBANG HP3 — selalu paling bawah sendiri ---
                     $nilaiHppHp3 = $totalHargaBahanGlobal - $totalHargaProdukHp3;
                     if (round(abs($nilaiHppHp3), 0) != 0) {
                         $hpp    = $this->getAkunHpp();
