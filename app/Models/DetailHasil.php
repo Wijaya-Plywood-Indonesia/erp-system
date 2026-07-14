@@ -64,4 +64,9 @@ class DetailHasil extends Model
     {
         return $this->hasOne(SerahTerimaVeneerKering::class, 'id_detail_hasil');
     }
+
+    public function getKodePaletAttribute(): string
+{
+    return 'dry-' . $this->no_palet;
+}
 }

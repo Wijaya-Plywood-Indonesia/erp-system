@@ -39,9 +39,15 @@ class DetailHasilsRelationManager extends RelationManager
         return $schema
             ->schema([
                 TextInput::make('no_palet')
-                    ->label('Nomor Palet')
-                    ->numeric()
-                    ->required(),
+    ->label('Nomor Palet')
+    ->numeric()
+    ->default(function () {
+        // Ambil palet tertinggi dari SELURUH hasil produksi dryer
+        $paletTerakhir = DetailHasil::max('no_palet');
+
+        return $paletTerakhir ? $paletTerakhir + 1 : 1;
+    })
+    ->required(),
 
                 Select::make('id_ukuran')
                     ->label('Ukuran Kayu')
@@ -107,6 +113,7 @@ class DetailHasilsRelationManager extends RelationManager
                     ->label('No. Palet')
                     ->searchable()
                     ->badge()
+                    ->formatStateUsing(fn ($state) => 'dry-' . $state)
                     ->color(function ($record) {
                         $serahTerima = $record->serahTerimaVeneerKering;
 
