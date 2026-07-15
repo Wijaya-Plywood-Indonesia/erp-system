@@ -13,39 +13,38 @@ use Filament\Schemas\Schema;
 
 class BahanTerimaGudangSatuForm
 {
++    /**
+     * Label opsi untuk satu baris serah terima, sadar-asal:
+     *  - Triplek Jadi : dirakit dari relasi triplekMutasiKeluar.
+     *  - Pilih Plywood: format lama, tidak berubah.
+     */
+    protected static function labelOpsi(SerahTerimaGudangSatu $s): string
+    {
+        $sisa = rtrim(rtrim(number_format($s->sisa, 2, ',', '.'), '0'), ',');
+
+        if ($s->id_triplek_mutasi_keluar !== null) {
+            $m = $s->triplekMutasiKeluar;
+
+            return 'TRIPLEK JADI | '.
+                ($m ? ($m->panjang + 0).'×'.($m->lebar + 0).'×'.($m->tebal + 0) : '-').' | '.
+                ($m?->kw_grade ?? '-').' | '.
+                ($m?->jenisKayu?->nama_kayu ?? '-').
+                ' (Sisa: '.$sisa.')';
+        }
+
+        $b = $s->barangSetengahJadi;
+
+        return ($b?->grade?->kategoriBarang?->nama_kategori ?? '-').' | '.
+            ($b?->ukuran?->nama_ukuran ?? '-').' | '.
+            ($b?->grade?->nama_grade ?? '-').' | '.
+            ($b?->jenisBarang?->nama_jenis_barang ?? '-').
+            ' (Sisa: '.$sisa.')';
+    }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
-                // Select::make('grade_id')
-                //     ->label('Filter Grade')
-                //     ->options(
-                //         Grade::whereHas('kategoriBarang', function ($q) {
-                //             $q->where('nama_kategori', 'PLYWOOD');
-                //         })
-                //             ->orderBy('nama_grade')
-                //             ->get()
-                //             ->mapWithKeys(fn ($g) => [
-                //                 $g->id => ($g->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
-                //                     .' | '.$g->nama_grade,
-                //             ])
-                //     )
-                //     ->reactive()
-                //     ->searchable()
-                //     ->placeholder('Semua Grade')
-                //     ->dehydrated(false),
-
-                // Select::make('jenis_barang_id_filter')
-                //     ->label('Filter Jenis Barang')
-                //     ->options(
-                //         JenisBarang::orderBy('nama_jenis_barang')
-                //             ->pluck('nama_jenis_barang', 'id')
-                //     )
-                //     ->reactive()
-                //     ->searchable()
-                //     ->placeholder('Semua Jenis Barang')
-                //     ->dehydrated(false),
-
                 Select::make('id_serah_terima_gudang_satu')
                     ->label('Bahan (Serah Terima Gudang Satu)')
                     ->required()
@@ -57,21 +56,39 @@ class BahanTerimaGudangSatuForm
                                 'hasilPilihPlywood.barangSetengahJadiHp.ukuran',
                                 'hasilPilihPlywood.barangSetengahJadiHp.jenisBarang',
                                 'hasilPilihPlywood.barangSetengahJadiHp.grade.kategoriBarang',
+                                'triplekMutasiKeluar.jenisKayu',
                             ])
                             ->where('diterima_oleh', '!=', '-')
-                            ->whereHas('hasilPilihPlywood.barangSetengahJadiHp.grade.kategoriBarang', function ($q) {
-                                $q->where('nama_kategori', 'PLYWOOD');
+                            // 🌟 Dua asal bahan yang sah:
+                            //  (a) Pilih Plywood berkategori PLYWOOD (syarat lama), ATAU
+                            //  (b) keluaran Gudang Triplek Jadi (baris punya
+                            //      id_triplek_mutasi_keluar). whereHas lama menyaring
+                            //      habis baris triplek karena hasilPilihPlywood-nya NULL.
+                            ->where(function ($q) {
+                                $q->whereNotNull('id_triplek_mutasi_keluar')
+                                    ->orWhereHas('hasilPilihPlywood.barangSetengahJadiHp.grade.kategoriBarang', function ($sub) {
+                                        $sub->where('nama_kategori', 'PLYWOOD');
+                                    });
                             });
 
+                        // Filter grade/jenis barang (fitur lama, saat ini nonaktif di form)
+                        // hanya relevan untuk jalur Pilih Plywood — baris triplek tetap
+                        // ditampilkan agar tidak "hilang" saat filter dipakai.
                         if ($get('grade_id')) {
-                            $query->whereHas('hasilPilihPlywood.barangSetengahJadiHp', function ($q) use ($get) {
-                                $q->where('id_grade', $get('grade_id'));
+                            $query->where(function ($q) use ($get) {
+                                $q->whereNotNull('id_triplek_mutasi_keluar')
+                                    ->orWhereHas('hasilPilihPlywood.barangSetengahJadiHp', function ($sub) use ($get) {
+                                        $sub->where('id_grade', $get('grade_id'));
+                                    });
                             });
                         }
 
                         if ($get('jenis_barang_id_filter')) {
-                            $query->whereHas('hasilPilihPlywood.barangSetengahJadiHp', function ($q) use ($get) {
-                                $q->where('id_jenis_barang', $get('jenis_barang_id_filter'));
+                            $query->where(function ($q) use ($get) {
+                                $q->whereNotNull('id_triplek_mutasi_keluar')
+                                    ->orWhereHas('hasilPilihPlywood.barangSetengahJadiHp', function ($sub) use ($get) {
+                                        $sub->where('id_jenis_barang', $get('jenis_barang_id_filter'));
+                                    });
                             });
                         }
 
@@ -79,18 +96,10 @@ class BahanTerimaGudangSatuForm
                             ->get()
                             // sisa dihitung via accessor (bukan kolom DB), jadi difilter di PHP
                             ->filter(fn ($s) => $s->sisa > 0)
-                            ->sortBy(fn ($s) => $s->barangSetengahJadi?->ukuran?->tebal ?? 0)
-                            ->mapWithKeys(function ($s) {
-                                $b = $s->barangSetengahJadi;
-
-                                return [
-                                    $s->id => ($b?->grade?->kategoriBarang?->nama_kategori ?? '-').' | '.
-                                        ($b?->ukuran?->nama_ukuran ?? '-').' | '.
-                                        ($b?->grade?->nama_grade ?? '-').' | '.
-                                        ($b?->jenisBarang?->nama_jenis_barang ?? '-').
-                                        ' (Sisa: '.rtrim(rtrim(number_format($s->sisa, 2, ',', '.'), '0'), ',').')',
-                                ];
-                            });
+                            ->sortBy(fn ($s) => $s->id_triplek_mutasi_keluar !== null
+                                ? (float) ($s->triplekMutasiKeluar?->tebal ?? 0)
+                                : (float) ($s->barangSetengahJadi?->ukuran?->tebal ?? 0))
+                            ->mapWithKeys(fn ($s) => [$s->id => static::labelOpsi($s)]);
                     })
                     ->afterStateUpdated(function ($state, callable $set) {
                         // reset jumlah biar tidak kebawa nilai lama yang mungkin melebihi sisa baru
