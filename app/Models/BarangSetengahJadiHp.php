@@ -29,6 +29,7 @@ class BarangSetengahJadiHp extends Model
     {
         return $this->belongsTo(Grade::class, 'id_grade');
     }
+
     public function modalSandings()
     {
         return $this->hasMany(ModalSanding::class, 'id_barang_setengah_jadi');
