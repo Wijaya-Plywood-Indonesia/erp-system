@@ -55,7 +55,7 @@
                             </span>
                             <span
                                 class="font-mono text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400 tabular-nums whitespace-nowrap shrink-0">
-                                {{ number_format((float) $ukuran?->panjang, 2) }}×{{ number_format((float) $ukuran?->lebar, 2) }}×{{ number_format((float) $ukuran?->tebal, 2) }}
+                                {{ rtrim(rtrim(number_format((float) $ukuran?->panjang, 2), '0'), '.') }}×{{ rtrim(rtrim(number_format((float) $ukuran?->lebar, 2), '0'), '.') }}×{{ rtrim(rtrim(number_format((float) $ukuran?->tebal, 2), '0'), '.') }}
                                 <span class="text-[10px] text-zinc-400">mm</span>
                             </span>
                             <span
@@ -112,7 +112,7 @@
                                 </span>
                                 <span
                                     class="font-mono text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400 tabular-nums whitespace-nowrap shrink-0">
-                                    {{ number_format((float) $ukuran?->panjang, 2) }}×{{ number_format((float) $ukuran?->lebar, 2) }}×{{ number_format((float) $ukuran?->tebal, 2) }}
+                                    {{ rtrim(rtrim(number_format((float) $ukuran?->panjang, 2), '0'), '.') }}×{{ rtrim(rtrim(number_format((float) $ukuran?->lebar, 2), '0'), '.') }}×{{ rtrim(rtrim(number_format((float) $ukuran?->tebal, 2), '0'), '.') }}
                                     <span class="text-[10px] text-zinc-400">mm</span>
                                 </span>
                                 <span

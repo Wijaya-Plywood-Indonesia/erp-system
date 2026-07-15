@@ -62,7 +62,7 @@
                             </span>
                             <span
                                 class="font-mono text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap shrink-0">
-                                {{ number_format((float) $ukuran?->panjang, 2) }}×{{ number_format((float) $ukuran?->lebar, 2) }}×{{ number_format((float) $ukuran?->tebal, 2) }}
+                                {{ $this->trimAngka($ukuran?->panjang) }}×{{ $this->trimAngka($ukuran?->lebar) }}×{{ $this->trimAngka($ukuran?->tebal) }}
                                 <span class="text-[10px] text-gray-400">mm</span>
                             </span>
                             <span
@@ -119,7 +119,7 @@
                                 </span>
                                 <span
                                     class="font-mono text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap shrink-0">
-                                    {{ number_format((float) $ukuran?->panjang, 2) }}×{{ number_format((float) $ukuran?->lebar, 2) }}×{{ number_format((float) $ukuran?->tebal, 2) }}
+                                    {{ $this->trimAngka($ukuran?->panjang) }}×{{ $this->trimAngka($ukuran?->lebar) }}×{{ $this->trimAngka($ukuran?->tebal) }}
                                     <span class="text-[10px] text-gray-400">mm</span>
                                 </span>
                                 <span
@@ -195,7 +195,7 @@
                                 <div class="flex items-center gap-2 flex-wrap">
                                     <span
                                         class="font-mono text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap">
-                                        {{ number_format((float) $rk->ukuran?->panjang, 2) }}×{{ number_format((float) $rk->ukuran?->lebar, 2) }}×{{ number_format((float) $rk->ukuran?->tebal, 2) }}
+                                        {{ $this->trimAngka($rk->ukuran?->panjang) }}×{{ $this->trimAngka($rk->ukuran?->lebar) }}×{{ $this->trimAngka($rk->ukuran?->tebal) }}
                                         <span class="text-[10px] text-gray-400">mm</span>
                                     </span>
                                     <span
@@ -276,11 +276,11 @@
                         selectedStokId: @entangle('selectedStokId'),
                         options: [
                             @foreach ($faceback->concat($core) as $s)
-                        {
-                            id: '{{ $s->id }}',
-                            nama: '{{ $s->jenisKayu?->nama_kayu }} (KW {{ $s->kw }}) - Sisa: {{ number_format((float) $s->total_lembar) }} lbr',
-                            no: '{{ number_format((float) $s->ukuran?->panjang, 2) }}x{{ number_format((float) $s->ukuran?->lebar, 2) }}x{{ number_format((float) $s->ukuran?->tebal, 2) }}'
-                        }, @endforeach
+{
+    id: '{{ $s->id }}',
+    nama: '{{ $s->jenisKayu?->nama_kayu }} (KW {{ $s->kw }}) - Sisa: {{ number_format((float) $s->total_lembar) }} lbr',
+    no: '{{ $this->trimAngka($s->ukuran?->panjang) }}x{{ $this->trimAngka($s->ukuran?->lebar) }}x{{ $this->trimAngka($s->ukuran?->tebal) }}'
+}, @endforeach
                         ],
                         get filteredOptions() {
                             if (this.searchTerm === '') return this.options;

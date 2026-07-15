@@ -638,6 +638,10 @@ class GudangVeneerJadi extends Page
             ->whereIn('tipe_sumber', ['dryer', 'kedi'])
             ->where('jenis_terima', 'jadi')
             ->where('diterima_oleh', '-')
+            ->where(function ($q) {
+                $q->whereNotNull('id_detail_hasil')
+                    ->orWhereNotNull('id_detail_bongkar_kedi');
+            })
             ->with([
                 'detailHasil.ukuran',
                 'detailHasil.jenisKayu',
@@ -658,6 +662,10 @@ class GudangVeneerJadi extends Page
             ->whereIn('tipe_sumber', ['dryer', 'kedi'])
             ->where('jenis_terima', 'jadi')
             ->where('diterima_oleh', '!=', '-')
+            ->where(function ($q) {
+                $q->whereNotNull('id_detail_hasil')
+                    ->orWhereNotNull('id_detail_bongkar_kedi');
+            })
             ->with([
                 'detailHasil.ukuran',
                 'detailHasil.jenisKayu',
