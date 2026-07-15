@@ -13,6 +13,7 @@ class SerahTerimaGudangSatu extends Model
         'id_hasil_pilih_plywood',
         'id_produksi_terima_gudang_satu',
         'id_hasil_terima_gudang_satu',
+        'id_triplek_mutasi_keluar',
         'id_produksi_nyusup',
         'tujuan',
         'diserahkan_oleh',
@@ -43,6 +44,11 @@ class SerahTerimaGudangSatu extends Model
     {
         return $this->belongsTo(ProduksiNyusup::class, 'id_produksi_nyusup');
     }
+
+    public function triplekMutasiKeluar(): BelongsTo
+{
+    return $this->belongsTo(\App\Models\TriplekJadiMutasiKeluar::class, 'id_triplek_mutasi_keluar');
+}
 
     // ─────────────────────────────────────────────
     // Helpers
@@ -79,13 +85,17 @@ class SerahTerimaGudangSatu extends Model
      * - Dari Hasil Terima Gudang Satu: pakai `jumlah`.
      */
     public function getJumlahAttribute()
-    {
-        if ($this->hasilPilihPlywood) {
-            return $this->hasilPilihPlywood->jumlah_bagus ?? null;
-        }
-
-        return $this->hasilTerimaGudangSatu->jumlah ?? null;
+{
+    if ($this->id_triplek_mutasi_keluar !== null) {
+        return $this->triplekMutasiKeluar->stok_lembar ?? null;
     }
+
+    if ($this->hasilPilihPlywood) {
+        return $this->hasilPilihPlywood->jumlah_bagus ?? null;
+    }
+
+    return $this->hasilTerimaGudangSatu->jumlah ?? null;
+}
 
     public function isMenunggu(): bool
     {
