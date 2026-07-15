@@ -23,9 +23,9 @@ class HasilTerimaGudangSatusTable
                 TextColumn::make('grade.nama_grade')
                     ->label('Grade')
                     ->getStateUsing(
-                        fn ($record) => ($record->grade?->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
-                            .' | '.
-                            ($record->grade?->nama_grade ?? '-')
+                        fn($record) => ($record->grade?->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
+                        . ' | ' .
+                        ($record->grade?->nama_grade ?? '-')
                     )
                     ->sortable(),
 
@@ -34,9 +34,9 @@ class HasilTerimaGudangSatusTable
                     ->searchable()
                     ->sortable(),
 
-                TextColumn::make('ukuran.nama_ukuran')
+                TextColumn::make('ukuran.dimensi')
                     ->label('Ukuran')
-                    ->getStateUsing(fn ($record) => $record->ukuran?->dimensi ?? '-')
+                    ->getStateUsing(fn($record) => $record->ukuran?->dimensi ?? '-')
                     ->sortable(),
 
                 TextColumn::make('jumlah')
@@ -53,7 +53,7 @@ class HasilTerimaGudangSatusTable
                     ->getStateUsing(function ($record) {
                         $serah = $record->serahTerimaGudangSatu;
 
-                        if (! $serah) {
+                        if (!$serah) {
                             return 'Belum Diserahkan';
                         }
 
@@ -63,7 +63,7 @@ class HasilTerimaGudangSatusTable
                     ->color(function ($record) {
                         $serah = $record->serahTerimaGudangSatu;
 
-                        if (! $serah) {
+                        if (!$serah) {
                             return 'gray';
                         }
 
@@ -76,7 +76,7 @@ class HasilTerimaGudangSatusTable
             ->headerActions([
                 CreateAction::make()
                     ->hidden(
-                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
             ->recordActions([
@@ -86,8 +86,8 @@ class HasilTerimaGudangSatusTable
                     ->icon('heroicon-o-arrow-right-circle')
                     ->requiresConfirmation()
                     ->modalHeading('Serahkan barang ini untuk Nyusup?')
-                    ->modalDescription(fn ($record) => 'Jumlah: '.($record->jumlah ?? 0).' pcs. Barang akan masuk antrian penerimaan dengan tujuan Nyusup.')
-                    ->visible(fn ($record) => ! $record->serahTerimaGudangSatu)
+                    ->modalDescription(fn($record) => 'Jumlah: ' . ($record->jumlah ?? 0) . ' pcs. Barang akan masuk antrian penerimaan dengan tujuan Nyusup.')
+                    ->visible(fn($record) => !$record->serahTerimaGudangSatu)
                     ->action(function ($record) {
                         try {
                             SerahTerimaGudangSatu::create([
@@ -113,20 +113,20 @@ class HasilTerimaGudangSatusTable
 
                 EditAction::make()
                     ->hidden(
-                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
 
                 DeleteAction::make()
                     ->hidden(
-                        fn ($record, $livewire) => $record->serahTerimaGudangSatu
-                            || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        fn($record, $livewire) => $record->serahTerimaGudangSatu
+                        || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->hidden(
-                            fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                            fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                         ),
                 ]),
             ]);

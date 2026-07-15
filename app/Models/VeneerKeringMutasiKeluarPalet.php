@@ -17,7 +17,7 @@ class VeneerKeringMutasiKeluarPalet extends Model
 
     protected $casts = [
         'no_palet' => 'integer',
-        'qty' => 'decimal:4',
+        'qty' => 'integer',
     ];
 
     public function mutasiKeluar()
@@ -73,4 +73,10 @@ class VeneerKeringMutasiKeluarPalet extends Model
     {
         return $this->mutasiKeluar?->kw;
     }
+
+    public function serahTerima()
+    {
+        return $this->hasOne(SerahTerimaVeneerKering::class, 'id_mutasi_keluar_palet');
+    }
+
 }
