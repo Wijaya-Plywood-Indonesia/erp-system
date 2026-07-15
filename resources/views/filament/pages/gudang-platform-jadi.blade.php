@@ -251,6 +251,18 @@
                                 <div class="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap tabular-nums">
                                     {{ number_format((float) $rk->stok_kubikasi, 4) }} m³ · {{ $rk->jumlah_palet }} plt
                                 </div>
+
+                                    @if($rk->bisa_diedit)
+                                    <button type="button" wire:click="editKeluar({{ $rk->id }})" wire:loading.attr="disabled"
+                                        class="inline-flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-amber-500 hover:border-amber-500 hover:text-gray-950 transition-colors">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                        Edit
+                                    </button>
+                                    @else
+                                    <span class="text-[9px] text-gray-300 dark:text-gray-700 font-bold uppercase" title="Sudah diterima/terpakai di tujuan">🔒 Terkunci</span>
+                                    @endif
                             </div>
                         </div>
                     </div>
@@ -434,6 +446,78 @@
         </div>
     </div>
     @endif
+    @endif
+
+    {{-- ═══ MODAL EDIT RIWAYAT KELUAR ═══ --}}
+    @if($showEditKeluarModal)
+    <div class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" wire:click="cancelEditKeluar"></div>
+
+        <div class="relative w-full max-w-md bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
+                <span class="inline-block w-1.5 h-4 bg-amber-500 rounded-sm"></span>
+                <span class="text-sm font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Edit Rincian Palet</span>
+            </div>
+
+            <form wire:submit.prevent="updateKeluar" class="p-5 space-y-4 text-xs">
+
+                <div class="space-y-1.5">
+                    <label class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">Jumlah Palet</label>
+                    <input type="text" inputmode="numeric" wire:model.live="editJumlahPalet" required
+                        class="w-full text-sm p-2 bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-700 rounded-sm text-gray-900 dark:text-gray-100 focus:border-amber-500 focus:outline-none font-bold" />
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">Isi per palet</label>
+                    <div class="grid grid-cols-2 gap-2.5 max-h-[180px] overflow-y-auto border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950/30 p-3 rounded-sm">
+                        @for($i = 0; $i < max(1, (int) $editJumlahPalet); $i++)
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase block">Palet #{{ $i + 1 }}</span>
+                                @if(count($editPaletQuantities) > 1)
+                                <button type="button" wire:click="hapusEditPalet({{ $i }})"
+                                    class="text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                                @endif
+                            </div>
+                            <div class="relative">
+                                <input type="text" inputmode="numeric" wire:model="editPaletQuantities.{{ $i }}"
+                                    placeholder="Kuantitas" required
+                                    class="w-full text-xs p-2 border border-gray-300 dark:border-gray-700 rounded-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:border-amber-500 focus:outline-none" />
+                                <span class="absolute right-2.5 top-2 text-[11px] text-gray-400 dark:text-gray-500">lbr</span>
+                            </div>
+                        </div>
+                        @endfor
+                    </div>
+                </div>
+
+                @php $editTotalLbr = array_sum(array_map('intval', $editPaletQuantities)); @endphp
+                @if($editTotalLbr > 0)
+                <div class="p-3 border border-dashed border-amber-500/30 bg-amber-500/5 rounded-sm flex items-center justify-between">
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-widest font-black">Total Baru</p>
+                    <span class="px-3 py-1 bg-amber-500 text-gray-950 font-black text-sm rounded-sm">
+                        {{ number_format($editTotalLbr) }} Lbr
+                    </span>
+                </div>
+                @endif
+
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" wire:click="cancelEditKeluar"
+                        class="px-3.5 py-1.5 rounded-sm text-[11px] font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                        Batal
+                    </button>
+                    <button type="submit" wire:loading.attr="disabled" wire:target="updateKeluar"
+                        class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-sm text-[11px] font-bold text-gray-950 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 transition-colors">
+                        <span wire:loading.remove wire:target="updateKeluar">Simpan Perubahan</span>
+                        <span wire:loading wire:target="updateKeluar">Menyimpan…</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
     @endif
 
 </x-filament-panels::page>
