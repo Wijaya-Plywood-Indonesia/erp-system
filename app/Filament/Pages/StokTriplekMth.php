@@ -17,7 +17,7 @@ class StokTriplekMth extends Page
     protected static ?string $navigationLabel = 'Stok Triplek MTH';
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
     protected static ?string $title          = 'Stok Triplek MTH';
-    protected static ?int    $navigationSort = 15;
+    protected static ?int    $navigationSort = 7;
 
     // State untuk filtering di UI Blade
     public string $filterJenisKayu = '';
@@ -25,8 +25,8 @@ class StokTriplekMth extends Page
     public string $filterKw        = '';
 
     public bool $showKubikasi   = false;
-public bool $showHppAverage = false;
-public bool $showNilaiStok  = false;
+    public bool $showHppAverage = false;
+    public bool $showNilaiStok  = false;
 
     public function getSummariesProperty()
     {

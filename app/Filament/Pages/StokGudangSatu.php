@@ -17,7 +17,7 @@ class StokGudangSatu extends Page
     protected static ?string $navigationLabel = 'Stok Gudang Satu';
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
     protected static ?string $title          = 'Stok Gudang Satu';
-    protected static ?int    $navigationSort = 23;
+    protected static ?int    $navigationSort = 9;
 
     // State untuk filtering di UI Blade
     public string $filterJenisKayu = '';
@@ -25,8 +25,8 @@ class StokGudangSatu extends Page
     public string $filterKw        = '';
 
     public bool $showKubikasi   = false;
-public bool $showHppAverage = false;
-public bool $showNilaiStok  = false;
+    public bool $showHppAverage = false;
+    public bool $showNilaiStok  = false;
 
     public function getSummariesProperty()
     {

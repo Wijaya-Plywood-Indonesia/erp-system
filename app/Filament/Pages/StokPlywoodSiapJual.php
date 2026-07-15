@@ -17,7 +17,7 @@ class StokPlywoodSiapJual extends Page
     protected static ?string $navigationLabel = 'Stok Plywood Siap Jual';
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
     protected static ?string $title          = 'Stok Plywood Siap Jual';
-    protected static ?int    $navigationSort = 17;
+    protected static ?int    $navigationSort = 10;
 
     // State untuk filtering di UI Blade
     public string $filterJenisKayu = '';
