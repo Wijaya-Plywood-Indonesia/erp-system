@@ -70,11 +70,13 @@ class GudangVeneerJadi extends Page
     protected $queryString = ['activeTab'];
     // public string $activeSubTab = 'produksi';
 
-
     // Kebutuhan Edit
     public bool $showEditKeluarModal = false;
+
     public ?int $editKeluarId = null;
+
     public $editJumlahPalet = 1;
+
     public array $editPaletQuantities = [0 => ''];
 
     public function hitungKubikasi(float $p, float $l, float $t, ?int $lembar): float
@@ -88,29 +90,30 @@ class GudangVeneerJadi extends Page
     {
         $mutasi = VeneerJadiMutasiKeluar::with('palets')->find($id);
 
-        if (!$mutasi) {
+        if (! $mutasi) {
             Notification::make()->danger()->title('Data tidak ditemukan')->send();
+
             return;
         }
 
-        if (!is_null($mutasi->id_produksi_hp)) {
+        if (! is_null($mutasi->id_produksi_hp)) {
             Notification::make()
                 ->danger()
                 ->title('Tidak Bisa Diedit')
                 ->body('Barang ini sudah diterima di sisi tujuan (Hotpress), rincian tidak bisa diubah lagi.')
                 ->send();
+
             return;
         }
 
         $this->editKeluarId = $mutasi->id;
 
         $palet = $mutasi->palets->sortBy('nomor_palet')->pluck('jumlah_lembar')->values()->toArray();
-        $this->editPaletQuantities = !empty($palet) ? $palet : [0 => ''];
+        $this->editPaletQuantities = ! empty($palet) ? $palet : [0 => ''];
         $this->editJumlahPalet = count($this->editPaletQuantities);
 
         $this->showEditKeluarModal = true;
     }
-
 
     public function cancelEditKeluar(): void
     {
@@ -153,7 +156,7 @@ class GudangVeneerJadi extends Page
      */
     public function updateKeluar(): void
     {
-        if (!$this->editKeluarId) {
+        if (! $this->editKeluarId) {
             return;
         }
 
@@ -165,6 +168,7 @@ class GudangVeneerJadi extends Page
                 ->title('Input Gagal')
                 ->body('Kuantitas palet wajib diisi.')
                 ->send();
+
             return;
         }
 
@@ -172,13 +176,13 @@ class GudangVeneerJadi extends Page
             DB::transaction(function () use ($totalLembar) {
                 $mutasi = VeneerJadiMutasiKeluar::where('id', $this->editKeluarId)->lockForUpdate()->first();
 
-                if (!$mutasi) {
+                if (! $mutasi) {
                     throw new \Exception('Data tidak ditemukan.');
                 }
 
                 // 🔒 Re-cek race condition: barang sudah keburu diterima di sisi
                 // tujuan sesaat setelah modal edit dibuka.
-                if (!is_null($mutasi->id_produksi_hp)) {
+                if (! is_null($mutasi->id_produksi_hp)) {
                     throw new \Exception('Barang ini sudah diterima di sisi tujuan, tidak bisa diedit lagi.');
                 }
 
@@ -191,7 +195,7 @@ class GudangVeneerJadi extends Page
                     ->lockForUpdate()
                     ->first();
 
-                if (!$stok || $totalLembar > $stok->stok_lembar) {
+                if (! $stok || $totalLembar > $stok->stok_lembar) {
                     throw new \Exception('Sisa stok fisik di gudang tidak mencukupi untuk kuantitas baru.');
                 }
 
@@ -446,12 +450,12 @@ class GudangVeneerJadi extends Page
 
                 return str_contains($namaKayu, $q) ||
                     str_contains(strtolower($item->kw_grade), $q) ||
-                    str_contains(strtolower(($item->panjang + 0) . 'x' . ($item->lebar + 0) . 'x' . ($item->tebal + 0)), $q);
+                    str_contains(strtolower(($item->panjang + 0).'x'.($item->lebar + 0).'x'.($item->tebal + 0)), $q);
             });
 
         return [
-            'faceback' => $allStok->filter(fn($item) => $item->tebal < 1.0),
-            'core' => $allStok->filter(fn($item) => $item->tebal >= 1.0),
+            'faceback' => $allStok->filter(fn ($item) => $item->tebal < 1.0),
+            'core' => $allStok->filter(fn ($item) => $item->tebal >= 1.0),
         ];
     }
 
@@ -479,9 +483,9 @@ class GudangVeneerJadi extends Page
         return $dariGudang
             // ->concat($dariMutasi)
             ->sortBy([
-                fn($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
-                fn($item) => -$item['created_at_ts'],
-                fn($item) => $item['id'],
+                fn ($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
+                fn ($item) => -$item['created_at_ts'],
+                fn ($item) => $item['id'],
             ])
             ->values();
     }
@@ -514,8 +518,8 @@ class GudangVeneerJadi extends Page
         }
 
         // Sumber tunggal: GudangVeneerJadi (Produksi/Repair)
-        return $query->get()->map(fn($item) => [
-            'id' => 'gudang-' . $item->id,
+        return $query->get()->map(fn ($item) => [
+            'id' => 'gudang-'.$item->id,
             'source' => 'gudang',
             'jenis_kayu' => $item->jenis_kayu_nama,
             'panjang' => $item->panjang,
@@ -533,8 +537,8 @@ class GudangVeneerJadi extends Page
             'keterangan' => $item->keterangan,
         ])
             ->sortBy([
-                fn($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
-                fn($item) => -$item['created_at_ts'],
+                fn ($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
+                fn ($item) => -$item['created_at_ts'],
             ])
             ->values();
     }
@@ -565,10 +569,10 @@ class GudangVeneerJadi extends Page
 
         $mutasiRows = VeneerMutasi::query()
             ->whereNotNull('id_nota_bm') // proxy "arah masuk", sama seperti versi Kering
-            ->whereHas('notaBm', fn($q) => $q->whereNotNull('divalidasi_oleh'))
-            ->whereHas('details', fn($q) => $q->where('tipe_veneer', 'like', $jadiLike))
+            ->whereHas('notaBm', fn ($q) => $q->whereNotNull('divalidasi_oleh'))
+            ->whereHas('details', fn ($q) => $q->where('tipe_veneer', 'like', $jadiLike))
             ->with([
-                'details' => fn($q) => $q
+                'details' => fn ($q) => $q
                     ->where('tipe_veneer', 'like', $jadiLike)
                     ->with(['ukuran', 'jenisKayu']),
             ])
@@ -578,7 +582,7 @@ class GudangVeneerJadi extends Page
 
         // Kumpulkan semua id detail dari semua mutasi di atas, lalu cek SEKALI
         // mana saja yang sudah punya log 'masuk' (artinya: sudah "Diterima").
-        $semuaDetailIds = $mutasiRows->flatMap(fn($vm) => $vm->details->pluck('id'));
+        $semuaDetailIds = $mutasiRows->flatMap(fn ($vm) => $vm->details->pluck('id'));
 
         $sudahDiterimaIds = HppVeneerJadiLog::query()
             ->where('referensi_type', VeneerMutasiDetail::class)
@@ -609,7 +613,7 @@ class GudangVeneerJadi extends Page
                 $timestamp = $waktuNota instanceof Carbon ? $waktuNota->timestamp : strtotime($waktuNota);
 
                 $hasil->push([
-                    'id' => 'mutasi-' . $detail->id,
+                    'id' => 'mutasi-'.$detail->id,
                     'source' => 'mutasi',
                     'jenis_kayu' => $detail->jenisKayu?->nama_kayu,
                     'panjang' => $ukuran?->panjang,
@@ -624,7 +628,7 @@ class GudangVeneerJadi extends Page
                     'diterima_at' => null,
                     'diterima_by' => null,
                     'penerima_name' => 'N/A',
-                    'keterangan' => 'No Nota: ' . ($mutasi->no_nota ?? '-'),
+                    'keterangan' => 'No Nota: '.($mutasi->no_nota ?? '-'),
                 ]);
             }
         }
@@ -765,7 +769,7 @@ class GudangVeneerJadi extends Page
             });
         }
 
-        return $query->get()->map(fn($item) => [
+        return $query->get()->map(fn ($item) => [
             'id' => $item->id,
             'bisa_diedit' => is_null($item->id_produksi_hp),
             'created_at' => $item->created_at->format('d/m/Y H:i'),
@@ -944,7 +948,7 @@ class GudangVeneerJadi extends Page
                 ]);
 
                 $fresh->update([
-                    'diterima_oleh' => $userName . ' - Gudang Veneer Jadi',
+                    'diterima_oleh' => $userName.' - Gudang Veneer Jadi',
                     'status' => 'Terima Veneer',
                 ]);
             });
