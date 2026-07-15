@@ -1,31 +1,8 @@
 {{-- resources/views/filament/pages/gudang-triplek-jadi.blade.php --}}
 <x-filament-panels::page>
 
-    {{-- ═══ TAB NAVIGATION ═══ --}}
-    <div class="flex border-b border-gray-200 dark:border-gray-800 mb-4">
-        <button
-            type="button"
-            wire:click="$set('activeTab', 'masuk')"
-            class="flex-1 sm:flex-initial px-6 py-3 text-xs font-black uppercase tracking-widest border-b-2 -mb-px transition-all flex items-center justify-center gap-2 {{ $activeTab === 'masuk' ? 'border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-500/5' : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-200' }}">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-            </svg>
-            <span>Serah Terima</span>
-        </button>
-        <button
-            type="button"
-            wire:click="$set('activeTab', 'keluar')"
-            class="flex-1 sm:flex-initial px-6 py-3 text-xs font-black uppercase tracking-widest border-b-2 -mb-px transition-all flex items-center justify-center gap-2 {{ $activeTab === 'keluar' ? 'border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-500/5' : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-200' }}">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-            </svg>
-            <span>Barang Keluar</span>
-        </button>
-    </div>
-
     {{-- DINONAKTIFKAN: Detail Stok (ubah false -> true bila dibutuhkan lagi) --}}
     @if(false)
-    {{-- ═══ DETAIL STOK (tampil di kedua tab) ═══ --}}
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
         <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Detail Stok Triplek Jadi</span>
 
@@ -69,122 +46,13 @@
             @endforelse
         </div>
     </div>
-
     @endif
 
-    @if($activeTab === 'masuk')
     {{-- ══════════════════════════════════════════════════════════════════════
-         TAB 1: SERAH TERIMA (antrean gabungan multi-sumber, composite id)
+         BARANG KELUAR (satu-satunya tampilan halaman ini)
+         Tujuan: Produksi Nyusup / Gudang Satu
     ═══════════════════════════════════════════════════════════════════════ --}}
-    @php
-        $antrean  = $this->antreanFiltered;
-        $menunggu = $antrean->filter(fn ($r) => $r['status_gudang'] === 'belum diterima')->count();
-    @endphp
-
-    <div class="mt-8">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-            <div class="flex items-center gap-3">
-                <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Serah Terima Triplek Jadi</span>
-                <span class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">{{ $menunggu }} menunggu diterima</span>
-            </div>
-
-            <div class="relative w-full sm:w-64">
-                <input
-                    type="text"
-                    wire:model.live.debounce.300ms="tableSearchQuery"
-                    placeholder="Cari antrean..."
-                    class="w-full text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-sm pl-8 pr-3 py-2 outline-none focus:border-primary-500"
-                />
-                <svg class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-                </svg>
-            </div>
-        </div>
-
-        <div class="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
-            <div class="divide-y divide-gray-100 dark:divide-gray-800 max-h-[560px] overflow-y-auto">
-                @forelse($antrean as $r)
-                    @php $sudah = $r['status_gudang'] === 'sudah diterima'; @endphp
-                    <div wire:key="antrean-{{ $r['id'] }}"
-                         class="px-4 sm:px-5 py-4 transition-colors {{ $sudah ? 'opacity-60' : 'hover:bg-gray-50 dark:hover:bg-gray-800/40' }}">
-                        <div class="flex items-start justify-between gap-3 flex-wrap">
-                            <div class="min-w-0 flex-1">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 whitespace-nowrap">
-                                        {{ $r['source'] }}
-                                    </span>
-                                    <span class="font-mono text-[11px] text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap">
-                                        {{ ($r['panjang'] + 0) }}×{{ ($r['lebar'] + 0) }}×{{ ($r['tebal'] + 0) }}
-                                    </span>
-                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 whitespace-nowrap">
-                                        {{ $r['kw'] }}
-                                    </span>
-                                    <span class="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase truncate">
-                                        {{ $r['jenis_kayu'] }}
-                                    </span>
-                                    @if($sudah)
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 whitespace-nowrap">
-                                            Diterima
-                                        </span>
-                                    @else
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 whitespace-nowrap">
-                                            Menunggu
-                                        </span>
-                                    @endif
-                                </div>
-                                <div class="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
-                                    {{ optional($r['created_at'])->translatedFormat('d M Y H:i') }}
-                                    <span class="text-gray-300 dark:text-gray-600">·</span>
-                                    {{ number_format((float) $r['stok_kubikasi'], 4) }} m³
-                                    @if($r['keterangan'])
-                                        <span class="text-gray-300 dark:text-gray-600">·</span>
-                                        {{ $r['keterangan'] }}
-                                    @endif
-                                    @if($sudah && $r['penerima_name'] !== 'N/A')
-                                        <span class="text-gray-300 dark:text-gray-600">·</span>
-                                        Diterima: {{ $r['penerima_name'] }}
-                                        @if($r['diterima_at'])
-                                            ({{ \Illuminate\Support\Carbon::parse($r['diterima_at'])->translatedFormat('d M H:i') }})
-                                        @endif
-                                    @endif
-                                </div>
-                            </div>
-
-                            <div class="shrink-0 flex items-center gap-3">
-                                <span class="font-black text-sm text-amber-500 dark:text-amber-400 whitespace-nowrap tabular-nums">
-                                    {{ number_format($r['jumlah']) }} <span class="text-[10px] font-semibold text-gray-400">Lbr</span>
-                                </span>
-                                @unless($sudah)
-                                    <button
-                                        type="button"
-                                        wire:click="terimaBarang('{{ $r['id'] }}')"
-                                        wire:confirm="Terima {{ number_format($r['jumlah']) }} lbr {{ $r['jenis_kayu'] }} ({{ $r['kw'] }}) ke Gudang Triplek Jadi?"
-                                        wire:loading.attr="disabled"
-                                        wire:target="terimaBarang('{{ $r['id'] }}')"
-                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                        <span>Terima</span>
-                                    </button>
-                                @endunless
-                            </div>
-                        </div>
-                    </div>
-                @empty
-                    <div class="px-5 py-8 text-center text-xs text-gray-400 dark:text-gray-600">
-                        Tidak ada antrean serah terima
-                    </div>
-                @endforelse
-            </div>
-        </div>
-    </div>
-
-    @else
-    {{-- ══════════════════════════════════════════════════════════════════════
-         TAB 2: BARANG KELUAR
-    ═══════════════════════════════════════════════════════════════════════ --}}
-    <div class="mt-8">
+    <div>
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3">
                 <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Mutasi Keluar Triplek Jadi</span>
@@ -398,15 +266,16 @@
                 </div>
                 @endif
 
-                {{-- 3. TUJUAN KELUAR --}}
+                {{-- 3. TUJUAN KELUAR: Produksi Nyusup / Gudang Satu --}}
                 <div class="space-y-1.5">
                     <label class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">Tujuan Keluar</label>
                     <select
                         wire:model="tujuanKeluar"
                         required
                         class="w-full text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:border-amber-500 focus:outline-none font-bold">
-                        <option value="Packing">Packing</option>
-                        <option value="Jual">Jual</option>
+                        @foreach(\App\Filament\Pages\GudangTriplekJadi::TUJUAN_OPTIONS as $opt)
+                            <option value="{{ $opt }}">{{ $opt }}</option>
+                        @endforeach
                     </select>
                 </div>
 
@@ -440,7 +309,6 @@
             </form>
         </div>
     </div>
-    @endif
     @endif
 
 </x-filament-panels::page>
