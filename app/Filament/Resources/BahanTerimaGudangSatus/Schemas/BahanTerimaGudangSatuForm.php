@@ -13,7 +13,7 @@ use Filament\Schemas\Schema;
 
 class BahanTerimaGudangSatuForm
 {
-+    /**
+    /**
      * Label opsi untuk satu baris serah terima, sadar-asal:
      *  - Triplek Jadi : dirakit dari relasi triplekMutasiKeluar.
      *  - Pilih Plywood: format lama, tidak berubah.
