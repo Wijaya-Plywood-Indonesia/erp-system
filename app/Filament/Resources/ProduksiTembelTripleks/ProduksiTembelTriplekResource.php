@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiTembelTripleks;
 
-use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\SerahTerimaTriplekCacatRelationManager;
+// use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\SerahTerimaTriplekCacatRelationManager;
 use App\Filament\Resources\ProduksiTembelTripleks\Pages\CreateProduksiTembelTriplek;
 use App\Filament\Resources\ProduksiTembelTripleks\Pages\EditProduksiTembelTriplek;
 use App\Filament\Resources\ProduksiTembelTripleks\Pages\ListProduksiTembelTripleks;
@@ -47,7 +47,7 @@ class ProduksiTembelTriplekResource extends Resource
     public static function getRelations(): array
     {
         return [
-            SerahTerimaTriplekCacatRelationManager::class,
+            // SerahTerimaTriplekCacatRelationManager::class,
             PegawaiTembeltriplekRelationManager::class,
             HasilTembeltriplekRelationManager::class,
             BahanPenolongTembeltriplekRelationManager::class,

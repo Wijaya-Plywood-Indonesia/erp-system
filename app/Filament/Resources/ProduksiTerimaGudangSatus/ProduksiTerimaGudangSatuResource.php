@@ -32,9 +32,9 @@ class ProduksiTerimaGudangSatuResource extends Resource
 
     protected static ?int $navigationSort = 2;
 
-    protected static ?string $label = 'Terima Gudang Satu';
+    protected static ?string $label = 'Sampling Plywood';
 
-    protected static ?string $pluralLabel = 'Terima Gudang Satu';
+    protected static ?string $pluralLabel = 'Sampling Plywood';
 
     protected static ?string $recordTitleAttribute = 'id';
 

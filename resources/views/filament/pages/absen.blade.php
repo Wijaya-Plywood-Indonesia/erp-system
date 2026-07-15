@@ -143,6 +143,8 @@
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-800 ring-1 ring-indigo-500/30">DEMPUL</span>
                                                 @elseif(str_contains($divisi, 'GRAJI TRIPLEK'))
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-sky-100 text-sky-800 ring-1 ring-sky-500/30 uppercase">GRAJI TRIPLEK</span>
+                                                @elseif(str_contains($divisi, 'TEMBEL TRIPLEK'))
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 ring-1 ring-emerald-500/30 uppercase">TEMBEL TRIPLEK</span>
                                                 @elseif(str_contains($divisi, 'NYUSUP'))
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-lime-100 text-lime-800 ring-1 ring-lime-500/30 uppercase">NYUSUP</span>
                                                 @elseif(str_contains($divisi, 'SANDING'))

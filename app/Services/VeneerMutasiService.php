@@ -278,7 +278,7 @@ class VeneerMutasiService
                     ->where('nama_barang', $namaBarang)
                     ->where('jumlah', $detail->qty)
                     ->value('keterangan');
-            } elseif (! $isKeluar && $mutasi->id_nota_bm) {
+            } elseif (!$isKeluar && $mutasi->id_nota_bm) {
                 $ketDetail = DetailNotaBarangMasuk::where('id_nota_bm', $mutasi->id_nota_bm)
                     ->where('nama_barang', $namaBarang)
                     ->where('jumlah', $detail->qty)
@@ -300,7 +300,7 @@ class VeneerMutasiService
             'id_ukuran' => $detail->id_ukuran,
             'id_jenis_kayu' => $detail->id_jenis_kayu,
             'kw' => $detail->kw,
-            'jenis_transaksi' => $mutasi->tipe_transaksi, // 'keluar'
+            'jenis_transaksi' => $mutasi->tipe_transaksi,
             'tanggal_transaksi' => $mutasi->tanggal,
             'qty' => $detail->qty,
             'm3' => $detail->m3,
@@ -315,8 +315,7 @@ class VeneerMutasiService
             'nilai_stok_sebelum' => 0,
             'nilai_stok_sesudah' => 0,
             'hpp_average' => 0,
-            'keterangan' => strtoupper(($isKeluar ? "Veneer Keluar #" : "Veneer Masuk #") . $mutasi->no_nota)
-                . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
+            'keterangan' => $keterangan,
             'id_veneer_mutasi' => $mutasi->id,
             'id_veneer_mutasi_detail' => $detail->id,
         ]);
@@ -348,16 +347,16 @@ class VeneerMutasiService
             }
 
             $summary = StokVeneerJadi::create([
-                'id_jenis_kayu'           => $detail->id_jenis_kayu,
-                'panjang'                 => $ukuran->panjang,
-                'lebar'                   => $ukuran->lebar,
-                'tebal'                   => $ukuran->tebal,
-                'kw_grade'                => $detail->kw,
-                'stok_lembar'             => 0,
-                'stok_kubikasi'           => 0,
-                'nilai_stok'              => 0,
-                'hpp_average'             => 0,
-                'hpp_pekerja_last'        => 0,
+                'id_jenis_kayu' => $detail->id_jenis_kayu,
+                'panjang' => $ukuran->panjang,
+                'lebar' => $ukuran->lebar,
+                'tebal' => $ukuran->tebal,
+                'kw_grade' => $detail->kw,
+                'stok_lembar' => 0,
+                'stok_kubikasi' => 0,
+                'nilai_stok' => 0,
+                'hpp_average' => 0,
+                'hpp_pekerja_last' => 0,
                 'hpp_bahan_penolong_last' => 0,
             ]);
         }
@@ -367,18 +366,30 @@ class VeneerMutasiService
         $nilaiStokBefore = (float) $summary->nilai_stok;
 
         // TODO: hpp_pekerja & hpp_bahan_penolong belum ada sumber input dari Mutasi, sementara 0.
-        $hppPekerja       = (float) ($summary->hpp_pekerja_last ?? 0);
+        $hppPekerja = (float) ($summary->hpp_pekerja_last ?? 0);
         $hppBahanPenolong = (float) ($summary->hpp_bahan_penolong_last ?? 0);
 
-        $stokFisik = $stokSistem - $detail->qty;
-        $kubikasiFisik = max(0.0, round($kubikasiSistem - $detail->m3, 6));
-        $nilaiKeluar = round($detail->m3 * $summary->hpp_average, 2);
-        $nilaiStokBaru = max(0.0, round($nilaiStokBefore - $nilaiKeluar, 2));
+        if ($isKeluar) {
+            if ($stokSistem < $detail->qty) {
+                throw new Exception("Stok veneer jadi tidak cukup untuk: {$namaBarang}. Tersedia: {$stokSistem} lembar.");
+            }
+            $stokFisik = $stokSistem - $detail->qty;
+            $kubikasiFisik = max(0.0, round($kubikasiSistem - $detail->m3, 6));
+            $nilaiKeluar = round($detail->m3 * $summary->hpp_average, 2);
+            $nilaiStokBaru = max(0.0, round($nilaiStokBefore - $nilaiKeluar, 2));
+        } else {
+            $stokFisik = $stokSistem + $detail->qty;
+            $kubikasiFisik = round($kubikasiSistem + $detail->m3, 6);
+            $nilaiMasuk = round($detail->m3 * $summary->hpp_average, 2);
+            $nilaiStokBaru = round($nilaiStokBefore + $nilaiMasuk, 2);
+        }
 
         $summary->update([
             'stok_lembar' => $stokFisik,
             'stok_kubikasi' => $kubikasiFisik,
             'nilai_stok' => $nilaiStokBaru,
+            'hpp_pekerja_last' => $hppPekerja,
+            'hpp_bahan_penolong_last' => $hppBahanPenolong,
         ]);
 
         $log = HppVeneerJadiLog::create([
@@ -388,15 +399,15 @@ class VeneerMutasiService
             'tebal' => $ukuran->tebal,
             'kw_grade' => $detail->kw,
             'tanggal' => $mutasi->tanggal,
-            'tipe_transaksi' => $mutasi->tipe_transaksi, // 'keluar'
-            'keterangan' => strtoupper("Veneer Keluar #" . $mutasi->no_nota)
+            'tipe_transaksi' => $mutasi->tipe_transaksi,
+            'keterangan' => strtoupper(($isKeluar ? "Veneer Keluar #" : "Veneer Masuk #") . $mutasi->no_nota)
                 . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
             'referensi_type' => VeneerMutasiDetail::class,
             'referensi_id' => $detail->id,
             'total_lembar' => $detail->qty,
             'total_kubikasi' => $detail->m3,
-            'hpp_pekerja' => (float) $summary->hpp_pekerja_last,
-            'hpp_bahan_penolong' => (float) $summary->hpp_bahan_penolong_last,
+            'hpp_pekerja' => $hppPekerja,
+            'hpp_bahan_penolong' => $hppBahanPenolong,
             'hpp_average' => $summary->hpp_average,
             'nilai_stok' => $nilaiStokBaru,
             'stok_lembar_before' => $stokSistem,
@@ -486,53 +497,6 @@ class VeneerMutasiService
                                 'lebar' => $ukuran->lebar,
                                 'tebal' => $ukuran->tebal,
                                 'kw' => $detail->kw,
-                            ])->latest()->first();
-
-                            $summary->update(['id_last_log' => $lastLog?->id]);
-                        }
-                    } elseif ($detail->tipe_veneer === 'jadi') {
-                        $summary = StokVeneerJadi::where([
-                            'id_jenis_kayu' => $detail->id_jenis_kayu,
-                            'panjang' => $ukuran->panjang,
-                            'lebar' => $ukuran->lebar,
-                            'tebal' => $ukuran->tebal,
-                            'kw_grade' => $detail->kw,
-                        ])->lockForUpdate()->first();
-
-                        if ($summary) {
-                            $stokSistem = (int) $summary->stok_lembar;
-                            $kubikasiSistem = (float) $summary->stok_kubikasi;
-                            $nilaiStokBefore = (float) $summary->nilai_stok;
-
-                            if ($mutasi->tipe_transaksi === 'keluar') {
-                                // batalkan keluar -> kembalikan
-                                $stokFisik = $stokSistem + $detail->qty;
-                                $kubikasiFisik = round($kubikasiSistem + $detail->m3, 6);
-                                $nilaiStokBaru = round($nilaiStokBefore + round($detail->m3 * $summary->hpp_average, 2), 2);
-                            } else {
-                                // batalkan masuk (yang sudah di-Terima) -> kurangi lagi
-                                $stokFisik = max(0, $stokSistem - $detail->qty);
-                                $kubikasiFisik = max(0.0, round($kubikasiSistem - $detail->m3, 6));
-                                $nilaiStokBaru = max(0.0, round($nilaiStokBefore - round($detail->m3 * $summary->hpp_average, 2), 2));
-                            }
-
-                            $summary->update([
-                                'stok_lembar' => $stokFisik,
-                                'stok_kubikasi' => $kubikasiFisik,
-                                'nilai_stok' => $nilaiStokBaru,
-                            ]);
-
-                            HppVeneerJadiLog::where([
-                                'referensi_type' => VeneerMutasiDetail::class,
-                                'referensi_id' => $detail->id,
-                            ])->delete();
-
-                            $lastLog = HppVeneerJadiLog::where([
-                                'id_jenis_kayu' => $detail->id_jenis_kayu,
-                                'panjang' => $ukuran->panjang,
-                                'lebar' => $ukuran->lebar,
-                                'tebal' => $ukuran->tebal,
-                                'kw_grade' => $detail->kw,
                             ])->latest()->first();
 
                             $summary->update(['id_last_log' => $lastLog?->id]);

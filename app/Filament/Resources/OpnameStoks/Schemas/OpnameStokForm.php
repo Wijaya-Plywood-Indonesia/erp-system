@@ -5,6 +5,7 @@ namespace App\Filament\Resources\OpnameStoks\Schemas;
 use App\Models\Ukuran;
 use App\Models\JenisKayu;
 use App\Models\JenisBarang;
+use App\Models\Grade;
 use App\Models\HppVeneerBasahSummary;
 use App\Models\StokVeneerJadi;
 use App\Models\StokVeneerKering;
@@ -13,6 +14,7 @@ use App\Models\StokTriplekMth;
 use App\Models\StokPlywoodSiapJual;
 use App\Models\StokPlatformJadi;
 use App\Models\StokTriplekJadi;
+use App\Models\StokGudangSatu;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
@@ -34,9 +36,10 @@ class OpnameStokForm
                     'veneer_jadi'    => 'Veneer Jadi',
                     'platform_mth'   => 'Platform MTH',
                     'triplek_mth'    => 'Triplek MTH',
+                    'plywood'        => 'Plywood Siap Jual',
                     'platform_jadi'  => 'Platform Jadi',
                     'triplek_jadi'   => 'Triplek Jadi',
-                    'plywood'        => 'Plywood Siap Jual',
+                    'gudang_satu'    => 'Gudang Satu',
                 ])
                 ->default('veneer_basah')
                 ->required()
@@ -71,8 +74,9 @@ class OpnameStokForm
 
             Select::make('kw')
                 ->label('KW / Grade')
-                ->options(['1' => '1', '2' => '2', '3' => '3', '4' => '4'])
+                ->options(fn() => Grade::orderBy('nama_grade')->pluck('nama_grade', 'nama_grade'))
                 ->required()
+                ->searchable()
                 ->live()
                 ->afterStateUpdated(fn(Get $get, Set $set) => self::updateStokInfo($get, $set)),
 
@@ -148,6 +152,7 @@ class OpnameStokForm
             'plywood'       => self::bacaStokPlywood((int) $idEntitas, $ukuran, (string) $kw),
             'platform_jadi' => self::bacaStokPlatformJadi((int) $idEntitas, $ukuran, (string) $kw),
             'triplek_jadi'  => self::bacaStokTriplekJadi((int) $idEntitas, $ukuran, (string) $kw),
+            'gudang_satu'   => self::bacaStokGudangSatu((int) $idEntitas, $ukuran, (string) $kw),
             default         => [0, 0],
         };
 
@@ -164,7 +169,6 @@ class OpnameStokForm
             'tebal'         => $ukuran->tebal,
             'kw'            => $kw,
         ])->first();
-
         return [
             $summary ? (int) $summary->stok_lembar : 0,
             $summary ? (float) $summary->stok_kubikasi : 0.0,
@@ -180,7 +184,6 @@ class OpnameStokForm
             'tebal'         => $ukuran->tebal,
             'kw_grade'      => $kw,
         ])->first();
-
         return [
             $summary ? (int) $summary->stok_lembar : 0,
             $summary ? (float) $summary->stok_kubikasi : 0.0,
@@ -191,7 +194,6 @@ class OpnameStokForm
     {
         $stokLembar = StokVeneerKering::saldoLembarTerakhir($idUkuran, $idJenisKayu, $kw);
         $snapshot   = StokVeneerKering::snapshotTerakhir($idUkuran, $idJenisKayu, $kw);
-
         return [$stokLembar, (float) $snapshot['stok_m3']];
     }
 
@@ -204,7 +206,6 @@ class OpnameStokForm
             'tebal'         => $ukuran->tebal,
             'kw_grade'      => $kw,
         ])->first();
-
         return [
             $summary ? (int) $summary->stok_lembar : 0,
             $summary ? (float) $summary->stok_kubikasi : 0.0,
@@ -220,7 +221,6 @@ class OpnameStokForm
             'tebal'         => $ukuran->tebal,
             'kw_grade'      => $kw,
         ])->first();
-
         return [
             $summary ? (int) $summary->stok_lembar : 0,
             $summary ? (float) $summary->stok_kubikasi : 0.0,
@@ -236,7 +236,6 @@ class OpnameStokForm
             'tebal'         => $ukuran->tebal,
             'kw_grade'      => $kw,
         ])->first();
-
         return [
             $summary ? (int) $summary->stok_lembar : 0,
             $summary ? (float) $summary->stok_kubikasi : 0.0,
@@ -252,7 +251,6 @@ class OpnameStokForm
             'tebal'           => $ukuran->tebal,
             'kw_grade'        => $kw,
         ])->first();
-
         return [
             $summary ? (int) $summary->stok_lembar : 0,
             $summary ? (float) $summary->stok_kubikasi : 0.0,
@@ -268,7 +266,21 @@ class OpnameStokForm
             'tebal'         => $ukuran->tebal,
             'kw_grade'      => $kw,
         ])->first();
+        return [
+            $summary ? (int) $summary->stok_lembar : 0,
+            $summary ? (float) $summary->stok_kubikasi : 0.0,
+        ];
+    }
 
+    private static function bacaStokGudangSatu(int $idJenisKayu, Ukuran $ukuran, string $kw): array
+    {
+        $summary = StokGudangSatu::where([
+            'id_jenis_kayu' => $idJenisKayu,
+            'panjang'       => $ukuran->panjang,
+            'lebar'         => $ukuran->lebar,
+            'tebal'         => $ukuran->tebal,
+            'kw_grade'      => $kw,
+        ])->first();
         return [
             $summary ? (int) $summary->stok_lembar : 0,
             $summary ? (float) $summary->stok_kubikasi : 0.0,

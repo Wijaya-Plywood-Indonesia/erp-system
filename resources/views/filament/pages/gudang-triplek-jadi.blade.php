@@ -1,4 +1,4 @@
-{{-- resources/views/filament/pages/gudang-platform-jadi.blade.php --}}
+{{-- resources/views/filament/pages/gudang-triplek-jadi.blade.php --}}
 <x-filament-panels::page>
 
     {{-- ═══ TAB NAVIGATION ═══ --}}
@@ -27,13 +27,13 @@
     @if(false)
     {{-- ═══ DETAIL STOK (tampil di kedua tab) ═══ --}}
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-        <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Detail Stok Platform Jadi</span>
+        <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Detail Stok Triplek Jadi</span>
 
         <div class="relative w-full sm:w-72">
             <input
                 type="text"
-                wire:model.live.debounce.300ms="search"
-                placeholder="Cari barang/ukuran/grade..."
+                wire:model.live.debounce.300ms="searchQuery"
+                placeholder="Cari kayu/ukuran/grade..."
                 class="w-full text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-sm pl-8 pr-3 py-2 outline-none focus:border-primary-500"
             />
             <svg class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -53,7 +53,7 @@
                     {{ $row->kw_grade ?? '-' }}
                 </span>
                 <span class="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase truncate min-w-0 flex-1">
-                    {{ $row->jenisBarang?->nama_jenis_barang ?? '-' }}
+                    {{ $row->jenisKayu?->nama_kayu ?? '-' }}
                 </span>
                 <span class="font-mono text-[10px] text-gray-400 dark:text-gray-500 tabular-nums whitespace-nowrap shrink-0 hidden sm:block">
                     {{ number_format((float) $row->stok_kubikasi, 4) }} m³
@@ -64,7 +64,7 @@
             </div>
             @empty
             <div class="px-5 py-8 text-center text-xs text-gray-400 dark:text-gray-600">
-                Belum ada stok Platform Jadi
+                Belum ada stok Triplek Jadi
             </div>
             @endforelse
         </div>
@@ -74,24 +74,24 @@
 
     @if($activeTab === 'masuk')
     {{-- ══════════════════════════════════════════════════════════════════════
-         TAB 1: SERAH TERIMA (dari Hasil Sanding, per palet)
+         TAB 1: SERAH TERIMA (antrean gabungan multi-sumber, composite id)
     ═══════════════════════════════════════════════════════════════════════ --}}
     @php
-        $antrean  = $this->antrean;
-        $menunggu = $antrean->filter(fn ($r) => ! $r->sudah)->count();
+        $antrean  = $this->antreanFiltered;
+        $menunggu = $antrean->filter(fn ($r) => $r['status_gudang'] === 'belum diterima')->count();
     @endphp
 
     <div class="mt-8">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
             <div class="flex items-center gap-3">
-                <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Serah Terima Hasil Sanding</span>
+                <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Serah Terima Triplek Jadi</span>
                 <span class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">{{ $menunggu }} menunggu diterima</span>
             </div>
 
             <div class="relative w-full sm:w-64">
                 <input
                     type="text"
-                    wire:model.live.debounce.300ms="antreanSearch"
+                    wire:model.live.debounce.300ms="tableSearchQuery"
                     placeholder="Cari antrean..."
                     class="w-full text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-sm pl-8 pr-3 py-2 outline-none focus:border-primary-500"
                 />
@@ -104,25 +104,25 @@
         <div class="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
             <div class="divide-y divide-gray-100 dark:divide-gray-800 max-h-[560px] overflow-y-auto">
                 @forelse($antrean as $r)
-                    @php $volume = $this->hitungKubikasi($r->panjang, $r->lebar, $r->tebal, $r->jumlah); @endphp
-                    <div wire:key="hs-{{ $r->id }}"
-                         class="px-4 sm:px-5 py-4 transition-colors {{ $r->sudah ? 'opacity-60' : 'hover:bg-gray-50 dark:hover:bg-gray-800/40' }}">
+                    @php $sudah = $r['status_gudang'] === 'sudah diterima'; @endphp
+                    <div wire:key="antrean-{{ $r['id'] }}"
+                         class="px-4 sm:px-5 py-4 transition-colors {{ $sudah ? 'opacity-60' : 'hover:bg-gray-50 dark:hover:bg-gray-800/40' }}">
                         <div class="flex items-start justify-between gap-3 flex-wrap">
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="font-mono text-xs font-bold text-gray-700 dark:text-gray-200 whitespace-nowrap">
-                                        Palet {{ $r->no_palet ?? '-' }}
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 whitespace-nowrap">
+                                        {{ $r['source'] }}
                                     </span>
                                     <span class="font-mono text-[11px] text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap">
-                                        {{ ($r->panjang + 0) }}×{{ ($r->lebar + 0) }}×{{ ($r->tebal + 0) }}
+                                        {{ ($r['panjang'] + 0) }}×{{ ($r['lebar'] + 0) }}×{{ ($r['tebal'] + 0) }}
                                     </span>
                                     <span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 whitespace-nowrap">
-                                        {{ $r->grade }}
+                                        {{ $r['kw'] }}
                                     </span>
                                     <span class="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase truncate">
-                                        {{ $r->jenis_barang }}
+                                        {{ $r['jenis_kayu'] }}
                                     </span>
-                                    @if($r->sudah)
+                                    @if($sudah)
                                         <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 whitespace-nowrap">
                                             Diterima
                                         </span>
@@ -133,27 +133,34 @@
                                     @endif
                                 </div>
                                 <div class="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
-                                    {{ optional($r->created_at)->translatedFormat('d M Y H:i') }}
+                                    {{ optional($r['created_at'])->translatedFormat('d M Y H:i') }}
                                     <span class="text-gray-300 dark:text-gray-600">·</span>
-                                    {{ number_format($volume, 4) }} m³
-                                    @if($r->sudah && $r->penerima)
+                                    {{ number_format((float) $r['stok_kubikasi'], 4) }} m³
+                                    @if($r['keterangan'])
                                         <span class="text-gray-300 dark:text-gray-600">·</span>
-                                        Diterima: {{ $r->penerima }} ({{ optional($r->diterima_at)->translatedFormat('d M H:i') }})
+                                        {{ $r['keterangan'] }}
+                                    @endif
+                                    @if($sudah && $r['penerima_name'] !== 'N/A')
+                                        <span class="text-gray-300 dark:text-gray-600">·</span>
+                                        Diterima: {{ $r['penerima_name'] }}
+                                        @if($r['diterima_at'])
+                                            ({{ \Illuminate\Support\Carbon::parse($r['diterima_at'])->translatedFormat('d M H:i') }})
+                                        @endif
                                     @endif
                                 </div>
                             </div>
 
                             <div class="shrink-0 flex items-center gap-3">
                                 <span class="font-black text-sm text-amber-500 dark:text-amber-400 whitespace-nowrap tabular-nums">
-                                    {{ number_format($r->jumlah) }} <span class="text-[10px] font-semibold text-gray-400">Lbr</span>
+                                    {{ number_format($r['jumlah']) }} <span class="text-[10px] font-semibold text-gray-400">Lbr</span>
                                 </span>
-                                @unless($r->sudah)
+                                @unless($sudah)
                                     <button
                                         type="button"
-                                        wire:click="terima({{ $r->id }})"
-                                        wire:confirm="Terima Palet {{ $r->no_palet }} ({{ number_format($r->jumlah) }} lbr {{ $r->jenis_barang }}) ke Gudang Platform Jadi?"
+                                        wire:click="terimaBarang('{{ $r['id'] }}')"
+                                        wire:confirm="Terima {{ number_format($r['jumlah']) }} lbr {{ $r['jenis_kayu'] }} ({{ $r['kw'] }}) ke Gudang Triplek Jadi?"
                                         wire:loading.attr="disabled"
-                                        wire:target="terima({{ $r->id }})"
+                                        wire:target="terimaBarang('{{ $r['id'] }}')"
                                         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
@@ -166,7 +173,7 @@
                     </div>
                 @empty
                     <div class="px-5 py-8 text-center text-xs text-gray-400 dark:text-gray-600">
-                        Tidak ada antrean hasil sanding
+                        Tidak ada antrean serah terima
                     </div>
                 @endforelse
             </div>
@@ -180,7 +187,7 @@
     <div class="mt-8">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3">
-                <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Mutasi Keluar Platform Jadi</span>
+                <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Mutasi Keluar Triplek Jadi</span>
                 <button
                     type="button"
                     wire:click="$set('showFormKeluarModal', true)"
@@ -207,7 +214,7 @@
 
         <div class="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
             <div class="divide-y divide-gray-100 dark:divide-gray-800 max-h-[560px] overflow-y-auto">
-                @forelse($this->riwayatKeluar as $rk)
+                @forelse($this->riwayatKeluarFiltered as $rk)
                     <div wire:key="rk-{{ $rk->id }}" class="px-4 sm:px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
                         <div class="flex items-start justify-between gap-3 flex-wrap">
                             <div class="min-w-0 flex-1">
@@ -219,7 +226,7 @@
                                         {{ $rk->kw_grade ?? '-' }}
                                     </span>
                                     <span class="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase truncate">
-                                        {{ $rk->jenisBarang?->nama_jenis_barang ?? '-' }}
+                                        {{ $rk->jenisKayu?->nama_kayu ?? '-' }}
                                     </span>
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 whitespace-nowrap">
                                         {{ $rk->tujuan }}
@@ -251,18 +258,6 @@
                                 <div class="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap tabular-nums">
                                     {{ number_format((float) $rk->stok_kubikasi, 4) }} m³ · {{ $rk->jumlah_palet }} plt
                                 </div>
-
-                                    @if($rk->bisa_diedit)
-                                    <button type="button" wire:click="editKeluar({{ $rk->id }})" wire:loading.attr="disabled"
-                                        class="inline-flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-amber-500 hover:border-amber-500 hover:text-gray-950 transition-colors">
-                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                        </svg>
-                                        Edit
-                                    </button>
-                                    @else
-                                    <span class="text-[9px] text-gray-300 dark:text-gray-700 font-bold uppercase" title="Sudah diterima/terpakai di tujuan">🔒 Terkunci</span>
-                                    @endif
                             </div>
                         </div>
                     </div>
@@ -297,7 +292,7 @@
                         @foreach($this->stokList as $s)
                         {
                             id: '{{ $s->id }}',
-                            nama: '{{ $s->jenisBarang?->nama_jenis_barang }} ({{ $s->kw_grade }}) - Sisa: {{ number_format((int) $s->stok_lembar) }} lbr',
+                            nama: '{{ $s->jenisKayu?->nama_kayu }} ({{ $s->kw_grade }}) - Sisa: {{ number_format((int) $s->stok_lembar) }} lbr',
                             no: '{{ ($s->panjang + 0) }}x{{ ($s->lebar + 0) }}x{{ ($s->tebal + 0) }}'
                         },
                         @endforeach
@@ -325,7 +320,7 @@
                 }" @click.away="isDropdownOpen = false">
                     <label class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">Pilih Barang</label>
                     <div class="relative flex items-center">
-                        <input type="text" x-model="searchTerm" @focus="isDropdownOpen = true" placeholder="Ketik ukuran, grade, atau nama barang..."
+                        <input type="text" x-model="searchTerm" @focus="isDropdownOpen = true" placeholder="Ketik ukuran, grade, atau jenis kayu..."
                             class="w-full px-3 py-2 bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-700 rounded-sm font-bold text-gray-900 dark:text-gray-100 outline-none pr-10 focus:border-amber-500 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-600 placeholder:font-normal placeholder:text-xs">
                         <button type="button" x-show="searchTerm.length > 0 || selectedStokId" @click="clearItem()"
                             class="absolute right-3 text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors">
@@ -410,7 +405,7 @@
                         wire:model="tujuanKeluar"
                         required
                         class="w-full text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:border-amber-500 focus:outline-none font-bold">
-                        <option value="Hotpress">Hotpress</option>
+                        <option value="Packing">Packing</option>
                         <option value="Jual">Jual</option>
                     </select>
                 </div>
@@ -446,78 +441,6 @@
         </div>
     </div>
     @endif
-    @endif
-
-    {{-- ═══ MODAL EDIT RIWAYAT KELUAR ═══ --}}
-    @if($showEditKeluarModal)
-    <div class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" wire:click="cancelEditKeluar"></div>
-
-        <div class="relative w-full max-w-md bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
-                <span class="inline-block w-1.5 h-4 bg-amber-500 rounded-sm"></span>
-                <span class="text-sm font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Edit Rincian Palet</span>
-            </div>
-
-            <form wire:submit.prevent="updateKeluar" class="p-5 space-y-4 text-xs">
-
-                <div class="space-y-1.5">
-                    <label class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">Jumlah Palet</label>
-                    <input type="text" inputmode="numeric" wire:model.live="editJumlahPalet" required
-                        class="w-full text-sm p-2 bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-700 rounded-sm text-gray-900 dark:text-gray-100 focus:border-amber-500 focus:outline-none font-bold" />
-                </div>
-
-                <div class="space-y-1.5">
-                    <label class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">Isi per palet</label>
-                    <div class="grid grid-cols-2 gap-2.5 max-h-[180px] overflow-y-auto border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950/30 p-3 rounded-sm">
-                        @for($i = 0; $i < max(1, (int) $editJumlahPalet); $i++)
-                        <div class="space-y-1">
-                            <div class="flex items-center justify-between">
-                                <span class="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase block">Palet #{{ $i + 1 }}</span>
-                                @if(count($editPaletQuantities) > 1)
-                                <button type="button" wire:click="hapusEditPalet({{ $i }})"
-                                    class="text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors">
-                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                                @endif
-                            </div>
-                            <div class="relative">
-                                <input type="text" inputmode="numeric" wire:model="editPaletQuantities.{{ $i }}"
-                                    placeholder="Kuantitas" required
-                                    class="w-full text-xs p-2 border border-gray-300 dark:border-gray-700 rounded-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:border-amber-500 focus:outline-none" />
-                                <span class="absolute right-2.5 top-2 text-[11px] text-gray-400 dark:text-gray-500">lbr</span>
-                            </div>
-                        </div>
-                        @endfor
-                    </div>
-                </div>
-
-                @php $editTotalLbr = array_sum(array_map('intval', $editPaletQuantities)); @endphp
-                @if($editTotalLbr > 0)
-                <div class="p-3 border border-dashed border-amber-500/30 bg-amber-500/5 rounded-sm flex items-center justify-between">
-                    <p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-widest font-black">Total Baru</p>
-                    <span class="px-3 py-1 bg-amber-500 text-gray-950 font-black text-sm rounded-sm">
-                        {{ number_format($editTotalLbr) }} Lbr
-                    </span>
-                </div>
-                @endif
-
-                <div class="pt-2 flex justify-end gap-2">
-                    <button type="button" wire:click="cancelEditKeluar"
-                        class="px-3.5 py-1.5 rounded-sm text-[11px] font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                        Batal
-                    </button>
-                    <button type="submit" wire:loading.attr="disabled" wire:target="updateKeluar"
-                        class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-sm text-[11px] font-bold text-gray-950 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 transition-colors">
-                        <span wire:loading.remove wire:target="updateKeluar">Simpan Perubahan</span>
-                        <span wire:loading wire:target="updateKeluar">Menyimpan…</span>
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
     @endif
 
 </x-filament-panels::page>

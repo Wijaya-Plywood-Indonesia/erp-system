@@ -20,24 +20,50 @@ class AbsenExport implements FromArray, WithHeadings, WithStyles, WithColumnWidt
 
     public function __construct(array $data)
     {
-        // --- 1. LOGIKA SORTING NUMERIK ASCENDING (Terkecil ke Terbesar) ---
-        // Kita urutkan data berdasarkan kodep secara menaik (dari 1000 s.d terbesar)
-        usort($data, function ($a, $b) {
-            $kodeA = $a['kodep'] ?? '';
-            $kodeB = $b['kodep'] ?? '';
+        // --- 1. LOGIKA SORTING BERBASIS DOMAIN HOST ---
+        $currentHost = request()->getHost();
 
-            // Jika keduanya berupa angka, bandingkan secara numerik agar akurat
-            if (is_numeric($kodeA) && is_numeric($kodeB)) {
-                return (float)$kodeA <=> (float)$kodeB;
-            }
+        if (in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com'])) {
+            // 🔹 SORTING A: Numerik Murni
+            usort($data, function ($a, $b) {
+                $kodeA = (int) ($a['kodep'] ?? 0);
+                $kodeB = (int) ($b['kodep'] ?? 0);
 
-            // Fallback menggunakan pengurutan alami (natural sort) jika terdapat karakter non-angka
-            return strnatcasecmp((string)$kodeA, (string)$kodeB);
-        });
+                return $kodeA <=> $kodeB;
+            });
+        } else {
+            // 🔹 SORTING B: Berbasis Grup Prioritas (Wahana, Localhost, dll)
+            usort($data, function ($a, $b) {
+                $kodeA = trim((string) ($a['kodep'] ?? ''));
+                $kodeB = trim((string) ($b['kodep'] ?? ''));
+
+                $getPriority = function ($kode) {
+                    // Prioritas 1: Kode berawalan angka 8 atau 9 (Paling atas)
+                    if (str_starts_with($kode, '8') || str_starts_with($kode, '9')) {
+                        return 1;
+                    }
+                    // Prioritas 3: Kode berawalan angka 7 (Paling bawah)
+                    if (str_starts_with($kode, '7')) {
+                        return 3;
+                    }
+                    // Prioritas 2: Lainnya di tengah
+                    return 2;
+                };
+
+                $prioA = $getPriority($kodeA);
+                $prioB = $getPriority($kodeB);
+
+                if ($prioA !== $prioB) {
+                    return $prioA <=> $prioB;
+                }
+
+                return (int) $kodeA <=> (int) $kodeB;
+            });
+        }
 
         $this->data = $data;
 
-        // --- 2. PENGATURAN PRESISI (Tetap Sama) ---
+        // --- 2. PENGATURAN PRESISI ---
         $this->originalPrecision = (int) ini_get('precision');
         $this->originalSerializePrecision = (int) ini_get('serialize_precision');
 

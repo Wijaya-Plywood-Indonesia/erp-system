@@ -3,6 +3,8 @@
 namespace App\Filament\Pages;
 
 use App\Exports\AbsenExport;
+use App\Filament\Pages\Absen\Transformers\TembelTriplekWorkerMap;
+use App\Models\ProduksiTembeltriplek;
 use Filament\Pages\Page;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
@@ -132,7 +134,7 @@ class Absen extends Page implements HasForms
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
                 ->action(fn() => $this->exportExcel())
-                ->visible(fn() => ! empty($this->listAbsensi)),
+                ->visible(fn() => !empty($this->listAbsensi)),
         ];
     }
 
@@ -184,6 +186,7 @@ class Absen extends Page implements HasForms
             $listGuellotine = GuellotineWorkerMap::make(produksi_guellotine::with(['pegawaiGuellotine.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listGrajiBalken = GrajiBalkenWorkerMap::make(ProduksiGrajiBalken::with(['pegawaiGrajiBalken.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listGrajiStik = GrajiStikWorkerMap::make(GrajiStik::with(['pegawaiGrajiStik.pegawai'])->whereDate('tanggal', $tgl)->get());
+            $listTembelTriplek = TembelTriplekWorkerMap::make(ProduksiTembeltriplek::with(['pegawaiTembeltriplek.pegawai'])->whereDate('tanggal', $tgl)->get());
 
             $pegawaiBekerjaRaw = array_merge(
                 $listRotary,
@@ -207,7 +210,8 @@ class Absen extends Page implements HasForms
                 $listPilihVeneer,
                 $listGuellotine,
                 $listGrajiBalken,
-                $listGrajiStik
+                $listGrajiStik,
+                $listTembelTriplek
             );
 
             // 4. Gabungkan Produksi dengan Log Finger
@@ -232,18 +236,18 @@ class Absen extends Page implements HasForms
                     $rawMasuk = $finger?->jam_masuk ?? '-';
                     $rawPulang = $finger?->jam_pulang ?? '-';
 
-                    $fMasuk  = $rawMasuk;
+                    $fMasuk = $rawMasuk;
                     $fPulang = $rawPulang;
 
                     return [
-                        'kodep'      => $kodep,
-                        'nama'       => $first['nama'] ?? '-',
-                        'masuk'      => $first['masuk'] ?? '-',
-                        'pulang'     => $first['pulang'] ?? '-',
-                        'f_masuk'    => $fMasuk,
-                        'f_pulang'   => $fPulang,
-                        'hasil'      => $allDivisi, // Sekarang nilainya sudah berupa String murni (contoh: "DRYER - PAGI")
-                        'ijin'       => $first['ijin'] ?? '',
+                        'kodep' => $kodep,
+                        'nama' => $first['nama'] ?? '-',
+                        'masuk' => $first['masuk'] ?? '-',
+                        'pulang' => $first['pulang'] ?? '-',
+                        'f_masuk' => $fMasuk,
+                        'f_pulang' => $fPulang,
+                        'hasil' => $allDivisi, // Sekarang nilainya sudah berupa String murni (contoh: "DRYER - PAGI")
+                        'ijin' => $first['ijin'] ?? '',
                         'keterangan' => $first['keterangan'] ?? '',
                     ];
                 });
@@ -258,14 +262,14 @@ class Absen extends Page implements HasForms
                 $fingerLibur = $listFinger->get($cleanKode);
 
                 $listLibur[] = [
-                    'kodep'      => $p->kode_pegawai,
-                    'nama'       => $p->nama_pegawai,
-                    'masuk'      => '-',
-                    'pulang'     => '-',
-                    'f_masuk'    => $fingerLibur?->jam_masuk ?? '-',
-                    'f_pulang'   => $fingerLibur?->jam_pulang ?? '-',
-                    'hasil'      => '-',
-                    'ijin'       => '-',
+                    'kodep' => $p->kode_pegawai,
+                    'nama' => $p->nama_pegawai,
+                    'masuk' => '-',
+                    'pulang' => '-',
+                    'f_masuk' => $fingerLibur?->jam_masuk ?? '-',
+                    'f_pulang' => $fingerLibur?->jam_pulang ?? '-',
+                    'hasil' => '-',
+                    'ijin' => '-',
                     'keterangan' => '-',
                 ];
             }
@@ -275,14 +279,14 @@ class Absen extends Page implements HasForms
             foreach ($listFinger as $kodeFinger => $dataFinger) {
                 if (!in_array($kodeFinger, $kodePegawaiDb)) {
                     $unregisteredFinal[] = [
-                        'kodep'      => $kodeFinger,
-                        'nama'       => '', // Sesuai permintaan: Nama Kosong
-                        'masuk'      => '-',
-                        'pulang'     => '-',
-                        'f_masuk'    => $dataFinger->jam_masuk,
-                        'f_pulang'   => $dataFinger->jam_pulang,
-                        'hasil'      => ['Sync Error'],
-                        'ijin'       => '-',
+                        'kodep' => $kodeFinger,
+                        'nama' => '', // Sesuai permintaan: Nama Kosong
+                        'masuk' => '-',
+                        'pulang' => '-',
+                        'f_masuk' => $dataFinger->jam_masuk,
+                        'f_pulang' => $dataFinger->jam_pulang,
+                        'hasil' => ['Sync Error'],
+                        'ijin' => '-',
                         'keterangan' => 'ID Mesin tidak ada di Database',
                     ];
                 }
@@ -297,16 +301,16 @@ class Absen extends Page implements HasForms
             if (in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com'])) {
                 // 🔹 SORTING A: Numerik Murni untuk domain Kayu & Pra-release
                 usort($finalMerge, function ($a, $b) {
-                    $kodeA = (int)($a['kodep'] ?? 0);
-                    $kodeB = (int)($b['kodep'] ?? 0);
+                    $kodeA = (int) ($a['kodep'] ?? 0);
+                    $kodeB = (int) ($b['kodep'] ?? 0);
 
                     return $kodeA <=> $kodeB;
                 });
             } else {
                 // 🔹 SORTING B: Berbasis Grup Prioritas untuk domain selain di atas (Wahana, Localhost, dll)
                 usort($finalMerge, function ($a, $b) {
-                    $kodeA = trim((string)($a['kodep'] ?? ''));
-                    $kodeB = trim((string)($b['kodep'] ?? ''));
+                    $kodeA = trim((string) ($a['kodep'] ?? ''));
+                    $kodeB = trim((string) ($b['kodep'] ?? ''));
 
                     // Fungsi pembantu untuk menentukan pembagian grup prioritas
                     $getPriority = function ($kode) {
@@ -331,7 +335,7 @@ class Absen extends Page implements HasForms
                     }
 
                     // Jika berada di dalam grup prioritas yang sama, urutkan secara numerik menaik
-                    return (int)$kodeA <=> (int)$kodeB;
+                    return (int) $kodeA <=> (int) $kodeB;
                 });
             }
 
@@ -369,11 +373,11 @@ class Absen extends Page implements HasForms
             $response = \Illuminate\Support\Facades\Http::timeout(30)
                 ->withHeaders([
                     'X-API-KEY' => 'SINKRON_SECRET_KEY_123',
-                    'Accept'    => 'application/json',
+                    'Accept' => 'application/json',
                 ])->post($targetUrl, [
-                    'tanggal' => $tgl,
-                    'absensi' => $this->listUnregistered,
-                ]);
+                        'tanggal' => $tgl,
+                        'absensi' => $this->listUnregistered,
+                    ]);
 
             $result = $response->json();
 

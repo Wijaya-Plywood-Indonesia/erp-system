@@ -55,10 +55,14 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
     {
         return [
             'no_palet' => match ($record->tipe_sumber) {
-                'dryer' => $record->detailHasil?->no_palet,
-                'kedi' => $record->detailBongkarKedi?->no_palet,
-                default => null,
-            } ?? '-',
+    'dryer' => $record->detailHasil?->no_palet !== null
+        ? 'dry-' . $record->detailHasil->no_palet
+        : null,
+    'kedi' => $record->detailBongkarKedi?->no_palet !== null
+        ? 'kedi-' . $record->detailBongkarKedi->no_palet
+        : null,
+    default => null,
+} ?? '-',
 
             'ukuran' => match ($record->tipe_sumber) {
                 'dryer' => $record->detailHasil?->ukuran?->nama_ukuran,
@@ -157,15 +161,19 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                     }),
 
                 TextColumn::make('no_palet')
-                    ->label('No. Palet')
-                    ->getStateUsing(fn ($record) => match ($record->tipe_sumber) {
-                        'dryer' => $record->detailHasil?->no_palet ?? '-',
-                        'kedi' => $record->detailBongkarKedi?->no_palet ?? '-',
-                        'gudang' => $record->mutasiKeluarPalet?->no_palet ?? '-',
-                        default => '-',
-                    })
-                    ->badge()
-                    ->color('info'),
+    ->label('No. Palet')
+    ->getStateUsing(fn ($record) => match ($record->tipe_sumber) {
+        'dryer' => $record->detailHasil?->no_palet !== null
+            ? 'dry-' . $record->detailHasil->no_palet
+            : '-',
+        'kedi' => $record->detailBongkarKedi?->no_palet !== null
+            ? 'kd-' . $record->detailBongkarKedi->no_palet
+            : '-',
+        'gudang' => $record->mutasiKeluarPalet?->no_palet ?? '-',
+        default => '-',
+    })
+    ->badge()
+    ->color('info'),
 
                 TextColumn::make('ukuran')
                     ->label('Ukuran')
