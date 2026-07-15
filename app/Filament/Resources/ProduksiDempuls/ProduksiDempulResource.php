@@ -13,7 +13,7 @@ use App\Filament\Resources\ProduksiDempuls\RelationManagers\ValidasiDempulRelati
 use App\Filament\Resources\ProduksiDempuls\Schemas\ProduksiDempulForm;
 use App\Filament\Resources\ProduksiDempuls\Schemas\ProduksiDempulInfolist;
 use App\Filament\Resources\ProduksiDempuls\Tables\ProduksiDempulsTable;
-use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\SerahTerimaTriplekCacatRelationManager;
+// use App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers\SerahTerimaTriplekCacatRelationManager;
 use App\Models\ProduksiDempul;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -50,7 +50,7 @@ class ProduksiDempulResource extends Resource
     public static function getRelations(): array
     {
         return [
-            SerahTerimaTriplekCacatRelationManager::class,
+            // SerahTerimaTriplekCacatRelationManager::class,
             BahanDempulRelationManager::class,
             RencanaPegawaiDempulRelationManager::class,
             DetailDempulRelationManager::class,
