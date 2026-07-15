@@ -17,16 +17,17 @@ class StokVeneerJadi extends Page
     protected static ?string $navigationLabel = 'Stok Veneer Jadi';
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
     protected static ?string $title          = 'Stok Veneer Jadi';
-    protected static ?int    $navigationSort = 12;
+    protected static ?int    $navigationSort = 4;
 
     // State untuk filtering di UI Blade
     public string $filterJenisKayu = '';
     public string $filterTebal     = '';
     public string $filterKw        = '';
+    public string $filterCoreType  = '';
 
     public bool $showKubikasi   = false;
-public bool $showHppAverage = false;
-public bool $showNilaiStok  = false;
+    public bool $showHppAverage = false;
+    public bool $showNilaiStok  = false;
 
     public function getSummariesProperty()
     {
@@ -34,6 +35,16 @@ public bool $showNilaiStok  = false;
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->when($this->filterTebal,     fn($q) => $q->where('tebal',     $this->filterTebal))
             ->when($this->filterKw,        fn($q) => $q->where('kw_grade', $this->filterKw))
+            ->when(
+                $this->filterCoreType === 'long',
+                fn($q) =>
+                $q->where('panjang', 244)->where('lebar', 122)->where('tebal', '>', 0)
+            )
+            ->when(
+                $this->filterCoreType === 'short',
+                fn($q) =>
+                $q->where('panjang', 122)->where('lebar', 244)->where('tebal', '>', 0)
+            )
             ->where('stok_lembar', '>', 0)
             ->get();
     }
@@ -65,5 +76,17 @@ public bool $showNilaiStok  = false;
         return (int) StokVeneerJadiModel::where('stok_lembar', '>', 0)
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->sum('stok_lembar');
+    }
+    public function getCoreTypeLabel($row): ?string
+    {
+        if ((float) $row->panjang === 244.0 && (float) $row->lebar === 122.0) {
+            return 'Long Core';
+        }
+
+        if ((float) $row->panjang === 122.0 && (float) $row->lebar === 244.0 || (float) $row->panjang === 122.0 && (float) $row->lebar === 130.0) {
+            return 'Short Core';
+        }
+
+        return null;
     }
 }

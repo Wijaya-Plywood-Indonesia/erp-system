@@ -18,6 +18,7 @@ class ProduksiTembelTripleksTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('tanggal', 'desc')
             ->columns([
                 TextColumn::make('tanggal')
                     ->label('Tanggal Produksi')
@@ -37,9 +38,9 @@ class ProduksiTembelTripleksTable
             ])
             ->recordActions([
                 Action::make('kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn ($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'warning')
+                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Kendala')
@@ -61,7 +62,7 @@ class ProduksiTembelTripleksTable
                             ->success()
                             ->send();
                     })
-                    ->modalHeading(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
                     ->modalSubmitActionLabel('Simpan'),
 
                 ViewAction::make(),

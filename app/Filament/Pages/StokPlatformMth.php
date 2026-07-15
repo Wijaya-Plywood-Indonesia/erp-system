@@ -17,7 +17,7 @@ class StokPlatformMth extends Page
     protected static ?string $navigationLabel = 'Stok Platform MTH';
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
     protected static ?string $title          = 'Stok Platform MTH';
-    protected static ?int    $navigationSort = 13;
+    protected static ?int    $navigationSort = 5;
 
     // State untuk filtering di UI Blade
     public string $filterJenisKayu = '';
@@ -25,8 +25,8 @@ class StokPlatformMth extends Page
     public string $filterKw        = '';
 
     public bool $showKubikasi   = false;
-public bool $showHppAverage = false;
-public bool $showNilaiStok  = false;
+    public bool $showHppAverage = false;
+    public bool $showNilaiStok  = false;
 
     public function getSummariesProperty()
     {
