@@ -2,8 +2,8 @@
 <x-filament-panels::page>
 
     @php
-        $summaries = $this->summaries;
-        $grouped   = $this->groupedSummaries; // grouped per tebal
+    $summaries = $this->summaries;
+    $grouped = $this->groupedSummaries; // grouped per tebal
     @endphp
 
     {{-- Filter bar + toggle kolom --}}
@@ -14,7 +14,7 @@
             class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
             <option value="">Semua Jenis Kayu</option>
             @foreach(\App\Models\JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id') as $id => $nama)
-                <option value="{{ $id }}">{{ $nama }}</option>
+            <option value="{{ $id }}">{{ $nama }}</option>
             @endforeach
         </select>
 
@@ -22,7 +22,7 @@
             class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
             <option value="">Semua Tebal</option>
             @foreach($this->tebalList as $t)
-                <option value="{{ $t }}">{{ $t }} mm</option>
+            <option value="{{ $t }}">{{ $t }} mm</option>
             @endforeach
         </select>
 
@@ -30,35 +30,36 @@
             class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
             <option value="">Semua KW</option>
             @foreach($this->kwList as $kw)
-                <option value="{{ $kw }}">KW {{ $kw }}</option>
+            <option value="{{ $kw }}">KW {{ $kw }}</option>
             @endforeach
+        </select>
+
+        <select wire:model.live="filterCoreType"
+            class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
+            <option value="">Semua Tipe Core</option>
+            <option value="long">Long Core</option>
+            <option value="short">Short Core</option>
         </select>
 
         <div class="h-4 w-px bg-gray-200 dark:bg-gray-700"></div>
 
         <button type="button" wire:click="$toggle('showKubikasi')"
-            @class([
-                'text-[9px] font-bold uppercase tracking-tight px-2 py-1 rounded-sm border transition',
-                'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400' => $showKubikasi,
-                'bg-transparent border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' => !$showKubikasi,
+            @class([ 'text-[9px] font-bold uppercase tracking-tight px-2 py-1 rounded-sm border transition' , 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400'=> $showKubikasi,
+            'bg-transparent border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' => !$showKubikasi,
             ])>
             m³
         </button>
 
         <button type="button" wire:click="$toggle('showHppAverage')"
-            @class([
-                'text-[9px] font-bold uppercase tracking-tight px-2 py-1 rounded-sm border transition',
-                'bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-400' => $showHppAverage,
-                'bg-transparent border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' => !$showHppAverage,
+            @class([ 'text-[9px] font-bold uppercase tracking-tight px-2 py-1 rounded-sm border transition' , 'bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-400'=> $showHppAverage,
+            'bg-transparent border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' => !$showHppAverage,
             ])>
             HPP
         </button>
 
         <button type="button" wire:click="$toggle('showNilaiStok')"
-            @class([
-                'text-[9px] font-bold uppercase tracking-tight px-2 py-1 rounded-sm border transition',
-                'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-400' => $showNilaiStok,
-                'bg-transparent border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' => !$showNilaiStok,
+            @class([ 'text-[9px] font-bold uppercase tracking-tight px-2 py-1 rounded-sm border transition' , 'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-400'=> $showNilaiStok,
+            'bg-transparent border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' => !$showNilaiStok,
             ])>
             Rp
         </button>
@@ -79,16 +80,16 @@
                         Tebal {{ (float)$tebal }} mm
                     </span>
                     @php
-                        $labelJenis = $tebal <= 1 ? 'F/B (Face/Back)' : 'Core';
-                    @endphp
-                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">{{ $labelJenis }}</span>
-                    <div class="h-px flex-1 bg-gray-100 dark:bg-gray-900"></div>
-                    <span class="text-[10px] font-black text-gray-500 dark:text-gray-400 tabular-nums">
-                        {{ number_format($rows->sum('stok_lembar')) }} lbr
-                        @if($showKubikasi)
+                    $labelJenis = $tebal <= 1 ? 'F/B (Face/Back)' : 'Core' ;
+                        @endphp
+                        <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">{{ $labelJenis }}</span>
+                        <div class="h-px flex-1 bg-gray-100 dark:bg-gray-900"></div>
+                        <span class="text-[10px] font-black text-gray-500 dark:text-gray-400 tabular-nums">
+                            {{ number_format($rows->sum('stok_lembar')) }} lbr
+                            @if($showKubikasi)
                             · {{ number_format($rows->sum('stok_kubikasi'), 4) }} m³
-                        @endif
-                    </span>
+                            @endif
+                        </span>
                 </div>
 
                 <div class="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
@@ -97,6 +98,7 @@
                             <tr class="text-gray-400 dark:text-gray-400 uppercase text-[9px] tracking-widest font-black bg-gray-50/50 dark:bg-gray-800/50">
                                 <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800 w-12">No</th>
                                 <th class="px-6 py-3 border-b border-gray-100 dark:border-gray-800">Jenis Kayu</th>
+                                <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">Tipe Core</th>
                                 <th class="px-6 py-3 border-b border-gray-100 dark:border-gray-800">Ukuran (p×l×t)</th>
                                 <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">KW</th>
                                 <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">Stok Lembar</th>
@@ -121,14 +123,28 @@
 
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-2">
-                                        <div @class(['w-2 h-2 rounded-sm',
-                                            'bg-emerald-500' => str_contains(strtolower($row->jenisKayu?->nama_kayu ?? ''), 'sengon'),
-                                            'bg-amber-500'   => !str_contains(strtolower($row->jenisKayu?->nama_kayu ?? ''), 'sengon'),
-                                        ])></div>
+                                        <div @class(['w-2 h-2 rounded-sm', 'bg-emerald-500'=> str_contains(strtolower($row->jenisKayu?->nama_kayu ?? ''), 'sengon'),
+                                            'bg-amber-500' => !str_contains(strtolower($row->jenisKayu?->nama_kayu ?? ''), 'sengon'),
+                                            ])></div>
                                         <span class="font-bold text-gray-700 dark:text-gray-300 uppercase tracking-tight">
                                             {{ $row->jenisKayu?->nama_kayu ?? '-' }}
                                         </span>
                                     </div>
+                                </td>
+
+                                @php
+                                $coreType = $this->getCoreTypeLabel($row);
+                                @endphp
+                                <td class="px-6 py-4 text-center">
+                                    @if($coreType)
+                                    <span @class([ 'inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight' , 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'=> $coreType === 'Long Core',
+                                        'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' => $coreType === 'Short Core',
+                                        ])>
+                                        {{ $coreType }}
+                                    </span>
+                                    @else
+                                    <span class="text-gray-300 dark:text-gray-600 text-xs">-</span>
+                                    @endif
                                 </td>
 
                                 <td class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400 tabular-nums">
@@ -158,19 +174,19 @@
                                 @if($showHppAverage)
                                 {{-- HPP Average Sebelum → Sekarang --}}
                                 @php
-                                    $hppSekarang  = (float) ($row->hpp_average ?? 0);
-                                    $lastLog      = $row->lastLog ?? null;
-                                    $hppSebelum   = $lastLog ? (float) ($lastLog->stok_kubikasi_before > 0
-                                        ? ($lastLog->nilai_stok_before / $lastLog->stok_kubikasi_before)
-                                        : 0)
-                                        : 0;
+                                $hppSekarang = (float) ($row->hpp_average ?? 0);
+                                $lastLog = $row->lastLog ?? null;
+                                $hppSebelum = $lastLog ? (float) ($lastLog->stok_kubikasi_before > 0
+                                ? ($lastLog->nilai_stok_before / $lastLog->stok_kubikasi_before)
+                                : 0)
+                                : 0;
                                 @endphp
                                 <td class="px-6 py-4 text-right bg-amber-50/20 dark:bg-amber-900/5">
                                     @if($hppSebelum > 0)
-                                        <div class="flex items-center justify-end gap-1.5 font-mono text-xs tabular-nums mb-0.5">
-                                            <span class="text-gray-400 dark:text-gray-500">Rp {{ number_format($hppSebelum, 0, ',', '.') }}</span>
-                                            <span class="text-gray-300 dark:text-gray-700 text-[10px]">→</span>
-                                        </div>
+                                    <div class="flex items-center justify-end gap-1.5 font-mono text-xs tabular-nums mb-0.5">
+                                        <span class="text-gray-400 dark:text-gray-500">Rp {{ number_format($hppSebelum, 0, ',', '.') }}</span>
+                                        <span class="text-gray-300 dark:text-gray-700 text-[10px]">→</span>
+                                    </div>
                                     @endif
                                     <span class="font-black text-amber-700 dark:text-amber-400 tabular-nums text-base">
                                         Rp {{ number_format($hppSekarang, 0, ',', '.') }}
@@ -206,12 +222,10 @@
             <div class="px-6 py-4 bg-gray-50 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
                 <h3 class="text-[10px] font-black uppercase tracking-widest text-gray-500">Total Keseluruhan</h3>
             </div>
-            <div @class([
-                'grid divide-x divide-gray-100 dark:divide-gray-800',
-                'grid-cols-1' => !$showKubikasi && !$showNilaiStok,
+            <div @class([ 'grid divide-x divide-gray-100 dark:divide-gray-800' , 'grid-cols-1'=> !$showKubikasi && !$showNilaiStok,
                 'grid-cols-2' => ($showKubikasi xor $showNilaiStok),
                 'grid-cols-3' => $showKubikasi && $showNilaiStok,
-            ])>
+                ])>
                 <div class="px-6 py-5">
                     <div class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Total Lembar</div>
                     <div class="text-2xl font-black text-gray-800 dark:text-gray-200 tabular-nums">

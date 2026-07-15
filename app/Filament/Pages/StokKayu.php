@@ -26,7 +26,7 @@ class StokKayu extends Page
     protected static ?string $navigationLabel = 'Stok Kayu';
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
     protected static ?string $title = 'Stok Kayu';
-    protected static ?int $navigationSort = 10;
+    protected static ?int $navigationSort = 1;
 
     // Role untuk membuat super admin yang bisa akses untuk edit dan delete
     private const ROLE_ADMIN    = ['super_admin', 'Super Admin'];
