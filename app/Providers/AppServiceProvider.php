@@ -90,6 +90,8 @@ class AppServiceProvider extends ServiceProvider
         ValidasiPressDryer::observe(ProductionValidationObserver::class);
         ValidasiStik::observe(ProductionValidationObserver::class);
         ValidasiKedi::observe(ProductionValidationObserver::class);
+        \App\Models\ValidasiPilihPlywood::observe(\App\Observers\ValidasiPilihPlywoodObserver::class);
+        \App\Models\ValidasiNyusup::observe(\App\Observers\ValidasiNyusupObserver::class);
         // PlatformHasilHp::observe(PlatformHasilHpObserver::class);
         // TriplekHasilHp::observe(TriplekHasilHpObserver::class);
 

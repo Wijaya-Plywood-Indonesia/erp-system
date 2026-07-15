@@ -6,12 +6,12 @@ use App\Models\BarangSetengahJadiHp;
 use App\Models\Grade;
 use App\Models\JenisBarang;
 use App\Models\RencanaPegawaiDempul;
-use App\Models\DetailDempul;
-use Illuminate\Database\Eloquent\Builder;
+use App\Models\SerahTerimaTriplekCacat;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
-use Filament\Forms\Components\Grid;
+use Illuminate\Database\Eloquent\Builder;
 
 class DetailDempulForm
 {
@@ -19,75 +19,123 @@ class DetailDempulForm
     {
         return $schema->components([
             // =========================
-            // BARANG
+            // SUMBER BARANG CACAT (SERAH TERIMA)
             // =========================
-            Select::make('grade_id')
-                ->label('Filter Grade')
-                ->options(
-                    Grade::whereHas('kategoriBarang', function ($q) {
-                        $q->whereIn('nama_kategori', ['PLYWOOD', 'PLATFORM']);
-                    })
-                        ->orderBy('nama_grade')
-                        ->get()
-                        ->mapWithKeys(fn($g) => [
-                            $g->id => ($g->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
-                                . ' | ' . $g->nama_grade
-                        ])
-                )
-                ->reactive()
-                ->searchable()
-                ->placeholder('Semua Grade')
-                ->dehydrated(false),
-
-            Select::make('jenis_barang_id_filter')
-                ->label('Filter Jenis Barang')
-                ->options(
-                    JenisBarang::orderBy('nama_jenis_barang')
-                        ->pluck('nama_jenis_barang', 'id')
-                )
-                ->reactive()
-                ->searchable()
-                ->placeholder('Semua Jenis Barang')
-                ->dehydrated(false),
-
-            Select::make('id_barang_setengah_jadi_hp')
-                ->label('Barang Setengah Jadi (Plywood)')
+            Select::make('id_serah_terima_triplek_cacat')
+                ->label('Barang Cacat (Serah Terima)')
                 ->required()
                 ->searchable()
+                ->live()
                 ->options(function (callable $get) {
-                    $query = BarangSetengahJadiHp::query()
-                        ->with([
-                            'ukuran',
-                            'jenisBarang',
-                            'grade.kategoriBarang',
-                        ])
-                        ->whereHas('grade.kategoriBarang', function ($q) {
-                            $q->whereIn('nama_kategori', ['PLYWOOD', 'PLATFORM']);
-                        })
-                        ->joinRelationship('jenisBarang')
-                        ->joinRelationship('ukuran');
+                    return SerahTerimaTriplekCacat::query()
+                        ->where('tujuan', 'dempul')
+                        ->where('diterima_oleh', '!=', '-')
+                        ->with(
+                            'hasilPilihPlywood.barangSetengahJadiHp.jenisBarang',
+                            'hasilPilihPlywood.barangSetengahJadiHp.grade',
+                            'hasilPilihPlywood.barangSetengahJadiHp.ukuran'
+                        )
+                        ->get()
+                        ->filter(fn ($s) => $s->sisa > 0)
+                        ->mapWithKeys(function ($s) {
+                            $bsj = $s->barangSetengahJadi;
 
-                    if ($get('grade_id')) {
-                        $query->where('barang_setengah_jadi_hp.id_grade', $get('grade_id'));
-                    }
+                            $label = ($bsj?->jenisBarang?->nama_jenis_barang ?? '-').' | '.
+                                ($bsj?->ukuran?->nama_ukuran ?? '-').' | '.
+                                ($bsj?->grade?->nama_grade ?? '-').
+                                ' — Sisa: '.$s->sisa;
 
-                    if ($get('jenis_barang_id_filter')) {
-                        $query->where('barang_setengah_jadi_hp.id_jenis_barang', $get('jenis_barang_id_filter'));
-                    }
-
-                    $query->orderBy('ukurans.tebal', 'asc')
-                        ->orderBy('barang_setengah_jadi_hp.id', 'asc');
-
-                    return $query->get()->mapWithKeys(function ($b) {
-                        return [
-                            $b->id => ($b->grade?->kategoriBarang?->nama_kategori ?? '-') . ' | ' .
-                                ($b->ukuran?->nama_ukuran ?? '-') . ' | ' .
-                                ($b->grade?->nama_grade ?? '-') . ' | ' .
-                                ($b->jenisBarang?->nama_jenis_barang ?? '-')
-                        ];
-                    });
+                            return [$s->id => $label];
+                        });
                 })
                 ->columnSpanFull(),
+
+            Placeholder::make('info_sisa')
+                ->label('Sisa Tersedia')
+                ->content(function (callable $get) {
+                    $id = $get('id_serah_terima_triplek_cacat');
+
+                    if (! $id) {
+                        return '-';
+                    }
+
+                    $serah = SerahTerimaTriplekCacat::find($id);
+
+                    return $serah ? $serah->sisa.' lembar' : '-';
+                })
+                ->live()
+                ->columnSpanFull(),
+
+            // =========================
+            // BARANG
+            // =========================
+            // Select::make('grade_id')
+            //     ->label('Filter Grade')
+            //     ->options(
+            //         Grade::whereHas('kategoriBarang', function ($q) {
+            //             $q->whereIn('nama_kategori', ['PLYWOOD', 'PLATFORM']);
+            //         })
+            //             ->orderBy('nama_grade')
+            //             ->get()
+            //             ->mapWithKeys(fn ($g) => [
+            //                 $g->id => ($g->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
+            //                     .' | '.$g->nama_grade,
+            //             ])
+            //     )
+            //     ->reactive()
+            //     ->searchable()
+            //     ->placeholder('Semua Grade')
+            //     ->dehydrated(false),
+
+            // Select::make('jenis_barang_id_filter')
+            //     ->label('Filter Jenis Barang')
+            //     ->options(
+            //         JenisBarang::orderBy('nama_jenis_barang')
+            //             ->pluck('nama_jenis_barang', 'id')
+            //     )
+            //     ->reactive()
+            //     ->searchable()
+            //     ->placeholder('Semua Jenis Barang')
+            //     ->dehydrated(false),
+
+            // Select::make('id_barang_setengah_jadi_hp')
+            //     ->label('Barang Setengah Jadi (Plywood)')
+            //     ->required()
+            //     ->searchable()
+            //     ->options(function (callable $get) {
+            //         $query = BarangSetengahJadiHp::query()
+            //             ->with([
+            //                 'ukuran',
+            //                 'jenisBarang',
+            //                 'grade.kategoriBarang',
+            //             ])
+            //             ->whereHas('grade.kategoriBarang', function ($q) {
+            //                 $q->whereIn('nama_kategori', ['PLYWOOD', 'PLATFORM']);
+            //             })
+            //             ->joinRelationship('jenisBarang')
+            //             ->joinRelationship('ukuran');
+
+            //         if ($get('grade_id')) {
+            //             $query->where('barang_setengah_jadi_hp.id_grade', $get('grade_id'));
+            //         }
+
+            //         if ($get('jenis_barang_id_filter')) {
+            //             $query->where('barang_setengah_jadi_hp.id_jenis_barang', $get('jenis_barang_id_filter'));
+            //         }
+
+            //         $query->orderBy('ukurans.tebal', 'asc')
+            //             ->orderBy('barang_setengah_jadi_hp.id', 'asc');
+
+            //         return $query->get()->mapWithKeys(function ($b) {
+            //             return [
+            //                 $b->id => ($b->grade?->kategoriBarang?->nama_kategori ?? '-').' | '.
+            //                     ($b->ukuran?->nama_ukuran ?? '-').' | '.
+            //                     ($b->grade?->nama_grade ?? '-').' | '.
+            //                     ($b->jenisBarang?->nama_jenis_barang ?? '-'),
+            //             ];
+            //         });
+            //     })
+            //     ->columnSpanFull(),
 
             TextInput::make('modal')
                 ->numeric()

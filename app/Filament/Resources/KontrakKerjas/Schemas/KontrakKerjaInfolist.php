@@ -55,7 +55,7 @@ class KontrakKerjaInfolist
                             ->visible(
                                 fn($record) =>
                                 $record->bukti_ttd &&
-                                    Str::endsWith($record->bukti_ttd, ['jpg', 'jpeg', 'png', 'webp'])
+                                Str::endsWith($record->bukti_ttd, ['jpg', 'jpeg', 'png', 'webp'])
                             )
                             ->disk('public')
                             ->height(300)
@@ -66,7 +66,7 @@ class KontrakKerjaInfolist
                             ->visible(
                                 fn($record) =>
                                 $record->bukti_ttd &&
-                                    Str::endsWith($record->bukti_ttd, ['pdf'])
+                                Str::endsWith($record->bukti_ttd, ['pdf'])
                             )
                             ->formatStateUsing(fn($state) => 'Klik untuk mengunduh PDF')
                             ->url(fn($record) => asset('storage/' . $record->bukti_ttd))
@@ -96,7 +96,9 @@ class KontrakKerjaInfolist
                                 'active' => 'success',
                                 'soon' => 'warning',
                                 'expired' => 'danger',
+                                'new' => 'primary',
                                 'extended' => 'gray',
+                                default => 'gray',
                             }),
                     ]),
 

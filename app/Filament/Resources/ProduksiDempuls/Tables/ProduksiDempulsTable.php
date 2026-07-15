@@ -2,35 +2,35 @@
 
 namespace App\Filament\Resources\ProduksiDempuls\Tables;
 
+use App\Models\ProduksiDempul;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-use Filament\Actions\DeleteAction;
-use Filament\Tables\Table;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Actions\Action;
-use Filament\Notifications\Notification;
 use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
 
 class ProduksiDempulsTable
 {
     public static function configure(Table $table): Table
     {
-        $currentHost = request()->getHost();
-
-        // 2. Tentukan nama kolom tanggal berdasarkan domain
-        $kolomTanggal = in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com'])
-            ? 'tanggal'
-            : 'tanggal_produksi';
+        $kolomTanggal = ProduksiDempul::kolomTanggalAktif();
 
         return $table
             ->columns([
-                TextColumn::make($kolomTanggal)
+                TextColumn::make('tanggal_dempul')
                     ->label('Tanggal Dempul')
                     ->date('d/m/Y')
-                    ->sortable()
-                    ->searchable(),
+                    ->sortable(query: function ($query, string $direction) use ($kolomTanggal) {
+                        return $query->orderBy($kolomTanggal, $direction);
+                    })
+                    ->searchable(query: function ($query, string $search) use ($kolomTanggal) {
+                        return $query->whereDate($kolomTanggal, 'like', "%{$search}%");
+                    }),
 
                 TextColumn::make('kendala')
                     ->label('Kendala')
@@ -39,14 +39,15 @@ class ProduksiDempulsTable
                     ->sortable()
                     ->searchable(),
             ])
+            ->defaultSort($kolomTanggal, 'desc') // ⬅️ urutkan terbaru di atas secara default
             ->filters([
                 //
             ])
             ->recordActions([
                 Action::make('kendala')
-                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
+                    ->label(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->icon(fn ($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
+                    ->color(fn ($record) => $record->kendala ? 'info' : 'warning')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Kendala')
@@ -68,7 +69,7 @@ class ProduksiDempulsTable
                             ->success()
                             ->send();
                     })
-                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->modalHeading(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
                     ->modalSubmitActionLabel('Simpan'),
 
                 ViewAction::make(),

@@ -116,6 +116,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         site:
           - domain: prarelease.wijayaplywoods.com
@@ -410,6 +411,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           port: ${{ secrets.SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          debug: true
           script: |
             set -euo pipefail
             DOMAIN="${{ matrix.site.domain }}"
@@ -554,6 +556,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         site:
           - domain: kayu.wijayaplywoods.com

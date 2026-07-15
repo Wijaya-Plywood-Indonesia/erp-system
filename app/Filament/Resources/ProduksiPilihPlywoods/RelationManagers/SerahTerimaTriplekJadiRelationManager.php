@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers;
 
 use App\Models\HppTriplekJadiLog;
+use App\Models\HppTriplekMthLog;
 use App\Models\JenisKayu;
 use App\Models\SerahTerimaTriplekJadi;
 use App\Models\StokTriplekJadi;
+use App\Models\StokTriplekMth;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Placeholder;
 use Filament\Notifications\Notification;
@@ -22,6 +24,13 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
 
     protected static ?string $title = 'Terima Triplek Jadi';
 
+    /**
+     * Sumber yang HASIL nya sudah pernah tercatat/dihitung sebelumnya
+     * (barang cacat yang diperbaiki) — jadi ketika diterima di Pilih Plywood,
+     * TIDAK boleh menambah stok lagi (mencegah double count).
+     */
+    protected const SUMBER_TANPA_STOK = ['dempul', 'tembel_triplek'];
+
     public function table(Table $table): Table
     {
         $ownerId = $this->getOwnerRecord()->id;
@@ -37,7 +46,13 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
                         'hasilSanding.barangSetengahJadi.ukuran',
                         'hasilSanding.barangSetengahJadi.grade',
                         'hasilSanding.barangSetengahJadi.jenisBarang',
-                        'hasilGrajiTriplek.barangSetengahJadiHp.ukuran', // Sesuaikan jika ada Graji
+                        'hasilGrajiTriplek.barangSetengahJadiHp.ukuran',
+                        'detailDempul.barangSetengahJadi.ukuran',
+                        'detailDempul.barangSetengahJadi.grade',
+                        'detailDempul.barangSetengahJadi.jenisBarang',
+                        'hasilTembelTriplek.serahTerimaTriplekCacat.hasilPilihPlywood.barangSetengahJadiHp.ukuran',
+                        'hasilTembelTriplek.serahTerimaTriplekCacat.hasilPilihPlywood.barangSetengahJadiHp.grade',
+                        'hasilTembelTriplek.serahTerimaTriplekCacat.hasilPilihPlywood.barangSetengahJadiHp.jenisBarang',
                     ])
                     ->where('diterima_oleh', '-')
                     ->orWhere('id_produksi_pilih_plywood', $ownerId)
@@ -47,14 +62,20 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
-                    ->state(fn ($record) => $record->hasil?->no_palet ?? '-')
+                    ->state(fn ($record) => $record->hasil?->no_palet ?? $record->hasil?->nomor_palet ?? '-')
                     ->badge()
                     ->color('info'),
 
                 TextColumn::make('asal_label')
-                    ->label('Asal Mesin')
+                    ->label('Asal')
                     ->badge()
-                    ->color(fn ($state) => $state === 'Sanding' ? 'warning' : 'danger'),
+                    ->color(fn ($state) => match ($state) {
+                        'Sanding' => 'warning',
+                        'Graji Triplek' => 'danger',
+                        'Dempul (Perbaikan)' => 'gray',
+                        'Tembel Triplek (Perbaikan)' => 'gray',
+                        default => 'gray',
+                    }),
 
                 TextColumn::make('jenis_barang')
                     ->label('Jenis Barang')
@@ -73,12 +94,23 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
                     ->numeric()
                     ->alignCenter(),
 
+                TextColumn::make('pengaruh_stok')
+                    ->label('Pengaruh Stok')
+                    ->badge()
+                    ->state(function ($record) {
+                        return in_array($record->tipe_sumber, self::SUMBER_TANPA_STOK, true)
+                            ? 'Tidak Menambah Stok'
+                            : 'Menambah Stok';
+                    })
+                    ->color(fn ($state) => $state === 'Tidak Menambah Stok' ? 'gray' : 'success')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('diterima_oleh')
                     ->label('Status Diterima')
                     ->badge()
                     ->color(fn ($state) => $state === '-' ? 'gray' : 'success')
                     ->formatStateUsing(fn ($state) => $state === '-' ? 'Menunggu' : $state),
-                    
+
                 TextColumn::make('created_at')
                     ->label('Waktu Serah')
                     ->dateTime('d/m/Y H:i:s')
@@ -91,24 +123,33 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
                     ->color('success')
                     ->icon('heroicon-o-check-circle')
                     ->requiresConfirmation()
-                    ->modalHeading('Terima Triplek Jadi?')
-                    ->modalDescription('Barang yang diterima akan memotong dan langsung masuk ke Stok Triplek Jadi.')
+                    ->modalHeading(fn ($record) => in_array($record->tipe_sumber, self::SUMBER_TANPA_STOK, true)
+                        ? 'Terima Barang Perbaikan?'
+                        : 'Terima Triplek Jadi?')
+                    ->modalDescription(fn ($record) => in_array($record->tipe_sumber, self::SUMBER_TANPA_STOK, true)
+                        ? 'Barang hasil perbaikan ini sudah pernah tercatat sebelumnya sebagai barang cacat, sehingga penerimaan ini HANYA menandai status selesai dan TIDAK menambah stok (mencegah dobel hitung).'
+                        : 'Barang yang diterima akan memotong dan langsung masuk ke Stok Triplek Jadi.')
                     ->visible(fn ($record) => $record->diterima_oleh === '-')
                     ->schema(function ($record) {
                         return [
                             Grid::make(2)->schema([
                                 Placeholder::make('preview_asal')
-                                    ->label('Dari Mesin')
+                                    ->label('Dari')
                                     ->content($record->asal_label),
                                 Placeholder::make('preview_qty')
                                     ->label('Kuantitas')
-                                    ->content($record->jumlah . ' Lembar'),
+                                    ->content($record->jumlah.' Lembar'),
                                 Placeholder::make('preview_grade')
                                     ->label('Grade')
                                     ->content($record->barang_setengah_jadi?->grade?->nama_grade ?? '-'),
                                 Placeholder::make('preview_ukuran')
                                     ->label('Ukuran')
                                     ->content($record->barang_setengah_jadi?->ukuran?->nama_ukuran ?? '-'),
+                                Placeholder::make('preview_pengaruh_stok')
+                                    ->label('Pengaruh Stok')
+                                    ->content(in_array($record->tipe_sumber, self::SUMBER_TANPA_STOK, true)
+                                        ? 'Tidak menambah stok (barang perbaikan)'
+                                        : 'Menambah stok'),
                             ]),
                         ];
                     })
@@ -121,19 +162,27 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
                                     throw new \RuntimeException('Barang ini sudah diterima pengawas lain.');
                                 }
 
-                                // 1. Update status Serah Terima
+                                // 1. Update status Serah Terima — SELALU dilakukan, apapun sumbernya
                                 $fresh->update([
-                                    'diterima_oleh' => Auth::user()->name . ' - Pilih Plywood',
+                                    'diterima_oleh' => Auth::user()->name.' - Pilih Plywood',
                                     'id_produksi_pilih_plywood' => $ownerId,
                                     'status' => 'Terima Triplek',
                                 ]);
 
-                                // 2. Tambah ke stok (fungsi ada di bawah)
-                                $this->tambahStokTriplek($fresh);
+                                // 2. Tambah ke stok — HANYA untuk sumber Sanding & Graji Triplek.
+                                // Dempul & Tembel Triplek adalah barang cacat yang sudah pernah
+                                // tercatat sebelumnya, jadi diterima-nya di sini murni administratif
+                                // (menutup antrian), tidak boleh menambah stok lagi.
+                                if (! in_array($fresh->tipe_sumber, self::SUMBER_TANPA_STOK, true)) {
+                                    $this->tambahStokTriplek($fresh);
+                                }
                             });
 
                             Notification::make()
-                                ->title('Barang Berhasil Diterima dan Masuk Stok')
+                                ->title('Barang Berhasil Diterima')
+                                ->body(in_array($record->tipe_sumber, self::SUMBER_TANPA_STOK, true)
+                                    ? 'Status diperbarui. Stok tidak berubah (barang perbaikan).'
+                                    : 'Barang masuk ke Stok Triplek Jadi.')
                                 ->success()
                                 ->send();
 
@@ -149,8 +198,11 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
     }
 
     /**
-     * Memotong proses gudang dengan menambahkannya langsung ke Stok 
+     * Memotong proses gudang dengan menambahkannya langsung ke Stok
      * Triplek Jadi beserta Log HPP nya.
+     *
+     * PENTING: hanya dipanggil untuk sumber Sanding & Graji Triplek.
+     * Jangan panggil untuk sumber Dempul/Tembel Triplek (lihat SUMBER_TANPA_STOK).
      */
     protected function tambahStokTriplek(SerahTerimaTriplekJadi $serahTerima): void
     {
@@ -205,7 +257,7 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
         $stok->save();
 
         $tanggalProduksi = date('d/m/Y', strtotime($this->getOwnerRecord()->tanggal_produksi));
-        
+
         // Ambil nama pengawas yang sedang login dan menekan tombol "Terima"
         $namaPenerima = Auth::user()->name;
 
@@ -219,8 +271,8 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
             'tebal' => $ukuran->tebal,
             'kw_grade' => $grade->nama_grade,
             'tanggal' => now()->toDateString(),
-            'tipe_transaksi' => 'Masuk', // Sesuai kesepakatan agar terbaca positif di UI Anda
-            'keterangan' => $keteranganLog, // Masukkan variabel keterangan di sini
+            'tipe_transaksi' => 'Masuk',
+            'keterangan' => $keteranganLog,
             'referensi_type' => SerahTerimaTriplekJadi::class,
             'referensi_id' => $serahTerima->id,
             'total_lembar' => $lembar,
@@ -236,8 +288,81 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
             'stok_kubikasi_after' => $stok->stok_kubikasi,
             'nilai_stok_after' => $stok->nilai_stok,
         ]);
-        
+
         // Simpan id log terakhir ke tabel stok jika kolomnya ada
         $stok->update(['id_last_log' => $log->id]);
+
+        // ── KURANGI STOK TRIPLEK MENTAH (boleh minus, crosscheck) ──
+        $this->kurangiStokTriplekMth($jenisKayu, $ukuran, $grade->nama_grade, $lembar, $serahTerima);
+    }
+
+    /**
+     * Kurangi Stok Triplek Mentah sesuai barang & qty yang diterima.
+     * Boleh minus (crosscheck).
+     */
+    protected function kurangiStokTriplekMth($jenisKayu, $ukuran, string $kwGrade, float $lembar, SerahTerimaTriplekJadi $serahTerima): void
+    {
+        $stokMth = StokTriplekMth::where('id_jenis_kayu', $jenisKayu->id)
+            ->where('panjang', $ukuran->panjang)
+            ->where('lebar', $ukuran->lebar)
+            ->where('tebal', $ukuran->tebal)
+            ->where('kw_grade', $kwGrade)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $stokMth) {
+            $stokMth = StokTriplekMth::create([
+                'id_jenis_kayu' => $jenisKayu->id,
+                'panjang' => $ukuran->panjang,
+                'lebar' => $ukuran->lebar,
+                'tebal' => $ukuran->tebal,
+                'kw_grade' => $kwGrade,
+                'stok_lembar' => 0,
+                'stok_kubikasi' => 0,
+                'nilai_stok' => 0,
+                'hpp_average' => 0,
+            ]);
+        }
+
+        $kubikasi = ($lembar * (float) $ukuran->panjang * (float) $ukuran->lebar * (float) $ukuran->tebal) / 10000000;
+
+        $stokLembarBefore = (float) $stokMth->stok_lembar;
+        $stokKubikasiBefore = (float) $stokMth->stok_kubikasi;
+        $nilaiStokBefore = (float) $stokMth->nilai_stok;
+
+        $stokMth->stok_lembar = $stokLembarBefore - $lembar;
+        $stokMth->stok_kubikasi = round($stokKubikasiBefore - $kubikasi, 6);
+        $stokMth->save();
+
+        $namaPenerima = Auth::user()->name;
+        $tanggalProduksi = date('d/m/Y', strtotime($this->getOwnerRecord()->tanggal_produksi));
+        $keperluan = 'Sanding';
+
+        $log = HppTriplekMthLog::create([
+            'id_jenis_kayu' => $jenisKayu->id,
+            'panjang' => $ukuran->panjang,
+            'lebar' => $ukuran->lebar,
+            'tebal' => $ukuran->tebal,
+            'kw_grade' => $kwGrade,
+            'tanggal' => now()->toDateString(),
+            'tipe_transaksi' => 'Keluar',
+            'keterangan' => "Dipakai produksi: {$keperluan} - Palet {$serahTerima->hasil?->no_palet} (oleh {$namaPenerima})",
+            'referensi_type' => SerahTerimaTriplekJadi::class,
+            'referensi_id' => $serahTerima->id,
+            'total_lembar' => $lembar,
+            'total_kubikasi' => $kubikasi,
+            'hpp_pekerja' => 0,
+            'hpp_bahan_penolong' => 0,
+            'hpp_average' => $stokMth->hpp_average,
+            'nilai_stok' => $nilaiStokBefore,
+            'stok_lembar_before' => $stokLembarBefore,
+            'stok_kubikasi_before' => $stokKubikasiBefore,
+            'nilai_stok_before' => $nilaiStokBefore,
+            'stok_lembar_after' => $stokMth->stok_lembar,
+            'stok_kubikasi_after' => $stokMth->stok_kubikasi,
+            'nilai_stok_after' => $nilaiStokBefore,
+        ]);
+
+        $stokMth->update(['id_last_log' => $log->id]);
     }
 }

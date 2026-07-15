@@ -9,6 +9,7 @@ class ValidasiPilihPlywood extends Model
     protected $table = 'validasi_pilih_plywood';
 
     protected $fillable = [
+        'id_produksi_pilih_plywood',
         'id_hasil_pilih_plywood',
         'role',
         'status',

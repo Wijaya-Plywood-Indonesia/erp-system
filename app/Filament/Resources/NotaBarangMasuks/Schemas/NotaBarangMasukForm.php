@@ -47,7 +47,7 @@ class NotaBarangMasukForm
                     ]),
 
                 TextInput::make('tujuan_nota')
-                    ->label('Kepada')
+                    ->label('Dari')
                     ->required(),
                 Hidden::make('dibuat_oleh')
                     ->default(fn() => auth()->id())

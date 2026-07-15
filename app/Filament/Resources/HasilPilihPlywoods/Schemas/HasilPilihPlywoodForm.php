@@ -2,12 +2,12 @@
 
 namespace App\Filament\Resources\HasilPilihPlywoods\Schemas;
 
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Textarea;
 use App\Models\BahanPilihPlywood;
 use App\Models\HasilPilihPlywood;
 use App\Models\PegawaiPilihPlywood;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Illuminate\Database\Eloquent\Builder;
 
 class HasilPilihPlywoodForm
@@ -34,10 +34,11 @@ class HasilPilihPlywoodForm
                             // Pastikan daftar pilihan pegawai diurutkan berdasarkan Nama
                             return $query->whereIn('pegawais.id', $absenIds)->orderBy('nama_pegawai');
                         }
+
                         return $query;
                     }
                 )
-                ->getOptionLabelFromRecordUsing(fn($record) => "{$record->kode_pegawai} - {$record->nama_pegawai}")
+                ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->kode_pegawai} - {$record->nama_pegawai}")
                 ->multiple()
                 ->preload()
                 ->required()
@@ -48,6 +49,7 @@ class HasilPilihPlywoodForm
                     if (is_array($state)) {
                         sort($state);
                     }
+
                     return $state;
                 }),
 
@@ -77,15 +79,15 @@ class HasilPilihPlywoodForm
                             $sisa = $bahan->jumlah - $sudahDikerjakan;
 
                             return [
-                                $barang->id => "[Sisa: {$sisa}] " .
-                                    ($barang->jenisBarang->nama_jenis_barang ?? '-') . ' | ' .
-                                    ($barang->ukuran->nama_ukuran ?? '-') . ' | ' .
-                                    ($barang->grade->nama_grade ?? '-')
+                                $barang->id => "[Sisa: {$sisa}] ".
+                                    ($barang->jenisBarang->nama_jenis_barang ?? '-').' | '.
+                                    ($barang->ukuran->nama_ukuran ?? '-').' | '.
+                                    ($barang->grade->nama_grade ?? '-'),
                             ];
                         });
                 })
                 ->reactive()
-                ->afterStateUpdated(fn($set) => $set('jumlah', 0)),
+                ->afterStateUpdated(fn ($set) => $set('jumlah', 0)),
 
             Select::make('jenis_cacat')
                 ->label('Jenis Cacat')
@@ -116,12 +118,12 @@ class HasilPilihPlywoodForm
                 ->reactive()
                 ->afterStateUpdated(function ($state, $get, $set, $livewire) {
                     // Ambil stok awal
-                    $stokAwal = \App\Models\BahanPilihPlywood::where('id_produksi_pilih_plywood', $livewire->ownerRecord->id)
+                    $stokAwal = BahanPilihPlywood::where('id_produksi_pilih_plywood', $livewire->ownerRecord->id)
                         ->where('id_barang_setengah_jadi_hp', $get('id_barang_setengah_jadi_hp'))
                         ->sum('jumlah');
 
                     // Ambil yang sudah terpakai di DB
-                    $terpakai = \App\Models\HasilPilihPlywood::where('id_produksi_pilih_plywood', $livewire->ownerRecord->id)
+                    $terpakai = HasilPilihPlywood::where('id_produksi_pilih_plywood', $livewire->ownerRecord->id)
                         ->where('id_barang_setengah_jadi_hp', $get('id_barang_setengah_jadi_hp'))
                         ->selectRaw('SUM(jumlah + jumlah_bagus) as total')
                         ->value('total') ?? 0;
@@ -129,7 +131,7 @@ class HasilPilihPlywoodForm
                     $sisaSekarang = $stokAwal - $terpakai;
 
                     // Otomatis isi hasil bagus dengan sisa yang ada dikurangi cacat saat ini
-                    $saranBagus = max(0, $sisaSekarang - (int)$state);
+                    $saranBagus = max(0, $sisaSekarang - (int) $state);
                     $set('jumlah_bagus', $saranBagus);
                 }),
 
@@ -137,7 +139,6 @@ class HasilPilihPlywoodForm
                 ->label('Hasil Bagus (Lembar)')
                 ->numeric()
                 ->required()
-                ->helperText('Isi 0 jika masih ada jenis cacat lain yang ingin diinput.')
                 ->reactive(),
 
             Textarea::make('ket')

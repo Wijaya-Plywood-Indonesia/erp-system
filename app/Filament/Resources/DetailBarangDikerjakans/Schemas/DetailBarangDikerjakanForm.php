@@ -125,7 +125,7 @@ class DetailBarangDikerjakanForm
                                 'hasilTerimaGudangSatu.ukuran',
                             ])
                             ->where('tujuan', 'nyusup')
-                            ->where('id_produksi_nyusup', $produksi->id)
+                            // ->where('id_produksi_nyusup', $produksi->id)
                             ->where('diterima_oleh', '!=', '-')
                             ->get();
 

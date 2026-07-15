@@ -3,36 +3,37 @@
 namespace App\Filament\Resources\ProduksiDempuls\Schemas;
 
 use App\Models\ProduksiDempul;
-use Filament\Schemas\Schema;
 use Filament\Forms\Components\DatePicker;
+use Filament\Schemas\Schema;
 
 class ProduksiDempulForm
 {
     public static function configure(Schema $schema): Schema
     {
-        $currentHost = request()->getHost();
-        $kolomTanggal = in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com'])
-            ? 'tanggal'
-            : 'tanggal_produksi';
+        $kolomTanggal = ProduksiDempul::kolomTanggalAktif();
 
         return $schema
             ->components([
                 DatePicker::make($kolomTanggal)
                     ->label('Tanggal Produksi')
-                    ->default(fn() => now()->addDay())
+                    ->default(fn () => now()->addDay())
                     ->displayFormat('d F Y')
                     ->required()
                     ->rules([
-                        function () use ($kolomTanggal) {
-                            return function (string $attribute, $value, $fail) use ($kolomTanggal) {
-                                $exists = ProduksiDempul::whereDate($kolomTanggal, $value)->exists();
+                        function ($record) use ($kolomTanggal) {
+                            return function (string $attribute, $value, $fail) use ($record, $kolomTanggal) {
+                                $query = ProduksiDempul::whereDate($kolomTanggal, $value);
 
-                                if ($exists) {
+                                if ($record) {
+                                    $query->where('id', '!=', $record->id);
+                                }
+
+                                if ($query->exists()) {
                                     $fail('Tanggal ini sudah digunakan. Pilih tanggal lain.');
                                 }
                             };
                         },
-                    ])
+                    ]),
             ]);
     }
 }
