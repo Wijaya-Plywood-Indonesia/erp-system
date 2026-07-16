@@ -12,7 +12,7 @@ class HppVeneerJadiPage extends Page
 {
     use HasPageShield;
     protected string $view = 'filament.pages.hpp-veneer-jadi-page';
-
+    protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Log HPP Veneer Jadi';
     protected static string|UnitEnum|null $navigationGroup = 'Log';
     protected static ?string $title          = 'Log HPP Veneer Jadi';

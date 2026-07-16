@@ -13,7 +13,7 @@ class StokPlatformMth extends Page
     use HasPageShield;
 
     protected string $view = 'filament.pages.stok-platform-mth';
-
+    protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Stok Platform MTH';
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
     protected static ?string $title          = 'Stok Platform MTH';

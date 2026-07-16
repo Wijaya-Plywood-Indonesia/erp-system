@@ -13,7 +13,7 @@ class StokPlywoodSiapJual extends Page
     use HasPageShield;
 
     protected string $view = 'filament.pages.stok-plywood-siap-jual';
-
+    protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Stok Plywood Siap Jual';
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
     protected static ?string $title          = 'Stok Plywood Siap Jual';

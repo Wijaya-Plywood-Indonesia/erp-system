@@ -13,7 +13,7 @@ class StokPlatformJadi extends Page
     use HasPageShield;
 
     protected string $view = 'filament.pages.stok-platform-jadi';
-
+    protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Stok Platform Jadi';
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
     protected static ?string $title          = 'Stok Platform Jadi';

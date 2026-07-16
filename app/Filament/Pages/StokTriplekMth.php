@@ -13,7 +13,7 @@ class StokTriplekMth extends Page
     use HasPageShield;
 
     protected string $view = 'filament.pages.stok-triplek-mth';
-
+    protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Stok Triplek MTH';
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
     protected static ?string $title          = 'Stok Triplek MTH';
