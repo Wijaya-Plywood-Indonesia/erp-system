@@ -38,12 +38,12 @@ class StokVeneerJadi extends Page
             ->when(
                 $this->filterCoreType === 'long',
                 fn($q) =>
-                $q->where('panjang', 244)->where('lebar', 122)->where('tebal', '>', 0)
+                $q->where('panjang', 244)->where('lebar', 122)->where('tebal', '>', 1)
             )
             ->when(
                 $this->filterCoreType === 'short',
                 fn($q) =>
-                $q->where('panjang', 122)->where('lebar', 244)->where('tebal', '>', 0)
+                $q->where('panjang', 122)->where('lebar', 244)->where('tebal', '>', 1)
             )
             ->where('stok_lembar', '>', 0)
             ->get();
@@ -77,13 +77,21 @@ class StokVeneerJadi extends Page
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->sum('stok_lembar');
     }
+
     public function getCoreTypeLabel($row): ?string
     {
+        if ((float) $row->tebal <= 1.0) {
+            return null;
+        }
+
         if ((float) $row->panjang === 244.0 && (float) $row->lebar === 122.0) {
             return 'Long Core';
         }
 
-        if ((float) $row->panjang === 122.0 && (float) $row->lebar === 244.0 || (float) $row->panjang === 122.0 && (float) $row->lebar === 130.0) {
+        if (
+            ((float) $row->panjang === 122.0 && (float) $row->lebar === 244.0)
+            || ((float) $row->panjang === 122.0 && (float) $row->lebar === 130.0)
+        ) {
             return 'Short Core';
         }
 
