@@ -24,6 +24,7 @@ class ProduksiGrajiTripleksTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('tanggal_produksi', 'desc')
             ->columns([
                 TextColumn::make('tanggal_produksi')
                     ->label('Tanggal Produksi')

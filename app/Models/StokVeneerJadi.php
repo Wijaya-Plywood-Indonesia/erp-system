@@ -29,7 +29,7 @@ class StokVeneerJadi extends Model
         'nilai_stok'             => 'float',
         'hpp_average'            => 'float',
         'hpp_pekerja_last'       => 'float',
-        'hpp_bahan_penolong_last'=> 'float',
+        'hpp_bahan_penolong_last' => 'float',
     ];
 
     public function jenisKayu(): BelongsTo

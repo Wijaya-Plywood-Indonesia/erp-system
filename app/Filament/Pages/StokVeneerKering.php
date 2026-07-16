@@ -18,13 +18,14 @@ class StokVeneerKering extends Page
     protected static ?string $navigationLabel = 'Stok Veneer Kering';
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
     protected static ?string $title          = 'Stok Veneer Kering';
-    protected static ?int    $navigationSort = 20;
+    protected static ?int    $navigationSort = 3;
 
     public string $filterJenisKayu = '';
+    public string $filterCoreType  = '';
 
     public bool $showM3         = false;
-public bool $showHppAverage = false;
-public bool $showNilaiStok  = false;
+    public bool $showHppAverage = false;
+    public bool $showNilaiStok  = false;
 
     public function getLatestStokProperty()
     {
@@ -35,6 +36,24 @@ public bool $showNilaiStok  = false;
                 $join->on('stok_veneer_kerings.id', '=', 'latest.max_id');
             })
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
+            ->when(
+                $this->filterCoreType === 'long',
+                fn($q) =>
+                $q->whereHas(
+                    'ukuran',
+                    fn($u) =>
+                    $u->where('panjang', 244)->where('lebar', 122)->where('tebal', '>', 1)
+                )
+            )
+            ->when(
+                $this->filterCoreType === 'short',
+                fn($q) =>
+                $q->whereHas(
+                    'ukuran',
+                    fn($u) =>
+                    $u->where('panjang', 122)->where('lebar', 244)->where('tebal', '>', 1)
+                )
+            )
             ->where('stok_m3_sesudah', '>', 0)
             ->get();
 
@@ -71,5 +90,29 @@ public bool $showNilaiStok  = false;
     public function getTotalNilaiStokProperty(): float
     {
         return $this->latestStok->sum('nilai_stok_sesudah');
+    }
+
+    public function getCoreTypeLabel($row): ?string
+    {
+        $tebal   = (float) ($row->ukuran->tebal ?? 0);
+        $panjang = (float) ($row->ukuran->panjang ?? 0);
+        $lebar   = (float) ($row->ukuran->lebar ?? 0);
+
+        if ($tebal <= 1.0) {
+            return null;
+        }
+
+        if ($panjang === 244.0 && $lebar === 122.0) {
+            return 'Long Core';
+        }
+
+        if (
+            ($panjang === 122.0 && $lebar === 244.0)
+            || ($panjang === 122.0 && $lebar === 130.0)
+        ) {
+            return 'Short Core';
+        }
+
+        return null;
     }
 }

@@ -19,6 +19,13 @@ class ModalRepairsTable
     {
         return $table
             ->columns([
+                TextColumn::make('nomor_palet')
+                    ->label('Nomor Palet')
+                    ->numeric()
+                    ->sortable()
+                    ->badge()
+                    ->color('primary')
+                    ->formatStateUsing(fn(string $state): string => "RP-{$state}"),
                 TextColumn::make('ukuran.dimensi')
                     ->label('Ukuran')
                     ->numeric()
@@ -40,15 +47,11 @@ class ModalRepairsTable
                             $q->where('nama_kayu', 'like', "%{$search}%");
                         });
                     }),
-                TextColumn::make('jumlah')
-                    ->label('Jumlah bahan')
-                    ->numeric()
-                    ->sortable(),
                 TextColumn::make('kw')
                     ->label('KW')
                     ->searchable(),
-                TextColumn::make('nomor_palet')
-                    ->label('Nomor Palet')
+                TextColumn::make('jumlah')
+                    ->label('Jumlah bahan')
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('keterangan')
