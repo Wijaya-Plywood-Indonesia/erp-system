@@ -42,7 +42,7 @@ class StokVeneerKering extends Page
                 $q->whereHas(
                     'ukuran',
                     fn($u) =>
-                    $u->where('panjang', 244)->where('lebar', 122)->where('tebal', '>', 0)
+                    $u->where('panjang', 244)->where('lebar', 122)->where('tebal', '>', 1)
                 )
             )
             ->when(
@@ -51,7 +51,7 @@ class StokVeneerKering extends Page
                 $q->whereHas(
                     'ukuran',
                     fn($u) =>
-                    $u->where('panjang', 122)->where('lebar', 244)->where('tebal', '>', 0)
+                    $u->where('panjang', 122)->where('lebar', 244)->where('tebal', '>', 1)
                 )
             )
             ->where('stok_m3_sesudah', '>', 0)
@@ -94,14 +94,22 @@ class StokVeneerKering extends Page
 
     public function getCoreTypeLabel($row): ?string
     {
+        $tebal   = (float) ($row->ukuran->tebal ?? 0);
         $panjang = (float) ($row->ukuran->panjang ?? 0);
         $lebar   = (float) ($row->ukuran->lebar ?? 0);
+
+        if ($tebal <= 1.0) {
+            return null;
+        }
 
         if ($panjang === 244.0 && $lebar === 122.0) {
             return 'Long Core';
         }
 
-        if ($panjang === 122.0 && $lebar === 244.0 || $panjang === 122.0 && $lebar === 130.0) {
+        if (
+            ($panjang === 122.0 && $lebar === 244.0)
+            || ($panjang === 122.0 && $lebar === 130.0)
+        ) {
             return 'Short Core';
         }
 

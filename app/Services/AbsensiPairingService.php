@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class AbsensiPairingService
 {
@@ -32,38 +33,44 @@ class AbsensiPairingService
             }
         }
 
-        // 2. Determine the shift first (PAGI or MALAM) based on forcedShift, explicit time windows, or the presence of a night‑time entry.
+        // Ambil entry pertama pada targetDate (setelah skip prevCheckout), dipakai di beberapa langkah.
+        $firstOfDay = null;
+        foreach ($filtered as $e) {
+            if ($e['date'] !== $targetDate) {
+                continue;
+            }
+            if ($prevCheckout && $e['full']->diffInMinutes($prevCheckout, true) <= 5) {
+                continue;
+            }
+            $firstOfDay = $e;
+            break;
+        }
+
+        // 2. Determine the shift first (PAGI or MALAM) based on forcedShift, explicit time windows,
+        //    or the presence of a night-time entry.
         $isShiftMalam = false;
-        // 2a. Forced shift takes priority
+
         if ($forcedShift === 'MALAM') {
             $isShiftMalam = true;
         } elseif ($forcedShift === 'PAGI') {
             $isShiftMalam = false;
+        } elseif ($firstOfDay) {
+            // Auto-detect dari scan pertama targetDate.
+            $isShiftMalam = $firstOfDay['time'] >= '14:00:00';
         } else {
-            // 2b. Auto‑detect: use the earliest entry of the target date *after* skipping a possible previous checkout
-            $firstOfDay = null;
-            foreach ($filtered as $e) {
-                if ($e['date'] !== $targetDate) {
-                    continue;
-                }
-                // Skip the scan that matches the previous night‑shift checkout (handled earlier)
-                if ($prevCheckout && $e['full']->diffInMinutes($prevCheckout, true) <= 5) {
-                    continue;
-                }
-                $firstOfDay = $e;
-                break;
-            }
-            if ($firstOfDay && $firstOfDay['time'] >= '14:00:00') {
-                $isShiftMalam = true;
-            }
-        }
+            // FIX #1: Tidak ada entry sama sekali di targetDate (mis. shift malam yang jam masuknya
+            // tidak ter-scan). Cek apakah ada entry di nextDate pada jendela checkout malam
+            // (00:00-12:00) — kalau ada, kemungkinan besar ini shift malam yang kehilangan scan masuk.
+            $hasNightCheckoutOnly = collect($filtered)->contains(
+                fn($e) => $e['date'] === $nextDate && $e['time'] >= '00:00:00' && $e['time'] <= '12:00:00'
+            );
 
-        if (!$forcedShift) {
-            $firstScanToday = $sorted->first(fn($e) => $e['date'] === $targetDate);
-            if ($firstScanToday) {
-                $scanHour    = Carbon::parse($firstScanToday['full'])->hour;
-                $forcedShift = $scanHour >= 14 ? 'MALAM' : 'PAGI';
-                $isShiftMalam = $forcedShift === 'MALAM'; // ← tambahkan baris ini
+            if ($hasNightCheckoutOnly) {
+                $isShiftMalam = true;
+                Log::warning('Absensi: scan masuk hilang, shift malam terdeteksi dari checkout saja.', [
+                    'targetDate' => $targetDate,
+                    'nextDate' => $nextDate,
+                ]);
             }
         }
 
@@ -73,20 +80,17 @@ class AbsensiPairingService
             if ($entry['date'] !== $targetDate) {
                 continue;
             }
-            // Skip a scan that is essentially the checkout of the previous shift
             if ($prevCheckout && $entry['full']->diffInMinutes($prevCheckout, true) <= 5) {
                 continue;
             }
 
             $time = $entry['time'];
             if ($isShiftMalam) {
-                // Night shift: accept scans from 14:00 to 23:59
                 if ($time >= '14:00:00' && $time <= '23:59:59') {
                     $firstTap = $entry;
                     break;
                 }
             } else {
-                // Day shift: accept scans from 05:00 to 13:59
                 if ($time >= '05:00:00' && $time <= '13:59:59') {
                     $firstTap = $entry;
                     break;
@@ -104,21 +108,31 @@ class AbsensiPairingService
             }
         }
 
-        if (!$firstTap) {
-            return null; // No entry at all for the target date.
+        // FIX #1 (lanjutan): Jika memang tidak ada scan sama sekali di targetDate (kasus shift malam
+        // yang scan masuknya hilang total), tetap lanjut ke pencarian checkout tanpa jam_masuk pasti,
+        // alih-alih langsung return null dan kehilangan data jam_pulang yang sebenarnya ada.
+        if (!$firstTap && !$isShiftMalam) {
+            return null; // Tidak ada entry sama sekali untuk targetDate, dan bukan kasus shift malam khusus.
         }
 
-        $jamMasuk = $firstTap['time'];
-        $jamMasukDt = $firstTap['full'];
+        $jamMasuk = $firstTap['time'] ?? null;
+        $jamMasukDt = $firstTap['full'] ?? null;
+
+        if (!$jamMasuk && !$isShiftMalam) {
+            return null;
+        }
 
         $jamPulang = null;
         if ($isShiftMalam) {
-            // Night Shift: look for checkout scan on nextDate in the OUT window (00:00:00 - 12:00:00)
+            // Night Shift: look for checkout scan on nextDate in the OUT window (00:00:00 - 12:00:00).
+            // FIX #3: tambahkan guard eksplisit agar checkout selalu > jam masuk (melindungi dari
+            // data corrupt / kasus targetDate == nextDate).
             $checkoutScan = null;
             foreach ($filtered as $entry) {
                 if ($entry['date'] === $nextDate) {
                     $time = $entry['time'];
-                    if ($time >= '00:00:00' && $time <= '12:00:00') {
+                    $afterMasuk = !$jamMasukDt || $entry['full']->gt($jamMasukDt);
+                    if ($time >= '00:00:00' && $time <= '12:00:00' && $afterMasuk) {
                         $checkoutScan = $entry; // Pick last scan in window
                     }
                 }
@@ -140,6 +154,12 @@ class AbsensiPairingService
             if ($checkoutScan) {
                 $jamPulang = $checkoutScan['time'];
             }
+        }
+
+        // Jika shift malam tanpa jam masuk terdeteksi (FIX #1) dan checkout pun tidak ketemu,
+        // baru dianggap benar-benar tidak ada data.
+        if (!$jamMasuk && !$jamPulang) {
+            return null;
         }
 
         return [
