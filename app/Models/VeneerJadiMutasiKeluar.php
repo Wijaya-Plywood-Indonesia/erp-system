@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class VeneerJadiMutasiKeluar extends Model
 {
@@ -41,5 +42,10 @@ class VeneerJadiMutasiKeluar extends Model
     public function palets()
     {
         return $this->hasMany(VeneerJadiMutasiKeluarPalet::class, 'id_mutasi_keluar');
+    }
+
+    public function produksiRepair(): BelongsTo
+    {
+        return $this->belongsTo(ProduksiRepair::class, 'id_produksi_repair');
     }
 }

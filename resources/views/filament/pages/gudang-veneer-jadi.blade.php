@@ -1,17 +1,29 @@
 <x-filament-panels::page>
     {{-- ══════════════════════════════════════════════════════════════
-     SERAH TERIMA DARI DRYER / KEDI (tujuan: Veneer Jadi)
+     SERAH TERIMA DARI DRYER / KEDI / SANDING JOINT (tujuan: Veneer Jadi)
 ═══════════════════════════════════════════════════════════════ --}}
     @php
         $serahTerima = $this->serahTerima;
         $riwayatSerahTerima = $this->riwayatSerahTerima;
+
+        // Warna badge per sumber — dipakai di kedua tab (aktif & history)
+        $badgeColorMap = [
+            'dryer' => 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
+            'kedi' => 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+            'sanding_joint' => 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+        ];
+        $labelMap = [
+            'dryer' => 'Press Dryer',
+            'kedi' => 'Kedi',
+            'sanding_joint' => 'Sanding Joint',
+        ];
     @endphp
 
     <section class="space-y-3">
         <div
             class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-2">
             <h2 class="text-xs font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                Serah Terima dari Dryer / Kedi
+                Serah Terima dari Dryer / Kedi / Sanding Joint
             </h2>
 
             <div class="flex border-b border-zinc-200 dark:border-zinc-800 -mb-2">
@@ -37,19 +49,27 @@
                 @if ($serahTerimaTab === 'aktif')
                     @forelse($serahTerima as $st)
                         @php
-                            $sumber = $st->tipe_sumber === 'dryer' ? $st->detailHasil : $st->detailBongkarKedi;
+                            $sumber = match ($st->tipe_sumber) {
+                                'dryer' => $st->detailHasil,
+                                'kedi' => $st->detailBongkarKedi,
+                                'sanding_joint' => $st->hasilSandingJoint,
+                                default => null,
+                            };
                             $noPalet = $sumber?->no_palet ?? '-';
                             $ukuran = $sumber?->ukuran;
                             $kayu = $sumber?->jenisKayu?->nama_kayu ?? '-';
                             $kw = $sumber?->kw ?? '-';
                             $qty = $st->tipe_sumber === 'dryer' ? $sumber?->isi ?? 0 : $sumber?->jumlah ?? 0;
+                            $labelSumber = $labelMap[$st->tipe_sumber] ?? '-';
+                            $badgeColor =
+                                $badgeColorMap[$st->tipe_sumber] ??
+                                'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400';
                         @endphp
                         <div wire:key="jadi-st-{{ $st->id }}"
                             class="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors flex-wrap">
                             <span
-                                class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap shrink-0
-                            {{ $st->tipe_sumber === 'dryer' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }}">
-                                {{ $st->tipe_sumber === 'dryer' ? 'Press Dryer' : 'Kedi' }}
+                                class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap shrink-0 {{ $badgeColor }}">
+                                {{ $labelSumber }}
                             </span>
                             <span
                                 class="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 whitespace-nowrap shrink-0">
@@ -86,27 +106,35 @@
                         </div>
                     @empty
                         <div class="px-5 py-8 text-center text-xs text-zinc-400 dark:text-zinc-600">
-                            Tidak ada veneer dari Dryer/Kedi (tujuan Jadi) yang menunggu diterima
+                            Tidak ada veneer dari Dryer/Kedi/Sanding Joint (tujuan Jadi) yang menunggu diterima
                         </div>
                     @endforelse
                 @else
                     @forelse($riwayatSerahTerima as $st)
                         @php
-                            $sumber = $st->tipe_sumber === 'dryer' ? $st->detailHasil : $st->detailBongkarKedi;
+                            $sumber = match ($st->tipe_sumber) {
+                                'dryer' => $st->detailHasil,
+                                'kedi' => $st->detailBongkarKedi,
+                                'sanding_joint' => $st->hasilSandingJoint,
+                                default => null,
+                            };
                             $noPalet = $sumber?->no_palet ?? '-';
                             $ukuran = $sumber?->ukuran;
                             $kayu = $sumber?->jenisKayu?->nama_kayu ?? '-';
                             $kw = $sumber?->kw ?? '-';
                             $qty = $st->tipe_sumber === 'dryer' ? $sumber?->isi ?? 0 : $sumber?->jumlah ?? 0;
                             $diterimaOleh = trim(explode(' - ', $st->diterima_oleh ?? '-')[0]);
+                            $labelSumber = $labelMap[$st->tipe_sumber] ?? '-';
+                            $badgeColor =
+                                $badgeColorMap[$st->tipe_sumber] ??
+                                'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400';
                         @endphp
                         <div wire:key="jadi-rst-{{ $st->id }}"
                             class="px-3 sm:px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors">
                             <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
                                 <span
-                                    class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap shrink-0
-                                {{ $st->tipe_sumber === 'dryer' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }}">
-                                    {{ $st->tipe_sumber === 'dryer' ? 'Press Dryer' : 'Kedi' }}
+                                    class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap shrink-0 {{ $badgeColor }}">
+                                    {{ $labelSumber }}
                                 </span>
                                 <span
                                     class="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 whitespace-nowrap shrink-0">
@@ -140,7 +168,7 @@
                         </div>
                     @empty
                         <div class="px-5 py-8 text-center text-xs text-zinc-400 dark:text-zinc-600">
-                            Belum ada riwayat serah terima dari Dryer/Kedi (tujuan Jadi)
+                            Belum ada riwayat serah terima dari Dryer/Kedi/Sanding Joint (tujuan Jadi)
                         </div>
                     @endforelse
                 @endif
@@ -496,7 +524,7 @@
                                 </span>
                                 <div class="flex items-center gap-2">
                                     <span class="text-[11px] text-zinc-400">By: {{ $item['dikeluarkan_by'] }}</span>
-                                    {{-- 🆕 TOMBOL EDIT MOBILE: hanya tampil kalau belum diterima di Hotpress --}}
+                                    {{-- 🆕 TOMBOL EDIT MOBILE: hanya tampil kalau belum diterima di Hotpress/Repair --}}
                                     @if ($item['bisa_diedit'])
                                         <button type="button" wire:click="editKeluar({{ $item['id'] }})"
                                             wire:loading.attr="disabled"
@@ -510,7 +538,7 @@
                                         </button>
                                     @else
                                         <span class="text-zinc-300 dark:text-zinc-700 text-[10px]"
-                                            title="Sudah diterima di Hotpress">🔒</span>
+                                            title="Sudah diterima di sisi tujuan">🔒</span>
                                     @endif
                                 </div>
                             </div>
@@ -566,7 +594,7 @@
                                             </button>
                                         @else
                                             <span class="text-zinc-300 dark:text-zinc-700"
-                                                title="Sudah diterima di Hotpress, terkunci">🔒</span>
+                                                title="Sudah diterima di sisi tujuan, terkunci">🔒</span>
                                         @endif
                                     </td>
                                     <td class="py-3 px-4 text-xs text-zinc-500 whitespace-nowrap">
@@ -881,15 +909,16 @@
                         </div>
                     @endif
 
-                    {{-- 3. TUJUAN (HOTPRESS & JUAL) --}}
+                    {{-- 3. TUJUAN (dinamis dari $daftarTujuanKeluar, tambah tujuan baru cukup di properti Page) --}}
                     <div class="space-y-1.5">
                         <label
                             class="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider block">Tujuan
                             Keluar</label>
                         <select wire:model="tujuanKeluar" required
                             class="w-full text-sm p-2 border border-zinc-300 dark:border-zinc-800 rounded-none bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:border-amber-500 focus:outline-none font-bold">
-                            <option value="Hotpress">Hotpress</option>
-                            <option value="Jual">Jual</option>
+                            @foreach ($daftarTujuanKeluar as $opsiTujuan)
+                                <option value="{{ $opsiTujuan }}">{{ $opsiTujuan }}</option>
+                            @endforeach
                         </select>
                     </div>
 
