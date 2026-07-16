@@ -9,6 +9,8 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Radio;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -23,8 +25,8 @@ class HasilTerimaGudangSatusTable
                 TextColumn::make('grade.nama_grade')
                     ->label('Grade')
                     ->getStateUsing(
-                        fn($record) => ($record->grade?->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
-                        . ' | ' .
+                        fn ($record) => ($record->grade?->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
+                        .' | '.
                         ($record->grade?->nama_grade ?? '-')
                     )
                     ->sortable(),
@@ -36,7 +38,7 @@ class HasilTerimaGudangSatusTable
 
                 TextColumn::make('ukuran.dimensi')
                     ->label('Ukuran')
-                    ->getStateUsing(fn($record) => $record->ukuran?->dimensi ?? '-')
+                    ->getStateUsing(fn ($record) => $record->ukuran?->dimensi ?? '-')
                     ->sortable(),
 
                 TextColumn::make('jumlah')
@@ -53,7 +55,7 @@ class HasilTerimaGudangSatusTable
                     ->getStateUsing(function ($record) {
                         $serah = $record->serahTerimaGudangSatu;
 
-                        if (!$serah) {
+                        if (! $serah) {
                             return 'Belum Diserahkan';
                         }
 
@@ -63,7 +65,7 @@ class HasilTerimaGudangSatusTable
                     ->color(function ($record) {
                         $serah = $record->serahTerimaGudangSatu;
 
-                        if (!$serah) {
+                        if (! $serah) {
                             return 'gray';
                         }
 
@@ -76,49 +78,104 @@ class HasilTerimaGudangSatusTable
             ->headerActions([
                 CreateAction::make()
                     ->hidden(
-                        fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
             ->recordActions([
+
+                // 🚚 TOMBOL SERAH
                 Action::make('serah')
-                    ->label('Serah (Nyusup)')
+                    ->label('Serah')
                     ->color('warning')
                     ->icon('heroicon-o-arrow-right-circle')
-                    ->requiresConfirmation()
-                    ->modalHeading('Serahkan barang ini untuk Nyusup?')
-                    ->modalDescription(fn($record) => 'Jumlah: ' . ($record->jumlah ?? 0) . ' pcs. Barang akan masuk antrian penerimaan dengan tujuan Nyusup.')
-                    ->visible(fn($record) => !$record->serahTerimaGudangSatu)
-                    ->action(function ($record) {
-                        try {
-                            SerahTerimaGudangSatu::create([
-                                'id_hasil_terima_gudang_satu' => $record->id,
-                                'tujuan' => 'nyusup',
-                                'diserahkan_oleh' => Auth::user()->name,
-                                'diterima_oleh' => '-',
-                                'status' => 'Menunggu',
-                            ]);
+                    ->visible(fn ($record) => ! $record->serahTerimaGudangSatu)
+                    ->modalHeading('Serah Barang')
+                    ->modalDescription(fn ($record) => 'Jumlah: '.($record->jumlah ?? 0).' pcs. Pilih tujuan penyerahan barang ini.')
+                    ->modalSubmitActionLabel('Serah')
+                    ->form(function ($record) {
+                        return [
+                            Placeholder::make('grade_detail')
+                                ->label('Grade')
+                                ->content(
+                                    ($record->grade?->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
+                                    .' | '.
+                                    ($record->grade?->nama_grade ?? '-')
+                                ),
 
+                            Placeholder::make('jenis_detail')
+                                ->label('Jenis Barang')
+                                ->content($record->jenisBarang?->nama_jenis_barang ?? '-'),
+
+                            Placeholder::make('ukuran_detail')
+                                ->label('Ukuran')
+                                ->content($record->ukuran?->dimensi ?? '-'),
+
+                            Placeholder::make('jumlah_detail')
+                                ->label('Jumlah')
+                                ->content((string) ($record->jumlah ?? 0)),
+
+                            Radio::make('serah_ke')
+                                ->label('Serah Ke')
+                                ->options([
+                                    'nyusup' => 'Serah ke Nyusup',
+                                    'gudang' => 'Serah ke Gudang',
+                                ])
+                                ->default('nyusup')
+                                ->required()
+                                ->reactive(),
+                        ];
+                    })
+                    ->action(function ($record, array $data) {
+
+                        if ($data['serah_ke'] === 'nyusup') {
+
+                            try {
+                                SerahTerimaGudangSatu::create([
+                                    'id_hasil_terima_gudang_satu' => $record->id,
+                                    'tujuan' => 'nyusup',
+                                    'diserahkan_oleh' => Auth::user()->name,
+                                    'diterima_oleh' => '-',
+                                    'status' => 'Menunggu',
+                                ]);
+
+                                Notification::make()
+                                    ->title('Berhasil diserahkan (Nyusup)')
+                                    ->success()
+                                    ->send();
+                            } catch (\Throwable $e) {
+                                Notification::make()
+                                    ->title('Gagal')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+
+                        } elseif ($data['serah_ke'] === 'gudang') {
+
+                            // 🚧 Coming soon
                             Notification::make()
-                                ->title('Berhasil diserahkan (Nyusup)')
-                                ->success()
-                                ->send();
-                        } catch (\Throwable $e) {
-                            Notification::make()
-                                ->title('Gagal')
-                                ->body($e->getMessage())
-                                ->danger()
+                                ->title('Fitur "Serah ke Gudang" sedang dalam pengembangan (Coming Soon)')
+                                ->warning()
                                 ->send();
                         }
                     }),
 
                 EditAction::make()
-                    ->hidden(
-                        fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    ->hidden(function ($record, $livewire) {
+                        // Sembunyikan kalau sudah divalidasi
+                        if ($livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi') {
+                            return true;
+                        }
+
+                        // Sembunyikan kalau sudah DITERIMA (bukan cuma diserahkan)
+                        $serah = $record->serahTerimaGudangSatu;
+
+                        return $serah && $serah->diterima_oleh !== '-';
+                    }),
 
                 DeleteAction::make()
                     ->hidden(
-                        fn($record, $livewire) => $record->serahTerimaGudangSatu
+                        fn ($record, $livewire) => $record->serahTerimaGudangSatu
                         || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
@@ -126,7 +183,7 @@ class HasilTerimaGudangSatusTable
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->hidden(
-                            fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                            fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                         ),
                 ]),
             ]);

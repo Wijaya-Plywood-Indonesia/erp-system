@@ -13,7 +13,9 @@ class SerahTerimaGudangSatu extends Model
         'id_hasil_pilih_plywood',
         'id_produksi_terima_gudang_satu',
         'id_hasil_terima_gudang_satu',
+        'id_triplek_mutasi_keluar',
         'id_produksi_nyusup',
+        'id_hasil_nyusup', // 🆕
         'tujuan',
         'diserahkan_oleh',
         'diterima_oleh',
@@ -44,28 +46,47 @@ class SerahTerimaGudangSatu extends Model
         return $this->belongsTo(ProduksiNyusup::class, 'id_produksi_nyusup');
     }
 
+    public function triplekMutasiKeluar(): BelongsTo
+    {
+        return $this->belongsTo(TriplekJadiMutasiKeluar::class, 'id_triplek_mutasi_keluar');
+    }
+
+    // 🆕 Relasi ke DetailBarangDikerjakan (sumber barang dari jalur nyusup)
+    public function hasilNyusup(): BelongsTo
+    {
+        return $this->belongsTo(DetailBarangDikerjakan::class, 'id_hasil_nyusup');
+    }
+
     // ─────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────
 
     /**
-     * Sumber barang aktual: dari Pilih Plywood ATAU dari Hasil Terima Gudang Satu,
-     * tergantung mana yang terisi (mutually exclusive tergantung `tujuan`).
+     * Sumber barang aktual: dari Pilih Plywood, Hasil Terima Gudang Satu,
+     * ATAU dari Hasil Nyusup, tergantung mana yang terisi
+     * (mutually exclusive tergantung `tujuan`).
      */
     public function getSumberAttribute()
     {
-        return $this->hasilPilihPlywood ?? $this->hasilTerimaGudangSatu;
+        return $this->hasilPilihPlywood
+            ?? $this->hasilTerimaGudangSatu
+            ?? $this->hasilNyusup;
     }
 
     /**
-     * Barang setengah jadi terkait. Fallback: kalau dari Pilih Plywood pakai
-     * relasi barangSetengahJadiHp, kalau dari Hasil Terima Gudang Satu,
-     * bentuk objek serupa dari grade/jenisBarang/ukuran langsung.
+     * Barang setengah jadi terkait.
+     * - Pilih Plywood: pakai relasi barangSetengahJadiHp.
+     * - Hasil Terima Gudang Satu: objek itu sendiri (grade/jenisBarang/ukuran langsung).
+     * - Hasil Nyusup (DetailBarangDikerjakan): pakai relasi barangSetengahJadiHp miliknya.
      */
     public function getBarangSetengahJadiAttribute()
     {
         if ($this->hasilPilihPlywood) {
             return $this->hasilPilihPlywood->barangSetengahJadiHp;
+        }
+
+        if ($this->hasilNyusup) {
+            return $this->hasilNyusup->barangSetengahJadiHp;
         }
 
         // HasilTerimaGudangSatu tidak punya barangSetengahJadiHp,
@@ -75,13 +96,23 @@ class SerahTerimaGudangSatu extends Model
 
     /**
      * Jumlah/isi barang.
-     * - Dari Pilih Plywood: pakai `jumlah_bagus`.
-     * - Dari Hasil Terima Gudang Satu: pakai `jumlah`.
+     * - Triplek mutasi keluar: pakai `stok_lembar`.
+     * - Pilih Plywood: pakai `jumlah_bagus`.
+     * - Hasil Nyusup (DetailBarangDikerjakan): pakai `modal`.
+     * - Hasil Terima Gudang Satu: pakai `jumlah`.
      */
     public function getJumlahAttribute()
     {
+        if ($this->id_triplek_mutasi_keluar !== null) {
+            return $this->triplekMutasiKeluar->stok_lembar ?? null;
+        }
+
         if ($this->hasilPilihPlywood) {
             return $this->hasilPilihPlywood->jumlah_bagus ?? null;
+        }
+
+        if ($this->hasilNyusup) {
+            return $this->hasilNyusup->modal ?? null;
         }
 
         return $this->hasilTerimaGudangSatu->jumlah ?? null;

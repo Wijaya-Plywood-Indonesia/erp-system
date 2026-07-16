@@ -6,6 +6,7 @@ use App\Models\JenisKayu;
 use App\Models\ProduksiNyusup;
 use App\Models\SerahTerimaGudangSatu;
 use App\Services\StokGudangSatuService;
+use App\Services\TerimaTriplekJadiService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -50,10 +51,61 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
     }
 
     /**
+     * Apakah record ini berasal dari Gudang Triplek Jadi (bukan Pilih Plywood)?
+     */
+    protected function isDariTriplek($record): bool
+    {
+        return $record->id_triplek_mutasi_keluar !== null;
+    }
+
+    /**
+     * Apakah record ini berasal dari jalur Nyusup (DetailBarangDikerjakan)?
+     */
+    protected function isDariNyusup($record): bool
+    {
+        return $record->id_hasil_nyusup !== null;
+    }
+
+    /**
      * Ambil data ringkas dari record untuk ditampilkan di preview modal terima.
+     * Mendukung tiga asal barang: Pilih Plywood (lama), Triplek Jadi, dan Nyusup.
      */
     protected function getPreviewData($record): array
     {
+        // ── Asal: Gudang Triplek Jadi ──
+        if ($this->isDariTriplek($record)) {
+            $mutasi = $record->triplekMutasiKeluar;
+
+            return [
+                'jenis_barang' => $mutasi?->jenisKayu?->nama_kayu ?? '-',
+                'grade' => $mutasi?->kw_grade ?? '-',
+                'ukuran' => $mutasi
+                    ? ($mutasi->panjang + 0).'×'.($mutasi->lebar + 0).'×'.($mutasi->tebal + 0)
+                    : '-',
+                'kondisi' => 'Triplek Jadi',
+                'jenis_cacat' => '-',
+                'jumlah' => $record->jumlah ?? '-',
+                'dari_produksi' => 'Gudang Triplek Jadi (Mutasi #'.$record->id_triplek_mutasi_keluar.')',
+            ];
+        }
+
+        // ── Asal: Nyusup (DetailBarangDikerjakan) ──
+        if ($this->isDariNyusup($record)) {
+            $hasilNyusup = $record->hasilNyusup;
+            $bsj = $hasilNyusup?->barangSetengahJadiHp;
+
+            return [
+                'jenis_barang' => $bsj?->jenisBarang?->nama_jenis_barang ?? '-',
+                'grade' => $bsj?->grade?->nama_grade ?? '-',
+                'ukuran' => $bsj?->ukuran?->nama_ukuran ?? '-',
+                'kondisi' => 'Hasil Nyusup',
+                'jenis_cacat' => '-',
+                'jumlah' => $record->jumlah ?? '-',
+                'dari_produksi' => 'Nyusup (Detail #'.$record->id_hasil_nyusup.')',
+            ];
+        }
+
+        // ── Asal: Pilih Plywood (logika asli, tidak diubah) ──
         $hasil = $record->hasilPilihPlywood;
         $bsj = $record->barang_setengah_jadi;
 
@@ -69,8 +121,9 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
     }
 
     /**
-     * Tambahkan stok plywood siap jual ketika barang diterima di konteks Gudang Satu
-     * (khusus, tidak berlaku untuk konteks Nyusup).
+     * Tambahkan stok plywood siap jual ketika barang PILIH PLYWOOD diterima
+     * di konteks Gudang Satu (tidak berlaku untuk konteks Nyusup, dan tidak
+     * dipakai untuk barang asal Triplek Jadi — itu ditangani service sendiri).
      */
     protected function tambahStokPlywoodSiapJual(SerahTerimaGudangSatu $record): void
     {
@@ -133,14 +186,21 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                     'hasilPilihPlywood.barangSetengahJadiHp.grade',
                     'hasilPilihPlywood.barangSetengahJadiHp.ukuran',
                     'hasilPilihPlywood.produksiPilihPlywood',
+                    'triplekMutasiKeluar.jenisKayu',
+                    'hasilNyusup.barangSetengahJadiHp.jenisBarang',
+                    'hasilNyusup.barangSetengahJadiHp.grade',
+                    'hasilNyusup.barangSetengahJadiHp.ukuran',
                 ]);
 
-                // Filter tujuan: kalau dipanggil dari ProduksiNyusup, hanya tampilkan
-                // yang tujuan = 'nyusup'. Kalau dari ProduksiTerimaGudangSatu,
-                // hanya tampilkan yang tujuan != 'nyusup' (mis. gudang_satu / null).
+                // Filter tujuan:
+                //  - Konteks Nyusup       : tujuan = 'nyusup' ATAU 'triplek_jadi'.
+                //  - Konteks Gudang Satu  : tujuan selain 'nyusup' (null / gudang_satu /
+                //                           'triplek_jadi' otomatis lolos di sini).
+                // Dengan begitu barang dari Gudang Triplek Jadi muncul di KEDUA
+                // antrean sampai salah satu menerimanya.
                 $query->when(
                     $isNyusup,
-                    fn ($q) => $q->where('tujuan', 'nyusup'),
+                    fn ($q) => $q->whereIn('tujuan', ['nyusup', 'triplek_jadi']),
                     fn ($q) => $q->where(function ($sub) {
                         $sub->whereNull('tujuan')->orWhere('tujuan', '!=', 'nyusup');
                     })
@@ -158,19 +218,83 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('jenis_barang')
                     ->label('Jenis Barang')
-                    ->state(fn ($record) => $record->barang_setengah_jadi?->jenisBarang?->nama_jenis_barang ?? '-'),
+                    ->state(function ($record) {
+                        if ($this->isDariTriplek($record)) {
+                            return $record->triplekMutasiKeluar?->jenisKayu?->nama_kayu ?? '-';
+                        }
+
+                        if ($this->isDariNyusup($record)) {
+                            return $record->hasilNyusup?->barangSetengahJadiHp?->jenisBarang?->nama_jenis_barang ?? '-';
+                        }
+
+                        return $record->barang_setengah_jadi?->jenisBarang?->nama_jenis_barang ?? '-';
+                    }),
+
+                TextColumn::make('asal')
+                    ->label('Asal')
+                    ->badge()
+                    ->state(function ($record) {
+                        if ($this->isDariTriplek($record)) {
+                            return 'Triplek Jadi';
+                        }
+
+                        if ($this->isDariNyusup($record)) {
+                            return 'Nyusup';
+                        }
+
+                        return 'Pilih Plywood';
+                    })
+                    ->color(fn ($state) => match ($state) {
+                        'Triplek Jadi' => 'info',
+                        'Nyusup' => 'warning',
+                        default => 'gray',
+                    }),
 
                 TextColumn::make('grade')
                     ->label('Grade')
-                    ->state(fn ($record) => $record->barang_setengah_jadi?->grade?->nama_grade ?? '-'),
+                    ->state(function ($record) {
+                        if ($this->isDariTriplek($record)) {
+                            return $record->triplekMutasiKeluar?->kw_grade ?? '-';
+                        }
+
+                        if ($this->isDariNyusup($record)) {
+                            return $record->hasilNyusup?->barangSetengahJadiHp?->grade?->nama_grade ?? '-';
+                        }
+
+                        return $record->barang_setengah_jadi?->grade?->nama_grade ?? '-';
+                    }),
 
                 TextColumn::make('ukuran')
                     ->label('Ukuran')
-                    ->state(fn ($record) => $record->barang_setengah_jadi?->ukuran?->nama_ukuran ?? '-'),
+                    ->state(function ($record) {
+                        if ($this->isDariTriplek($record)) {
+                            $m = $record->triplekMutasiKeluar;
+
+                            return $m
+                                ? ($m->panjang + 0).'×'.($m->lebar + 0).'×'.($m->tebal + 0)
+                                : '-';
+                        }
+
+                        if ($this->isDariNyusup($record)) {
+                            return $record->hasilNyusup?->barangSetengahJadiHp?->ukuran?->nama_ukuran ?? '-';
+                        }
+
+                        return $record->barang_setengah_jadi?->ukuran?->nama_ukuran ?? '-';
+                    }),
 
                 TextColumn::make('kondisi')
                     ->label('Kondisi')
-                    ->state(fn ($record) => $record->hasilPilihPlywood?->kondisi ?? '-')
+                    ->state(function ($record) {
+                        if ($this->isDariTriplek($record)) {
+                            return 'Triplek Jadi';
+                        }
+
+                        if ($this->isDariNyusup($record)) {
+                            return 'Hasil Nyusup';
+                        }
+
+                        return $record->hasilPilihPlywood?->kondisi ?? '-';
+                    })
                     ->badge()
                     ->toggleable(isToggledHiddenByDefault: true),
 
@@ -205,7 +329,8 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                     ->sortable(),
             ])
             ->headerActions([
-                // Tidak ada CreateAction — barang masuk otomatis dari sisi Pilih Plywood / Hasil Terima Gudang Satu.
+                // Tidak ada CreateAction — barang masuk otomatis dari sisi Pilih Plywood /
+                // Hasil Terima Gudang Satu / Mutasi Keluar Gudang Triplek Jadi / Nyusup.
             ])
             ->actions([
                 Action::make('terima')
@@ -246,7 +371,7 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                                         ->content($preview['jumlah']),
 
                                     Placeholder::make('preview_dari_produksi')
-                                        ->label('Tgl Produksi Asal')
+                                        ->label('Asal')
                                         ->content($preview['dari_produksi']),
                                 ]),
                         ];
@@ -257,24 +382,40 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                         try {
                             DB::transaction(function () use ($record, $ownerId, $foreignKey, $isNyusup) {
                                 // Lock + re-check: mencegah 2 produksi menerima barang yang sama
-                                // secara bersamaan (race condition).
+                                // secara bersamaan (race condition). Untuk barang asal Triplek Jadi,
+                                // lock inilah yang menjamin barang otomatis "hilang" dari antrean
+                                // satunya begitu diklaim di sini.
                                 $fresh = SerahTerimaGudangSatu::lockForUpdate()->find($record->id);
 
                                 if (! $fresh || $fresh->diterima_oleh !== '-') {
                                     throw new \RuntimeException('Barang ini sudah diambil produksi lain.');
                                 }
 
+                                $lokasi = $isNyusup ? 'Nyusup' : 'Gudang Satu';
+
                                 // Begitu diterima, record ini lengket permanen ke produksi ini
                                 // (kolom FK yang dipakai tergantung konteks: nyusup atau gudang satu).
                                 $fresh->update([
-                                    'diterima_oleh' => Auth::user()->name.' - Gudang Satu',
+                                    'diterima_oleh' => Auth::user()->name.' - '.$lokasi,
                                     $foreignKey => $ownerId,
                                     'status' => 'Diterima',
                                 ]);
 
-                                // Tambah stok plywood siap jual — HANYA untuk konteks Gudang Satu.
-                                // Konteks Nyusup tidak menambah stok siap jual di sini.
-                                if (! $isNyusup) {
+                                if ($fresh->id_triplek_mutasi_keluar !== null) {
+                                    // ── Barang asal GUDANG TRIPLEK JADI ──
+                                    // Selalu tambah stok, terlepas dari diterima di Nyusup
+                                    // maupun Sampling (Gudang Satu).
+                                    app(TerimaTriplekJadiService::class)
+                                        ->konfirmasi($fresh, tambahStokGudangSatu: true);
+
+                                } elseif ($fresh->id_hasil_nyusup !== null) {
+                                    // ── Barang asal NYUSUP (DetailBarangDikerjakan) ──
+                                    // Tidak pernah menambah stok, baik diterima di Nyusup
+                                    // maupun di Sampling (Gudang Satu).
+
+                                } elseif (! $isNyusup) {
+                                    // ── Barang asal PILIH PLYWOOD (logika lama) ──
+                                    // Tambah stok plywood siap jual — hanya konteks Gudang Satu.
                                     $this->tambahStokPlywoodSiapJual($fresh);
                                 }
                             });

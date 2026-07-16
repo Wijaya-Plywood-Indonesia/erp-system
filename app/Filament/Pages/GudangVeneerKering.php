@@ -315,6 +315,10 @@ class GudangVeneerKering extends Page
             ->whereIn('tipe_sumber', ['dryer', 'kedi'])
             ->where('jenis_terima', 'kering')
             ->where('diterima_oleh', '-')
+            ->where(function ($q) {
+                $q->whereNotNull('id_detail_hasil')
+                    ->orWhereNotNull('id_detail_bongkar_kedi');
+            })
             ->with([
                 'detailHasil.ukuran',
                 'detailHasil.jenisKayu',
@@ -335,6 +339,10 @@ class GudangVeneerKering extends Page
             ->whereIn('tipe_sumber', ['dryer', 'kedi'])
             ->where('jenis_terima', 'kering')
             ->where('diterima_oleh', '!=', '-')
+            ->where(function ($q) {
+                $q->whereNotNull('id_detail_hasil')
+                    ->orWhereNotNull('id_detail_bongkar_kedi');
+            })
             ->with([
                 'detailHasil.ukuran',
                 'detailHasil.jenisKayu',
@@ -559,5 +567,10 @@ class GudangVeneerKering extends Page
             );
             return $rk;
         });
+    }
+
+    public function trimAngka($value): string
+    {
+        return rtrim(rtrim(number_format((float) $value, 2), '0'), '.');
     }
 }
