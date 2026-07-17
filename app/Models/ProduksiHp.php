@@ -71,7 +71,8 @@ class ProduksiHp extends Model
 
     public function mutasiMasuk()
     {
-        return $this->hasMany(SerahTerimaMasukHp::class, 'id_produksi_hp');
+        return $this->hasMany(SerahTerimaMasukHp::class, 'id_produksi_hp')
+            ->orWhereNull('id_produksi_hp');
     }
 
     public function serahTerimaHp()

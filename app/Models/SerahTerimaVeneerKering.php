@@ -206,4 +206,28 @@ class SerahTerimaVeneerKering extends Model
             default => ['no_palet' => '-', 'dimensi' => '-', 'jenis_kayu' => '-', 'kw' => '-'],
         };
     }
+
+    /**
+     * Cari baris Ukuran yang cocok berdasarkan dimensi (panjang/lebar/tebal).
+     * TIDAK membuat baris baru — semua ukuran dianggap sudah ada di database.
+     * Pencocokan dilakukan di PHP (bukan SQL) supaya tidak terpengaruh
+     * perbedaan tipe kolom/format string di database (mis. varchar vs decimal).
+     */
+    public static function cariUkuran($panjang, $lebar, $tebal): ?int
+    {
+        if ($panjang === null || $lebar === null || $tebal === null) {
+            return null;
+        }
+
+        $p = round((float) $panjang, 2);
+        $l = round((float) $lebar, 2);
+        $t = round((float) $tebal, 2);
+
+        return Ukuran::all()
+            ->first(function ($u) use ($p, $l, $t) {
+                return round((float) $u->panjang, 2) === $p
+                    && round((float) $u->lebar, 2) === $l
+                    && round((float) $u->tebal, 2) === $t;
+            })?->id;
+    }
 }
