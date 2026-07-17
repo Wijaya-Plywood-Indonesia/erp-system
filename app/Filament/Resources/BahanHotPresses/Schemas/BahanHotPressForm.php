@@ -215,9 +215,9 @@ class BahanHotPressForm
         return VeneerJadiMutasiKeluarPalet::query()
             ->whereNotNull('diterima_by')
             ->whereHas('mutasiKeluar', function ($q) use ($ownerRecordId, $namaGrade, $jenisId) {
-                if ($ownerRecordId) {
-                    $q->where('id_produksi_hp', $ownerRecordId);
-                }
+                // if ($ownerRecordId) {
+                //     $q->where('id_produksi_hp', $ownerRecordId);
+                // }
                 if ($namaGrade) {
                     $q->where('kw_grade', $namaGrade);
                 }
@@ -260,9 +260,9 @@ class BahanHotPressForm
         return PlatformJadiMutasiKeluarPalet::query()
             ->whereNotNull('diterima_by')
             ->whereHas('mutasiKeluar', function ($q) use ($ownerRecordId, $namaGrade, $jenisId) {
-                if ($ownerRecordId) {
-                    $q->where('id_produksi_hp', $ownerRecordId);
-                }
+                // if ($ownerRecordId) {
+                //     $q->where('id_produksi_hp', $ownerRecordId);
+                // }
                 if ($namaGrade) {
                     $q->where('kw_grade', $namaGrade);
                 }

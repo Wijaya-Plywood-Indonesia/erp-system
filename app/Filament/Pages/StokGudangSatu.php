@@ -13,6 +13,7 @@ class StokGudangSatu extends Page
     use HasPageShield;
 
     protected string $view = 'filament.pages.stok-gudang-satu';
+    protected static bool $shouldRegisterNavigation = false;
 
     protected static ?string $navigationLabel = 'Stok Gudang Satu';
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
