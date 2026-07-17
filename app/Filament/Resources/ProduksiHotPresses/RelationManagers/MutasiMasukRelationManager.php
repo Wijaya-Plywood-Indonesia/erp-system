@@ -30,7 +30,11 @@ class MutasiMasukRelationManager extends RelationManager
 
     protected function getTableQuery(): Builder
     {
-        return $this->getOwnerRecord()->mutasiMasuk()->getQuery()
+        return SerahTerimaMasukHp::query()
+            ->where(function (Builder $q) {
+                $q->whereNull('diterima_by')
+                    ->orWhereDate('diterima_at', today());
+            })
             ->orderByRaw('CASE WHEN diterima_by IS NULL THEN 0 ELSE 1 END ASC')
             ->orderByDesc('tanggal_keluar');
     }

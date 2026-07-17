@@ -12,7 +12,7 @@ class HppPlatformMthPage extends Page
 {
     use HasPageShield;
     protected string $view = 'filament.pages.hpp-platform-mth-page';
-
+    protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Log HPP Platform MTH';
     protected static string|UnitEnum|null $navigationGroup = 'Log';
     protected static ?string $title          = 'Log HPP Platform MTH';
