@@ -12,7 +12,7 @@ class HppTriplekMthPage extends Page
 {
     use HasPageShield;
     protected string $view = 'filament.pages.hpp-triplek-mth-page';
-
+    protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Log HPP Triplek MTH';
     protected static string|UnitEnum|null $navigationGroup = 'Log';
     protected static ?string $title          = 'Log HPP Triplek MTH';

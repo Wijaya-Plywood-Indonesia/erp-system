@@ -12,7 +12,7 @@ class GudangSatuLogPage extends Page
 {
     use HasPageShield;
     protected string $view = 'filament.pages.gudang-satu-log-page';
-
+    protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Log Gudang Satu';
     protected static string|UnitEnum|null $navigationGroup = 'Log';
     protected static ?string $title          = 'Log Gudang Satu';

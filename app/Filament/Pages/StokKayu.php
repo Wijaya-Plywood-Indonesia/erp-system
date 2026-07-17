@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Auth;
 class StokKayu extends Page
 {
     use HasPageShield;
-
+    protected static bool $shouldRegisterNavigation = false;
     protected string $view = 'filament.pages.stok-kayu';
 
     protected static ?string $navigationLabel = 'Stok Kayu';

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class NotaBarangMasuk extends Model
 {
@@ -50,4 +51,9 @@ class NotaBarangMasuk extends Model
     {
         return $this->hasOne(VeneerMutasi::class, 'id_nota_bm');
     }
+
+    public function plywoodMutasi(): HasOne
+{
+    return $this->hasOne(PlywoodMutasi::class, 'id_nota_bm');
+}
 }
