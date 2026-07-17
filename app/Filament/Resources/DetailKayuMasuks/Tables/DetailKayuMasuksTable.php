@@ -3,9 +3,8 @@
 namespace App\Filament\Resources\DetailKayuMasuks\Tables;
 
 use App\Models\DetailKayuMasuk;
-use App\Models\Lahan;
 use App\Models\JenisKayu;
-use Filament\Tables\Table;
+use App\Models\Lahan;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -16,8 +15,8 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Grouping\Group;
+use Filament\Tables\Table;
 use Illuminate\Support\Collection;
-use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth; // Tambahkan ini
 
 class DetailKayuMasuksTable
@@ -41,10 +40,10 @@ class DetailKayuMasuksTable
         $isAdmin = Auth::user()?->hasAnyRole(self::ROLE_ADMIN) ?? false;
 
         /**
-         * 3. LOGIKA IZIN AKSI (BYPASS): 
+         * 3. LOGIKA IZIN AKSI (BYPASS):
          * Tombol muncul jika (TIDAK TERKUNCI) ATAU (USER ADALAH ADMIN)
          */
-        $canPerformAction = !$isLocked || $isAdmin;
+        $canPerformAction = ! $isLocked || $isAdmin;
 
         $ownerRecord = null;
         if ($livewire && method_exists($livewire, 'getOwnerRecord')) {
@@ -55,6 +54,7 @@ class DetailKayuMasuksTable
             ->striped()
             ->recordClasses(function ($record) {
                 $grade = (int) ($record->grade ?? 0);
+
                 return match ($grade) {
                     1 => 'bg-opacity-5 filament-row-grade-a',
                     2 => 'bg-opacity-5 filament-row-grade-b',
@@ -82,10 +82,11 @@ class DetailKayuMasuksTable
                             2, '2', 'B' => 'B',
                             default => '-',
                         };
+
                         return "{$namaKayu} {$panjang} ({$grade})";
                     })
                     ->searchable(query: function ($query, string $search) {
-                        $query->whereHas('jenisKayu', fn($q) => $q->where('nama_kayu', 'like', "%{$search}%"))
+                        $query->whereHas('jenisKayu', fn ($q) => $q->where('nama_kayu', 'like', "%{$search}%"))
                             ->orWhere('panjang', 'like', "%{$search}%")
                             ->orWhere('grade', 'like', "%{$search}%");
                     })
@@ -104,9 +105,15 @@ class DetailKayuMasuksTable
                     ->searchable()
                     ->sortable(),
 
+                // ✅ DIUBAH: ambil langsung dari accessor model ($record->kubikasi),
+                // bukan hitung ulang manual. Ini menyamakan pola dengan
+                // DetailTurusanKayusTable, memastikan nilai kubikasi di Table
+                // SELALU sama dengan yang dipakai/ditampilkan di Nota Kayu,
+                // karena sumbernya satu (model accessor).
                 TextColumn::make('kubikasi')
                     ->label('Kubikasi')
-                    ->formatStateUsing(fn($state) => is_null($state) ? '-' : number_format($state, 6, ',', '.'))
+                    ->state(fn ($record) => $record->kubikasi)
+                    ->numeric(decimalPlaces: 6)
                     ->suffix(' m³')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->alignRight(),
@@ -146,16 +153,22 @@ class DetailKayuMasuksTable
                         $parentId = $record->id_kayu_masuk ?? $record->kayu_masuk_id ?? null;
                         $lahanId = $record->id_lahan;
 
+                        // ✅ DIUBAH: kubikasi diambil dari accessor model ($r->kubikasi),
+                        // bukan dihitung ulang manual dari panjang/diameter/jumlah_batang.
+                        // Ini menyamakan pola dengan DetailTurusanKayusTable, sehingga
+                        // subtotal grup di sini konsisten dengan nilai yang dipakai
+                        // di tempat lain (kolom tabel, Nota Kayu, total harga, dst).
                         if ($records instanceof Collection && $records->isNotEmpty()) {
                             $filtered = $records->where('id_kayu_masuk', $parentId)->where('id_lahan', $lahanId);
-                            $totalBatang = $filtered->sum(fn($r) => (int) ($r->jumlah_batang ?? 0));
-                            $totalKubikasi = $filtered->sum(fn($r) => (($r->panjang ?? 0) * ($r->diameter ?? 0) * ($r->diameter ?? 0) * ($r->jumlah_batang ?? 0) * 0.785) / 1000000);
+                            $totalBatang = $filtered->sum(fn ($r) => (int) ($r->jumlah_batang ?? 0));
+                            $totalKubikasi = $filtered->sum(fn ($r) => round($r->kubikasi, 4));
                         } else {
                             $query = DetailKayuMasuk::where('id_kayu_masuk', $parentId)->where('id_lahan', $lahanId)->get();
                             $totalBatang = $query->sum('jumlah_batang');
-                            $totalKubikasi = $query->sum(fn($r) => (($r->panjang ?? 0) * ($r->diameter ?? 0) * ($r->diameter ?? 0) * ($r->jumlah_batang ?? 0) * 0.785) / 1000000);
+                            $totalKubikasi = $query->sum(fn ($r) => round($r->kubikasi, 4));
                         }
-                        return "{$kode} {$nama} {$jenis_kayu} - " . number_format($totalBatang) . " batang (" . number_format($totalKubikasi, 4, ',', '.') . " m³)";
+
+                        return "{$kode} {$nama} {$jenis_kayu} - ".number_format($totalBatang).' batang ('.number_format($totalKubikasi, 4, ',', '.').' m³)';
                     }),
             ])
             ->defaultGroup('lahan.kode_lahan')
@@ -165,13 +178,18 @@ class DetailKayuMasuksTable
                 CreateAction::make()
                     ->visible($canPerformAction), // Bypass Lock jika Admin
 
+                // ✅ DIUBAH: total kubikasi diambil dari accessor model ($item->kubikasi),
+                // bukan hitung ulang manual. Konsisten dengan pola Turusan.
                 Action::make('total_kubikasi')
                     ->label(function () use ($ownerRecord) {
-                        if (!$ownerRecord) return 'Total: 0 m³';
+                        if (! $ownerRecord) {
+                            return 'Total: 0 m³';
+                        }
                         $total = DetailKayuMasuk::where('id_kayu_masuk', $ownerRecord->id)
                             ->get()
-                            ->sum(fn($item) => (($item->panjang ?? 0) * ($item->diameter ?? 0) * ($item->diameter ?? 0) * ($item->jumlah_batang ?? 0) * 0.785) / 1000000);
-                        return 'Total: ' . number_format($total, 4, ',', '.') . ' m³';
+                            ->sum(fn ($item) => round($item->kubikasi, 4));
+
+                        return 'Total: '.number_format($total, 4, ',', '.').' m³';
                     })
                     ->disabled()
                     ->icon('heroicon-o-cube')
@@ -184,9 +202,9 @@ class DetailKayuMasuksTable
                     ->modalHeading('Input Kayu (Mode Offline)')
                     ->modalWidth('2xl')
                     ->visible($canPerformAction) // Bypass Lock jika Admin
-                    ->modalContent(fn() => view('filament.components.offline-detail-kayu-modal', [
+                    ->modalContent(fn () => view('filament.components.offline-detail-kayu-modal', [
                         'parentId' => $ownerRecord?->id,
-                        'optionsLahan' => Lahan::all()->mapWithKeys(fn($l) => [$l->id => "{$l->kode_lahan} - {$l->nama_lahan}"]),
+                        'optionsLahan' => Lahan::all()->mapWithKeys(fn ($l) => [$l->id => "{$l->kode_lahan} - {$l->nama_lahan}"]),
                         'optionsJenis' => JenisKayu::pluck('nama_kayu', 'id'),
                     ]))
                     ->modalSubmitAction(false)
@@ -200,7 +218,7 @@ class DetailKayuMasuksTable
                     ->button()
                     ->size('sm')
                     ->visible($canPerformAction) // Bypass Lock jika Admin
-                    ->action(fn(DetailKayuMasuk $record) => $record->jumlah_batang > 0 ? $record->decrement('jumlah_batang') : null),
+                    ->action(fn (DetailKayuMasuk $record) => $record->jumlah_batang > 0 ? $record->decrement('jumlah_batang') : null),
 
                 Action::make('tambahBatang')
                     ->label('')
@@ -209,7 +227,7 @@ class DetailKayuMasuksTable
                     ->button()
                     ->size('sm')
                     ->visible($canPerformAction) // Bypass Lock jika Admin
-                    ->action(fn(DetailKayuMasuk $record) => $record->increment('jumlah_batang')),
+                    ->action(fn (DetailKayuMasuk $record) => $record->increment('jumlah_batang')),
 
                 EditAction::make()->visible($canPerformAction), // Bypass Lock jika Admin
                 DeleteAction::make()->visible($canPerformAction), // Bypass Lock jika Admin
@@ -223,7 +241,7 @@ class DetailKayuMasuksTable
                         ->schema([
                             Select::make('id_lahan')->label('Lahan Baru')->options(Lahan::pluck('kode_lahan', 'id')->toArray())->required(),
                         ])
-                        ->action(fn(array $data, Collection $records) => $records->each->update(['id_lahan' => $data['id_lahan']]))
+                        ->action(fn (array $data, Collection $records) => $records->each->update(['id_lahan' => $data['id_lahan']]))
                         ->deselectRecordsAfterCompletion(),
 
                     BulkAction::make('update_panjang')
@@ -232,7 +250,7 @@ class DetailKayuMasuksTable
                         ->schema([
                             Select::make('panjang')->label('Panjang Baru')->options([130 => '130', 260 => '260'])->required(),
                         ])
-                        ->action(fn(array $data, Collection $records) => $records->each->update(['panjang' => $data['panjang']]))
+                        ->action(fn (array $data, Collection $records) => $records->each->update(['panjang' => $data['panjang']]))
                         ->deselectRecordsAfterCompletion(),
 
                     BulkAction::make('update_jenis_kayu')
