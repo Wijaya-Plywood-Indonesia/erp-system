@@ -5,6 +5,7 @@ namespace App\Providers\Filament;
 use App\Filament\Pages\DashboardHppDryer;
 use App\Filament\Pages\LaporanKayuKeluar;
 use App\Filament\Pages\OpnameStokKayu;
+use App\Filament\Pages\OpnameStokPage;
 use App\Filament\Pages\LaporanJurnalKayuMasuk;
 use App\Http\Middleware\RunDailyScheduler;
 use App\Livewire\GradingWizard;
@@ -67,6 +68,7 @@ class AdminPanelProvider extends PanelProvider
                 OpnameStokKayu::class,
                 LaporanKayuKeluar::class,
                 LaporanJurnalKayuMasuk::class,
+                OpnameStokPage::class,
             ])
             ->brandName(
                 in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com'])

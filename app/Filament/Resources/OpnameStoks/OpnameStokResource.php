@@ -20,6 +20,8 @@ class OpnameStokResource extends Resource
     protected static ?string $navigationLabel = 'Opname Stok';
     protected static UnitEnum|string|null $navigationGroup = 'Opname';
 
+    protected static bool $shouldRegisterNavigation = false;
+
     public static function form(Schema $schema): Schema
     {
         return OpnameStokForm::configure($schema);
