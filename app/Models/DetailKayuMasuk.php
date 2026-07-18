@@ -68,11 +68,11 @@ class DetailKayuMasuk extends Model
         $jumlah = (float) ($this->jumlah_batang ?? 0);
         $panjang = (float) ($this->panjang ?? 0);
 
-        // formula: diameter * 1 * 0.785 / 1_000_000 (hitung per 1 batang dahulu)
-        $kubikasiPerBatang = ($panjang * $diameter * $diameter * 0.785) / 1000000;
+        // formula: diameter * jumlah * 0.785 / 1_000_000
+        // kembalikan float dengan presisi cukup tinggi
+        $kubikasi = ($panjang * $diameter * $diameter * $jumlah * 0.785) / 1_000_000;
 
-        // Bulatkan per batang ke 4 desimal seperti Turusan, lalu dikali jumlah batang
-        return round($kubikasiPerBatang, 4) * $jumlah;
+        return $kubikasi; // mis. 0.123456789
     }
 
     public function getHargaSatuanAttribute()
@@ -111,12 +111,6 @@ class DetailKayuMasuk extends Model
     public static function hitungTotalByKayuMasuk($idKayuMasuk): array
     {
         $records = self::where('id_kayu_masuk', $idKayuMasuk)->get();
-
-        $totalBatang = $records->sum('jumlah_batang');
-        $totalKubikasi = $records->sum(function ($r) {
-            $kubikasiPerBatang = ($r->panjang * $r->diameter * $r->diameter * 0.785) / 1000000;
-            return round($kubikasiPerBatang, 4) * $r->jumlah_batang;
-        });
 
         return [
             'total_batang'   => $records->sum('jumlah_batang'),
