@@ -256,20 +256,67 @@ class OpnameStokTable extends Component
     // LOAD ROWS DARI DB
     // ────────────────────────────────────────────────────────────
     private function loadRows(string $jenisStok): array
-    {
-        return match ($jenisStok) {
-            'veneer_basah'  => $this->loadBasah(),
-            'veneer_jadi'   => $this->loadJadi(),
-            'veneer_kering' => $this->loadKering(),
-            'platform_mth'  => $this->loadPlatformMth(),
-            'triplek_mth'   => $this->loadTriplekMth(),
-            'plywood'       => $this->loadPlywood(),
-            'platform_jadi' => $this->loadPlatformJadi(),
-            'triplek_jadi'  => $this->loadTriplekJadi(),
-            'gudang_satu'   => $this->loadGudangSatu(),
-            default         => [],
-        };
-    }
+{
+    $rows = match ($jenisStok) {
+        'veneer_basah'  => $this->loadBasah(),
+        'veneer_jadi'   => $this->loadJadi(),
+        'veneer_kering' => $this->loadKering(),
+        'platform_mth'  => $this->loadPlatformMth(),
+        'triplek_mth'   => $this->loadTriplekMth(),
+        'plywood'       => $this->loadPlywood(),
+        'platform_jadi' => $this->loadPlatformJadi(),
+        'triplek_jadi'  => $this->loadTriplekJadi(),
+        'gudang_satu'   => $this->loadGudangSatu(),
+        default         => [],
+    };
+
+    return $this->sortirRows($rows);
+}
+
+private function sortirRows(array $rows): array
+{
+    $ukuranMap = Ukuran::all()->keyBy('id');
+
+    // Prioritas jenis kayu: Sengon → Meranti → sisanya alfabetis
+    $prioritasKayu = ['sengon' => 0, 'meranti' => 1];
+
+    $bobotKayu = function (array $row) use ($prioritasKayu): array {
+        $nama = $this->jenisStok === 'platform_jadi'
+            ? ($this->jenisBarangOptions[$row['id_jenis_barang']] ?? 'zzz')
+            : ($this->jenisKayuOptions[$row['id_jenis_kayu']] ?? 'zzz');
+
+        $prio = $prioritasKayu[strtolower(trim($nama))] ?? 99;
+        return [$prio, strtolower($nama)];
+    };
+
+    usort($rows, function ($a, $b) use ($ukuranMap, $bobotKayu) {
+        // 1. Jenis kayu: Sengon dulu, Meranti kedua, sisanya A-Z
+        [$prioA, $namaA] = $bobotKayu($a);
+        [$prioB, $namaB] = $bobotKayu($b);
+        if ($prioA !== $prioB) return $prioA <=> $prioB;
+        $cmp = strcmp($namaA, $namaB);
+        if ($cmp !== 0) return $cmp;
+
+        $ua = $ukuranMap->get($a['id_ukuran']);
+        $ub = $ukuranMap->get($b['id_ukuran']);
+
+        // 2. Tebal terkecil dulu
+        $tebalA = $ua ? (float) $ua->tebal : PHP_FLOAT_MAX;
+        $tebalB = $ub ? (float) $ub->tebal : PHP_FLOAT_MAX;
+        if ($tebalA !== $tebalB) return $tebalA <=> $tebalB;
+
+        // 3. Panjang lalu lebar
+        $pA = $ua ? (float) $ua->panjang : 0; $pB = $ub ? (float) $ub->panjang : 0;
+        if ($pA !== $pB) return $pA <=> $pB;
+        $lA = $ua ? (float) $ua->lebar : 0;   $lB = $ub ? (float) $ub->lebar : 0;
+        if ($lA !== $lB) return $lA <=> $lB;
+
+        // 4. Grade natural (1, 2, 3, 10, AFF, BETTER, LP...)
+        return strnatcasecmp((string) ($a['kw'] ?? ''), (string) ($b['kw'] ?? ''));
+    });
+
+    return array_values($rows);
+}
 
     private function barisKosong(): array
     {
