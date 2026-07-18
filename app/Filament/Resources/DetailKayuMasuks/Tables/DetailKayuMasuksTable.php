@@ -112,7 +112,7 @@ class DetailKayuMasuksTable
                 // karena sumbernya satu (model accessor).
                 TextColumn::make('kubikasi')
                     ->label('Kubikasi')
-                    ->state(fn ($record) => $record->kubikasi)
+                    ->state(fn($record) => $record->kubikasi)
                     ->numeric(decimalPlaces: 6)
                     ->suffix(' m³')
                     ->toggleable(isToggledHiddenByDefault: true)
@@ -160,12 +160,12 @@ class DetailKayuMasuksTable
                         // di tempat lain (kolom tabel, Nota Kayu, total harga, dst).
                         if ($records instanceof Collection && $records->isNotEmpty()) {
                             $filtered = $records->where('id_kayu_masuk', $parentId)->where('id_lahan', $lahanId);
-                            $totalBatang = $filtered->sum(fn ($r) => (int) ($r->jumlah_batang ?? 0));
-                            $totalKubikasi = $filtered->sum(fn ($r) => round($r->kubikasi, 4));
+                            $totalBatang   = $filtered->sum(fn($r) => (int) ($r->jumlah_batang ?? 0));
+                            $totalKubikasi = $filtered->sum(fn($r) => $r->kubikasi);       // ← round() dihapus
                         } else {
                             $query = DetailKayuMasuk::where('id_kayu_masuk', $parentId)->where('id_lahan', $lahanId)->get();
-                            $totalBatang = $query->sum('jumlah_batang');
-                            $totalKubikasi = $query->sum(fn ($r) => round($r->kubikasi, 4));
+                            $totalBatang   = $query->sum('jumlah_batang');
+                            $totalKubikasi = $query->sum(fn($r) => $r->kubikasi);          // ← round() dihapus
                         }
 
                         return "{$kode} {$nama} {$jenis_kayu} - ".number_format($totalBatang).' batang ('.number_format($totalKubikasi, 4, ',', '.').' m³)';
@@ -187,9 +187,8 @@ class DetailKayuMasuksTable
                         }
                         $total = DetailKayuMasuk::where('id_kayu_masuk', $ownerRecord->id)
                             ->get()
-                            ->sum(fn ($item) => round($item->kubikasi, 4));
-
-                        return 'Total: '.number_format($total, 4, ',', '.').' m³';
+                            ->sum(fn($item) => $item->kubikasi);
+                        return 'Total: ' . number_format($total, 4, ',', '.') . ' m³';
                     })
                     ->disabled()
                     ->icon('heroicon-o-cube')

@@ -4,16 +4,16 @@
         @php
         // Definisikan daftar menu stok Anda di sini
         $stokMenus = [
-        ['title' => 'Stok Kayu', 'url' => url('/admin/stok-kayu'), 'icon' => 'heroicon-m-document-text'],
-        ['title' => 'Stok Veneer Basah', 'url' => url('/admin/stok-veneer-basah'), 'icon' => 'heroicon-m-document-text'],
-        ['title' => 'Stok Veneer Kering', 'url' => url('/admin/stok-veneer-kering'), 'icon' => 'heroicon-m-document-text'],
-        ['title' => 'Stok Veneer Jadi', 'url' => url('/admin/stok-veneer-jadi'), 'icon' => 'heroicon-m-document-text'],
-        ['title' => 'Stok Platform MTH', 'url' => url('/admin/stok-platform-mth'), 'icon' => 'heroicon-m-document-text'],
-        ['title' => 'Stok Platform Jadi', 'url' => url('/admin/stok-platform-jadi'), 'icon' => 'heroicon-m-document-text'],
-        ['title' => 'Stok Triplek MTH', 'url' => url('/admin/stok-triplek-mth'), 'icon' => 'heroicon-m-document-text'],
-        ['title' => 'Stok Triplek Jadi', 'url' => url('/admin/stok-triplek-jadi'), 'icon' => 'heroicon-m-document-text'],
-        ['title' => 'Stok Gudang Satu', 'url' => \App\Filament\Pages\StokGudangSatu::getUrl(), 'icon' => 'heroicon-o-square-3-stack-3d'],
-        ['title' => 'Stok Plywood Siap Jual', 'url' => url('/admin/stok-plywood-siap-jual'), 'icon' => 'heroicon-m-document-text'],
+        ['title' => 'Stok Kayu', 'url' => url('/admin/stok-kayu'), 'icon' => 'heroicon-o-cube'],
+        ['title' => 'Stok Veneer Basah', 'url' => url('/admin/stok-veneer-basah'), 'icon' => 'heroicon-o-beaker'],
+        ['title' => 'Stok Veneer Kering', 'url' => url('/admin/stok-veneer-kering'), 'icon' => 'heroicon-o-sun'],
+        ['title' => 'Stok Veneer Jadi', 'url' => url('/admin/stok-veneer-jadi'), 'icon' => 'heroicon-o-squares-2x2'],
+        ['title' => 'Stok Platform MTH', 'url' => url('/admin/stok-platform-mth'), 'icon' => 'heroicon-o-rectangle-stack'],
+        ['title' => 'Stok Platform Jadi', 'url' => url('/admin/stok-platform-jadi'), 'icon' => 'heroicon-o-square-3-stack-3d'],
+        ['title' => 'Stok Triplek MTH', 'url' => url('/admin/stok-triplek-mth'), 'icon' => 'heroicon-o-rectangle-group'],
+        ['title' => 'Stok Triplek Jadi', 'url' => url('/admin/stok-triplek-jadi'), 'icon' => 'heroicon-o-squares-plus'],
+        ['title' => 'Stok Gudang Satu', 'url' => \App\Filament\Pages\StokGudangSatu::getUrl(), 'icon' => 'heroicon-o-building-storefront'],
+        ['title' => 'Stok Plywood Siap Jual', 'url' => url('/admin/stok-plywood-siap-jual'), 'icon' => 'heroicon-o-truck'],
         ];
         @endphp
 
@@ -42,22 +42,24 @@
 
     {{-- ================= SECTION 2: PUSAT LOG ================= --}}
     <div>
-        <h2 class="text-lg font-bold tracking-tight text-gray-950 dark:text-white mb-4">Pusat Log / Riwayat</h2>
+        <h2 class="text-2xl lg:text-3xl font-bold tracking-tight text-gray-950 dark:text-white mb-4">
+            Pusat Log
+        </h2>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             @php
             $logMenus = [
-            ['title' => 'Log Harga Kayu', 'url' => url('/admin/log-harga-kayu'), 'icon' => 'heroicon-o-clipboard-document-list'],
-            ['title' => 'Log HPP Kayu', 'url' => url('/admin/hpp-average-page'), 'icon' => 'heroicon-o-clipboard-document-list'],
-            ['title' => 'Log HPP Veneer Basah', 'url' => url('/admin/hpp-veneer-basah-page'), 'icon' => 'heroicon-o-clipboard-document-list'],
-            ['title' => 'Log HPP Veneer Kering', 'url' => url('/admin/hpp-veneer-kering-page'), 'icon' => 'heroicon-o-clipboard-document-list'],
-            ['title' => 'Log HPP Veneer Jadi', 'url' => url('/admin/hpp-veneer-jadi-page'), 'icon' => 'heroicon-o-clipboard-document-list'],
-            ['title' => 'Log HPP Platform MTH', 'url' => url('/admin/hpp-platform-mth-page'), 'icon' => 'heroicon-o-clipboard-document-list'],
-            ['title' => 'Log HPP Triplek MTH', 'url' => url('/admin/hpp-triplek-mth-page'), 'icon' => 'heroicon-o-clipboard-document-list'],
-            ['title' => 'Log HPP Platform Jadi', 'url' => url('/admin/hpp-platform-jadi-page'), 'icon' => 'heroicon-o-clipboard-document-list'],
-            ['title' => 'Log HPP Triplek Jadi', 'url' => url('/admin/hpp-triplek-jadi-page'), 'icon' => 'heroicon-o-clipboard-document-list'],
-            ['title' => 'Log Gudang Satu', 'url' => url('/admin/gudang-satu-log-page'), 'icon' => 'heroicon-o-clipboard-document-list'],
-            ['title' => 'Log Plywood Siap Jual', 'url' => url('/admin/hpp-plywood-siap-jual-page'), 'icon' => 'heroicon-o-clipboard-document-list'],
+            ['title' => 'Log Harga Kayu', 'url' => url('/admin/log-harga-kayu'), 'icon' => 'heroicon-o-currency-dollar'],
+            ['title' => 'Log HPP Kayu', 'url' => url('/admin/hpp-average-page'), 'icon' => 'heroicon-o-calculator'],
+            ['title' => 'Log HPP Veneer Basah', 'url' => url('/admin/hpp-veneer-basah-page'), 'icon' => 'heroicon-o-calculator'],
+            ['title' => 'Log HPP Veneer Kering', 'url' => url('/admin/hpp-veneer-kering-page'), 'icon' => 'heroicon-o-calculator'],
+            ['title' => 'Log HPP Veneer Jadi', 'url' => url('/admin/hpp-veneer-jadi-page'), 'icon' => 'heroicon-o-calculator'],
+            ['title' => 'Log HPP Platform MTH', 'url' => url('/admin/hpp-platform-mth-page'), 'icon' => 'heroicon-o-calculator'],
+            ['title' => 'Log HPP Triplek MTH', 'url' => url('/admin/hpp-triplek-mth-page'), 'icon' => 'heroicon-o-calculator'],
+            ['title' => 'Log HPP Platform Jadi', 'url' => url('/admin/hpp-platform-jadi-page'), 'icon' => 'heroicon-o-calculator'],
+            ['title' => 'Log HPP Triplek Jadi', 'url' => url('/admin/hpp-triplek-jadi-page'), 'icon' => 'heroicon-o-calculator'],
+            ['title' => 'Log Gudang Satu', 'url' => url('/admin/gudang-satu-log-page'), 'icon' => 'heroicon-o-archive-box'],
+            ['title' => 'Log Plywood Siap Jual', 'url' => url('/admin/hpp-plywood-siap-jual-page'), 'icon' => 'heroicon-o-clipboard-document-check'],
             ];
             @endphp
 

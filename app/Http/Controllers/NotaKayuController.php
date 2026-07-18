@@ -46,9 +46,11 @@ class NotaKayuController extends Controller
         $totalBatang = $details->sum('kuantitas');
 
         // ✅ Kubikasi dipaksa 4 digit desimal untuk presisi akuntansi
-        $totalKubikasi = $details->sum(function ($item) {
-            return round($item->kubikasi, 4);
-        });
+        // $totalKubikasi = $details->sum(function ($item) {
+        //     return round($item->kubikasi, 4);
+        // });
+
+        $totalKubikasi = $details->sum(fn($item) => $item->kubikasi);
 
         // =========================
         // HITUNG GRAND TOTAL (RUPIAH)
@@ -144,7 +146,7 @@ class NotaKayuController extends Controller
 
             if ($kelompok->isNotEmpty()) {
                 $totalBatang   = $kelompok->sum('kuantitas');
-                $totalKubikasi = $kelompok->sum(fn($item) => round($item->kubikasi, 4));
+                $totalKubikasi = $kelompok->sum(fn($item) => $item->kubikasi);
 
                 /**
                  * PENERTIBAN: Ambil harga snapshot dari baris turusan.
@@ -174,7 +176,7 @@ class NotaKayuController extends Controller
                 'batang'       => $item->kuantitas,
                 'kubikasi'     => round($item->kubikasi, 4),
                 'harga_satuan' => $item->harga ?? 0,
-                'total_harga'  => round(($item->harga ?? 0) * round($item->kubikasi, 4) * 1000),
+                'total_harga'  => round(($item->harga ?? 0) * $item->kubikasi * 1000),
             ]);
         }
 

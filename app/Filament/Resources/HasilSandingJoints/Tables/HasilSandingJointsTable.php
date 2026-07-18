@@ -21,7 +21,7 @@ class HasilSandingJointsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn ($query) => $query->with([
+            ->modifyQueryUsing(fn($query) => $query->with([
                 'jenisKayu',
                 'ukuran',
                 'serahTerimaVeneerKering', // eager load untuk cek status serah
@@ -31,6 +31,7 @@ class HasilSandingJointsTable
                     ->label('No. Palet')
                     ->searchable()
                     ->badge()
+                    ->formatStateUsing(fn($state) => 'SJ-' . $state)
                     ->color(function ($record) {
                         $serahTerima = $record->serahTerimaVeneerKering;
 
@@ -79,7 +80,7 @@ class HasilSandingJointsTable
 
                         return $serahTerima->diterima_oleh === '-' ? 'Sudah Diserahkan' : 'Sudah Diterima';
                     })
-                    ->color(fn ($state) => match ($state) {
+                    ->color(fn($state) => match ($state) {
                         'Sudah Diterima' => 'success',
                         'Sudah Diserahkan' => 'warning',
                         default => 'gray',
@@ -92,7 +93,7 @@ class HasilSandingJointsTable
                 // Create Action — HILANG jika status sudah divalidasi
                 CreateAction::make()
                     ->hidden(
-                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
             ->recordActions([
@@ -132,7 +133,7 @@ class HasilSandingJointsTable
     </div>
 HTML);
                     })
-                    ->visible(fn ($record) => ! $record->serahTerimaVeneerKering)
+                    ->visible(fn($record) => ! $record->serahTerimaVeneerKering)
                     ->action(function ($record) {
                         try {
                             DB::transaction(function () use ($record) {
@@ -157,7 +158,6 @@ HTML);
                                 ->body('Siap diterima Gudang Veneer Jadi.')
                                 ->success()
                                 ->send();
-
                         } catch (\Throwable $e) {
                             Notification::make()
                                 ->title('Gagal')
@@ -179,7 +179,7 @@ HTML);
                 // Delete Action — HILANG jika sudah diserahkan atau sudah divalidasi
                 DeleteAction::make()
                     ->hidden(
-                        fn ($livewire, $record) => $record->serahTerimaVeneerKering
+                        fn($livewire, $record) => $record->serahTerimaVeneerKering
                             || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
@@ -187,7 +187,7 @@ HTML);
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->hidden(
-                            fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                            fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                         ),
                 ]),
             ]);

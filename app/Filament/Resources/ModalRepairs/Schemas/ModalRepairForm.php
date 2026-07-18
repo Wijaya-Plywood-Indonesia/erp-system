@@ -22,18 +22,18 @@ class ModalRepairForm
         return $schema
             ->schema([
                 Hidden::make('id_produksi_repair')
-                    ->default(fn ($livewire) => $livewire->getOwnerRecord()?->id),
+                    ->default(fn($livewire) => $livewire->getOwnerRecord()?->id),
 
                 Select::make('palet_select')
                     ->label('Pilih Palet (Veneer)')
-                    ->options(fn (?ModalRepair $record) => self::getPaletOptions($record))
+                    ->options(fn(?ModalRepair $record) => self::getPaletOptions($record))
                     ->searchable()
                     ->live()
                     ->required(fn ($record) => $record === null)
                     ->disabled(fn ($record) => $record !== null)
                     ->dehydrated(false)
                     ->afterStateHydrated(function (Set $set, ?ModalRepair $record) {
-                        if (! $record) {
+                        if (!$record) {
                             return;
                         }
 
@@ -44,7 +44,7 @@ class ModalRepairForm
                         }
                     })
                     ->afterStateUpdated(function ($state, Set $set, ?ModalRepair $record) {
-                        if (! $state) {
+                        if (!$state) {
                             $set('id_serah_terima_veneer_kering', null);
                             $set('id_ukuran', null);
                             $set('id_jenis_kayu', null);
@@ -83,11 +83,10 @@ class ModalRepairForm
                         }
 
                         $serahTerima = SerahTerimaVeneerKering::with([
-                            'detailHasil.ukuran', 'detailHasil.jenisKayu',
-                            'detailBongkarKedi.ukuran', 'detailBongkarKedi.jenisKayu',
-                            'mutasiKeluarPalet.mutasiKeluar.ukuran',
-                            'mutasiKeluarPalet.mutasiKeluar.jenisKayu',
-                            'mutasiKeluarPaletJadi.mutasiKeluar.jenisKayu',
+                            'detailHasil.ukuran',
+                            'detailHasil.jenisKayu',
+                            'detailBongkarKedi.ukuran',
+                            'detailBongkarKedi.jenisKayu',
                         ])->find($state);
 
                         $sumber = $serahTerima?->sumber;
@@ -99,8 +98,11 @@ class ModalRepairForm
                             $sisa += (float) $record->jumlah;
                         }
 
+                        // ✅ Nomor palet SELALU nomor baru (turunan urutan modal_repairs),
+                        // sama persis seperti jalur AF — bukan lagi diambil dari no_palet sumber.
                         $newPaletNumber = DB::table((new ModalRepair)->getTable())->count() + 1;
                         if ($record && $record->nomor_palet) {
+                            // Saat edit, pertahankan nomor palet yang sudah ada, jangan generate baru lagi.
                             $newPaletNumber = $record->nomor_palet;
                         }
 
@@ -122,12 +124,16 @@ class ModalRepairForm
                         };
 
                         $set('id_serah_terima_veneer_kering', (int) $state);
-                        $set('id_ukuran', $idUkuran);
-                        $set('id_jenis_kayu', $idJenisKayu);
-                        $set('kw', $tampilan['kw']);
+                        // ✅ Field Hidden ini yang benar-benar disimpan ke DB — sumber kebenaran tunggal,
+                        // sama seperti jalur AF (yang menyimpan lewat sync dari _select).
+                        $set('id_ukuran', $sumber?->id_ukuran);
+                        $set('id_jenis_kayu', $sumber?->id_jenis_kayu);
+                        $set('kw', $sumber?->kw);
                         $set('nomor_palet', $newPaletNumber);
-                        $set('ukuran_label', $tampilan['dimensi']);
-                        $set('jenis_kayu_label', $tampilan['jenis_kayu']);
+                        $set('ukuran_label', $ukuran
+                            ? "{$ukuran->panjang} x {$ukuran->lebar} x {$ukuran->tebal}"
+                            : '-');
+                        $set('jenis_kayu_label', $sumber?->jenisKayu?->nama_kayu ?? '-');
                         $set('jenis_terima_label', $serahTerima?->label_jenis_terima ?? '-');
                         $set('sisa_tersedia', $sisa);
                         $set('jumlah', $sisa);
@@ -147,37 +153,37 @@ class ModalRepairForm
                     ->options(JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id'))
                     ->searchable()
                     ->live()
-                    ->visible(fn (Get $get) => $get('palet_select') === 'AF')
-                    ->required(fn (Get $get) => $get('palet_select') === 'AF')
+                    ->visible(fn(Get $get) => $get('palet_select') === 'AF')
+                    ->required(fn(Get $get) => $get('palet_select') === 'AF')
                     ->dehydrated(false)
                     ->afterStateHydrated(function (Set $set, ?ModalRepair $record) {
                         if ($record && $record->id_serah_terima_veneer_kering === null) {
                             $set('id_jenis_kayu_select', $record->id_jenis_kayu);
                         }
                     })
-                    ->afterStateUpdated(fn ($state, Set $set) => $set('id_jenis_kayu', $state)),
+                    ->afterStateUpdated(fn($state, Set $set) => $set('id_jenis_kayu', $state)),
 
                 Select::make('id_ukuran_select')
                     ->label('Ukuran')
                     ->options(Ukuran::all()->pluck('nama_ukuran', 'id'))
                     ->searchable()
                     ->live()
-                    ->visible(fn (Get $get) => $get('palet_select') === 'AF')
-                    ->required(fn (Get $get) => $get('palet_select') === 'AF')
+                    ->visible(fn(Get $get) => $get('palet_select') === 'AF')
+                    ->required(fn(Get $get) => $get('palet_select') === 'AF')
                     ->dehydrated(false)
                     ->afterStateHydrated(function (Set $set, ?ModalRepair $record) {
                         if ($record && $record->id_serah_terima_veneer_kering === null) {
                             $set('id_ukuran_select', $record->id_ukuran);
                         }
                     })
-                    ->afterStateUpdated(fn ($state, Set $set) => $set('id_ukuran', $state)),
+                    ->afterStateUpdated(fn($state, Set $set) => $set('id_ukuran', $state)),
 
                 TextInput::make('sisa_tersedia')
                     ->label('Sisa Tersedia (Lembar)')
                     ->disabled()
                     ->dehydrated(false)
                     ->afterStateHydrated(function ($set, ?ModalRepair $record) {
-                        if (! $record?->serahTerimaVeneerKering) {
+                        if (!$record?->serahTerimaVeneerKering) {
                             return;
                         }
 
@@ -189,27 +195,34 @@ class ModalRepairForm
                     ->numeric()
                     ->required()
                     ->rules([
-                        fn (Get $get, ?ModalRepair $record) => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                        fn(Get $get, ?ModalRepair $record) => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
                             $idSerahTerima = $get('id_serah_terima_veneer_kering');
 
                             if (! $idSerahTerima) {
                                 return;
                             }
 
-                            $serahTerima = SerahTerimaVeneerKering::find($idSerahTerima);
-
-                            if (! $serahTerima) {
+                            $serahTerima = SerahTerimaVeneerKering::with(['detailHasil', 'detailBongkarKedi'])->find($idSerahTerima);
+                            if (!$serahTerima) {
                                 return;
                             }
 
-                            $sisa = $serahTerima->sisa;
+                            $sisa = (float) $serahTerima->sisa;
+                            $sumber = $serahTerima->sumber;
+
+                            if ($record) {
+                                // KONDISI BARU: Tambahkan record->jumlah ke toleransi sisa jika:
+                                // 1. ID Palet yang dipilih sama persis, ATAU
+                                // 2. ID Ukuran dari palet yang dipilih sama dengan ID Ukuran asli data lama
+                                $isPaletSama = (int)$record->id_serah_terima_veneer_kering === (int)$idSerahTerima;
+                                $isUkuranSama = $sumber && (int)$sumber->id_ukuran === (int)$record->id_ukuran;
 
                             // ✅ FIX: bandingkan sebagai int
                             if ($record && (int) $record->id_serah_terima_veneer_kering === (int) $idSerahTerima) {
                                 $sisa += (float) $record->jumlah;
                             }
 
-                            if ($value > $sisa) {
+                            if ((float)$value > $sisa) {
                                 $fail("Jumlah melebihi sisa yang tersedia ({$sisa} lembar).");
                             }
                         },
@@ -220,7 +233,7 @@ class ModalRepairForm
                     ->disabled()
                     ->dehydrated(false)
                     ->afterStateHydrated(function ($set, ?ModalRepair $record) {
-                        if (! $record?->serahTerimaVeneerKering) {
+                        if (!$record?->serahTerimaVeneerKering) {
                             return;
                         }
 
@@ -230,10 +243,10 @@ class ModalRepairForm
                 TextInput::make('ukuran_label')
                     ->label('Ukuran Kayu')
                     ->disabled()
-                    ->visible(fn (Get $get) => $get('palet_select') !== 'AF')
+                    ->visible(fn(Get $get) => $get('palet_select') !== 'AF')
                     ->dehydrated(false)
                     ->afterStateHydrated(function ($set, ?ModalRepair $record) {
-                        if (! $record?->ukuran) {
+                        if (!$record?->ukuran) {
                             return;
                         }
 
@@ -243,10 +256,10 @@ class ModalRepairForm
                 TextInput::make('jenis_kayu_label')
                     ->label('Jenis Kayu')
                     ->disabled()
-                    ->visible(fn (Get $get) => $get('palet_select') !== 'AF')
+                    ->visible(fn(Get $get) => $get('palet_select') !== 'AF')
                     ->dehydrated(false)
                     ->afterStateHydrated(function ($set, ?ModalRepair $record) {
-                        if (! $record?->jenisKayu) {
+                        if (!$record?->jenisKayu) {
                             return;
                         }
 
@@ -274,14 +287,16 @@ class ModalRepairForm
         $currentId = $record ? (int) $record->id_serah_terima_veneer_kering : null;
         $currentJumlah = (float) ($record?->jumlah ?? 0);
 
+        // Ambil ID ukuran dari data yang sedang diedit
+        $currentUkuranId = $record?->id_ukuran;
+
         $options = SerahTerimaVeneerKering::query()
             ->where('diterima_oleh', '!=', '-')
             ->with([
-                'detailHasil.ukuran', 'detailHasil.jenisKayu',
-                'detailBongkarKedi.ukuran', 'detailBongkarKedi.jenisKayu',
-                'mutasiKeluarPalet.mutasiKeluar.ukuran',
-                'mutasiKeluarPalet.mutasiKeluar.jenisKayu',
-                'mutasiKeluarPaletJadi.mutasiKeluar.jenisKayu',
+                'detailHasil.ukuran',
+                'detailHasil.jenisKayu',
+                'detailBongkarKedi.ukuran',
+                'detailBongkarKedi.jenisKayu',
             ])
             ->get()
             ->map(function ($item) use ($currentId, $currentJumlah) {
@@ -295,10 +310,20 @@ class ModalRepairForm
             ->filter(fn ($pair) => $pair[1] > 0 || (int) $pair[0]->id === $currentId)
             ->mapWithKeys(function ($pair) {
                 [$item, $sisa] = $pair;
-                $tampilan = $item->tampilan;
+                $sumber = $item->sumber;
 
-                $label = "Palet {$tampilan['no_palet']} · {$tampilan['dimensi']} {$tampilan['jenis_kayu']} KW{$tampilan['kw']}"
-                    ." · ({$item->label_jenis_terima}) · Sisa {$sisa} lbr";
+                $ukuran = $sumber?->ukuran;
+                $dimensi = $ukuran
+                    ? collect([$ukuran->panjang, $ukuran->lebar, $ukuran->tebal])
+                    ->map(fn($v) => rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.'))
+                    ->implode('x')
+                    : '-';
+
+                $kayu = $sumber?->jenisKayu?->nama_kayu ?? '-';
+                $kw = $sumber?->kw ?? '-';
+
+                $label = "Palet {$sumber?->no_palet} · {$dimensi} {$kayu} KW{$kw}"
+                    . " · ({$item->label_jenis_terima}) · Sisa {$sisa} lbr";
 
                 return [$item->id => $label];
             })

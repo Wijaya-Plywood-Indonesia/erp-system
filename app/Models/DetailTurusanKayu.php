@@ -135,20 +135,17 @@ class DetailTurusanKayu extends Model
             ->whereColumn('harga_kayus.panjang', 'detail_kayu_masuks.panjang')
             ->whereRaw('? BETWEEN harga_kayus.diameter_terkecil AND harga_kayus.diameter_terbesar', [$this->diameter]);
     }
+
     public static function hitungTotalByKayuMasuk($idKayuMasuk): array
     {
         $records = self::where('id_kayu_masuk', $idKayuMasuk)->get();
 
-        $totalBatang = $records->sum('kuantitas');
-        $totalKubikasi = $records->sum(function ($r) {
-            return ($r->panjang * $r->diameter * $r->diameter * $r->kuantitas * 0.785) / 1_000_000;
-        });
-
         return [
-            'total_batang' => $totalBatang,
-            'total_kubikasi' => $totalKubikasi,
+            'total_batang'   => $records->sum('kuantitas'),
+            'total_kubikasi' => $records->sum(fn($r) => $r->kubikasi), // ← accessor
         ];
     }
+
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');
