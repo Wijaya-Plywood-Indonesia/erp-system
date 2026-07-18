@@ -26,6 +26,7 @@ class OngkosProduksiDryerResource extends Resource
     protected static ?string $navigationLabel = 'Ongkos Produksi Dryer';
     protected static ?string $modelLabel = 'Ongkos Produksi Dryer';
     protected static ?int $navigationSort = 1;
+    protected static bool $shouldRegisterNavigation = false;
     public static function form(Schema $schema): Schema
     {
         return OngkosProduksiDryerForm::configure($schema);

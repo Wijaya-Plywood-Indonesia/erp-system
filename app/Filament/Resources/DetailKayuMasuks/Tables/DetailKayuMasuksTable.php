@@ -106,7 +106,8 @@ class DetailKayuMasuksTable
 
                 TextColumn::make('kubikasi')
                     ->label('Kubikasi')
-                    ->formatStateUsing(fn($state) => is_null($state) ? '-' : number_format($state, 6, ',', '.'))
+                    ->state(fn($record) => $record->kubikasi)
+                    ->numeric(decimalPlaces: 6)
                     ->suffix(' m³')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->alignRight(),
@@ -148,12 +149,12 @@ class DetailKayuMasuksTable
 
                         if ($records instanceof Collection && $records->isNotEmpty()) {
                             $filtered = $records->where('id_kayu_masuk', $parentId)->where('id_lahan', $lahanId);
-                            $totalBatang = $filtered->sum(fn($r) => (int) ($r->jumlah_batang ?? 0));
-                            $totalKubikasi = $filtered->sum(fn($r) => (($r->panjang ?? 0) * ($r->diameter ?? 0) * ($r->diameter ?? 0) * ($r->jumlah_batang ?? 0) * 0.785) / 1000000);
+                            $totalBatang   = $filtered->sum(fn($r) => (int) ($r->jumlah_batang ?? 0));
+                            $totalKubikasi = $filtered->sum(fn($r) => $r->kubikasi);       // ← round() dihapus
                         } else {
                             $query = DetailKayuMasuk::where('id_kayu_masuk', $parentId)->where('id_lahan', $lahanId)->get();
-                            $totalBatang = $query->sum('jumlah_batang');
-                            $totalKubikasi = $query->sum(fn($r) => (($r->panjang ?? 0) * ($r->diameter ?? 0) * ($r->diameter ?? 0) * ($r->jumlah_batang ?? 0) * 0.785) / 1000000);
+                            $totalBatang   = $query->sum('jumlah_batang');
+                            $totalKubikasi = $query->sum(fn($r) => $r->kubikasi);          // ← round() dihapus
                         }
                         return "{$kode} {$nama} {$jenis_kayu} - " . number_format($totalBatang) . " batang (" . number_format($totalKubikasi, 4, ',', '.') . " m³)";
                     }),
@@ -170,7 +171,7 @@ class DetailKayuMasuksTable
                         if (!$ownerRecord) return 'Total: 0 m³';
                         $total = DetailKayuMasuk::where('id_kayu_masuk', $ownerRecord->id)
                             ->get()
-                            ->sum(fn($item) => (($item->panjang ?? 0) * ($item->diameter ?? 0) * ($item->diameter ?? 0) * ($item->jumlah_batang ?? 0) * 0.785) / 1000000);
+                            ->sum(fn($item) => $item->kubikasi);
                         return 'Total: ' . number_format($total, 4, ',', '.') . ' m³';
                     })
                     ->disabled()

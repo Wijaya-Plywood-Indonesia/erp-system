@@ -68,7 +68,7 @@ class DetailKayuMasuk extends Model
 
         // formula: diameter * jumlah * 0.785 / 1_000_000
         // kembalikan float dengan presisi cukup tinggi
-        $kubikasi = ($panjang * $diameter * $diameter * $jumlah * 0.785) / 1000000;
+        $kubikasi = ($panjang * $diameter * $diameter * $jumlah * 0.785) / 1_000_000;
 
         return $kubikasi; // mis. 0.123456789
     }
@@ -109,16 +109,12 @@ class DetailKayuMasuk extends Model
     {
         $records = self::where('id_kayu_masuk', $idKayuMasuk)->get();
 
-        $totalBatang = $records->sum('jumlah_batang');
-        $totalKubikasi = $records->sum(function ($r) {
-            return ($r->panjang * $r->diameter * $r->diameter * $r->jumlah_batang * 0.785) / 1_000_000;
-        });
-
         return [
-            'total_batang' => $totalBatang,
-            'total_kubikasi' => $totalKubikasi,
+            'total_batang'   => $records->sum('jumlah_batang'),
+            'total_kubikasi' => $records->sum(fn($r) => $r->kubikasi), // ← accessor
         ];
     }
+
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');
@@ -128,6 +124,4 @@ class DetailKayuMasuk extends Model
     {
         return $this->belongsTo(User::class, 'updated_by');
     }
-
-
 }

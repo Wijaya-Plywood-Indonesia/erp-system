@@ -21,7 +21,7 @@ class DashboardHppDryer extends Page implements HasTable
 {
     use InteractsWithTable;
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
-
+    protected static bool $shouldRegisterNavigation = false;
     protected static string|UnitEnum|null $navigationGroup = 'HPP & Biaya';
     protected static ?string $navigationLabel = 'Dashboard HPP';
     protected static ?string $title = 'Dashboard HPP Veneer Kering';

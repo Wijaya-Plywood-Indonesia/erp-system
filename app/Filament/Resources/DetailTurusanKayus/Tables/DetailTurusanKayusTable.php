@@ -88,7 +88,7 @@ class DetailTurusanKayusTable
                     ->searchable(query: function ($query, string $search) {
                         $query->where('panjang', 'like', "%{$search}%")
                             ->orWhere('grade', 'like', "%{$search}%")
-                            ->orWhereHas('jenisKayu', fn ($q) => $q->where('nama_kayu', 'like', "%{$search}%"));
+                            ->orWhereHas('jenisKayu', fn($q) => $q->where('nama_kayu', 'like', "%{$search}%"));
                     }),
 
                 TextColumn::make('diameter')
@@ -104,7 +104,7 @@ class DetailTurusanKayusTable
                     ->alignRight()
                     ->color('primary')
                     ->weight('bold')
-                    ->formatStateUsing(fn ($state) => $state > 0 ? number_format($state, 0, ',', '.') : '-')
+                    ->formatStateUsing(fn($state) => $state > 0 ? number_format($state, 0, ',', '.') : '-')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 // ✅ DIUBAH: tidak lagi hitung manual, mengikuti pola NotaKayuController
@@ -113,7 +113,7 @@ class DetailTurusanKayusTable
                 // dipakai/ditampilkan di Nota Kayu, karena sumbernya satu (model accessor).
                 TextColumn::make('kubikasi')
                     ->label('Kubikasi')
-                    ->state(fn ($record) => $record->kubikasi)
+                    ->state(fn($record) => $record->kubikasi)
                     ->numeric(decimalPlaces: 6)
                     ->suffix(' m³')
                     ->alignRight()
@@ -141,19 +141,18 @@ class DetailTurusanKayusTable
                         // ✅ DIUBAH: kubikasi diambil dari accessor model ($r->kubikasi)
                         // bukan dihitung ulang manual, agar konsisten dengan Nota Kayu.
                         if ($records instanceof Collection && $records->isNotEmpty()) {
-                            $totalBatang = $records->count();
-                            $totalKubikasi = $records->sum(fn ($r) => round($r->kubikasi, 4));
+                            $totalBatang   = $records->count();
+                            $totalKubikasi = $records->sum(fn($r) => $r->kubikasi);        // ← round() dihapus
                         } else {
                             $parentId = $record->id_kayu_masuk ?? $record->kayu_masuk_id;
                             $query = DetailTurusanKayu::where('id_kayu_masuk', $parentId)
                                 ->where('lahan_id', $record->lahan_id)
                                 ->get();
-                            $totalBatang = $query->count();
-                            $totalKubikasi = $query->sum(fn ($r) => round($r->kubikasi, 4));
+                            $totalBatang   = $query->count();
+                            $totalKubikasi = $query->sum(fn($r) => $r->kubikasi);          // ← round() dihapus
                         }
-
-                        return "{$kode} {$nama} {$jenis_kayu} - {$totalBatang} batang (".
-                            number_format($totalKubikasi, 4, ',', '.').' m³)';
+                        return "{$kode} {$nama} {$jenis_kayu} - {$totalBatang} batang (" .
+                            number_format($totalKubikasi, 4, ',', '.') . ' m³)';
                     }),
             ])
             ->defaultGroup('lahan.kode_lahan')
@@ -178,10 +177,10 @@ class DetailTurusanKayusTable
                     ->visible($canPerformAction)
                     ->modalHeading('Input Turusan (Tanpa Sinyal)')
                     ->modalWidth('2xl')
-                    ->modalContent(fn () => view('filament.components.offline-turusan-modal', [
+                    ->modalContent(fn() => view('filament.components.offline-turusan-modal', [
                         'parentId' => $ownerRecord?->id,
-                        'optionsLahan' => Lahan::get()->mapWithKeys(fn ($l) => [$l->id => "{$l->kode_lahan} - {$l->nama_lahan}"]),
-                        'optionsJenis' => JenisKayu::get()->mapWithKeys(fn ($j) => [$j->id => "{$j->kode_kayu} - {$j->nama_kayu}"]),
+                        'optionsLahan' => Lahan::get()->mapWithKeys(fn($l) => [$l->id => "{$l->kode_lahan} - {$l->nama_lahan}"]),
+                        'optionsJenis' => JenisKayu::get()->mapWithKeys(fn($j) => [$j->id => "{$j->kode_kayu} - {$j->nama_kayu}"]),
                     ]))
                     ->modalSubmitAction(false)
                     ->modalCancelAction(false),
@@ -244,7 +243,7 @@ class DetailTurusanKayusTable
                                 ->title("Sinkronisasi Selesai: {$berhasil} batang diperbarui")
                                 ->body(
                                     $gagal > 0
-                                        ? "{$gagal} tidak ditemukan harganya: ".implode(', ', array_slice($tidakAda, 0, 5)).($gagal > 5 ? '...' : '')
+                                        ? "{$gagal} tidak ditemukan harganya: " . implode(', ', array_slice($tidakAda, 0, 5)) . ($gagal > 5 ? '...' : '')
                                         : 'Semua harga berhasil diperbarui dari master.'
                                 )
                                 ->success()
@@ -272,7 +271,7 @@ class DetailTurusanKayusTable
                         ->schema([
                             Select::make('lahan_id')->options(Lahan::pluck('kode_lahan', 'id'))->required(),
                         ])
-                        ->action(fn (array $data, Collection $records) => $records->each->update(['lahan_id' => $data['lahan_id']]))
+                        ->action(fn(array $data, Collection $records) => $records->each->update(['lahan_id' => $data['lahan_id']]))
                         ->deselectRecordsAfterCompletion(),
 
                     BulkAction::make('update_panjang')
@@ -281,7 +280,7 @@ class DetailTurusanKayusTable
                         ->schema([
                             Select::make('panjang')->label('Panjang Baru')->options([130 => '130', 260 => '260'])->required(),
                         ])
-                        ->action(fn (array $data, Collection $records) => $records->each->update(['panjang' => $data['panjang']]))
+                        ->action(fn(array $data, Collection $records) => $records->each->update(['panjang' => $data['panjang']]))
                         ->deselectRecordsAfterCompletion(),
 
                     BulkAction::make('update_jenis_kayu')
