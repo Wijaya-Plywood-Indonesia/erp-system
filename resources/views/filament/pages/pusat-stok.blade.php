@@ -2,7 +2,6 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 
         @php
-        // Definisikan daftar menu stok Anda di sini
         $stokMenus = [
         ['title' => 'Stok Kayu', 'url' => url('/admin/stok-kayu'), 'icon' => 'heroicon-o-cube'],
         ['title' => 'Stok Veneer Basah', 'url' => url('/admin/stok-veneer-basah'), 'icon' => 'heroicon-o-beaker'],
@@ -19,18 +18,22 @@
 
         @foreach($stokMenus as $menu)
         <a href="{{ $menu['url'] }}"
-            class="flex items-center gap-3 p-4 bg-zinc-900 border border-zinc-800 rounded-xl transition duration-200 hover:border-amber-500 hover:bg-zinc-800/50 group">
+            class="flex items-center gap-3 p-4 transition duration-200 rounded-xl group
+                   bg-white border border-gray-200 hover:border-amber-500 hover:bg-gray-50
+                   dark:bg-zinc-900 dark:border-zinc-800 dark:hover:border-amber-500 dark:hover:bg-zinc-800/50">
 
-            <!-- Icon Box/Document dengan warna orange sesuai tema gambar Anda -->
-            <div class="p-2 text-amber-500 bg-amber-500/10 rounded-lg group-hover:bg-amber-500 group-hover:text-zinc-950 transition">
+            <div class="p-2 rounded-lg transition
+                        text-amber-600 bg-amber-50 group-hover:bg-amber-500 group-hover:text-white
+                        dark:text-amber-500 dark:bg-amber-500/10 dark:group-hover:bg-amber-500 dark:group-hover:text-zinc-950">
                 <x-filament::icon
                     alias="panels::pages.dashboard.navigation-item"
                     icon="{{ $menu['icon'] }}"
                     class="h-5 w-5" />
             </div>
 
-            <!-- Judul Menu -->
-            <span class="text-sm font-medium text-zinc-200 group-hover:text-white">
+            <span class="text-sm font-medium transition
+                         text-gray-700 group-hover:text-gray-900
+                         dark:text-zinc-200 dark:group-hover:text-white">
                 {{ $menu['title'] }}
             </span>
         </a>
