@@ -24,15 +24,13 @@ class ModalRepairForm
                 Hidden::make('id_produksi_repair')
                     ->default(fn($livewire) => $livewire->getOwnerRecord()?->id),
 
-                // ✅ Field UI saja, tidak disimpan langsung.
-                // Menentukan apakah user pilih palet asli atau "Afalan".
                 Select::make('palet_select')
                     ->label('Pilih Palet (Veneer)')
                     ->options(fn(?ModalRepair $record) => self::getPaletOptions($record))
                     ->searchable()
                     ->live()
-                    ->required(fn($record) => $record === null) // required hanya saat create
-                    ->disabled(fn($record) => $record !== null) // sembunyikan edit ulang palet
+                    ->required(fn ($record) => $record === null)
+                    ->disabled(fn ($record) => $record !== null)
                     ->dehydrated(false)
                     ->afterStateHydrated(function (Set $set, ?ModalRepair $record) {
                         if (!$record) {
@@ -64,16 +62,11 @@ class ModalRepairForm
                         }
 
                         if ($state === 'AF') {
-                            // Nomor afalan murni angka (kolom nomor_palet masih int),
-                            // diambil dari total baris modal_repairs + 1.
-                            // id_serah_terima_veneer_kering diisi NULL karena FK mengharuskan nilai
-                            // yang valid (ada di tabel serah_terima_veneer_kering) atau NULL.
                             $newAfNumber = DB::table((new ModalRepair)->getTable())->count() + 1;
 
                             $set('id_serah_terima_veneer_kering', null);
                             $set('af_generated_id', $newAfNumber);
 
-                            // Kosongkan agar diisi manual oleh user lewat id_ukuran_select / id_jenis_kayu_select.
                             $set('id_ukuran', null);
                             $set('id_jenis_kayu', null);
                             $set('id_ukuran_select', null);
@@ -89,7 +82,6 @@ class ModalRepairForm
                             return;
                         }
 
-                        // Palet asli dipilih.
                         $serahTerima = SerahTerimaVeneerKering::with([
                             'detailHasil.ukuran',
                             'detailHasil.jenisKayu',
@@ -98,10 +90,11 @@ class ModalRepairForm
                         ])->find($state);
 
                         $sumber = $serahTerima?->sumber;
-                        $ukuran = $sumber?->ukuran;
+                        $tampilan = $serahTerima?->tampilan ?? ['no_palet' => '-', 'dimensi' => '-', 'jenis_kayu' => '-', 'kw' => '-'];
 
                         $sisa = $serahTerima?->sisa ?? 0;
-                        if ($record && $record->id_serah_terima_veneer_kering === (int) $state) {
+                        // ✅ FIX: bandingkan sebagai int, jangan strict beda tipe
+                        if ($record && (int) $record->id_serah_terima_veneer_kering === (int) $state) {
                             $sisa += (float) $record->jumlah;
                         }
 
@@ -112,6 +105,23 @@ class ModalRepairForm
                             // Saat edit, pertahankan nomor palet yang sudah ada, jangan generate baru lagi.
                             $newPaletNumber = $record->nomor_palet;
                         }
+
+                        $idUkuran = match ($serahTerima?->tipe_sumber) {
+                            'gudang' => $serahTerima->mutasiKeluarPalet?->mutasiKeluar?->id_ukuran,
+                            'gudang_jadi' => $serahTerima->mutasiKeluarPaletJadi?->mutasiKeluar
+                                ? SerahTerimaVeneerKering::cariUkuran(
+                                    $serahTerima->mutasiKeluarPaletJadi->mutasiKeluar->panjang,
+                                    $serahTerima->mutasiKeluarPaletJadi->mutasiKeluar->lebar,
+                                    $serahTerima->mutasiKeluarPaletJadi->mutasiKeluar->tebal
+                                )
+                                : null,
+                            default => $sumber?->id_ukuran,
+                        };
+                        $idJenisKayu = match ($serahTerima?->tipe_sumber) {
+                            'gudang' => $serahTerima->mutasiKeluarPalet?->mutasiKeluar?->id_jenis_kayu,
+                            'gudang_jadi' => $serahTerima->mutasiKeluarPaletJadi?->mutasiKeluar?->id_jenis_kayu,
+                            default => $sumber?->id_jenis_kayu,
+                        };
 
                         $set('id_serah_terima_veneer_kering', (int) $state);
                         // ✅ Field Hidden ini yang benar-benar disimpan ke DB — sumber kebenaran tunggal,
@@ -129,26 +139,15 @@ class ModalRepairForm
                         $set('jumlah', $sisa);
                     }),
 
-                // ✅ Field asli yang disimpan ke DB. NULL untuk Afalan (sudah nullable di DB).
                 Hidden::make('id_serah_terima_veneer_kering')
                     ->dehydrated(true),
 
-                // ==========================================================
-                // ✅ FIELD YANG BENAR-BENAR DISIMPAN KE DB.
-                // Selalu ada di form state (tidak pernah hilang dari DOM),
-                // sehingga dehydrate konsisten baik untuk AF maupun Serah Terima.
-                // Diisi dari dua jalur:
-                //   1. AF      -> disinkron dari Select id_ukuran_select / id_jenis_kayu_select (manual).
-                //   2. Serah   -> diisi otomatis di afterStateUpdated milik palet_select.
-                // ==========================================================
                 Hidden::make('id_ukuran')
                     ->dehydrated(true),
 
                 Hidden::make('id_jenis_kayu')
                     ->dehydrated(true),
 
-                // ✅ Select ini HANYA tampil & dipakai saat AF, murni untuk input manual user.
-                // Tidak pernah disimpan langsung (dehydrated false) — nilainya disalin ke Hidden di atas.
                 Select::make('id_jenis_kayu_select')
                     ->label('Jenis Kayu')
                     ->options(JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id'))
@@ -158,7 +157,6 @@ class ModalRepairForm
                     ->required(fn(Get $get) => $get('palet_select') === 'AF')
                     ->dehydrated(false)
                     ->afterStateHydrated(function (Set $set, ?ModalRepair $record) {
-                        // Saat edit record AF, isi ulang select dari nilai yang sudah tersimpan.
                         if ($record && $record->id_serah_terima_veneer_kering === null) {
                             $set('id_jenis_kayu_select', $record->id_jenis_kayu);
                         }
@@ -200,7 +198,7 @@ class ModalRepairForm
                         fn(Get $get, ?ModalRepair $record) => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
                             $idSerahTerima = $get('id_serah_terima_veneer_kering');
 
-                            if (!$idSerahTerima) {
+                            if (! $idSerahTerima) {
                                 return;
                             }
 
@@ -219,9 +217,9 @@ class ModalRepairForm
                                 $isPaletSama = (int)$record->id_serah_terima_veneer_kering === (int)$idSerahTerima;
                                 $isUkuranSama = $sumber && (int)$sumber->id_ukuran === (int)$record->id_ukuran;
 
-                                if ($isPaletSama || $isUkuranSama) {
-                                    $sisa += (float) $record->jumlah;
-                                }
+                            // ✅ FIX: bandingkan sebagai int
+                            if ($record && (int) $record->id_serah_terima_veneer_kering === (int) $idSerahTerima) {
+                                $sisa += (float) $record->jumlah;
                             }
 
                             if ((float)$value > $sisa) {
@@ -286,7 +284,7 @@ class ModalRepairForm
 
     protected static function getPaletOptions(?ModalRepair $record): array
     {
-        $currentId = $record?->id_serah_terima_veneer_kering;
+        $currentId = $record ? (int) $record->id_serah_terima_veneer_kering : null;
         $currentJumlah = (float) ($record?->jumlah ?? 0);
 
         // Ambil ID ukuran dari data yang sedang diedit
@@ -302,21 +300,14 @@ class ModalRepairForm
             ])
             ->get()
             ->map(function ($item) use ($currentId, $currentJumlah) {
-                // Evaluasi sisa: Tambahkan kembali stok jika ID paletnya sama
-                $sisa = $item->sisa + ((int)$item->id === (int)$currentId ? $currentJumlah : 0);
+                // ✅ FIX: bandingkan sebagai int agar record sendiri selalu dikenali
+                $sisa = $item->sisa + ((int) $item->id === $currentId ? $currentJumlah : 0);
 
                 return [$item, $sisa];
             })
-            ->filter(function ($pair) use ($currentUkuranId, $currentId) {
-                [$item, $sisa] = $pair;
-                $sumber = $item->sumber;
-
-                // KONDISI BARU: Tetap tampilkan jika sisa > 0
-                // ATAU jika ID Paletnya sama, ATAU jika ID Ukurannya sama persis dengan data lama
-                return $sisa > 0
-                    || ((int)$item->id === (int)$currentId)
-                    || ($currentUkuranId !== null && $sumber && (int)$sumber->id_ukuran === (int)$currentUkuranId);
-            })
+            // ✅ FIX: saat edit, palet milik record ini SELALU disertakan
+            // walau sisanya 0, supaya select bisa menampilkan value tersimpan.
+            ->filter(fn ($pair) => $pair[1] > 0 || (int) $pair[0]->id === $currentId)
             ->mapWithKeys(function ($pair) {
                 [$item, $sisa] = $pair;
                 $sumber = $item->sumber;

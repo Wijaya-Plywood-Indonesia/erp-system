@@ -41,7 +41,6 @@ class DetailKayuMasuk extends Model
         });
     }
 
-
     /**
      * Relasi ke model KayuMasuk
      * (Setiap detail kayu masuk dimiliki oleh satu kayu masuk)
@@ -50,14 +49,17 @@ class DetailKayuMasuk extends Model
     {
         return $this->belongsTo(KayuMasuk::class, 'id_kayu_masuk');
     }
+
     public function jenisKayu()
     {
         return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu', 'id');
     }
+
     public function lahan()
     {
         return $this->belongsTo(Lahan::class, 'id_lahan');
     }
+
     protected $appends = ['kubikasi', 'harga_satuan', 'total_harga'];
 
     public function getKubikasiAttribute()
@@ -66,15 +68,16 @@ class DetailKayuMasuk extends Model
         $jumlah = (float) ($this->jumlah_batang ?? 0);
         $panjang = (float) ($this->panjang ?? 0);
 
-        // formula: diameter * jumlah * 0.785 / 1_000_000
-        // kembalikan float dengan presisi cukup tinggi
-        $kubikasi = ($panjang * $diameter * $diameter * $jumlah * 0.785) / 1_000_000;
+        // formula: diameter * 1 * 0.785 / 1_000_000 (hitung per 1 batang dahulu)
+        $kubikasiPerBatang = ($panjang * $diameter * $diameter * 0.785) / 1000000;
 
-        return $kubikasi; // mis. 0.123456789
+        // Bulatkan per batang ke 4 desimal seperti Turusan, lalu dikali jumlah batang
+        return round($kubikasiPerBatang, 4) * $jumlah;
     }
+
     public function getHargaSatuanAttribute()
     {
-        $harga = \App\Models\HargaKayu::where('id_jenis_kayu', $this->id_jenis_kayu)
+        $harga = HargaKayu::where('id_jenis_kayu', $this->id_jenis_kayu)
             ->where('grade', $this->grade)
             ->where('panjang', $this->panjang)
             ->where('diameter_terkecil', '<=', $this->diameter)
@@ -108,6 +111,12 @@ class DetailKayuMasuk extends Model
     public static function hitungTotalByKayuMasuk($idKayuMasuk): array
     {
         $records = self::where('id_kayu_masuk', $idKayuMasuk)->get();
+
+        $totalBatang = $records->sum('jumlah_batang');
+        $totalKubikasi = $records->sum(function ($r) {
+            $kubikasiPerBatang = ($r->panjang * $r->diameter * $r->diameter * 0.785) / 1000000;
+            return round($kubikasiPerBatang, 4) * $r->jumlah_batang;
+        });
 
         return [
             'total_batang'   => $records->sum('jumlah_batang'),

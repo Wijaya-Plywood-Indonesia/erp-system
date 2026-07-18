@@ -47,19 +47,11 @@ class SerahTerimaVeneerKering extends Model
         return $this->belongsTo(HasilSandingJoint::class, 'id_hasil_sanding_joint');
     }
 
-    /**
-     * Sumber dari mutasi keluar Gudang Veneer Kering (per palet),
-     * mis. dikeluarkan untuk kebutuhan Repair.
-     */
     public function mutasiKeluarPalet(): BelongsTo
     {
         return $this->belongsTo(VeneerKeringMutasiKeluarPalet::class, 'id_mutasi_keluar_palet');
     }
 
-    /**
-     * 🆕 Sumber dari mutasi keluar Gudang Veneer JADI (per palet),
-     * mis. dikeluarkan untuk kebutuhan Repair.
-     */
     public function mutasiKeluarPaletJadi(): BelongsTo
     {
         return $this->belongsTo(VeneerJadiMutasiKeluarPalet::class, 'id_mutasi_keluar_palet_jadi');
@@ -70,10 +62,6 @@ class SerahTerimaVeneerKering extends Model
         return $this->belongsTo(ProduksiRepair::class, 'id_produksi_repair');
     }
 
-    /**
-     * Semua pemakaian palet ini sebagai bahan (modal) Repair,
-     * lintas produksi repair manapun.
-     */
     public function modalRepairs(): HasMany
     {
         return $this->hasMany(ModalRepair::class, 'id_serah_terima_veneer_kering');
@@ -88,11 +76,6 @@ class SerahTerimaVeneerKering extends Model
         return $this->diterima_oleh === '-';
     }
 
-    /**
-     * Ambil model sumber (DetailHasil, DetailBongkarKedi, HasilSandingJoint,
-     * VeneerKeringMutasiKeluarPalet, atau VeneerJadiMutasiKeluarPalet) tanpa
-     * perlu tahu tipe_sumber di luar model.
-     */
     public function getSumberAttribute(): DetailHasil|DetailBongkarKedi|HasilSandingJoint|VeneerKeringMutasiKeluarPalet|VeneerJadiMutasiKeluarPalet|null
     {
         return match ($this->tipe_sumber) {
@@ -105,9 +88,6 @@ class SerahTerimaVeneerKering extends Model
         };
     }
 
-    /**
-     * Label ringkas untuk ditampilkan di tabel
-     */
     public function getLabelSumberAttribute(): string
     {
         return match ($this->tipe_sumber) {
@@ -120,9 +100,6 @@ class SerahTerimaVeneerKering extends Model
         };
     }
 
-    /**
-     * Label jenis penerimaan (Kering/Jadi)
-     */
     public function getLabelJenisTerimaAttribute(): string
     {
         return match ($this->jenis_terima) {
@@ -133,30 +110,27 @@ class SerahTerimaVeneerKering extends Model
     }
 
     /**
-     * Qty asli dari sumber:
-     * - DetailHasil                    -> isi
-     * - DetailBongkarKedi              -> jumlah
-     * - HasilSandingJoint              -> jumlah
-     * - VeneerKeringMutasiKeluarPalet  -> qty
-     * - VeneerJadiMutasiKeluarPalet    -> jumlah_lembar
+     * ✅ FIX: qty asli sekarang di-resolve EKSPLISIT per tipe_sumber,
+     * bukan lagi rantai `??` yang bisa berhenti di kolom `0`/'' sebelum
+     * mencapai `jumlah_lembar` (kasus gudang_jadi).
      */
     public function getQtyAsliAttribute(): float
     {
-        return (float) ($this->sumber->isi ?? $this->sumber->jumlah ?? $this->sumber->qty ?? $this->sumber->jumlah_lembar ?? 0);
+        return (float) match ($this->tipe_sumber) {
+            'dryer' => $this->sumber?->isi ?? 0,
+            'kedi',
+            'sanding_joint' => $this->sumber?->jumlah ?? 0,
+            'gudang' => $this->sumber?->qty ?? 0,
+            'gudang_jadi' => $this->sumber?->jumlah_lembar ?? 0,
+            default => 0,
+        };
     }
 
-    /**
-     * Total lembar yang sudah dipakai sebagai bahan (modal) Repair,
-     * dijumlahkan lintas semua produksi repair.
-     */
     public function getTotalDigunakanAttribute(): float
     {
         return (float) $this->modalRepairs()->sum('jumlah');
     }
 
-    /**
-     * Sisa lembar yang masih bisa dipakai sebagai bahan Repair.
-     */
     public function getSisaAttribute(): float
     {
         return $this->qty_asli - $this->total_digunakan;
@@ -205,5 +179,23 @@ class SerahTerimaVeneerKering extends Model
             ],
             default => ['no_palet' => '-', 'dimensi' => '-', 'jenis_kayu' => '-', 'kw' => '-'],
         };
+    }
+
+    public static function cariUkuran($panjang, $lebar, $tebal): ?int
+    {
+        if ($panjang === null || $lebar === null || $tebal === null) {
+            return null;
+        }
+
+        $p = round((float) $panjang, 2);
+        $l = round((float) $lebar, 2);
+        $t = round((float) $tebal, 2);
+
+        return Ukuran::all()
+            ->first(function ($u) use ($p, $l, $t) {
+                return round((float) $u->panjang, 2) === $p
+                    && round((float) $u->lebar, 2) === $l
+                    && round((float) $u->tebal, 2) === $t;
+            })?->id;
     }
 }
