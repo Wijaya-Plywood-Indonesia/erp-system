@@ -119,8 +119,8 @@ class DetailKayuMasuk extends Model
         });
 
         return [
-            'total_batang' => $totalBatang,
-            'total_kubikasi' => $totalKubikasi,
+            'total_batang'   => $records->sum('jumlah_batang'),
+            'total_kubikasi' => $records->sum(fn($r) => $r->kubikasi), // ← accessor
         ];
     }
 

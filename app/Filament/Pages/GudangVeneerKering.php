@@ -269,8 +269,8 @@ class GudangVeneerKering extends Page
             $rows = $rows->filter(function (StokVeneerKering $row) use ($needle) {
                 $dimensi = strtolower(
                     rtrim(rtrim(number_format((float) $row->ukuran?->panjang, 2), '0'), '.') . 'x' .
-                    rtrim(rtrim(number_format((float) $row->ukuran?->lebar, 2), '0'), '.') . 'x' .
-                    rtrim(rtrim(number_format((float) $row->ukuran?->tebal, 2), '0'), '.')
+                        rtrim(rtrim(number_format((float) $row->ukuran?->lebar, 2), '0'), '.') . 'x' .
+                        rtrim(rtrim(number_format((float) $row->ukuran?->tebal, 2), '0'), '.')
                 );
                 $kw = strtolower((string) $row->kw);
                 $kayu = strtolower((string) $row->jenisKayu?->nama_kayu);
@@ -572,5 +572,20 @@ class GudangVeneerKering extends Page
     public function trimAngka($value): string
     {
         return rtrim(rtrim(number_format((float) $value, 2), '0'), '.');
+    }
+
+    public function formatKodePalet($serahTerima): string
+    {
+        // Jika data berasal dari dryer
+        if ($serahTerima->tipe_sumber === 'dryer' && $serahTerima->detailHasil) {
+            return 'DRY-' . $serahTerima->detailHasil->no_palet;
+        }
+
+        // Jika data berasal dari kedi (sesuaikan prefixnya jika ada, misal KDI-)
+        if ($serahTerima->tipe_sumber === 'kedi' && $serahTerima->detailBongkarKedi) {
+            return 'KDI-' . $serahTerima->detailBongkarKedi->no_palet; // ganti KDI sesuai kebutuhan
+        }
+
+        return '-';
     }
 }

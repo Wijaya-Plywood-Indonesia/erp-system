@@ -482,12 +482,12 @@ class GudangVeneerJadi extends Page
 
                 return str_contains($namaKayu, $q) ||
                     str_contains(strtolower($item->kw_grade), $q) ||
-                    str_contains(strtolower(($item->panjang + 0).'x'.($item->lebar + 0).'x'.($item->tebal + 0)), $q);
+                    str_contains(strtolower(($item->panjang + 0) . 'x' . ($item->lebar + 0) . 'x' . ($item->tebal + 0)), $q);
             });
 
         return [
-            'faceback' => $allStok->filter(fn ($item) => $item->tebal < 1.0),
-            'core' => $allStok->filter(fn ($item) => $item->tebal >= 1.0),
+            'faceback' => $allStok->filter(fn($item) => $item->tebal < 1.0),
+            'core' => $allStok->filter(fn($item) => $item->tebal >= 1.0),
         ];
     }
 
@@ -515,9 +515,9 @@ class GudangVeneerJadi extends Page
         return $dariGudang
             // ->concat($dariMutasi)
             ->sortBy([
-                fn ($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
-                fn ($item) => -$item['created_at_ts'],
-                fn ($item) => $item['id'],
+                fn($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
+                fn($item) => -$item['created_at_ts'],
+                fn($item) => $item['id'],
             ])
             ->values();
     }
@@ -550,8 +550,8 @@ class GudangVeneerJadi extends Page
         }
 
         // Sumber tunggal: GudangVeneerJadi (Produksi/Repair)
-        return $query->get()->map(fn ($item) => [
-            'id' => 'gudang-'.$item->id,
+        return $query->get()->map(fn($item) => [
+            'id' => 'gudang-' . $item->id,
             'source' => 'gudang',
             'jenis_kayu' => $item->jenis_kayu_nama,
             'panjang' => $item->panjang,
@@ -569,8 +569,8 @@ class GudangVeneerJadi extends Page
             'keterangan' => $item->keterangan,
         ])
             ->sortBy([
-                fn ($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
-                fn ($item) => -$item['created_at_ts'],
+                fn($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
+                fn($item) => -$item['created_at_ts'],
             ])
             ->values();
     }
@@ -601,10 +601,10 @@ class GudangVeneerJadi extends Page
 
         $mutasiRows = VeneerMutasi::query()
             ->whereNotNull('id_nota_bm') // proxy "arah masuk", sama seperti versi Kering
-            ->whereHas('notaBm', fn ($q) => $q->whereNotNull('divalidasi_oleh'))
-            ->whereHas('details', fn ($q) => $q->where('tipe_veneer', 'like', $jadiLike))
+            ->whereHas('notaBm', fn($q) => $q->whereNotNull('divalidasi_oleh'))
+            ->whereHas('details', fn($q) => $q->where('tipe_veneer', 'like', $jadiLike))
             ->with([
-                'details' => fn ($q) => $q
+                'details' => fn($q) => $q
                     ->where('tipe_veneer', 'like', $jadiLike)
                     ->with(['ukuran', 'jenisKayu']),
             ])
@@ -614,7 +614,7 @@ class GudangVeneerJadi extends Page
 
         // Kumpulkan semua id detail dari semua mutasi di atas, lalu cek SEKALI
         // mana saja yang sudah punya log 'masuk' (artinya: sudah "Diterima").
-        $semuaDetailIds = $mutasiRows->flatMap(fn ($vm) => $vm->details->pluck('id'));
+        $semuaDetailIds = $mutasiRows->flatMap(fn($vm) => $vm->details->pluck('id'));
 
         $sudahDiterimaIds = HppVeneerJadiLog::query()
             ->where('referensi_type', VeneerMutasiDetail::class)
@@ -645,7 +645,7 @@ class GudangVeneerJadi extends Page
                 $timestamp = $waktuNota instanceof Carbon ? $waktuNota->timestamp : strtotime($waktuNota);
 
                 $hasil->push([
-                    'id' => 'mutasi-'.$detail->id,
+                    'id' => 'mutasi-' . $detail->id,
                     'source' => 'mutasi',
                     'jenis_kayu' => $detail->jenisKayu?->nama_kayu,
                     'panjang' => $ukuran?->panjang,
@@ -660,7 +660,7 @@ class GudangVeneerJadi extends Page
                     'diterima_at' => null,
                     'diterima_by' => null,
                     'penerima_name' => 'N/A',
-                    'keterangan' => 'No Nota: '.($mutasi->no_nota ?? '-'),
+                    'keterangan' => 'No Nota: ' . ($mutasi->no_nota ?? '-'),
                 ]);
             }
         }
@@ -829,7 +829,7 @@ class GudangVeneerJadi extends Page
             });
         }
 
-        return $query->get()->map(fn ($item) => [
+        return $query->get()->map(fn($item) => [
             'id' => $item->id,
             'bisa_diedit' => $this->mutasiKeluarBisaDiedit($item),
             'created_at' => $item->created_at->format('d/m/Y H:i'),
@@ -1037,7 +1037,7 @@ class GudangVeneerJadi extends Page
                 ]);
 
                 $fresh->update([
-                    'diterima_oleh' => $userName.' - Gudang Veneer Jadi',
+                    'diterima_oleh' => $userName . ' - Gudang Veneer Jadi',
                     'status' => 'Terima Veneer',
                 ]);
             });
@@ -1076,4 +1076,28 @@ class GudangVeneerJadi extends Page
     //         // 3. $mutasi->update(['id_produksi_repair' => $idProduksiRepair]);
     //     });
     // }
+
+    public function formatKodePalet($serahTerima): string
+    {
+        if (! $serahTerima) {
+            return '-';
+        }
+
+        // 1. Jika sumber berasal dari Press Dryer
+        if ($serahTerima->tipe_sumber === 'dryer' && $serahTerima->detailHasil) {
+            return 'DRY-' . $serahTerima->detailHasil->no_palet;
+        }
+
+        // 2. Jika sumber berasal dari Bongkar Kedi
+        if ($serahTerima->tipe_sumber === 'kedi' && $serahTerima->detailBongkarKedi) {
+            return 'KD-' . $serahTerima->detailBongkarKedi->no_palet;
+        }
+
+        // 3. Jika sumber berasal dari Sanding Joint (jika ada prefix khusus, misal SJ-)
+        if ($serahTerima->tipe_sumber === 'sanding_joint' && $serahTerima->hasilSandingJoint) {
+            return 'SJ-' . $serahTerima->hasilSandingJoint->no_palet; // sesuaikan property no_palet/palet jika berbeda
+        }
+
+        return '-';
+    }
 }

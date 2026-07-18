@@ -21,7 +21,7 @@ class StokVeneerKeringResource extends Resource
     protected static ?string $model = StokVeneerKering::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArchiveBox;
-
+    protected static bool $shouldRegisterNavigation = false;
     protected static string|UnitEnum|null $navigationGroup = 'HPP & Biaya';
     protected static ?string $navigationLabel = 'Stok Veneer Kering';
     protected static ?string $modelLabel = 'Stok Veneer Kering';
