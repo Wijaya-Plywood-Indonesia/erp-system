@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\DetailBarangDikerjakans\Tables;
 
+use App\Models\JenisKayu;
 use App\Models\SerahTerimaGudangSatu;
+use App\Services\StokPlywoodSiapJualService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -16,6 +18,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 class DetailBarangDikerjakansTable
 {
@@ -183,10 +186,73 @@ class DetailBarangDikerjakansTable
 
                         } elseif ($data['serah_ke'] === 'gudang') {
 
-                            Notification::make()
-                                ->title('Fitur "Serah ke Gudang" sedang dalam pengembangan (Coming Soon)')
-                                ->warning()
-                                ->send();
+                            try {
+                                DB::transaction(function () use ($record) {
+
+                                    $b = $record->barangSetengahJadiHp;
+
+                                    if (! $b) {
+                                        throw new \RuntimeException('Data barang setengah jadi tidak ditemukan.');
+                                    }
+
+                                    $panjang = $b->ukuran?->panjang ?? 0;
+                                    $lebar = $b->ukuran?->lebar ?? 0;
+                                    $tebal = $b->ukuran?->tebal ?? 0;
+                                    $kwGrade = $b->grade?->nama_grade ?? '-';
+
+                                    $namaJenisBarang = $b->jenisBarang?->nama_jenis_barang;
+
+                                    $idJenisKayu = JenisKayu::where('nama_kayu', $namaJenisBarang)
+                                        ->value('id');
+
+                                    if (! $idJenisKayu) {
+                                        throw new \RuntimeException("Jenis kayu \"{$namaJenisBarang}\" tidak ditemukan di master jenis kayu.");
+                                    }
+
+                                    $lembar = $record->hasil;
+                                    $penyerah = auth()->user()?->name ?? '-';
+
+                                    // 1. Catat serah terima dengan tujuan 'gudang'.
+                                    // Belum ada fitur "terima" untuk tujuan gudang, jadi
+                                    // langsung ditandai diterima oleh pengirim sendiri (auto-terima).
+                                    $serahTerima = SerahTerimaGudangSatu::create([
+                                        'id_hasil_pilih_plywood' => null,
+                                        'id_produksi_terima_gudang_satu' => null,
+                                        'id_hasil_terima_gudang_satu' => null,
+                                        'id_triplek_mutasi_keluar' => null,
+                                        'id_produksi_nyusup' => null,
+                                        'id_hasil_nyusup' => $record->id,
+                                        'tujuan' => 'gudang',
+                                        'diserahkan_oleh' => $penyerah,
+                                        'diterima_oleh' => $penyerah,
+                                        'status' => 'Diterima',
+                                    ]);
+
+                                    // 2. Tambah stok plywood siap jual + catat log (kubikasi dihitung di dalam service)
+                                    app(StokPlywoodSiapJualService::class)->tambah(
+                                        idJenisKayu: $idJenisKayu,
+                                        panjang: $panjang,
+                                        lebar: $lebar,
+                                        tebal: $tebal,
+                                        kwGrade: $kwGrade,
+                                        lembar: $lembar,
+                                        keterangan: 'Serah terima dari Nyusup ke Gudang',
+                                        referensi: $serahTerima,
+                                    );
+                                });
+
+                                Notification::make()
+                                    ->title('Barang berhasil diserahkan ke Gudang dan stok berhasil ditambahkan')
+                                    ->success()
+                                    ->send();
+
+                            } catch (\Throwable $e) {
+                                Notification::make()
+                                    ->title('Gagal menyerahkan barang ke Gudang')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
                         }
                     }),
 

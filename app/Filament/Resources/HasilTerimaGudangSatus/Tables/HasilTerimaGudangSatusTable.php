@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\HasilTerimaGudangSatus\Tables;
 
+use App\Models\JenisKayu;
 use App\Models\SerahTerimaGudangSatu;
+use App\Services\StokPlywoodSiapJualService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -15,6 +17,7 @@ use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class HasilTerimaGudangSatusTable
 {
@@ -152,11 +155,62 @@ class HasilTerimaGudangSatusTable
 
                         } elseif ($data['serah_ke'] === 'gudang') {
 
-                            // 🚧 Coming soon
-                            Notification::make()
-                                ->title('Fitur "Serah ke Gudang" sedang dalam pengembangan (Coming Soon)')
-                                ->warning()
-                                ->send();
+                            try {
+                                DB::transaction(function () use ($record) {
+
+                                    $panjang = $record->ukuran?->panjang ?? 0;
+                                    $lebar = $record->ukuran?->lebar ?? 0;
+                                    $tebal = $record->ukuran?->tebal ?? 0;
+                                    $kwGrade = $record->grade?->nama_grade ?? '-';
+
+                                    $namaJenisBarang = $record->jenisBarang?->nama_jenis_barang;
+
+                                    $idJenisKayu = JenisKayu::where('nama_kayu', $namaJenisBarang)
+                                        ->value('id');
+
+                                    if (! $idJenisKayu) {
+                                        throw new \RuntimeException("Jenis kayu \"{$namaJenisBarang}\" tidak ditemukan di master jenis kayu.");
+                                    }
+
+                                    $lembar = $record->jumlah ?? 0;
+                                    $penyerah = Auth::user()->name;
+
+                                    // 1. Catat serah terima dengan tujuan 'gudang'.
+                                    // Belum ada fitur "terima" untuk tujuan gudang, jadi
+                                    // langsung ditandai diterima oleh pengirim sendiri (auto-terima).
+                                    $serahTerima = SerahTerimaGudangSatu::create([
+                                        'id_hasil_terima_gudang_satu' => $record->id,
+                                        'tujuan' => 'gudang',
+                                        'diserahkan_oleh' => $penyerah,
+                                        'diterima_oleh' => $penyerah,
+                                        'status' => 'Diterima',
+                                    ]);
+
+                                    // 2. Tambah stok plywood siap jual + catat log (kubikasi dihitung di dalam service)
+                                    app(StokPlywoodSiapJualService::class)->tambah(
+                                        idJenisKayu: $idJenisKayu,
+                                        panjang: $panjang,
+                                        lebar: $lebar,
+                                        tebal: $tebal,
+                                        kwGrade: $kwGrade,
+                                        lembar: $lembar,
+                                        keterangan: 'Serah terima dari Terima Gudang Satu ke Gudang',
+                                        referensi: $serahTerima,
+                                    );
+                                });
+
+                                Notification::make()
+                                    ->title('Barang berhasil diserahkan ke Gudang dan stok berhasil ditambahkan')
+                                    ->success()
+                                    ->send();
+
+                            } catch (\Throwable $e) {
+                                Notification::make()
+                                    ->title('Gagal menyerahkan barang ke Gudang')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
                         }
                     }),
 

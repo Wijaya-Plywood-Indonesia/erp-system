@@ -193,17 +193,16 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                 ]);
 
                 // Filter tujuan:
-                //  - Konteks Nyusup       : tujuan = 'nyusup' ATAU 'triplek_jadi'.
-                //  - Konteks Gudang Satu  : tujuan selain 'nyusup' (null / gudang_satu /
-                //                           'triplek_jadi' otomatis lolos di sini).
-                // Dengan begitu barang dari Gudang Triplek Jadi muncul di KEDUA
-                // antrean sampai salah satu menerimanya.
+                //  - 'nyusup'      → HANYA muncul di antrean Nyusup.
+                //  - 'gudang_satu' → HANYA muncul di antrean Gudang Satu.
+                //  - 'triplek_jadi'→ muncul di KEDUA antrean (Nyusup & Gudang Satu),
+                //                    sampai salah satu menerimanya.
+                //  - 'gudang'      → tujuannya final ke Gudang Plywood Siap Jual,
+                //                    TIDAK muncul di antrean manapun di sini.
                 $query->when(
                     $isNyusup,
                     fn ($q) => $q->whereIn('tujuan', ['nyusup', 'triplek_jadi']),
-                    fn ($q) => $q->where(function ($sub) {
-                        $sub->whereNull('tujuan')->orWhere('tujuan', '!=', 'nyusup');
-                    })
+                    fn ($q) => $q->whereIn('tujuan', ['gudang_satu', 'triplek_jadi'])
                 );
 
                 // Tampilkan yang masih menunggu (belum diterima siapapun, bisa diterima produksi manapun)
