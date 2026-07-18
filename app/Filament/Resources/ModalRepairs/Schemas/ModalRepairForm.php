@@ -276,6 +276,7 @@ class ModalRepairForm
 
         $options = SerahTerimaVeneerKering::query()
             ->where('diterima_oleh', '!=', '-')
+            ->whereIn('tipe_sumber', ['gudang', 'gudang_jadi']) // ✅ filter sumber gudang & gudang jadi
             ->with([
                 'detailHasil.ukuran', 'detailHasil.jenisKayu',
                 'detailBongkarKedi.ukuran', 'detailBongkarKedi.jenisKayu',
@@ -285,13 +286,10 @@ class ModalRepairForm
             ])
             ->get()
             ->map(function ($item) use ($currentId, $currentJumlah) {
-                // ✅ FIX: bandingkan sebagai int agar record sendiri selalu dikenali
                 $sisa = $item->sisa + ((int) $item->id === $currentId ? $currentJumlah : 0);
 
                 return [$item, $sisa];
             })
-            // ✅ FIX: saat edit, palet milik record ini SELALU disertakan
-            // walau sisanya 0, supaya select bisa menampilkan value tersimpan.
             ->filter(fn ($pair) => $pair[1] > 0 || (int) $pair[0]->id === $currentId)
             ->mapWithKeys(function ($pair) {
                 [$item, $sisa] = $pair;

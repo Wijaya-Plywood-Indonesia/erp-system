@@ -141,6 +141,7 @@ class MasukGrajiTriplekForm
         return SerahTerimaHp::query()
             ->whereNotNull('id_triplek_hasil_hp')   // <-- tambahan: khusus sumber triplek
             ->where('diterima_oleh', '!=', '-')
+            ->whereIn('tujuan', ['graji_triplek'])
             ->with([
                 'triplekHasilHp.barangSetengahJadi.ukuran',
                 'triplekHasilHp.barangSetengahJadi.grade',
