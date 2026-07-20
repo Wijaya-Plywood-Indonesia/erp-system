@@ -86,7 +86,7 @@ class DetailKayuMasuksTable
                         return "{$namaKayu} {$panjang} ({$grade})";
                     })
                     ->searchable(query: function ($query, string $search) {
-                        $query->whereHas('jenisKayu', fn ($q) => $q->where('nama_kayu', 'like', "%{$search}%"))
+                        $query->whereHas('jenisKayu', fn($q) => $q->where('nama_kayu', 'like', "%{$search}%"))
                             ->orWhere('panjang', 'like', "%{$search}%")
                             ->orWhere('grade', 'like', "%{$search}%");
                     })
@@ -168,7 +168,7 @@ class DetailKayuMasuksTable
                             $totalKubikasi = $query->sum(fn($r) => $r->kubikasi);          // ← round() dihapus
                         }
 
-                        return "{$kode} {$nama} {$jenis_kayu} - ".number_format($totalBatang).' batang ('.number_format($totalKubikasi, 4, ',', '.').' m³)';
+                        return "{$kode} {$nama} {$jenis_kayu} - " . number_format($totalBatang) . ' batang (' . number_format($totalKubikasi, 4, ',', '.') . ' m³)';
                     }),
             ])
             ->defaultGroup('lahan.kode_lahan')
@@ -201,9 +201,9 @@ class DetailKayuMasuksTable
                     ->modalHeading('Input Kayu (Mode Offline)')
                     ->modalWidth('2xl')
                     ->visible($canPerformAction) // Bypass Lock jika Admin
-                    ->modalContent(fn () => view('filament.components.offline-detail-kayu-modal', [
+                    ->modalContent(fn() => view('filament.components.offline-detail-kayu-modal', [
                         'parentId' => $ownerRecord?->id,
-                        'optionsLahan' => Lahan::all()->mapWithKeys(fn ($l) => [$l->id => "{$l->kode_lahan} - {$l->nama_lahan}"]),
+                        'optionsLahan' => Lahan::all()->mapWithKeys(fn($l) => [$l->id => "{$l->kode_lahan} - {$l->nama_lahan}"]),
                         'optionsJenis' => JenisKayu::pluck('nama_kayu', 'id'),
                     ]))
                     ->modalSubmitAction(false)
@@ -217,7 +217,7 @@ class DetailKayuMasuksTable
                     ->button()
                     ->size('sm')
                     ->visible($canPerformAction) // Bypass Lock jika Admin
-                    ->action(fn (DetailKayuMasuk $record) => $record->jumlah_batang > 0 ? $record->decrement('jumlah_batang') : null),
+                    ->action(fn(DetailKayuMasuk $record) => $record->jumlah_batang > 0 ? $record->decrement('jumlah_batang') : null),
 
                 Action::make('tambahBatang')
                     ->label('')
@@ -226,7 +226,7 @@ class DetailKayuMasuksTable
                     ->button()
                     ->size('sm')
                     ->visible($canPerformAction) // Bypass Lock jika Admin
-                    ->action(fn (DetailKayuMasuk $record) => $record->increment('jumlah_batang')),
+                    ->action(fn(DetailKayuMasuk $record) => $record->increment('jumlah_batang')),
 
                 EditAction::make()->visible($canPerformAction), // Bypass Lock jika Admin
                 DeleteAction::make()->visible($canPerformAction), // Bypass Lock jika Admin
@@ -240,7 +240,7 @@ class DetailKayuMasuksTable
                         ->schema([
                             Select::make('id_lahan')->label('Lahan Baru')->options(Lahan::pluck('kode_lahan', 'id')->toArray())->required(),
                         ])
-                        ->action(fn (array $data, Collection $records) => $records->each->update(['id_lahan' => $data['id_lahan']]))
+                        ->action(fn(array $data, Collection $records) => $records->each->update(['id_lahan' => $data['id_lahan']]))
                         ->deselectRecordsAfterCompletion(),
 
                     BulkAction::make('update_panjang')
@@ -249,7 +249,7 @@ class DetailKayuMasuksTable
                         ->schema([
                             Select::make('panjang')->label('Panjang Baru')->options([130 => '130', 260 => '260'])->required(),
                         ])
-                        ->action(fn (array $data, Collection $records) => $records->each->update(['panjang' => $data['panjang']]))
+                        ->action(fn(array $data, Collection $records) => $records->each->update(['panjang' => $data['panjang']]))
                         ->deselectRecordsAfterCompletion(),
 
                     BulkAction::make('update_jenis_kayu')

@@ -46,4 +46,9 @@ class RencanaRepair extends Model
     {
         return $this->hasMany(HasilRepair::class, 'id_rencana_repair');
     }
+
+    public function ukuran(): BelongsTo
+    {
+        return $this->belongsTo(Ukuran::class, 'id_modal_repair');
+    }
 }
