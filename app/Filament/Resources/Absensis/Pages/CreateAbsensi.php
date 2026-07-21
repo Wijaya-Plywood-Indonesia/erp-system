@@ -127,8 +127,7 @@ class CreateAbsensi extends CreateRecord
         // ===============================================
 
         $semuaPegawai = Pegawai::all()
-            ->keyBy(fn($p) => ltrim($p->kode_pegawai, '0'));
-
+            ->keyBy(fn($p) => ltrim(trim($p->kode_pegawai), '0'));
         // Pre-load shift produksi untuk targetDate sekaligus
         $shiftDryer   = ProduksiPressDryer::whereDate('tanggal_produksi', $targetDate)
             ->with('detailPegawais')
@@ -156,16 +155,16 @@ class CreateAbsensi extends CreateRecord
                 // Cek shift dari data produksi yang sudah di-preload
                 $shifts = array_filter([
                     $shiftDryer->first(
-                        fn($r) => $r->detailPegawais->contains(fn($d) => $d->id_pegawai === $pegawai->id)
+                        fn($r) => $r->detailPegawais->contains(fn($d) => (int) $d->id_pegawai === (int) $pegawai->id)
                     )?->shift,
                     $shiftHp->first(
-                        fn($r) => $r->detailPegawaiHp->contains(fn($d) => $d->id_pegawai === $pegawai->id)
+                        fn($r) => $r->detailPegawaiHp->contains(fn($d) => (int) $d->id_pegawai === (int) $pegawai->id)
                     )?->shift,
                     $shiftSanding->first(
-                        fn($r) => $r->pegawaiSandings->contains(fn($d) => $d->id_pegawai === $pegawai->id)
+                        fn($r) => $r->pegawaiSandings->contains(fn($d) => (int) $d->id_pegawai === (int) $pegawai->id)
                     )?->shift,
                     $shiftGraji->first(
-                        fn($r) => $r->pegawaiGrajiTriplek->contains(fn($d) => $d->id_pegawai === $pegawai->id)
+                        fn($r) => $r->pegawaiGrajiTriplek->contains(fn($d) => (int) $d->id_pegawai === (int) $pegawai->id)
                     )?->shift,
                 ]);
 
