@@ -44,7 +44,7 @@ class SerahTerimaHpRelationManager extends RelationManager
         return match (get_class($ownerRecord)) {
             ProduksiHp::class => 'Serah Hasil Produksi',
             ProduksiGrajitriplek::class => 'Terima Triplek',
-            ProduksiSanding::class => 'Terima Platform',
+            ProduksiSanding::class => 'Terima Platform/Plywood',
             default => 'Serah Terima',
         };
     }

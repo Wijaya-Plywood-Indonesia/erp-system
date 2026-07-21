@@ -12,6 +12,23 @@ use Filament\Schemas\Schema;
 
 class ModalSandingForm
 {
+    /**
+     * Eager load semua kemungkinan sumber hasil (HP, Graji, Sanding)
+     * supaya accessor `hasil` & `barangSetengahJadi` di SerahTerimaHp
+     * tidak N+1 dan tidak null untuk palet non-hotpress.
+     */
+    protected const HASIL_RELATIONS = [
+        'platformHasilHp.barangSetengahJadi.ukuran',
+        'platformHasilHp.barangSetengahJadi.grade',
+        'platformHasilHp.barangSetengahJadi.jenisBarang',
+        'hasilGrajiTriplek.barangSetengahJadiHp.ukuran',
+        'hasilGrajiTriplek.barangSetengahJadiHp.grade',
+        'hasilGrajiTriplek.barangSetengahJadiHp.jenisBarang',
+        'hasilSanding.barangSetengahJadi.ukuran',
+        'hasilSanding.barangSetengahJadi.grade',
+        'hasilSanding.barangSetengahJadi.jenisBarang',
+    ];
+
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
@@ -23,7 +40,7 @@ class ModalSandingForm
 
             /*
             |--------------------------------------------------------------------------
-            | PILIH PALET (SERAH TERIMA) — KHUSUS PLATFORM
+            | PILIH PALET (SERAH TERIMA) — SUMBER: HOTPRESS ATAU GRAJI
             |--------------------------------------------------------------------------
             */
             Select::make('id_serah_terima_hp')
@@ -44,14 +61,10 @@ class ModalSandingForm
                         return;
                     }
 
-                    $serahTerima = SerahTerimaHp::with([
-                        'platformHasilHp.barangSetengahJadi.jenisBarang',
-                        'platformHasilHp.barangSetengahJadi.grade',
-                        'platformHasilHp.barangSetengahJadi.ukuran',
-                    ])->find($state);
+                    $serahTerima = SerahTerimaHp::with(self::HASIL_RELATIONS)->find($state);
 
-                    $hasil = $serahTerima?->platformHasilHp;
-                    $barang = $hasil?->barangSetengahJadi;
+                    // Accessor universal — jalan untuk semua sumber
+                    $barang = $serahTerima?->barangSetengahJadi;
 
                     $sisa = $serahTerima?->sisa ?? 0;
                     if ($record && $record->id_serah_terima_hp === (int) $state) {
@@ -83,11 +96,13 @@ class ModalSandingForm
                 ->disabled()
                 ->dehydrated(false)
                 ->afterStateHydrated(function ($set, ?ModalSanding $record) {
-                    if (! $record?->barangSetengahJadi) {
+                    $barang = $record?->serahTerimaHp?->barangSetengahJadi;
+
+                    if (! $barang) {
                         return;
                     }
 
-                    $set('grade_label', $record->barangSetengahJadi->grade?->nama_grade);
+                    $set('grade_label', $barang->grade?->nama_grade);
                 }),
 
             TextInput::make('jenis_barang_label')
@@ -95,11 +110,13 @@ class ModalSandingForm
                 ->disabled()
                 ->dehydrated(false)
                 ->afterStateHydrated(function ($set, ?ModalSanding $record) {
-                    if (! $record?->barangSetengahJadi) {
+                    $barang = $record?->serahTerimaHp?->barangSetengahJadi;
+
+                    if (! $barang) {
                         return;
                     }
 
-                    $set('jenis_barang_label', $record->barangSetengahJadi->jenisBarang?->nama_jenis_barang);
+                    $set('jenis_barang_label', $barang->jenisBarang?->nama_jenis_barang);
                 }),
 
             TextInput::make('ukuran_label')
@@ -107,11 +124,13 @@ class ModalSandingForm
                 ->disabled()
                 ->dehydrated(false)
                 ->afterStateHydrated(function ($set, ?ModalSanding $record) {
-                    if (! $record?->barangSetengahJadi) {
+                    $barang = $record?->serahTerimaHp?->barangSetengahJadi;
+
+                    if (! $barang) {
                         return;
                     }
 
-                    $set('ukuran_label', $record->barangSetengahJadi->ukuran?->dimensi);
+                    $set('ukuran_label', $barang->ukuran?->dimensi);
                 }),
 
             /*
@@ -193,13 +212,14 @@ class ModalSandingForm
         $currentKuantitas = (float) ($record?->kuantitas ?? 0);
 
         return SerahTerimaHp::query()
-            ->whereNotNull('id_platform_hasil_hp')
             ->where('diterima_oleh', '!=', '-')
-            ->with([
-                'platformHasilHp.barangSetengahJadi.ukuran',
-                'platformHasilHp.barangSetengahJadi.grade',
-                'platformHasilHp.barangSetengahJadi.jenisBarang',
-            ])
+            ->whereIn('tujuan', ['sanding'])
+            // hanya palet yang memang menuju sanding: dari HP (platform) atau dari Graji
+            ->where(function ($q) {
+                $q->whereNotNull('id_platform_hasil_hp')
+                    ->orWhereNotNull('id_hasil_graji_triplek');
+            })
+            ->with(self::HASIL_RELATIONS)
             ->get()
             ->map(function ($item) use ($currentId, $currentKuantitas) {
                 $sisa = $item->sisa + ($item->id === $currentId ? $currentKuantitas : 0);
@@ -209,16 +229,17 @@ class ModalSandingForm
             ->filter(fn ($pair) => $pair[1] > 0)
             ->mapWithKeys(function ($pair) {
                 [$item, $sisa] = $pair;
-                $hasil = $item->platformHasilHp;
-                $barang = $hasil?->barangSetengahJadi;
+                $hasil = $item->hasil;                 // accessor universal
+                $barang = $item->barangSetengahJadi;   // accessor universal
                 $ukuran = $barang?->ukuran;
 
                 $ukuranLabel = $ukuran ? ($ukuran->dimensi ?? "{$ukuran->panjang}x{$ukuran->lebar}x{$ukuran->tebal}") : '-';
                 $kodeJenisBarang = strtoupper($barang?->jenisBarang?->kode_jenis_barang ?? '-');
                 $gradeLabel = $barang?->grade?->nama_grade ?? '-';
+                $asal = $item->asal_label;
                 $sisaLabel = rtrim(rtrim(number_format($sisa, 2, '.', ''), '0'), '.');
 
-                $label = "Palet {$hasil?->no_palet} - {$ukuranLabel} {$kodeJenisBarang} {$gradeLabel} — Sisa: {$sisaLabel}";
+                $label = "Palet {$hasil?->no_palet} ({$asal}) - {$ukuranLabel} {$kodeJenisBarang} {$gradeLabel} — Sisa: {$sisaLabel}";
 
                 return [$item->id => $label];
             })

@@ -32,7 +32,7 @@ class ListOpnameStoks extends CreateRecord
 
     public function getTitle(): string
     {
-        return 'Stock Opname Veneer';
+        return 'Stock Opname';
     }
 
     public function getMaxContentWidth(): string
@@ -50,24 +50,68 @@ class ListOpnameStoks extends CreateRecord
 
     protected function handleRecordCreation(array $data): BarangSetengahJadiHp
     {
-        return match ($data['jenis_stok']) {
-            'veneer_basah'  => $this->opnameVeneerBasah($data),
-            'veneer_jadi'   => $this->opnameVeneerJadi($data),
-            'veneer_kering' => $this->opnameVeneerKering($data),
-            'platform_mth'  => $this->opnamePlatformMth($data),
-            'triplek_mth'   => $this->opnameTriplekMth($data),
-            'plywood'       => $this->opnamePlywood($data),
-            'platform_jadi' => $this->opnamePlatformJadi($data),
-            'triplek_jadi'  => $this->opnameTriplekJadi($data),
-            'gudang_satu'   => $this->opnameGudangSatu($data),
-            default         => throw new \InvalidArgumentException('Jenis stok tidak dikenali.'),
-        };
+        $jenisStok = $data['jenis_stok'];
+        $items     = $data['items'] ?? [];
+
+        // Filter hanya baris yang stok_fisik-nya diisi
+        $itemsDiisi = array_filter($items, fn($item) => isset($item['stok_fisik']) && $item['stok_fisik'] !== null && $item['stok_fisik'] !== '');
+
+        if (empty($itemsDiisi)) {
+            Notification::make()->title('Tidak ada data yang diisi')->warning()->send();
+            return new BarangSetengahJadiHp();
+        }
+
+        $berhasil = 0;
+        $dilewati = 0;
+
+        foreach ($itemsDiisi as $item) {
+            // Gabungkan data item dengan jenis_stok agar method opname bisa pakai
+            $itemData = array_merge($item, ['jenis_stok' => $jenisStok]);
+
+            $result = match ($jenisStok) {
+                'veneer_basah'  => $this->opnameVeneerBasah($itemData),
+                'veneer_jadi'   => $this->opnameVeneerJadi($itemData),
+                'veneer_kering' => $this->opnameVeneerKering($itemData),
+                'platform_mth'  => $this->opnamePlatformMth($itemData),
+                'triplek_mth'   => $this->opnameTriplekMth($itemData),
+                'plywood'       => $this->opnamePlywood($itemData),
+                'platform_jadi' => $this->opnamePlatformJadi($itemData),
+                'triplek_jadi'  => $this->opnameTriplekJadi($itemData),
+                'gudang_satu'   => $this->opnameGudangSatu($itemData),
+                default         => null,
+            };
+
+            if ($result === true) $berhasil++;
+            else $dilewati++;
+        }
+
+        Notification::make()
+            ->title('Opname Selesai')
+            ->body("{$berhasil} barang berhasil disesuaikan" . ($dilewati > 0 ? ", {$dilewati} dilewati (tidak ada perubahan)." : "."))
+            ->success()
+            ->send();
+
+        return new BarangSetengahJadiHp();
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // Helper: buat keterangan
+    // ────────────────────────────────────────────────────────────
+    private function buatKeterangan(string $label, array $data): string
+    {
+        $tgl      = now()->format('d/m/Y');
+        $namaUser = auth()->user()?->name ?? 'SISTEM';
+        $ket      = "{$label} TANGGAL {$tgl} OLEH {$namaUser}";
+        if (!empty($data['catatan'])) {
+            $ket .= ". CATATAN: " . strtoupper($data['catatan']);
+        }
+        return $ket;
     }
 
     // ────────────────────────────────────────────────────────────
     // VENEER BASAH
     // ────────────────────────────────────────────────────────────
-    protected function opnameVeneerBasah(array $data): BarangSetengahJadiHp
+    protected function opnameVeneerBasah(array $data): bool
     {
         return DB::transaction(function () use ($data) {
             $ukuran = Ukuran::findOrFail($data['id_ukuran']);
@@ -87,10 +131,7 @@ class ListOpnameStoks extends CreateRecord
                     'lebar'         => (float) $ukuran->lebar,
                     'tebal'         => (float) $ukuran->tebal,
                     'kw'            => $data['kw'],
-                    'stok_lembar'   => 0,
-                    'stok_kubikasi' => 0,
-                    'nilai_stok'    => 0,
-                    'hpp_average'   => 0,
+                    'stok_lembar'   => 0, 'stok_kubikasi' => 0, 'nilai_stok' => 0, 'hpp_average' => 0,
                 ]);
             }
 
@@ -101,15 +142,10 @@ class ListOpnameStoks extends CreateRecord
             $selisihLembar   = $stokFisik - $stokSistem;
             $selisihKubikasi = $kubikasiFisik - $kubikasiSistem;
 
-            if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) {
-                Notification::make()->title('Tidak ada perubahan stok')->warning()->send();
-                return new BarangSetengahJadiHp();
-            }
+            if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) return false;
 
             $tipe = $selisihLembar !== 0 ? ($selisihLembar > 0 ? 'masuk' : 'keluar') : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
-            $tgl  = now()->format('d/m/Y');
-            $ket  = "OPNAME VENEER BASAH TANGGAL {$tgl}";
-            if (!empty($data['catatan'])) $ket .= ". CATATAN: " . strtoupper($data['catatan']);
+            $ket  = $this->buatKeterangan('OPNAME VENEER BASAH', $data);
 
             $kubikasiSelisih = round(abs($kubikasiFisik - $kubikasiSistem), 6);
             $nilaiStokBaru   = round($kubikasiFisik * $summary->hpp_average, 2);
@@ -137,15 +173,14 @@ class ListOpnameStoks extends CreateRecord
                 'nilai_stok_after'     => $nilaiStokBaru,
             ]);
 
-            Notification::make()->title('Opname Berhasil')->body("Stok veneer basah disesuaikan menjadi {$stokFisik} lembar.")->success()->send();
-            return new BarangSetengahJadiHp();
+            return true;
         });
     }
 
     // ────────────────────────────────────────────────────────────
     // VENEER JADI
     // ────────────────────────────────────────────────────────────
-    protected function opnameVeneerJadi(array $data): BarangSetengahJadiHp
+    protected function opnameVeneerJadi(array $data): bool
     {
         return DB::transaction(function () use ($data) {
             $ukuran = Ukuran::findOrFail($data['id_ukuran']);
@@ -176,15 +211,10 @@ class ListOpnameStoks extends CreateRecord
             $selisihLembar   = $stokFisik - $stokSistem;
             $selisihKubikasi = $kubikasiFisik - $kubikasiSistem;
 
-            if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) {
-                Notification::make()->title('Tidak ada perubahan stok')->warning()->send();
-                return new BarangSetengahJadiHp();
-            }
+            if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) return false;
 
             $tipe = $selisihLembar !== 0 ? ($selisihLembar > 0 ? 'masuk' : 'keluar') : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
-            $tgl  = now()->format('d/m/Y');
-            $ket  = "OPNAME VENEER JADI TANGGAL {$tgl}";
-            if (!empty($data['catatan'])) $ket .= ". CATATAN: " . strtoupper($data['catatan']);
+            $ket  = $this->buatKeterangan('OPNAME VENEER JADI', $data);
 
             $kubikasiSelisih = round(abs($kubikasiFisik - $kubikasiSistem), 6);
             $nilaiStokBaru   = round($kubikasiFisik * $summary->hpp_average, 2);
@@ -214,15 +244,14 @@ class ListOpnameStoks extends CreateRecord
             ]);
             $summary->update(['id_last_log' => $log->id]);
 
-            Notification::make()->title('Opname Berhasil')->body("Stok veneer jadi disesuaikan menjadi {$stokFisik} lembar.")->success()->send();
-            return new BarangSetengahJadiHp();
+            return true;
         });
     }
 
     // ────────────────────────────────────────────────────────────
     // VENEER KERING
     // ────────────────────────────────────────────────────────────
-    protected function opnameVeneerKering(array $data): BarangSetengahJadiHp
+    protected function opnameVeneerKering(array $data): bool
     {
         return DB::transaction(function () use ($data) {
             $idUkuran    = (int) $data['id_ukuran'];
@@ -239,15 +268,10 @@ class ListOpnameStoks extends CreateRecord
             $selisihLembar   = $stokFisik - $stokLembarSistem;
             $selisihKubikasi = $kubikasiFisik - $kubikasiSistem;
 
-            if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) {
-                Notification::make()->title('Tidak ada perubahan stok')->warning()->send();
-                return new BarangSetengahJadiHp();
-            }
+            if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) return false;
 
             $tipe = $selisihLembar !== 0 ? ($selisihLembar > 0 ? 'masuk' : 'keluar') : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
-            $tgl  = now()->format('d/m/Y');
-            $ket  = "OPNAME VENEER KERING TANGGAL {$tgl}";
-            if (!empty($data['catatan'])) $ket .= ". CATATAN: " . strtoupper($data['catatan']);
+            $ket  = $this->buatKeterangan('OPNAME VENEER KERING', $data);
 
             $nilaiStokSebelum = (float) $snapshot['nilai_stok'];
             $nilaiStokSesudah = round($kubikasiFisik * $hppAverage, 2);
@@ -272,13 +296,12 @@ class ListOpnameStoks extends CreateRecord
                 'keterangan'          => $ket,
             ]);
 
-            Notification::make()->title('Opname Berhasil')->body("Stok veneer kering disesuaikan menjadi {$stokFisik} lembar.")->success()->send();
-            return new BarangSetengahJadiHp();
+            return true;
         });
     }
 
     // ────────────────────────────────────────────────────────────
-    // HELPER: pola umum untuk stok dengan summary & log
+    // HELPER: pola umum summary & log
     // ────────────────────────────────────────────────────────────
     private function opnameDenganSummary(
         array $data,
@@ -287,7 +310,7 @@ class ListOpnameStoks extends CreateRecord
         string $logClass,
         array $logExtra = [],
         string $idField = 'id_jenis_kayu',
-    ): BarangSetengahJadiHp {
+    ): bool {
         $stokSistem      = (int) $summary->stok_lembar;
         $stokFisik       = (int) $data['stok_fisik'];
         $kubikasiFisik   = (float) $data['kubikasi_fisik'];
@@ -295,15 +318,10 @@ class ListOpnameStoks extends CreateRecord
         $selisihLembar   = $stokFisik - $stokSistem;
         $selisihKubikasi = $kubikasiFisik - $kubikasiSistem;
 
-        if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) {
-            Notification::make()->title('Tidak ada perubahan stok')->warning()->send();
-            return new BarangSetengahJadiHp();
-        }
+        if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) return false;
 
         $tipe = $selisihLembar !== 0 ? ($selisihLembar > 0 ? 'masuk' : 'keluar') : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
-        $tgl  = now()->format('d/m/Y');
-        $ket  = "{$labelKeterangan} TANGGAL {$tgl}";
-        if (!empty($data['catatan'])) $ket .= ". CATATAN: " . strtoupper($data['catatan']);
+        $ket  = $this->buatKeterangan($labelKeterangan, $data);
 
         $kubikasiSelisih = round(abs($kubikasiFisik - $kubikasiSistem), 6);
         $nilaiStokBaru   = round($kubikasiFisik * $summary->hpp_average, 2);
@@ -333,15 +351,13 @@ class ListOpnameStoks extends CreateRecord
         ], $logExtra));
 
         $summary->update(['id_last_log' => $log->id]);
-
-        Notification::make()->title('Opname Berhasil')->body("Stok disesuaikan menjadi {$stokFisik} lembar.")->success()->send();
-        return new BarangSetengahJadiHp();
+        return true;
     }
 
     // ────────────────────────────────────────────────────────────
     // PLATFORM MTH
     // ────────────────────────────────────────────────────────────
-    protected function opnamePlatformMth(array $data): BarangSetengahJadiHp
+    protected function opnamePlatformMth(array $data): bool
     {
         return DB::transaction(function () use ($data) {
             $ukuran  = Ukuran::findOrFail($data['id_ukuran']);
@@ -354,7 +370,7 @@ class ListOpnameStoks extends CreateRecord
     // ────────────────────────────────────────────────────────────
     // TRIPLEK MTH
     // ────────────────────────────────────────────────────────────
-    protected function opnameTriplekMth(array $data): BarangSetengahJadiHp
+    protected function opnameTriplekMth(array $data): bool
     {
         return DB::transaction(function () use ($data) {
             $ukuran  = Ukuran::findOrFail($data['id_ukuran']);
@@ -367,30 +383,12 @@ class ListOpnameStoks extends CreateRecord
     // ────────────────────────────────────────────────────────────
     // PLYWOOD SIAP JUAL
     // ────────────────────────────────────────────────────────────
-    protected function opnamePlywood(array $data): BarangSetengahJadiHp
+    protected function opnamePlywood(array $data): bool
     {
         return DB::transaction(function () use ($data) {
             $ukuran = Ukuran::findOrFail($data['id_ukuran']);
-
-            $summary = StokPlywoodSiapJual::where([
-                'id_jenis_kayu' => $data['id_jenis_kayu'],
-                'panjang'       => (float) $ukuran->panjang,
-                'lebar'         => (float) $ukuran->lebar,
-                'tebal'         => (float) $ukuran->tebal,
-                'kw_grade'      => $data['kw'],
-            ])->lockForUpdate()->first();
-
-            if (!$summary) {
-                $summary = StokPlywoodSiapJual::create([
-                    'id_jenis_kayu' => $data['id_jenis_kayu'],
-                    'panjang'       => (float) $ukuran->panjang,
-                    'lebar'         => (float) $ukuran->lebar,
-                    'tebal'         => (float) $ukuran->tebal,
-                    'kw_grade'      => $data['kw'],
-                    'stok_lembar'   => 0,
-                    'stok_kubikasi' => 0,
-                ]);
-            }
+            $summary = StokPlywoodSiapJual::where(['id_jenis_kayu' => $data['id_jenis_kayu'], 'panjang' => (float) $ukuran->panjang, 'lebar' => (float) $ukuran->lebar, 'tebal' => (float) $ukuran->tebal, 'kw_grade' => $data['kw']])->lockForUpdate()->first();
+            if (!$summary) $summary = StokPlywoodSiapJual::create(['id_jenis_kayu' => $data['id_jenis_kayu'], 'panjang' => (float) $ukuran->panjang, 'lebar' => (float) $ukuran->lebar, 'tebal' => (float) $ukuran->tebal, 'kw_grade' => $data['kw'], 'stok_lembar' => 0, 'stok_kubikasi' => 0]);
 
             $stokSistem      = (int) $summary->stok_lembar;
             $stokFisik       = (int) $data['stok_fisik'];
@@ -399,17 +397,12 @@ class ListOpnameStoks extends CreateRecord
             $selisihLembar   = $stokFisik - $stokSistem;
             $selisihKubikasi = $kubikasiFisik - $kubikasiSistem;
 
-            if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) {
-                Notification::make()->title('Tidak ada perubahan stok')->warning()->send();
-                return new BarangSetengahJadiHp();
-            }
+            if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) return false;
 
             $tipe = $selisihLembar !== 0 ? ($selisihLembar > 0 ? 'masuk' : 'keluar') : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
-            $tgl  = now()->format('d/m/Y');
-            $ket  = "OPNAME PLYWOOD SIAP JUAL TANGGAL {$tgl}";
-            if (!empty($data['catatan'])) $ket .= ". CATATAN: " . strtoupper($data['catatan']);
-
+            $ket  = $this->buatKeterangan('OPNAME PLYWOOD SIAP JUAL', $data);
             $kubikasiSelisih = round(abs($kubikasiFisik - $kubikasiSistem), 6);
+
             $summary->update(['stok_lembar' => $stokFisik, 'stok_kubikasi' => $kubikasiFisik]);
 
             $log = HppPlywoodSiapJualLog::create([
@@ -430,15 +423,14 @@ class ListOpnameStoks extends CreateRecord
             ]);
             $summary->update(['id_last_log' => $log->id]);
 
-            Notification::make()->title('Opname Berhasil')->body("Stok plywood siap jual disesuaikan menjadi {$stokFisik} lembar.")->success()->send();
-            return new BarangSetengahJadiHp();
+            return true;
         });
     }
 
     // ────────────────────────────────────────────────────────────
     // PLATFORM JADI
     // ────────────────────────────────────────────────────────────
-    protected function opnamePlatformJadi(array $data): BarangSetengahJadiHp
+    protected function opnamePlatformJadi(array $data): bool
     {
         return DB::transaction(function () use ($data) {
             $ukuran  = Ukuran::findOrFail($data['id_ukuran']);
@@ -451,7 +443,7 @@ class ListOpnameStoks extends CreateRecord
     // ────────────────────────────────────────────────────────────
     // TRIPLEK JADI
     // ────────────────────────────────────────────────────────────
-    protected function opnameTriplekJadi(array $data): BarangSetengahJadiHp
+    protected function opnameTriplekJadi(array $data): bool
     {
         return DB::transaction(function () use ($data) {
             $ukuran  = Ukuran::findOrFail($data['id_ukuran']);
@@ -464,7 +456,7 @@ class ListOpnameStoks extends CreateRecord
     // ────────────────────────────────────────────────────────────
     // GUDANG SATU
     // ────────────────────────────────────────────────────────────
-    protected function opnameGudangSatu(array $data): BarangSetengahJadiHp
+    protected function opnameGudangSatu(array $data): bool
     {
         return DB::transaction(function () use ($data) {
             $ukuran  = Ukuran::findOrFail($data['id_ukuran']);
