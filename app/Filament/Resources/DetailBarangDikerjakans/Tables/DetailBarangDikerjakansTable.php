@@ -95,6 +95,28 @@ class DetailBarangDikerjakansTable
                     ->numeric()
                     ->alignCenter()
                     ->weight('bold'),
+
+                TextColumn::make('status_serah')
+                    ->label('Status Serah')
+                    ->getStateUsing(function ($record) {
+                        $serah = SerahTerimaGudangSatu::where('id_hasil_nyusup', $record->id)->first();
+
+                        if (! $serah) {
+                            return 'Belum Diserahkan';
+                        }
+
+                        return $serah->diterima_oleh === '-' ? 'Menunggu Diterima' : 'Diterima';
+                    })
+                    ->badge()
+                    ->color(function ($record) {
+                        $serah = SerahTerimaGudangSatu::where('id_hasil_nyusup', $record->id)->first();
+
+                        if (! $serah) {
+                            return 'gray';
+                        }
+
+                        return $serah->diterima_oleh === '-' ? 'warning' : 'success';
+                    }),
             ])
 
             /*
