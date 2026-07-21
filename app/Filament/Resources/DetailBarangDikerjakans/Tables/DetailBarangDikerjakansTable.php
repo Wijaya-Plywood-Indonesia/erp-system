@@ -4,6 +4,7 @@ namespace App\Filament\Resources\DetailBarangDikerjakans\Tables;
 
 use App\Models\JenisKayu;
 use App\Models\SerahTerimaGudangSatu;
+use App\Services\StokGudangSatuService;
 use App\Services\StokPlywoodSiapJualService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -11,6 +12,7 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
 use Filament\Notifications\Notification;
@@ -19,6 +21,7 @@ use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class DetailBarangDikerjakansTable
 {
@@ -130,6 +133,7 @@ class DetailBarangDikerjakansTable
                     ->modalHeading('Serah Barang')
                     ->modalDescription('Detail barang yang akan diserahkan')
                     ->modalSubmitActionLabel('Serah')
+
                     ->form(function ($record) {
                         $b = $record->barangSetengahJadiHp;
 
@@ -159,7 +163,24 @@ class DetailBarangDikerjakansTable
                                 ])
                                 ->required()
                                 ->default('gudang_satu')
-                                ->reactive(),
+                                ->live(),
+
+                            // 🔒 Konfirmasi ganda — hanya wajib & tampil saat tujuan "Gudang",
+                            // karena aksi ini auto-terima & langsung mengubah stok (tidak bisa dibatalkan)
+                            Placeholder::make('warning')
+                                ->label('⚠️ Perhatian')
+                                ->content(
+                                    'Tindakan ini akan langsung dianggap DITERIMA (auto-terima) dan '
+                                    .'TIDAK BISA dibatalkan. Stok Gudang Satu akan langsung berkurang '
+                                    .'dan stok Plywood Siap Jual akan bertambah sesuai jumlah Hasil.'
+                                )
+                                ->visible(fn ($get) => $get('serah_ke') === 'gudang'),
+
+                            Checkbox::make('konfirmasi_ganda')
+                                ->label('Saya yakin data sudah benar dan menyetujui perubahan stok ini secara langsung.')
+                                ->visible(fn ($get) => $get('serah_ke') === 'gudang')
+                                ->accepted(fn ($get) => $get('serah_ke') === 'gudang')
+                                ->required(fn ($get) => $get('serah_ke') === 'gudang'),
                         ];
                     })
                     ->action(function ($record, array $data) {
@@ -185,6 +206,13 @@ class DetailBarangDikerjakansTable
                                 ->send();
 
                         } elseif ($data['serah_ke'] === 'gudang') {
+
+                            // Validasi server-side: checkbox konfirmasi ganda wajib dicentang
+                            if (empty($data['konfirmasi_ganda'])) {
+                                throw ValidationException::withMessages([
+                                    'konfirmasi_ganda' => 'Anda harus menyetujui konfirmasi sebelum melanjutkan.',
+                                ]);
+                            }
 
                             try {
                                 DB::transaction(function () use ($record) {
@@ -212,6 +240,10 @@ class DetailBarangDikerjakansTable
                                     $lembar = $record->hasil;
                                     $penyerah = auth()->user()?->name ?? '-';
 
+                                    // Hitung kubikasi (m3). Sesuaikan rumus ini jika berbeda
+                                    // dengan rumus yang dipakai di StokPlywoodSiapJualService.
+                                    $kubikasi = ($panjang * $lebar * $tebal * $lembar) / 10_000_000_000;
+
                                     // 1. Catat serah terima dengan tujuan 'gudang'.
                                     // Belum ada fitur "terima" untuk tujuan gudang, jadi
                                     // langsung ditandai diterima oleh pengirim sendiri (auto-terima).
@@ -228,7 +260,20 @@ class DetailBarangDikerjakansTable
                                         'status' => 'Diterima',
                                     ]);
 
-                                    // 2. Tambah stok plywood siap jual + catat log (kubikasi dihitung di dalam service)
+                                    // 2. 🔻 KURANGI stok Gudang Satu
+                                    app(StokGudangSatuService::class)->kurang(
+                                        idJenisKayu: $idJenisKayu,
+                                        panjang: $panjang,
+                                        lebar: $lebar,
+                                        tebal: $tebal,
+                                        kwGrade: $kwGrade,
+                                        lembar: $lembar,
+                                        kubikasi: $kubikasi,
+                                        keterangan: 'Serah terima dari Nyusup ke Gudang',
+                                        referensi: $serahTerima,
+                                    );
+
+                                    // 3. 🔺 TAMBAH stok plywood siap jual + catat log
                                     app(StokPlywoodSiapJualService::class)->tambah(
                                         idJenisKayu: $idJenisKayu,
                                         panjang: $panjang,
@@ -242,7 +287,7 @@ class DetailBarangDikerjakansTable
                                 });
 
                                 Notification::make()
-                                    ->title('Barang berhasil diserahkan ke Gudang dan stok berhasil ditambahkan')
+                                    ->title('Barang berhasil diserahkan ke Gudang, stok Gudang Satu berkurang, dan stok siap jual bertambah')
                                     ->success()
                                     ->send();
 

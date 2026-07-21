@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiTerimaGudangSatus\RelationManagers;
 
+use App\Models\BahanTerimaGudangSatu;
 use App\Models\JenisKayu;
 use App\Models\ProduksiNyusup;
 use App\Models\SerahTerimaGudangSatu;
@@ -67,8 +68,17 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
     }
 
     /**
+     * Apakah record ini berasal dari Hasil Terima Gudang Satu (penyesuaian naik/turun grade)?
+     */
+    protected function isDariHasilTerimaGudangSatu($record): bool
+    {
+        return $record->id_hasil_terima_gudang_satu !== null;
+    }
+
+    /**
      * Ambil data ringkas dari record untuk ditampilkan di preview modal terima.
-     * Mendukung tiga asal barang: Pilih Plywood (lama), Triplek Jadi, dan Nyusup.
+     * Mendukung empat asal barang: Pilih Plywood (lama), Triplek Jadi, Nyusup,
+     * dan Hasil Terima Gudang Satu (penyesuaian grade).
      */
     protected function getPreviewData($record): array
     {
@@ -102,6 +112,21 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                 'jenis_cacat' => '-',
                 'jumlah' => $record->jumlah ?? '-',
                 'dari_produksi' => 'Nyusup (Detail #'.$record->id_hasil_nyusup.')',
+            ];
+        }
+
+        // ── Asal: Hasil Terima Gudang Satu (penyesuaian naik/turun grade) ──
+        if ($this->isDariHasilTerimaGudangSatu($record)) {
+            $hasil = $record->hasilTerimaGudangSatu;
+
+            return [
+                'jenis_barang' => $hasil?->jenisBarang?->nama_jenis_barang ?? '-',
+                'grade' => $hasil?->grade?->nama_grade ?? '-',
+                'ukuran' => $hasil?->ukuran?->nama_ukuran ?? '-',
+                'kondisi' => 'Penyesuaian Grade Gudang Satu',
+                'jenis_cacat' => '-',
+                'jumlah' => $record->jumlah ?? '-',
+                'dari_produksi' => 'Hasil Terima Gudang Satu (#'.$record->id_hasil_terima_gudang_satu.')',
             ];
         }
 
@@ -167,6 +192,135 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
         );
     }
 
+    /**
+     * Kurangi & tambah stok Gudang Satu untuk barang yang berasal dari
+     * HASIL TERIMA GUDANG SATU (proses sortir ulang / penyesuaian naik-turun grade).
+     *
+     * Berlaku TERLEPAS dari konteks (Nyusup atau Gudang Satu) — karena ini murni
+     * penyesuaian stok internal Gudang Satu, bukan soal transfer ke Nyusup.
+     *
+     * Alur:
+     *  1. Ambil semua "bahan" (BahanTerimaGudangSatu) yang dipakai untuk
+     *     menghasilkan HasilTerimaGudangSatu ini — masing-masing mewakili
+     *     stok LAMA (grade sebelum disortir ulang) yang harus DIKURANGI
+     *     dari Gudang Satu.
+     *  2. Tambahkan stok BARU sesuai grade/jenis/ukuran hasil akhir
+     *     (HasilTerimaGudangSatu itu sendiri) sejumlah $record->jumlah.
+     *
+     * 🔒 SKIP: kalau grade bahan (lama) SAMA dengan grade hasil (baru) —
+     * artinya barang ini TIDAK naik/turun grade — maka bahan tersebut
+     * di-skip total (tidak dikurangi maupun ditambahkan lagi), karena
+     * stoknya sudah "benar" di grade itu dan tidak perlu disentuh.
+     */
+    protected function prosesStokHasilTerimaGudangSatu(SerahTerimaGudangSatu $record): void
+    {
+        $record->loadMissing([
+            'hasilTerimaGudangSatu.jenisBarang',
+            'hasilTerimaGudangSatu.grade',
+            'hasilTerimaGudangSatu.ukuran',
+        ]);
+
+        $hasil = $record->hasilTerimaGudangSatu;
+
+        if (! $hasil) {
+            throw new \RuntimeException('Data hasil terima gudang satu tidak ditemukan.');
+        }
+
+        $gradeHasil = $hasil->grade?->nama_grade;
+
+        $stokService = app(StokGudangSatuService::class);
+
+        // ── 1. Kurangi stok bahan (asal) yang dipakai untuk hasil ini ──
+        // Kecuali bahan yang grade-nya SAMA dengan grade hasil — itu di-skip,
+        // tidak perlu naik/turun grade karena memang tidak ada perubahan grade.
+        $bahanList = BahanTerimaGudangSatu::with([
+            'barangSetengahJadiHp.jenisBarang',
+            'barangSetengahJadiHp.grade',
+            'barangSetengahJadiHp.ukuran',
+        ])
+            ->where('id_hasil_terima_gudang_satu', $hasil->id)
+            ->get();
+
+        $lembarBerubahGrade = 0.0;
+
+        foreach ($bahanList as $bahan) {
+            $bsj = $bahan->barangSetengahJadiHp;
+
+            if (! $bsj || ! $bsj->ukuran || ! $bsj->grade || ! $bsj->jenisBarang) {
+                throw new \RuntimeException("Data bahan (#{$bahan->id}) tidak lengkap, stok tidak bisa disesuaikan.");
+            }
+
+            // 🔒 SKIP: grade bahan (lama) sama dengan grade hasil (baru) →
+            // tidak ada naik/turun grade, jadi tidak perlu dikurangi & ditambah.
+            if ($bsj->grade->nama_grade === $gradeHasil) {
+                continue;
+            }
+
+            $jenisKayuBahan = JenisKayu::where('nama_kayu', $bsj->jenisBarang->nama_jenis_barang)->first();
+
+            if (! $jenisKayuBahan) {
+                throw new \RuntimeException("Jenis kayu \"{$bsj->jenisBarang->nama_jenis_barang}\" (bahan) tidak ditemukan di data Jenis Kayu.");
+            }
+
+            $lembarBahan = (float) $bahan->jumlah;
+            $kubikasiBahan = $lembarBahan * (float) $bsj->ukuran->kubikasi / 10000000;
+
+            $stokService->kurang(
+                idJenisKayu: $jenisKayuBahan->id,
+                panjang: $bsj->ukuran->panjang,
+                lebar: $bsj->ukuran->lebar,
+                tebal: $bsj->ukuran->tebal,
+                kwGrade: $bsj->grade->nama_grade,
+                lembar: $lembarBahan,
+                kubikasi: $kubikasiBahan,
+                keterangan: 'Pemakaian bahan untuk Hasil Terima Gudang Satu #'.$hasil->id.' (Serah Terima #'.$record->id.')',
+                referensi: $bahan,
+            );
+
+            // Akumulasi jumlah yang MEMANG berubah grade — hanya sejumlah inilah
+            // yang nanti ditambahkan ke grade baru (hasil), supaya tidak dobel
+            // menambah stok untuk bahan yang grade-nya sudah sama (di-skip di atas).
+            $lembarBerubahGrade += $lembarBahan;
+        }
+
+        // ── 2. Tambah stok hasil (baru, sudah disesuaikan grade-nya) ──
+        // Hanya untuk porsi yang MEMANG naik/turun grade ($lembarBerubahGrade).
+        // Kalau semua bahan grade-nya sama dengan hasil (tidak ada yang berubah),
+        // maka $lembarBerubahGrade = 0 dan langkah ini otomatis di-skip juga —
+        // karena tidak ada penambahan stok yang perlu dilakukan.
+        if ($lembarBerubahGrade <= 0) {
+            return;
+        }
+
+        $ukuran = $hasil->ukuran;
+        $grade = $hasil->grade;
+        $jenisBarang = $hasil->jenisBarang;
+
+        if (! $ukuran || ! $grade || ! $jenisBarang) {
+            throw new \RuntimeException('Data ukuran, grade, atau jenis barang pada hasil tidak lengkap. Stok tidak dapat ditambahkan.');
+        }
+
+        $jenisKayuHasil = JenisKayu::where('nama_kayu', $jenisBarang->nama_jenis_barang)->first();
+
+        if (! $jenisKayuHasil) {
+            throw new \RuntimeException("Jenis kayu \"{$jenisBarang->nama_jenis_barang}\" tidak ditemukan di data Jenis Kayu. Mohon samakan penamaan atau tambahkan datanya terlebih dahulu.");
+        }
+
+        $kubikasiHasil = $lembarBerubahGrade * (float) $ukuran->kubikasi / 10000000;
+
+        $stokService->tambah(
+            idJenisKayu: $jenisKayuHasil->id,
+            panjang: $ukuran->panjang,
+            lebar: $ukuran->lebar,
+            tebal: $ukuran->tebal,
+            kwGrade: $grade->nama_grade,
+            lembar: $lembarBerubahGrade,
+            kubikasi: $kubikasiHasil,
+            keterangan: 'Terima barang dari Hasil Terima Gudang Satu (penyesuaian grade) - Gudang Satu (Serah Terima #'.$record->id.')',
+            referensi: $record,
+        );
+    }
+
     public function table(Table $table): Table
     {
         $ownerId = $this->getOwnerRecord()->id;
@@ -190,13 +344,20 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                     'hasilNyusup.barangSetengahJadiHp.jenisBarang',
                     'hasilNyusup.barangSetengahJadiHp.grade',
                     'hasilNyusup.barangSetengahJadiHp.ukuran',
+                    'hasilTerimaGudangSatu.jenisBarang',
+                    'hasilTerimaGudangSatu.grade',
+                    'hasilTerimaGudangSatu.ukuran',
                 ]);
 
                 // Filter tujuan:
                 //  - 'nyusup'      → HANYA muncul di antrean Nyusup.
                 //  - 'gudang_satu' → HANYA muncul di antrean Gudang Satu.
                 //  - 'triplek_jadi'→ muncul di KEDUA antrean (Nyusup & Gudang Satu),
-                //                    sampai salah satu menerimanya.
+                //                    sampai salah satu menerimanya — begitu diterima,
+                //                    kolom `tujuan` langsung diubah mengikuti tempat
+                //                    penerimaan ('nyusup' atau 'gudang_satu'), sehingga
+                //                    otomatis hilang dari antrean lawan cukup lewat
+                //                    filter tujuan ini saja (lihat action 'terima').
                 //  - 'gudang'      → tujuannya final ke Gudang Plywood Siap Jual,
                 //                    TIDAK muncul di antrean manapun di sini.
                 $query->when(
@@ -226,6 +387,10 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                             return $record->hasilNyusup?->barangSetengahJadiHp?->jenisBarang?->nama_jenis_barang ?? '-';
                         }
 
+                        if ($this->isDariHasilTerimaGudangSatu($record)) {
+                            return $record->hasilTerimaGudangSatu?->jenisBarang?->nama_jenis_barang ?? '-';
+                        }
+
                         return $record->barang_setengah_jadi?->jenisBarang?->nama_jenis_barang ?? '-';
                     }),
 
@@ -241,11 +406,16 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                             return 'Nyusup';
                         }
 
+                        if ($this->isDariHasilTerimaGudangSatu($record)) {
+                            return 'Penyesuaian Grade';
+                        }
+
                         return 'Pilih Plywood';
                     })
                     ->color(fn ($state) => match ($state) {
                         'Triplek Jadi' => 'info',
                         'Nyusup' => 'warning',
+                        'Penyesuaian Grade' => 'primary',
                         default => 'gray',
                     }),
 
@@ -258,6 +428,10 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
 
                         if ($this->isDariNyusup($record)) {
                             return $record->hasilNyusup?->barangSetengahJadiHp?->grade?->nama_grade ?? '-';
+                        }
+
+                        if ($this->isDariHasilTerimaGudangSatu($record)) {
+                            return $record->hasilTerimaGudangSatu?->grade?->nama_grade ?? '-';
                         }
 
                         return $record->barang_setengah_jadi?->grade?->nama_grade ?? '-';
@@ -278,6 +452,10 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                             return $record->hasilNyusup?->barangSetengahJadiHp?->ukuran?->nama_ukuran ?? '-';
                         }
 
+                        if ($this->isDariHasilTerimaGudangSatu($record)) {
+                            return $record->hasilTerimaGudangSatu?->ukuran?->nama_ukuran ?? '-';
+                        }
+
                         return $record->barang_setengah_jadi?->ukuran?->nama_ukuran ?? '-';
                     }),
 
@@ -290,6 +468,10 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
 
                         if ($this->isDariNyusup($record)) {
                             return 'Hasil Nyusup';
+                        }
+
+                        if ($this->isDariHasilTerimaGudangSatu($record)) {
+                            return 'Penyesuaian Grade Gudang Satu';
                         }
 
                         return $record->hasilPilihPlywood?->kondisi ?? '-';
@@ -392,13 +574,24 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
 
                                 $lokasi = $isNyusup ? 'Nyusup' : 'Gudang Satu';
 
-                                // Begitu diterima, record ini lengket permanen ke produksi ini
-                                // (kolom FK yang dipakai tergantung konteks: nyusup atau gudang satu).
-                                $fresh->update([
+                                $updateData = [
                                     'diterima_oleh' => Auth::user()->name.' - '.$lokasi,
                                     $foreignKey => $ownerId,
                                     'status' => 'Diterima',
-                                ]);
+                                ];
+
+                                // Barang asal Triplek Jadi awalnya bertujuan 'triplek_jadi' (bisa
+                                // muncul di KEDUA antrean). Begitu diklaim salah satu, ubah tujuan
+                                // supaya mengikuti tempat dia diterima — ini yang membuat query
+                                // antrean lawan otomatis tidak lagi menampilkan record ini
+                                // (optimasi: cukup filter tujuan, tanpa perlu logika tambahan).
+                                if ($fresh->tujuan === 'triplek_jadi') {
+                                    $updateData['tujuan'] = $isNyusup ? 'nyusup' : 'gudang_satu';
+                                }
+
+                                // Begitu diterima, record ini lengket permanen ke produksi ini
+                                // (kolom FK yang dipakai tergantung konteks: nyusup atau gudang satu).
+                                $fresh->update($updateData);
 
                                 if ($fresh->id_triplek_mutasi_keluar !== null) {
                                     // ── Barang asal GUDANG TRIPLEK JADI ──
@@ -409,8 +602,18 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
 
                                 } elseif ($fresh->id_hasil_nyusup !== null) {
                                     // ── Barang asal NYUSUP (DetailBarangDikerjakan) ──
-                                    // Tidak pernah menambah stok, baik diterima di Nyusup
-                                    // maupun di Sampling (Gudang Satu).
+                                    // Tidak pernah menambah/mengurangi stok, baik diterima di Nyusup
+                                    // maupun di Sampling (Gudang Satu). Sengaja dibiarkan kosong.
+
+                                } elseif ($fresh->id_hasil_terima_gudang_satu !== null) {
+                                    // ── Barang asal HASIL TERIMA GUDANG SATU (penyesuaian naik/turun grade) ──
+                                    // Kurangi stok bahan lama (grade sebelum disortir ulang) + tambah
+                                    // stok hasil baru (grade sesudah disortir ulang). Berlaku terlepas
+                                    // dari konteks penerimaan (Nyusup atau Gudang Satu), karena ini
+                                    // murni penyesuaian stok internal Gudang Satu.
+                                    // Bahan yang grade-nya SAMA dengan grade hasil otomatis di-skip
+                                    // di dalam method ini (tidak naik/turun grade).
+                                    $this->prosesStokHasilTerimaGudangSatu($fresh);
 
                                 } elseif (! $isNyusup) {
                                     // ── Barang asal PILIH PLYWOOD (logika lama) ──
