@@ -7,6 +7,8 @@ use App\Models\PegawaiPilihVeneer;
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 
 class HasilPilihVeneerForm
 {
@@ -40,18 +42,43 @@ class HasilPilihVeneerForm
                     ->label('Pilih Barang Modal')
                     ->required()
                     ->searchable()
-                    ->options(function ($livewire) {
+                    ->live()
+                    ->options(function ($livewire, $record) {
                         $produksi = $livewire->getOwnerRecord();
                         if (!$produksi) return [];
 
                         return ModalPilihVeneer::query()
                             ->where('id_produksi_pilih_veneer', $produksi->id)
-                            ->with(['ukuran', 'jenisKayu'])
+                            ->with(['stokVeneerJadi.jenisKayu', 'hasilPilihVeneers'])
                             ->get()
-                            ->mapWithKeys(function ($item) {
-                                $label = "{$item->ukuran->dimensi} | {$item->jenisKayu->nama_kayu} | KW: {$item->kw}";
+                            ->filter(function ($item) use ($record) {
+                                // Poin 3: modal yang sisanya 0 disembunyikan dari pilihan,
+                                // kecuali modal itu memang yang sedang dipakai record ini
+                                $sisa = $item->sisaBelumDipakai($record?->id);
+                                return $sisa > 0 || ($record && $record->id_modal_pilih_veneer == $item->id);
+                            })
+                            ->mapWithKeys(function ($item) use ($record) {
+                                $stok = $item->stokVeneerJadi;
+                                $sisa = $item->sisaBelumDipakai($record?->id);
+
+                                if (!$stok) {
+                                    return [$item->id => "Palet {$item->no_palet} · Data Stok N/A [Modal: {$item->jumlah} · Sisa: {$sisa}]"];
+                                }
+
+                                $panjang = floatval($stok->panjang);
+                                $lebar = floatval($stok->lebar);
+                                $tebal = floatval($stok->tebal);
+
+                                $dimensi = "{$panjang} x {$lebar} x {$tebal}";
+                                $kayu = $stok->jenisKayu?->nama_kayu ?? '-';
+
+                                // Poin 1: jumlah modal & sisa tampil di label
+                                $label = "Palet {$item->no_palet} · {$kayu} · {$dimensi} [KW Asal: {$stok->kw_grade}] · Modal: {$item->jumlah} · Sisa: {$sisa}";
                                 return [$item->id => $label];
                             });
+                    })
+                    ->afterStateUpdated(function (Set $set) {
+                        $set('jumlah', null);
                     })
                     ->columnSpanFull(),
 
@@ -67,7 +94,42 @@ class HasilPilihVeneerForm
                 TextInput::make('jumlah')
                     ->label('Jumlah Hasil')
                     ->required()
-                    ->numeric(),
+                    ->numeric()
+                    ->live(onBlur: true)
+                    ->helperText(function (Get $get, $record) {
+                        $idModal = $get('id_modal_pilih_veneer');
+                        if (!$idModal) return null;
+
+                        $modal = ModalPilihVeneer::find($idModal);
+                        if (!$modal) return null;
+
+                        $sisa = $modal->sisaBelumDipakai($record?->id);
+                        $input = (float) ($get('jumlah') ?? 0);
+
+                        // Poin 4: melebihi sisa modal
+                        if ($input > $sisa) {
+                            return "⚠ Stok melebihi batas modal. Sisa yang tersedia: {$sisa} lembar.";
+                        }
+
+                        // Poin 2: info sisa setelah dipakai
+                        $sisaSetelahInput = $sisa - $input;
+                        return "Sisa modal saat ini: {$sisa} lbr. Setelah disimpan: {$sisaSetelahInput} lbr.";
+                    })
+                    ->rules([
+                        fn(Get $get, $record) => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                            $idModal = $get('id_modal_pilih_veneer');
+                            if (!$idModal) return;
+
+                            $modal = ModalPilihVeneer::find($idModal);
+                            if (!$modal) return;
+
+                            $sisa = $modal->sisaBelumDipakai($record?->id);
+
+                            if ((float) $value > $sisa) {
+                                $fail("Jumlah hasil melebihi sisa modal yang tersedia ({$sisa} lembar).");
+                            }
+                        },
+                    ]),
             ]);
     }
 }

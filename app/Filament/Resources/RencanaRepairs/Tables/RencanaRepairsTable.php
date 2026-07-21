@@ -18,9 +18,9 @@ class RencanaRepairsTable
         return $table
             ->columns([
                 // 1. UKURAN — PAKAI ACCESSOR dimensi
-                TextColumn::make('modalRepairs.ukuran.dimensi')
+                TextColumn::make('ukuran.dimensi')
                     ->label('Ukuran')
-                    ->formatStateUsing(fn($state) => $state)
+                    // ->formatStateUsing(fn($state) => $state)
                     ->searchable()
                     ->sortable(),
 
@@ -48,8 +48,8 @@ class RencanaRepairsTable
                     ->formatStateUsing(
                         fn($state, $record) =>
                         $record->rencanaPegawai?->pegawai
-                        ? "{$record->rencanaPegawai->pegawai->kode_pegawai} - {$state}"
-                        : '-'
+                            ? "{$record->rencanaPegawai->pegawai->kode_pegawai} - {$state}"
+                            : '-'
                     )
                     ->searchable()
                     ->sortable(),
