@@ -5,6 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+use App\Models\Ukuran;
+use App\Models\JenisBarang;
+use App\Models\Grade;
+use App\Models\BarangSetengahJadiHp;
+
 class SerahTerimaGudangSatu extends Model
 {
     protected $table = 'serah_terima_gudang_satu';
@@ -78,6 +83,7 @@ class SerahTerimaGudangSatu extends Model
      * - Pilih Plywood: pakai relasi barangSetengahJadiHp.
      * - Hasil Terima Gudang Satu: objek itu sendiri (grade/jenisBarang/ukuran langsung).
      * - Hasil Nyusup (DetailBarangDikerjakan): pakai relasi barangSetengahJadiHp miliknya.
+     * - Triplek Jadi: cari/buat otomatis.
      */
     public function getBarangSetengahJadiAttribute()
     {
@@ -87,6 +93,27 @@ class SerahTerimaGudangSatu extends Model
 
         if ($this->hasilNyusup) {
             return $this->hasilNyusup->barangSetengahJadiHp;
+        }
+
+        if ($this->id_triplek_mutasi_keluar !== null) {
+            $m = $this->triplekMutasiKeluar;
+            if ($m) {
+                $ukuran = Ukuran::where('panjang', $m->panjang)
+                    ->where('lebar', $m->lebar)
+                    ->where('tebal', $m->tebal)
+                    ->first();
+                $jenisBarang = JenisBarang::where('nama_jenis_barang', $m->jenisKayu?->nama_kayu)->first();
+                $grade = $m->kw_grade
+                    ? Grade::where('nama_grade', $m->kw_grade)->first()
+                    : null;
+                if ($jenisBarang && $ukuran) {
+                    return BarangSetengahJadiHp::firstOrCreate([
+                        'id_jenis_barang' => $jenisBarang->id,
+                        'id_ukuran' => $ukuran->id,
+                        'id_grade' => $grade?->id,
+                    ]);
+                }
+            }
         }
 
         // HasilTerimaGudangSatu tidak punya barangSetengahJadiHp,

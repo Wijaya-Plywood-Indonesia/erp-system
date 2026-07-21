@@ -12,6 +12,7 @@ class BahanTerimaGudangSatu extends Model
 
     protected $fillable = [
         'id_produksi_terima_gudang_satu',
+        'id_hasil_terima_gudang_satu',
         'id_serah_terima_gudang_satu',
         'id_barang_setengah_jadi_hp',
         'no_palet',
@@ -92,5 +93,10 @@ class BahanTerimaGudangSatu extends Model
                 ProductionUpdated::dispatch($model->id_produksi_terima_gudang_satu, 'terima_gudang_satu');
             }
         });
+    }
+
+    public function hasilTerimaGudangSatu(): BelongsTo
+    {
+        return $this->belongsTo(HasilTerimaGudangSatu::class, 'id_hasil_terima_gudang_satu');
     }
 }

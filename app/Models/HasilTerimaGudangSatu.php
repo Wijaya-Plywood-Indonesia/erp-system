@@ -43,4 +43,16 @@ class HasilTerimaGudangSatu extends Model
     {
         return $this->hasOne(SerahTerimaGudangSatu::class, 'id_hasil_terima_gudang_satu');
     }
+
+    public function bahan(): HasOne
+    {
+        return $this->hasOne(BahanTerimaGudangSatu::class, 'id_hasil_terima_gudang_satu');
+    }
+
+    protected static function booted()
+    {
+        static::deleting(function (HasilTerimaGudangSatu $record) {
+            $record->bahan()?->delete();
+        });
+    }
 }
