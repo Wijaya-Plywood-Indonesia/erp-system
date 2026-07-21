@@ -12,7 +12,7 @@ class HppPlatformJadiPage extends Page
 {
     use HasPageShield;
     protected string $view = 'filament.pages.hpp-platform-jadi-page';
-
+    protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Log HPP Platform Jadi';
     protected static string|UnitEnum|null $navigationGroup = 'Log';
     protected static ?string $title          = 'Log HPP Platform Jadi';

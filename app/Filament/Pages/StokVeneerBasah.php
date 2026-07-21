@@ -19,7 +19,7 @@ class StokVeneerBasah extends Page
     use HasPageShield;
 
     protected string $view = 'filament.pages.stok-veneer-basah';
-
+    protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Stok Veneer Basah';
     protected static string|UnitEnum|null $navigationGroup = 'Stok';
     protected static ?string $title          = 'Stok Veneer Basah';

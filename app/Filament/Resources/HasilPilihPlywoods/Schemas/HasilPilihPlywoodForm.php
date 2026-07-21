@@ -109,37 +109,17 @@ class HasilPilihPlywoodForm
                 ]),
 
             // =========================
-            // 🔢 INPUT JUMLAH
+            // 🔢 INPUT JUMLAH (manual, tanpa auto-balancing)
             // =========================
             TextInput::make('jumlah')
                 ->label('Jumlah Lembar Cacat')
                 ->numeric()
-                ->required()
-                ->reactive()
-                ->afterStateUpdated(function ($state, $get, $set, $livewire) {
-                    // Ambil stok awal
-                    $stokAwal = BahanPilihPlywood::where('id_produksi_pilih_plywood', $livewire->ownerRecord->id)
-                        ->where('id_barang_setengah_jadi_hp', $get('id_barang_setengah_jadi_hp'))
-                        ->sum('jumlah');
-
-                    // Ambil yang sudah terpakai di DB
-                    $terpakai = HasilPilihPlywood::where('id_produksi_pilih_plywood', $livewire->ownerRecord->id)
-                        ->where('id_barang_setengah_jadi_hp', $get('id_barang_setengah_jadi_hp'))
-                        ->selectRaw('SUM(jumlah + jumlah_bagus) as total')
-                        ->value('total') ?? 0;
-
-                    $sisaSekarang = $stokAwal - $terpakai;
-
-                    // Otomatis isi hasil bagus dengan sisa yang ada dikurangi cacat saat ini
-                    $saranBagus = max(0, $sisaSekarang - (int) $state);
-                    $set('jumlah_bagus', $saranBagus);
-                }),
+                ->required(),
 
             TextInput::make('jumlah_bagus')
                 ->label('Hasil Bagus (Lembar)')
                 ->numeric()
-                ->required()
-                ->reactive(),
+                ->required(),
 
             Textarea::make('ket')
                 ->label('Keterangan Tambahan')

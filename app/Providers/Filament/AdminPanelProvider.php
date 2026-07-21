@@ -114,10 +114,6 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Opname')
                     ->icon('heroicon-o-clipboard-document-check')->collapsed(),
 
-                NavigationGroup::make('Stok')
-                    ->icon('heroicon-o-cube')
-                    ->collapsed(),
-
                 NavigationGroup::make('Log')
                     ->icon('heroicon-o-cog')
                     ->collapsed(),
@@ -152,17 +148,6 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Lain Lain')
                     ->icon('heroicon-o-ellipsis-horizontal-circle')->collapsed(),
 
-                //Laporan 
-
-                NavigationGroup::make('Hpp')
-                    ->icon('heroicon-o-calculator')
-                    ->collapsed(),
-
-
-
-                NavigationGroup::make('HPP')
-                    ->icon('heroicon-o-banknotes')
-                    ->collapsed(),
 
                 NavigationGroup::make('Laporan')
                     ->icon('heroicon-o-clipboard-document-list')

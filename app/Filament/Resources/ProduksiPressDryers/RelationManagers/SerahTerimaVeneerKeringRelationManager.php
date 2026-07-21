@@ -49,20 +49,20 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
 
     /**
      * Ambil data ringkas dari record untuk ditampilkan di preview modal terima.
-     * Tidak dipakai untuk tipe_sumber='gudang' (yang diterima langsung tanpa modal).
+     * Tidak dipakai untuk tipe_sumber='gudang' / 'gudang_jadi' (diterima langsung tanpa modal).
      */
     protected function getPreviewData($record): array
     {
         return [
             'no_palet' => match ($record->tipe_sumber) {
-    'dryer' => $record->detailHasil?->no_palet !== null
-        ? 'dry-' . $record->detailHasil->no_palet
-        : null,
-    'kedi' => $record->detailBongkarKedi?->no_palet !== null
-        ? 'kedi-' . $record->detailBongkarKedi->no_palet
-        : null,
-    default => null,
-} ?? '-',
+                'dryer' => $record->detailHasil?->no_palet !== null
+                    ? 'dry-'.$record->detailHasil->no_palet
+                    : null,
+                'kedi' => $record->detailBongkarKedi?->no_palet !== null
+                    ? 'kedi-'.$record->detailBongkarKedi->no_palet
+                    : null,
+                default => null,
+            } ?? '-',
 
             'ukuran' => match ($record->tipe_sumber) {
                 'dryer' => $record->detailHasil?->ukuran?->nama_ukuran,
@@ -128,20 +128,20 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                         'detailBongkarKedi.jenisKayu',
                         'mutasiKeluarPalet.mutasiKeluar.ukuran',
                         'mutasiKeluarPalet.mutasiKeluar.jenisKayu',
+                        // 🆕 Sumber gudang jadi: palet -> mutasiKeluar (header) -> jenisKayu
+                        'mutasiKeluarPaletJadi.mutasiKeluar.jenisKayu',
                     ])
-                    // 🔒 SEMENTARA DINONAKTIFKAN: tab Repair hanya menampilkan antrean dari
-                    // Gudang saja (tipe_sumber = 'gudang'). Antrean dari Dryer/Kedi
-                    // langsung (tipe_sumber 'dryer'/'kedi') disembunyikan dulu atas
-                    // permintaan — filter ini bisa dihapus lagi kapan saja untuk
-                    // mengaktifkan kembali tampilan gabungan seperti semula.
-                    ->where('tipe_sumber', 'gudang')
+                    // 🔒 Tab Repair menampilkan antrean dari Gudang Kering ('gudang')
+                    // DAN Gudang Jadi ('gudang_jadi'). Antrean dari Dryer/Kedi
+                    // langsung (tipe_sumber 'dryer'/'kedi') tetap disembunyikan
+                    // sesuai permintaan sebelumnya.
+                    ->whereIn('tipe_sumber', ['gudang', 'gudang_jadi'])
                     ->where(function ($q) use ($ownerId) {
                         $q->where('diterima_oleh', '-')
                             ->orWhere('id_produksi_repair', $ownerId);
                     })
                     ->orderBy('diterima_oleh', 'asc')
                     ->orderBy('created_at', 'desc');
-
             })
             ->columns([
                 TextColumn::make('tipe_sumber')
@@ -150,38 +150,48 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                     ->formatStateUsing(fn ($state) => match ($state) {
                         'dryer' => 'Press Dryer',
                         'kedi' => 'Kedi',
-                        'gudang' => 'Gudang',
+                        'gudang' => 'Gudang Kering',
+                        'gudang_jadi' => 'Gudang Jadi',
                         default => '-',
                     })
                     ->color(fn ($state) => match ($state) {
                         'dryer' => 'info',
                         'kedi' => 'warning',
                         'gudang' => 'gray',
+                        'gudang_jadi' => 'success',
                         default => 'gray',
                     }),
 
                 TextColumn::make('no_palet')
-    ->label('No. Palet')
-    ->getStateUsing(fn ($record) => match ($record->tipe_sumber) {
-        'dryer' => $record->detailHasil?->no_palet !== null
-            ? 'dry-' . $record->detailHasil->no_palet
-            : '-',
-        'kedi' => $record->detailBongkarKedi?->no_palet !== null
-            ? 'kd-' . $record->detailBongkarKedi->no_palet
-            : '-',
-        'gudang' => $record->mutasiKeluarPalet?->no_palet ?? '-',
-        default => '-',
-    })
-    ->badge()
-    ->color('info'),
+                    ->label('No. Palet')
+                    ->getStateUsing(fn ($record) => match ($record->tipe_sumber) {
+                        'dryer' => $record->detailHasil?->no_palet !== null
+                            ? 'dry-'.$record->detailHasil->no_palet
+                            : '-',
+                        'kedi' => $record->detailBongkarKedi?->no_palet !== null
+                            ? 'kd-'.$record->detailBongkarKedi->no_palet
+                            : '-',
+                        'gudang' => $record->mutasiKeluarPalet?->no_palet ?? '-',
+                        'gudang_jadi' => $record->mutasiKeluarPaletJadi?->nomor_palet !== null
+                            ? 'jd-'.$record->mutasiKeluarPaletJadi->nomor_palet
+                            : '-',
+                        default => '-',
+                    })
+                    ->badge()
+                    ->color('info'),
 
                 TextColumn::make('ukuran')
                     ->label('Ukuran')
                     ->getStateUsing(function ($record) {
+                        $mutasiJadi = $record->mutasiKeluarPaletJadi?->mutasiKeluar;
+
                         $ukuran = match ($record->tipe_sumber) {
                             'dryer' => $record->detailHasil?->ukuran?->nama_ukuran,
                             'kedi' => $record->detailBongkarKedi?->ukuran?->nama_ukuran,
                             'gudang' => $record->mutasiKeluarPalet?->mutasiKeluar?->ukuran?->nama_ukuran,
+                            'gudang_jadi' => $mutasiJadi !== null
+                                ? ($mutasiJadi->panjang + 0).'x'.($mutasiJadi->lebar + 0).'x'.($mutasiJadi->tebal + 0)
+                                : null,
                             default => null,
                         } ?? '-';
 
@@ -189,6 +199,7 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                             'dryer' => $record->detailHasil?->jenisKayu?->kode_kayu,
                             'kedi' => $record->detailBongkarKedi?->jenisKayu?->kode_kayu,
                             'gudang' => $record->mutasiKeluarPalet?->mutasiKeluar?->jenisKayu?->kode_kayu,
+                            'gudang_jadi' => $mutasiJadi?->jenisKayu?->kode_kayu,
                             default => null,
                         };
 
@@ -203,6 +214,7 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                         'dryer' => $record->detailHasil?->kw ?? '-',
                         'kedi' => $record->detailBongkarKedi?->kw ?? '-',
                         'gudang' => $record->mutasiKeluarPalet?->mutasiKeluar?->kw ?? '-',
+                        'gudang_jadi' => $record->mutasiKeluarPaletJadi?->mutasiKeluar?->kw_grade ?? '-',
                         default => '-',
                     })
                     ->alignCenter(),
@@ -214,6 +226,9 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                         'kedi' => $record->detailBongkarKedi?->jumlah ?? '-',
                         'gudang' => $record->mutasiKeluarPalet?->qty !== null
                             ? number_format((float) $record->mutasiKeluarPalet->qty, 0)
+                            : '-',
+                        'gudang_jadi' => $record->mutasiKeluarPaletJadi?->jumlah_lembar !== null
+                            ? number_format((float) $record->mutasiKeluarPaletJadi->jumlah_lembar, 0)
                             : '-',
                         default => '-',
                     })
@@ -313,8 +328,10 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                                 ->inline(),
                         ];
                     })
-                    // Hanya muncul kalau dibuka dari Repair, belum diterima, DAN bukan dari gudang
-                    ->visible(fn ($record) => $tipe === 'repair' && $record->diterima_oleh === '-' && $record->tipe_sumber !== 'gudang')
+                    // Hanya muncul kalau dibuka dari Repair, belum diterima, DAN bukan dari gudang manapun
+                    ->visible(fn ($record) => $tipe === 'repair'
+                        && $record->diterima_oleh === '-'
+                        && ! in_array($record->tipe_sumber, ['gudang', 'gudang_jadi'], true))
                     ->action(function ($record, array $data) use ($ownerId) {
                         try {
                             DB::transaction(function () use ($record, $ownerId, $data) {
@@ -342,7 +359,6 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                                 ->title('Veneer Kering Berhasil Diterima')
                                 ->success()
                                 ->send();
-
                         } catch (\Throwable $e) {
                             Notification::make()
                                 ->title('Gagal')
@@ -385,7 +401,62 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                                 ->title('Veneer Kering Berhasil Diterima')
                                 ->success()
                                 ->send();
+                        } catch (\Throwable $e) {
+                            Notification::make()
+                                ->title('Gagal')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
 
+                // 🆕 ── Terima dari Gudang Veneer JADI: LANGSUNG eksekusi, TANPA modal.
+                //    Barang ini sudah pasti "jadi" (berasal dari mutasi keluar
+                //    Gudang Veneer Jadi dengan tujuan Repair, dibuat di
+                //    GudangVeneerJadi::prosesKeluar()/updateKeluar()), jadi
+                //    tidak perlu pilihan Kering/Jadi.
+                //    $record di sini adalah baris ASLI serah_terima_veneer_kering
+                //    (tipe_sumber = 'gudang_jadi'), bukan model sintetis.
+                Action::make('terimaGudangJadi')
+                    ->label('Terima')
+                    ->color('success')
+                    ->icon('heroicon-o-check-circle')
+                    ->visible(fn ($record) => $tipe === 'repair' && $record->diterima_oleh === '-' && $record->tipe_sumber === 'gudang_jadi')
+                    ->action(function ($record) use ($ownerId) {
+                        try {
+                            DB::transaction(function () use ($record, $ownerId) {
+                                $fresh = SerahTerimaVeneerKering::with('mutasiKeluarPaletJadi.mutasiKeluar')
+                                    ->lockForUpdate()
+                                    ->find($record->id);
+
+                                if (! $fresh || $fresh->diterima_oleh !== '-') {
+                                    throw new \RuntimeException('Veneer ini sudah diambil produksi lain.');
+                                }
+
+                                $mutasi = $fresh->mutasiKeluarPaletJadi?->mutasiKeluar;
+
+                                if (! $mutasi) {
+                                    throw new \RuntimeException('Data mutasi keluar tidak ditemukan.');
+                                }
+
+                                if (! is_null($mutasi->id_produksi_repair) || ! is_null($mutasi->id_produksi_hp)) {
+                                    throw new \RuntimeException('Barang ini sudah diambil di sisi tujuan lain.');
+                                }
+
+                                $fresh->update([
+                                    'diterima_oleh' => Auth::user()->name.' - Produksi REPAIR',
+                                    'id_produksi_repair' => $ownerId,
+                                    'jenis_terima' => 'jadi',
+                                    'status' => 'Terima Veneer',
+                                ]);
+
+                                app(StokVeneerJadiService::class)->terimaKeluarGudang($fresh);
+                            });
+
+                            Notification::make()
+                                ->title('Veneer Jadi Berhasil Diterima')
+                                ->success()
+                                ->send();
                         } catch (\Throwable $e) {
                             Notification::make()
                                 ->title('Gagal')

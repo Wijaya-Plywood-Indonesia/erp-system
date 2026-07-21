@@ -12,7 +12,7 @@ class HppTriplekJadiPage extends Page
 {
     use HasPageShield;
     protected string $view = 'filament.pages.hpp-triplek-jadi-page';
-
+    protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Log HPP Triplek Jadi';
     protected static string|UnitEnum|null $navigationGroup = 'Log';
     protected static ?string $title          = 'Log HPP Triplek Jadi';

@@ -18,7 +18,9 @@ class DetailHasilStiksTable
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
-                    ->searchable(),
+                    ->searchable()
+                    ->badge()
+                    ->formatStateUsing(fn($state) => 'ST-' . $state),
 
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')

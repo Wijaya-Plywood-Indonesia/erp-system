@@ -489,7 +489,7 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             ? ($jns === 'Sengon' ? ['faceback'] : ['face', 'back'])
             : ($kelompok === 'ppc_faceback' ? ['ppc_faceback'] : [$kelompok]);
 
-        $kwOptions = array_map(function($opt) {
+        $kwOptions = array_map(function ($opt) {
             return 'KW 1 - ' . ucfirst(str_replace('_', ' ', $opt));
         }, $ukuranOptions);
 
@@ -501,8 +501,10 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
         $jenisBarang = $tipeKualitasMap[strtolower($tipeKualitas)] ?? 'Veneer Jadi';
 
         $hargaVeneer = \App\Models\ReferensiHargaProduksi::where('id_jenis_kayu', $jenisKayu->id)
-            ->where('jenis_barang', $jenisBarang)
-            ->whereIn('kw', $kwOptions)
+            ->whereHas('kategoriBarang', function ($query) use ($jenisBarang) {
+                $query->where('nama_kategori', $jenisBarang);
+            })
+            ->whereIn('nama', $kwOptions)
             ->first();
 
         if (!$hargaVeneer) {

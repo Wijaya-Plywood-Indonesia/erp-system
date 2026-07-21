@@ -14,6 +14,7 @@ class LogHargaKayu extends Page
     use HasPageShield;
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-clock';
     protected static string|UnitEnum|null $navigationGroup = 'Log';
+    protected static bool $shouldRegisterNavigation = false;
     protected static ?string $title = 'Log Harga Kayu';
     protected static ?int $navigationSort = 11;
 

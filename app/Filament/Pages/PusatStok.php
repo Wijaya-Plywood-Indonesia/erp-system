@@ -11,7 +11,6 @@ class PusatStok extends Page
 {
     use HasPageShield;
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-cube';
-    protected static UnitEnum|string|null $navigationGroup = 'Stok';
     protected static ?string $navigationLabel = 'Pusat Stok';
     protected string $view = 'filament.pages.pusat-stok';
 }

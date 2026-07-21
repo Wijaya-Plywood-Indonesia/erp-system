@@ -62,25 +62,28 @@ class GudangVeneerKering extends Page
      * Logika IDENTIK dgn halaman Stok Veneer Kering (MAX(id), stok_m3_sesudah > 0,
      * total_lembar = SUM(masuk) - SUM(keluar)).
      */
-
     public bool $showEditKeluarModal = false;
+
     public ?int $editKeluarId = null;
+
     public $editJumlahPalet = 1;
+
     public array $editPaletQuantities = [0 => ''];
 
-    // Kode untuk edit 
+    // Kode untuk edit
     public function editKeluar(int $id): void
     {
         $mutasi = VeneerKeringMutasiKeluar::with(['palets.serahTerima'])->find($id);
 
-        if (!$mutasi) {
+        if (! $mutasi) {
             Notification::make()->danger()->title('Data tidak ditemukan')->send();
+
             return;
         }
 
         // Terkunci kalau ADA SATU SAJA palet yang sudah diterima di Produksi Repair.
         $sudahAdaYangDiterima = $mutasi->palets
-            ->contains(fn($p) => optional($p->serahTerima)->diterima_oleh !== '-' && $p->serahTerima !== null);
+            ->contains(fn ($p) => optional($p->serahTerima)->diterima_oleh !== '-' && $p->serahTerima !== null);
 
         if ($sudahAdaYangDiterima) {
             Notification::make()
@@ -88,13 +91,14 @@ class GudangVeneerKering extends Page
                 ->title('Tidak Bisa Diedit')
                 ->body('Sebagian atau seluruh palet pada mutasi ini sudah diterima di Produksi Repair, rincian tidak bisa diubah lagi.')
                 ->send();
+
             return;
         }
 
         $this->editKeluarId = $mutasi->id;
 
         $palet = $mutasi->palets->sortBy('no_palet')->pluck('qty')->map('intval')->values()->toArray();
-        $this->editPaletQuantities = !empty($palet) ? $palet : [0 => ''];
+        $this->editPaletQuantities = ! empty($palet) ? $palet : [0 => ''];
         $this->editJumlahPalet = count($this->editPaletQuantities);
 
         $this->showEditKeluarModal = true;
@@ -136,7 +140,7 @@ class GudangVeneerKering extends Page
      */
     public function updateKeluar(): void
     {
-        if (!$this->editKeluarId) {
+        if (! $this->editKeluarId) {
             return;
         }
 
@@ -148,6 +152,7 @@ class GudangVeneerKering extends Page
                 ->title('Input Gagal')
                 ->body('Kuantitas palet wajib diisi.')
                 ->send();
+
             return;
         }
 
@@ -158,14 +163,14 @@ class GudangVeneerKering extends Page
                     ->lockForUpdate()
                     ->first();
 
-                if (!$mutasi) {
+                if (! $mutasi) {
                     throw new \Exception('Data tidak ditemukan.');
                 }
 
                 // 🔒 Re-cek race condition: ada palet yang keburu diterima sesaat
                 // setelah modal edit dibuka.
                 $sudahAdaYangDiterima = $mutasi->palets
-                    ->contains(fn($p) => optional($p->serahTerima)->diterima_oleh !== '-' && $p->serahTerima !== null);
+                    ->contains(fn ($p) => optional($p->serahTerima)->diterima_oleh !== '-' && $p->serahTerima !== null);
 
                 if ($sudahAdaYangDiterima) {
                     throw new \Exception('Sebagian palet sudah diterima di Produksi Repair, tidak bisa diedit lagi.');
@@ -219,6 +224,7 @@ class GudangVeneerKering extends Page
                         'diserahkan_oleh' => $user?->name ?? 'System',
                         'diterima_oleh' => '-',
                         'status' => 'Serah Veneer',
+                        'jenis_terima' => 'kering',
                     ]);
                 }
             });
@@ -241,6 +247,7 @@ class GudangVeneerKering extends Page
                 ->send();
         }
     }
+
     public function getSummariesProperty()
     {
         $rows = StokVeneerKering::query()
@@ -248,7 +255,7 @@ class GudangVeneerKering extends Page
             ->select('stok_veneer_kerings.*')
             ->join(
                 DB::raw('(SELECT MAX(id) as max_id FROM stok_veneer_kerings GROUP BY id_ukuran, id_jenis_kayu, kw) as latest'),
-                fn($join) => $join->on('stok_veneer_kerings.id', '=', 'latest.max_id')
+                fn ($join) => $join->on('stok_veneer_kerings.id', '=', 'latest.max_id')
             )
             ->where('stok_m3_sesudah', '>', 0)
             ->get();
@@ -268,9 +275,9 @@ class GudangVeneerKering extends Page
 
             $rows = $rows->filter(function (StokVeneerKering $row) use ($needle) {
                 $dimensi = strtolower(
-                    rtrim(rtrim(number_format((float) $row->ukuran?->panjang, 2), '0'), '.') . 'x' .
-                    rtrim(rtrim(number_format((float) $row->ukuran?->lebar, 2), '0'), '.') . 'x' .
-                    rtrim(rtrim(number_format((float) $row->ukuran?->tebal, 2), '0'), '.')
+                    rtrim(rtrim(number_format((float) $row->ukuran?->panjang, 2), '0'), '.').'x'.
+                        rtrim(rtrim(number_format((float) $row->ukuran?->lebar, 2), '0'), '.').'x'.
+                        rtrim(rtrim(number_format((float) $row->ukuran?->tebal, 2), '0'), '.')
                 );
                 $kw = strtolower((string) $row->kw);
                 $kayu = strtolower((string) $row->jenisKayu?->nama_kayu);
@@ -287,16 +294,16 @@ class GudangVeneerKering extends Page
     public function getFacebackProperty()
     {
         return $this->summaries
-            ->filter(fn(StokVeneerKering $r) => (float) ($r->ukuran?->tebal ?? 0) <= 1)
-            ->sortBy(fn(StokVeneerKering $r) => (float) ($r->ukuran?->tebal ?? 0))
+            ->filter(fn (StokVeneerKering $r) => (float) ($r->ukuran?->tebal ?? 0) <= 1)
+            ->sortBy(fn (StokVeneerKering $r) => (float) ($r->ukuran?->tebal ?? 0))
             ->values();
     }
 
     public function getCoreProperty()
     {
         return $this->summaries
-            ->filter(fn(StokVeneerKering $r) => (float) ($r->ukuran?->tebal ?? 0) > 1)
-            ->sortBy(fn(StokVeneerKering $r) => (float) ($r->ukuran?->tebal ?? 0))
+            ->filter(fn (StokVeneerKering $r) => (float) ($r->ukuran?->tebal ?? 0) > 1)
+            ->sortBy(fn (StokVeneerKering $r) => (float) ($r->ukuran?->tebal ?? 0))
             ->values();
     }
 
@@ -368,7 +375,7 @@ class GudangVeneerKering extends Page
                     throw new \RuntimeException('Veneer ini sudah diterima sebelumnya.');
                 }
 
-                if (!in_array($fresh->tipe_sumber, ['dryer', 'kedi'], true)) {
+                if (! in_array($fresh->tipe_sumber, ['dryer', 'kedi'], true)) {
                     throw new \RuntimeException('Sumber veneer tidak valid untuk diterima di Gudang Veneer Kering.');
                 }
 
@@ -379,7 +386,7 @@ class GudangVeneerKering extends Page
                 $user = Auth::user();
 
                 $fresh->update([
-                    'diterima_oleh' => ($user?->name ?? 'System') . ' - Gudang Veneer Kering',
+                    'diterima_oleh' => ($user?->name ?? 'System').' - Gudang Veneer Kering',
                     'status' => 'Terima Veneer',
                 ]);
 
@@ -450,7 +457,7 @@ class GudangVeneerKering extends Page
 
         $totalLembar = array_sum(array_map('intval', $this->paletQuantities));
 
-        if (!$this->selectedStokId || $totalLembar <= 0 || trim($this->tujuanKeluar) === '') {
+        if (! $this->selectedStokId || $totalLembar <= 0 || trim($this->tujuanKeluar) === '') {
             Notification::make()
                 ->danger()
                 ->title('Input Gagal')
@@ -515,6 +522,7 @@ class GudangVeneerKering extends Page
                         'diserahkan_oleh' => $user?->name ?? 'System',
                         'diterima_oleh' => '-',
                         'status' => 'Serah Veneer',
+                        'jenis_terima' => 'kering',
                     ]);
                 }
             });
@@ -554,7 +562,7 @@ class GudangVeneerKering extends Page
         if (trim($this->keluarSearchQuery) !== '') {
             $q = strtolower(trim($this->keluarSearchQuery));
             $query->where(function ($query) use ($q) {
-                $query->whereHas('jenisKayu', fn($qr) => $qr->whereRaw('LOWER(nama_kayu) LIKE ?', ["%{$q}%"]))
+                $query->whereHas('jenisKayu', fn ($qr) => $qr->whereRaw('LOWER(nama_kayu) LIKE ?', ["%{$q}%"]))
                     ->orWhereRaw('LOWER(kw) LIKE ?', ["%{$q}%"])
                     ->orWhereRaw('LOWER(tujuan_keluar) LIKE ?', ["%{$q}%"])
                     ->orWhereRaw('LOWER(keterangan) LIKE ?', ["%{$q}%"]);
@@ -562,9 +570,10 @@ class GudangVeneerKering extends Page
         }
 
         return $query->get()->map(function ($rk) {
-            $rk->bisa_diedit = !$rk->palets->contains(
-                fn($p) => $p->serahTerima !== null && $p->serahTerima->diterima_oleh !== '-'
+            $rk->bisa_diedit = ! $rk->palets->contains(
+                fn ($p) => $p->serahTerima !== null && $p->serahTerima->diterima_oleh !== '-'
             );
+
             return $rk;
         });
     }
@@ -572,5 +581,20 @@ class GudangVeneerKering extends Page
     public function trimAngka($value): string
     {
         return rtrim(rtrim(number_format((float) $value, 2), '0'), '.');
+    }
+
+    public function formatKodePalet($serahTerima): string
+    {
+        // Jika data berasal dari dryer
+        if ($serahTerima->tipe_sumber === 'dryer' && $serahTerima->detailHasil) {
+            return 'DRY-'.$serahTerima->detailHasil->no_palet;
+        }
+
+        // Jika data berasal dari kedi (sesuaikan prefixnya jika ada, misal KDI-)
+        if ($serahTerima->tipe_sumber === 'kedi' && $serahTerima->detailBongkarKedi) {
+            return 'KDI-'.$serahTerima->detailBongkarKedi->no_palet; // ganti KDI sesuai kebutuhan
+        }
+
+        return '-';
     }
 }
