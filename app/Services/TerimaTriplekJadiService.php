@@ -3,14 +3,18 @@
 namespace App\Services;
 
 use App\Models\HppTriplekJadiLog;
-use App\Models\SerahTerimaGudangSatu;
 use App\Models\StokTriplekJadi;
 use App\Models\TriplekJadiMutasiKeluar;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
 /**
  * Menangani konfirmasi penerimaan barang keluaran Gudang Triplek Jadi
- * di tujuan (Produksi Nyusup / Gudang Satu).
+ * di tujuan mana pun (Produksi Nyusup / Gudang Satu / Produksi Sanding).
+ *
+ * $serahTerima boleh SerahTerimaGudangSatu ATAU SerahTerimaHp — syaratnya
+ * cuma satu: punya kolom id_triplek_mutasi_keluar yang terisi. Record ini
+ * juga dipakai sebagai referensi morph saat menambah stok tujuan.
  *
  * DIPANGGIL DI DALAM TRANSAKSI (oleh relation manager) — jangan buka
  * transaksi sendiri di sini.
@@ -20,16 +24,22 @@ use Illuminate\Support\Facades\Auth;
  *     (baru dipotong SEKARANG, saat dikonfirmasi — bukan saat dikirim).
  *  2. Tandai mutasi keluar sebagai diterima.
  *  3. Jika diterima di Gudang Satu: tambah stok plywood siap jual via
- *     StokGudangSatuService (id jenis kayu langsung dari mutasi — tidak
- *     perlu pencocokan nama seperti alur Pilih Plywood).
+ *     StokGudangSatuService. Tujuan produksi (Nyusup/Sanding) tidak
+ *     menambah stok apa pun di sini.
  */
 class TerimaTriplekJadiService
 {
-    public function konfirmasi(SerahTerimaGudangSatu $serahTerima, bool $tambahStokGudangSatu): void
+    public function konfirmasi(Model $serahTerima, bool $tambahStokGudangSatu): void
     {
+        $idMutasi = $serahTerima->id_triplek_mutasi_keluar;
+
+        if (! $idMutasi) {
+            throw new \RuntimeException('Record serah terima ini tidak tertaut ke mutasi keluar Triplek Jadi.');
+        }
+
         $mutasi = TriplekJadiMutasiKeluar::with('jenisKayu')
             ->lockForUpdate()
-            ->findOrFail($serahTerima->id_triplek_mutasi_keluar);
+            ->findOrFail($idMutasi);
 
         if ($mutasi->status === TriplekJadiMutasiKeluar::STATUS_DITERIMA) {
             throw new \RuntimeException('Mutasi keluar ini sudah pernah dikonfirmasi diterima.');

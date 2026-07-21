@@ -14,6 +14,7 @@ class SerahTerimaHp extends Model
         'id_platform_hasil_hp',
         'id_hasil_graji_triplek',
         'id_hasil_sanding',
+        'id_triplek_mutasi_keluar',
         'id_produksi_graji_triplek',
         'id_produksi_sanding',
         'diserahkan_oleh',
@@ -50,6 +51,15 @@ class SerahTerimaHp extends Model
     public function hasilSanding(): BelongsTo
     {
         return $this->belongsTo(HasilSanding::class, 'id_hasil_sanding');
+    }
+
+    /**
+     * Mutasi keluar dari Gudang Triplek Jadi. Terisi hanya untuk barang yang
+     * dikeluarkan dari stok triplek jadi dengan tujuan Produksi Sanding.
+     */
+    public function triplekMutasiKeluar(): BelongsTo
+    {
+        return $this->belongsTo(TriplekJadiMutasiKeluar::class, 'id_triplek_mutasi_keluar');
     }
 
     public function produksiGrajiTriplek(): BelongsTo
@@ -90,6 +100,7 @@ class SerahTerimaHp extends Model
             (bool) $this->id_platform_hasil_hp => 'Hotpress',
             (bool) $this->id_hasil_graji_triplek => 'Graji Triplek',
             (bool) $this->id_hasil_sanding => 'Sanding',
+            (bool) $this->id_triplek_mutasi_keluar => 'Gudang Triplek Jadi',
             default => '-',
         };
     }
@@ -119,12 +130,17 @@ class SerahTerimaHp extends Model
     }
 
     /**
-     * Jumlah/isi barang, terlepas dari nama kolom yang beda-beda antar model
-     * hasil (TriplekHasilHp/PlatformHasilHp/HasilGrajiTriplek pakai `isi`,
-     * HasilSanding pakai `kuantitas`).
+     * Jumlah/isi barang.
+     * - Dari Gudang Triplek Jadi: pakai stok_lembar mutasi keluar.
+     * - Selain itu (TriplekHasilHp/PlatformHasilHp/HasilGrajiTriplek pakai `isi`,
+     *   HasilSanding pakai `kuantitas`).
      */
     public function getJumlahAttribute()
     {
+        if ($this->id_triplek_mutasi_keluar !== null) {
+            return $this->triplekMutasiKeluar->stok_lembar ?? null;
+        }
+
         return $this->hasil->isi ?? $this->hasil->kuantitas ?? null;
     }
 

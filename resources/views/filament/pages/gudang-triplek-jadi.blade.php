@@ -56,6 +56,18 @@
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3">
                 <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Mutasi Keluar Triplek Jadi</span>
+
+                @php $wip = $this->wipSanding; @endphp
+                @if($wip > 0)
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 whitespace-nowrap"
+                          title="Barang sudah keluar ke Produksi Sanding dan diterima di sana, tapi hasilnya belum kembali masuk stok. Barang tidak hilang — sedang diproses.">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {{ number_format($wip) }} lbr sedang di sanding
+                    </span>
+                @endif
+
                 <button
                     type="button"
                     wire:click="$set('showFormKeluarModal', true)"
