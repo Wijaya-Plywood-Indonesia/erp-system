@@ -11,6 +11,7 @@ use App\Models\SerahTerimaHp;
 use App\Models\TriplekHasilHp;
 use App\Services\StokPlatformMthService;
 use App\Services\StokTriplekMthService;
+use App\Services\TerimaTriplekJadiService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -44,7 +45,7 @@ class SerahTerimaHpRelationManager extends RelationManager
         return match (get_class($ownerRecord)) {
             ProduksiHp::class => 'Serah Hasil Produksi',
             ProduksiGrajitriplek::class => 'Terima Triplek',
-            ProduksiSanding::class => 'Terima Platform',
+            ProduksiSanding::class => 'Terima Platform/Plywood',
             default => 'Serah Terima',
         };
     }
@@ -60,12 +61,38 @@ class SerahTerimaHpRelationManager extends RelationManager
     }
 
     /**
+     * Apakah record ini berasal dari Gudang Triplek Jadi?
+     */
+    protected function isDariTriplekJadi($record): bool
+    {
+        return $record->id_triplek_mutasi_keluar !== null;
+    }
+
+    /**
      * Ambil data ringkas dari record untuk ditampilkan di preview modal terima.
-     * Bekerja untuk semua sumber (triplek HP, platform HP, hasil Graji, hasil Sanding)
-     * lewat accessor `hasil`, `barangSetengahJadi`, dan `jumlah` di model SerahTerimaHp.
+     * Mendukung semua sumber lama (triplek HP, platform HP, hasil Graji, hasil
+     * Sanding) lewat accessor model, PLUS sumber baru: Gudang Triplek Jadi.
      */
     protected function getPreviewData($record): array
     {
+        // ── Asal: Gudang Triplek Jadi ──
+        if ($this->isDariTriplekJadi($record)) {
+            $m = $record->triplekMutasiKeluar;
+
+            return [
+                'no_palet' => $m ? ($m->jumlah_palet . ' palet') : '-',
+                'jenis_barang' => $m?->jenisKayu?->nama_kayu ?? '-',
+                'grade' => $m?->kw_grade ?? '-',
+                'ukuran' => $m
+                    ? ($m->panjang + 0) . '×' . ($m->lebar + 0) . '×' . ($m->tebal + 0)
+                    : '-',
+                'isi' => $m?->stok_lembar ?? '-',
+                'dari_mesin' => '-',
+                'asal' => 'Gudang Triplek Jadi',
+            ];
+        }
+
+        // ── Asal lama (logika asli, tidak diubah) ──
         $hasil = $record->hasil;
         $bsj = $record->barangSetengahJadi;
 
@@ -101,6 +128,7 @@ class SerahTerimaHpRelationManager extends RelationManager
             'hasilSanding.barangSetengahJadi.jenisBarang',
             'hasilSanding.barangSetengahJadi.grade',
             'hasilSanding.barangSetengahJadi.ukuran',
+            'triplekMutasiKeluar.jenisKayu',
         ];
 
         return $table
@@ -138,8 +166,9 @@ class SerahTerimaHpRelationManager extends RelationManager
                 }
 
                 if ($tipe === 'sanding') {
-                    // Menuju Sanding: cukup filter langsung dari kolom `tujuan`
-                    // (mencakup dari hotpress via id_platform_hasil_hp ATAU serah manual dari Graji Triplek).
+                    // Menuju Sanding: filter langsung dari kolom `tujuan`.
+                    // Baris dari Gudang Triplek Jadi juga bertujuan 'sanding',
+                    // jadi otomatis ikut tampil di sini tanpa syarat tambahan.
                     return $query
                         ->where('tujuan', self::TIPE_TO_TUJUAN['sanding'])
                         ->where(function ($q) use ($ownerId) {
@@ -155,20 +184,26 @@ class SerahTerimaHpRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
-                    ->state(fn ($record) => $record->hasil?->no_palet ?? '-')
+                    ->state(fn ($record) => $this->isDariTriplekJadi($record)
+                        ? (($record->triplekMutasiKeluar?->jumlah_palet ?? '-') . ' palet')
+                        : ($record->hasil?->no_palet ?? '-'))
                     ->badge()
                     ->color('info'),
 
                 TextColumn::make('asal_label')
                     ->label('Asal')
-                    ->state(fn ($record) => $record->asalLabel)
+                    ->state(fn ($record) => $this->isDariTriplekJadi($record)
+                        ? 'Gudang Triplek Jadi'
+                        : $record->asalLabel)
                     ->badge()
-                    ->color(fn ($record) => match ($record->asalLabel) {
-                        'Hotpress' => 'info',
-                        'Graji Triplek' => 'warning',
-                        'Sanding' => 'purple',
-                        default => 'gray',
-                    }),
+                    ->color(fn ($record) => $this->isDariTriplekJadi($record)
+                        ? 'success'
+                        : match ($record->asalLabel) {
+                            'Hotpress' => 'info',
+                            'Graji Triplek' => 'warning',
+                            'Sanding' => 'purple',
+                            default => 'gray',
+                        }),
 
                 TextColumn::make('mesin')
                     ->label('Mesin')
@@ -177,19 +212,33 @@ class SerahTerimaHpRelationManager extends RelationManager
 
                 TextColumn::make('jenis_barang')
                     ->label('Jenis Barang')
-                    ->state(fn ($record) => $record->barangSetengahJadi?->jenisBarang?->nama_jenis_barang ?? '-'),
+                    ->state(fn ($record) => $this->isDariTriplekJadi($record)
+                        ? ($record->triplekMutasiKeluar?->jenisKayu?->nama_kayu ?? '-')
+                        : ($record->barangSetengahJadi?->jenisBarang?->nama_jenis_barang ?? '-')),
 
                 TextColumn::make('grade')
                     ->label('Grade')
-                    ->state(fn ($record) => $record->barangSetengahJadi?->grade?->nama_grade ?? '-'),
+                    ->state(fn ($record) => $this->isDariTriplekJadi($record)
+                        ? ($record->triplekMutasiKeluar?->kw_grade ?? '-')
+                        : ($record->barangSetengahJadi?->grade?->nama_grade ?? '-')),
 
                 TextColumn::make('ukuran')
                     ->label('Ukuran')
-                    ->state(fn ($record) => $record->barangSetengahJadi?->ukuran?->nama_ukuran ?? '-'),
+                    ->state(function ($record) {
+                        if ($this->isDariTriplekJadi($record)) {
+                            $m = $record->triplekMutasiKeluar;
+                            return $m
+                                ? ($m->panjang + 0) . '×' . ($m->lebar + 0) . '×' . ($m->tebal + 0)
+                                : '-';
+                        }
+                        return $record->barangSetengahJadi?->ukuran?->nama_ukuran ?? '-';
+                    }),
 
                 TextColumn::make('isi')
                     ->label('Jumlah Lembar')
-                    ->state(fn ($record) => $record->jumlah ?? '-')
+                    ->state(fn ($record) => $this->isDariTriplekJadi($record)
+                        ? ($record->triplekMutasiKeluar?->stok_lembar ?? '-')
+                        : ($record->jumlah ?? '-'))
                     ->alignCenter(),
 
                 TextColumn::make('diserahkan_oleh')
@@ -207,7 +256,7 @@ class SerahTerimaHpRelationManager extends RelationManager
                     ->badge()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->color(fn ($state) => match ($state) {
-                        'Terima Triplek', 'Terima Platform' => 'success',
+                        'Terima Triplek', 'Terima Platform', 'Terima dari Triplek Jadi' => 'success',
                         'Serah Triplek', 'Serah Platform', 'Serah ke Sanding', 'Serah ke Graji' => 'warning',
                         default => 'gray',
                     }),
@@ -302,14 +351,25 @@ class SerahTerimaHpRelationManager extends RelationManager
                                     $fresh->update([
                                         'diterima_oleh' => Auth::user()->name.' - Sanding',
                                         'id_produksi_sanding' => $ownerId,
-                                        'status' => $fresh->id_platform_hasil_hp ? 'Terima Platform' : 'Terima dari Graji',
+                                        'status' => $fresh->id_platform_hasil_hp
+                                            ? 'Terima Platform'
+                                            : ($fresh->id_triplek_mutasi_keluar
+                                                ? 'Terima dari Triplek Jadi'
+                                                : 'Terima dari Graji'),
                                     ]);
 
-                                    // Stok platform BERTAMBAH hanya kalau barang berasal dari hotpress.
-                                    // Serah manual dari Graji -> Sanding tidak mengubah stok (sementara).
                                     if ($fresh->id_platform_hasil_hp) {
+                                        // Dari hotpress: stok platform mentah bertambah (logika lama).
                                         $this->prosesTerimaPlatform($fresh, $stokPlatformService);
+                                    } elseif ($fresh->id_triplek_mutasi_keluar) {
+                                        // 🌟 Dari GUDANG TRIPLEK JADI: potong stok triplek jadi +
+                                        // tulis HppTriplekJadiLog 'keluar' + tandai mutasi diterima.
+                                        // Sanding adalah tujuan produksi, jadi TIDAK menambah stok
+                                        // apa pun di sini (tambahStokGudangSatu: false).
+                                        app(TerimaTriplekJadiService::class)
+                                            ->konfirmasi($fresh, tambahStokGudangSatu: false);
                                     }
+                                    // Serah manual dari Graji -> Sanding: tetap tanpa efek stok.
                                 }
                             });
 

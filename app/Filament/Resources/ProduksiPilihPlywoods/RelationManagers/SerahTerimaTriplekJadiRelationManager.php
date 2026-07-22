@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers;
 use App\Models\HppTriplekJadiLog;
 use App\Models\HppTriplekMthLog;
 use App\Models\JenisKayu;
+use App\Models\ModalSanding;
 use App\Models\SerahTerimaTriplekJadi;
 use App\Models\StokTriplekJadi;
 use App\Models\StokTriplekMth;
@@ -198,6 +199,54 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
     }
 
     /**
+     * 🌟 Apakah hasil sanding ini berasal dari material Gudang Triplek Jadi?
+     *
+     * Kalau ya, stok TRIPLEK MENTAH tidak boleh dipotong saat hasilnya diterima —
+     * karena barang itu memang tidak pernah berasal dari stok mentah. Ia keluar
+     * dari Stok Triplek Jadi (sudah dipotong saat diterima di sanding) lalu
+     * kembali lagi ke Stok Triplek Jadi.
+     *
+     * Penelusuran asal:
+     *   HasilSanding → id_produksi_sanding
+     *                → ModalSanding (modal produksi itu)
+     *                → SerahTerimaHp → id_triplek_mutasi_keluar
+     *
+     * Karena spesifikasi barang TIDAK berubah saat disanding (5mm keluar, 5mm
+     * kembali), pencocokan dilakukan berdasarkan spesifikasi: modal asal triplek
+     * jadi yang jenis kayu + ukuran + grade-nya sama dengan hasil ini.
+     * Ini penting untuk produksi sanding dengan modal CAMPURAN (sebagian dari
+     * graji/mentah, sebagian dari triplek jadi) — hanya yang spesifikasinya
+     * cocok yang dianggap berasal dari triplek jadi.
+     */
+    protected function berasalDariTriplekJadi(
+        SerahTerimaTriplekJadi $serahTerima,
+        $jenisKayu,
+        $ukuran,
+        ?string $kwGrade
+    ): bool {
+        $hasil = $serahTerima->hasilSanding;
+
+        // Bukan dari sanding (mis. dari Graji Triplek) → perlakuan lama, potong mentah.
+        if (! $hasil || ! $hasil->id_produksi_sanding) {
+            return false;
+        }
+
+        return ModalSanding::query()
+            ->where('id_produksi_sanding', $hasil->id_produksi_sanding)
+            ->whereHas('serahTerimaHp', function ($q) use ($jenisKayu, $ukuran, $kwGrade) {
+                $q->whereNotNull('id_triplek_mutasi_keluar')
+                    ->whereHas('triplekMutasiKeluar', function ($qq) use ($jenisKayu, $ukuran, $kwGrade) {
+                        $qq->where('id_jenis_kayu', $jenisKayu->id)
+                            ->where('panjang', $ukuran->panjang)
+                            ->where('lebar', $ukuran->lebar)
+                            ->where('tebal', $ukuran->tebal)
+                            ->where('kw_grade', $kwGrade);
+                    });
+            })
+            ->exists();
+    }
+
+    /**
      * Memotong proses gudang dengan menambahkannya langsung ke Stok
      * Triplek Jadi beserta Log HPP nya.
      *
@@ -293,6 +342,14 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
         $stok->update(['id_last_log' => $log->id]);
 
         // ── KURANGI STOK TRIPLEK MENTAH (boleh minus, crosscheck) ──
+        // 🌟 DILEWATI kalau material hasil sanding ini berasal dari Gudang Triplek
+        // Jadi: barang itu tidak pernah ada di stok mentah (sudah dipotong dari
+        // Stok Triplek Jadi saat diterima di sanding), jadi memotong mentah akan
+        // salah — membuat stok mentah minus tanpa dasar.
+        if ($this->berasalDariTriplekJadi($serahTerima, $jenisKayu, $ukuran, $grade->nama_grade)) {
+            return;
+        }
+
         $this->kurangiStokTriplekMth($jenisKayu, $ukuran, $grade->nama_grade, $lembar, $serahTerima);
     }
 

@@ -20,14 +20,23 @@ class PenggunaanLahanRotaryForm
             ->components([
                 Select::make('id_lahan')
                     ->label('Lahan')
-                    ->options(function () {
+                    ->options(function ($component) {
+                        // 1. Ambil list ID lahan yang berstatus 'sudah diterima'
                         $lahanIds = TempatKayu::query()
                             ->where('status', 'sudah diterima')
                             ->pluck('id_lahan')
-                            ->unique();
+                            ->unique()
+                            ->toArray();
 
+                        // 2. KUNCI PERBAIKAN EDIT: Ambil record saat ini melalui $component
+                        $record = $component->getRecord();
+                        if ($record && $record->id_lahan) {
+                            $lahanIds[] = $record->id_lahan;
+                        }
+
+                        // 3. Kembalikan opsi lahan
                         return Lahan::query()
-                            ->whereIn('id', $lahanIds)
+                            ->whereIn('id', array_unique($lahanIds))
                             ->get()
                             ->mapWithKeys(fn($lahan) => [
                                 $lahan->id => "{$lahan->kode_lahan} - {$lahan->nama_lahan}",
@@ -35,24 +44,28 @@ class PenggunaanLahanRotaryForm
                     })
                     ->searchable()
                     ->required()
-                    ->live() // Memicu re-render saat lahan diubah
-                    ->afterStateUpdated(function ($state, callable $get, callable $set, $livewire) {
-                        
-                        // 1. Jika lahan dikosongkan, kosongkan juga jenis kayunya
+                    ->live()
+                    ->afterStateUpdated(function ($state, callable $set, $livewire, $component) {
+
+                        // 1. Jika lahan dikosongkan
                         if (!$state) {
                             $set('id_jenis_kayu', null);
                             return;
                         }
 
-                        $produksiId = $livewire->ownerRecord->id;
+                        $produksiId = $livewire->getOwnerRecord()?->id;
 
-                        $exists = PenggunaanLahanRotary::query()
+                        // 2. Validasi duplikat yang aman untuk Create & Edit
+                        $query = PenggunaanLahanRotary::query()
                             ->where('id_produksi', $produksiId)
-                            ->where('id_lahan', $state)
-                            ->exists();
+                            ->where('id_lahan', $state);
 
-                        // 2. Validasi duplikat
-                        if ($exists) {
+                        $record = $component->getRecord();
+                        if ($record && $record->exists) {
+                            $query->where('id', '!=', $record->id);
+                        }
+
+                        if ($query->exists()) {
                             Notification::make()
                                 ->title('Data sudah terdaftar')
                                 ->body('Lahan ini sudah digunakan pada produksi ini.')
@@ -64,21 +77,19 @@ class PenggunaanLahanRotaryForm
                             return;
                         }
 
-                        // 3. AUTO-FILL JENIS KAYU
-                        // Cari detail kayu masuk terakhir untuk lahan yang dipilih
+                        // 3. AUTO-FILL JENIS KAYU (Sekarang dijamin jalan saat Create)
                         $detailTerbaru = DetailKayuMasuk::query()
                             ->where('id_lahan', $state)
                             ->latest('id')
                             ->first();
 
                         if ($detailTerbaru && $detailTerbaru->id_jenis_kayu) {
-                            // Set nilai jenis kayu sesuai dengan ID yang ditemukan
                             $set('id_jenis_kayu', $detailTerbaru->id_jenis_kayu);
                         } else {
                             $set('id_jenis_kayu', null);
                         }
                     }),
-                    
+
                 Select::make('id_jenis_kayu')
                     ->label('Jenis Kayu')
                     ->options(

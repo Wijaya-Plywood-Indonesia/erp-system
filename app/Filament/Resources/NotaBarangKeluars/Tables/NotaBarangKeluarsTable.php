@@ -57,6 +57,16 @@ class NotaBarangKeluarsTable
                     ->url(fn($record) => route('nota-bk.print', $record))
                     ->openUrlInNewTab()
                     ->visible(fn($record) => $record->divalidasi_oleh !== null),
+
+                // ✅ BARU: CETAK SURAT JALAN
+                Action::make('suratJalan')
+                    ->label('Cetak Surat Jalan')
+                    ->icon('heroicon-o-truck')
+                    ->color('warning')
+                    ->url(fn($record) => route('surat-jalan.bk', $record))
+                    ->openUrlInNewTab()
+                    ->visible(fn($record) => $record->divalidasi_oleh !== null),
+
                 ViewAction::make(),
                 EditAction::make()
                     ->visible(fn($record) => $record->divalidasi_oleh === null),

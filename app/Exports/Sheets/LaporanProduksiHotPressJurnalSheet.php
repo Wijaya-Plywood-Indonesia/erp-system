@@ -825,12 +825,54 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
                         }
 
                         $banyak = $bahan->isi ?? 0;
-                        $m3     = ($p * $l * $tebal * $banyak) / 10_000_000;
 
+                        // Parsing keterangan kelebihan/kehilangan.
+                        // Format baru: "+ 5 kelebihan" / "- 3 kehilangan" → angka pada
+                        // keterangan adalah jumlah penyesuaian TERPISAH, sedangkan `isi`
+                        // tetap pemakaian normal. Jadi satu baris bahan bisa menghasilkan
+                        // dua entri jurnal: normal (k) + penyesuaian (d untuk kelebihan).
+                        // Format lama: "kelebihan" tanpa angka → seluruh isi dianggap
+                        // kelebihan (perilaku lama dipertahankan).
                         $ketBahan = strtolower(trim($bahan->ket ?? ''));
-                        $isLebih  = str_contains($ketBahan, 'kelebihan');
-                        $isHilang = str_contains($ketBahan, 'kehilangan');
-                        $statusKey = $isLebih ? 'lebih' : ($isHilang ? 'hilang' : 'normal');
+                        $entries  = [];
+
+                        // Terima dua urutan penulisan:
+                        //   "+5 kelebihan" / "5 lembar kelebihan"  (angka dulu)
+                        //   "kelebihan +5" / "kelebihan 5 lembar"  (kata dulu)
+                        $polaAngkaDulu = '/([+-]?\s*\d+)\s*(?:lembar|lbr|pcs|ply)?\s*(kelebihan|kehilangan)/';
+                        $polaKataDulu  = '/(kelebihan|kehilangan)\s*([+-]?\s*\d+)/';
+
+                        $jumlahAdj = null;
+                        $kataAdj   = null;
+
+                        if (preg_match($polaAngkaDulu, $ketBahan, $m)) {
+                            $jumlahAdj = (int) preg_replace('/\s+/', '', $m[1]);
+                            $kataAdj   = $m[2];
+                        } elseif (preg_match($polaKataDulu, $ketBahan, $m)) {
+                            $kataAdj   = $m[1];
+                            $jumlahAdj = (int) preg_replace('/\s+/', '', $m[2]);
+                        }
+
+                        if ($kataAdj !== null) {
+                            $statusAdj = $kataAdj === 'kelebihan' ? 'lebih' : 'hilang';
+
+                            if ($banyak != 0) {
+                                $entries[] = ['banyak' => $banyak, 'status' => 'normal'];
+                            }
+                            if ($jumlahAdj != 0) {
+                                $entries[] = ['banyak' => abs($jumlahAdj), 'status' => $statusAdj];
+                            }
+                        } else {
+                            $statusLama = str_contains($ketBahan, 'kelebihan')
+                                ? 'lebih'
+                                : (str_contains($ketBahan, 'kehilangan') ? 'hilang' : 'normal');
+                            $entries[] = ['banyak' => $banyak, 'status' => $statusLama];
+                        }
+
+                        if (empty($entries)) continue;
+
+                        // m3 per lembar — dipakai untuk menghitung m3 tiap entri
+                        $m3PerLembar = ($p * $l * $tebal) / 10_000_000;
 
                         $isAf       = $this->isAf($grAsli);
                         $isPlatform = !$isAf && $this->isPlatformGrade($grAsli);
@@ -843,33 +885,41 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
 
                         if ($isPlatform) {
                             $tipeVeneer = 'Platform';
-                            $ketVeneer  = $ref?->nama ?? "Platform {$jkAsli} uk {$tebal} [UNKNOWN - cek master data]";
+                            $ketDasar   = $ref?->nama ?? "Platform {$jkAsli} uk {$tebal} [UNKNOWN - cek master data]";
                         } else {
                             $tipeVeneer = $isAf ? 'AF' : (($tebal < 1) ? '260 F/B' : '130 Core');
-                            $ketVeneer  = "{$tipeVeneer} {$jkAsli} uk {$tebal}" . ($ref ? '' : ' [UNKNOWN - cek master data]');
+                            $ketDasar   = "{$tipeVeneer} {$jkAsli} uk {$tebal}" . ($ref ? '' : ' [UNKNOWN - cek master data]');
                         }
-
-                        if ($isLebih)  $ketVeneer .= ' // kelebihan';
-                        if ($isHilang) $ketVeneer .= ' // kehilangan';
 
                         $katGrade = $this->kategoriGrade($grAsli);
-                        $groupKey = "{$akunNo}_{$tipeVeneer}_{$tebal}_{$p}x{$l}_{$katGrade}_{$statusKey}";
 
-                        if (!isset($veneerMap[$groupKey])) {
-                            $veneerMap[$groupKey] = [
-                                'akun_nama'   => $akunNama,
-                                'akun_no'     => $akunNo,
-                                'ket'         => $ketVeneer,
-                                'banyak'      => 0,
-                                'm3'          => 0.0,
-                                'harga'       => $hargaBahan,
-                                'map'         => $isLebih ? 'd' : 'k',
-                                'is_platform' => $isPlatform,
-                                'status'      => $statusKey,
-                            ];
+                        foreach ($entries as $entry) {
+                            $statusKey  = $entry['status'];
+                            $banyakItem = $entry['banyak'];
+                            $m3Item     = $m3PerLembar * $banyakItem;
+
+                            $ketVeneer = $ketDasar;
+                            if ($statusKey === 'lebih')  $ketVeneer .= ' // kelebihan';
+                            if ($statusKey === 'hilang') $ketVeneer .= ' // kehilangan';
+
+                            $groupKey = "{$akunNo}_{$tipeVeneer}_{$tebal}_{$p}x{$l}_{$katGrade}_{$statusKey}";
+
+                            if (!isset($veneerMap[$groupKey])) {
+                                $veneerMap[$groupKey] = [
+                                    'akun_nama'   => $akunNama,
+                                    'akun_no'     => $akunNo,
+                                    'ket'         => $ketVeneer,
+                                    'banyak'      => 0,
+                                    'm3'          => 0.0,
+                                    'harga'       => $hargaBahan,
+                                    'map'         => $statusKey === 'lebih' ? 'd' : 'k',
+                                    'is_platform' => $isPlatform,
+                                    'status'      => $statusKey,
+                                ];
+                            }
+                            $veneerMap[$groupKey]['banyak'] += $banyakItem;
+                            $veneerMap[$groupKey]['m3']     += $m3Item;
                         }
-                        $veneerMap[$groupKey]['banyak'] += $banyak;
-                        $veneerMap[$groupKey]['m3']     += $m3;
                     }
 
                     // Urutkan: normal → kelebihan → kehilangan
@@ -882,9 +932,14 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
                         $hitKbk  = $v['is_platform'] ? 'b' : 'm';
                         $m3Round = round($v['m3'], 4);
 
-                        $totalHargaBahanGlobal += $v['is_platform']
+                        $nilai = $v['is_platform']
                             ? round($v['banyak'] * $v['harga'], 0)
                             : round($m3Round * $v['harga'], 0);
+
+                        // Baris kelebihan bermap 'd' (debit) — nilainya MENGURANGI
+                        // total biaya bahan, bukan menambah. Kalau ikut ditambah,
+                        // jurnal tidak balance sebesar 2x nilai baris tersebut.
+                        $totalHargaBahanGlobal += ($v['map'] === 'd') ? -$nilai : $nilai;
 
                         $rows[] = $this->makeRow(
                             $v['akun_nama'],
@@ -929,7 +984,6 @@ class LaporanProduksiHotPressJurnalSheet implements FromArray, WithTitle, WithCo
                     }
 
                     // --- HPP PENYEIMBANG HP3 — selalu paling bawah sendiri ---
-                    
                     $nilaiHppHp3 = $totalHargaBahanGlobal - $totalHargaProdukHp3;
                     if (round(abs($nilaiHppHp3), 0) != 0) {
                         $hpp    = $this->getAkunHpp();

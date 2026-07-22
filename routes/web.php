@@ -4,6 +4,7 @@ use App\Exports\ExportExcelPersentaseKayuService;
 use App\Http\Controllers\PreviewPersentaseKayu;
 use App\Services\ProduksiInflowService;
 use App\Services\ProduksiOutflowService;
+use App\Http\Controllers\SuratJalanController;
 use App\Http\Controllers\KontrakController;
 use App\Models\KontrakKerja;
 // use App\Models\ProduksiRotary;
@@ -22,6 +23,12 @@ Route::middleware(['auth', 'verified'])->prefix('admin')->group(function () {
     Route::get('/persentase-kayu/export-excel', [PreviewPersentaseKayu::class, 'exportExcel'])->name('produksi.export-excel');
 
     Route::resource('referensi-harga-produksi', \App\Http\Controllers\ReferensiHargaProduksiController::class);
+});
+
+Route::middleware(['auth'])->group(function () {
+    // Surat Jalan - Nota Barang Keluar
+    Route::get('/surat-jalan/bk/{nota}', [SuratJalanController::class, 'printBk'])
+        ->name('surat-jalan.bk');
 });
 
 

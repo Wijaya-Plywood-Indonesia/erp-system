@@ -20,6 +20,42 @@ use Illuminate\Support\HtmlString;
 
 class HasilSandingsTable
 {
+    /**
+     * Apakah palet hasil sanding ini SUDAH DITERIMA di gudang tujuan?
+     *
+     * "Diterima" letaknya di tabel berbeda tergantung tujuan serah:
+     *  - triplek_jadi  -> SerahTerimaTriplekJadi (diterima_oleh != '-')
+     *  - platform_jadi -> tabel serah terima platform (ISI SAAT SIAP — lihat TODO)
+     *
+     * Selama belum diserah (diserahkan_at null) pasti belum diterima -> false,
+     * sehingga Edit/Delete tetap tampil untuk barang yang masih menunggu diserah.
+     */
+    protected static function sudahDiterima($record): bool
+    {
+        // Belum diserah sama sekali -> jelas belum diterima.
+        if ($record->diserahkan_at === null) {
+            return false;
+        }
+
+        // Tujuan: Gudang Triplek Jadi
+        if ($record->tujuan_serah === 'triplek_jadi') {
+            return SerahTerimaTriplekJadi::where('id_hasil_sanding', $record->id)
+                ->where('diterima_oleh', '!=', '-')
+                ->exists();
+        }
+
+        // Tujuan: Gudang Platform Jadi
+        if ($record->tujuan_serah === 'platform_jadi') {
+            // Beda pola dengan triplek: di platform, baris SerahTerimaPlatformJadi
+            // BARU dibuat saat barang diterima (bukan saat serah). Jadi tidak ada
+            // penanda '-' — cukup cek keberadaan barisnya.
+            return \App\Models\SerahTerimaPlatformJadi::where('id_hasil_sanding', $record->id)
+                ->exists();
+        }
+
+        return false;
+    }
+
     public static function configure(Table $table): Table
     {
         return $table
@@ -48,15 +84,15 @@ class HasilSandingsTable
                 TextColumn::make('no_palet')
                     ->label('Palet')
                     ->sortable(),
-                
+
                 TextColumn::make('status')
                     ->searchable(),
-                
+
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                
+
                 TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
@@ -89,7 +125,7 @@ class HasilSandingsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->searchable(),
-                
+
                 TextColumn::make('label_tujuan_serah')
                     ->label('Diserahkan Ke')
                     ->badge()
@@ -219,14 +255,16 @@ class HasilSandingsTable
 
                 EditAction::make()
                     ->hidden(
-                        fn($livewire) =>
+                        fn($livewire, $record) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        || self::sudahDiterima($record)
                     ),
 
                 DeleteAction::make()
                     ->hidden(
-                        fn($livewire) =>
+                        fn($livewire, $record) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        || self::sudahDiterima($record)
                     ),
             ])
             ->toolbarActions([

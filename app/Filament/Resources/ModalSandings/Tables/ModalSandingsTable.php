@@ -16,6 +16,12 @@ class ModalSandingsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn ($query) => $query->with([
+                'barangSetengahJadi.grade.kategoriBarang',
+                'barangSetengahJadi.ukuran',
+                'barangSetengahJadi.jenisBarang',
+                'serahTerimaHp.triplekMutasiKeluar.jenisKayu',
+            ]))
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No Palet')
@@ -26,6 +32,25 @@ class ModalSandingsTable
                 TextColumn::make('barangSetengahJadiInfo')
                     ->label('Barang Setengah Jadi')
                     ->getStateUsing(function ($record) {
+                        // Barang dari Gudang Triplek Jadi tidak punya barangSetengahJadi —
+                        // rakit label dari mutasi keluar (jenis kayu / ukuran / grade).
+                        $serah = $record->serahTerimaHp;
+                        if ($serah?->id_triplek_mutasi_keluar !== null) {
+                            $m = $serah->triplekMutasiKeluar;
+                            if (! $m) {
+                                return 'Triplek Jadi — -';
+                            }
+                            $ukuran = ($m->panjang + 0).' x '.($m->lebar + 0).' x '.($m->tebal + 0);
+
+                            // Barang di Gudang Triplek Jadi selalu berkategori Plywood
+                            // (tidak menyimpan field kategori sendiri), jadi di-hardcode
+                            // agar formatnya identik dengan baris hotpress/graji.
+                            return "Plywood — {$ukuran} - "
+                                .($m->jenisKayu?->nama_kayu ?? '-').' - '
+                                .($m->kw_grade ?? '-');
+                        }
+
+                        // Sumber lama (hotpress / graji): format asli, tidak diubah.
                         $kategori = $record->barangSetengahJadi?->grade?->kategoriBarang?->nama_kategori ?? '-';
                         $ukuran = $record->barangSetengahJadi?->ukuran?->dimensi ?? '-';
                         $grade = $record->barangSetengahJadi?->grade?->nama_grade ?? '-';

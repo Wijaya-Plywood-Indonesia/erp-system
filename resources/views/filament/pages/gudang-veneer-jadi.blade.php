@@ -1,7 +1,8 @@
 <x-filament-panels::page>
-    {{-- ══════════════════════════════════════════════════════════════
-     SERAH TERIMA DARI DRYER / KEDI / SANDING JOINT (tujuan: Veneer Jadi)
-═══════════════════════════════════════════════════════════════ --}}
+
+    {{-- ══════════════════════════════════════════════════════════════════════
+         SERAH TERIMA (DARI DRYER / KEDI / JOINT) — TUJUAN VENEER JADI
+    ═══════════════════════════════════════════════════════════════════════ --}}
     @php
         $serahTerima = $this->serahTerima;
         $riwayatSerahTerima = $this->riwayatSerahTerima;
@@ -17,6 +18,21 @@
             'kedi' => 'Kedi',
             'joint' => 'Joint',
         ];
+
+        // 🔀 MERGE: helper badge "Sumber" untuk antrean (fitur dari branch main).
+        // Dibungkus closure + null-coalescing supaya baris antrean yang BELUM
+        // menyediakan key 'source'/'sumber_label' tidak bikin view error.
+        $sumberBadgeClass = function ($item) {
+            $source = $item['source'] ?? 'gudang';
+            $label = $item['sumber_label'] ?? null;
+
+            return match (true) {
+                $source === 'pilih_veneer' => 'border-purple-400 bg-purple-500/10 text-purple-600 dark:text-purple-400',
+                $label === 'Repair' => 'border-orange-400 bg-orange-500/10 text-orange-600 dark:text-orange-400',
+                default => 'border-sky-400 bg-sky-500/10 text-sky-600 dark:text-sky-400',
+            };
+        };
+        $sumberLabel = fn($item) => $item['sumber_label'] ?? 'Produksi';
     @endphp
 
     <section class="space-y-3">
@@ -26,36 +42,36 @@
                 Serah Terima dari Dryer / Kedi / Joint
             </h2>
 
-            <div class="flex border-b border-zinc-200 dark:border-zinc-800 -mb-2">
+            <div class="flex border-b border-zinc-200 dark:border-zinc-800">
                 <button type="button" wire:click="$set('serahTerimaTab', 'aktif')"
-                    class="px-4 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 -mb-px transition-all {{ $serahTerimaTab === 'aktif' ? 'border-amber-500 text-amber-500' : 'border-transparent text-zinc-400 hover:text-zinc-200' }}">
+                    class="px-4 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 -mb-px transition-all {{ $serahTerimaTab === 'aktif' ? 'border-amber-500 text-amber-600 dark:text-amber-400' : 'border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200' }}">
                     Aktif
                     <span
-                        class="ml-1 inline-flex items-center justify-center min-w-[1.1rem] px-1 rounded-full text-[9px] font-bold {{ $serahTerimaTab === 'aktif' ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400' }}">
+                        class="ml-1 inline-flex items-center justify-center min-w-[1.1rem] px-1 rounded-full text-[9px] font-bold {{ $serahTerimaTab === 'aktif' ? 'bg-amber-500 text-white' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400' }}">
                         {{ $serahTerima->count() }}
                     </span>
                 </button>
                 <button type="button" wire:click="$set('serahTerimaTab', 'history')"
-                    class="px-4 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 -mb-px transition-all {{ $serahTerimaTab === 'history' ? 'border-amber-500 text-amber-500' : 'border-transparent text-zinc-400 hover:text-zinc-200' }}">
+                    class="px-4 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 -mb-px transition-all {{ $serahTerimaTab === 'history' ? 'border-amber-500 text-amber-600 dark:text-amber-400' : 'border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200' }}">
                     History
                 </button>
             </div>
         </div>
 
-        <div
-            class="border bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-none shadow-sm overflow-hidden">
-            <div class="divide-y divide-zinc-100 dark:divide-zinc-900 max-h-[400px] overflow-y-auto">
+        <div class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <div class="divide-y divide-zinc-100 dark:divide-zinc-800 max-h-[400px] overflow-y-auto">
 
                 @if ($serahTerimaTab === 'aktif')
                     @forelse($serahTerima as $st)
                         @php
+                            // ✅ FIX: 'joint' pakai relasi hasilJoint (tabel hasil_joint),
+                            // BUKAN hasilSandingJoint yang menunjuk tabel berbeda.
                             $sumber = match ($st->tipe_sumber) {
                                 'dryer' => $st->detailHasil,
                                 'kedi' => $st->detailBongkarKedi,
-                                'joint' => $st->hasilSandingJoint,
+                                'joint' => $st->hasilJoint,
                                 default => null,
                             };
-                            $noPalet = $sumber?->no_palet ?? '-';
                             $ukuran = $sumber?->ukuran;
                             $kayu = $sumber?->jenisKayu?->nama_kayu ?? '-';
                             $kw = $sumber?->kw ?? '-';
@@ -106,7 +122,7 @@
                         </div>
                     @empty
                         <div class="px-5 py-8 text-center text-xs text-zinc-400 dark:text-zinc-600">
-                            Tidak ada veneer dari Dryer/Kedi/Sanding Joint (tujuan Jadi) yang menunggu diterima
+                            Tidak ada veneer dari Dryer/Kedi/Joint (tujuan Jadi) yang menunggu diterima
                         </div>
                     @endforelse
                 @else
@@ -115,10 +131,9 @@
                             $sumber = match ($st->tipe_sumber) {
                                 'dryer' => $st->detailHasil,
                                 'kedi' => $st->detailBongkarKedi,
-                                'joint' => $st->hasilSandingJoint,
+                                'joint' => $st->hasilJoint,
                                 default => null,
                             };
-                            $noPalet = $sumber?->no_palet ?? '-';
                             $ukuran = $sumber?->ukuran;
                             $kayu = $sumber?->jenisKayu?->nama_kayu ?? '-';
                             $kw = $sumber?->kw ?? '-';
@@ -168,7 +183,7 @@
                         </div>
                     @empty
                         <div class="px-5 py-8 text-center text-xs text-zinc-400 dark:text-zinc-600">
-                            Belum ada riwayat serah terima dari Dryer/Kedi/Sanding Joint (tujuan Jadi)
+                            Belum ada riwayat serah terima dari Dryer/Kedi/Joint (tujuan Jadi)
                         </div>
                     @endforelse
                 @endif
@@ -176,6 +191,7 @@
             </div>
         </div>
     </section>
+
     <div class="space-y-6 font-mono">
 
         {{-- TAB NAVIGATION SWITCH GAYA INDUSTRIAL --}}
@@ -226,7 +242,7 @@
                     </div>
                 </div>
 
-                {{-- 📱 VIEW HP / MOBILE (Hanya muncul di md:hidden atau layar < 768px) --}}
+                {{-- 📱 VIEW HP / MOBILE --}}
                 <div class="block md:hidden space-y-3 max-h-[500px] overflow-y-auto pr-1">
                     @forelse($this->antreanFiltered as $item)
                         @php
@@ -249,10 +265,17 @@
                                             class="font-bold text-zinc-800 dark:text-zinc-200">{{ $item['panjang'] + 0 }}x{{ $item['lebar'] + 0 }}x{{ $item['tebal'] + 0 }}</span>
                                     </p>
                                 </div>
-                                <span
-                                    class="inline-block border border-amber-400 bg-amber-500 text-zinc-950 font-black text-xs px-2 py-0.5 rounded-none shadow-sm">
-                                    KW {{ $item['kw'] }}
-                                </span>
+                                {{-- 🔀 MERGE: badge KW (dev-khamal) + badge Sumber (main) --}}
+                                <div class="flex flex-col items-end gap-1">
+                                    <span
+                                        class="inline-block border border-amber-400 bg-amber-500 text-zinc-950 font-black text-xs px-2 py-0.5 rounded-none shadow-sm">
+                                        KW {{ $item['kw'] }}
+                                    </span>
+                                    <span
+                                        class="inline-block border text-[9px] font-black uppercase px-1.5 py-0.5 rounded-none {{ $sumberBadgeClass($item) }}">
+                                        {{ $sumberLabel($item) }}
+                                    </span>
+                                </div>
                             </div>
 
                             <div
@@ -321,7 +344,7 @@
                     @endforelse
                 </div>
 
-                {{-- 🖥️ VIEW TABLE DESKTOP (Otomatis tersembunyi di HP lewat class 'hidden md:block') --}}
+                {{-- 🖥️ VIEW TABLE DESKTOP --}}
                 <div
                     class="hidden md:block border overflow-x-auto max-h-[450px] overflow-y-auto rounded-none bg-white border-zinc-200 shadow-sm dark:bg-zinc-950 dark:border-zinc-800 dark:shadow-none">
                     <table class="w-full text-left border-collapse text-sm">
@@ -334,6 +357,8 @@
                                 <th class="py-3 px-3 text-right">Lebar</th>
                                 <th class="py-3 px-3 text-right">Tebal</th>
                                 <th class="py-3 px-3 text-center">Grade</th>
+                                {{-- 🔀 MERGE: kolom Sumber dari branch main --}}
+                                <th class="py-3 px-3 text-center">Sumber</th>
                                 <th class="py-3 px-4 text-center">Stok</th>
                                 <th class="py-3 px-4 text-right">Kubikasi</th>
                                 <th class="py-3 px-4 text-center">Status</th>
@@ -384,6 +409,13 @@
                                             {{ $item['kw'] }}
                                         </span>
                                     </td>
+                                    {{-- 🔀 MERGE: sel Sumber dari branch main --}}
+                                    <td class="py-3 px-3 text-center">
+                                        <span
+                                            class="inline-block border text-[9px] font-black uppercase px-1.5 py-0.5 rounded-none {{ $sumberBadgeClass($item) }}">
+                                            {{ $sumberLabel($item) }}
+                                        </span>
+                                    </td>
                                     <td class="py-3 px-4 text-center">
                                         <span
                                             class="inline-block border border-amber-400 bg-amber-500 text-zinc-950 font-bold text-sm px-3 py-0.5 rounded-none shadow-sm">
@@ -426,7 +458,8 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colSpan="11"
+                                    {{-- 🔀 MERGE: 11 → 12 kolom karena tambahan kolom Sumber --}}
+                                    <td colspan="12"
                                         class="py-8 text-center text-zinc-400 dark:text-zinc-500 italic">
                                         Tidak ada antrean kiriman aktif saat ini.
                                     </td>
@@ -530,7 +563,7 @@
                                 </span>
                                 <div class="flex items-center gap-2">
                                     <span class="text-[11px] text-zinc-400">By: {{ $item['dikeluarkan_by'] }}</span>
-                                    {{-- 🆕 TOMBOL EDIT MOBILE: hanya tampil kalau belum diterima di Hotpress/Repair --}}
+                                    {{-- TOMBOL EDIT MOBILE: hanya tampil kalau belum diterima di Hotpress/Repair --}}
                                     @if ($item['bisa_diedit'])
                                         <button type="button" wire:click="editKeluar({{ $item['id'] }})"
                                             wire:loading.attr="disabled"
@@ -552,7 +585,8 @@
                     @empty
                         <div
                             class="border p-8 text-center text-zinc-400 dark:text-zinc-500 italic bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
-                            Belum ada riwayat pengeluaran yang terdaftar.</div>
+                            Belum ada riwayat pengeluaran yang terdaftar.
+                        </div>
                     @endforelse
                 </div>
 
@@ -585,7 +619,7 @@
                                 {{-- BARIS UTAMA: seluruh baris jadi trigger accordion --}}
                                 <tr @click="open = !open"
                                     class="cursor-pointer hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-colors">
-                                    {{-- 🆕 KOLOM AKSI: klik.stop supaya tidak ikut men-toggle accordion --}}
+                                    {{-- KOLOM AKSI: klik.stop supaya tidak ikut men-toggle accordion --}}
                                     <td class="py-3 px-4 text-center" @click.stop>
                                         @if ($item['bisa_diedit'])
                                             <button type="button" wire:click="editKeluar({{ $item['id'] }})"
@@ -689,7 +723,7 @@
                         @empty
                             <tbody>
                                 <tr>
-                                    <td colSpan="12" class="py-8 text-center text-zinc-400 italic">Belum ada riwayat
+                                    <td colspan="12" class="py-8 text-center text-zinc-400 italic">Belum ada riwayat
                                         pengeluaran yang terdaftar.</td>
                                 </tr>
                             </tbody>
@@ -701,6 +735,9 @@
 
     </div>
 
+    {{-- ══════════════════════════════════════════════════════════════════════
+         MODAL KONFIRMASI TERIMA
+    ═══════════════════════════════════════════════════════════════════════ --}}
     @if ($showConfirmModal)
         @php
             // Ambil rincian spesifikasi barang terpilih langsung dari computed property
@@ -710,60 +747,61 @@
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
                 <div
                     class="w-full max-w-md border bg-zinc-950 border-zinc-800 rounded-none shadow-2xl p-6 font-mono text-zinc-100">
-                    <div class="flex items-start gap-4">
-                        <div class="space-y-2 flex-1">
-                            <h3 class="text-base sm:text-lg font-black uppercase text-zinc-50 tracking-wider">
-                                KONFIRMASI TERIMA BARANG
-                            </h3>
-                            <p class="text-sm sm:text-base text-zinc-400 leading-relaxed">
-                                Apakah Anda yakin ingin memverifikasi data ini? Jumlah lembar akan diakumulasikan ke
-                                stok veneer jadi.
 
-                                {{-- RETRO KEY-VALUE DETAILS BLOCK (Rincian data yang akan diserahkan) --}}
-                            <div class="mt-4 p-4 border border-zinc-800 bg-zinc-900/40 text-xs sm:text-sm space-y-2">
-                                <div class="flex justify-between items-center border-b border-zinc-900 pb-2">
-                                    <span class="text-zinc-500 uppercase font-bold text-[12px] tracking-wider">Jenis
-                                        Kayu:</span>
-                                    <span
-                                        class="font-black text-zinc-200 text-sm">{{ $selectedItem['jenis_kayu'] }}</span>
-                                </div>
-                                <div class="flex justify-between items-center border-b border-zinc-900 pb-2">
-                                    <span class="text-zinc-500 uppercase font-bold text-[12px] tracking-wider">Ukuran
-                                        Dimensi:</span>
-                                    <span class="font-black text-zinc-200">
-                                        {{ $selectedItem['panjang'] + 0 }}x{{ $selectedItem['lebar'] + 0 }}x{{ $selectedItem['tebal'] + 0 }}
-                                    </span>
-                                </div>
-                                <div class="flex justify-between items-center border-b border-zinc-900 pb-2">
-                                    <span class="text-zinc-500 uppercase font-bold text-[12px] tracking-wider">Kualitas
-                                        (Grade):</span>
-                                    <span
-                                        class="inline-block px-2 py-0.5 bg-amber-500 text-zinc-950 font-black text-xs rounded-none">
-                                        KW {{ $selectedItem['kw'] }}
-                                    </span>
-                                </div>
-                                <div class="flex justify-between items-center border-b border-zinc-900 pb-2">
-                                    <span class="text-zinc-500 uppercase font-bold text-[12px] tracking-wider">Jumlah
-                                        Lembar:</span>
-                                    <span class="font-black text-amber-500 text-sm">
-                                        {{ number_format($selectedItem['jumlah'], 0, ',', '.') }} <span
-                                            class="text-zinc-500 text-[12px] font-normal">lbr</span>
-                                    </span>
-                                </div>
-                                <div class="flex justify-between items-center pt-1">
-                                    <span class="text-zinc-500 uppercase font-bold text-[12px] tracking-wider">Volume
-                                        (Kubikasi):</span>
-                                    <span class="font-black text-emerald-500">
-                                        {{ number_format($this->hitungKubikasi($selectedItem['panjang'], $selectedItem['lebar'], $selectedItem['tebal'], $selectedItem['jumlah']), 4, '.', '') }}
-                                        <span class="text-zinc-500 text-[12px] font-normal">m³</span>
-                                    </span>
-                                </div>
-                            </div>
+                    <h3 class="text-base sm:text-lg font-black uppercase text-zinc-50 tracking-wider">
+                        KONFIRMASI TERIMA BARANG
+                    </h3>
+                    <p class="mt-2 text-sm sm:text-base text-zinc-400 leading-relaxed">
+                        Apakah Anda yakin ingin memverifikasi data ini? Jumlah lembar akan diakumulasikan ke stok
+                        veneer jadi.
+                    </p>
 
+                    {{-- RETRO KEY-VALUE DETAILS BLOCK --}}
+                    <div class="mt-4 p-4 border border-zinc-800 bg-zinc-900/40 text-xs sm:text-sm space-y-2">
+                        <div class="flex justify-between items-center border-b border-zinc-900 pb-2">
+                            <span class="text-zinc-500 uppercase font-bold text-[12px] tracking-wider">Jenis
+                                Kayu:</span>
+                            <span class="font-black text-zinc-200 text-sm">{{ $selectedItem['jenis_kayu'] }}</span>
+                        </div>
+                        <div class="flex justify-between items-center border-b border-zinc-900 pb-2">
+                            <span class="text-zinc-500 uppercase font-bold text-[12px] tracking-wider">Ukuran
+                                Dimensi:</span>
+                            <span class="font-black text-zinc-200">
+                                {{ $selectedItem['panjang'] + 0 }}x{{ $selectedItem['lebar'] + 0 }}x{{ $selectedItem['tebal'] + 0 }}
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center border-b border-zinc-900 pb-2">
+                            <span class="text-zinc-500 uppercase font-bold text-[12px] tracking-wider">Kualitas
+                                (Grade):</span>
+                            <span
+                                class="inline-block px-2 py-0.5 bg-amber-500 text-zinc-950 font-black text-xs rounded-none">
+                                KW {{ $selectedItem['kw'] }}
+                            </span>
+                        </div>
+                        {{-- 🔀 MERGE: baris Sumber dari branch main --}}
+                        <div class="flex justify-between items-center border-b border-zinc-900 pb-2">
+                            <span class="text-zinc-500 uppercase font-bold text-[12px] tracking-wider">Sumber:</span>
+                            <span class="font-black text-zinc-200 text-sm">{{ $sumberLabel($selectedItem) }}</span>
+                        </div>
+                        <div class="flex justify-between items-center border-b border-zinc-900 pb-2">
+                            <span class="text-zinc-500 uppercase font-bold text-[12px] tracking-wider">Jumlah
+                                Lembar:</span>
+                            <span class="font-black text-amber-500 text-sm">
+                                {{ number_format($selectedItem['jumlah'], 0, ',', '.') }} <span
+                                    class="text-zinc-500 text-[12px] font-normal">lbr</span>
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center pt-1">
+                            <span class="text-zinc-500 uppercase font-bold text-[12px] tracking-wider">Volume
+                                (Kubikasi):</span>
+                            <span class="font-black text-emerald-500">
+                                {{ number_format($this->hitungKubikasi($selectedItem['panjang'], $selectedItem['lebar'], $selectedItem['tebal'], $selectedItem['jumlah']), 4, '.', '') }}
+                                <span class="text-zinc-500 text-[12px] font-normal">m³</span>
+                            </span>
                         </div>
                     </div>
 
-                    {{-- Tombol Aksi Kaku Berukuran Proporsional --}}
+                    {{-- Tombol Aksi --}}
                     <div class="mt-6 flex justify-end gap-3 text-xs sm:text-sm font-black uppercase">
                         <button type="button" wire:click="cancelConfirm"
                             class="px-4 py-2 border border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 transition-all rounded-none">
@@ -774,11 +812,15 @@
                             Ya, Terima
                         </button>
                     </div>
+
                 </div>
             </div>
         @endif
     @endif
 
+    {{-- ══════════════════════════════════════════════════════════════════════
+         MODAL FORM BARANG KELUAR
+    ═══════════════════════════════════════════════════════════════════════ --}}
     @if ($showFormKeluarModal)
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
             <div
@@ -799,11 +841,11 @@
                         selectedStokId: @entangle('selectedStokId'),
                         options: [
                             @foreach ($this->splitStok['faceback']->concat($this->splitStok['core']) as $s)
-    {
-        id: '{{ $s->id }}',
-        nama: '{{ $s->jenisKayu?->nama_kayu ?? 'Tanpa Jenis' }} (KW {{ $s->kw_grade }}) - Sisa: {{ $s->stok_lembar }} lbr',
-        no: '{{ $s->panjang + 0 }}x{{ $s->lebar + 0 }}x{{ $s->tebal + 0 }}'
-    }, @endforeach
+                                {
+                                    id: '{{ $s->id }}',
+                                    nama: '{{ $s->jenisKayu->nama_kayu }} (KW {{ $s->kw_grade }}) - Sisa: {{ $s->stok_lembar }} lbr',
+                                    no: '{{ $s->panjang + 0 }}x{{ $s->lebar + 0 }}x{{ $s->tebal + 0 }}'
+                                }, @endforeach
                         ],
                         get filteredOptions() {
                             if (this.searchTerm === '') return this.options;
@@ -922,7 +964,7 @@
                         </div>
                     @endif
 
-                    {{-- 3. TUJUAN (dinamis dari $daftarTujuanKeluar, tambah tujuan baru cukup di properti Page) --}}
+                    {{-- 3. TUJUAN (dinamis dari $daftarTujuanKeluar di Page) --}}
                     <div class="space-y-1.5">
                         <label
                             class="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider block">Tujuan
@@ -960,7 +1002,9 @@
         </div>
     @endif
 
-    {{-- 🆕 MODAL EDIT RIWAYAT KELUAR --}}
+    {{-- ══════════════════════════════════════════════════════════════════════
+         MODAL EDIT RIWAYAT KELUAR
+    ═══════════════════════════════════════════════════════════════════════ --}}
     @if ($showEditKeluarModal)
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
             <div
@@ -1041,4 +1085,5 @@
             </div>
         </div>
     @endif
+
 </x-filament-panels::page>
