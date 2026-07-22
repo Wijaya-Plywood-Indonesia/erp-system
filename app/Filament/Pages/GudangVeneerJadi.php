@@ -1110,7 +1110,8 @@ class GudangVeneerJadi extends Page
     protected function ambilAntreanDariPilihVeneer(): Collection
     {
         $hasilRows = HasilPilihVeneer::with(['modalPilihVeneer.stokVeneerJadi.jenisKayu'])
-            ->whereNull('diterima_gudang_at') // kolom status baru, lihat di bawah
+            ->whereNotNull('diserahkan_at')
+            ->whereNull('diterima_gudang_at')
             ->get();
 
         return $hasilRows->map(function ($hasil) {
