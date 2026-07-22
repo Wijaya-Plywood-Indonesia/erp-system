@@ -2,10 +2,14 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\HppTriplekJadiLog;
 use App\Models\SerahTerimaGudangSatu;
+use App\Models\SerahTerimaHp;
+use App\Models\SerahTerimaTriplekJadi;
 use App\Models\StokTriplekJadi;
 use App\Models\TriplekJadiMutasiKeluar;
 use App\Models\TriplekJadiMutasiKeluarPalet;
+use App\Models\WipSandingReset;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Notifications\Notification;
@@ -28,11 +32,13 @@ class GudangTriplekJadi extends Page
     // 🌟 Tujuan keluar yang diizinkan — SATU sumber kebenaran.
     // Dipakai di view (opsi <select>) dan validasi prosesKeluar().
     public const TUJUAN_NYUSUP      = 'Produksi Nyusup';
-    public const TUJUAN_GUDANG_SATU = 'Gudang Satu';
+    public const TUJUAN_GUDANG_SATU = 'Produksi Sampling Plywood';
+    public const TUJUAN_SANDING     = 'Produksi Sanding';
 
     public const TUJUAN_OPTIONS = [
         self::TUJUAN_NYUSUP,
         self::TUJUAN_GUDANG_SATU,
+        self::TUJUAN_SANDING,
     ];
 
     public string $searchQuery = '';        // search dropdown stok (di modal)
@@ -49,6 +55,78 @@ class GudangTriplekJadi extends Page
     public function hitungKubikasi(float $p, float $l, float $t, ?int $lembar): float
     {
         return ($p * $l * $t * ($lembar ?? 0)) / 10000000;
+    }
+
+    // ─── WIP SANDING (agregat) ───────────────────────────────────────────────
+
+    /**
+     * Total lembar yang "sedang di sanding" — sudah keluar dari gudang menuju
+     * Produksi Sanding dan diterima di sana, tapi hasilnya BELUM kembali masuk
+     * stok triplek jadi.
+     *
+     * Rumus agregat (bukan per-batch):
+     *   WIP = Σ(keluar ke sanding) − Σ(masuk dari hasil sanding)
+     *
+     * Kedua angka diambil dari HppTriplekJadiLog agar satu sumber:
+     *  - Keluar : tipe 'keluar', referensi TriplekJadiMutasiKeluar, TAPI hanya
+     *             mutasi yang tujuannya Produksi Sanding (keluar ke Nyusup/Gudang
+     *             Satu itu keluar permanen, bukan WIP).
+     *  - Masuk  : tipe 'masuk', referensi SerahTerimaTriplekJadi yang asalnya
+     *             dari sanding (punya id_hasil_sanding terisi).
+     *
+     * Casing tipe_transaksi SENGAJA dibandingkan case-insensitive (LOWER) karena
+     * di kode lama ada campuran 'keluar'/'Masuk' — supaya hitungan tidak bergantung
+     * pada collation database.
+     *
+     * Selaras dengan halaman Stok: mengurangi baseline "tutup buku" dari tabel
+     * wip_sanding_resets. Jadi setelah pengawas menekan "Selesaikan WIP" di Stok,
+     * badge total di Gudang ini pun ikut berkurang.
+     */
+    public function getWipSandingProperty(): float
+    {
+        // Id mutasi keluar yang tujuannya Produksi Sanding
+        $idMutasiSanding = TriplekJadiMutasiKeluar::where('tujuan', self::TUJUAN_SANDING)
+            ->pluck('id');
+
+        if ($idMutasiSanding->isEmpty()) {
+            return 0.0;
+        }
+
+        $keluar = (float) HppTriplekJadiLog::query()
+            ->whereRaw('LOWER(tipe_transaksi) = ?', ['keluar'])
+            ->where('referensi_type', TriplekJadiMutasiKeluar::class)
+            ->whereIn('referensi_id', $idMutasiSanding)
+            ->sum('total_lembar');
+
+        // Id serah terima triplek jadi yang benar-benar berasal dari sanding
+        $idSerahDariSanding = SerahTerimaTriplekJadi::whereNotNull('id_hasil_sanding')
+            ->pluck('id');
+
+        $masuk = $idSerahDariSanding->isEmpty()
+            ? 0.0
+            : (float) HppTriplekJadiLog::query()
+                ->whereRaw('LOWER(tipe_transaksi) = ?', ['masuk'])
+                ->where('referensi_type', SerahTerimaTriplekJadi::class)
+                ->whereIn('referensi_id', $idSerahDariSanding)
+                ->sum('total_lembar');
+
+        // Kurangi baseline yang sudah "ditutup buku" per spesifikasi. Kalau satu
+        // spec direset berkali-kali, ambil baseline terbesar (reset terakhir).
+        $baselineKeluar = 0.0;
+        $baselineMasuk = 0.0;
+        WipSandingReset::query()
+            ->orderBy('spec_key')
+            ->get(['spec_key', 'keluar_kumulatif', 'masuk_kumulatif'])
+            ->groupBy('spec_key')
+            ->each(function ($rows) use (&$baselineKeluar, &$baselineMasuk) {
+                $baselineKeluar += (float) $rows->max('keluar_kumulatif');
+                $baselineMasuk  += (float) $rows->max('masuk_kumulatif');
+            });
+
+        $wip = ($keluar - $baselineKeluar) - ($masuk - $baselineMasuk);
+
+        // Tidak boleh negatif (jaga-jaga bila ada data lama tak sinkron).
+        return max(0.0, $wip);
     }
 
     // ─── STOK (untuk dropdown pilih barang di modal keluar) ─────────────────
@@ -120,7 +198,7 @@ class GudangTriplekJadi extends Page
         if (! in_array($this->tujuanKeluar, self::TUJUAN_OPTIONS, true)) {
             Notification::make()->danger()
                 ->title('Input Gagal')
-                ->body('Tujuan keluar tidak valid. Pilih Produksi Nyusup atau Gudang Satu.')
+                ->body('Tujuan keluar tidak valid. Pilih Produksi Nyusup, Gudang Satu, atau Produksi Sanding.')
                 ->send();
             return;
         }
@@ -161,19 +239,33 @@ class GudangTriplekJadi extends Page
                     ]);
                 }
 
-                // 🌟 Buat SATU baris antrean serah terima. tujuan='triplek_jadi'
-                // membuatnya muncul di antrean Produksi Nyusup DAN Gudang Satu
-                // sekaligus (lihat filter di SerahTerimaGudangSatuRelationManager).
-                // Jumlah TIDAK disimpan di sini — accessor getJumlahAttribute()
-                // di model mengambilnya langsung dari stok_lembar mutasi via
+                // 🌟 Buat baris antrean serah terima sesuai tujuan.
+                // Jumlah TIDAK disimpan di mana pun selain mutasi — accessor
+                // di masing-masing model mengambilnya dari stok_lembar via
                 // id_triplek_mutasi_keluar, jadi selalu konsisten satu sumber.
-                SerahTerimaGudangSatu::create([
-                    'id_triplek_mutasi_keluar' => $mutasi->id,
-                    'tujuan'                   => 'triplek_jadi',
-                    'diserahkan_oleh'          => Auth::user()?->name ?? 'System',
-                    'diterima_oleh'            => '-',
-                    'status'                   => 'Menunggu',
-                ]);
+                if ($this->tujuanKeluar === self::TUJUAN_SANDING) {
+                    // Antrean Produksi Sanding hidup di tabel SerahTerimaHp
+                    // (tab "Terima Platform/Plywood", filter tujuan='sanding').
+                    SerahTerimaHp::create([
+                        'id_triplek_mutasi_keluar' => $mutasi->id,
+                        'tujuan'                   => 'sanding',
+                        'diserahkan_oleh'          => Auth::user()?->name ?? 'System',
+                        'diterima_oleh'            => '-',
+                        'status'                   => 'Serah ke Sanding',
+                    ]);
+                } else {
+                    // Nyusup & Gudang Satu: tujuan='triplek_jadi' membuat baris
+                    // muncul di antrean KEDUANYA sekaligus (lihat filter di
+                    // SerahTerimaGudangSatuRelationManager); siapa terima duluan
+                    // mengklaimnya.
+                    SerahTerimaGudangSatu::create([
+                        'id_triplek_mutasi_keluar' => $mutasi->id,
+                        'tujuan'                   => 'triplek_jadi',
+                        'diserahkan_oleh'          => Auth::user()?->name ?? 'System',
+                        'diterima_oleh'            => '-',
+                        'status'                   => 'Menunggu',
+                    ]);
+                }
             });
 
             // Reset form
