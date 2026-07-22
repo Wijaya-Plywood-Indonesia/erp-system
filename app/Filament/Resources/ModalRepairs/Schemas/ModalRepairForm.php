@@ -51,7 +51,7 @@ class ModalRepairForm
                             $set('id_ukuran_select', null);
                             $set('id_jenis_kayu_select', null);
                             $set('kw', null);
-                            $set('no_palet', null);
+                            $set('nomor_palet', null);
                             $set('ukuran_label', null);
                             $set('jenis_kayu_label', null);
                             $set('jenis_terima_label', null);
@@ -72,7 +72,7 @@ class ModalRepairForm
                             $set('id_ukuran_select', null);
                             $set('id_jenis_kayu_select', null);
                             $set('kw', 'AF');
-                            $set('no_palet', $newAfNumber);
+                            $set('nomor_palet', $newAfNumber);
                             $set('ukuran_label', null);
                             $set('jenis_kayu_label', null);
                             $set('jenis_terima_label', 'Afalan');
@@ -126,7 +126,7 @@ class ModalRepairForm
                         $set('id_ukuran', $idUkuran);
                         $set('id_jenis_kayu', $idJenisKayu);
                         $set('kw', $tampilan['kw']);
-                        $set('no_palet', $newPaletNumber);
+                        $set('nomor_palet', $newPaletNumber);
                         $set('ukuran_label', $tampilan['dimensi']);
                         $set('jenis_kayu_label', $tampilan['jenis_kayu']);
                         $set('jenis_terima_label', $serahTerima?->label_jenis_terima ?? '-');
