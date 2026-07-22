@@ -83,11 +83,14 @@ class GudangVeneerJadi extends Page
 
     public array $editPaletQuantities = [0 => ''];
 
-    public function hitungKubikasi(float $p, float $l, float $t, ?int $lembar): float
+    public function hitungKubikasi(?float $p, ?float $l, ?float $t, ?int $lembar): float
     {
+        $pAman = $p ?? 0;
+        $lAman = $l ?? 0;
+        $tAman = $t ?? 0;
         $lembarAman = $lembar ?? 0;
 
-        return ($p * $l * $t * $lembarAman) / 10000000;
+        return ($pAman * $lAman * $tAman * $lembarAman) / 10000000;
     }
 
     /**
