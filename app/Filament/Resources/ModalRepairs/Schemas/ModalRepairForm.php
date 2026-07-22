@@ -62,7 +62,7 @@ class ModalRepairForm
                         }
 
                         if ($state === 'AF') {
-                            $newAfNumber = DB::table((new ModalRepair)->getTable())->count() + 1;
+                            $newAfNumber = (int) DB::table((new ModalRepair)->getTable())->max('nomor_palet') + 1;
 
                             $set('id_serah_terima_veneer_kering', null);
                             $set('af_generated_id', $newAfNumber);
@@ -99,9 +99,10 @@ class ModalRepairForm
                             $sisa += (float) $record->jumlah;
                         }
 
-                        $newPaletNumber = DB::table((new ModalRepair)->getTable())->count() + 1;
-                        if ($record && $record->no_palet) {
-                            $newPaletNumber = $record->no_palet;
+                        // ✅ FIX: kolom di tabel modal_repairs bernama "nomor_palet", bukan "no_palet"
+                        $newPaletNumber = (int) DB::table((new ModalRepair)->getTable())->max('nomor_palet') + 1;
+                        if ($record && $record->nomor_palet) {
+                            $newPaletNumber = $record->nomor_palet;
                         }
 
                         $idUkuran = match ($serahTerima?->tipe_sumber) {
@@ -258,8 +259,10 @@ class ModalRepairForm
                     ->disabled()
                     ->dehydrated(),
 
-                TextInput::make('no_palet')
-                    ->label('no Palet')
+                // ✅ FIX: nama field & kolom disesuaikan menjadi "nomor_palet"
+                // agar cocok dengan kolom yang benar-benar ada di tabel modal_repairs
+                TextInput::make('nomor_palet')
+                    ->label('No Palet')
                     ->disabled()
                     ->dehydrated(),
 
@@ -293,6 +296,8 @@ class ModalRepairForm
             ->filter(fn ($pair) => $pair[1] > 0 || (int) $pair[0]->id === $currentId)
             ->mapWithKeys(function ($pair) {
                 [$item, $sisa] = $pair;
+                // ⚠️ "tampilan" adalah accessor array di model SerahTerimaVeneerKering,
+                // key "no_palet" di sini TIDAK terkait kolom modal_repairs, jadi dibiarkan tetap.
                 $tampilan = $item->tampilan;
 
                 $label = "Palet {$tampilan['no_palet']} · {$tampilan['dimensi']} {$tampilan['jenis_kayu']} KW{$tampilan['kw']}"
