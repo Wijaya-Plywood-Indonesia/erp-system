@@ -13,14 +13,16 @@ class SerahTerimaVeneerKering extends Model
     protected $fillable = [
         'id_detail_hasil',
         'id_detail_bongkar_kedi',
-        'id_hasil_sanding_joint',
+        'id_hasil_joint',
         'id_mutasi_keluar_palet',
         'id_mutasi_keluar_palet_jadi',
         'tipe_sumber',
         'id_produksi_repair',
+        'id_produksi_joint',
         'diserahkan_oleh',
         'diterima_oleh',
         'jenis_terima',
+        'tujuan',
         'status',
     ];
 
@@ -42,9 +44,30 @@ class SerahTerimaVeneerKering extends Model
         return $this->belongsTo(DetailBongkarKedi::class, 'id_detail_bongkar_kedi');
     }
 
+    /**
+     * Sumber dari Produksi Joint (tabel: hasil_joint).
+     *
+     * ⚠️ PENTING: kolom id_hasil_joint SELALU berisi hasil_joint.id —
+     * BUKAN hasil_sanding_joint.id. Sanding Joint tidak pernah melewati
+     * alur serah terima ini. Sebelumnya relasi ini salah menunjuk ke
+     * HasilSandingJoint sehingga id 147 dari hasil_joint dibaca sebagai
+     * baris 147 di hasil_sanding_joint → jenis kayu & jumlah lembar acak.
+     */
+    public function hasilJoint(): BelongsTo
+    {
+        return $this->belongsTo(HasilJoint::class, 'id_hasil_joint');
+    }
+
+    /**
+     * @deprecated Nama lama peninggalan era "Sanding Joint" dan targetnya salah.
+     *             Sudah diarahkan ulang ke hasilJoint() supaya kode/Blade lama
+     *             tidak error dan langsung menampilkan data yang benar.
+     *             Hapus method ini setelah `grep -rn "hasilSandingJoint" app/ resources/`
+     *             bersih.
+     */
     public function hasilSandingJoint(): BelongsTo
     {
-        return $this->belongsTo(HasilSandingJoint::class, 'id_hasil_sanding_joint');
+        return $this->hasilJoint();
     }
 
     public function mutasiKeluarPalet(): BelongsTo
@@ -81,7 +104,7 @@ class SerahTerimaVeneerKering extends Model
         return match ($this->tipe_sumber) {
             'dryer' => $this->detailHasil,
             'kedi' => $this->detailBongkarKedi,
-            'sanding_joint' => $this->hasilSandingJoint,
+            'joint' => $this->hasilSandingJoint,
             'gudang' => $this->mutasiKeluarPalet,
             'gudang_jadi' => $this->mutasiKeluarPaletJadi,
             default => null,
@@ -93,7 +116,7 @@ class SerahTerimaVeneerKering extends Model
         return match ($this->tipe_sumber) {
             'dryer' => 'Press Dryer',
             'kedi' => 'Kedi',
-            'sanding_joint' => 'Sanding Joint',
+            'joint' => 'Sanding Joint',
             'gudang' => 'Gudang Kering',
             'gudang_jadi' => 'Gudang Jadi',
             default => '-',
@@ -119,7 +142,7 @@ class SerahTerimaVeneerKering extends Model
         return (float) match ($this->tipe_sumber) {
             'dryer' => $this->sumber?->isi ?? 0,
             'kedi',
-            'sanding_joint' => $this->sumber?->jumlah ?? 0,
+            'joint' => $this->sumber?->jumlah ?? 0,
             'gudang' => $this->sumber?->qty ?? 0,
             'gudang_jadi' => $this->sumber?->jumlah_lembar ?? 0,
             default => 0,
@@ -128,7 +151,10 @@ class SerahTerimaVeneerKering extends Model
 
     public function getTotalDigunakanAttribute(): float
     {
-        return (float) $this->modalRepairs()->sum('jumlah');
+        $totalRepair = (float) $this->modalRepairs()->sum('jumlah');
+        $totalJoint = (float) $this->modalJoints()->sum('jumlah');
+
+        return $totalRepair + $totalJoint;
     }
 
     public function getSisaAttribute(): float
@@ -139,7 +165,7 @@ class SerahTerimaVeneerKering extends Model
     public function getTampilanAttribute(): array
     {
         return match ($this->tipe_sumber) {
-            'dryer', 'kedi' => [
+            'dryer', 'kedi', 'joint' => [
                 'no_palet' => $this->sumber?->no_palet ?? '-',
                 'dimensi' => $this->sumber?->ukuran
                     ? collect([$this->sumber->ukuran->panjang, $this->sumber->ukuran->lebar, $this->sumber->ukuran->tebal])
@@ -197,5 +223,10 @@ class SerahTerimaVeneerKering extends Model
                     && round((float) $u->lebar, 2) === $l
                     && round((float) $u->tebal, 2) === $t;
             })?->id;
+    }
+
+    public function modalJoints(): HasMany
+    {
+        return $this->hasMany(ModalJoint::class, 'id_serah_terima_veneer_kering');
     }
 }

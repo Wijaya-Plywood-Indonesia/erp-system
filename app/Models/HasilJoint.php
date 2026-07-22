@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\ProductionUpdated;
 use Illuminate\Database\Eloquent\Model;
 
 class HasilJoint extends Model
@@ -32,18 +33,23 @@ class HasilJoint extends Model
         return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu');
     }
 
+    public function serahTerimaVeneerKering()
+    {
+        return $this->hasOne(SerahTerimaVeneerKering::class, 'id_hasil_joint');
+    }
+
     protected static function booted()
     {
         // Menggunakan static::saved mencakup Created dan Updated
         static::saved(function ($model) {
             if ($model->id_produksi_joint) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_joint, 'join');
+                ProductionUpdated::dispatch($model->id_produksi_joint, 'join');
             }
         });
 
         static::deleted(function ($model) {
             if ($model->id_produksi_joint) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_joint, 'join');
+                ProductionUpdated::dispatch($model->id_produksi_joint, 'join');
             }
         });
     }

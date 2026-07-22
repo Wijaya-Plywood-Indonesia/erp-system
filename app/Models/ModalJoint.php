@@ -10,16 +10,23 @@ class ModalJoint extends Model
 
     protected $fillable = [
         'id_produksi_joint',
+        'id_serah_terima_veneer_kering',
         'id_ukuran',
         'id_jenis_kayu',
         'jumlah',
         'kw',
         'no_palet',
+        'keterangan',
     ];
 
     public function produksiJoint()
     {
         return $this->belongsTo(ProduksiJoint::class, 'id_produksi_joint');
+    }
+
+    public function serahTerimaVeneerKering()
+    {
+        return $this->belongsTo(SerahTerimaVeneerKering::class, 'id_serah_terima_veneer_kering');
     }
 
     public function ukuran()
