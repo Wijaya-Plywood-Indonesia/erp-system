@@ -9,6 +9,7 @@ use App\Models\SerahTerimaTriplekJadi;
 use App\Models\StokTriplekJadi;
 use App\Models\TriplekJadiMutasiKeluar;
 use App\Models\TriplekJadiMutasiKeluarPalet;
+use App\Models\WipSandingReset;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Notifications\Notification;
@@ -31,7 +32,7 @@ class GudangTriplekJadi extends Page
     // 🌟 Tujuan keluar yang diizinkan — SATU sumber kebenaran.
     // Dipakai di view (opsi <select>) dan validasi prosesKeluar().
     public const TUJUAN_NYUSUP      = 'Produksi Nyusup';
-    public const TUJUAN_GUDANG_SATU = 'Gudang Satu';
+    public const TUJUAN_GUDANG_SATU = 'Produksi Sampling Plywood';
     public const TUJUAN_SANDING     = 'Produksi Sanding';
 
     public const TUJUAN_OPTIONS = [
@@ -76,6 +77,10 @@ class GudangTriplekJadi extends Page
      * Casing tipe_transaksi SENGAJA dibandingkan case-insensitive (LOWER) karena
      * di kode lama ada campuran 'keluar'/'Masuk' — supaya hitungan tidak bergantung
      * pada collation database.
+     *
+     * Selaras dengan halaman Stok: mengurangi baseline "tutup buku" dari tabel
+     * wip_sanding_resets. Jadi setelah pengawas menekan "Selesaikan WIP" di Stok,
+     * badge total di Gudang ini pun ikut berkurang.
      */
     public function getWipSandingProperty(): float
     {
@@ -105,8 +110,23 @@ class GudangTriplekJadi extends Page
                 ->whereIn('referensi_id', $idSerahDariSanding)
                 ->sum('total_lembar');
 
+        // Kurangi baseline yang sudah "ditutup buku" per spesifikasi. Kalau satu
+        // spec direset berkali-kali, ambil baseline terbesar (reset terakhir).
+        $baselineKeluar = 0.0;
+        $baselineMasuk = 0.0;
+        WipSandingReset::query()
+            ->orderBy('spec_key')
+            ->get(['spec_key', 'keluar_kumulatif', 'masuk_kumulatif'])
+            ->groupBy('spec_key')
+            ->each(function ($rows) use (&$baselineKeluar, &$baselineMasuk) {
+                $baselineKeluar += (float) $rows->max('keluar_kumulatif');
+                $baselineMasuk  += (float) $rows->max('masuk_kumulatif');
+            });
+
+        $wip = ($keluar - $baselineKeluar) - ($masuk - $baselineMasuk);
+
         // Tidak boleh negatif (jaga-jaga bila ada data lama tak sinkron).
-        return max(0.0, $keluar - $masuk);
+        return max(0.0, $wip);
     }
 
     // ─── STOK (untuk dropdown pilih barang di modal keluar) ─────────────────

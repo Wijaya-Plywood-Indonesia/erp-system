@@ -126,6 +126,15 @@
                             </thead>
                             <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
                                 @foreach ($rows as $row)
+                                    @php
+                                        $wipRow = $this->wipUntuk(
+                                            $row->id_jenis_kayu,
+                                            $row->panjang,
+                                            $row->lebar,
+                                            $row->tebal,
+                                            $row->kw_grade,
+                                        );
+                                    @endphp
                                     <tr class="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                                         <td
                                             class="px-6 py-4 text-center text-gray-300 dark:text-gray-600 font-mono text-xs">
@@ -167,6 +176,31 @@
                                                 {{ number_format($row->stok_lembar) }}
                                             </span>
                                             <div class="text-[9px] text-gray-400 uppercase tracking-tight">lembar</div>
+
+                                            {{-- BADGE WIP SANDING: porsi stok baris ini yang sedang diproses di sanding --}}
+                                            @if ($wipRow > 0)
+                                                <div class="mt-1.5 flex flex-col items-center gap-1">
+                                                    <span
+                                                        class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 whitespace-nowrap"
+                                                        title="Dari stok ini, {{ number_format($wipRow) }} lembar sedang diproses di Produksi Sanding (sudah keluar & diterima di sana, hasilnya belum kembali). Barang tidak hilang — sedang dikerjakan.">
+                                                        <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor"
+                                                            viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                                stroke-width="2.5"
+                                                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                        {{ number_format($wipRow) }} wip sanding
+                                                    </span>
+
+                                                    <button type="button"
+                                                        wire:click="selesaikanWip('{{ $row->id_jenis_kayu }}', '{{ $row->panjang }}', '{{ $row->lebar }}', '{{ $row->tebal }}', '{{ $row->kw_grade }}')"
+                                                        wire:confirm="Selesaikan WIP {{ number_format($wipRow) }} lembar untuk {{ $row->jenisKayu?->nama_kayu }} {{ $row->kw_grade }} ({{ (float) $row->panjang }}×{{ (float) $row->lebar }}×{{ (float) $row->tebal }})?&#10;&#10;Sisa yang belum kembali akan dianggap SUSUT tercatat. Lakukan hanya jika sudah tidak ada barang spesifikasi ini yang benar-benar di mesin sanding."
+                                                        wire:loading.attr="disabled"
+                                                        class="text-[8px] font-bold uppercase tracking-tight text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 underline decoration-dotted underline-offset-2 transition-colors">
+                                                        Selesaikan WIP
+                                                    </button>
+                                                </div>
+                                            @endif
                                         </td>
 
                                         @if ($showKubikasi)
