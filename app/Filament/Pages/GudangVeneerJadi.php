@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Models\GudangVeneerJadi as GudangModel;
+use App\Models\HasilPilihVeneer;
 use App\Models\HppVeneerJadiLog;
 use App\Models\SerahTerimaVeneerKering;
 use App\Models\StokVeneerJadi;
@@ -313,6 +314,8 @@ class GudangVeneerJadi extends Page
 
         if ($source === 'mutasi') {
             $this->terimaDariMutasi((int) $rawId);
+        } elseif ($source === 'pilih') {
+            $this->terimaDariPilihVeneer((int) $rawId);
         } else {
             // Default ke perilaku lama supaya backward-compatible kalau
             // suatu saat composite id belum sempat dipakai di tempat lain.
@@ -504,7 +507,7 @@ class GudangVeneerJadi extends Page
     public function getAntreanFilteredProperty(): Collection
     {
         $dariGudang = $this->ambilAntreanDariGudang();
-
+        $dariPilihVeneer = $this->ambilAntreanDariPilihVeneer();
         // 🔒 SEMENTARA DINONAKTIFKAN: sub-tab "Terima dari BM" (sumber mutasi)
         // dihilangkan dari tampilan atas permintaan — hanya antrean Produksi/Repair
         // yang ditampilkan. Method ambilAntreanDariMutasiJadi() & terimaDariMutasi()
@@ -514,6 +517,7 @@ class GudangVeneerJadi extends Page
 
         return $dariGudang
             // ->concat($dariMutasi)
+            ->concat($dariPilihVeneer)
             ->sortBy([
                 fn($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
                 fn($item) => -$item['created_at_ts'],
@@ -567,6 +571,7 @@ class GudangVeneerJadi extends Page
             'diterima_by' => $item->diterima_by,
             'penerima_name' => $item->penerima?->name ?? 'N/A',
             'keterangan' => $item->keterangan,
+            'sumber_label' => $item->id_produksi_repair ? 'Repair' : 'Produksi',
         ])
             ->sortBy([
                 fn($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
@@ -1099,5 +1104,97 @@ class GudangVeneerJadi extends Page
         }
 
         return '-';
+    }
+
+    // Untuk serah terima hasil pilih veneer
+    protected function ambilAntreanDariPilihVeneer(): Collection
+    {
+        $hasilRows = HasilPilihVeneer::with(['modalPilihVeneer.stokVeneerJadi.jenisKayu'])
+            ->whereNull('diterima_gudang_at') // kolom status baru, lihat di bawah
+            ->get();
+
+        return $hasilRows->map(function ($hasil) {
+            $stokAsal = $hasil->modalPilihVeneer?->stokVeneerJadi;
+
+            return [
+                'id' => 'pilih-' . $hasil->id,
+                'source' => 'pilih_veneer',
+                'sumber_label' => 'Pilih Veneer',
+                'jenis_kayu' => $stokAsal?->jenisKayu?->nama_kayu,
+                'panjang' => $stokAsal?->panjang,
+                'lebar' => $stokAsal?->lebar,
+                'tebal' => $stokAsal?->tebal,
+                'kw' => $hasil->kw, // KW HASIL, bukan KW modal
+                'jumlah' => $hasil->jumlah,
+                'stok_kubikasi' => $this->hitungKubikasi($stokAsal?->panjang ?? 0, $stokAsal?->lebar ?? 0, $stokAsal?->tebal ?? 0, $hasil->jumlah),
+                'created_at' => $hasil->created_at,
+                'created_at_ts' => $hasil->created_at?->timestamp ?? 0,
+                'status_gudang' => 'belum diterima',
+                'diterima_at' => null,
+                'diterima_by' => null,
+                'penerima_name' => 'N/A',
+                'keterangan' => 'Pilih Veneer tanggal ' . $hasil->created_at?->translatedFormat('d F Y'),
+            ];
+        });
+    }
+
+    /**
+     * Terima hasil pilih veneer ke Gudang.
+     *
+     * 🔑 PENTING: method ini SENGAJA tidak lagi menghitung/menulis mutasi
+     * StokVeneerJadi atau HppVeneerJadiLog secara manual. Tugasnya cuma
+     * validasi + tandai `diterima_gudang_at`. Begitu kolom itu ter-update,
+     * event `saved` di HasilPilihVeneer::booted() otomatis mendeteksi
+     * perubahan (null -> ada isi) dan menjalankan mutasi stok yang benar:
+     *   - KW hasil SAMA dengan KW stok asal -> tidak ada mutasi stok.
+     *   - KW hasil BEDA dari KW stok asal   -> pindahkan lembar dari baris
+     *     stok KW asal ke baris stok KW hasil (dengan HPP rata-rata
+     *     tertimbang di sisi tujuan).
+     *
+     * Kalau logika mutasi stok ditulis DI SINI JUGA, hasilnya dobel-mutasi
+     * (baris ini menambah ke stok tujuan, DAN booted() juga menambah/
+     * mengurangi) — itulah penyebab bug stok bertambah tidak wajar yang
+     * pernah terjadi sebelumnya (modal 300 -> stok KW 3 & KW 2 sama-sama
+     * jadi 450, padahal seharusnya berpindah, bukan digandakan).
+     */
+    protected function terimaDariPilihVeneer(int $id): void
+    {
+        try {
+            DB::transaction(function () use ($id) {
+                $hasil = HasilPilihVeneer::with('modalPilihVeneer.stokVeneerJadi')
+                    ->lockForUpdate()
+                    ->findOrFail($id);
+
+                if ($hasil->diterima_gudang_at !== null) {
+                    throw new \Exception('Hasil pilih veneer ini sudah diterima sebelumnya.');
+                }
+
+                if (! $hasil->modalPilihVeneer?->stokVeneerJadi) {
+                    throw new \Exception('Data stok asal modal tidak lengkap.');
+                }
+
+                $user = Auth::user();
+
+                // Update ini men-trigger event `saved` di HasilPilihVeneer,
+                // yang lalu memanggil mutasiStokSaatDiterima() untuk
+                // menghitung & mencatat perubahan stok yang sebenarnya.
+                $hasil->update([
+                    'diterima_gudang_at' => now(),
+                    'diterima_gudang_by' => $user?->id,
+                ]);
+            });
+
+            Notification::make()
+                ->success()
+                ->title('Sukses Diterima!')
+                ->body('Hasil pilih veneer resmi masuk gudang.')
+                ->send();
+        } catch (\Exception $e) {
+            Notification::make()
+                ->danger()
+                ->title('Gagal Menerima Barang')
+                ->body($e->getMessage())
+                ->send();
+        }
     }
 }

@@ -57,7 +57,7 @@ class ProduksiTerimaGudangSatuResource extends Resource
     {
         return [
             SerahTerimaGudangSatuRelationManager::class,
-            BahanTerimaGudangSatuRelationManager::class,
+            // BahanTerimaGudangSatuRelationManager::class,
             PegawaiTerimaGudangSatuRelationManager::class,
             HasilProduksiTerimaGudangSatuRelationManager::class,
             ValidasiTerimaGudangSatuRelationManager::class,

@@ -20,15 +20,32 @@ class ModalPilihVeneersTable
                     ->label('No. Palet')
                     ->searchable(),
 
-                TextColumn::make('jenisKayu.nama_kayu')
+                TextColumn::make('stokVeneerJadi.jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
                     ->searchable()
-                    ->placeholder('N/A'),
+                    ->placeholder('-'),
 
-                TextColumn::make('Ukuran.nama_ukuran')
+                // 3. UKURAN (Diambil dari kolom panjang, lebar, tebal di ModalPilihVeneer)
+                TextColumn::make('dimensi')
                     ->label('Ukuran')
-                    ->searchable(false)
-                    ->placeholder('Ukuran'),
+                    ->getStateUsing(function ($record) {
+                        if ($record->panjang && $record->lebar && $record->tebal) {
+                            $p = floatval($record->panjang);
+                            $l = floatval($record->lebar);
+                            $t = floatval($record->tebal);
+                            return "{$p} x {$l} x {$t}";
+                        }
+
+                        // Fallback ke stokVeneerJadi jika nilai di record kosong
+                        if ($record->stokVeneerJadi) {
+                            $p = floatval($record->stokVeneerJadi->panjang);
+                            $l = floatval($record->stokVeneerJadi->lebar);
+                            $t = floatval($record->stokVeneerJadi->tebal);
+                            return "{$p} x {$l} x {$t}";
+                        }
+
+                        return '-';
+                    }),
 
                 TextColumn::make('kw')
                     ->label('Kualitas (KW)')

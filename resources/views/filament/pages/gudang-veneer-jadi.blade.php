@@ -1,83 +1,61 @@
 <x-filament-panels::page>
-    {{-- ══════════════════════════════════════════════════════════════
-     SERAH TERIMA DARI DRYER / KEDI / SANDING JOINT (tujuan: Veneer Jadi)
-═══════════════════════════════════════════════════════════════ --}}
+
+    {{-- ══════════════════════════════════════════════════════════════════════
+     SERAH TERIMA (DARI DRYER / KEDI) — TUJUAN VENEER JADI
+═══════════════════════════════════════════════════════════════════════ --}}
     @php
     $serahTerima = $this->serahTerima;
     $riwayatSerahTerima = $this->riwayatSerahTerima;
-
-    // Warna badge per sumber — dipakai di kedua tab (aktif & history)
-    $badgeColorMap = [
-    'dryer' => 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
-    'kedi' => 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-    'sanding_joint' => 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-    ];
-    $labelMap = [
-    'dryer' => 'Press Dryer',
-    'kedi' => 'Kedi',
-    'sanding_joint' => 'Sanding Joint',
-    ];
     @endphp
 
-    <section class="space-y-3">
-        <div
-            class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-2">
-            <h2 class="text-xs font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                Serah Terima dari Dryer / Kedi / Sanding Joint
-            </h2>
+    <div>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+            <span class="text-[10px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Serah Terima
+                dari Dryer / Kedi</span>
 
-            <div class="flex border-b border-zinc-200 dark:border-zinc-800 -mb-2">
+            <div class="flex border-b border-zinc-200 dark:border-zinc-800">
                 <button type="button" wire:click="$set('serahTerimaTab', 'aktif')"
-                    class="px-4 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 -mb-px transition-all {{ $serahTerimaTab === 'aktif' ? 'border-amber-500 text-amber-500' : 'border-transparent text-zinc-400 hover:text-zinc-200' }}">
+                    class="px-4 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 -mb-px transition-all {{ $serahTerimaTab === 'aktif' ? 'border-amber-500 text-amber-600 dark:text-amber-400' : 'border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200' }}">
                     Aktif
                     <span
-                        class="ml-1 inline-flex items-center justify-center min-w-[1.1rem] px-1 rounded-full text-[9px] font-bold {{ $serahTerimaTab === 'aktif' ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400' }}">
+                        class="ml-1 inline-flex items-center justify-center min-w-[1.1rem] px-1 rounded-full text-[9px] font-bold {{ $serahTerimaTab === 'aktif' ? 'bg-amber-500 text-white' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400' }}">
                         {{ $serahTerima->count() }}
                     </span>
                 </button>
                 <button type="button" wire:click="$set('serahTerimaTab', 'history')"
-                    class="px-4 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 -mb-px transition-all {{ $serahTerimaTab === 'history' ? 'border-amber-500 text-amber-500' : 'border-transparent text-zinc-400 hover:text-zinc-200' }}">
+                    class="px-4 py-2 text-[10px] font-black uppercase tracking-widest border-b-2 -mb-px transition-all {{ $serahTerimaTab === 'history' ? 'border-amber-500 text-amber-600 dark:text-amber-400' : 'border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200' }}">
                     History
                 </button>
             </div>
         </div>
 
-        <div
-            class="border bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-none shadow-sm overflow-hidden">
-            <div class="divide-y divide-zinc-100 dark:divide-zinc-900 max-h-[400px] overflow-y-auto">
+        <div class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <div class="divide-y divide-zinc-100 dark:divide-zinc-800 max-h-[400px] overflow-y-auto">
 
                 @if ($serahTerimaTab === 'aktif')
                 @forelse($serahTerima as $st)
                 @php
-                $sumber = match ($st->tipe_sumber) {
-                'dryer' => $st->detailHasil,
-                'kedi' => $st->detailBongkarKedi,
-                'sanding_joint' => $st->hasilSandingJoint,
-                default => null,
-                };
+                $sumber = $st->tipe_sumber === 'dryer' ? $st->detailHasil : $st->detailBongkarKedi;
                 $noPalet = $sumber?->no_palet ?? '-';
                 $ukuran = $sumber?->ukuran;
                 $kayu = $sumber?->jenisKayu?->nama_kayu ?? '-';
                 $kw = $sumber?->kw ?? '-';
                 $qty = $st->tipe_sumber === 'dryer' ? $sumber?->isi ?? 0 : $sumber?->jumlah ?? 0;
-                $labelSumber = $labelMap[$st->tipe_sumber] ?? '-';
-                $badgeColor =
-                $badgeColorMap[$st->tipe_sumber] ??
-                'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400';
                 @endphp
-                <div wire:key="jadi-st-{{ $st->id }}"
-                    class="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors flex-wrap">
+                <div wire:key="st-{{ $st->id }}"
+                    class="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors flex-wrap">
                     <span
-                        class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap shrink-0 {{ $badgeColor }}">
-                        {{ $labelSumber }}
+                        class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap shrink-0
+                            {{ $st->tipe_sumber === 'dryer' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }}">
+                        {{ $st->tipe_sumber === 'dryer' ? 'Press Dryer' : 'Kedi' }}
                     </span>
                     <span
                         class="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 whitespace-nowrap shrink-0">
-                        Palet {{ $this->formatKodePalet($st) }}
+                        Palet {{ $noPalet }}
                     </span>
                     <span
                         class="font-mono text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400 tabular-nums whitespace-nowrap shrink-0">
-                        {{ $ukuran?->panjang + 0 }}×{{ $ukuran?->lebar + 0 }}×{{ $ukuran?->tebal + 0 }}
+                        {{ number_format((float) $ukuran?->panjang, 2) }}×{{ number_format((float) $ukuran?->lebar, 2) }}×{{ number_format((float) $ukuran?->tebal, 2) }}
                         <span class="text-[10px] text-zinc-400">mm</span>
                     </span>
                     <span
@@ -106,43 +84,35 @@
                 </div>
                 @empty
                 <div class="px-5 py-8 text-center text-xs text-zinc-400 dark:text-zinc-600">
-                    Tidak ada veneer dari Dryer/Kedi/Sanding Joint (tujuan Jadi) yang menunggu diterima
+                    Tidak ada veneer jadi dari Dryer/Kedi yang menunggu diterima
                 </div>
                 @endforelse
                 @else
                 @forelse($riwayatSerahTerima as $st)
                 @php
-                $sumber = match ($st->tipe_sumber) {
-                'dryer' => $st->detailHasil,
-                'kedi' => $st->detailBongkarKedi,
-                'sanding_joint' => $st->hasilSandingJoint,
-                default => null,
-                };
+                $sumber = $st->tipe_sumber === 'dryer' ? $st->detailHasil : $st->detailBongkarKedi;
                 $noPalet = $sumber?->no_palet ?? '-';
                 $ukuran = $sumber?->ukuran;
                 $kayu = $sumber?->jenisKayu?->nama_kayu ?? '-';
                 $kw = $sumber?->kw ?? '-';
                 $qty = $st->tipe_sumber === 'dryer' ? $sumber?->isi ?? 0 : $sumber?->jumlah ?? 0;
                 $diterimaOleh = trim(explode(' - ', $st->diterima_oleh ?? '-')[0]);
-                $labelSumber = $labelMap[$st->tipe_sumber] ?? '-';
-                $badgeColor =
-                $badgeColorMap[$st->tipe_sumber] ??
-                'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400';
                 @endphp
-                <div wire:key="jadi-rst-{{ $st->id }}"
-                    class="px-3 sm:px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors">
+                <div wire:key="rst-{{ $st->id }}"
+                    class="px-3 sm:px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
                     <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
                         <span
-                            class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap shrink-0 {{ $badgeColor }}">
-                            {{ $labelSumber }}
+                            class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap shrink-0
+                                {{ $st->tipe_sumber === 'dryer' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }}">
+                            {{ $st->tipe_sumber === 'dryer' ? 'Press Dryer' : 'Kedi' }}
                         </span>
                         <span
                             class="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 whitespace-nowrap shrink-0">
-                            Palet {{ $this->formatKodePalet($st) }}
+                            Palet {{ $noPalet }}
                         </span>
                         <span
                             class="font-mono text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400 tabular-nums whitespace-nowrap shrink-0">
-                            {{ $ukuran?->panjang + 0 }}×{{ $ukuran?->lebar + 0 }}×{{ $ukuran?->tebal + 0 }}
+                            {{ number_format((float) $ukuran?->panjang, 2) }}×{{ number_format((float) $ukuran?->lebar, 2) }}×{{ number_format((float) $ukuran?->tebal, 2) }}
                             <span class="text-[10px] text-zinc-400">mm</span>
                         </span>
                         <span
@@ -168,14 +138,14 @@
                 </div>
                 @empty
                 <div class="px-5 py-8 text-center text-xs text-zinc-400 dark:text-zinc-600">
-                    Belum ada riwayat serah terima dari Dryer/Kedi/Sanding Joint (tujuan Jadi)
+                    Belum ada riwayat serah terima veneer jadi dari Dryer/Kedi
                 </div>
                 @endforelse
                 @endif
 
             </div>
         </div>
-    </section>
+    </div>
     <div class="space-y-6 font-mono">
 
         {{-- TAB NAVIGATION SWITCH GAYA INDUSTRIAL --}}
@@ -249,10 +219,22 @@
                                     class="font-bold text-zinc-800 dark:text-zinc-200">{{ $item['panjang'] + 0 }}x{{ $item['lebar'] + 0 }}x{{ $item['tebal'] + 0 }}</span>
                             </p>
                         </div>
-                        <span
-                            class="inline-block border border-amber-400 bg-amber-500 text-zinc-950 font-black text-xs px-2 py-0.5 rounded-none shadow-sm">
-                            KW {{ $item['kw'] }}
-                        </span>
+                        <div class="flex flex-col items-end gap-1">
+                            <span
+                                class="inline-block border border-amber-400 bg-amber-500 text-zinc-950 font-black text-xs px-2 py-0.5 rounded-none shadow-sm">
+                                KW {{ $item['kw'] }}
+                            </span>
+                            @php
+                            $warnaBadge = match(true) {
+                            $item['source'] === 'pilih_veneer' => 'border-purple-400 bg-purple-500/10 text-purple-600 dark:text-purple-400',
+                            $item['sumber_label'] === 'Repair' => 'border-orange-400 bg-orange-500/10 text-orange-600 dark:text-orange-400',
+                            default => 'border-sky-400 bg-sky-500/10 text-sky-600 dark:text-sky-400',
+                            };
+                            @endphp
+                            <span class="inline-block border text-[9px] font-black uppercase px-1.5 py-0.5 rounded-none {{ $warnaBadge }}">
+                                {{ $item['sumber_label'] }}
+                            </span>
+                        </div>
                     </div>
 
                     <div
@@ -334,6 +316,7 @@
                             <th class="py-3 px-3 text-right">Lebar</th>
                             <th class="py-3 px-3 text-right">Tebal</th>
                             <th class="py-3 px-3 text-center">Grade</th>
+                            <th class="py-3 px-3 text-center">Sumber</th>
                             <th class="py-3 px-4 text-center">Stok</th>
                             <th class="py-3 px-4 text-right">Kubikasi</th>
                             <th class="py-3 px-4 text-center">Status</th>
@@ -384,6 +367,18 @@
                                     {{ $item['kw'] }}
                                 </span>
                             </td>
+                            @php
+                            $warnaBadge = match(true) {
+                            $item['source'] === 'pilih_veneer' => 'border-purple-400 bg-purple-500/10 text-purple-600 dark:text-purple-400',
+                            $item['sumber_label'] === 'Repair' => 'border-orange-400 bg-orange-500/10 text-orange-600 dark:text-orange-400',
+                            default => 'border-sky-400 bg-sky-500/10 text-sky-600 dark:text-sky-400',
+                            };
+                            @endphp
+                            <td class="py-3 px-3 text-center">
+                                <span class="inline-block border text-[9px] font-black uppercase px-1.5 py-0.5 rounded-none {{ $warnaBadge }}">
+                                    {{ $item['sumber_label'] }}
+                                </span>
+                            </td>
                             <td class="py-3 px-4 text-center">
                                 <span
                                     class="inline-block border border-amber-400 bg-amber-500 text-zinc-950 font-bold text-sm px-3 py-0.5 rounded-none shadow-sm">
@@ -426,7 +421,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colSpan="11"
+                            <td colSpan="12"
                                 class="py-8 text-center text-zinc-400 dark:text-zinc-500 italic">
                                 Tidak ada antrean kiriman aktif saat ini.
                             </td>
@@ -528,25 +523,7 @@
                             class="px-2 py-0.5 text-[10px] font-semibold rounded uppercase bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                             {{ $item['tujuan'] }}
                         </span>
-                        <div class="flex items-center gap-2">
-                            <span class="text-[11px] text-zinc-400">By: {{ $item['dikeluarkan_by'] }}</span>
-                            {{-- 🆕 TOMBOL EDIT MOBILE: hanya tampil kalau belum diterima di Hotpress/Repair --}}
-                            @if ($item['bisa_diedit'])
-                            <button type="button" wire:click="editKeluar({{ $item['id'] }})"
-                                wire:loading.attr="disabled"
-                                class="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 border border-zinc-300 dark:border-zinc-700 hover:bg-amber-500 hover:border-amber-500 hover:text-zinc-950 text-zinc-500 dark:text-zinc-400 rounded-none transition-all">
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                                Edit
-                            </button>
-                            @else
-                            <span class="text-zinc-300 dark:text-zinc-700 text-[10px]"
-                                title="Sudah diterima di sisi tujuan">🔒</span>
-                            @endif
-                        </div>
+                        <span class="text-[11px] text-zinc-400">By: {{ $item['dikeluarkan_by'] }}</span>
                     </div>
                 </div>
                 @empty
@@ -563,7 +540,6 @@
                     <thead
                         class="sticky top-0 z-10 bg-zinc-50 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400 text-[11px] uppercase font-bold border-b border-zinc-200 dark:border-zinc-800">
                         <tr>
-                            <th class="py-3 px-4 text-center w-20">Aksi</th>
                             <th class="py-3 px-4">Waktu Keluar</th>
                             <th class="py-3 px-4">Jenis Kayu</th>
                             <th class="py-3 px-3 text-center">Panjang</th>
@@ -585,24 +561,6 @@
                         {{-- BARIS UTAMA: seluruh baris jadi trigger accordion --}}
                         <tr @click="open = !open"
                             class="cursor-pointer hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-colors">
-                            {{-- 🆕 KOLOM AKSI: klik.stop supaya tidak ikut men-toggle accordion --}}
-                            <td class="py-3 px-4 text-center" @click.stop>
-                                @if ($item['bisa_diedit'])
-                                <button type="button" wire:click="editKeluar({{ $item['id'] }})"
-                                    wire:loading.attr="disabled"
-                                    class="inline-flex items-center gap-1 border border-zinc-300 dark:border-zinc-700 hover:bg-amber-500 hover:border-amber-500 hover:text-zinc-950 text-zinc-500 dark:text-zinc-400 transition-all text-[11px] font-black uppercase px-2.5 py-1 rounded-none">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                            stroke-width="2"
-                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                </button>
-                                @else
-                                <span class="text-zinc-300 dark:text-zinc-700"
-                                    title="Sudah diterima di sisi tujuan, terkunci">🔒</span>
-                                @endif
-                            </td>
                             <td class="py-3 px-4 text-xs text-zinc-500 whitespace-nowrap">
                                 <span class="inline-flex items-center gap-2">
                                     <svg class="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 transition-transform duration-150 flex-shrink-0"
@@ -672,7 +630,7 @@
                         {{-- BARIS ACCORDION: rincian per palet dalam bentuk badge --}}
                         @if (!empty($item['rincian_palet']))
                         <tr x-show="open" x-cloak class="bg-zinc-50/60 dark:bg-zinc-900/40">
-                            <td colspan="12" class="py-3 px-4 pl-12">
+                            <td colspan="11" class="py-3 px-4 pl-12">
                                 <div class="flex flex-wrap gap-2">
                                     @foreach ($item['rincian_palet'] as $idx => $qty)
                                     <span
@@ -689,7 +647,7 @@
                     @empty
                     <tbody>
                         <tr>
-                            <td colSpan="12" class="py-8 text-center text-zinc-400 italic">Belum ada riwayat
+                            <td colSpan="11" class="py-8 text-center text-zinc-400 italic">Belum ada riwayat
                                 pengeluaran yang terdaftar.</td>
                         </tr>
                     </tbody>
@@ -741,6 +699,10 @@
                                 class="inline-block px-2 py-0.5 bg-amber-500 text-zinc-950 font-black text-xs rounded-none">
                                 KW {{ $selectedItem['kw'] }}
                             </span>
+                        </div>
+                        <div class="flex justify-between items-center border-b border-zinc-900 pb-2">
+                            <span class="text-zinc-500 uppercase font-bold text-[12px] tracking-wider">Sumber:</span>
+                            <span class="font-black text-zinc-200 text-sm">{{ $selectedItem['sumber_label'] ?? '-' }}</span>
                         </div>
                         <div class="flex justify-between items-center border-b border-zinc-900 pb-2">
                             <span class="text-zinc-500 uppercase font-bold text-[12px] tracking-wider">Jumlah
@@ -799,11 +761,11 @@
                         selectedStokId: @entangle('selectedStokId'),
                         options: [
                             @foreach ($this->splitStok['faceback']->concat($this->splitStok['core']) as $s)
-    {
-        id: '{{ $s->id }}',
-        nama: '{{ $s->jenisKayu?->nama_kayu ?? 'Tanpa Jenis' }} (KW {{ $s->kw_grade }}) - Sisa: {{ $s->stok_lembar }} lbr',
-        no: '{{ $s->panjang + 0 }}x{{ $s->lebar + 0 }}x{{ $s->tebal + 0 }}'
-    }, @endforeach
+                        {
+                            id: '{{ $s->id }}',
+                            nama: '{{ $s->jenisKayu->nama_kayu }} (KW {{ $s->kw_grade }}) - Sisa: {{ $s->stok_lembar }} lbr',
+                            no: '{{ $s->panjang + 0 }}x{{ $s->lebar + 0 }}x{{ $s->tebal + 0 }}'
+                        }, @endforeach
                         ],
                         get filteredOptions() {
                             if (this.searchTerm === '') return this.options;
@@ -922,16 +884,15 @@
         </div>
         @endif
 
-        {{-- 3. TUJUAN (dinamis dari $daftarTujuanKeluar, tambah tujuan baru cukup di properti Page) --}}
+        {{-- 3. TUJUAN (HOTPRESS & JUAL) --}}
         <div class="space-y-1.5">
             <label
                 class="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider block">Tujuan
                 Keluar</label>
             <select wire:model="tujuanKeluar" required
                 class="w-full text-sm p-2 border border-zinc-300 dark:border-zinc-800 rounded-none bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:border-amber-500 focus:outline-none font-bold">
-                @foreach ($daftarTujuanKeluar as $opsiTujuan)
-                <option value="{{ $opsiTujuan }}">{{ $opsiTujuan }}</option>
-                @endforeach
+                <option value="Hotpress">Hotpress</option>
+                <option value="Jual">Jual</option>
             </select>
         </div>
 
@@ -952,88 +913,6 @@
             <button type="submit"
                 class="px-5 py-2 bg-amber-500 hover:bg-amber-600 border border-amber-400 text-zinc-950 transition-all rounded-none shadow-md">
                 Proses Barang Keluar
-            </button>
-        </div>
-
-        </form>
-    </div>
-    </div>
-    @endif
-
-    {{-- 🆕 MODAL EDIT RIWAYAT KELUAR --}}
-    @if ($showEditKeluarModal)
-    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
-        <div
-            class="w-full max-w-md border bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded-none shadow-2xl p-6 font-mono text-zinc-800 dark:text-zinc-100 max-h-[90vh] overflow-y-auto">
-
-            <h3
-                class="text-base sm:text-lg font-black uppercase text-amber-500 border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-4 flex items-center gap-2">
-                <span class="inline-block w-1.5 h-3.5 bg-amber-500"></span>
-                Edit Rincian Palet
-            </h3>
-
-            <form wire:submit.prevent="updateKeluar" class="space-y-4 text-xs">
-
-                {{-- JUMLAH PALET --}}
-                <div class="space-y-1.5">
-                    <label
-                        class="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider block">Jumlah
-                        Palet</label>
-                    <input type="text" inputmode='numeric' wire:model.live="editJumlahPalet" required
-                        min="1"
-                        class="w-full text-sm p-2 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-none text-zinc-900 dark:text-zinc-100 focus:border-amber-500 focus:outline-none font-bold" />
-                </div>
-
-                {{-- DINAMIS INPUT LEMBAR PER-PALET --}}
-                <div class="space-y-1.5">
-                    <label
-                        class="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider block">Isi
-                        per palet</label>
-                    <div
-                        class="grid grid-cols-2 gap-2.5 max-h-[180px] overflow-y-auto border border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-950/30 p-3">
-                        @for ($i = 0; $i < $editJumlahPalet; $i++)
-                            <div class="space-y-1">
-                            <span
-                                class="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase block">Palet
-                                #{{ $i + 1 }}</span>
-                            <div class="relative">
-                                <input type="text" inputmode='numeric'
-                                    wire:model="editPaletQuantities.{{ $i }}"
-                                    placeholder="Kuantitas" required min="1"
-                                    class="w-full text-xs p-2 border border-zinc-300 dark:border-zinc-800 rounded-none bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:border-amber-500 focus:outline-none" />
-                                <span
-                                    class="absolute right-2.5 top-2 text-[12px] text-zinc-400 dark:text-zinc-500">lbr</span>
-                            </div>
-                    </div>
-                    @endfor
-                </div>
-        </div>
-
-        {{-- LIVE INDIKATOR TOTAL LEMBAR TERKUMPUL --}}
-        @php
-        $editTotalLbr = array_sum(array_map('intval', $editPaletQuantities));
-        @endphp
-        @if ($editTotalLbr > 0)
-        <div
-            class="p-3 border border-dashed border-amber-500/20 bg-amber-500/5 text-zinc-800 dark:text-zinc-300 flex items-center justify-between">
-            <p
-                class="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-widest font-black">
-                Total Baru</p>
-            <span class="px-3 py-1 bg-amber-500 text-zinc-950 font-black text-base shadow-sm">
-                {{ number_format($editTotalLbr, 0, ',', '.') }} Lembar
-            </span>
-        </div>
-        @endif
-
-        {{-- TOMBOL AKSI --}}
-        <div class="pt-2 flex justify-end gap-3 text-xs sm:text-sm font-black uppercase">
-            <button type="button" wire:click="cancelEditKeluar"
-                class="px-4 py-2 border border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-all rounded-none">
-                Batal
-            </button>
-            <button type="submit"
-                class="px-5 py-2 bg-amber-500 hover:bg-amber-600 border border-amber-400 text-zinc-950 transition-all rounded-none shadow-md">
-                Simpan Perubahan
             </button>
         </div>
 
