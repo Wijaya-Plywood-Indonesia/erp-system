@@ -9,20 +9,23 @@ use App\Filament\Resources\ProduksiJoints\Pages\ViewProduksiJoint;
 use App\Filament\Resources\ProduksiJoints\Schemas\ProduksiJointForm;
 use App\Filament\Resources\ProduksiJoints\Schemas\ProduksiJointInfoList;
 use App\Filament\Resources\ProduksiJoints\Tables\ProduksiJointsTable;
+use App\Filament\Resources\ProduksiPressDryers\RelationManagers\SerahTerimaVeneerKeringRelationManager;
 use App\Models\ProduksiJoint;
 use BackedEnum;
-use UnitEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class ProduksiJointResource extends Resource
 {
     protected static ?string $model = ProduksiJoint::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
     protected static string|UnitEnum|null $navigationGroup = 'Repair';
+
     protected static ?int $navigationSort = 1;
 
     protected static ?string $recordTitleAttribute = 'no';
@@ -45,6 +48,7 @@ class ProduksiJointResource extends Resource
     public static function getRelations(): array
     {
         return [
+            SerahTerimaVeneerKeringRelationManager::class,
             RelationManagers\PegawaiJointRelationManager::class,
             RelationManagers\ModalJointRelationManager::class,
             RelationManagers\BahanProduksiRelationManager::class,

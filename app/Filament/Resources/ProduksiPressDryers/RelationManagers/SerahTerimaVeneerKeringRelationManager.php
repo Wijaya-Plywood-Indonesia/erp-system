@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiPressDryers\RelationManagers;
 
+use App\Models\ProduksiJoint;
 use App\Models\ProduksiKedi;
 use App\Models\ProduksiPressDryer;
 use App\Models\ProduksiRepair;
@@ -32,24 +33,134 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
     {
         return match (get_class($ownerRecord)) {
             ProduksiPressDryer::class, ProduksiKedi::class => 'Serah Veneer',
-            ProduksiRepair::class => 'Terima Veneer',
+            ProduksiRepair::class, ProduksiJoint::class => 'Terima Veneer',
             default => 'Serah Terima Veneer Kering',
         };
     }
 
     protected function getTipe(): string
     {
-        return match (get_class($this->getOwnerRecord())) {
-            ProduksiPressDryer::class => 'dryer',
-            ProduksiKedi::class => 'kedi',
-            ProduksiRepair::class => 'repair',
+        $owner = $this->getOwnerRecord();
+
+        // 🔧 FIX: pakai instanceof, bukan get_class() persis.
+        // Kalau model di-extend / di-proxy (mis. oleh package atau
+        // subclass), get_class() tidak cocok dan tipe jatuh ke 'unknown'
+        // tanpa error apa pun.
+        return match (true) {
+            $owner instanceof ProduksiPressDryer => 'dryer',
+            $owner instanceof ProduksiKedi => 'kedi',
+            $owner instanceof ProduksiRepair => 'repair',
+            $owner instanceof ProduksiJoint => 'joint',
             default => 'unknown',
         };
     }
 
     /**
+     * 🔧 FIX: satu-satunya sumber kebenaran untuk ID owner.
+     * Sebelumnya dipakai `->id` langsung — kalau model punya
+     * $primaryKey non-standar, hasilnya NULL dan tersimpan diam-diam.
+     */
+    protected function getOwnerId(): int|string|null
+    {
+        return $this->getOwnerRecord()->getKey();
+    }
+
+    /**
+     * Nama kolom FK id_produksi_* di tabel serah_terima_veneer_kering,
+     * sesuai tipe owner saat ini. Hanya berlaku untuk 'repair' & 'joint'.
+     */
+    protected function getKolomProduksi(): ?string
+    {
+        return match ($this->getTipe()) {
+            'repair' => 'id_produksi_repair',
+            'joint' => 'id_produksi_joint',
+            default => null,
+        };
+    }
+
+    protected function getLabelProduksi(): string
+    {
+        return match ($this->getTipe()) {
+            'repair' => 'Produksi REPAIR',
+            'joint' => 'Produksi JOINT',
+            default => '-',
+        };
+    }
+
+    /**
+     * 🔧 FIX: guard terpusat. Dipanggil di awal setiap action supaya
+     * tidak pernah lagi ada update dengan kolom NULL / nilai NULL.
+     *
+     * @return array{0: string, 1: int|string}
+     */
+    protected function pastikanKonteksProduksi(): array
+    {
+        $kolom = $this->getKolomProduksi();
+        $ownerId = $this->getOwnerId();
+
+        if ($kolom === null) {
+            throw new \RuntimeException(
+                'Tujuan produksi tidak dikenali (tipe: '.$this->getTipe().'). '
+                .'Owner: '.get_class($this->getOwnerRecord()).'.'
+            );
+        }
+
+        if (empty($ownerId)) {
+            throw new \RuntimeException(
+                'ID produksi penerima tidak terbaca dari '
+                .get_class($this->getOwnerRecord()).' '
+                .'(primary key: '.$this->getOwnerRecord()->getKeyName().').'
+            );
+        }
+
+        return [$kolom, $ownerId];
+    }
+
+    /**
+     * 🔧 FIX: update serah terima + verifikasi FK benar-benar ikut tersimpan.
+     * Kalau kolom terbuang mass-assignment atau nilainya kosong,
+     * langsung throw supaya transaksi rollback dan user dapat pesan jelas —
+     * bukan "sukses" tapi kolom NULL seperti kejadian di baris 98 & 99.
+     */
+    protected function tandaiDiterima(
+        SerahTerimaVeneerKering $fresh,
+        string $kolomProduksi,
+        int|string $ownerId,
+        string $jenisTerima,
+        string $labelPenerima,
+    ): void {
+        $payload = [
+            'diterima_oleh' => Auth::user()->name.' - '.$labelPenerima,
+            'jenis_terima' => $jenisTerima,
+            'status' => 'Terima Veneer',
+        ];
+
+        $payload[$kolomProduksi] = $ownerId;
+
+        $fresh->fill($payload);
+
+        if (! array_key_exists($kolomProduksi, $fresh->getDirty())) {
+            throw new \RuntimeException(
+                "Kolom {$kolomProduksi} tidak ikut tersimpan. "
+                .'Periksa $fillable pada model SerahTerimaVeneerKering.'
+            );
+        }
+
+        $fresh->save();
+
+        // Sanity check terakhir: baca ulang dari DB dalam transaksi yang sama.
+        $fresh->refresh();
+
+        if (empty($fresh->{$kolomProduksi})) {
+            throw new \RuntimeException(
+                "Kolom {$kolomProduksi} tetap kosong setelah disimpan."
+            );
+        }
+    }
+
+    /**
      * Ambil data ringkas dari record untuk ditampilkan di preview modal terima.
-     * Tidak dipakai untuk tipe_sumber='gudang' / 'gudang_jadi' (diterima langsung tanpa modal).
+     * Tidak dipakai untuk tipe_sumber='gudang' / 'gudang_jadi'.
      */
     protected function getPreviewData($record): array
     {
@@ -99,13 +210,12 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         $tipe = $this->getTipe();
-        $ownerId = $this->getOwnerRecord()->id;
+        $ownerId = $this->getOwnerId(); // 🔧 FIX: getKey(), bukan ->id
+        $kolomProduksi = $this->getKolomProduksi();
 
         return $table
-            ->modifyQueryUsing(function ($query) use ($tipe, $ownerId) {
+            ->modifyQueryUsing(function ($query) use ($tipe, $ownerId, $kolomProduksi) {
                 if ($tipe === 'dryer' || $tipe === 'kedi') {
-                    // Dryer & Kedi: hanya tampilkan riwayat miliknya sendiri
-                    // (hasManyThrough sudah filter otomatis by FK owner)
                     return $query
                         ->with([
                             'detailHasil.ukuran',
@@ -116,11 +226,12 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                         ->orderBy('created_at', 'desc');
                 }
 
-                // Repair: reset constraint hasMany, tampilkan semua menunggu + riwayat sendiri
+                // Repair & Joint: reset constraint hasMany, tampilkan semua
+                // antrean bertujuan sesuai tipe ini yang menunggu + riwayat sendiri
                 $query->getQuery()->wheres = [];
                 $query->getQuery()->bindings['where'] = [];
 
-                return $query
+                $q = $query
                     ->with([
                         'detailHasil.ukuran',
                         'detailHasil.jenisKayu',
@@ -128,18 +239,24 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                         'detailBongkarKedi.jenisKayu',
                         'mutasiKeluarPalet.mutasiKeluar.ukuran',
                         'mutasiKeluarPalet.mutasiKeluar.jenisKayu',
-                        // 🆕 Sumber gudang jadi: palet -> mutasiKeluar (header) -> jenisKayu
                         'mutasiKeluarPaletJadi.mutasiKeluar.jenisKayu',
                     ])
-                    // 🔒 Tab Repair menampilkan antrean dari Gudang Kering ('gudang')
-                    // DAN Gudang Jadi ('gudang_jadi'). Antrean dari Dryer/Kedi
-                    // langsung (tipe_sumber 'dryer'/'kedi') tetap disembunyikan
-                    // sesuai permintaan sebelumnya.
-                    ->whereIn('tipe_sumber', ['gudang', 'gudang_jadi'])
-                    ->where(function ($q) use ($ownerId) {
-                        $q->where('diterima_oleh', '-')
-                            ->orWhere('id_produksi_repair', $ownerId);
-                    })
+                    ->where(function ($qq) use ($tipe) {
+                        $qq->where('tujuan', $tipe);
+
+                        if ($tipe === 'repair') {
+                            $qq->orWhere('tipe_sumber', 'gudang');
+                        }
+                    });
+
+                if ($kolomProduksi && $ownerId) {
+                    $q->where(function ($qq) use ($kolomProduksi, $ownerId) {
+                        $qq->where('diterima_oleh', '-')
+                            ->orWhere($kolomProduksi, $ownerId);
+                    });
+                }
+
+                return $q
                     ->orderBy('diterima_oleh', 'asc')
                     ->orderBy('created_at', 'desc');
             })
@@ -274,7 +391,7 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                     ->sortable(),
             ])
             ->actions([
-                // ── Terima dari Dryer / Kedi: TETAP pakai modal (pilih Kering/Jadi) ──
+                // ── Terima dari Dryer / Kedi: pakai modal (pilih Kering/Jadi) ──
                 Action::make('terima')
                     ->label('Terima')
                     ->color('success')
@@ -328,25 +445,27 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                                 ->inline(),
                         ];
                     })
-                    // Hanya muncul kalau dibuka dari Repair, belum diterima, DAN bukan dari gudang manapun
                     ->visible(fn ($record) => $tipe === 'repair'
                         && $record->diterima_oleh === '-'
                         && ! in_array($record->tipe_sumber, ['gudang', 'gudang_jadi'], true))
-                    ->action(function ($record, array $data) use ($ownerId) {
+                    ->action(function ($record, array $data) {
                         try {
-                            DB::transaction(function () use ($record, $ownerId, $data) {
+                            [$kolomProduksi, $ownerId] = $this->pastikanKonteksProduksi();
+
+                            DB::transaction(function () use ($record, $ownerId, $kolomProduksi, $data) {
                                 $fresh = SerahTerimaVeneerKering::lockForUpdate()->find($record->id);
 
                                 if (! $fresh || $fresh->diterima_oleh !== '-') {
                                     throw new \RuntimeException('Veneer ini sudah diambil produksi lain.');
                                 }
 
-                                $fresh->update([
-                                    'diterima_oleh' => Auth::user()->name.' - Produksi REPAIR',
-                                    'id_produksi_repair' => $ownerId,
-                                    'jenis_terima' => $data['jenis_terima'],
-                                    'status' => 'Terima Veneer',
-                                ]);
+                                $this->tandaiDiterima(
+                                    $fresh,
+                                    $kolomProduksi,
+                                    $ownerId,
+                                    $data['jenis_terima'],
+                                    $this->getLabelProduksi(),
+                                );
 
                                 if ($data['jenis_terima'] === 'kering') {
                                     app(StokVeneerKeringService::class)->terimaRepair($fresh);
@@ -368,31 +487,32 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                         }
                     }),
 
-                // ── Terima dari Gudang Veneer Kering: LANGSUNG eksekusi, TANPA modal.
-                //    Barang ini sudah pasti "kering" (memang berasal dari stok
-                //    Gudang Veneer Kering), jadi tidak perlu pilihan Kering/Jadi.
-                //    Titik inilah stok betul-betul berkurang & tercatat di Log
-                //    (lihat StokVeneerKeringService::terimaKeluarGudang()).
+                // ── Terima dari Gudang Veneer Kering: langsung, tanpa modal ──
                 Action::make('terimaGudang')
                     ->label('Terima')
                     ->color('success')
                     ->icon('heroicon-o-check-circle')
-                    ->visible(fn ($record) => $tipe === 'repair' && $record->diterima_oleh === '-' && $record->tipe_sumber === 'gudang')
-                    ->action(function ($record) use ($ownerId) {
+                    ->visible(fn ($record) => $tipe === 'repair'
+                        && $record->diterima_oleh === '-'
+                        && $record->tipe_sumber === 'gudang')
+                    ->action(function ($record) {
                         try {
-                            DB::transaction(function () use ($record, $ownerId) {
+                            [$kolomProduksi, $ownerId] = $this->pastikanKonteksProduksi();
+
+                            DB::transaction(function () use ($record, $ownerId, $kolomProduksi) {
                                 $fresh = SerahTerimaVeneerKering::lockForUpdate()->find($record->id);
 
                                 if (! $fresh || $fresh->diterima_oleh !== '-') {
                                     throw new \RuntimeException('Veneer ini sudah diambil produksi lain.');
                                 }
 
-                                $fresh->update([
-                                    'diterima_oleh' => Auth::user()->name.' - Produksi REPAIR',
-                                    'id_produksi_repair' => $ownerId,
-                                    'jenis_terima' => 'kering',
-                                    'status' => 'Terima Veneer',
-                                ]);
+                                $this->tandaiDiterima(
+                                    $fresh,
+                                    $kolomProduksi,
+                                    $ownerId,
+                                    'kering',
+                                    $this->getLabelProduksi(),
+                                );
 
                                 app(StokVeneerKeringService::class)->terimaKeluarGudang($fresh);
                             });
@@ -410,21 +530,20 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                         }
                     }),
 
-                // 🆕 ── Terima dari Gudang Veneer JADI: LANGSUNG eksekusi, TANPA modal.
-                //    Barang ini sudah pasti "jadi" (berasal dari mutasi keluar
-                //    Gudang Veneer Jadi dengan tujuan Repair, dibuat di
-                //    GudangVeneerJadi::prosesKeluar()/updateKeluar()), jadi
-                //    tidak perlu pilihan Kering/Jadi.
-                //    $record di sini adalah baris ASLI serah_terima_veneer_kering
-                //    (tipe_sumber = 'gudang_jadi'), bukan model sintetis.
+                // ── Terima dari Gudang Veneer JADI: langsung, tanpa modal ──
+                //    Dipakai bersama oleh Repair & Joint.
                 Action::make('terimaGudangJadi')
                     ->label('Terima')
                     ->color('success')
                     ->icon('heroicon-o-check-circle')
-                    ->visible(fn ($record) => $tipe === 'repair' && $record->diterima_oleh === '-' && $record->tipe_sumber === 'gudang_jadi')
-                    ->action(function ($record) use ($ownerId) {
+                    ->visible(fn ($record) => in_array($tipe, ['repair', 'joint'], true)
+                        && $record->diterima_oleh === '-'
+                        && $record->tipe_sumber === 'gudang_jadi')
+                    ->action(function ($record) {
                         try {
-                            DB::transaction(function () use ($record, $ownerId) {
+                            [$kolomProduksi, $ownerId] = $this->pastikanKonteksProduksi();
+
+                            DB::transaction(function () use ($record, $ownerId, $kolomProduksi) {
                                 $fresh = SerahTerimaVeneerKering::with('mutasiKeluarPaletJadi.mutasiKeluar')
                                     ->lockForUpdate()
                                     ->find($record->id);
@@ -443,12 +562,13 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                                     throw new \RuntimeException('Barang ini sudah diambil di sisi tujuan lain.');
                                 }
 
-                                $fresh->update([
-                                    'diterima_oleh' => Auth::user()->name.' - Produksi REPAIR',
-                                    'id_produksi_repair' => $ownerId,
-                                    'jenis_terima' => 'jadi',
-                                    'status' => 'Terima Veneer',
-                                ]);
+                                $this->tandaiDiterima(
+                                    $fresh,
+                                    $kolomProduksi,
+                                    $ownerId,
+                                    'jadi',
+                                    $this->getLabelProduksi(),
+                                );
 
                                 app(StokVeneerJadiService::class)->terimaKeluarGudang($fresh);
                             });

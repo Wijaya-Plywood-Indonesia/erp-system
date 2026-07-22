@@ -33,11 +33,6 @@ class HasilSandingJoint extends Model
         return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu');
     }
 
-    public function serahTerimaVeneerKering()
-    {
-        return $this->hasOne(SerahTerimaVeneerKering::class, 'id_hasil_sanding_joint');
-    }
-
     protected static function booted()
     {
         static::saved(function ($model) {

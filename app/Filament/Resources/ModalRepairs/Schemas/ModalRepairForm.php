@@ -51,7 +51,7 @@ class ModalRepairForm
                             $set('id_ukuran_select', null);
                             $set('id_jenis_kayu_select', null);
                             $set('kw', null);
-                            $set('nomor_palet', null);
+                            $set('no_palet', null);
                             $set('ukuran_label', null);
                             $set('jenis_kayu_label', null);
                             $set('jenis_terima_label', null);
@@ -72,7 +72,7 @@ class ModalRepairForm
                             $set('id_ukuran_select', null);
                             $set('id_jenis_kayu_select', null);
                             $set('kw', 'AF');
-                            $set('nomor_palet', $newAfNumber);
+                            $set('no_palet', $newAfNumber);
                             $set('ukuran_label', null);
                             $set('jenis_kayu_label', null);
                             $set('jenis_terima_label', 'Afalan');
@@ -100,8 +100,8 @@ class ModalRepairForm
                         }
 
                         $newPaletNumber = DB::table((new ModalRepair)->getTable())->count() + 1;
-                        if ($record && $record->nomor_palet) {
-                            $newPaletNumber = $record->nomor_palet;
+                        if ($record && $record->no_palet) {
+                            $newPaletNumber = $record->no_palet;
                         }
 
                         $idUkuran = match ($serahTerima?->tipe_sumber) {
@@ -125,7 +125,7 @@ class ModalRepairForm
                         $set('id_ukuran', $idUkuran);
                         $set('id_jenis_kayu', $idJenisKayu);
                         $set('kw', $tampilan['kw']);
-                        $set('nomor_palet', $newPaletNumber);
+                        $set('no_palet', $newPaletNumber);
                         $set('ukuran_label', $tampilan['dimensi']);
                         $set('jenis_kayu_label', $tampilan['jenis_kayu']);
                         $set('jenis_terima_label', $serahTerima?->label_jenis_terima ?? '-');
@@ -258,8 +258,8 @@ class ModalRepairForm
                     ->disabled()
                     ->dehydrated(),
 
-                TextInput::make('nomor_palet')
-                    ->label('Nomor Palet')
+                TextInput::make('no_palet')
+                    ->label('no Palet')
                     ->disabled()
                     ->dehydrated(),
 
@@ -276,7 +276,7 @@ class ModalRepairForm
 
         $options = SerahTerimaVeneerKering::query()
             ->where('diterima_oleh', '!=', '-')
-            ->whereIn('tipe_sumber', ['gudang', 'gudang_jadi']) // ✅ filter sumber gudang & gudang jadi
+            ->whereIn('tujuan', ['repair']) // ✅ filter sumber gudang & gudang jadi
             ->with([
                 'detailHasil.ukuran', 'detailHasil.jenisKayu',
                 'detailBongkarKedi.ukuran', 'detailBongkarKedi.jenisKayu',

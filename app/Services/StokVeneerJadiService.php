@@ -159,16 +159,16 @@ class StokVeneerJadiService
      * → titik dimana stok Gudang Veneer Jadi betul-betul BERKURANG & tercatat
      * di log, konsisten dengan pola StokVeneerKeringService::terimaKeluarGudang().
      *
-     * Alur: Gudang Veneer Jadi "Proses Barang Keluar" (tujuan=Repair) HANYA
+     * Alur: Gudang Veneer Jadi "Proses Barang Keluar" (tujuan=Repair/Joint) HANYA
      * mencatat VeneerJadiMutasiKeluar + palet-paletnya, dan membuat antrean
      * SerahTerimaVeneerKering (tipe_sumber='gudang_jadi') per palet — belum
-     * menyentuh stok. Baru saat palet itu di-"Terima" di Produksi Repair,
+     * menyentuh stok. Baru saat palet itu di-"Terima" di Produksi Repair/Joint,
      * method ini dipanggil dan:
      *   1. Validasi stok fisik masih cukup
      *   2. Insert baris HppVeneerJadiLog (tipe_transaksi='KELUAR')
      *   3. Kurangi StokVeneerJadi
-     *   4. Tandai VeneerJadiMutasiKeluar sebagai sudah diambil Repair
-     *      (id_produksi_repair) supaya tidak bisa diedit/diambil dua kali
+     *   4. Tandai VeneerJadiMutasiKeluar sebagai sudah diambil Repair/Joint
+     *      supaya tidak bisa diedit/diambil dua kali
      *
      * Palet yang TIDAK PERNAH diterima tidak pernah memanggil method ini,
      * jadi tidak pernah mengurangi stok/log — sesuai desain yang sama
@@ -275,8 +275,30 @@ class StokVeneerJadiService
             // Kunci mutasi supaya tidak bisa diedit/diambil dua kali —
             // konsisten dengan GudangVeneerJadi::mutasiKeluarBisaDiedit()
             // yang mengecek is_null(id_produksi_hp) && is_null(id_produksi_repair).
+            //
+            // 🆕 FIX: sebelumnya method ini SELALU menulis
+            // 'id_produksi_repair' => $serahTerima->id_produksi_repair — padahal
+            // untuk tujuan Joint, id_produksi_repair pada $serahTerima itu NULL
+            // (yang keisi adalah id_produksi_joint), jadi mutasi tidak pernah
+            // benar-benar terkunci untuk Joint. Sekarang keduanya ditangani
+            // eksplisit; mutasi 'dipinjamkan' kolom id_produksi_repair-nya
+            // sebagai penanda umum "sudah diambil", supaya tidak perlu ubah
+            // skema tabel veneer_jadi_mutasi_keluar.
+            // 🔧 FIX: jangan pernah menulis penanda kosong. Kalau NULL,
+            // mutasi tidak terkunci dan palet yang sama bisa diambil ulang
+            // padahal stoknya sudah berkurang (kasus mutasi 17 & 18).
+            $idPenanda = $serahTerima->id_produksi_joint ?? $serahTerima->id_produksi_repair;
+
+            if (empty($idPenanda)) {
+                throw new \RuntimeException(
+                    'Penanda produksi penerima kosong — mutasi keluar tidak bisa dikunci. '
+                    .'Serah terima #'.$serahTerima->id.' tidak punya id_produksi_repair '
+                    .'maupun id_produksi_joint.'
+                );
+            }
+
             $mutasi->update([
-                'id_produksi_repair' => $serahTerima->id_produksi_repair,
+                'id_produksi_repair' => $idPenanda,
             ]);
 
             return $stok->fresh();
