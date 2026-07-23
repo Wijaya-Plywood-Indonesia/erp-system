@@ -205,6 +205,14 @@ class GudangVeneerKering extends Page
 
                 $user = Auth::user();
 
+                // 🆕 FIX: kolom 'tujuan' sebelumnya tidak pernah diisi di sini,
+                // padahal di sisi Gudang Veneer Jadi selalu diisi. Ambil dari
+                // header mutasi (tujuan_keluar) yang sudah tersimpan — bukan
+                // dari properti Livewire $this->tujuanKeluar — karena form
+                // "keluar" & "edit keluar" beda properti (sama seperti pola
+                // di GudangVeneerJadi::updateKeluar()).
+                $tujuan = strtolower($mutasi->tujuan_keluar ?? 'repair');
+
                 foreach ($this->editPaletQuantities as $index => $qty) {
                     $qtyPalet = intval($qty);
 
@@ -225,6 +233,7 @@ class GudangVeneerKering extends Page
                         'diterima_oleh' => '-',
                         'status' => 'Serah Veneer',
                         'jenis_terima' => 'kering',
+                        'tujuan' => $tujuan,
                     ]);
                 }
             });
@@ -502,6 +511,13 @@ class GudangVeneerKering extends Page
                     'keterangan' => trim($this->keteranganKeluar) !== '' ? trim($this->keteranganKeluar) : null,
                 ]);
 
+                // 🆕 FIX: kolom 'tujuan' pada SerahTerimaVeneerKering sebelumnya
+                // tidak pernah diisi di alur Kering (berbeda dgn GudangVeneerJadi
+                // yang selalu mengisi 'tujuan' => strtolower($this->tujuanKeluar)).
+                // Akibatnya baris antrean serah terima dari Gudang Kering tidak
+                // punya info tujuan sama sekali. Samakan polanya di sini.
+                $tujuan = strtolower(trim($this->tujuanKeluar));
+
                 // 2. Rincian per palet + antrean Serah Terima (BELUM potong stok/log).
                 foreach ($this->paletQuantities as $index => $qty) {
                     $qtyPalet = intval($qty);
@@ -523,6 +539,7 @@ class GudangVeneerKering extends Page
                         'diterima_oleh' => '-',
                         'status' => 'Serah Veneer',
                         'jenis_terima' => 'kering',
+                        'tujuan' => $tujuan,
                     ]);
                 }
             });
