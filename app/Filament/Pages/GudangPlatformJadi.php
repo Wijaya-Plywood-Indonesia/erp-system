@@ -26,23 +26,33 @@ class GudangPlatformJadi extends Page
     protected string $view = 'filament.pages.gudang-platform-jadi';
 
     protected static ?string $navigationLabel = 'Gudang Platform Jadi';
+
     protected static string|UnitEnum|null $navigationGroup = 'Gudang';
+
     protected static ?string $title = 'Gudang Platform Jadi';
+
     protected static ?int $navigationSort = 22;
 
     // Tab aktif: 'masuk' (Serah Terima) / 'keluar'
     public string $activeTab = 'masuk';
 
     public string $search = '';             // search detail stok
+
     public string $antreanSearch = '';      // search antrean serah terima
+
     public string $keluarSearchQuery = '';  // search riwayat keluar
 
     // ── Form Barang Keluar ──
     public bool $showFormKeluarModal = false;
+
     public ?int $selectedStokId = null;     // id baris stok_platform_jadi
+
     public $jumlahPalet = 1;
+
     public array $paletQuantities = [0 => ''];
+
     public string $tujuanKeluar = 'Hotpress';
+
     public string $keteranganKeluar = '';
 
     protected $queryString = ['activeTab'];
@@ -54,30 +64,35 @@ class GudangPlatformJadi extends Page
 
     // Modal Edit Riwayat Keluar
     public bool $showEditKeluarModal = false;
+
     public ?int $editKeluarId = null;
+
     public $editJumlahPalet = 1;
+
     public array $editPaletQuantities = [0 => ''];
 
     public function editKeluar(int $id): void
     {
         $mutasi = PlatformJadiMutasiKeluar::with('palets.bahanHotpress')->find($id);
 
-        if (!$mutasi) {
+        if (! $mutasi) {
             Notification::make()->danger()->title('Data tidak ditemukan')->send();
+
             return;
         }
 
-        if (!is_null($mutasi->id_produksi_hp) || !is_null($mutasi->diterima_by)) {
+        if (! is_null($mutasi->id_produksi_hp) || ! is_null($mutasi->diterima_by)) {
             Notification::make()
                 ->danger()
                 ->title('Tidak Bisa Diedit')
                 ->body('Mutasi ini sudah diterima di sisi tujuan, rincian tidak bisa diubah lagi.')
                 ->send();
+
             return;
         }
 
         $sudahAdaYangTerserap = $mutasi->palets->contains(
-            fn($p) => !is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0
+            fn ($p) => ! is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0
         );
 
         if ($sudahAdaYangTerserap) {
@@ -86,13 +101,14 @@ class GudangPlatformJadi extends Page
                 ->title('Tidak Bisa Diedit')
                 ->body('Sebagian palet pada mutasi ini sudah mulai dipakai di produksi Hotpress, rincian tidak bisa diubah lagi.')
                 ->send();
+
             return;
         }
 
         $this->editKeluarId = $mutasi->id;
 
         $palet = $mutasi->palets->sortBy('nomor_palet')->pluck('jumlah_lembar')->values()->toArray();
-        $this->editPaletQuantities = !empty($palet) ? $palet : [0 => ''];
+        $this->editPaletQuantities = ! empty($palet) ? $palet : [0 => ''];
         $this->editJumlahPalet = count($this->editPaletQuantities);
 
         $this->showEditKeluarModal = true;
@@ -132,7 +148,7 @@ class GudangPlatformJadi extends Page
      */
     public function updateKeluar(): void
     {
-        if (!$this->editKeluarId) {
+        if (! $this->editKeluarId) {
             return;
         }
 
@@ -140,6 +156,7 @@ class GudangPlatformJadi extends Page
 
         if ($totalLembar <= 0) {
             Notification::make()->danger()->title('Input Gagal')->body('Kuantitas palet wajib diisi.')->send();
+
             return;
         }
 
@@ -150,17 +167,17 @@ class GudangPlatformJadi extends Page
                     ->lockForUpdate()
                     ->first();
 
-                if (!$mutasi) {
+                if (! $mutasi) {
                     throw new \Exception('Data tidak ditemukan.');
                 }
 
                 // 🔒 Re-cek race condition
-                if (!is_null($mutasi->id_produksi_hp) || !is_null($mutasi->diterima_by)) {
+                if (! is_null($mutasi->id_produksi_hp) || ! is_null($mutasi->diterima_by)) {
                     throw new \Exception('Mutasi ini sudah diterima di sisi tujuan, tidak bisa diedit lagi.');
                 }
 
                 $sudahAdaYangTerserap = $mutasi->palets->contains(
-                    fn($p) => !is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0
+                    fn ($p) => ! is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0
                 );
 
                 if ($sudahAdaYangTerserap) {
@@ -176,7 +193,7 @@ class GudangPlatformJadi extends Page
                     ->lockForUpdate()
                     ->first();
 
-                if (!$stok || $totalLembar > (int) $stok->stok_lembar) {
+                if (! $stok || $totalLembar > (int) $stok->stok_lembar) {
                     throw new \Exception('Sisa stok fisik di gudang tidak mencukupi untuk kuantitas baru.');
                 }
 
@@ -234,12 +251,19 @@ class GudangPlatformJadi extends Page
                 $q = strtolower(trim($this->search));
                 $barang = strtolower((string) $item->jenisBarang?->nama_jenis_barang);
                 $grade = strtolower((string) $item->kw_grade);
-                $dimensi = strtolower(($item->panjang + 0) . 'x' . ($item->lebar + 0) . 'x' . ($item->tebal + 0));
+                $dimensi = strtolower(($item->panjang + 0).'x'.($item->lebar + 0).'x'.($item->tebal + 0));
 
                 return str_contains($barang, $q)
                     || str_contains($grade, $q)
                     || str_contains($dimensi, $q);
             })
+            ->sortBy([
+                ['id_jenis_barang', 'asc'],
+                ['tebal', 'asc'],
+                ['panjang', 'asc'],
+                ['lebar', 'asc'],
+                ['kw_grade', 'asc'],
+            ])
             ->values();
     }
 
@@ -289,18 +313,17 @@ class GudangPlatformJadi extends Page
         if (trim($this->antreanSearch) !== '') {
             $q = strtolower(trim($this->antreanSearch));
             $rows = $rows->filter(
-                fn($r) =>
-                str_contains(strtolower((string) $r->jenis_barang), $q)
+                fn ($r) => str_contains(strtolower((string) $r->jenis_barang), $q)
                 || str_contains(strtolower((string) $r->grade), $q)
-                || str_contains(strtolower(($r->panjang + 0) . 'x' . ($r->lebar + 0) . 'x' . ($r->tebal + 0)), $q)
-                || str_contains(strtolower('palet ' . $r->no_palet), $q)
+                || str_contains(strtolower(($r->panjang + 0).'x'.($r->lebar + 0).'x'.($r->tebal + 0)), $q)
+                || str_contains(strtolower('palet '.$r->no_palet), $q)
             );
         }
 
         // Belum diterima di atas (terbaru dulu), sudah diterima di bawah.
         return $rows
             ->sortByDesc('created_at')
-            ->sortBy(fn($r) => $r->sudah ? 1 : 0)
+            ->sortBy(fn ($r) => $r->sudah ? 1 : 0)
             ->values();
     }
 
@@ -325,7 +348,7 @@ class GudangPlatformJadi extends Page
 
                 $bsj = $hs->barangSetengahJadi;
                 $ukuran = $bsj?->ukuran;
-                if (!$bsj || !$ukuran) {
+                if (! $bsj || ! $ukuran) {
                     throw new \Exception('Data barang setengah jadi / ukuran tidak lengkap.');
                 }
 
@@ -347,7 +370,7 @@ class GudangPlatformJadi extends Page
                     ->lockForUpdate()
                     ->first();
 
-                if (!$stok) {
+                if (! $stok) {
                     $stok = StokPlatformJadi::create([
                         'id_jenis_barang' => $idJenisBarang,
                         'panjang' => $p,
@@ -395,8 +418,8 @@ class GudangPlatformJadi extends Page
                     'stok_lembar_after' => $after['lembar'],
                     'stok_kubikasi_after' => $after['kubikasi'],
                     'nilai_stok_after' => $after['nilai'],
-                    'keterangan' => 'Serah terima Hasil Sanding Palet ' . $hs->no_palet
-                        . ' | Diterima: ' . $userName,
+                    'keterangan' => 'Serah terima Hasil Sanding Palet '.$hs->no_palet
+                        .' | Diterima: '.$userName,
                 ]);
 
                 $stok->update([
@@ -439,7 +462,7 @@ class GudangPlatformJadi extends Page
             ? JenisKayu::where('nama_kayu', $namaJenis)->first()
             : null;
 
-        if (!$jenisKayu) {
+        if (! $jenisKayu) {
             throw new \Exception("Jenis kayu \"{$namaJenis}\" tidak ditemukan di master Jenis Kayu. Samakan namanya dulu.");
         }
 
@@ -449,7 +472,7 @@ class GudangPlatformJadi extends Page
             ->lockForUpdate()
             ->first();
 
-        if (!$stokMth) {
+        if (! $stokMth) {
             // baris belum ada -> buat mulai 0 supaya bisa minus
             $stokMth = StokPlatformMth::create([
                 'id_jenis_kayu' => $jenisKayu->id,
@@ -548,11 +571,12 @@ class GudangPlatformJadi extends Page
     {
         $totalLembar = array_sum(array_map('intval', $this->paletQuantities));
 
-        if (!$this->selectedStokId || $totalLembar <= 0 || trim($this->tujuanKeluar) === '') {
+        if (! $this->selectedStokId || $totalLembar <= 0 || trim($this->tujuanKeluar) === '') {
             Notification::make()->danger()
                 ->title('Input Gagal')
                 ->body('Pilih stok, isi kuantitas palet, dan tujuan keluar wajib diisi.')
                 ->send();
+
             return;
         }
 
@@ -561,7 +585,7 @@ class GudangPlatformJadi extends Page
                 $stok = StokPlatformJadi::lockForUpdate()->findOrFail($this->selectedStokId);
 
                 if ($totalLembar > (int) $stok->stok_lembar) {
-                    throw new \Exception('Sisa stok tidak mencukupi. Tersedia: ' . $stok->stok_lembar . ' lembar.');
+                    throw new \Exception('Sisa stok tidak mencukupi. Tersedia: '.$stok->stok_lembar.' lembar.');
                 }
 
                 $user = Auth::user();
@@ -622,7 +646,7 @@ class GudangPlatformJadi extends Page
         if (trim($this->keluarSearchQuery) !== '') {
             $q = strtolower(trim($this->keluarSearchQuery));
             $query->where(function ($query) use ($q) {
-                $query->whereHas('jenisBarang', fn($qr) => $qr->whereRaw('LOWER(nama_jenis_barang) LIKE ?', ["%{$q}%"]))
+                $query->whereHas('jenisBarang', fn ($qr) => $qr->whereRaw('LOWER(nama_jenis_barang) LIKE ?', ["%{$q}%"]))
                     ->orWhereRaw('LOWER(kw_grade) LIKE ?', ["%{$q}%"])
                     ->orWhereRaw('LOWER(tujuan) LIKE ?', ["%{$q}%"])
                     ->orWhereRaw('LOWER(keterangan) LIKE ?', ["%{$q}%"]);
@@ -632,7 +656,8 @@ class GudangPlatformJadi extends Page
         return $query->get()->map(function ($rk) {
             $rk->bisa_diedit = is_null($rk->id_produksi_hp)
                 && is_null($rk->diterima_by)
-                && !$rk->palets->contains(fn($p) => !is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0);
+                && ! $rk->palets->contains(fn ($p) => ! is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0);
+
             return $rk;
         });
     }
