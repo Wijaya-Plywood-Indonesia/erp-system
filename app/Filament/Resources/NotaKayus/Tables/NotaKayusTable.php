@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\NotaKayus\Tables;
 
-use App\Filament\Resources\NotaKayus\NotaKayuResource;
 use App\Models\DetailKayuMasuk;
 use App\Models\DetailTurusanKayu;
 use App\Models\HppAverageLog;
@@ -51,10 +50,12 @@ class NotaKayusTable
                         });
                     })
                     ->getStateUsing(function ($record) {
-                        if (! $record->kayuMasuk) return '-';
-                        $seri         = $record->kayuMasuk->seri ?? '-';
+                        if (! $record->kayuMasuk) {
+                            return '-';
+                        }
+                        $seri = $record->kayuMasuk->seri ?? '-';
                         $namaSupplier = $record->kayuMasuk->penggunaanSupplier?->nama_supplier ?? '-';
-                        $noTelepon    = $record->kayuMasuk->penggunaanSupplier?->no_telepon ?? '-';
+                        $noTelepon = $record->kayuMasuk->penggunaanSupplier?->no_telepon ?? '-';
 
                         return "Seri {$seri} - {$namaSupplier} ({$noTelepon})";
                     }),
@@ -69,15 +70,15 @@ class NotaKayusTable
                         if (! $record->kayuMasuk) {
                             return "0 Batang\n0.0000 m³";
                         }
-                        $total    = DetailKayuMasuk::hitungTotalByKayuMasuk($record->kayuMasuk->id);
-                        $batang   = number_format($total['total_batang']);
+                        $total = DetailKayuMasuk::hitungTotalByKayuMasuk($record->kayuMasuk->id);
+                        $batang = number_format($total['total_batang']);
                         $kubikasi = number_format($total['total_kubikasi'], 4);
 
                         return "{$batang} Batang\n{$kubikasi} m³";
                     })
                     ->badge()
                     ->color('success')
-                    ->formatStateUsing(fn(string $state) => str_replace("\n", '<br>', e($state)))
+                    ->formatStateUsing(fn (string $state) => str_replace("\n", '<br>', e($state)))
                     ->html()
                     ->alignCenter(),
 
@@ -87,15 +88,15 @@ class NotaKayusTable
                         if (! $record->kayuMasuk) {
                             return "0 Batang\n0.0000 m³";
                         }
-                        $total    = DetailTurusanKayu::hitungTotalByKayuMasuk($record->kayuMasuk->id);
-                        $batang   = number_format($total['total_batang']);
+                        $total = DetailTurusanKayu::hitungTotalByKayuMasuk($record->kayuMasuk->id);
+                        $batang = number_format($total['total_batang']);
                         $kubikasi = number_format($total['total_kubikasi'], 4);
 
                         return "{$batang} Batang\n{$kubikasi} m³";
                     })
                     ->badge()
                     ->color('success')
-                    ->formatStateUsing(fn(string $state) => str_replace("\n", '<br>', e($state)))
+                    ->formatStateUsing(fn (string $state) => str_replace("\n", '<br>', e($state)))
                     ->html()
                     ->alignCenter(),
 
@@ -111,9 +112,9 @@ class NotaKayusTable
                     ->badge()
                     ->colors([
                         'secondary' => 'Belum Diperiksa',
-                        'success'   => fn($state) => str_contains($state ?? '', 'Sudah Diperiksa'),
-                        'warning'   => fn($state) => str_contains($state ?? '', 'Menunggu'),
-                        'danger'    => fn($state) => str_contains($state ?? '', 'Ditolak'),
+                        'success' => fn ($state) => str_contains($state ?? '', 'Sudah Diperiksa'),
+                        'warning' => fn ($state) => str_contains($state ?? '', 'Menunggu'),
+                        'danger' => fn ($state) => str_contains($state ?? '', 'Ditolak'),
                     ]),
 
                 TextColumn::make('status_pelunasan')
@@ -122,7 +123,7 @@ class NotaKayusTable
                     ->colors([
                         'danger' => 'Belum Lunas',
                         // Tetap hijau jika teks mengandung kata 'Lunas' (termasuk yang ada jam/usernya)
-                        'success' => fn($state) => str_starts_with($state ?? '', 'Lunas'),
+                        'success' => fn ($state) => str_starts_with($state ?? '', 'Lunas'),
                         'warning' => 'Sebagian',
                     ])
                     ->searchable(),
@@ -135,7 +136,37 @@ class NotaKayusTable
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
+                Action::make('batal_cek')
+                    ->label('Batal Periksa')
+                    ->icon('heroicon-o-x-mark')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading('Batalkan Status Pemeriksaan?')
+                    ->modalDescription('Status akan dikembalikan menjadi "Belum Diperiksa". Pastikan nota ini belum diproses lebih lanjut (misal: sudah dicetak/dipakai transaksi lain).')
+                    ->action(function ($record) {
+                        $record->status = 'Belum Diperiksa';
+                        $record->save();
 
+                        Notification::make()
+                            ->warning()
+                            ->title('Status Dibatalkan')
+                            ->body('Nota dikembalikan ke status Belum Diperiksa.')
+                            ->send();
+                    })
+                    ->visible(function ($record) {
+                        // Hanya muncul jika SUDAH diperiksa
+                        $sudahDiperiksa = str_contains($record->status ?? '', 'Sudah Diperiksa');
+                        if (! $sudahDiperiksa) {
+                            return false;
+                        }
+
+                        // Cegah dibatalkan kalau sudah LUNAS (karena stok/jurnal sudah tersinkron)
+                        if (str_starts_with($record->status_pelunasan ?? '', 'Lunas')) {
+                            return false;
+                        }
+
+                        return true;
+                    }),
                 // --- ACTION: TANDAI LUNAS (UTAMA: UPDATE STOK, TEMPAT KAYU & JURNAL) ---
                 Action::make('set_lunas')
                     ->label('Tandai Lunas')
@@ -168,12 +199,12 @@ class NotaKayusTable
 
                                 Log::info('[NotaKayu] Stok & Tempat Kayu berhasil diperbarui', [
                                     'nota_id' => $record->id,
-                                    'user' => $user->name
+                                    'user' => $user->name,
                                 ]);
                             } catch (\Throwable $e) {
                                 Log::error('[NotaKayu] GAGAL update stok & tempat kayu', [
                                     'nota_id' => $record->id,
-                                    'error'   => $e->getMessage(),
+                                    'error' => $e->getMessage(),
                                 ]);
                             }
                         }
@@ -183,13 +214,13 @@ class NotaKayusTable
 
                         Notification::make()
                             ->title('Pelunasan Berhasil')
-                            ->body("Stok dan Tempat Kayu telah diperbarui.")
+                            ->body('Stok dan Tempat Kayu telah diperbarui.')
                             ->success()
                             ->send();
                     })
                     ->visible(
-                        fn($record) =>
-                        // Tombol muncul hanya jika nota sudah diperiksa fisiknya 
+                        fn ($record) =>
+                        // Tombol muncul hanya jika nota sudah diperiksa fisiknya
                         // dan statusnya masih 'Belum Lunas'
                         str_contains($record->status ?? '', 'Sudah Diperiksa') &&
                             $record->status_pelunasan === 'Belum Lunas'
@@ -200,27 +231,27 @@ class NotaKayusTable
                     ->label('Cetak Nota')
                     ->icon('heroicon-o-printer')
                     ->color('success')
-                    ->url(fn($record) => route('nota-kayu.show', $record))
+                    ->url(fn ($record) => route('nota-kayu.show', $record))
                     ->openUrlInNewTab()
-                    ->visible(fn($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
+                    ->visible(fn ($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
 
                 // --- ACTION: CETAK TURUS ---
                 Action::make('print_turus')
                     ->label('Cetak Turus')
                     ->icon('heroicon-o-clipboard-document-list')
                     ->color('info')
-                    ->url(fn($record) => route('nota-kayu.turus', $record))
+                    ->url(fn ($record) => route('nota-kayu.turus', $record))
                     ->openUrlInNewTab()
-                    ->visible(fn($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
+                    ->visible(fn ($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
 
                 // --- ACTION: CETAK TURUS 2 ---
                 Action::make('print_turus_2')
                     ->label('Cetak Turus 2')
                     ->icon('heroicon-o-clipboard-document-list')
                     ->color('warning')
-                    ->url(fn($record) => route('nota-kayu.turus2', $record))
+                    ->url(fn ($record) => route('nota-kayu.turus2', $record))
                     ->openUrlInNewTab()
-                    ->visible(fn($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
+                    ->visible(fn ($record) => str_contains($record->status ?? '', 'Sudah Diperiksa')),
 
                 // --- ACTION: TANDAI SUDAH DIPERIKSA ---
                 Action::make('cek')
@@ -228,13 +259,17 @@ class NotaKayusTable
                     ->icon('heroicon-o-check')
                     ->color('success')
                     ->visible(function ($record) {
-                        if (str_contains($record->status ?? '', 'Sudah Diperiksa')) return false;
-                        if (! $record->kayuMasuk) return false;
+                        if (str_contains($record->status ?? '', 'Sudah Diperiksa')) {
+                            return false;
+                        }
+                        if (! $record->kayuMasuk) {
+                            return false;
+                        }
 
                         $total1 = DetailTurusanKayu::hitungTotalByKayuMasuk($record->kayuMasuk->id);
                         $total2 = DetailKayuMasuk::hitungTotalByKayuMasuk($record->kayuMasuk->id);
 
-                        $batangSama   = $total1['total_batang'] == $total2['total_batang'];
+                        $batangSama = $total1['total_batang'] == $total2['total_batang'];
                         $kubikasiSama = abs($total1['total_kubikasi'] - $total2['total_kubikasi']) < 0.0001;
 
                         return $batangSama && $kubikasiSama;
@@ -258,7 +293,8 @@ class NotaKayusTable
                         $user = Auth::user();
                         $isAdmin = $user->hasRole(['admin', 'super_admin']);
                         $sudahDiperiksa = str_contains($record->status ?? '', 'Sudah Diperiksa');
-                        return $isAdmin || !$sudahDiperiksa;
+
+                        return $isAdmin || ! $sudahDiperiksa;
                     }),
 
                 EditAction::make()
@@ -266,11 +302,12 @@ class NotaKayusTable
                         $user = Auth::user();
                         $isAdmin = $user->hasRole(['admin', 'super_admin']);
                         $sudahDiperiksa = str_contains($record->status ?? '', 'Sudah Diperiksa');
-                        return $isAdmin || !$sudahDiperiksa;
+
+                        return $isAdmin || ! $sudahDiperiksa;
                     }),
 
                 DeleteAction::make()
-                    ->visible(fn() => Auth::user()->hasRole(['admin', 'super_admin'])),
+                    ->visible(fn () => Auth::user()->hasRole(['admin', 'super_admin'])),
             ])
             ->filters([
                 Filter::make('seri_kayu')
@@ -283,9 +320,9 @@ class NotaKayusTable
                     ->query(function (Builder $query, array $data): Builder {
                         return $query->when(
                             $data['nomor_seri'],
-                            fn(Builder $query, $seri): Builder => $query->whereHas(
+                            fn (Builder $query, $seri): Builder => $query->whereHas(
                                 'kayuMasuk',
-                                fn(Builder $q) => $q->where('seri', 'like', "%{$seri}%")
+                                fn (Builder $q) => $q->where('seri', 'like', "%{$seri}%")
                             )
                         );
                     })
@@ -293,7 +330,8 @@ class NotaKayusTable
                         if (! $data['nomor_seri']) {
                             return null;
                         }
-                        return 'Seri Kayu: ' . $data['nomor_seri'];
+
+                        return 'Seri Kayu: '.$data['nomor_seri'];
                     }),
 
                 SelectFilter::make('status_pelunasan')
@@ -303,14 +341,16 @@ class NotaKayusTable
                         'Sebagian' => 'Sebagian',
                     ])
                     ->query(function (Builder $query, array $data) {
-                        if (empty($data['value'])) return $query;
+                        if (empty($data['value'])) {
+                            return $query;
+                        }
 
                         if ($data['value'] === 'Lunas') {
                             return $query->where('status_pelunasan', 'LIKE', 'Lunas%');
                         }
 
                         return $query->where('status_pelunasan', $data['value']);
-                    })
+                    }),
             ]);
     }
 
@@ -318,7 +358,9 @@ class NotaKayusTable
     {
         try {
             $record->loadMissing(['kayuMasuk.detailTurusanKayus.jenisKayu', 'kayuMasuk.penggunaanSupplier']);
-            if (! $record->kayuMasuk || $record->kayuMasuk->detailTurusanKayus->isEmpty()) return ['success' => false];
+            if (! $record->kayuMasuk || $record->kayuMasuk->detailTurusanKayus->isEmpty()) {
+                return ['success' => false];
+            }
 
             $payloadService = app(NotaKayuJurnalPayloadService::class);
             $payload = $payloadService->buildPayload($record);
@@ -330,9 +372,11 @@ class NotaKayusTable
             if ($result['success'] && ! empty($result['no_jurnal'])) {
                 Cache::put("jurnal_sync_{$record->id}", $result['no_jurnal'], now()->addYear());
             }
+
             return $result;
         } catch (\Throwable $e) {
             Log::error("[NotaKayusTable] Sync gagal: {$e->getMessage()}");
+
             return ['success' => false, 'message' => $e->getMessage()];
         }
     }
