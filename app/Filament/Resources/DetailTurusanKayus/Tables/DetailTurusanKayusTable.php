@@ -48,8 +48,7 @@ class DetailTurusanKayusTable
          * 4. LOGIKA IZIN AKSI:
          * Tombol muncul jika (TIDAK TERKUNCI) ATAU (USER ADALAH ADMIN)
          */
-        // $canPerformAction = ! $isLocked || $isAdmin;
-        $canPerformAction = ! $isLocked;
+        $canPerformAction = ! $isLocked || $isAdmin;
 
         $ownerRecord = null;
         if ($livewire && method_exists($livewire, 'getOwnerRecord')) {
