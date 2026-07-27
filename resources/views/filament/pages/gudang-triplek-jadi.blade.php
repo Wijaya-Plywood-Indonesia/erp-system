@@ -286,7 +286,7 @@
                         required
                         class="w-full text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:border-amber-500 focus:outline-none font-bold">
                         @foreach(\App\Filament\Pages\GudangTriplekJadi::TUJUAN_OPTIONS as $opt)
-                            <option value="{{ $opt }}">{{ $opt }}</option>
+                            <option value="{{ $opt }}">{{ \App\Filament\Pages\GudangTriplekJadi::TUJUAN_LABELS[$opt] ?? $opt }}</option>
                         @endforeach
                     </select>
                 </div>

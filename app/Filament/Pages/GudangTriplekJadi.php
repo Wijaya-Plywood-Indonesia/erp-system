@@ -32,13 +32,27 @@ class GudangTriplekJadi extends Page
     // 🌟 Tujuan keluar yang diizinkan — SATU sumber kebenaran.
     // Dipakai di view (opsi <select>) dan validasi prosesKeluar().
     public const TUJUAN_NYUSUP      = 'Produksi Nyusup';
-    public const TUJUAN_GUDANG_SATU = 'Produksi Sampling Plywood';
+    public const TUJUAN_GUDANG_SATU = 'Gudang Satu';
     public const TUJUAN_SANDING     = 'Produksi Sanding';
+    // Hotpress: nilai tersimpan HARUS 'hotpress' (huruf kecil) karena VIEW
+    // serah_terima_masuk_hp memfilter LOWER(mk.tujuan) = 'hotpress'. Berbeda
+    // dari tujuan lain yang menyimpan teks display — untuk hotpress, nilai
+    // tersimpan = nilai internal.
+    public const TUJUAN_HOTPRESS    = 'hotpress';
 
     public const TUJUAN_OPTIONS = [
         self::TUJUAN_NYUSUP,
         self::TUJUAN_GUDANG_SATU,
         self::TUJUAN_SANDING,
+        self::TUJUAN_HOTPRESS,
+    ];
+
+    // Label tampilan untuk tiap nilai tujuan (dipakai di <select> view).
+    public const TUJUAN_LABELS = [
+        self::TUJUAN_NYUSUP      => 'Produksi Nyusup',
+        self::TUJUAN_GUDANG_SATU => 'Gudang Satu',
+        self::TUJUAN_SANDING     => 'Produksi Sanding',
+        self::TUJUAN_HOTPRESS    => 'Produksi Hotpress',
     ];
 
     public string $searchQuery = '';        // search dropdown stok (di modal)
@@ -253,6 +267,13 @@ class GudangTriplekJadi extends Page
                         'diterima_oleh'            => '-',
                         'status'                   => 'Serah ke Sanding',
                     ]);
+                } elseif ($this->tujuanKeluar === self::TUJUAN_HOTPRESS) {
+                    // Produksi Hotpress: TIDAK perlu baris antrean terpisah.
+                    // VIEW serah_terima_masuk_hp menarik langsung dari
+                    // triplek_jadi_mutasi_keluars + paletnya (difilter
+                    // tujuan='hotpress'), jadi barang otomatis muncul di
+                    // antrean masuk hotpress begitu mutasi + palet dibuat.
+                    // Tidak ada create() di sini — sengaja.
                 } else {
                     // Nyusup & Gudang Satu: tujuan='triplek_jadi' membuat baris
                     // muncul di antrean KEDUANYA sekaligus (lihat filter di
