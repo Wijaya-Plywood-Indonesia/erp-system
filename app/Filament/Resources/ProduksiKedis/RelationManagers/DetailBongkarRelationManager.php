@@ -161,7 +161,7 @@ class DetailBongkarRelationManager extends RelationManager
                             return 'Belum Diserahkan';
                         }
 
-                        return $serahTerima->diterima_oleh === '-' ? 'Sudah Diserahkan' : 'Sudah Diterima Repair';
+                        return $serahTerima->diterima_oleh === '-' ? 'Sudah Diserahkan' : 'Sudah Diterima';
                     })
                     ->color(fn ($state) => match ($state) {
                         'Sudah Diterima Repair' => 'success',
@@ -190,7 +190,7 @@ class DetailBongkarRelationManager extends RelationManager
                     ->icon('heroicon-o-paper-airplane')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->modalHeading('Serahkan Veneer Kering ini ke Repair?')
+                    ->modalHeading('Serahkan Veneer Kering ini ke Gudang?')
                     ->modalDescription('Pilih tujuan serah, lalu pastikan data berikut sudah sesuai.')
                     ->schema([
                         Radio::make('jenis_terima')
