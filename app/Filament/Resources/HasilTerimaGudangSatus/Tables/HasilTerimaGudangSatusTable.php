@@ -261,7 +261,7 @@ class HasilTerimaGudangSatusTable
                                 ->label('Serah Ke')
                                 ->options([
                                     'nyusup' => 'Serah ke Nyusup',
-                                    'gudang' => 'Serah ke Gudang',
+                                    'gudang' => 'Serah ke Gudang Plywood Siap Jual',
                                 ])
                                 ->default('nyusup')
                                 ->required()
