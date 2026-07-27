@@ -41,7 +41,6 @@
             @php
                 $target = $summary['targetSummary'];
                 $progress = $target['progress'];
-                $isDryerUnit = $target['unit'] === 'm³';
 
                 if ($progress >= 100) {
                     $progressColor = '#16a34a';
@@ -55,9 +54,7 @@
                 <div class="font-semibold text-lg text-gray-900 dark:text-gray-100 flex items-center justify-between">
                     <span>Progress Target ({{ $target['targetName'] }})</span>
                     <span class="text-xs font-normal text-gray-500 dark:text-gray-400">
-                        Target:
-                        {{ $isDryerUnit ? number_format($target['targetValue'], 4, ',', '.') : number_format($target['targetValue'], 0, ',', '.') }}
-                        {{ $target['unit'] }}
+                        Target: {{ $target['targetValue'] }} {{ $target['unit'] }}
                     </span>
                 </div>
 
@@ -68,10 +65,7 @@
                             Pencapaian Aktual
                         </span>
                         <span class="font-mono text-gray-600 dark:text-gray-400 font-bold">
-                            {{ $isDryerUnit ? number_format($target['actualValue'], 4, ',', '.') : number_format($target['actualValue'], 0, ',', '.') }}
-                            /
-                            {{ $isDryerUnit ? number_format($target['targetValue'], 4, ',', '.') : number_format($target['targetValue'], 0, ',', '.') }}
-                            {{ $target['unit'] }}
+                            {{ $target['actualValue'] }} / {{ $target['targetValue'] }} {{ $target['unit'] }}
                         </span>
                     </div>
 
