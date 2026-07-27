@@ -30,35 +30,7 @@ class RencanaPegawaiForm
             ?? $form->getLivewire()->ownerRecord?->id
             ?? request()->route('record');
 
-        // NOMOR MEJA TERAKHIR → otomatis +1
-        $lastMeja = RencanaPegawai::where('id_produksi_repair', $produksiId)->max('nomor_meja');
-
-        // PEGAWAI YANG SUDAH DITUGASKAN → HILANG DARI DROPDOWN!
-        $usedPegawaiIds = RencanaPegawai::where('id_produksi_repair', $produksiId)
-            ->when($record, fn($q) => $q->where('id', '!=', $record->id))
-            ->pluck('id_pegawai')
-            ->toArray();
-
         return $form->schema([
-
-            Select::make('jam_masuk')
-                ->label('Jam Masuk')
-                ->options(self::timeOptions())
-                ->default('06:00')
-                ->required()
-                ->searchable()
-                ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
-                ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
-
-            // --- JAM PULANG ---
-            Select::make('jam_pulang')
-                ->label('Jam Pulang')
-                ->options(self::timeOptions())
-                ->default('16:00')
-                ->required()
-                ->searchable()
-                ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
-                ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
             Select::make('id_pegawai')
                 ->label('Pegawai')
@@ -81,6 +53,7 @@ class RencanaPegawaiForm
                 })
                 ->searchable()
                 ->required()
+                ->columnSpanFull()
                 ->rules([
                     fn($livewire) => function ($attribute, $value, $fail) use ($livewire) {
                         $editingRecord = method_exists($livewire, 'getMountedTableActionRecord')
@@ -96,24 +69,24 @@ class RencanaPegawaiForm
                     }
                 ]),
 
-            TextInput::make('nomor_meja')
-                ->label('Nomor Meja')
-                ->numeric()
+            Select::make('jam_masuk')
+                ->label('Jam Masuk')
+                ->options(self::timeOptions())
+                ->default('06:00')
                 ->required()
-                ->rules([
-                    fn($livewire) => function ($attribute, $value, $fail) use ($livewire) {
-                        $editingRecord = method_exists($livewire, 'getMountedTableActionRecord')
-                            ? $livewire->getMountedTableActionRecord()
-                            : null;
+                ->searchable()
+                ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
-                        $count = RencanaPegawai::where('id_produksi_repair', $livewire->ownerRecord?->id)
-                            ->where('nomor_meja', $value)
-                            ->when($editingRecord, fn($q) => $q->where('id', '!=', $editingRecord->id))
-                            ->count();
-
-                        if ($count >= 2) $fail("Meja nomor {$value} sudah penuh (maksimal 2 orang).");
-                    }
-                ])
+            // --- JAM PULANG ---
+            Select::make('jam_pulang')
+                ->label('Jam Pulang')
+                ->options(self::timeOptions())
+                ->default('16:00')
+                ->required()
+                ->searchable()
+                ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
+                ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
         ]);
     }
 }

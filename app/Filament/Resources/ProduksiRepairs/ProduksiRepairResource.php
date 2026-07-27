@@ -8,10 +8,9 @@ use App\Filament\Resources\ProduksiRepairs\Pages\EditProduksiRepair;
 use App\Filament\Resources\ProduksiRepairs\Pages\ListProduksiRepairs;
 use App\Filament\Resources\ProduksiRepairs\Pages\ViewProduksiRepair;
 use App\Filament\Resources\ProduksiRepairs\RelationManagers\BahanPenolongRepairRelationManager;
+use App\Filament\Resources\ProduksiRepairs\RelationManagers\DetailHasilRepairsRelationManager;
 use App\Filament\Resources\ProduksiRepairs\RelationManagers\DetailRencanaPegawaiRelationManager;
-use App\Filament\Resources\ProduksiRepairs\RelationManagers\HasilRepairRelationManager;
 use App\Filament\Resources\ProduksiRepairs\RelationManagers\ModalRepairRelationManager;
-use App\Filament\Resources\ProduksiRepairs\RelationManagers\RencanaRepairRelationManager;
 use App\Filament\Resources\ProduksiRepairs\RelationManagers\ValidasiRepairRelationManager;
 use App\Filament\Resources\ProduksiRepairs\Schemas\ProduksiRepairForm;
 use App\Filament\Resources\ProduksiRepairs\Schemas\ProduksiRepairInfolist;
@@ -52,10 +51,11 @@ class ProduksiRepairResource extends Resource
     {
         return [
             SerahTerimaVeneerKeringRelationManager::class,
-            ModalRepairRelationManager::class,
             DetailRencanaPegawaiRelationManager::class,
-            RencanaRepairRelationManager::class,
-            HasilRepairRelationManager::class,
+            ModalRepairRelationManager::class,
+            DetailHasilRepairsRelationManager::class,
+            // RencanaRepairRelationManager::class,
+            // HasilRepairRelationManager::class,
             BahanPenolongRepairRelationManager::class,
             ValidasiRepairRelationManager::class,
         ];

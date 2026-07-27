@@ -58,9 +58,9 @@ class BahanPenolongRepairRelationManager extends RelationManager
                     ->label('Nama Bahan')
                     ->formatStateUsing(
                         fn($state, $record) =>
-                        $record->bahanPenolong ? 
-                        $record->bahanPenolong->nama_bahan_penolong . ' (' . $record->bahanPenolong->satuan . ')' : 
-                        $state
+                        $record->bahanPenolong ?
+                            $record->bahanPenolong->nama_bahan_penolong . ' (' . $record->bahanPenolong->satuan . ')' :
+                            $state
                     ),
 
                 TextColumn::make('jumlah')

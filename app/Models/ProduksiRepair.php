@@ -66,4 +66,12 @@ class ProduksiRepair extends Model
     {
         return $this->hasMany(SerahTerimaVeneerKering::class, 'id_produksi_repair');
     }
+
+    public function detailHasilRepairs(): HasMany
+    {
+        return $this->hasMany(
+            DetailHasilRepair::class,
+            'id_produksi_repair' // Foreign key di tabel detail_hasil_repairs
+        );
+    }
 }
