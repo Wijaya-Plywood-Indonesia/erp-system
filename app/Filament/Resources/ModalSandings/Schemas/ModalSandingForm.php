@@ -19,16 +19,48 @@ class ModalSandingForm
      */
     protected const HASIL_RELATIONS = [
         'platformHasilHp.barangSetengahJadi.ukuran',
-        'platformHasilHp.barangSetengahJadi.grade',
+        'platformHasilHp.barangSetengahJadi.grade.kategoriBarang',
         'platformHasilHp.barangSetengahJadi.jenisBarang',
         'hasilGrajiTriplek.barangSetengahJadiHp.ukuran',
-        'hasilGrajiTriplek.barangSetengahJadiHp.grade',
+        'hasilGrajiTriplek.barangSetengahJadiHp.grade.kategoriBarang',
         'hasilGrajiTriplek.barangSetengahJadiHp.jenisBarang',
         'hasilSanding.barangSetengahJadi.ukuran',
-        'hasilSanding.barangSetengahJadi.grade',
+        'hasilSanding.barangSetengahJadi.grade.kategoriBarang',
         'hasilSanding.barangSetengahJadi.jenisBarang',
         'triplekMutasiKeluar.jenisKayu',
     ];
+
+    /**
+     * Kategori barang (PLYWOOD / PLATFORM) untuk ditampilkan di label opsi,
+     * menggantikan label asal (Hotpress/Graji/dll).
+     *
+     * Barang dari Gudang Triplek Jadi tidak menyimpan kategori sendiri —
+     * isinya selalu Plywood, jadi di-hardcode.
+     */
+    protected static function kategoriLabel(SerahTerimaHp $item): string
+    {
+        if ($item->id_triplek_mutasi_keluar !== null) {
+            return 'Plywood';
+        }
+
+        return $item->barangSetengahJadi?->grade?->kategoriBarang?->nama_kategori ?? '-';
+    }
+
+    /**
+     * Rapikan teks jadi Title Case: "S BETTER LOCAL" -> "Better Local",
+     * "SENGON" -> "Sengon". Dipakai agar label opsi tidak berteriak huruf besar
+     * dan lebih enak dibaca operator.
+     */
+    protected static function rapikan(?string $teks): string
+    {
+        $teks = trim((string) $teks);
+
+        if ($teks === '') {
+            return '-';
+        }
+
+        return ucwords(mb_strtolower($teks));
+    }
 
     public static function configure(Schema $schema): Schema
     {
@@ -270,19 +302,32 @@ class ModalSandingForm
             ->filter(fn ($pair) => $pair[1] > 0)
             ->mapWithKeys(function ($pair) {
                 [$item, $sisa] = $pair;
-                $sisaLabel = rtrim(rtrim(number_format($sisa, 2, '.', ''), '0'), '.');
-                $asal = $item->asal_label;
+
+                // Angka ini = jumlah yang MASIH BISA DIAMBIL. Ditampilkan polos
+                // dengan satuan "lbr" saja (tanpa kata "sisa"/"tersedia") supaya
+                // label tetap pendek dan tidak ambigu.
+                $tersedia = rtrim(rtrim(number_format($sisa, 2, '.', ''), '0'), '.');
+
+                $kategori = self::kategoriLabel($item);
 
                 // Barang Triplek Jadi: rakit label dari mutasi keluar.
                 if ($item->id_triplek_mutasi_keluar !== null) {
                     $m = $item->triplekMutasiKeluar;
+
                     $ukuranLabel = $m
                         ? ($m->panjang + 0).'x'.($m->lebar + 0).'x'.($m->tebal + 0)
                         : '-';
-                    $jenis = strtoupper($m?->jenisKayu?->nama_kayu ?? '-');
-                    $gradeLabel = $m?->kw_grade ?? '-';
+                    $jenis = self::rapikan($m?->jenisKayu?->nama_kayu);
+                    $gradeLabel = self::rapikan($m?->kw_grade);
 
-                    $label = "({$asal}) - {$ukuranLabel} {$jenis} {$gradeLabel} — Sisa: {$sisaLabel}";
+                    // 🌟 IDENTITAS: barang triplek jadi tidak punya no palet, jadi
+                    // dibedakan lewat nomor mutasi + tanggal keluar. Tanpa ini,
+                    // beberapa baris berspesifikasi sama tampak identik.
+                    $tanggal = $m?->created_at?->format('d/m') ?? '--/--';
+                    $identitas = 'TJ#'.($item->id_triplek_mutasi_keluar).' '.$tanggal;
+
+                    $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel}"
+                        ." · {$tersedia} lbr (gd. triplek jadi)";
 
                     return [$item->id => $label];
                 }
@@ -293,10 +338,19 @@ class ModalSandingForm
                 $ukuran = $barang?->ukuran;
 
                 $ukuranLabel = $ukuran ? ($ukuran->dimensi ?? "{$ukuran->panjang}x{$ukuran->lebar}x{$ukuran->tebal}") : '-';
-                $kodeJenisBarang = strtoupper($barang?->jenisBarang?->kode_jenis_barang ?? '-');
-                $gradeLabel = $barang?->grade?->nama_grade ?? '-';
+                // Pakai NAMA lengkap jenis barang (bukan kode), Title Case.
+                $namaJenisBarang = self::rapikan($barang?->jenisBarang?->nama_jenis_barang);
+                $gradeLabel = self::rapikan($barang?->grade?->nama_grade);
 
-                $label = "Palet {$hasil?->no_palet} ({$asal}) - {$ukuranLabel} {$kodeJenisBarang} {$gradeLabel} — Sisa: {$sisaLabel}";
+                // 🌟 "Palet 4" dipersingkat jadi "P4".
+                $noPalet = $hasil?->no_palet;
+                $identitas = $noPalet !== null && $noPalet !== '' ? "P{$noPalet}" : 'P-';
+
+                // Asal ditampilkan di ujung, huruf kecil — hadir tapi tidak mencolok.
+                $asal = strtolower((string) $item->asal_label);
+
+                $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$namaJenisBarang} {$gradeLabel}"
+                    ." · {$tersedia} lbr ({$asal})";
 
                 return [$item->id => $label];
             })

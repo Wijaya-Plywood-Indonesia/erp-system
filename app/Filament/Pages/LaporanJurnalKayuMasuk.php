@@ -2,32 +2,39 @@
 
 namespace App\Filament\Pages;
 
-use App\Models\NotaKayu;
-use App\Services\NotaKayuJurnalPayloadService;
-use Filament\Pages\Page;
-use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Concerns\InteractsWithForms;
-use Filament\Actions\Action;
-use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\LaporanJurnalKayuMasukExport;
-use Carbon\Carbon;
+use App\Models\HargaKayu;
+use App\Models\NotaKayu;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Carbon\Carbon;
+use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Pages\Page;
+use Maatwebsite\Excel\Facades\Excel;
 use UnitEnum;
 
-class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\HasForms
+class LaporanJurnalKayuMasuk extends Page implements HasForms
 {
-    use InteractsWithForms;
     use HasPageShield;
+    use InteractsWithForms;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
+
     protected string $view = 'filament.pages.laporan-jurnal-kayu-masuk';
+
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
+
     protected static ?string $title = 'Jurnal Kayu Masuk';
+
     protected static ?int $navigationSort = 7;
 
     public $tanggal = null;
+
     public array $jurnalTables = [];
+
     public bool $isLoading = false;
 
     public function mount(): void
@@ -49,7 +56,7 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
                 ->required()
                 ->maxDate(now())
                 ->default(now())
-                ->afterStateUpdated(fn($state) => $this->onTanggalUpdated($state)),
+                ->afterStateUpdated(fn ($state) => $this->onTanggalUpdated($state)),
         ];
     }
 
@@ -61,7 +68,7 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
                 ->action('exportToExcel'),
-            
+
             Action::make('back')
                 ->label('Kembali ke Rekap')
                 ->icon('heroicon-o-arrow-left')
@@ -106,6 +113,7 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
                 if ($panjang === 130) {
                     return ['no_akun' => '1414.00', 'nama_akun' => 'log core 130 WHN'];
                 }
+
                 return ['no_akun' => '1413.13', 'nama_akun' => 'log core 260 WHN'];
             }
             if ($isBaloan) {
@@ -123,6 +131,7 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
                 if ($panjang === 100) {
                     return ['no_akun' => '1413.12', 'nama_akun' => 'kayu Lunak 100 WHN'];
                 }
+
                 return ['no_akun' => '1413.01', 'nama_akun' => 'kayu Lunak 260 WHN'];
             }
 
@@ -130,6 +139,7 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
             if ($panjang === 130) {
                 return ['no_akun' => '1413.08', 'nama_akun' => 'Kayu Keras 130 WHN'];
             }
+
             return ['no_akun' => '1413.06', 'nama_akun' => 'Kayu Keras 260 WHN'];
         } else {
             // WJY
@@ -143,6 +153,7 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
                 if ($panjang === 130) {
                     return ['no_akun' => '1413.04', 'nama_akun' => 'log core 130 WJY'];
                 }
+
                 return ['no_akun' => '1413.03', 'nama_akun' => 'log core 260 WJY'];
             }
             if ($isBaloan) {
@@ -160,6 +171,7 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
                 if ($panjang === 100) {
                     return ['no_akun' => '1411.08', 'nama_akun' => 'kayu Lunak 100 WJY'];
                 }
+
                 return ['no_akun' => '1411.01', 'nama_akun' => 'kayu Lunak 260 WJY'];
             }
 
@@ -167,6 +179,7 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
             if ($panjang === 130) {
                 return ['no_akun' => '1411.04', 'nama_akun' => 'Kayu Keras 130 WJY'];
             }
+
             return ['no_akun' => '1411.02', 'nama_akun' => 'Kayu Keras 260 WJY'];
         }
     }
@@ -178,6 +191,7 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
         if (empty($this->tanggal)) {
             $this->jurnalTables = [];
             $this->isLoading = false;
+
             return;
         }
 
@@ -191,8 +205,8 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
             'kayuMasuk.penggunaanKendaraanSupplier',
             'kayuMasuk.penggunaanDokumenKayu',
         ])
-        ->where('status_pelunasan', 'LIKE', "Lunas - {$dateStr}%")
-        ->get();
+            ->where('status_pelunasan', 'LIKE', "Lunas - {$dateStr}%")
+            ->get();
 
         $tables = [];
 
@@ -204,34 +218,42 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
             }
 
             // Group by Lahan, Grade, Panjang, and Jenis Kayu
-            $grouped = $details->groupBy(function($item) {
+            $grouped = $details->groupBy(function ($item) {
                 $kodeLahan = optional($item->lahan)->kode_lahan ?? '-';
                 $grade = $item->grade ?? 0;
                 $panjang = $item->panjang ?? '-';
                 $jenis = optional($item->jenisKayu)->nama_kayu ?? '-';
+
                 return "{$kodeLahan}|{$grade}|{$panjang}|{$jenis}";
             });
 
             $grandBatang = 0;
-            $grandM3 = 0;
             $grandTotal = 0;
             $groupsData = [];
 
             foreach ($grouped as $key => $items) {
                 [$kodeLahan, $grade, $panjang, $jenis] = explode('|', $key);
                 $gradeText = $grade == 1 ? 'A' : ($grade == 2 ? 'B' : '-');
-                
+
                 $firstItem = $items->first();
                 $idJenisKayu = optional($firstItem->jenisKayu)->id ?? $firstItem->id_jenis_kayu ?? null;
-                
+
                 $groupedByDiameter = $this->groupByRentangDiameter($items, $idJenisKayu, $grade, $panjang);
-                
+
                 $totalBatangGrup = $groupedByDiameter->sum('batang');
                 $totalKubikasiGrup = $groupedByDiameter->sum('kubikasi');
                 $totalHargaGrup = $groupedByDiameter->sum('total_harga');
 
                 $grandBatang += $totalBatangGrup;
-                $grandM3 += $totalKubikasiGrup;
+                // PENTING: grandTotal diakumulasi dari total_harga per kategori
+                // (kodeLahan+grade+panjang+jenis), yang masing-masing dihitung via
+                // groupByRentangDiameter (raw-sum kubikasi per bucket diameter,
+                // dibulatkan sekali). Ini SAMA PERSIS dengan cara nota-kayu.print
+                // (blade) menghitung $grandHarga sekarang: kelompokkan per kategori
+                // dulu, baru per kategori dipecah per rentang diameter. Jangan
+                // dihitung ulang per-item mentah dari $details langsung, karena itu
+                // adalah pendekatan LAMA yang sudah terbukti tidak match dengan nota
+                // (kasus selisih 5.000 pada nota seri 419).
                 $grandTotal += $totalHargaGrup;
 
                 $groupsData[] = [
@@ -246,12 +268,23 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
                     'total_harga' => $totalHargaGrup,
                 ];
             }
+            $grandTotal = (int) round($grandTotal);
+
+            // =========================
+            // GRAND M3 (kubikasi, untuk perhitungan)
+            // =========================
+            // PENTING: dihitung langsung dari $details mentah (sum RAW, TANPA
+            // dibulatkan per item), lalu dibulatkan 4 desimal SEKALI di sini —
+            // persis seperti variabel $totalKubikasi di NotaKayuController::show()
+            // yang dipakai oleh nota-kayu.print. Jangan diambil dari re-sum grup,
+            // supaya nilainya identik dengan yang tercetak di nota.
+            $grandM3 = round($details->sum(fn ($item) => $item->kubikasi), 4);
 
             // =========================
             // BIAYA TURUN KAYU & PEMBULATAN
             // =========================
             $pembulatanManual = (int) ($nota->adjustment ?? 0);
-            $biayaTurunPerM3  = 5000;
+            $biayaTurunPerM3 = 5000;
 
             $hasilDasar = round($grandM3 * $biayaTurunPerM3);
             $biayaFloor = floor($hasilDasar / 1000) * 1000;
@@ -396,13 +429,13 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
      */
     public function groupByRentangDiameter($details, $idJenisKayu, $grade, $panjang)
     {
-        $rentangList = \App\Models\HargaKayu::where('id_jenis_kayu', $idJenisKayu)
+        $rentangList = HargaKayu::where('id_jenis_kayu', $idJenisKayu)
             ->where('grade', $grade)
             ->where('panjang', $panjang)
             ->orderBy('diameter_terkecil')
             ->get();
 
-        $hasil       = collect();
+        $hasil = collect();
         $terpakaiIds = collect();
 
         foreach ($rentangList as $rentang) {
@@ -412,18 +445,25 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
             });
 
             if ($kelompok->isNotEmpty()) {
-                $totalBatang   = $kelompok->sum('kuantitas');
-                $totalKubikasi = $kelompok->sum(fn($item) => round($item->kubikasi, 4));
+                $totalBatang = $kelompok->sum('kuantitas');
+
+                // PENTING: sum RAW (belum dibulatkan per item), lalu round HANYA
+                // sekali di titik ini — persis seperti groupByRentangDiameter di
+                // NotaKayuController. Membulatkan per item dulu baru menjumlah
+                // (versi sebelumnya) menghasilkan kubikasi grup yang sedikit
+                // berbeda dari nota asli, yang berimbas ke grandM3 dan akhirnya
+                // ke pembulatan kelipatan 5.000 (selisih 5.000 pada nota seri 419).
+                $totalKubikasi = $kelompok->sum(fn ($item) => $item->kubikasi);
 
                 $harga = $kelompok->first()->harga ?? 0;
                 $totalHarga = round($harga * $totalKubikasi * 1000);
 
                 $hasil->push([
-                    'rentang'      => "{$rentang->diameter_terkecil} - {$rentang->diameter_terbesar}",
-                    'batang'       => $totalBatang,
-                    'kubikasi'     => round($totalKubikasi, 4),
+                    'rentang' => "{$rentang->diameter_terkecil} - {$rentang->diameter_terbesar}",
+                    'batang' => $totalBatang,
+                    'kubikasi' => round($totalKubikasi, 4),
                     'harga_satuan' => $harga,
-                    'total_harga'  => $totalHarga,
+                    'total_harga' => $totalHarga,
                 ]);
 
                 $terpakaiIds = $terpakaiIds->merge($kelompok->pluck('id'));
@@ -434,11 +474,11 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
         $sisa = $details->whereNotIn('id', $terpakaiIds);
         foreach ($sisa as $item) {
             $hasil->push([
-                'rentang'      => "{$item->diameter} (Manual)",
-                'batang'       => $item->kuantitas,
-                'kubikasi'     => round($item->kubikasi, 4),
+                'rentang' => "{$item->diameter} (Manual)",
+                'batang' => $item->kuantitas,
+                'kubikasi' => round($item->kubikasi, 4),
                 'harga_satuan' => $item->harga ?? 0,
-                'total_harga'  => round(($item->harga ?? 0) * round($item->kubikasi, 4) * 1000),
+                'total_harga' => round(($item->harga ?? 0) * round($item->kubikasi, 4) * 1000),
             ]);
         }
 
@@ -453,7 +493,8 @@ class LaporanJurnalKayuMasuk extends Page implements \Filament\Forms\Contracts\H
             return;
         }
         $tanggal = $this->tanggal ?? now()->format('Y-m-d');
-        $filename = 'Laporan-Jurnal-Kayu-Masuk-' . Carbon::parse($tanggal)->format('Y-m-d') . '.xlsx';
+        $filename = 'Laporan-Jurnal-Kayu-Masuk-'.Carbon::parse($tanggal)->format('Y-m-d').'.xlsx';
+
         return Excel::download(new LaporanJurnalKayuMasukExport($this->jurnalTables), $filename);
     }
 }

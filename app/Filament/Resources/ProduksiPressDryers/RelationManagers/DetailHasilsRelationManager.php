@@ -65,7 +65,7 @@ class DetailHasilsRelationManager extends RelationManager
                     ->afterStateUpdated(function ($state) {
                         session(['last_ukuran' => $state]);
                     })
-                    ->default(fn() => session('last_ukuran'))
+                    ->default(fn () => session('last_ukuran'))
                     ->required(),
 
                 Select::make('id_jenis_kayu')
@@ -84,7 +84,7 @@ class DetailHasilsRelationManager extends RelationManager
                     ->afterStateUpdated(function ($state) {
                         session(['last_jenis_kayu' => $state]);
                     })
-                    ->default(fn() => session('last_jenis_kayu'))
+                    ->default(fn () => session('last_jenis_kayu'))
                     ->required(),
 
                 TextInput::make('kw')
@@ -103,7 +103,7 @@ class DetailHasilsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn($query) => $query->with([
+            ->modifyQueryUsing(fn ($query) => $query->with([
                 'ukuran',
                 'jenisKayu',
                 'produksiDryer',
@@ -114,7 +114,7 @@ class DetailHasilsRelationManager extends RelationManager
                     ->label('No. Palet')
                     ->searchable()
                     ->badge()
-                    ->formatStateUsing(fn($state) => 'DRY-' . $state)
+                    ->formatStateUsing(fn ($state) => 'DRY-'.$state)
                     ->color(function ($record) {
                         $serahTerima = $record->serahTerimaVeneerKering;
 
@@ -131,7 +131,7 @@ class DetailHasilsRelationManager extends RelationManager
                             return 'Belum Serah';
                         }
 
-                        return $serahTerima->diterima_oleh === '-' ? 'Sudah Diserahkan' : 'Sudah Diterima Repair';
+                        return $serahTerima->diterima_oleh === '-' ? 'Sudah Diserahkan' : 'Sudah Diterima';
                     }),
 
                 TextColumn::make('jenisKayu.nama_kayu')
@@ -168,9 +168,9 @@ class DetailHasilsRelationManager extends RelationManager
                             return 'Belum Diserahkan';
                         }
 
-                        return $serahTerima->diterima_oleh === '-' ? 'Sudah Diserahkan' : 'Sudah Diterima Repair';
+                        return $serahTerima->diterima_oleh === '-' ? 'Sudah Diserahkan' : 'Sudah Diterima';
                     })
-                    ->color(fn($state) => match ($state) {
+                    ->color(fn ($state) => match ($state) {
                         'Sudah Diterima Repair' => 'success',
                         'Sudah Diserahkan' => 'warning',
                         default => 'gray',
@@ -185,7 +185,7 @@ class DetailHasilsRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make()
                     ->hidden(
-                        fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
             ->recordActions([
@@ -194,7 +194,7 @@ class DetailHasilsRelationManager extends RelationManager
                     ->icon('heroicon-o-paper-airplane')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->modalHeading('Serahkan Veneer Kering ini ke Repair?')
+                    ->modalHeading('Serahkan Veneer Kering ini ke Gudang?')
                     ->modalDescription('Pilih tujuan serah, lalu pastikan data berikut sudah sesuai.')
                     ->schema([
                         Radio::make('jenis_terima')
@@ -236,7 +236,7 @@ class DetailHasilsRelationManager extends RelationManager
     </div>
 HTML);
                     })
-                    ->visible(fn(DetailHasil $record) => ! $record->serahTerimaVeneerKering)
+                    ->visible(fn (DetailHasil $record) => ! $record->serahTerimaVeneerKering)
                     ->action(function (DetailHasil $record, array $data) {
                         try {
                             DB::transaction(function () use ($record, $data) {
@@ -280,7 +280,7 @@ HTML);
 
                 DeleteAction::make()
                     ->hidden(
-                        fn($livewire, DetailHasil $record) => $record->serahTerimaVeneerKering
+                        fn ($livewire, DetailHasil $record) => $record->serahTerimaVeneerKering
                             || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
@@ -288,7 +288,7 @@ HTML);
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->hidden(
-                            fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                            fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                         ),
                 ]),
             ]);

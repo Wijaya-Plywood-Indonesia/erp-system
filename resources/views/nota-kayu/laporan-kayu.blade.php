@@ -98,6 +98,46 @@
             background: #f1f1f1;
             font-size: 13px;
         }
+
+        /* ================================== */
+        /* TAMBAHAN CSS UNTUK PAGINASI BOOTSTRAP */
+        /* ================================== */
+        .mt-4 {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .pagination {
+            display: flex;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            gap: 5px;
+        }
+        .page-item .page-link {
+            display: block;
+            padding: 8px 14px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            color: #3498db;
+            text-decoration: none;
+            background: #fff;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+        .page-item .page-link:hover {
+            background: #f1f1f1;
+        }
+        .page-item.active .page-link {
+            background: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+        .page-item.disabled .page-link {
+            color: #bdc3c7;
+            pointer-events: none;
+            background: #f9f9f9;
+        }
     </style>
 </head>
 
@@ -160,6 +200,14 @@
             @endforelse
         </tbody>
     </table>
+
+    <!-- ================================== -->
+    <!-- TAMBAHAN TOMBOL NAVIGASI HALAMAN   -->
+    <!-- Menggunakan format bootstrap-4     -->
+    <!-- ================================== -->
+    <div class="mt-4">
+        {{ $data->links('pagination::bootstrap-4') }}
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script>

@@ -2,13 +2,14 @@
 
 namespace App\Filament\Resources\HasilPilihVeneers\Schemas;
 
+use App\Models\Grade;
 use App\Models\ModalPilihVeneer;
 use App\Models\PegawaiPilihVeneer;
-use Filament\Schemas\Schema;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Schema;
 
 class HasilPilihVeneerForm
 {
@@ -20,20 +21,22 @@ class HasilPilihVeneerForm
                 Select::make('pegawaiPilihVeneers')
                     ->label('Pegawai (Maks 2)')
                     ->relationship('pegawaiPilihVeneers', 'id')
-                    ->getOptionLabelFromRecordUsing(fn($record) => $record->pegawai->nama_pegawai)
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->pegawai->nama_pegawai)
                     ->multiple()
                     ->maxItems(2) // Batasan maksimal 2 orang
                     ->required()
                     ->searchable()
                     ->options(function ($livewire) {
                         $produksi = $livewire->getOwnerRecord();
-                        if (!$produksi) return [];
+                        if (! $produksi) {
+                            return [];
+                        }
 
                         return PegawaiPilihVeneer::with('pegawai')
                             ->where('id_produksi_pilih_veneer', $produksi->id)
                             ->get()
-                            ->mapWithKeys(fn($p) => [
-                                $p->id => $p->pegawai->nama_pegawai
+                            ->mapWithKeys(fn ($p) => [
+                                $p->id => $p->pegawai->nama_pegawai,
                             ]);
                     })
                     ->columnSpanFull(),
@@ -45,7 +48,9 @@ class HasilPilihVeneerForm
                     ->live()
                     ->options(function ($livewire, $record) {
                         $produksi = $livewire->getOwnerRecord();
-                        if (!$produksi) return [];
+                        if (! $produksi) {
+                            return [];
+                        }
 
                         return ModalPilihVeneer::query()
                             ->where('id_produksi_pilih_veneer', $produksi->id)
@@ -55,13 +60,14 @@ class HasilPilihVeneerForm
                                 // Poin 3: modal yang sisanya 0 disembunyikan dari pilihan,
                                 // kecuali modal itu memang yang sedang dipakai record ini
                                 $sisa = $item->sisaBelumDipakai($record?->id);
+
                                 return $sisa > 0 || ($record && $record->id_modal_pilih_veneer == $item->id);
                             })
                             ->mapWithKeys(function ($item) use ($record) {
                                 $stok = $item->stokVeneerJadi;
                                 $sisa = $item->sisaBelumDipakai($record?->id);
 
-                                if (!$stok) {
+                                if (! $stok) {
                                     return [$item->id => "Palet {$item->no_palet} · Data Stok N/A [Modal: {$item->jumlah} · Sisa: {$sisa}]"];
                                 }
 
@@ -74,6 +80,7 @@ class HasilPilihVeneerForm
 
                                 // Poin 1: jumlah modal & sisa tampil di label
                                 $label = "Palet {$item->no_palet} · {$kayu} · {$dimensi} [KW Asal: {$stok->kw_grade}] · Modal: {$item->jumlah} · Sisa: {$sisa}";
+
                                 return [$item->id => $label];
                             });
                     })
@@ -82,8 +89,10 @@ class HasilPilihVeneerForm
                     })
                     ->columnSpanFull(),
 
-                TextInput::make('kw')
+                Select::make('kw')
                     ->label('KW Hasil')
+                    ->options(Grade::orderBy('nama_grade')->pluck('nama_grade', 'nama_grade'))
+                    ->searchable()
                     ->required(),
 
                 TextInput::make('no_palet')
@@ -98,10 +107,14 @@ class HasilPilihVeneerForm
                     ->live(onBlur: true)
                     ->helperText(function (Get $get, $record) {
                         $idModal = $get('id_modal_pilih_veneer');
-                        if (!$idModal) return null;
+                        if (! $idModal) {
+                            return null;
+                        }
 
                         $modal = ModalPilihVeneer::find($idModal);
-                        if (!$modal) return null;
+                        if (! $modal) {
+                            return null;
+                        }
 
                         $sisa = $modal->sisaBelumDipakai($record?->id);
                         $input = (float) ($get('jumlah') ?? 0);
@@ -113,15 +126,20 @@ class HasilPilihVeneerForm
 
                         // Poin 2: info sisa setelah dipakai
                         $sisaSetelahInput = $sisa - $input;
+
                         return "Sisa modal saat ini: {$sisa} lbr. Setelah disimpan: {$sisaSetelahInput} lbr.";
                     })
                     ->rules([
-                        fn(Get $get, $record) => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                        fn (Get $get, $record) => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
                             $idModal = $get('id_modal_pilih_veneer');
-                            if (!$idModal) return;
+                            if (! $idModal) {
+                                return;
+                            }
 
                             $modal = ModalPilihVeneer::find($idModal);
-                            if (!$modal) return;
+                            if (! $modal) {
+                                return;
+                            }
 
                             $sisa = $modal->sisaBelumDipakai($record?->id);
 

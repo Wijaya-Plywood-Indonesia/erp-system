@@ -8,6 +8,9 @@ use App\Models\NotaKayu;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Facades\Excel;
+use Carbon\Carbon;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\Paginator;
 
 class LaporanKayuMasukController extends Controller
 {
@@ -20,23 +23,34 @@ class LaporanKayuMasukController extends Controller
     private const SQL_TGL_LUNAS = "STR_TO_DATE(SUBSTRING_INDEX(SUBSTRING_INDEX(status_pelunasan, ' - ', -1), ' (', 1), '%d/%m/%Y %H:%i')";
 
     /**
+     * Menyimpan seluruh data master harga kayu agar tidak query berulang di dalam looping.
+     */
+    private Collection $masterHarga;
+
+    public function __construct()
+    {
+        // OPTIMASI: Ambil data harga kayu HANYA 1 KALI saat controller dipanggil
+        $this->masterHarga = HargaKayu::all();
+    }
+
+    /**
      * Ambil semua NotaKayu berstatus lunas, difilter & diurutkan
      * berdasarkan TANGGAL LUNAS (diparse dari string status_pelunasan).
      */
     private function ambilNota(Request $request): Collection
     {
+        // OPTIMASI: Set default tanggal ke bulan berjalan jika filter kosong
+        $dari = $request->dari ?? Carbon::now()->startOfMonth()->format('Y-m-d');
+        $sampai = $request->sampai ?? Carbon::now()->endOfMonth()->format('Y-m-d');
+
         return NotaKayu::query()
             ->where('status_pelunasan', 'LIKE', self::STATUS_LUNAS_PREFIX)
-            ->when($request->dari, function ($q, $dari) {
-                return $q->whereRaw('DATE('.self::SQL_TGL_LUNAS.') >= ?', [$dari]);
-            })
-            ->when($request->sampai, function ($q, $sampai) {
-                return $q->whereRaw('DATE('.self::SQL_TGL_LUNAS.') <= ?', [$sampai]);
-            })
+            ->whereRaw('DATE('.self::SQL_TGL_LUNAS.') >= ?', [$dari])
+            ->whereRaw('DATE('.self::SQL_TGL_LUNAS.') <= ?', [$sampai])
             ->with([
                 'kayuMasuk.detailTurusanKayus.jenisKayu',
                 'kayuMasuk.detailTurusanKayus.lahan',
-                'kayuMasuk.penggunaanSupplier', // TODO: sesuaikan nama relasi supplier kalau beda
+                'kayuMasuk.penggunaanSupplier', 
             ])
             ->orderByRaw(self::SQL_TGL_LUNAS.' ASC')
             ->get();
@@ -60,17 +74,17 @@ class LaporanKayuMasukController extends Controller
     }
 
     /**
-     * COPY PERSIS dari NotaKayuController::groupByRentangDiameter().
-     * Poin dihitung per rentang diameter master (harga snapshot dari baris
-     * PERTAMA di rentang), supaya totalnya identik dengan grand total nota.
+     * Menghitung poin dengan metode grouping rentang diameter.
      */
     private function groupByRentangDiameter($details, $idJenisKayu, $grade, $panjang)
     {
-        $rentangList = HargaKayu::where('id_jenis_kayu', $idJenisKayu)
+        // OPTIMASI: Menggunakan collection di memori ($this->masterHarga)
+        $rentangList = $this->masterHarga
+            ->where('id_jenis_kayu', $idJenisKayu)
             ->where('grade', $grade)
             ->where('panjang', $panjang)
-            ->orderBy('diameter_terkecil')
-            ->get();
+            ->sortBy('diameter_terkecil')
+            ->values();
 
         $hasil = collect();
         $terpakaiIds = collect();
@@ -112,8 +126,6 @@ class LaporanKayuMasukController extends Controller
 
     /**
      * Bangun baris laporan: SATU BARIS per (nota + lahan + jenis + panjang).
-     * Poin dihitung per grade + rentang diameter dulu (biar sama dengan nota),
-     * baru dijumlahkan jadi satu baris per lahan.
      */
     private function buildLaporanData(Request $request): Collection
     {
@@ -122,6 +134,11 @@ class LaporanKayuMasukController extends Controller
 
         foreach ($notas as $nota) {
             $kayuMasuk = $nota->kayuMasuk;
+            
+            if (!$kayuMasuk) {
+                continue;
+            }
+
             $details = $kayuMasuk->detailTurusanKayus ?? collect();
 
             if ($details->isEmpty()) {
@@ -179,8 +196,26 @@ class LaporanKayuMasukController extends Controller
 
     public function index(Request $request)
     {
-        $data = $this->buildLaporanData($request);
+        // 1. Ambil seluruh data hasil perhitungan (Masih berupa Collection mentah)
+        $allData = $this->buildLaporanData($request);
 
+        // 2. Konfigurasi Pagination (misal: 50 data per halaman)
+        $perPage = 50; 
+        $page = \Illuminate\Pagination\Paginator::resolveCurrentPage('page') ?: 1;
+
+        // 3. Potong collection dan ubah menjadi Paginator agar fungsi ->links() bisa bekerja
+        $data = new \Illuminate\Pagination\LengthAwarePaginator(
+            $allData->forPage($page, $perPage),
+            $allData->count(),
+            $perPage,
+            $page,
+            [
+                'path' => \Illuminate\Pagination\Paginator::resolveCurrentPath(),
+                'query' => $request->query() 
+            ]
+        );
+
+        // 4. Kirim data yang sudah di-paginate ke view
         return view('nota-kayu.laporan-kayu', compact('data'));
     }
 
@@ -209,6 +244,8 @@ class LaporanKayuMasukController extends Controller
         }
 
         $fileName = 'laporan_kayu_'.$labelTanggal.'.xlsx';
+        
+        // Export menggunakan semua data (bukan yang dipotong pagination)
         $data = $this->buildLaporanData($request);
 
         return Excel::download(new LaporanKayu($data, $columns), $fileName);

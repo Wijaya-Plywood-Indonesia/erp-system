@@ -69,6 +69,22 @@ class SerahTerimaHpRelationManager extends RelationManager
     }
 
     /**
+     * Kategori barang: PLYWOOD / PLATFORM.
+     *
+     * Diambil dari master grade -> kategoriBarang. Untuk barang asal Gudang
+     * Triplek Jadi, mutasi keluar tidak menyimpan kategori sendiri — isinya
+     * selalu Plywood, jadi di-hardcode.
+     */
+    protected function kategoriBarang($record): string
+    {
+        if ($this->isDariTriplekJadi($record)) {
+            return 'Plywood';
+        }
+
+        return $record->barangSetengahJadi?->grade?->kategoriBarang?->nama_kategori ?? '-';
+    }
+
+    /**
      * Ambil data ringkas dari record untuk ditampilkan di preview modal terima.
      * Mendukung semua sumber lama (triplek HP, platform HP, hasil Graji, hasil
      * Sanding) lewat accessor model, PLUS sumber baru: Gudang Triplek Jadi.
@@ -81,6 +97,7 @@ class SerahTerimaHpRelationManager extends RelationManager
 
             return [
                 'no_palet' => $m ? ($m->jumlah_palet . ' palet') : '-',
+                'kategori' => 'Plywood',
                 'jenis_barang' => $m?->jenisKayu?->nama_kayu ?? '-',
                 'grade' => $m?->kw_grade ?? '-',
                 'ukuran' => $m
@@ -98,6 +115,7 @@ class SerahTerimaHpRelationManager extends RelationManager
 
         return [
             'no_palet' => $hasil?->no_palet ?? '-',
+            'kategori' => $bsj?->grade?->kategoriBarang?->nama_kategori ?? '-',
             'jenis_barang' => $bsj?->jenisBarang?->nama_jenis_barang ?? '-',
             'grade' => $bsj?->grade?->nama_grade ?? '-',
             'ukuran' => $bsj?->ukuran?->nama_ukuran ?? '-',
@@ -115,18 +133,18 @@ class SerahTerimaHpRelationManager extends RelationManager
         $eagerLoads = [
             'triplekHasilHp.mesin',
             'triplekHasilHp.barangSetengahJadi.jenisBarang',
-            'triplekHasilHp.barangSetengahJadi.grade',
+            'triplekHasilHp.barangSetengahJadi.grade.kategoriBarang',
             'triplekHasilHp.barangSetengahJadi.ukuran',
             'platformHasilHp.mesin',
             'platformHasilHp.barangSetengahJadi.jenisBarang',
-            'platformHasilHp.barangSetengahJadi.grade',
+            'platformHasilHp.barangSetengahJadi.grade.kategoriBarang',
             'platformHasilHp.barangSetengahJadi.ukuran',
             'hasilGrajiTriplek.barangSetengahJadiHp.jenisBarang',
-            'hasilGrajiTriplek.barangSetengahJadiHp.grade',
+            'hasilGrajiTriplek.barangSetengahJadiHp.grade.kategoriBarang',
             'hasilGrajiTriplek.barangSetengahJadiHp.ukuran',
             'hasilSanding.mesin',
             'hasilSanding.barangSetengahJadi.jenisBarang',
-            'hasilSanding.barangSetengahJadi.grade',
+            'hasilSanding.barangSetengahJadi.grade.kategoriBarang',
             'hasilSanding.barangSetengahJadi.ukuran',
             'triplekMutasiKeluar.jenisKayu',
         ];
@@ -204,6 +222,17 @@ class SerahTerimaHpRelationManager extends RelationManager
                             'Sanding' => 'purple',
                             default => 'gray',
                         }),
+
+                // 🌟 KATEGORI: Plywood / Platform
+                TextColumn::make('kategori')
+                    ->label('Kategori')
+                    ->state(fn ($record) => $this->kategoriBarang($record))
+                    ->badge()
+                    ->color(fn ($state) => match (strtoupper((string) $state)) {
+                        'PLYWOOD' => 'success',
+                        'PLATFORM' => 'warning',
+                        default => 'gray',
+                    }),
 
                 TextColumn::make('mesin')
                     ->label('Mesin')
@@ -288,6 +317,10 @@ class SerahTerimaHpRelationManager extends RelationManager
                                     Placeholder::make('preview_asal')
                                         ->label('Asal')
                                         ->content($preview['asal']),
+
+                                    Placeholder::make('preview_kategori')
+                                        ->label('Kategori')
+                                        ->content($preview['kategori']),
 
                                     Placeholder::make('preview_jenis_barang')
                                         ->label('Jenis Barang')

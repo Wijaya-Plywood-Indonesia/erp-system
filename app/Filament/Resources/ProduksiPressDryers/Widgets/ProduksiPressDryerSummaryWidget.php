@@ -2,18 +2,22 @@
 
 namespace App\Filament\Resources\ProduksiPressDryers\Widgets;
 
-use Filament\Widgets\Widget;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log; // Import Log untuk debugging
-use App\Models\ProduksiPressDryer;
 use App\Models\DetailHasil;
 use App\Models\DetailPegawai;
+use App\Models\ProduksiPressDryer; // Import Log untuk debugging
+use App\Models\Target;
+use Filament\Widgets\Widget;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ProduksiPressDryerSummaryWidget extends Widget
 {
     protected string $view = 'filament.resources.produksi-press-dryers.widgets.summary';
+
     protected int|string|array $columnSpan = 'full';
+
     public ?ProduksiPressDryer $record = null;
+
     public array $summary = [
         'totalAll' => 0,
         'totalPegawai' => 0,
@@ -25,8 +29,10 @@ class ProduksiPressDryerSummaryWidget extends Widget
     public function getListeners(): array
     {
         $id = $this->record?->id;
-        if (!$id)
+        if (! $id) {
             return [];
+        }
+
         return [
             "echo:production.dryer.{$id},.ProductionUpdated" => 'refreshSummary',
         ];
@@ -38,10 +44,26 @@ class ProduksiPressDryerSummaryWidget extends Widget
         $this->refreshSummary();
     }
 
+    /**
+     * Format angka: max 4 desimal, trailing zero dibuang.
+     * Contoh: 12345.6700 -> "12.345,67" ; 12345.0000 -> "12.345"
+     */
+    private function formatSmart(float $value): string
+    {
+        $formatted = number_format($value, 4, ',', '.');
+        if (str_contains($formatted, ',')) {
+            $formatted = rtrim($formatted, '0');
+            $formatted = rtrim($formatted, ',');
+        }
+
+        return $formatted;
+    }
+
     public function refreshSummary(): void
     {
-        if (!$this->record)
+        if (! $this->record) {
             return;
+        }
 
         try {
             // Eager load necessary relationships safely
@@ -70,7 +92,7 @@ class ProduksiPressDryerSummaryWidget extends Widget
                     'ukurans.panjang',
                     'ukurans.lebar',
                     'ukurans.tebal',
-                    'detail_hasils.isi'
+                    'detail_hasils.isi',
                 ])
                 ->get();
 
@@ -93,8 +115,9 @@ class ProduksiPressDryerSummaryWidget extends Widget
 
             // Mencatat LOG ke storage/logs/laravel.log
             Log::info("=== BREAKDOWN KUBIKASI DRYER ID: $produksiId ===");
-            foreach ($breakdownLog as $logLine)
+            foreach ($breakdownLog as $logLine) {
                 Log::info($logLine);
+            }
             Log::info("TOTAL KUBIKASI AKHIR: $totalKubikasi");
 
             // Query Dasar Ukuran (Untuk tampilan List)
@@ -161,9 +184,9 @@ class ProduksiPressDryerSummaryWidget extends Widget
                 'targetSummary' => [
                     'hasTarget' => false,
                     'targetName' => 'TIDAK ADA TARGET',
-                    'targetValue' => 0,
+                    'targetValue' => $this->formatSmart(0),
                     'unit' => 'm³',
-                    'actualValue' => $totalKubikasi,
+                    'actualValue' => $this->formatSmart($totalKubikasi),
                     'progress' => 0,
                 ],
             ];
@@ -193,16 +216,16 @@ class ProduksiPressDryerSummaryWidget extends Widget
                 if ($mesinUtamaId) {
                     if (stripos($namaMesin, 'DRYER') !== false) {
                         if ($shift === 'PAGI') {
-                            $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER PAGI')->first();
+                            $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
                         } else {
-                            $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER MALAM')->first();
+                            $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
                         }
                     } elseif (stripos($namaMesin, 'DRYER 1') !== false || $mesinUtamaId == 17) {
-                        $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER PAGI')->first();
+                        $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
                     } elseif (stripos($namaMesin, 'DRYER 2') !== false || $mesinUtamaId == 18) {
-                        $targetModel = \App\Models\Target::where('kode_ukuran', 'DRYER MALAM')->first();
+                        $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
                     } else {
-                        $targetModel = \App\Models\Target::where('id_mesin', $mesinUtamaId)->first();
+                        $targetModel = Target::where('id_mesin', $mesinUtamaId)->first();
                     }
                 }
 
@@ -218,9 +241,16 @@ class ProduksiPressDryerSummaryWidget extends Widget
                 $targetSummary = [
                     'hasTarget' => $targetModel !== null,
                     'targetName' => $targetModel->kode_ukuran ?? ($targetModel ? $namaMesin : 'TIDAK ADA TARGET'),
-                    'targetValue' => $targetValue,
+                    // Nilai float asli ($targetValue, $totalKubikasi, $totalAll) tetap
+                    // dipakai untuk hitung $progress di atas SEBELUM diformat ke string,
+                    // supaya perhitungan persentase tidak terpengaruh pembulatan tampilan.
+                    'targetValue' => $isDryer
+                        ? $this->formatSmart($targetValue)
+                        : number_format($targetValue, 0, ',', '.'),
                     'unit' => $isDryer ? 'm³' : 'Lembar',
-                    'actualValue' => $isDryer ? $totalKubikasi : $totalAll,
+                    'actualValue' => $isDryer
+                        ? $this->formatSmart($totalKubikasi)
+                        : number_format($totalAll, 0, ',', '.'),
                     'progress' => $progress,
                 ];
 
@@ -228,12 +258,12 @@ class ProduksiPressDryerSummaryWidget extends Widget
                 // data inti (kubikasi, total, breakdown) tidak disentuh lagi.
                 $this->summary['targetSummary'] = $targetSummary;
             } catch (\Exception $e) {
-                Log::error("Gagal memuat target untuk dryer {$produksiId}: " . $e->getMessage());
+                Log::error("Gagal memuat target untuk dryer {$produksiId}: ".$e->getMessage());
                 // summary utama (termasuk kubikasi) tetap aman karena
                 // sudah di-assign sebelum blok try-catch ini dijalankan.
             }
         } catch (\Exception $e) {
-            Log::error("Error pada Summary Widget Dryer: " . $e->getMessage());
+            Log::error('Error pada Summary Widget Dryer: '.$e->getMessage());
         }
     }
 }

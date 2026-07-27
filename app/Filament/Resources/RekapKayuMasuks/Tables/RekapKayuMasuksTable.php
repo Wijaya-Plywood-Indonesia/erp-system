@@ -15,6 +15,16 @@ class RekapKayuMasuksTable
     public static function configure(Table $table): Table
     {
         return $table
+            // ===========================
+            // OPTIMASI: EAGER LOADING
+            // Menarik semua relasi di awal agar tidak N+1 query
+            // ===========================
+            ->modifyQueryUsing(fn (Builder $query) => $query->with([
+                'penggunaanSupplier',
+                'detailMasukanKayu.jenisKayu',
+                'detailMasukanKayu.lahan',
+                'notaKayu',
+            ]))
             ->paginated([25, 50, 100])
             ->defaultPaginationPageOption(25)
             ->deferLoading()

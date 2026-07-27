@@ -102,8 +102,8 @@
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
                     @foreach($rows as $i => $row)
-                    @php $diisi = isset($row['stok_fisik']) && $row['stok_fisik'] !== null && $row['stok_fisik'] !== ''; @endphp
-                    <tr wire:key="row-{{ $i }}" class="transition-colors {{ $diisi
+@php $diisi = isset($row['stok_fisik']) && $row['stok_fisik'] !== null && $row['stok_fisik'] !== ''; @endphp
+<tr wire:key="row-{{ $row['_uid'] }}" class="transition-colors {{ $diisi
                         ? 'bg-green-50 hover:bg-green-100 dark:bg-green-900/10 dark:hover:bg-green-900/20'
                         : 'bg-white hover:bg-gray-50 dark:bg-gray-900/50 dark:hover:bg-gray-800/30' }}">
 
