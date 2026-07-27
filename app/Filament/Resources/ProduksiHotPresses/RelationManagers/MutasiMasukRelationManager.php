@@ -50,11 +50,21 @@ class MutasiMasukRelationManager extends RelationManager
                     ->dateTime('d/m/Y H:i')
                     ->color('gray'),
                 TextColumn::make('sumber')
-                    ->label('Sumber')
-                    ->badge()
-                    ->color(fn(string $state) => $state === 'veneer' ? 'info' : 'purple')
-                    ->formatStateUsing(fn(string $state) => $state === 'veneer' ? 'Veneer Jadi' : 'Platform Jadi')
-                    ->searchable(),
+    ->label('Sumber')
+    ->badge()
+    ->color(fn (string $state) => match ($state) {
+        'veneer'        => 'info',
+        'platform_jadi' => 'purple',
+        'triplek_jadi'  => 'success',
+        default         => 'gray',
+    })
+    ->formatStateUsing(fn (string $state) => match ($state) {
+        'veneer'        => 'Veneer Jadi',
+        'platform_jadi' => 'Platform Jadi',
+        'triplek_jadi'  => 'Triplek Jadi',
+        default         => $state,
+    })
+    ->searchable(),
                 TextColumn::make('jenis_nama')
                     ->label('Jenis Barang')
                     ->weight('bold')
