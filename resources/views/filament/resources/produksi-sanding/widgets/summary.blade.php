@@ -50,6 +50,9 @@
             $globalProgressPercent = min(100, max(0, $globalProgressVal));
             $potonganPerOrang = (float) ($summary['potonganPerOrang'] ?? 0);
 
+            // Format target: maksimal 4 angka di belakang koma, tanpa trailing zero
+            $targetFormatted = rtrim(rtrim(number_format($target, 4, '.', ''), '0'), '.');
+
             if ($globalProgressPercent >= 100) {
                 $progressColor = '#16a34a';
             } elseif ($globalProgressPercent >= 75) {
@@ -63,7 +66,7 @@
             <div class="font-semibold text-lg text-gray-900 dark:text-gray-100">
                 Progress Target Sanding
                 <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
-                    ( Target {{ number_format($target, 4) }} )
+                    ( Target {{ $targetFormatted }} )
                 </span>
             </div>
 
@@ -74,7 +77,7 @@
                         Mesin {{ $record->mesin?->nama_mesin ?? 'SANDING' }}
                     </span>
                     <span class="text-gray-600 dark:text-gray-400 font-bold">
-                        {{ number_format($totalAll) }} / {{ (float) $target }}
+                        {{ number_format($totalAll) }} / {{ $targetFormatted }}
                     </span>
                 </div>
 
