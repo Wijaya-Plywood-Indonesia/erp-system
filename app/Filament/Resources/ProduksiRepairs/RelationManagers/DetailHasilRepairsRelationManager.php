@@ -85,8 +85,8 @@ class DetailHasilRepairsRelationManager extends RelationManager
                 Select::make('sumber_pilihan')
                     ->label(
                         fn($get) => $get('is_ukuran_manual')
-                            ? 'Ukuran Hasil (Manual / Beda dari Modal)'
-                            : 'Ukuran Hasil (Dari Modal Repair)'
+                            ? 'Ukuran Hasil (Manual)'
+                            : 'Ukuran Hasil (Dari Modal)'
                     )
                     ->placeholder(
                         fn($get) => $get('is_ukuran_manual')
