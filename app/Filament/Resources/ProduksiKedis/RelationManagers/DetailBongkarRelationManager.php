@@ -56,7 +56,7 @@ class DetailBongkarRelationManager extends RelationManager
                     })
                     ->searchable()
                     ->live()
-                    ->formatStateUsing(fn($record) => $record ? "{$record->id_jenis_kayu}-{$record->id_ukuran}" : null)
+                    ->formatStateUsing(fn ($record) => $record ? "{$record->id_jenis_kayu}-{$record->id_ukuran}" : null)
                     ->afterStateUpdated(function ($state, $set) {
                         if ($state) {
                             [$jenisId, $ukuranId] = explode('-', $state);
@@ -97,7 +97,7 @@ class DetailBongkarRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn($query) => $query->with([
+            ->modifyQueryUsing(fn ($query) => $query->with([
                 'jenisKayu',
                 'ukuran',
                 'serahTerimaVeneerKering', // eager load untuk cek status serah
@@ -107,7 +107,7 @@ class DetailBongkarRelationManager extends RelationManager
                     ->label('No. Palet')
                     ->searchable()
                     ->badge()
-                    ->formatStateUsing(fn($state) => 'KD-' . $state)
+                    ->formatStateUsing(fn ($state) => 'KD-'.$state)
                     ->color(function ($record) {
                         $serahTerima = $record->serahTerimaVeneerKering;
 
@@ -124,7 +124,7 @@ class DetailBongkarRelationManager extends RelationManager
                             return 'Belum Serah';
                         }
 
-                        return $serahTerima->diterima_oleh === '-' ? 'Sudah Diserahkan' : 'Sudah Diterima Repair';
+                        return $serahTerima->diterima_oleh === '-' ? 'Sudah Diserahkan' : 'Sudah Diterima';
                     }),
 
                 TextColumn::make('jenisKayu.nama_kayu')
@@ -163,7 +163,7 @@ class DetailBongkarRelationManager extends RelationManager
 
                         return $serahTerima->diterima_oleh === '-' ? 'Sudah Diserahkan' : 'Sudah Diterima Repair';
                     })
-                    ->color(fn($state) => match ($state) {
+                    ->color(fn ($state) => match ($state) {
                         'Sudah Diterima Repair' => 'success',
                         'Sudah Diserahkan' => 'warning',
                         default => 'gray',
@@ -180,7 +180,7 @@ class DetailBongkarRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make()
                     ->hidden(
-                        fn($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()
+                        fn ($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()
                     ),
             ])
             ->recordActions([
@@ -232,7 +232,7 @@ class DetailBongkarRelationManager extends RelationManager
     </div>
 HTML);
                     })
-                    ->visible(fn($record) => ! $record->serahTerimaVeneerKering)
+                    ->visible(fn ($record) => ! $record->serahTerimaVeneerKering)
                     ->action(function ($record, array $data) {
                         try {
                             DB::transaction(function () use ($record, $data) {
@@ -276,7 +276,7 @@ HTML);
 
                 DeleteAction::make()
                     ->hidden(
-                        fn($livewire, $record) => $record->serahTerimaVeneerKering
+                        fn ($livewire, $record) => $record->serahTerimaVeneerKering
                             || $livewire->ownerRecord?->isBongkarDivalidasi()
                     ),
             ])
@@ -284,7 +284,7 @@ HTML);
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->hidden(
-                            fn($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()
+                            fn ($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()
                         ),
                 ]),
             ]);
