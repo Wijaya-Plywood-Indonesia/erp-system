@@ -181,7 +181,7 @@ class DetailBarangDikerjakansTable
                                 ->label('Serah Ke')
                                 ->options([
                                     'gudang_satu' => 'Serah ke Sampling Plywood',
-                                    'gudang' => 'Serah ke Gudang',
+                                    'gudang' => 'Serah ke Gudang Plywood Siap Jual',
                                 ])
                                 ->required()
                                 ->default('gudang_satu')
