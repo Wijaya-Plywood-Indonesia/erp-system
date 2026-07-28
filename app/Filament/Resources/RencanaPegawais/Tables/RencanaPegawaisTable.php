@@ -23,8 +23,8 @@ class RencanaPegawaisTable
                     ->label('Pekerja')
                     ->formatStateUsing(
                         fn($record) => $record->pegawai
-                        ? $record->pegawai->kode_pegawai . ' - ' . $record->pegawai->nama_pegawai
-                        : '—'
+                            ? $record->pegawai->kode_pegawai . ' - ' . $record->pegawai->nama_pegawai
+                            : '—'
                     )
                     ->badge()
                     ->searchable(
@@ -35,10 +35,6 @@ class RencanaPegawaisTable
                                 ->orWhere('kode_pegawai', 'like', "%{$search}%")
                         )
                     ),
-                TextColumn::make('nomor_meja')
-                    ->label('Nomor Meja')
-                    ->numeric()
-                    ->sortable(),
                 TextColumn::make('jam_masuk')
                     ->label('Jam Masuk')
                     ->time()

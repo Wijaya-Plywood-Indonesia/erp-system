@@ -15,7 +15,6 @@ class RencanaPegawai extends Model
     protected $fillable = [
         'id_produksi_repair',
         'id_pegawai',
-        'nomor_meja',
         'jam_masuk',
         'jam_pulang',
         'ijin',
