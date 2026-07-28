@@ -15,7 +15,7 @@ return new class extends Migration
             $table->foreignId('id_produksi_hp')
                 ->nullable()
                 ->after('keterangan')
-                ->constrained('produksi_hps')
+                ->constrained('produksi_hp')
                 ->nullOnDelete();
         });
     }
