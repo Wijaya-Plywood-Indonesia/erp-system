@@ -30,8 +30,14 @@ class NotaKayusTable
     {
         return $table
             ->columns([
+                TextColumn::make('created_at')
+                    ->dateTime('d-m-Y')
+                    ->label('Tgl Nota')
+                    ->sortable(),
+
                 TextColumn::make('no_nota')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('info_kayu')
                     ->label('Info Kayu')
@@ -127,12 +133,6 @@ class NotaKayusTable
                         'warning' => 'Sebagian',
                     ])
                     ->searchable(),
-
-                TextColumn::make('created_at')
-                    ->dateTime('d/m/Y H:i')
-                    ->label('Tgl Nota')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
