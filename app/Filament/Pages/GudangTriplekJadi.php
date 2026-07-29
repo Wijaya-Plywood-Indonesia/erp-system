@@ -71,6 +71,190 @@ class GudangTriplekJadi extends Page
         return ($p * $l * $t * ($lembar ?? 0)) / 10000000;
     }
 
+    // ── Modal Edit Riwayat Keluar ──
+    public bool $showEditKeluarModal = false;
+    public ?int $editKeluarId = null;
+    public $editJumlahPalet = 1;
+    public array $editPaletQuantities = [0 => ''];
+
+    /**
+     * Cek apakah mutasi keluar ini masih boleh diedit rinciannya.
+     *
+     * ⚠️ SESUAIKAN: guard ini memakai kolom `status` pada TriplekJadiMutasiKeluar.
+     * Selama status masih STATUS_DIKIRIM (baru dicatat, belum dikonfirmasi
+     * diterima di tujuan manapun — Gudang Satu/Sanding/Hotpress), rincian
+     * masih boleh diubah. Begitu status berubah (barang sudah dikonfirmasi
+     * diterima di sisi tujuan), rincian dikunci permanen agar data stok
+     * tujuan tidak jadi tidak konsisten.
+     *
+     * Jika di project Anda nama status "sudah diterima" berbeda, sesuaikan
+     * kondisi di bawah ini (mis. cek langsung ke tabel SerahTerimaGudangSatu /
+     * SerahTerimaHp apakah diterima_oleh masih '-').
+     */
+    protected function bisaDiedit(TriplekJadiMutasiKeluar $mutasi): bool
+    {
+        if ($mutasi->status !== TriplekJadiMutasiKeluar::STATUS_DIKIRIM) {
+            return false;
+        }
+
+        // Jaga-jaga tambahan: kalau ternyata sudah ada yang mengklaim di
+        // antrean Gudang Satu / Sanding (diterima_oleh sudah bukan default),
+        // tetap kunci meskipun status mutasi belum sempat ter-update.
+        $sudahDiklaimGudangSatu = SerahTerimaGudangSatu::where('id_triplek_mutasi_keluar', $mutasi->id)
+            ->where('diterima_oleh', '!=', '-')
+            ->exists();
+
+        $sudahDiklaimSanding = SerahTerimaHp::where('id_triplek_mutasi_keluar', $mutasi->id)
+            ->where('tujuan', 'sanding')
+            ->where('diterima_oleh', '!=', '-')
+            ->exists();
+
+        return ! $sudahDiklaimGudangSatu && ! $sudahDiklaimSanding;
+    }
+
+    public function editKeluar(int $id): void
+    {
+        $mutasi = TriplekJadiMutasiKeluar::with('palets')->find($id);
+
+        if (! $mutasi) {
+            Notification::make()->danger()->title('Data tidak ditemukan')->send();
+
+            return;
+        }
+
+        if (! $this->bisaDiedit($mutasi)) {
+            Notification::make()
+                ->danger()
+                ->title('Tidak Bisa Diedit')
+                ->body('Mutasi ini sudah diterima/diklaim di sisi tujuan, rincian tidak bisa diubah lagi.')
+                ->send();
+
+            return;
+        }
+
+        $this->editKeluarId = $mutasi->id;
+
+        $palet = $mutasi->palets->sortBy('nomor_palet')->pluck('jumlah_lembar')->values()->toArray();
+        $this->editPaletQuantities = ! empty($palet) ? $palet : [0 => ''];
+        $this->editJumlahPalet = count($this->editPaletQuantities);
+
+        $this->showEditKeluarModal = true;
+    }
+
+    public function cancelEditKeluar(): void
+    {
+        $this->showEditKeluarModal = false;
+        $this->editKeluarId = null;
+    }
+
+    public function updatedEditJumlahPalet($value): void
+    {
+        if ($value === '' || $value === null || $value === 0 || $value === '0') {
+            return;
+        }
+
+        $count = max(1, intval($value));
+        $this->editPaletQuantities = array_slice($this->editPaletQuantities, 0, $count);
+
+        while (count($this->editPaletQuantities) < $count) {
+            $this->editPaletQuantities[] = '';
+        }
+    }
+
+    public function hapusEditPalet(int $index): void
+    {
+        if (isset($this->editPaletQuantities[$index])) {
+            unset($this->editPaletQuantities[$index]);
+            $this->editPaletQuantities = array_values($this->editPaletQuantities);
+            $this->editJumlahPalet = count($this->editPaletQuantities);
+        }
+    }
+
+    /**
+     * 💾 SIMPAN PERUBAHAN RINCIAN KELUAR
+     */
+    public function updateKeluar(): void
+    {
+        if (! $this->editKeluarId) {
+            return;
+        }
+
+        $totalLembar = array_sum(array_map('intval', $this->editPaletQuantities));
+
+        if ($totalLembar <= 0) {
+            Notification::make()->danger()->title('Input Gagal')->body('Kuantitas palet wajib diisi.')->send();
+
+            return;
+        }
+
+        try {
+            DB::transaction(function () use ($totalLembar) {
+                $mutasi = TriplekJadiMutasiKeluar::with('palets')
+                    ->where('id', $this->editKeluarId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $mutasi) {
+                    throw new \Exception('Data tidak ditemukan.');
+                }
+
+                // 🔒 Re-cek race condition
+                if (! $this->bisaDiedit($mutasi)) {
+                    throw new \Exception('Mutasi ini sudah diterima/diklaim di sisi tujuan, tidak bisa diedit lagi.');
+                }
+
+                // Validasi sisa stok fisik masih cukup untuk kuantitas baru
+                $stok = StokTriplekJadi::where('id_jenis_kayu', $mutasi->id_jenis_kayu)
+                    ->where('panjang', $mutasi->panjang)
+                    ->where('lebar', $mutasi->lebar)
+                    ->where('tebal', $mutasi->tebal)
+                    ->where('kw_grade', $mutasi->kw_grade)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $stok || $totalLembar > (int) $stok->stok_lembar) {
+                    throw new \Exception('Sisa stok fisik di gudang tidak mencukupi untuk kuantitas baru.');
+                }
+
+                $mutasi->update([
+                    'jumlah_palet' => count($this->editPaletQuantities),
+                    'stok_lembar' => $totalLembar,
+                    'stok_kubikasi' => $this->hitungKubikasi($mutasi->panjang, $mutasi->lebar, $mutasi->tebal, $totalLembar),
+                ]);
+
+                // Aman dihapus & dibuat ulang karena guard di atas memastikan
+                // mutasi ini belum diklaim/diterima di tujuan manapun.
+                $mutasi->palets()->delete();
+
+                foreach ($this->editPaletQuantities as $index => $qty) {
+                    $qtyPalet = intval($qty);
+                    if ($qtyPalet <= 0) {
+                        continue;
+                    }
+
+                    TriplekJadiMutasiKeluarPalet::create([
+                        'id_mutasi_keluar' => $mutasi->id,
+                        'nomor_palet' => $index + 1,
+                        'jumlah_lembar' => $qtyPalet,
+                    ]);
+                }
+            });
+
+            unset($this->riwayatKeluarFiltered);
+
+            $this->showEditKeluarModal = false;
+            $this->editKeluarId = null;
+
+            Notification::make()
+                ->success()
+                ->title('✓ Rincian Diperbarui')
+                ->body("Rincian palet berhasil diubah menjadi {$totalLembar} lembar.")
+                ->send();
+        } catch (\Exception $e) {
+            Notification::make()->danger()->title('Gagal Memperbarui')->body($e->getMessage())->send();
+        }
+    }
+
     // ─── WIP SANDING (agregat) ───────────────────────────────────────────────
 
     /**
@@ -326,6 +510,10 @@ class GudangTriplekJadi extends Page
 
         // Kembalikan model langsung supaya view bisa akses relasi
         // $rk->palets, $rk->jenisKayu, $rk->operator (gaya Platform Jadi).
-        return $query->get();
+        return $query->get()->map(function ($rk) {
+            $rk->bisa_diedit = $this->bisaDiedit($rk);
+
+            return $rk;
+        });
     }
 }
