@@ -132,29 +132,24 @@ class LaporanRepairs extends Page
     {
         try {
             $this->isLoading = true;
-
             $tanggal = $this->data['tanggal'] ?? now()->format('Y-m-d');
 
-            // Reset data
             $this->dataProduksi = [];
             $this->laporan = [];
 
-            // Load data menggunakan Query class
+            // 1. Ambil data dari query
             $raw = LoadLaporanRepairs::run($tanggal);
 
-            Log::info('Query executed', [
-                'records_found' => $raw->count(),
-                'tanggal' => $tanggal
-            ]);
-
-            // Transform data menggunakan Transformer
             if ($raw->isNotEmpty()) {
-                $mapped           = RepairDataMap::make($raw); // returns ['detail' => ..., 'summary' => ...]
-                $this->dataProduksi = $mapped;                 // simpan semua
-                $this->laporan      = $mapped;                 // ← laporan juga simpan semua (nanti export ambil ['detail'])
+                // 2. Transform langsung menggunakan RepairDataMap
+                $mappedData = RepairDataMap::make($raw);
 
-                Log::info('Data transformed successfully', [
-                    'items_count' => count($mapped['detail'] ?? [])
+                $this->dataProduksi = $mappedData;
+                $this->laporan = $mappedData;
+
+                Log::info('Data laporan repair berhasil dimuat', [
+                    'total_baris' => count($mappedData),
+                    'tanggal' => $tanggal,
                 ]);
             } else {
                 Notification::make()
@@ -164,10 +159,9 @@ class LaporanRepairs extends Page
                     ->send();
             }
         } catch (Exception $e) {
-            Log::error('Error loading repair data', [
+            Log::error('Error loading repair report', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
-                'tanggal' => $tanggal ?? 'unknown'
             ]);
 
             Notification::make()
@@ -175,9 +169,6 @@ class LaporanRepairs extends Page
                 ->title('Error Memuat Data')
                 ->body('Terjadi kesalahan: ' . $e->getMessage())
                 ->send();
-
-            $this->dataProduksi = [];
-            $this->laporan = [];
         } finally {
             $this->isLoading = false;
         }

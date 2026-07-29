@@ -53,4 +53,20 @@ class ModalRepair extends Model
     {
         return $this->belongsTo(SerahTerimaVeneerKering::class, 'id_serah_terima_veneer_kering');
     }
+
+    // Accesor attributes
+    public function getTerpakaiAttribute(): int
+    {
+        return (int) $this->detailHasilRepairs()->sum('jumlah');
+    }
+
+    public function getSisaStokAttribute(): int
+    {
+        return max(0, (int) $this->jumlah - $this->terpakai);
+    }
+
+    public function detailHasilRepairs()
+    {
+        return $this->hasMany(DetailHasilRepair::class, 'id_modal_repair');
+    }
 }
