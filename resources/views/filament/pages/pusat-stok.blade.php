@@ -3,6 +3,7 @@
 
         @php
         $stokMenus = [
+        ['title' => 'Stok Barang Umum', 'url' => \App\Filament\Pages\StokBarangUmum::getUrl(), 'icon' => 'heroicon-o-archive-box-arrow-down'],
         ['title' => 'Stok Kayu', 'url' => url('/admin/stok-kayu'), 'icon' => 'heroicon-o-cube'],
         ['title' => 'Stok Veneer Basah', 'url' => url('/admin/stok-veneer-basah'), 'icon' => 'heroicon-o-beaker'],
         ['title' => 'Stok Veneer Kering', 'url' => url('/admin/stok-veneer-kering'), 'icon' => 'heroicon-o-sun'],
@@ -52,6 +53,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             @php
             $logMenus = [
+            ['title' => 'Log Barang Umum', 'url' => \App\Filament\Pages\LogBarangUmum::getUrl(), 'icon' => 'heroicon-o-clipboard-document-list'],
             ['title' => 'Log Harga Kayu', 'url' => url('/admin/log-harga-kayu'), 'icon' => 'heroicon-o-currency-dollar'],
             ['title' => 'Log HPP Kayu', 'url' => url('/admin/hpp-average-page'), 'icon' => 'heroicon-o-calculator'],
             ['title' => 'Log HPP Veneer Basah', 'url' => url('/admin/hpp-veneer-basah-page'), 'icon' => 'heroicon-o-calculator'],
