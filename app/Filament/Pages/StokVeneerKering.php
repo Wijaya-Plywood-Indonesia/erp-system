@@ -2,8 +2,10 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\DetailHasilRepair;
 use App\Models\StokVeneerKering as ModelStok;
 use App\Models\JenisKayu;
+use App\Models\ModalRepair;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
@@ -114,5 +116,94 @@ class StokVeneerKering extends Page
         }
 
         return null;
+    }
+
+    // Work In Progress
+    private const SUMBER_REPAIR = 'veneer_kering';
+
+    public static function specKey($idJenisKayu, $panjang, $lebar, $tebal, $kw): string
+    {
+        return implode('|', [
+            (int) $idJenisKayu,
+            (float) $panjang,
+            (float) $lebar,
+            (float) $tebal,
+            (string) $kw,
+        ]);
+    }
+
+    protected ?array $wipRepairCache = null;
+
+    public function getWipRepairMapProperty(): array
+    {
+        if ($this->wipRepairCache !== null) {
+            return $this->wipRepairCache;
+        }
+
+        $map = [];
+
+        ModalRepair::with(['ukuran', 'jenisKayu'])
+            ->withSum('detailHasilRepairs as total_terpakai', 'jumlah')
+            ->where('sumber', self::SUMBER_REPAIR)
+            ->whereNull('ditutup_manual_at')
+            ->get()
+            ->each(function ($m) use (&$map) {
+                $sisa = (float) $m->jumlah - (float) ($m->total_terpakai ?? 0);
+
+                if ($sisa <= 0 || ! $m->ukuran) {
+                    return;
+                }
+
+                $key = self::specKey($m->id_jenis_kayu, $m->ukuran->panjang, $m->ukuran->lebar, $m->ukuran->tebal, $m->kw);
+                $map[$key] = ($map[$key] ?? 0) + $sisa;
+            });
+
+        return $this->wipRepairCache = $map;
+    }
+
+    public function wipRepairUntuk($idJenisKayu, $panjang, $lebar, $tebal, $kw): float
+    {
+        $key = self::specKey($idJenisKayu, $panjang, $lebar, $tebal, $kw);
+
+        return (float) ($this->wipRepairMap[$key] ?? 0);
+    }
+
+    public function selesaikanWipRepair($idJenisKayu, $panjang, $lebar, $tebal, $kw): void
+    {
+        $targetKey = self::specKey($idJenisKayu, $panjang, $lebar, $tebal, $kw);
+
+        ModalRepair::with('ukuran')
+            ->where('sumber', self::SUMBER_REPAIR)
+            ->whereNull('ditutup_manual_at')
+            ->get()
+            ->filter(function ($m) use ($targetKey) {
+                if (! $m->ukuran) {
+                    return false;
+                }
+
+                return self::specKey($m->id_jenis_kayu, $m->ukuran->panjang, $m->ukuran->lebar, $m->ukuran->tebal, $m->kw) === $targetKey;
+            })
+            ->each(function ($m) {
+                $m->update([
+                    'ditutup_manual_at' => now(),
+                    'ditutup_oleh'      => auth()->id(),
+                ]);
+            });
+
+        $this->wipRepairCache = null;
+
+        \Filament\Notifications\Notification::make()
+            ->success()
+            ->title('WIP repair diselesaikan')
+            ->body('Sisa WIP untuk spesifikasi ini ditandai selesai (susut tercatat).')
+            ->send();
+    }
+
+    public function getHasilTanpaModalProperty()
+    {
+        return DetailHasilRepair::whereNull('id_modal_repair')
+            ->with(['ukuran', 'jenisKayu'])
+            ->latest()
+            ->get();
     }
 }

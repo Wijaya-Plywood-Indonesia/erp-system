@@ -159,9 +159,9 @@ class Absen extends Page implements HasForms
             $kodePegawaiDb = Pegawai::pluck('kode_pegawai')->map(fn($k) => ltrim($k, '0'))->toArray();
 
             $currentHost = request()->getHost();
-            $kolomTanggalDempul = in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com'])
-                ? 'tanggal'
-                : 'tanggal_produksi';
+            // $kolomTanggalDempul = in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com'])
+            //     ? 'tanggal'
+            //     : 'tanggal_produksi';
 
             // 3. Ambil Data Produksi (WorkerMap)
             $listRotary = RotaryWorkerMap::make(ProduksiRotary::with(['detailPegawaiRotary.pegawai'])->whereDate('tgl_produksi', $tgl)->get());
@@ -181,7 +181,7 @@ class Absen extends Page implements HasForms
             $listSandingJoin = SandingJoinWorkerMap::make(ProduksiSandingJoint::with(['pegawaiSandingJoint.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listPotAfJoin = PotAfalanJoinWorkerMap::make(ProduksiPotAfJoint::with(['pegawaiPotAfJoint.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listLainLain = LainLainWorkerMap::make(DetailLainLain::with(['lainLains.pegawai'])->whereDate('tanggal', $tgl)->get());
-            $listDempul = DempulWorkerMap::make(ProduksiDempul::with(['rencanaPegawaiDempuls.pegawai'])->whereDate($kolomTanggalDempul, $tgl)->get());
+            $listDempul = DempulWorkerMap::make(ProduksiDempul::with(['rencanaPegawaiDempuls.pegawai'])->whereDate('tanggal', $tgl)->get());
             $listGrajiTriplek = GrajiTriplekWorkerMap::make(ProduksiGrajitriplek::with(['pegawaiGrajiTriplek.pegawaiGrajiTriplek'])->whereDate('tanggal_produksi', $tgl)->get());
             $listNyusup = NyusupWorkerMap::make(ProduksiNyusup::with(['pegawaiNyusup.pegawai'])->whereDate('tanggal_produksi', $tgl)->get());
             $listSanding = SandingWorkerMap::make(ProduksiSanding::with(['pegawaiSandings.pegawai'])->whereDate('tanggal', $tgl)->get());
@@ -246,6 +246,18 @@ class Absen extends Page implements HasForms
 
                     $fMasuk = $rawMasuk;
                     $fPulang = $rawPulang;
+
+                    $ijinVal = trim((string) ($first['ijin'] ?? ''));
+                    $ketVal  = trim((string) ($first['keterangan'] ?? ''));
+
+                    $adaIjin       = $ijinVal !== '' && $ijinVal !== '-';
+                    $adaKeterangan = $ketVal !== '' && $ketVal !== '-'
+                        && stripos($ketVal, 'tanpa keterangan') === false;
+
+                    if ($adaIjin && $adaKeterangan) {
+                        $fMasuk  = '-';
+                        $fPulang = '-';
+                    }
 
                     return [
                         'kodep' => $kodep,

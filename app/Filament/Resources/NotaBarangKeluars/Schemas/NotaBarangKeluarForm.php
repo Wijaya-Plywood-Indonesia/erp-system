@@ -30,6 +30,7 @@ class NotaBarangKeluarForm
                     ->options([
                         'BK'  => 'BK – Barang Keluar (Pabrik)',
                         'BKL' => 'BKL – Barang Keluar (Lain-lain)',
+                        'Penjualan' => 'Penjualan Barang',
                     ])
                     ->required()
                     ->native(false),

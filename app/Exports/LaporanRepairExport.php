@@ -535,140 +535,36 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             $jurnalBlockKredit = [];
 
             // ============================================================
-            // STEP A: Kumpulkan semua data HASIL per group
+            // STEP 1: MODAL REPAIR (HANYA DIPROSES JIKA DI-LINK KE HASIL)
             // ============================================================
-            $hasilPerGroup = [];
-
-            $groupedHasil = collect($produksi->detailHasilRepairs)->groupBy(function ($hasil) {
-                // Priority 1: Jika terikat ke modalRepair, pakai spesifikasi modalRepair
-                if ($hasil->modalRepair && $hasil->modalRepair->ukuran && $hasil->modalRepair->jenisKayu) {
-                    $modal   = $hasil->modalRepair;
-                    $jnsNorm = $this->normalizeJenis($modal->jenisKayu->nama_kayu ?? '');
-                    $kwStatus = strtolower((string) ($modal->kw ?? $hasil->kw));
-                    $isAf    = str_contains($kwStatus, 'af') ? 'af' : 'reguler';
-                    $tebal   = (float) $modal->ukuran->tebal;
-                    $panjang = (float) $modal->ukuran->panjang;
-                    $lebar   = (float) $modal->ukuran->lebar;
-                    $kwRaw   = (string)((int) filter_var($kwStatus, FILTER_SANITIZE_NUMBER_INT));
-
-                    return "{$jnsNorm}|{$panjang}|{$lebar}|{$tebal}|{$isAf}|{$kwRaw}";
-                }
-
-                // Priority 2: Jika Ukuran Manual
-                if (!$hasil->ukuran) return 'invalid_data';
-
-                $jenisModel = $hasil->jenisKayu;
-                $jnsNorm  = $this->normalizeJenis($jenisModel?->nama_kayu ?? 'meranti');
-                $kwStatus = strtolower((string) $hasil->kw);
-                $isAf     = str_contains($kwStatus, 'af') ? 'af' : 'reguler';
-                $tebal    = (float) $hasil->ukuran->tebal;
-                $panjang  = (float) $hasil->ukuran->panjang;
-                $lebar    = (float) $hasil->ukuran->lebar;
-                $kwRaw    = (string)((int) filter_var($kwStatus, FILTER_SANITIZE_NUMBER_INT));
-
-                return "{$jnsNorm}|{$panjang}|{$lebar}|{$tebal}|{$isAf}|{$kwRaw}";
+            $hasilDariModal = collect($produksi->detailHasilRepairs)->filter(function ($h) {
+                return $h->modalRepair && $h->modalRepair->ukuran && $h->modalRepair->jenisKayu;
             });
 
-            foreach ($groupedHasil as $key => $items) {
-                if ($key === 'invalid_data') continue;
+            $groupedHasilModal = $hasilDariModal->groupBy('id_modal_repair');
 
-                [$jnsNorm, $panjang, $lebar, $tebal, $statusKw, $kwRaw] = explode('|', $key);
-                $panjang = (float) $panjang;
-                $lebar   = (float) $lebar;
-                $tebal   = (float) $tebal;
-                $isAf    = ($statusKw === 'af');
+            foreach ($produksi->modalRepairs as $modal) {
+                if (!$modal->ukuran || !$modal->jenisKayu) continue;
 
-                $totalBanyak = $items->sum('jumlah');
-                $totalM3     = ($panjang * $lebar * $tebal * $totalBanyak) / 10000000;
+                $relatedHasil = $groupedHasilModal->get($modal->id, collect());
+                $hasilBanyak  = (int) $relatedHasil->sum('jumlah');
 
-                $hasilPerGroup[$key] = [
-                    'jnsNorm'     => $jnsNorm,
-                    'panjang'     => $panjang,
-                    'lebar'       => $lebar,
-                    'tebal'       => $tebal,
-                    'statusKw'    => $statusKw,
-                    'kwRaw'       => $kwRaw,
-                    'isAf'        => $isAf,
-                    'totalBanyak' => $totalBanyak,
-                    'totalM3'     => $totalM3,
-                ];
-            }
-
-            // ============================================================
-            // STEP B: Kumpulkan semua data MODAL per group
-            // ============================================================
-            $modalPerGroup = [];
-
-            $groupedModal = collect($produksi->modalRepairs)->groupBy(function ($modal) {
-                if (!$modal->ukuran || !$modal->jenisKayu) return 'invalid_data';
+                // *** PERBAIKAN KUNCI ***
+                // Jika modal ini TIDAK MEMILIKI HASIL TERHUBUNG (berarti pengerjaannya Manual),
+                // SKIP modal ini agar tidak mencetak baris Kehilangan palsu.
+                if ($hasilBanyak <= 0) {
+                    continue;
+                }
 
                 $jnsNorm  = $this->normalizeJenis($modal->jenisKayu->nama_kayu ?? '');
                 $kwStatus = strtolower((string) $modal->kw);
-                $isAf     = str_contains($kwStatus, 'af') ? 'af' : 'reguler';
+                $isAf     = str_contains($kwStatus, 'af');
                 $tebal    = (float) $modal->ukuran->tebal;
                 $panjang  = (float) $modal->ukuran->panjang;
                 $lebar    = (float) $modal->ukuran->lebar;
                 $kwRaw    = (string)((int) filter_var($kwStatus, FILTER_SANITIZE_NUMBER_INT));
 
-                return "{$jnsNorm}|{$panjang}|{$lebar}|{$tebal}|{$isAf}|{$kwRaw}";
-            });
-
-            foreach ($groupedModal as $key => $items) {
-                if ($key === 'invalid_data') continue;
-
-                [$jnsNorm, $panjang, $lebar, $tebal, $statusKw, $kwRaw] = explode('|', $key);
-                $panjang = (float) $panjang;
-                $lebar   = (float) $lebar;
-                $tebal   = (float) $tebal;
-                $isAf    = ($statusKw === 'af');
-
-                $totalBanyak = $items->sum('jumlah');
-                $totalM3     = ($panjang * $lebar * $tebal * $totalBanyak) / 10000000;
-
-                $modalPerGroup[$key] = [
-                    'jnsNorm'     => $jnsNorm,
-                    'panjang'     => $panjang,
-                    'lebar'       => $lebar,
-                    'tebal'       => $tebal,
-                    'statusKw'    => $statusKw,
-                    'kwRaw'       => $kwRaw,
-                    'isAf'        => $isAf,
-                    'totalBanyak' => $totalBanyak,
-                    'totalM3'     => $totalM3,
-                ];
-            }
-
-            // ============================================================
-            // STEP C: Hitung Selisih Jurnal (Balance / Kehilangan / Kelebihan)
-            // ============================================================
-            $allKeys = array_unique(array_merge(
-                array_keys($hasilPerGroup),
-                array_keys($modalPerGroup)
-            ));
-
-            $selisihDebitRows  = [];
-            $selisihKreditRows = [];
-
-            foreach ($allKeys as $key) {
-                $hasil = $hasilPerGroup[$key] ?? null;
-                $modal = $modalPerGroup[$key] ?? null;
-
-                $meta     = $hasil ?? $modal;
-                $jnsNorm  = $meta['jnsNorm'];
-                $panjang  = $meta['panjang'];
-                $lebar    = $meta['lebar'];
-                $tebal    = $meta['tebal'];
-                $statusKw = $meta['statusKw'];
-                $kwRaw    = $meta['kwRaw'];
-                $isAf     = $meta['isAf'];
-
-                $hasilM3     = $hasil['totalM3']     ?? 0.0;
-                $hasilBanyak = $hasil['totalBanyak'] ?? 0;
-                $modalM3     = $modal['totalM3']     ?? 0.0;
-                $modalBanyak = $modal['totalBanyak'] ?? 0;
-
-                $diffM3     = round($hasilM3 - $modalM3, 4);
-                $diffBanyak = $hasilBanyak - $modalBanyak;
+                $modalBanyak = (int) $modal->jumlah;
 
                 $refJadi   = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'jadi');
                 $refKering = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'kering');
@@ -676,47 +572,101 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                 [$namaAkunJadi,   $noAkunJadi,   $hargaJadi]   = $this->extractAkunVeneer($refJadi);
                 [$namaAkunKering, $noAkunKering, $hargaKering] = $this->extractAkunVeneer($refKering);
 
-                $keteranganNormal = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw);
+                $keteranganNormal = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $kwStatus, $kwRaw);
                 $keteranganJadi   = $keteranganNormal . (!$refJadi   ? ' [UNKNOWN]' : '');
                 $keteranganKering = $keteranganNormal . (!$refKering ? ' [UNKNOWN]' : '');
 
-                if ($diffM3 < 0) {
-                    // KEHILANGAN
-                    $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilBanyak, $hasilM3, $hargaJadi, 'm');
-                    $totalDebit += ($hasilM3 * $hargaJadi);
+                $diffBanyak = $modalBanyak - $hasilBanyak;
 
-                    $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKering, 'k', $hasilBanyak, $hasilM3, $hargaKering, 'm');
-                    $totalKredit += ($hasilM3 * $hargaKering);
+                if ($diffBanyak > 0) {
+                    // KONDISI KEHILANGAN (Hanya jika ada hasil terhubung tetapi jumlahnya kurang dari modal)
+                    $kehilanganBanyak = $diffBanyak;
+                    $modalSebanding   = $hasilBanyak;
 
-                    $keteranganKehilangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw, 'Kehilangan') . (!$refKering ? ' [UNKNOWN]' : '');
-                    $selisihKreditRows[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKehilangan, 'k', abs($diffBanyak), abs($diffM3), $hargaKering, 'm');
-                    $totalKredit += (abs($diffM3) * $hargaKering);
-                } elseif ($diffM3 > 0) {
-                    // KELEBIHAN
-                    $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $modalBanyak, $modalM3, $hargaJadi, 'm');
-                    $totalDebit += ($modalM3 * $hargaJadi);
+                    $m3Hasil      = ($panjang * $lebar * $tebal * $hasilBanyak) / 10000000;
+                    $m3Modal      = ($panjang * $lebar * $tebal * $modalSebanding) / 10000000;
+                    $m3Kehilangan = ($panjang * $lebar * $tebal * $kehilanganBanyak) / 10000000;
 
-                    $keteranganKelebihan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw, 'Kelebihan') . (!$refJadi ? ' [UNKNOWN]' : '');
-                    $selisihDebitRows[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganKelebihan, 'd', abs($diffBanyak), abs($diffM3), $hargaJadi, 'm');
-                    $totalDebit += (abs($diffM3) * $hargaJadi);
+                    if ($hasilBanyak > 0) {
+                        $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilBanyak, $m3Hasil, $hargaJadi, 'm');
+                        $totalDebit += ($m3Hasil * $hargaJadi);
+                    }
 
-                    $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKering, 'k', $modalBanyak, $modalM3, $hargaKering, 'm');
-                    $totalKredit += ($modalM3 * $hargaKering);
+                    if ($modalSebanding > 0) {
+                        $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKering, 'k', $modalSebanding, $m3Modal, $hargaKering, 'm');
+                        $totalKredit += ($m3Modal * $hargaKering);
+                    }
+
+                    $keteranganKehilangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $kwStatus, $kwRaw, 'Kehilangan') . (!$refKering ? ' [UNKNOWN]' : '');
+                    $jurnalBlockKredit[]  = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKehilangan, 'k', $kehilanganBanyak, $m3Kehilangan, $hargaKering, 'm');
+                    $totalKredit += ($m3Kehilangan * $hargaKering);
+                } elseif ($diffBanyak < 0) {
+                    // KONDISI KELEBIHAN (Hanya jika hasil terhubung melebihi modal)
+                    $kelebihanBanyak = abs($diffBanyak);
+                    $hasilSebanding  = $modalBanyak;
+
+                    $m3HasilUtama = ($panjang * $lebar * $tebal * $hasilSebanding) / 10000000;
+                    $m3Kelebihan  = ($panjang * $lebar * $tebal * $kelebihanBanyak) / 10000000;
+                    $m3ModalUtama = ($panjang * $lebar * $tebal * $modalBanyak) / 10000000;
+
+                    $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilSebanding, $m3HasilUtama, $hargaJadi, 'm');
+                    $totalDebit += ($m3HasilUtama * $hargaJadi);
+
+                    $keteranganKelebihan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $kwStatus, $kwRaw, 'Kelebihan') . (!$refJadi ? ' [UNKNOWN]' : '');
+                    $jurnalBlockDebit[]  = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganKelebihan, 'd', $kelebihanBanyak, $m3Kelebihan, $hargaJadi, 'm');
+                    $totalDebit += ($m3Kelebihan * $hargaJadi);
+
+                    $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKering, 'k', $modalBanyak, $m3ModalUtama, $hargaKering, 'm');
+                    $totalKredit += ($m3ModalUtama * $hargaKering);
                 } else {
-                    // BALANCE
-                    $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilBanyak, $hasilM3, $hargaJadi, 'm');
-                    $totalDebit += ($hasilM3 * $hargaJadi);
+                    // KONDISI NORMAL / BALANCE
+                    $m3Hasil = ($panjang * $lebar * $tebal * $hasilBanyak) / 10000000;
+                    $m3Modal = ($panjang * $lebar * $tebal * $modalBanyak) / 10000000;
 
-                    $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKering, 'k', $modalBanyak, $modalM3, $hargaKering, 'm');
-                    $totalKredit += ($modalM3 * $hargaKering);
+                    $jurnalBlockDebit[]  = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilBanyak, $m3Hasil, $hargaJadi, 'm');
+                    $totalDebit += ($m3Hasil * $hargaJadi);
+
+                    $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKering, 'k', $modalBanyak, $m3Modal, $hargaKering, 'm');
+                    $totalKredit += ($m3Modal * $hargaKering);
                 }
             }
 
-            foreach ($selisihDebitRows  as $row) $jurnalBlockDebit[]  = $row;
-            foreach ($selisihKreditRows as $row) $jurnalBlockKredit[] = $row;
+            // ============================================================
+            // STEP 2: UKURAN MANUAL (CATAT BERSIH TANPA LABEL KEHILANGAN)
+            // ============================================================
+            $hasilManual = collect($produksi->detailHasilRepairs)->filter(function ($h) {
+                return !$h->modalRepair || !$h->modalRepair->ukuran || !$h->modalRepair->jenisKayu;
+            });
+
+            foreach ($hasilManual as $hasil) {
+                if (!$hasil->ukuran) continue;
+
+                $jenisModel = $hasil->jenisKayu;
+                $jnsNorm  = $this->normalizeJenis($jenisModel?->nama_kayu ?? 'meranti');
+                $kwStatus = strtolower((string) $hasil->kw);
+                $isAf     = str_contains($kwStatus, 'af');
+                $tebal    = (float) $hasil->ukuran->tebal;
+                $panjang  = (float) $hasil->ukuran->panjang;
+                $lebar    = (float) $hasil->ukuran->lebar;
+                $kwRaw    = (string)((int) filter_var($kwStatus, FILTER_SANITIZE_NUMBER_INT));
+
+                $banyak = (int) $hasil->jumlah;
+                if ($banyak <= 0) continue;
+
+                $m3 = ($panjang * $lebar * $tebal * $banyak) / 10000000;
+
+                $refJadi = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'jadi');
+                [$namaAkun, $noAkun, $harga] = $this->extractAkunVeneer($refJadi);
+
+                $keterangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $kwStatus, $kwRaw) . (!$refJadi ? ' [UNKNOWN]' : '');
+
+                // Push murni ke Debit (Veneer Jadi)
+                $jurnalBlockDebit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'd', $banyak, $m3, $harga, 'm');
+                $totalDebit += ($m3 * $harga);
+            }
 
             // ============================================================
-            // 4. KREDIT: Bahan Penolong
+            // STEP 3: KREDIT BAHAN PENOLONG
             // ============================================================
             if (!empty($produksi->bahanPenolongRepair)) {
                 foreach ($produksi->bahanPenolongRepair as $bahan) {
@@ -734,7 +684,7 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             }
 
             // ============================================================
-            // 5. KREDIT: Gaji Pegawai
+            // STEP 4: KREDIT GAJI PEGAWAI
             // ============================================================
             $jmlPekerja = (int) $produksi->rencanaPegawais->count();
             if ($jmlPekerja > 0) {
@@ -743,7 +693,7 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             }
 
             // ============================================================
-            // 6. PENYEIMBANG: HPP Repair
+            // STEP 5: PENYEIMBANG OTOMATIS (HPP TRIPLEK)
             // ============================================================
             $hppRow = [];
             $selisih = $totalDebit - $totalKredit;

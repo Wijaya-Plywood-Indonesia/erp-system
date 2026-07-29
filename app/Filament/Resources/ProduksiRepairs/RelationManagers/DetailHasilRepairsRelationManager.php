@@ -108,6 +108,7 @@ class DetailHasilRepairsRelationManager extends RelationManager
 
                         return ModalRepair::with(['ukuran', 'jenisKayu'])
                             ->withSum('detailHasilRepairs as total_terpakai', 'jumlah')
+                            ->latest()
                             ->get()
                             ->filter(function ($modal) use ($record) {
                                 $totalTerpakai = $modal->total_terpakai ?? 0;

@@ -1,8 +1,8 @@
 {{-- resources/views/filament/pages/stok-veneer-kering.blade.php --}}
 <x-filament-panels::page>
     @php
-        $latestStok = $this->latestStok;
-        $grouped = $this->groupedStok;
+    $latestStok = $this->latestStok;
+    $grouped = $this->groupedStok;
     @endphp
 
     {{-- Filter bar + toggle kolom --}}
@@ -15,7 +15,7 @@
             class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:ring-1 focus:ring-primary-500 shrink-0">
             <option value="">Semua Jenis Kayu</option>
             @foreach (\App\Models\JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id') as $id => $nama)
-                <option value="{{ $id }}">{{ $nama }}</option>
+            <option value="{{ $id }}">{{ $nama }}</option>
             @endforeach
         </select>
 
@@ -28,27 +28,21 @@
 
         <div class="h-4 w-px bg-gray-200 dark:bg-gray-700 shrink-0"></div>
 
-        <button type="button" wire:click="$toggle('showM3')" @class([
-            'text-[9px] font-bold uppercase tracking-tight px-2 py-1 rounded-sm border transition shrink-0',
-            'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400' => $showM3,
+        <button type="button" wire:click="$toggle('showM3')" @class([ 'text-[9px] font-bold uppercase tracking-tight px-2 py-1 rounded-sm border transition shrink-0' , 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400'=> $showM3,
             'bg-transparent border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' => !$showM3,
-        ])>
+            ])>
             m³
         </button>
 
-        <button type="button" wire:click="$toggle('showHppAverage')" @class([
-            'text-[9px] font-bold uppercase tracking-tight px-2 py-1 rounded-sm border transition shrink-0',
-            'bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-400' => $showHppAverage,
+        <button type="button" wire:click="$toggle('showHppAverage')" @class([ 'text-[9px] font-bold uppercase tracking-tight px-2 py-1 rounded-sm border transition shrink-0' , 'bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-400'=> $showHppAverage,
             'bg-transparent border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' => !$showHppAverage,
-        ])>
+            ])>
             HPP
         </button>
 
-        <button type="button" wire:click="$toggle('showNilaiStok')" @class([
-            'text-[9px] font-bold uppercase tracking-tight px-2 py-1 rounded-sm border transition shrink-0',
-            'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-400' => $showNilaiStok,
+        <button type="button" wire:click="$toggle('showNilaiStok')" @class([ 'text-[9px] font-bold uppercase tracking-tight px-2 py-1 rounded-sm border transition shrink-0' , 'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-400'=> $showNilaiStok,
             'bg-transparent border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' => !$showNilaiStok,
-        ])>
+            ])>
             Rp
         </button>
 
@@ -56,154 +50,194 @@
             <span class="text-[10px] font-black uppercase tracking-widest text-gray-400 whitespace-nowrap">
                 {{ $latestStok->count() }} Kombinasi
                 @if ($showM3)
-                    · {{ number_format($this->totalM3, 4) }} m³
+                · {{ number_format($this->totalM3, 4) }} m³
                 @endif
             </span>
             @if ($showNilaiStok)
-                <span
-                    class="bg-primary-50 text-primary-700 dark:bg-primary-950 dark:text-primary-400 px-3 py-1 rounded font-black text-xs border border-primary-100 whitespace-nowrap">
-                    TOTAL: RP {{ number_format($this->totalNilaiStok, 0, ',', '.') }}
-                </span>
+            <span
+                class="bg-primary-50 text-primary-700 dark:bg-primary-950 dark:text-primary-400 px-3 py-1 rounded font-black text-xs border border-primary-100 whitespace-nowrap">
+                TOTAL: RP {{ number_format($this->totalNilaiStok, 0, ',', '.') }}
+            </span>
             @endif
         </div>
     </div>
 
     <div class="flex flex-col gap-8">
         @forelse($grouped as $tebal => $rows)
-            <div class="space-y-3">
-                <div class="flex items-center gap-3 flex-wrap">
+        <div class="space-y-3">
+            <div class="flex items-center gap-3 flex-wrap">
+                <span
+                    class="bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900 text-[10px] font-black px-4 py-1.5 rounded uppercase tracking-widest shadow-sm">
+                    Tebal {{ (float) $tebal }} mm
+                </span>
+                @php $labelJenis = $tebal <= 1 ? 'F/B (Face/Back)' : 'Core' ; @endphp
                     <span
-                        class="bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900 text-[10px] font-black px-4 py-1.5 rounded uppercase tracking-widest shadow-sm">
-                        Tebal {{ (float) $tebal }} mm
-                    </span>
-                    @php $labelJenis = $tebal <= 1 ? 'F/B (Face/Back)' : 'Core' ; @endphp
-                    <span
-                        class="text-[10px] font-black uppercase tracking-widest text-gray-400">{{ $labelJenis }}</span>
+                    class="text-[10px] font-black uppercase tracking-widest text-gray-400">{{ $labelJenis }}</span>
                     <div class="h-px flex-1 bg-gray-100 dark:bg-gray-800 min-w-[20px]"></div>
                     @if ($showM3)
-                        <div class="flex gap-4">
-                            <span
-                                class="text-[10px] font-black text-blue-600 tabular-nums uppercase tracking-tighter whitespace-nowrap">
-                                Vol: {{ number_format($rows->sum('stok_m3_sesudah'), 4) }} m³
-                            </span>
-                        </div>
+                    <div class="flex gap-4">
+                        <span
+                            class="text-[10px] font-black text-blue-600 tabular-nums uppercase tracking-tighter whitespace-nowrap">
+                            Vol: {{ number_format($rows->sum('stok_m3_sesudah'), 4) }} m³
+                        </span>
+                    </div>
                     @endif
-                </div>
+            </div>
 
-                {{-- Wrapper scroll horizontal khusus mobile: overflow-x-auto + -webkit-overflow-scrolling untuk momentum scroll di iOS --}}
-                <div class="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 shadow-sm overflow-x-auto"
-                    style="-webkit-overflow-scrolling: touch;">
-                    <table class="w-full text-sm text-left border-separate border-spacing-0 min-w-[900px]">
-                        <thead>
-                            <tr
-                                class="text-gray-400 uppercase text-[9px] tracking-widest font-black bg-gray-50/50 dark:bg-gray-800/50">
-                                <th class="px-6 py-3 border-b border-gray-100 dark:border-gray-800 w-12 text-center">No
-                                </th>
-                                <th class="px-6 py-3 border-b border-gray-100 dark:border-gray-800">Jenis Kayu</th>
-                                <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">Tipe
-                                    Core</th>
-                                <th class="px-6 py-3 border-b border-gray-100 dark:border-gray-800">Ukuran (p×l×t)</th>
-                                <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">KW</th>
-                                <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">Jumlah
-                                    Lembar</th>
-                                @if ($showM3)
-                                    <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800">M3
-                                        Stok</th>
+            {{-- Wrapper scroll horizontal khusus mobile: overflow-x-auto + -webkit-overflow-scrolling untuk momentum scroll di iOS --}}
+            <div class="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 shadow-sm overflow-x-auto"
+                style="-webkit-overflow-scrolling: touch;">
+                <table class="w-full text-sm text-left border-separate border-spacing-0 min-w-[900px]">
+                    <thead>
+                        <tr
+                            class="text-gray-400 uppercase text-[9px] tracking-widest font-black bg-gray-50/50 dark:bg-gray-800/50">
+                            <th class="px-6 py-3 border-b border-gray-100 dark:border-gray-800 w-12 text-center">No
+                            </th>
+                            <th class="px-6 py-3 border-b border-gray-100 dark:border-gray-800">Jenis Kayu</th>
+                            <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">Tipe
+                                Core</th>
+                            <th class="px-6 py-3 border-b border-gray-100 dark:border-gray-800">Ukuran (p×l×t)</th>
+                            <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">KW</th>
+                            <th class="px-6 py-3 text-center border-b border-gray-100 dark:border-gray-800">Jumlah
+                                Lembar</th>
+                            @if ($showM3)
+                            <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800">M3
+                                Stok</th>
+                            @endif
+                            @if ($showHppAverage)
+                            <th
+                                class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800 bg-amber-50/30 dark:bg-amber-900/10">
+                                HPP Average</th>
+                            @endif
+                            @if ($showNilaiStok)
+                            <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800">Nilai
+                                Stok</th>
+                            @endif
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
+                        @foreach ($rows as $row)
+                        <tr class="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                            <td
+                                class="px-6 py-4 text-center text-gray-300 dark:text-gray-600 font-mono text-xs">
+                                {{ $loop->iteration }}
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-2">
+                                    <div @class([ 'w-2 h-2 rounded-sm shrink-0' , 'bg-emerald-500'=> str_contains(
+                                        strtolower($row->jenisKayu?->nama_kayu ?? ''),
+                                        'sengon'),
+                                        'bg-amber-500' => !str_contains(
+                                        strtolower($row->jenisKayu?->nama_kayu ?? ''),
+                                        'sengon'),
+                                        ])></div>
+                                    <span
+                                        class="font-bold text-gray-700 dark:text-gray-300 uppercase tracking-tight whitespace-nowrap">{{ $row->jenisKayu?->nama_kayu ?? '-' }}</span>
+                                </div>
+                            </td>
+                            @php
+                            $coreType = $this->getCoreTypeLabel($row);
+                            @endphp
+                            <td class="px-6 py-4 text-center">
+                                @if ($coreType)
+                                <span @class([ 'inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight whitespace-nowrap' , 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'=>
+                                    $coreType === 'Long Core',
+                                    'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' =>
+                                    $coreType === 'Short Core',
+                                    ])>
+                                    {{ $coreType }}
+                                </span>
+                                @else
+                                <span class="text-gray-300 dark:text-gray-600 text-xs">-</span>
                                 @endif
-                                @if ($showHppAverage)
-                                    <th
-                                        class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800 bg-amber-50/30 dark:bg-amber-900/10">
-                                        HPP Average</th>
+                            </td>
+                            <td
+                                class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap">
+                                {{ (float) ($row->ukuran->panjang ?? 0) }}×{{ (float) ($row->ukuran->lebar ?? 0) }}×{{ (float) ($row->ukuran->tebal ?? 0) }}
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <span
+                                    class="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">{{ $row->kw ?? '-' }}</span>
+                            </td>
+                            @php
+                            $wipRow = $this->wipRepairUntuk(
+                            $row->id_jenis_kayu,
+                            $row->ukuran->panjang ?? 0,
+                            $row->ukuran->lebar ?? 0,
+                            $row->ukuran->tebal ?? 0,
+                            $row->kw,
+                            );
+                            @endphp
+                            <td
+                                class="px-6 py-4 text-center font-black text-gray-700 dark:text-gray-300 tabular-nums">
+                                {{ number_format($row->total_lembar, 0) }}
+
+                                @if ($wipRow > 0)
+                                <div class="mt-1.5 flex flex-col items-center gap-1">
+                                    <span
+                                        class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 whitespace-nowrap"
+                                        title="Dari stok ini, {{ number_format($wipRow) }} lembar sedang diproses di repair (sudah dipakai sebagai modal, hasilnya belum kembali sepenuhnya).">
+                                        <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        {{ number_format($wipRow) }} wip repair
+                                    </span>
+
+                                    <button type="button"
+                                        wire:click="selesaikanWipRepair('{{ $row->id_jenis_kayu }}', '{{ $row->ukuran->panjang ?? 0 }}', '{{ $row->ukuran->lebar ?? 0 }}', '{{ $row->ukuran->tebal ?? 0 }}', '{{ $row->kw }}')"
+                                        wire:confirm="Selesaikan WIP {{ number_format($wipRow) }} lembar untuk {{ $row->jenisKayu?->nama_kayu }} KW {{ $row->kw }}?&#10;&#10;Sisa yang belum terpakai akan dianggap SUSUT tercatat."
+                                        wire:loading.attr="disabled"
+                                        class="text-[8px] font-bold uppercase tracking-tight text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 underline decoration-dotted underline-offset-2 transition-colors">
+                                        Selesaikan WIP
+                                    </button>
+                                </div>
                                 @endif
-                                @if ($showNilaiStok)
-                                    <th class="px-6 py-3 text-right border-b border-gray-100 dark:border-gray-800">Nilai
-                                        Stok</th>
-                                @endif
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
-                            @foreach ($rows as $row)
-                                <tr class="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                    <td
-                                        class="px-6 py-4 text-center text-gray-300 dark:text-gray-600 font-mono text-xs">
-                                        {{ $loop->iteration }}</td>
-                                    <td class="px-6 py-4">
-                                        <div class="flex items-center gap-2">
-                                            <div @class([
-                                                'w-2 h-2 rounded-sm shrink-0',
-                                                'bg-emerald-500' => str_contains(
-                                                    strtolower($row->jenisKayu?->nama_kayu ?? ''),
-                                                    'sengon'),
-                                                'bg-amber-500' => !str_contains(
-                                                    strtolower($row->jenisKayu?->nama_kayu ?? ''),
-                                                    'sengon'),
-                                            ])></div>
-                                            <span
-                                                class="font-bold text-gray-700 dark:text-gray-300 uppercase tracking-tight whitespace-nowrap">{{ $row->jenisKayu?->nama_kayu ?? '-' }}</span>
-                                        </div>
-                                    </td>
-                                    @php
-                                        $coreType = $this->getCoreTypeLabel($row);
-                                    @endphp
-                                    <td class="px-6 py-4 text-center">
-                                        @if ($coreType)
-                                            <span @class([
-                                                'inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight whitespace-nowrap',
-                                                'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' =>
-                                                    $coreType === 'Long Core',
-                                                'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' =>
-                                                    $coreType === 'Short Core',
-                                            ])>
-                                                {{ $coreType }}
-                                            </span>
-                                        @else
-                                            <span class="text-gray-300 dark:text-gray-600 text-xs">-</span>
-                                        @endif
-                                    </td>
-                                    <td
-                                        class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap">
-                                        {{ (float) ($row->ukuran->panjang ?? 0) }}×{{ (float) ($row->ukuran->lebar ?? 0) }}×{{ (float) ($row->ukuran->tebal ?? 0) }}
-                                    </td>
-                                    <td class="px-6 py-4 text-center">
-                                        <span
-                                            class="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">{{ $row->kw ?? '-' }}</span>
-                                    </td>
-                                    <td
-                                        class="px-6 py-4 text-center font-black text-gray-700 dark:text-gray-300 tabular-nums">
-                                        {{ number_format($row->total_lembar, 0) }}
-                                    </td>
-                                    @if ($showM3)
-                                        <td
-                                            class="px-6 py-4 text-right font-mono font-black text-blue-600 dark:text-blue-400 tabular-nums whitespace-nowrap">
-                                            {{ number_format($row->stok_m3_sesudah, 4) }} <span
-                                                class="text-[9px] font-normal uppercase">m³</span>
-                                        </td>
-                                    @endif
-                                    @if ($showHppAverage)
-                                        <td
-                                            class="px-6 py-4 text-right bg-amber-50/20 dark:bg-amber-900/5 whitespace-nowrap">
-                                            <span
-                                                class="font-black text-amber-700 dark:text-amber-400 tabular-nums text-base">Rp
-                                                {{ number_format($row->hpp_average ?? 0, 0, ',', '.') }}</span>
-                                        </td>
-                                    @endif
-                                    @if ($showNilaiStok)
-                                        <td
-                                            class="px-6 py-4 text-right font-black text-gray-800 dark:text-gray-200 tabular-nums whitespace-nowrap">
-                                            Rp {{ number_format($row->nilai_stok_sesudah ?? 0, 0, ',', '.') }}
-                                        </td>
-                                    @endif
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
+                            </td>
+                            @if ($showM3)
+                            <td
+                                class="px-6 py-4 text-right font-mono font-black text-blue-600 dark:text-blue-400 tabular-nums whitespace-nowrap">
+                                {{ number_format($row->stok_m3_sesudah, 4) }} <span
+                                    class="text-[9px] font-normal uppercase">m³</span>
+                            </td>
+                            @endif
+                            @if ($showHppAverage)
+                            <td
+                                class="px-6 py-4 text-right bg-amber-50/20 dark:bg-amber-900/5 whitespace-nowrap">
+                                <span
+                                    class="font-black text-amber-700 dark:text-amber-400 tabular-nums text-base">Rp
+                                    {{ number_format($row->hpp_average ?? 0, 0, ',', '.') }}</span>
+                            </td>
+                            @endif
+                            @if ($showNilaiStok)
+                            <td
+                                class="px-6 py-4 text-right font-black text-gray-800 dark:text-gray-200 tabular-nums whitespace-nowrap">
+                                Rp {{ number_format($row->nilai_stok_sesudah ?? 0, 0, ',', '.') }}
+                            </td>
+                            @endif
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
             </div>
+        </div>
         @empty
-            <div
-                class="py-20 text-center text-gray-400 bg-white dark:bg-gray-900 border border-dashed border-gray-200 dark:border-gray-800 rounded-lg">
-                <span class="font-black uppercase tracking-widest">Stok Tidak Tersedia</span>
-            </div>
+        <div
+            class="py-20 text-center text-gray-400 bg-white dark:bg-gray-900 border border-dashed border-gray-200 dark:border-gray-800 rounded-lg">
+            <span class="font-black uppercase tracking-widest">Stok Tidak Tersedia</span>
+        </div>
         @endforelse
+
+        {{-- SECTION 1.5: SISA/WIP DI PRODUKSI REPAIR --}}
+        @php
+        $tanpaModal = $this->hasilTanpaModal;
+        @endphp
+        @if ($tanpaModal->count())
+        <div class="mt-2 text-[10px] font-black uppercase tracking-wide text-gray-500">
+            <span class="bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded">
+                {{ $tanpaModal->count() }} hasil repair tanpa modal tertaut
+            </span>
+        </div>
+        @endif
     </div>
 </x-filament-panels::page>

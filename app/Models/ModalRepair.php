@@ -18,6 +18,10 @@ class ModalRepair extends Model
         'kw',
         'nomor_palet',
         'keterangan',
+        'sumber',
+        'ditutup_manual_at',
+        'ditutup_oleh',
+        'catatan_penutupan',
     ];
 
     // Eager load biar nggak N+1 query

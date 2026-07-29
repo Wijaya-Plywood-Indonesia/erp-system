@@ -54,7 +54,7 @@ class CreateAbsensi extends CreateRecord
                     continue;
                 }
 
-                // Pecah berdasarkan TAB (\t) dahulu agar nama yang mengandung spasi tidak pecah. 
+                // Pecah berdasarkan TAB (\t) dahulu agar nama yang mengandung spasi tidak pecah.
                 // Jika tidak ada TAB, baru pecah berdasarkan spasi reguler.
                 if (str_contains($trimmedLine, "\t")) {
                     $parts = explode("\t", $trimmedLine);
@@ -94,6 +94,7 @@ class CreateAbsensi extends CreateRecord
                     // AMBIL KODE PEGAWAI (Ambil 4 Angka Terakhir secara absolut dari Kolom EnNo)
                     $empCode = null;
 
+
                     // Strategi Utama: Berdasarkan berkas GLogData, EnNo berada di indeks ke-2
                     if (isset($parts[2]) && is_numeric($parts[2]) && strlen($parts[2]) >= 4) {
                         $fourDigits = substr($parts[2], -4); // Potong ambil 4 angka terakhir
@@ -109,8 +110,12 @@ class CreateAbsensi extends CreateRecord
                         }
                     }
 
+                    $rawFirst = ltrim($parts[0] ?? '', '0');
+                    if (str_starts_with($rawFirst, '99') && strlen($rawFirst) === 5) continue;
+
                     // Pastikan Kode Pegawai, Jam, dan format kodenya murni angka
                     if (!$empCode || !$timeStr || !is_numeric($empCode)) continue;
+
 
                     // Masukkan ke wadah merge gabungan multi-kantor berdasarkan kode pegawai yang sama
                     $rawLogs[$empCode][] = [
@@ -181,26 +186,39 @@ class CreateAbsensi extends CreateRecord
                     $jamMasukSistem = $pegawai->jam_masuk_sistem ?? '07:00:00';
                     if (Carbon::parse($jamMasukSistem)->hour >= 14) {
                         $forcedShift = 'MALAM';
+                    } else {
+                        // PENTING (perbaikan): sebelumnya cabang else ini tidak ada, jadi
+                        // kalau jam_masuk_sistem menunjukkan PAGI, $forcedShift tetap null
+                        // dan pairing terpaksa menebak lagi dari pola scan -- padahal kita
+                        // sudah tahu jawabannya dari data pegawai. Sekarang kita tegaskan
+                        // eksplisit jadi 'PAGI' juga, bukan cuma diam-diam MALAM saja yang
+                        // ditegaskan.
+                        $forcedShift = 'PAGI';
                     }
                 }
             }
 
-            // Pakai Service yang sudah matang logikanya
+            // FIX: $forcedShift sebelumnya dihitung di atas tapi TIDAK PERNAH dikirim ke
+            // service (parameter ini hilang dari pemanggilan). Akibatnya pairing selalu
+            // menebak shift dari pola jam scan sendiri, padahal kita sudah punya jawaban
+            // yang jauh lebih akurat dari data produksi / jadwal pegawai. Sekarang dikirim.
             $result = $pairingService->pairEmployeeLogs(
                 entries: $entries,
                 targetDate: $targetDate,
                 nextDate: $nextDate,
-                prevCheckout: null,
                 forcedShift: $forcedShift,
             );
 
-            if ($result) {
+            if ($result && $pegawai) {
                 DetailAbsensi::updateOrCreate(
                     ['kode_pegawai' => $empCode, 'tanggal' => $targetDate],
                     [
                         'id_absensi' => $record->id,
                         'jam_masuk'  => $result['jam_masuk'],
                         'jam_pulang' => $result['jam_pulang'],
+                        'shift'      => $result['shift'],
+                        'status'     => $result['status'],
+                        'catatan'    => $result['catatan'],
                     ]
                 );
                 $totalProcessed++;
