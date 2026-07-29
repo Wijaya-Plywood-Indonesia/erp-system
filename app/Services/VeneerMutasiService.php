@@ -267,6 +267,24 @@ class VeneerMutasiService
      * ────────────────────────────────────────────────── */
     private function updateStokKering(VeneerMutasi $mutasi, VeneerMutasiDetail $detail, bool $isKeluar, string $namaBarang = ''): void
     {
+        // ── Guard stok: cegah pengeluaran melebihi stok tersedia ──
+        if ($isKeluar) {
+            $last = StokVeneerKering::where('id_ukuran', $detail->id_ukuran)
+                ->where('id_jenis_kayu', $detail->id_jenis_kayu)
+                ->where('kw', $detail->kw)
+                ->orderBy('tanggal_transaksi', 'desc')
+                ->orderBy('id', 'desc')
+                ->lockForUpdate()
+                ->first();
+
+            $stokTersedia = (int) ($last->stok_lembar_sesudah ?? 0);
+            if ($stokTersedia < $detail->qty) {
+                $label = $namaBarang !== '' ? $namaBarang
+                    : "Ukuran #{$detail->id_ukuran} / Kayu #{$detail->id_jenis_kayu} / KW {$detail->kw}";
+                throw new \Exception("Stok veneer kering tidak cukup untuk: {$label}. Tersedia: {$stokTersedia} lembar, diminta: {$detail->qty} lembar.");
+            }
+        }
+
         // Keterangan per-baris diambil dari detail nota (BM/BK) yang cocok:
         // nama_barang dibangun dengan format yang sama saat nota dibuat,
         // ditambah jumlah sebagai pengaman bila ada nama identik.
@@ -528,6 +546,7 @@ class VeneerMutasiService
         $stokM3 = 0.0;
         $nilaiStok = 0.0;
         $hppAverage = 0.0;
+        $adaSaldoMinus = false;
 
         foreach ($records as $record) {
             $stokLembarSebelum = $stokLembar;
@@ -584,6 +603,19 @@ class VeneerMutasiService
                     'hpp_average' => round($hppAverage, 4),
                 ]);
             }
+
+            // Tandai jika saldo lembar menjadi negatif di titik mana pun sepanjang ledger.
+            if ($stokLembar < 0) {
+                $adaSaldoMinus = true;
+            }
+        }
+
+        if ($adaSaldoMinus) {
+            throw new \Exception(
+                "Transaksi menyebabkan stok veneer kering menjadi negatif "
+                    . "(Ukuran #{$idUkuran} / Kayu #{$idJenisKayu} / KW {$kw}). "
+                    . "Kemungkinan ada transaksi keluar dengan tanggal lebih awal dari stok masuk."
+            );
         }
     }
 }
