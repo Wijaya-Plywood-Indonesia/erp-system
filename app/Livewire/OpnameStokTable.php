@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use Livewire\Component;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Filament\Notifications\Notification;
 
 use App\Models\Ukuran;
@@ -43,14 +44,17 @@ class OpnameStokTable extends Component
         'gudang_satu'   => 'Gudang Satu',
     ];
 
-    public string $jenisStok      = '';
+    /** Field kunci yang memicu refresh stok sistem */
+    const FIELD_KUNCI = ['id_jenis_kayu', 'id_jenis_barang', 'id_ukuran', 'kw'];
+
+    public string $jenisStok       = '';
     public bool   $headerCollapsed = false;
     public array  $rows            = [];
     public array  $originalRows    = [];
-    public array  $jenisKayuOptions    = [];
-    public array  $jenisBarangOptions  = [];
-    public array  $ukuranOptions       = [];
-    public array  $gradeOptions        = [];
+    public array  $jenisKayuOptions   = [];
+    public array  $jenisBarangOptions = [];
+    public array  $ukuranOptions      = [];
+    public array  $gradeOptions       = [];
 
     public function mount(): void
     {
@@ -67,22 +71,47 @@ class OpnameStokTable extends Component
 
     public function updatedJenisStok(): void
     {
-        $this->rows          = $this->loadRows($this->jenisStok);
-        $this->originalRows  = $this->rows;
-        $this->headerCollapsed = true; // otomatis collapse header setelah pilih jenis stok
+        $this->rows            = $this->loadRows($this->jenisStok);
+        $this->originalRows    = $this->rows;
+        $this->headerCollapsed = true;
     }
 
+    // ────────────────────────────────────────────────────────────
+    // MANIPULASI BARIS (berbasis _uid, bukan index)
+    // ────────────────────────────────────────────────────────────
     public function tambahBaris(): void
     {
         $this->rows[] = $this->barisKosong();
     }
 
-    public function hapusBaris(int $index): void
+    public function hapusBaris(string $uid): void
     {
-        array_splice($this->rows, $index, 1);
-        $this->rows = array_values($this->rows);
+        $this->rows = array_values(array_filter(
+            $this->rows,
+            fn ($r) => ($r['_uid'] ?? null) !== $uid
+        ));
     }
 
+    /**
+     * Dipakai oleh dropdown Alpine. Wajib berbasis _uid karena x-data
+     * hanya dievaluasi sekali, sehingga index yang di-hardcode bisa basi
+     * setelah ada baris yang dihapus.
+     */
+    public function setField(string $uid, string $field, $value): void
+    {
+        if (!in_array($field, self::FIELD_KUNCI, true)) return;
+
+        $index = null;
+        foreach ($this->rows as $i => $r) {
+            if (($r['_uid'] ?? null) === $uid) { $index = $i; break; }
+        }
+        if ($index === null) return;
+
+        $this->rows[$index][$field] = $this->kosongJadiNull($value);
+        $this->refreshStokSistem($index);
+    }
+
+    /** Fallback bila ada field kunci yang masih memakai wire:model */
     public function updatedRows(mixed $value, string $path): void
     {
         $parts = explode('.', $path);
@@ -91,9 +120,15 @@ class OpnameStokTable extends Component
         $index = (int) $parts[0];
         $field = $parts[1];
 
-        if (!in_array($field, ['id_jenis_kayu', 'id_jenis_barang', 'id_ukuran', 'kw'])) return;
+        if (!in_array($field, self::FIELD_KUNCI, true)) return;
 
+        $this->rows[$index][$field] = $this->kosongJadiNull($value);
         $this->refreshStokSistem($index);
+    }
+
+    private function kosongJadiNull($value)
+    {
+        return ($value === '' || $value === 'null') ? null : $value;
     }
 
     private function refreshStokSistem(int $index): void
@@ -104,61 +139,98 @@ class OpnameStokTable extends Component
         $idUkuran      = $row['id_ukuran'] ?? null;
         $idJenisKayu   = $row['id_jenis_kayu'] ?? null;
         $idJenisBarang = $row['id_jenis_barang'] ?? null;
-        $kw            = $row['kw'] ?? null;
+        $kw            = $this->kosongJadiNull($row['kw'] ?? null);
         $jenisStok     = $this->jenisStok;
 
         $idEntitas = $jenisStok === 'platform_jadi' ? $idJenisBarang : $idJenisKayu;
+        $idEntitas = $idEntitas !== null && $idEntitas !== '' ? (int) $idEntitas : null;
 
-        if (!$idUkuran || !$idEntitas || !$kw) {
-            $this->rows[$index]['stok_sistem']    = 0;
+        // Hanya ukuran yang wajib: jenis kayu / grade boleh kosong,
+        // pencarian akan memakai whereNull.
+        if (!$idUkuran) {
+            $this->rows[$index]['stok_sistem']     = 0;
             $this->rows[$index]['kubikasi_sistem'] = 0;
             return;
         }
 
         $ukuran = Ukuran::find($idUkuran);
-        if (!$ukuran) return;
+        if (!$ukuran) {
+            $this->rows[$index]['stok_sistem']     = 0;
+            $this->rows[$index]['kubikasi_sistem'] = 0;
+            return;
+        }
 
         $this->rows[$index]['panjang'] = (float) $ukuran->panjang;
         $this->rows[$index]['lebar']   = (float) $ukuran->lebar;
         $this->rows[$index]['tebal']   = (float) $ukuran->tebal;
 
         [$stok, $kubikasi] = match ($jenisStok) {
-            'veneer_basah'  => $this->bacaBasah((int) $idEntitas, $ukuran, (string) $kw),
-            'veneer_jadi'   => $this->bacaJadi((int) $idEntitas, $ukuran, (string) $kw),
-            'veneer_kering' => $this->bacaKering((int) $idEntitas, (int) $idUkuran, (string) $kw),
-            'platform_mth'  => $this->bacaPlatformMth((int) $idEntitas, $ukuran, (string) $kw),
-            'triplek_mth'   => $this->bacaTriplekMth((int) $idEntitas, $ukuran, (string) $kw),
-            'plywood'       => $this->bacaPlywood((int) $idEntitas, $ukuran, (string) $kw),
-            'platform_jadi' => $this->bacaPlatformJadi((int) $idEntitas, $ukuran, (string) $kw),
-            'triplek_jadi'  => $this->bacaTriplekJadi((int) $idEntitas, $ukuran, (string) $kw),
-            'gudang_satu'   => $this->bacaGudangSatu((int) $idEntitas, $ukuran, (string) $kw),
+            'veneer_basah'  => $this->bacaBasah($idEntitas, $ukuran, $kw),
+            'veneer_jadi'   => $this->bacaJadi($idEntitas, $ukuran, $kw),
+            'veneer_kering' => $this->bacaKering($idEntitas, (int) $idUkuran, $kw),
+            'platform_mth'  => $this->bacaPlatformMth($idEntitas, $ukuran, $kw),
+            'triplek_mth'   => $this->bacaTriplekMth($idEntitas, $ukuran, $kw),
+            'plywood'       => $this->bacaPlywood($idEntitas, $ukuran, $kw),
+            'platform_jadi' => $this->bacaPlatformJadi($idEntitas, $ukuran, $kw),
+            'triplek_jadi'  => $this->bacaTriplekJadi($idEntitas, $ukuran, $kw),
+            'gudang_satu'   => $this->bacaGudangSatu($idEntitas, $ukuran, $kw),
             default         => [0, 0],
         };
 
-        $this->rows[$index]['stok_sistem']    = $stok;
+        $this->rows[$index]['stok_sistem']     = $stok;
         $this->rows[$index]['kubikasi_sistem'] = round($kubikasi, 6);
     }
 
     // ────────────────────────────────────────────────────────────
-    // HELPER: row key unik untuk deteksi baris yang dihapus
+    // QUERY HELPER: NULL-AWARE
+    // "kolom = NULL" di SQL tidak pernah match, harus whereNull.
+    // Untuk kolom teks (mis. kw / kw_grade) juga ditoleransi string kosong.
     // ────────────────────────────────────────────────────────────
-    private function rowKey(array $row): ?string
+    private function queryKunci(string $model, array $kunci)
     {
-        $idEntitas = $this->jenisStok === 'platform_jadi'
-            ? ($row['id_jenis_barang'] ?? null)
-            : ($row['id_jenis_kayu'] ?? null);
+        $q = $model::query();
 
-        $kw      = $row['kw'] ?? null;
-        $panjang = $row['panjang'] ?? null;
-        $lebar   = $row['lebar'] ?? null;
-        $tebal   = $row['tebal'] ?? null;
+        foreach ($kunci as $kolom => $nilai) {
+            if ($nilai === null || $nilai === '') {
+                if (str_starts_with($kolom, 'id_')) {
+                    $q->whereNull($kolom);
+                } else {
+                    $q->where(fn ($sub) => $sub->whereNull($kolom)->orWhere($kolom, ''));
+                }
+            } else {
+                $q->where($kolom, $nilai);
+            }
+        }
 
-        // Pakai dimensi (panjang/lebar/tebal) langsung, bukan id_ukuran,
-        // supaya baris yang tidak punya id_ukuran ter-mapping (mis. ukuran
-        // di tabel Ukuran tidak match persis) tetap bisa dikenali & dihapus.
-        if (!$idEntitas || !$kw || $panjang === null || $lebar === null || $tebal === null) return null;
+        return $q;
+    }
 
-        return "{$idEntitas}_{$panjang}x{$lebar}x{$tebal}_{$kw}";
+    /**
+     * Cari summary dengan kunci yang boleh mengandung null.
+     * Baris baru hanya dibuat kalau memang ada stok fisik yang mau dicatat,
+     * supaya proses "penolan" baris terhapus tidak malah membuat data sampah.
+     */
+    private function cariSummary(string $model, array $kunci, array $default, bool $bolehBuat): ?object
+    {
+        $summary = $this->queryKunci($model, $kunci)->lockForUpdate()->first();
+
+        if (!$summary && $bolehBuat) {
+            $summary = $model::create(array_merge($kunci, $default));
+        }
+
+        return $summary;
+    }
+
+    private function bolehBuatBaru(array $row): bool
+    {
+        return (int) ($row['stok_fisik'] ?? 0) > 0
+            || (float) ($row['kubikasi_fisik'] ?? 0) > 0;
+    }
+
+    private function defaultSummary(bool $pakaiHpp = true): array
+    {
+        $base = ['stok_lembar' => 0, 'stok_kubikasi' => 0];
+        return $pakaiHpp ? array_merge($base, ['nilai_stok' => 0, 'hpp_average' => 0]) : $base;
     }
 
     // ────────────────────────────────────────────────────────────
@@ -171,20 +243,22 @@ class OpnameStokTable extends Component
             return;
         }
 
-        $currentKeys = collect($this->rows)
-            ->map(fn($r) => $this->rowKey($r))
-            ->filter()
-            ->toArray();
+        // Deteksi baris terhapus berbasis _uid. Cara lama (key komposit
+        // kayu+dimensi+grade) selalu null untuk baris yang kayu / ukuran /
+        // grade-nya kosong, sehingga baris tsb tidak pernah terdeteksi
+        // dan muncul notif "Tidak ada perubahan".
+        $uidSekarang = collect($this->rows)->pluck('_uid')->filter()->all();
 
-        $deletedRows = collect($this->originalRows)->filter(function ($r) use ($currentKeys) {
-            $key = $this->rowKey($r);
-            return $key && !in_array($key, $currentKeys);
-        })->toArray();
+        $deletedRows = collect($this->originalRows)
+            ->reject(fn ($r) => in_array($r['_uid'] ?? null, $uidSekarang, true))
+            ->values()
+            ->all();
 
-        $rowsDiisi = array_filter(
-            $this->rows,
-            fn($r) => isset($r['stok_fisik']) && $r['stok_fisik'] !== null && $r['stok_fisik'] !== ''
-        );
+        $rowsDiisi = array_values(array_filter($this->rows, function ($r) {
+            $adaLembar   = isset($r['stok_fisik'])     && $r['stok_fisik'] !== null     && $r['stok_fisik'] !== '';
+            $adaKubikasi = isset($r['kubikasi_fisik']) && $r['kubikasi_fisik'] !== null && $r['kubikasi_fisik'] !== '';
+            return $adaLembar || $adaKubikasi;
+        }));
 
         if (empty($rowsDiisi) && empty($deletedRows)) {
             Notification::make()->title('Tidak ada perubahan')->warning()->send();
@@ -195,14 +269,11 @@ class OpnameStokTable extends Component
         $dilewati = 0;
 
         foreach ($rowsDiisi as $row) {
-            $result = $this->prosesRow($row);
-            $result ? $berhasil++ : $dilewati++;
+            $this->prosesRow($row) ? $berhasil++ : $dilewati++;
         }
 
         foreach ($deletedRows as $row) {
-            // Baris dianggap valid untuk dinolkan selama punya dimensi
-            // (panjang/lebar/tebal); id_ukuran tidak wajib ada.
-            if ($row['panjang'] === null || $row['lebar'] === null || $row['tebal'] === null) continue;
+            if (!$this->bisaDinolkan($row)) { $dilewati++; continue; }
 
             $rowZero = array_merge($row, [
                 'stok_fisik'     => 0,
@@ -210,8 +281,7 @@ class OpnameStokTable extends Component
                 'catatan'        => 'DIHAPUS DARI OPNAME - STOK DINOLKAN',
             ]);
 
-            $result = $this->prosesRow($rowZero);
-            $result ? $berhasil++ : $dilewati++;
+            $this->prosesRow($rowZero) ? $berhasil++ : $dilewati++;
         }
 
         $this->rows         = $this->loadRows($this->jenisStok);
@@ -224,8 +294,31 @@ class OpnameStokTable extends Component
             ->send();
     }
 
+    /**
+     * Veneer kering butuh id_ukuran + id_jenis_kayu + kw karena berbentuk
+     * buku besar (ledger) ber-FK. Jenis stok lain cukup punya dimensi.
+     */
+    private function bisaDinolkan(array $row): bool
+    {
+        if ($this->jenisStok === 'veneer_kering') {
+            return !empty($row['id_ukuran'])
+                && !empty($row['id_jenis_kayu'])
+                && !empty($row['kw']);
+        }
+
+        return ($row['panjang'] ?? null) !== null
+            && ($row['lebar'] ?? null) !== null
+            && ($row['tebal'] ?? null) !== null;
+    }
+
     private function prosesRow(array $row): bool
     {
+        // Normalisasi: string kosong dari input dropdown → null,
+        // supaya queryKunci bisa memilih whereNull dengan benar.
+        foreach (self::FIELD_KUNCI as $f) {
+            $row[$f] = $this->kosongJadiNull($row[$f] ?? null);
+        }
+
         return match ($this->jenisStok) {
             'veneer_basah'  => $this->opnameVeneerBasah($row),
             'veneer_jadi'   => $this->opnameVeneerJadi($row),
@@ -259,7 +352,6 @@ class OpnameStokTable extends Component
         };
 
         // Baris dengan stok sistem 0 tidak perlu tampil di daftar opname
-        // (disamakan dengan tampilan halaman Stok).
         $rows = array_values(array_filter($rows, function ($row) {
             $stokNol = (int) ($row['stok_sistem'] ?? 0) === 0
                 && round((float) ($row['kubikasi_sistem'] ?? 0), 6) === 0.0;
@@ -269,15 +361,10 @@ class OpnameStokTable extends Component
         return $this->sortirRows($rows);
     }
 
-    // ────────────────────────────────────────────────────────────
-    // SORTIR ROWS: Sengon → Meranti → sisanya A-Z, lalu tebal, panjang,
-    // lebar, lalu grade (natural sort)
-    // ────────────────────────────────────────────────────────────
+    // Sortir: Sengon → Meranti → sisanya A-Z, lalu tebal, panjang, lebar, grade
     private function sortirRows(array $rows): array
     {
-        $ukuranMap = Ukuran::all()->keyBy('id');
-
-        // Prioritas jenis kayu: Sengon → Meranti → sisanya alfabetis
+        $ukuranMap     = Ukuran::all()->keyBy('id');
         $prioritasKayu = ['sengon' => 0, 'meranti' => 1];
 
         $bobotKayu = function (array $row) use ($prioritasKayu): array {
@@ -290,7 +377,6 @@ class OpnameStokTable extends Component
         };
 
         usort($rows, function ($a, $b) use ($ukuranMap, $bobotKayu) {
-            // 1. Jenis kayu: Sengon dulu, Meranti kedua, sisanya A-Z
             [$prioA, $namaA] = $bobotKayu($a);
             [$prioB, $namaB] = $bobotKayu($b);
             if ($prioA !== $prioB) return $prioA <=> $prioB;
@@ -300,18 +386,15 @@ class OpnameStokTable extends Component
             $ua = $ukuranMap->get($a['id_ukuran']);
             $ub = $ukuranMap->get($b['id_ukuran']);
 
-            // 2. Tebal terkecil dulu
             $tebalA = $ua ? (float) $ua->tebal : PHP_FLOAT_MAX;
             $tebalB = $ub ? (float) $ub->tebal : PHP_FLOAT_MAX;
             if ($tebalA !== $tebalB) return $tebalA <=> $tebalB;
 
-            // 3. Panjang lalu lebar
             $pA = $ua ? (float) $ua->panjang : 0; $pB = $ub ? (float) $ub->panjang : 0;
             if ($pA !== $pB) return $pA <=> $pB;
             $lA = $ua ? (float) $ua->lebar : 0;   $lB = $ub ? (float) $ub->lebar : 0;
             if ($lA !== $lB) return $lA <=> $lB;
 
-            // 4. Grade natural (1, 2, 3, 10, AFF, BETTER, LP...)
             return strnatcasecmp((string) ($a['kw'] ?? ''), (string) ($b['kw'] ?? ''));
         });
 
@@ -321,7 +404,7 @@ class OpnameStokTable extends Component
     private function barisKosong(): array
     {
         return [
-            '_uid'            => (string) \Illuminate\Support\Str::uuid(),
+            '_uid'            => (string) Str::uuid(),
             'id_jenis_kayu'   => null,
             'id_jenis_barang' => null,
             'id_ukuran'       => null,
@@ -340,15 +423,16 @@ class OpnameStokTable extends Component
     private function rowDariSummary(object $s, string $idField = 'id_jenis_kayu'): array
     {
         $ukuran = Ukuran::where(['panjang' => $s->panjang, 'lebar' => $s->lebar, 'tebal' => $s->tebal])->first();
+
         return [
-            '_uid'            => (string) \Illuminate\Support\Str::uuid(),
+            '_uid'            => (string) Str::uuid(),
             'id_jenis_kayu'   => $idField === 'id_jenis_kayu' ? $s->id_jenis_kayu : null,
             'id_jenis_barang' => $idField === 'id_jenis_barang' ? $s->id_jenis_barang : null,
             'id_ukuran'       => $ukuran?->id,
             'panjang'         => (float) $s->panjang,
             'lebar'           => (float) $s->lebar,
             'tebal'           => (float) $s->tebal,
-            'kw'              => $s->kw_grade ?? $s->kw ?? null,
+            'kw'              => $this->kosongJadiNull($s->kw_grade ?? $s->kw ?? null),
             'stok_sistem'     => (int) $s->stok_lembar,
             'kubikasi_sistem' => round((float) $s->stok_kubikasi, 6),
             'stok_fisik'      => null,
@@ -362,14 +446,14 @@ class OpnameStokTable extends Component
         return HppVeneerBasahSummary::all()->map(function ($s) {
             $ukuran = Ukuran::where(['panjang' => $s->panjang, 'lebar' => $s->lebar, 'tebal' => $s->tebal])->first();
             return [
-                '_uid'            => (string) \Illuminate\Support\Str::uuid(),
+                '_uid'            => (string) Str::uuid(),
                 'id_jenis_kayu'   => $s->id_jenis_kayu,
                 'id_jenis_barang' => null,
                 'id_ukuran'       => $ukuran?->id,
                 'panjang'         => (float) $s->panjang,
                 'lebar'           => (float) $s->lebar,
                 'tebal'           => (float) $s->tebal,
-                'kw'              => $s->kw,
+                'kw'              => $this->kosongJadiNull($s->kw),
                 'stok_sistem'     => (int) $s->stok_lembar,
                 'kubikasi_sistem' => round((float) $s->stok_kubikasi, 6),
                 'stok_fisik'      => null,
@@ -379,7 +463,7 @@ class OpnameStokTable extends Component
         })->toArray();
     }
 
-    private function loadJadi(): array   { return StokVeneerJadi::all()->map(fn($s) => $this->rowDariSummary($s))->toArray(); }
+    private function loadJadi(): array         { return StokVeneerJadi::all()->map(fn($s) => $this->rowDariSummary($s))->toArray(); }
     private function loadPlatformMth(): array  { return StokPlatformMth::all()->map(fn($s) => $this->rowDariSummary($s))->toArray(); }
     private function loadTriplekMth(): array   { return StokTriplekMth::all()->map(fn($s) => $this->rowDariSummary($s))->toArray(); }
     private function loadPlywood(): array      { return StokPlywoodSiapJual::all()->map(fn($s) => $this->rowDariSummary($s))->toArray(); }
@@ -397,14 +481,14 @@ class OpnameStokTable extends Component
                 $snapshot = StokVeneerKering::snapshotTerakhir($s->id_ukuran, $s->id_jenis_kayu, $s->kw);
                 $ukuran   = Ukuran::find($s->id_ukuran);
                 return [
-                    '_uid'            => (string) \Illuminate\Support\Str::uuid(),
+                    '_uid'            => (string) Str::uuid(),
                     'id_jenis_kayu'   => $s->id_jenis_kayu,
                     'id_jenis_barang' => null,
                     'id_ukuran'       => $s->id_ukuran,
                     'panjang'         => $ukuran ? (float) $ukuran->panjang : null,
                     'lebar'           => $ukuran ? (float) $ukuran->lebar : null,
                     'tebal'           => $ukuran ? (float) $ukuran->tebal : null,
-                    'kw'              => $s->kw,
+                    'kw'              => $this->kosongJadiNull($s->kw),
                     'stok_sistem'     => $stok,
                     'kubikasi_sistem' => round((float) $snapshot['stok_m3'], 6),
                     'stok_fisik'      => null,
@@ -415,61 +499,76 @@ class OpnameStokTable extends Component
     }
 
     // ────────────────────────────────────────────────────────────
-    // BACA STOK SISTEM
+    // BACA STOK SISTEM (null-aware)
     // ────────────────────────────────────────────────────────────
-    private function bacaBasah(int $id, Ukuran $u, string $kw): array
+    private function hasilBaca(?object $s): array
     {
-        $s = HppVeneerBasahSummary::where(['id_jenis_kayu' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw' => $kw])->first();
         return [$s ? (int) $s->stok_lembar : 0, $s ? (float) $s->stok_kubikasi : 0.0];
     }
 
-    private function bacaJadi(int $id, Ukuran $u, string $kw): array
+    private function bacaBasah(?int $id, Ukuran $u, ?string $kw): array
     {
-        $s = StokVeneerJadi::where(['id_jenis_kayu' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw_grade' => $kw])->first();
-        return [$s ? (int) $s->stok_lembar : 0, $s ? (float) $s->stok_kubikasi : 0.0];
+        return $this->hasilBaca($this->queryKunci(HppVeneerBasahSummary::class, [
+            'id_jenis_kayu' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw' => $kw,
+        ])->first());
     }
 
-    private function bacaKering(int $id, int $idUkuran, string $kw): array
+    private function bacaJadi(?int $id, Ukuran $u, ?string $kw): array
     {
+        return $this->hasilBaca($this->queryKunci(StokVeneerJadi::class, [
+            'id_jenis_kayu' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw_grade' => $kw,
+        ])->first());
+    }
+
+    private function bacaKering(?int $id, int $idUkuran, ?string $kw): array
+    {
+        if (!$id || !$kw) return [0, 0.0];
+
         $stok     = StokVeneerKering::saldoLembarTerakhir($idUkuran, $id, $kw);
         $snapshot = StokVeneerKering::snapshotTerakhir($idUkuran, $id, $kw);
         return [$stok, (float) $snapshot['stok_m3']];
     }
 
-    private function bacaPlatformMth(int $id, Ukuran $u, string $kw): array
+    private function bacaPlatformMth(?int $id, Ukuran $u, ?string $kw): array
     {
-        $s = StokPlatformMth::where(['id_jenis_kayu' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw_grade' => $kw])->first();
-        return [$s ? (int) $s->stok_lembar : 0, $s ? (float) $s->stok_kubikasi : 0.0];
+        return $this->hasilBaca($this->queryKunci(StokPlatformMth::class, [
+            'id_jenis_kayu' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw_grade' => $kw,
+        ])->first());
     }
 
-    private function bacaTriplekMth(int $id, Ukuran $u, string $kw): array
+    private function bacaTriplekMth(?int $id, Ukuran $u, ?string $kw): array
     {
-        $s = StokTriplekMth::where(['id_jenis_kayu' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw_grade' => $kw])->first();
-        return [$s ? (int) $s->stok_lembar : 0, $s ? (float) $s->stok_kubikasi : 0.0];
+        return $this->hasilBaca($this->queryKunci(StokTriplekMth::class, [
+            'id_jenis_kayu' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw_grade' => $kw,
+        ])->first());
     }
 
-    private function bacaPlywood(int $id, Ukuran $u, string $kw): array
+    private function bacaPlywood(?int $id, Ukuran $u, ?string $kw): array
     {
-        $s = StokPlywoodSiapJual::where(['id_jenis_kayu' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw_grade' => $kw])->first();
-        return [$s ? (int) $s->stok_lembar : 0, $s ? (float) $s->stok_kubikasi : 0.0];
+        return $this->hasilBaca($this->queryKunci(StokPlywoodSiapJual::class, [
+            'id_jenis_kayu' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw_grade' => $kw,
+        ])->first());
     }
 
-    private function bacaPlatformJadi(int $id, Ukuran $u, string $kw): array
+    private function bacaPlatformJadi(?int $id, Ukuran $u, ?string $kw): array
     {
-        $s = StokPlatformJadi::where(['id_jenis_barang' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw_grade' => $kw])->first();
-        return [$s ? (int) $s->stok_lembar : 0, $s ? (float) $s->stok_kubikasi : 0.0];
+        return $this->hasilBaca($this->queryKunci(StokPlatformJadi::class, [
+            'id_jenis_barang' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw_grade' => $kw,
+        ])->first());
     }
 
-    private function bacaTriplekJadi(int $id, Ukuran $u, string $kw): array
+    private function bacaTriplekJadi(?int $id, Ukuran $u, ?string $kw): array
     {
-        $s = StokTriplekJadi::where(['id_jenis_kayu' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw_grade' => $kw])->first();
-        return [$s ? (int) $s->stok_lembar : 0, $s ? (float) $s->stok_kubikasi : 0.0];
+        return $this->hasilBaca($this->queryKunci(StokTriplekJadi::class, [
+            'id_jenis_kayu' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw_grade' => $kw,
+        ])->first());
     }
 
-    private function bacaGudangSatu(int $id, Ukuran $u, string $kw): array
+    private function bacaGudangSatu(?int $id, Ukuran $u, ?string $kw): array
     {
-        $s = StokGudangSatu::where(['id_jenis_kayu' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw_grade' => $kw])->first();
-        return [$s ? (int) $s->stok_lembar : 0, $s ? (float) $s->stok_kubikasi : 0.0];
+        return $this->hasilBaca($this->queryKunci(StokGudangSatu::class, [
+            'id_jenis_kayu' => $id, 'panjang' => $u->panjang, 'lebar' => $u->lebar, 'tebal' => $u->tebal, 'kw_grade' => $kw,
+        ])->first());
     }
 
     // ────────────────────────────────────────────────────────────
@@ -486,8 +585,17 @@ class OpnameStokTable extends Component
         return $ket;
     }
 
+    private function dimensi(array $row): array
+    {
+        return [
+            (float) $row['panjang'],
+            (float) $row['lebar'],
+            (float) $row['tebal'],
+        ];
+    }
+
     // ────────────────────────────────────────────────────────────
-    // HELPER OPNAME DENGAN SUMMARY
+    // HELPER OPNAME DENGAN SUMMARY (pakai hpp_average & nilai_stok)
     // ────────────────────────────────────────────────────────────
     private function opnameDenganSummary(
         array $row,
@@ -497,7 +605,7 @@ class OpnameStokTable extends Component
         string $idField = 'id_jenis_kayu'
     ): bool {
         $stokSistem      = (int) $summary->stok_lembar;
-        $stokFisik       = (int) $row['stok_fisik'];
+        $stokFisik       = (int) ($row['stok_fisik'] ?? 0);
         $kubikasiFisik   = (float) ($row['kubikasi_fisik'] ?? 0);
         $kubikasiSistem  = (float) $summary->stok_kubikasi;
         $selisihLembar   = $stokFisik - $stokSistem;
@@ -505,14 +613,20 @@ class OpnameStokTable extends Component
 
         if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) return false;
 
-        $tipe = $selisihLembar !== 0 ? ($selisihLembar > 0 ? 'masuk' : 'keluar') : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
-        $ket  = $this->buatKeterangan($label, $row);
+        $tipe = $selisihLembar !== 0
+            ? ($selisihLembar > 0 ? 'masuk' : 'keluar')
+            : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
+        $ket = $this->buatKeterangan($label, $row);
 
-        $kubikasiSelisih = round(abs($kubikasiFisik - $kubikasiSistem), 6);
+        $kubikasiSelisih = round(abs($selisihKubikasi), 6);
         $nilaiStokBaru   = round($kubikasiFisik * $summary->hpp_average, 2);
         $nilaiStokBefore = $summary->nilai_stok;
 
-        $summary->update(['stok_lembar' => $stokFisik, 'stok_kubikasi' => $kubikasiFisik, 'nilai_stok' => $nilaiStokBaru]);
+        $summary->update([
+            'stok_lembar'   => $stokFisik,
+            'stok_kubikasi' => $kubikasiFisik,
+            'nilai_stok'    => $nilaiStokBaru,
+        ]);
 
         $log = $logClass::create([
             $idField               => $summary->{$idField},
@@ -545,14 +659,27 @@ class OpnameStokTable extends Component
     private function opnameVeneerBasah(array $row): bool
     {
         return DB::transaction(function () use ($row) {
-            $panjang = (float) $row['panjang'];
-            $lebar   = (float) $row['lebar'];
-            $tebal   = (float) $row['tebal'];
-            $summary = HppVeneerBasahSummary::where(['id_jenis_kayu' => $row['id_jenis_kayu'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw' => $row['kw']])->lockForUpdate()->first();
-            if (!$summary) $summary = HppVeneerBasahSummary::create(['id_jenis_kayu' => $row['id_jenis_kayu'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw' => $row['kw'], 'stok_lembar' => 0, 'stok_kubikasi' => 0, 'nilai_stok' => 0, 'hpp_average' => 0]);
+            [$panjang, $lebar, $tebal] = $this->dimensi($row);
+
+            $kunci = [
+                'id_jenis_kayu' => $row['id_jenis_kayu'],
+                'panjang'       => $panjang,
+                'lebar'         => $lebar,
+                'tebal'         => $tebal,
+                'kw'            => $row['kw'],
+            ];
+
+            $summary = $this->cariSummary(
+                HppVeneerBasahSummary::class,
+                $kunci,
+                $this->defaultSummary(),
+                $this->bolehBuatBaru($row)
+            );
+
+            if (!$summary) return false;
 
             $stokSistem      = (int) $summary->stok_lembar;
-            $stokFisik       = (int) $row['stok_fisik'];
+            $stokFisik       = (int) ($row['stok_fisik'] ?? 0);
             $kubikasiFisik   = (float) ($row['kubikasi_fisik'] ?? 0);
             $kubikasiSistem  = (float) $summary->stok_kubikasi;
             $selisihLembar   = $stokFisik - $stokSistem;
@@ -560,14 +687,19 @@ class OpnameStokTable extends Component
 
             if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) return false;
 
-            $tipe = $selisihLembar !== 0 ? ($selisihLembar > 0 ? 'masuk' : 'keluar') : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
-            $ket  = $this->buatKeterangan('OPNAME VENEER BASAH', $row);
+            $tipe = $selisihLembar !== 0
+                ? ($selisihLembar > 0 ? 'masuk' : 'keluar')
+                : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
 
-            $kubikasiSelisih = round(abs($kubikasiFisik - $kubikasiSistem), 6);
+            $kubikasiSelisih = round(abs($selisihKubikasi), 6);
             $nilaiStokBaru   = round($kubikasiFisik * $summary->hpp_average, 2);
             $nilaiStokBefore = $summary->nilai_stok;
 
-            $summary->update(['stok_lembar' => $stokFisik, 'stok_kubikasi' => $kubikasiFisik, 'nilai_stok' => $nilaiStokBaru]);
+            $summary->update([
+                'stok_lembar'   => $stokFisik,
+                'stok_kubikasi' => $kubikasiFisik,
+                'nilai_stok'    => $nilaiStokBaru,
+            ]);
 
             HppVeneerBasahLog::create([
                 'id_jenis_kayu'        => $summary->id_jenis_kayu,
@@ -577,7 +709,7 @@ class OpnameStokTable extends Component
                 'kw'                   => $summary->kw,
                 'tanggal'              => now(),
                 'tipe_transaksi'       => $tipe,
-                'keterangan'           => $ket,
+                'keterangan'           => $this->buatKeterangan('OPNAME VENEER BASAH', $row),
                 'total_lembar'         => abs($selisihLembar),
                 'total_kubikasi'       => $kubikasiSelisih,
                 'stok_lembar_before'   => $stokSistem,
@@ -596,59 +728,31 @@ class OpnameStokTable extends Component
     private function opnameVeneerJadi(array $row): bool
     {
         return DB::transaction(function () use ($row) {
-            $panjang = (float) $row['panjang'];
-            $lebar   = (float) $row['lebar'];
-            $tebal   = (float) $row['tebal'];
-            $summary = StokVeneerJadi::where(['id_jenis_kayu' => $row['id_jenis_kayu'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw_grade' => $row['kw']])->lockForUpdate()->first();
-            if (!$summary) $summary = StokVeneerJadi::create(['id_jenis_kayu' => $row['id_jenis_kayu'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw_grade' => $row['kw'], 'stok_lembar' => 0, 'stok_kubikasi' => 0, 'nilai_stok' => 0, 'hpp_average' => 0]);
+            [$panjang, $lebar, $tebal] = $this->dimensi($row);
 
-            $stokSistem      = (int) $summary->stok_lembar;
-            $stokFisik       = (int) $row['stok_fisik'];
-            $kubikasiFisik   = (float) ($row['kubikasi_fisik'] ?? 0);
-            $kubikasiSistem  = (float) $summary->stok_kubikasi;
-            $selisihLembar   = $stokFisik - $stokSistem;
-            $selisihKubikasi = $kubikasiFisik - $kubikasiSistem;
+            $summary = $this->cariSummary(
+                StokVeneerJadi::class,
+                [
+                    'id_jenis_kayu' => $row['id_jenis_kayu'],
+                    'panjang'       => $panjang,
+                    'lebar'         => $lebar,
+                    'tebal'         => $tebal,
+                    'kw_grade'      => $row['kw'],
+                ],
+                $this->defaultSummary(),
+                $this->bolehBuatBaru($row)
+            );
 
-            if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) return false;
+            if (!$summary) return false;
 
-            $tipe = $selisihLembar !== 0 ? ($selisihLembar > 0 ? 'masuk' : 'keluar') : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
-            $ket  = $this->buatKeterangan('OPNAME VENEER JADI', $row);
-
-            $kubikasiSelisih = round(abs($kubikasiFisik - $kubikasiSistem), 6);
-            $nilaiStokBaru   = round($kubikasiFisik * $summary->hpp_average, 2);
-            $nilaiStokBefore = $summary->nilai_stok;
-
-            $summary->update(['stok_lembar' => $stokFisik, 'stok_kubikasi' => $kubikasiFisik, 'nilai_stok' => $nilaiStokBaru]);
-
-            $log = HppVeneerJadiLog::create([
-                'id_jenis_kayu'        => $summary->id_jenis_kayu,
-                'panjang'              => $summary->panjang,
-                'lebar'                => $summary->lebar,
-                'tebal'                => $summary->tebal,
-                'kw_grade'             => $summary->kw_grade,
-                'tanggal'              => now(),
-                'tipe_transaksi'       => $tipe,
-                'keterangan'           => $ket,
-                'total_lembar'         => abs($selisihLembar),
-                'total_kubikasi'       => $kubikasiSelisih,
-                'stok_lembar_before'   => $stokSistem,
-                'stok_lembar_after'    => $stokFisik,
-                'stok_kubikasi_before' => $kubikasiSistem,
-                'stok_kubikasi_after'  => $kubikasiFisik,
-                'hpp_average'          => $summary->hpp_average,
-                'nilai_stok'           => $nilaiStokBaru,
-                'nilai_stok_before'    => $nilaiStokBefore,
-                'nilai_stok_after'     => $nilaiStokBaru,
-            ]);
-            $summary->update(['id_last_log' => $log->id]);
-
-            return true;
+            return $this->opnameDenganSummary($row, $summary, 'OPNAME VENEER JADI', HppVeneerJadiLog::class);
         });
     }
 
     private function opnameVeneerKering(array $row): bool
     {
-        if (empty($row['id_ukuran'])) return false; // butuh id_ukuran sebagai FK, tidak bisa pakai panjang/lebar/tebal saja
+        // Ledger ber-FK: butuh id_ukuran, id_jenis_kayu, dan kw
+        if (empty($row['id_ukuran']) || empty($row['id_jenis_kayu']) || empty($row['kw'])) return false;
 
         return DB::transaction(function () use ($row) {
             $idUkuran    = (int) $row['id_ukuran'];
@@ -657,7 +761,7 @@ class OpnameStokTable extends Component
 
             $stokSistem      = StokVeneerKering::saldoLembarTerakhir($idUkuran, $idJenisKayu, $kw);
             $snapshot        = StokVeneerKering::snapshotTerakhir($idUkuran, $idJenisKayu, $kw);
-            $stokFisik       = (int) $row['stok_fisik'];
+            $stokFisik       = (int) ($row['stok_fisik'] ?? 0);
             $kubikasiFisik   = (float) ($row['kubikasi_fisik'] ?? 0);
             $kubikasiSistem  = (float) $snapshot['stok_m3'];
             $hppAverage      = (float) $snapshot['hpp_average'];
@@ -666,7 +770,9 @@ class OpnameStokTable extends Component
 
             if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) return false;
 
-            $tipe = $selisihLembar !== 0 ? ($selisihLembar > 0 ? 'masuk' : 'keluar') : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
+            $tipe = $selisihLembar !== 0
+                ? ($selisihLembar > 0 ? 'masuk' : 'keluar')
+                : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
 
             StokVeneerKering::create([
                 'id_ukuran'           => $idUkuran,
@@ -675,7 +781,7 @@ class OpnameStokTable extends Component
                 'jenis_transaksi'     => $tipe,
                 'tanggal_transaksi'   => now(),
                 'qty'                 => abs($selisihLembar),
-                'm3'                  => round(abs($kubikasiFisik - $kubikasiSistem), 6),
+                'm3'                  => round(abs($selisihKubikasi), 6),
                 'stok_lembar_sebelum' => $stokSistem,
                 'stok_lembar_sesudah' => $stokFisik,
                 'hpp_kering_per_m3'   => $hppAverage,
@@ -695,11 +801,23 @@ class OpnameStokTable extends Component
     private function opnamePlatformMth(array $row): bool
     {
         return DB::transaction(function () use ($row) {
-            $panjang = (float) $row['panjang'];
-            $lebar   = (float) $row['lebar'];
-            $tebal   = (float) $row['tebal'];
-            $summary = StokPlatformMth::where(['id_jenis_kayu' => $row['id_jenis_kayu'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw_grade' => $row['kw']])->lockForUpdate()->first();
-            if (!$summary) $summary = StokPlatformMth::create(['id_jenis_kayu' => $row['id_jenis_kayu'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw_grade' => $row['kw'], 'stok_lembar' => 0, 'stok_kubikasi' => 0, 'nilai_stok' => 0, 'hpp_average' => 0]);
+            [$panjang, $lebar, $tebal] = $this->dimensi($row);
+
+            $summary = $this->cariSummary(
+                StokPlatformMth::class,
+                [
+                    'id_jenis_kayu' => $row['id_jenis_kayu'],
+                    'panjang'       => $panjang,
+                    'lebar'         => $lebar,
+                    'tebal'         => $tebal,
+                    'kw_grade'      => $row['kw'],
+                ],
+                $this->defaultSummary(),
+                $this->bolehBuatBaru($row)
+            );
+
+            if (!$summary) return false;
+
             return $this->opnameDenganSummary($row, $summary, 'OPNAME PLATFORM MTH', HppPlatformMthLog::class);
         });
     }
@@ -707,11 +825,23 @@ class OpnameStokTable extends Component
     private function opnameTriplekMth(array $row): bool
     {
         return DB::transaction(function () use ($row) {
-            $panjang = (float) $row['panjang'];
-            $lebar   = (float) $row['lebar'];
-            $tebal   = (float) $row['tebal'];
-            $summary = StokTriplekMth::where(['id_jenis_kayu' => $row['id_jenis_kayu'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw_grade' => $row['kw']])->lockForUpdate()->first();
-            if (!$summary) $summary = StokTriplekMth::create(['id_jenis_kayu' => $row['id_jenis_kayu'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw_grade' => $row['kw'], 'stok_lembar' => 0, 'stok_kubikasi' => 0, 'nilai_stok' => 0, 'hpp_average' => 0]);
+            [$panjang, $lebar, $tebal] = $this->dimensi($row);
+
+            $summary = $this->cariSummary(
+                StokTriplekMth::class,
+                [
+                    'id_jenis_kayu' => $row['id_jenis_kayu'],
+                    'panjang'       => $panjang,
+                    'lebar'         => $lebar,
+                    'tebal'         => $tebal,
+                    'kw_grade'      => $row['kw'],
+                ],
+                $this->defaultSummary(),
+                $this->bolehBuatBaru($row)
+            );
+
+            if (!$summary) return false;
+
             return $this->opnameDenganSummary($row, $summary, 'OPNAME TRIPLEK MTH', HppTriplekMthLog::class);
         });
     }
@@ -719,14 +849,25 @@ class OpnameStokTable extends Component
     private function opnamePlywood(array $row): bool
     {
         return DB::transaction(function () use ($row) {
-            $panjang = (float) $row['panjang'];
-            $lebar   = (float) $row['lebar'];
-            $tebal   = (float) $row['tebal'];
-            $summary = StokPlywoodSiapJual::where(['id_jenis_kayu' => $row['id_jenis_kayu'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw_grade' => $row['kw']])->lockForUpdate()->first();
-            if (!$summary) $summary = StokPlywoodSiapJual::create(['id_jenis_kayu' => $row['id_jenis_kayu'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw_grade' => $row['kw'], 'stok_lembar' => 0, 'stok_kubikasi' => 0]);
+            [$panjang, $lebar, $tebal] = $this->dimensi($row);
+
+            $summary = $this->cariSummary(
+                StokPlywoodSiapJual::class,
+                [
+                    'id_jenis_kayu' => $row['id_jenis_kayu'],
+                    'panjang'       => $panjang,
+                    'lebar'         => $lebar,
+                    'tebal'         => $tebal,
+                    'kw_grade'      => $row['kw'],
+                ],
+                $this->defaultSummary(false),
+                $this->bolehBuatBaru($row)
+            );
+
+            if (!$summary) return false;
 
             $stokSistem      = (int) $summary->stok_lembar;
-            $stokFisik       = (int) $row['stok_fisik'];
+            $stokFisik       = (int) ($row['stok_fisik'] ?? 0);
             $kubikasiFisik   = (float) ($row['kubikasi_fisik'] ?? 0);
             $kubikasiSistem  = (float) $summary->stok_kubikasi;
             $selisihLembar   = $stokFisik - $stokSistem;
@@ -734,8 +875,9 @@ class OpnameStokTable extends Component
 
             if ($selisihLembar === 0 && round($selisihKubikasi, 6) === 0.0) return false;
 
-            $tipe = $selisihLembar !== 0 ? ($selisihLembar > 0 ? 'masuk' : 'keluar') : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
-            $kubikasiSelisih = round(abs($kubikasiFisik - $kubikasiSistem), 6);
+            $tipe = $selisihLembar !== 0
+                ? ($selisihLembar > 0 ? 'masuk' : 'keluar')
+                : ($selisihKubikasi > 0 ? 'masuk' : 'keluar');
 
             $summary->update(['stok_lembar' => $stokFisik, 'stok_kubikasi' => $kubikasiFisik]);
 
@@ -749,12 +891,13 @@ class OpnameStokTable extends Component
                 'tipe_transaksi'       => $tipe,
                 'keterangan'           => $this->buatKeterangan('OPNAME PLYWOOD SIAP JUAL', $row),
                 'total_lembar'         => abs($selisihLembar),
-                'total_kubikasi'       => $kubikasiSelisih,
+                'total_kubikasi'       => round(abs($selisihKubikasi), 6),
                 'stok_lembar_before'   => $stokSistem,
                 'stok_lembar_after'    => $stokFisik,
                 'stok_kubikasi_before' => $kubikasiSistem,
                 'stok_kubikasi_after'  => $kubikasiFisik,
             ]);
+
             $summary->update(['id_last_log' => $log->id]);
             return true;
         });
@@ -763,11 +906,23 @@ class OpnameStokTable extends Component
     private function opnamePlatformJadi(array $row): bool
     {
         return DB::transaction(function () use ($row) {
-            $panjang = (float) $row['panjang'];
-            $lebar   = (float) $row['lebar'];
-            $tebal   = (float) $row['tebal'];
-            $summary = StokPlatformJadi::where(['id_jenis_barang' => $row['id_jenis_barang'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw_grade' => $row['kw']])->lockForUpdate()->first();
-            if (!$summary) $summary = StokPlatformJadi::create(['id_jenis_barang' => $row['id_jenis_barang'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw_grade' => $row['kw'], 'stok_lembar' => 0, 'stok_kubikasi' => 0, 'nilai_stok' => 0, 'hpp_average' => 0]);
+            [$panjang, $lebar, $tebal] = $this->dimensi($row);
+
+            $summary = $this->cariSummary(
+                StokPlatformJadi::class,
+                [
+                    'id_jenis_barang' => $row['id_jenis_barang'],
+                    'panjang'         => $panjang,
+                    'lebar'           => $lebar,
+                    'tebal'           => $tebal,
+                    'kw_grade'        => $row['kw'],
+                ],
+                $this->defaultSummary(),
+                $this->bolehBuatBaru($row)
+            );
+
+            if (!$summary) return false;
+
             return $this->opnameDenganSummary($row, $summary, 'OPNAME PLATFORM JADI', HppPlatformJadiLog::class, 'id_jenis_barang');
         });
     }
@@ -775,11 +930,23 @@ class OpnameStokTable extends Component
     private function opnameTriplekJadi(array $row): bool
     {
         return DB::transaction(function () use ($row) {
-            $panjang = (float) $row['panjang'];
-            $lebar   = (float) $row['lebar'];
-            $tebal   = (float) $row['tebal'];
-            $summary = StokTriplekJadi::where(['id_jenis_kayu' => $row['id_jenis_kayu'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw_grade' => $row['kw']])->lockForUpdate()->first();
-            if (!$summary) $summary = StokTriplekJadi::create(['id_jenis_kayu' => $row['id_jenis_kayu'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw_grade' => $row['kw'], 'stok_lembar' => 0, 'stok_kubikasi' => 0, 'nilai_stok' => 0, 'hpp_average' => 0]);
+            [$panjang, $lebar, $tebal] = $this->dimensi($row);
+
+            $summary = $this->cariSummary(
+                StokTriplekJadi::class,
+                [
+                    'id_jenis_kayu' => $row['id_jenis_kayu'],
+                    'panjang'       => $panjang,
+                    'lebar'         => $lebar,
+                    'tebal'         => $tebal,
+                    'kw_grade'      => $row['kw'],
+                ],
+                $this->defaultSummary(),
+                $this->bolehBuatBaru($row)
+            );
+
+            if (!$summary) return false;
+
             return $this->opnameDenganSummary($row, $summary, 'OPNAME TRIPLEK JADI', HppTriplekJadiLog::class);
         });
     }
@@ -787,11 +954,23 @@ class OpnameStokTable extends Component
     private function opnameGudangSatu(array $row): bool
     {
         return DB::transaction(function () use ($row) {
-            $panjang = (float) $row['panjang'];
-            $lebar   = (float) $row['lebar'];
-            $tebal   = (float) $row['tebal'];
-            $summary = StokGudangSatu::where(['id_jenis_kayu' => $row['id_jenis_kayu'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw_grade' => $row['kw']])->lockForUpdate()->first();
-            if (!$summary) $summary = StokGudangSatu::create(['id_jenis_kayu' => $row['id_jenis_kayu'], 'panjang' => $panjang, 'lebar' => $lebar, 'tebal' => $tebal, 'kw_grade' => $row['kw'], 'stok_lembar' => 0, 'stok_kubikasi' => 0, 'nilai_stok' => 0, 'hpp_average' => 0]);
+            [$panjang, $lebar, $tebal] = $this->dimensi($row);
+
+            $summary = $this->cariSummary(
+                StokGudangSatu::class,
+                [
+                    'id_jenis_kayu' => $row['id_jenis_kayu'],
+                    'panjang'       => $panjang,
+                    'lebar'         => $lebar,
+                    'tebal'         => $tebal,
+                    'kw_grade'      => $row['kw'],
+                ],
+                $this->defaultSummary(),
+                $this->bolehBuatBaru($row)
+            );
+
+            if (!$summary) return false;
+
             return $this->opnameDenganSummary($row, $summary, 'OPNAME GUDANG SATU', GudangSatuLog::class);
         });
     }
