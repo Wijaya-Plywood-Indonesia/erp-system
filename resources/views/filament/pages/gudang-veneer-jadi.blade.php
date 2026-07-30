@@ -843,7 +843,7 @@
                             @foreach ($this->splitStok['faceback']->concat($this->splitStok['core']) as $s)
                                 {
                                     id: '{{ $s->id }}',
-                                    nama: '{{ $s->jenisKayu->nama_kayu }} (KW {{ $s->kw_grade }}) - Sisa: {{ $s->stok_lembar }} lbr',
+                                    nama: '{{ $s->jenisKayu?->nama_kayu }} (KW {{ $s->kw_grade }}) - Sisa: {{ $s->stok_lembar }} lbr',
                                     no: '{{ $s->panjang + 0 }}x{{ $s->lebar + 0 }}x{{ $s->tebal + 0 }}'
                                 }, @endforeach
                         ],
