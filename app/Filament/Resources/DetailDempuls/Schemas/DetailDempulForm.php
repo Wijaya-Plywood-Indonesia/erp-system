@@ -110,20 +110,18 @@ class DetailDempulForm
                         $produksiId = $livewire->ownerRecord?->id ?? null;
 
                         if ($produksiId) {
-                            // HANYA ambil Pegawai yang TERDAFTAR di Rencana
-                            // Tidak ada filter "usedIds" lagi, jadi pegawai bisa dipilih berkali-kali
                             $rencanaIds = RencanaPegawaiDempul::query()
                                 ->where('id_produksi_dempul', $produksiId)
                                 ->pluck('id_pegawai')
                                 ->toArray();
 
-                            // Terapkan Filter (Hanya tampilkan yg ada di rencana)
                             return $query->whereIn('pegawais.id', $rencanaIds);
                         }
 
                         return $query;
                     }
                 )
+                ->getOptionLabelFromRecordUsing(fn ($record) => $record->nama_pegawai ?: "Pegawai #{$record->kode_pegawai}")
                 ->multiple()
                 ->required()
                 ->maxItems(2)
