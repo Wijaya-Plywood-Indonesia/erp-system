@@ -59,12 +59,11 @@ class DetailHasilRepairsRelationManager extends RelationManager
                     ->label('Pegawai Repair')
                     ->relationship(
                         name: 'rencanaPegawais',
-                        titleAttribute: 'id', // Gunakan 'id' sebagai atribut default agar tidak error order clause
+                        titleAttribute: 'id',
                         modifyQueryUsing: function ($query) {
                             $produksiId = $this->getOwnerRecord()?->id;
 
                             if ($produksiId) {
-                                // Pastikan eager load relasi pegawai jika ada
                                 $query->with('pegawai')
                                     ->where('id_produksi_repair', $produksiId);
                             }
@@ -72,7 +71,61 @@ class DetailHasilRepairsRelationManager extends RelationManager
                             return $query;
                         }
                     )
-                    ->getOptionLabelFromRecordUsing(fn($record) => $record->pegawai?->nama_pegawai ?? $record->nama_pegawai ?? "Pegawai #{$record->id}")
+                    // 1. Pencarian kustom berdasarkan kode_pegawai & nama_pegawai
+                    ->getSearchResultsUsing(function (string $search) {
+                        $produksiId = $this->getOwnerRecord()?->id;
+
+                        return \App\Models\RencanaPegawai::query()
+                            ->with('pegawai')
+                            ->when($produksiId, fn($q) => $q->where('id_produksi_repair', $produksiId))
+                            ->where(function ($query) use ($search) {
+                                $query->where('id', 'LIKE', "%{$search}%")
+                                    ->orWhereHas('pegawai', function ($q) use ($search) {
+                                        $q->where('nama_pegawai', 'LIKE', "%{$search}%")
+                                            ->orWhere('kode_pegawai', 'LIKE', "%{$search}%");
+                                    });
+                            })
+                            ->limit(50)
+                            ->get()
+                            ->mapWithKeys(function ($record) {
+                                $pegawai = $record->pegawai;
+
+                                if ($pegawai) {
+                                    $kode = $pegawai->kode_pegawai ? "{$pegawai->kode_pegawai} - " : '';
+                                    $label = "{$kode}{$pegawai->nama_pegawai}";
+                                } else {
+                                    $label = "Pegawai #{$record->id}";
+                                }
+
+                                return [$record->id => $label];
+                            });
+                    })
+                    // 2. Format label untuk data yang terpilih/tersimpan saat form dirender
+                    ->getOptionLabelsUsing(function (array $values) {
+                        return \App\Models\RencanaPegawai::with('pegawai')
+                            ->whereIn('id', $values)
+                            ->get()
+                            ->mapWithKeys(function ($record) {
+                                $pegawai = $record->pegawai;
+
+                                if ($pegawai) {
+                                    $kode = $pegawai->kode_pegawai ? "{$pegawai->kode_pegawai} - " : '';
+                                    $label = "{$kode}{$pegawai->nama_pegawai}";
+                                } else {
+                                    $label = "Pegawai #{$record->id}";
+                                }
+
+                                return [$record->id => $label];
+                            });
+                    })
+                    ->getOptionLabelFromRecordUsing(function ($record) {
+                        $pegawai = $record->pegawai;
+                        if (! $pegawai) return "Pegawai #{$record->id}";
+
+                        $kode = $pegawai->kode_pegawai ? "{$pegawai->kode_pegawai} - " : '';
+
+                        return "{$kode}{$pegawai->nama_pegawai}";
+                    })
                     ->multiple()
                     ->required()
                     ->preload()

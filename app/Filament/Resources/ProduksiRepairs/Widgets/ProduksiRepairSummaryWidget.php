@@ -5,7 +5,7 @@ namespace App\Filament\Resources\ProduksiRepairs\Widgets;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use App\Models\ProduksiRepair;
-use App\Models\HasilRepair;
+use App\Models\DetailHasilRepair;
 
 class ProduksiRepairSummaryWidget extends Widget
 {
@@ -42,66 +42,64 @@ class ProduksiRepairSummaryWidget extends Widget
         $produksiId = $this->record->id;
 
         // 1. TOTAL PRODUKSI (LEMBAR)
-        $totalAll = HasilRepair::where('id_produksi_repair', $produksiId)
+        $totalAll = DetailHasilRepair::where('id_produksi_repair', $produksiId)
             ->sum(DB::raw('CAST(jumlah AS UNSIGNED)'));
 
-        // 2. TOTAL PEGAWAI KESELURUHAN (UNIK)
-        $totalPegawai = $this->record->rencanaPegawais()
-            ->distinct('id_pegawai')
-            ->count('id_pegawai');
+        // 2. TOTAL PEGAWAI KESELURUHAN (UNIK) VIA PIVOT TABLE
+        $totalPegawai = DB::table('detail_repair_pegawai')
+            ->join('detail_hasil_repairs', 'detail_hasil_repairs.id', '=', 'detail_repair_pegawai.detail_hasil_repair_id')
+            ->where('detail_hasil_repairs.id_produksi_repair', $produksiId)
+            ->distinct('detail_repair_pegawai.rencana_pegawai_repair_id')
+            ->count('detail_repair_pegawai.rencana_pegawai_repair_id');
 
-        // 3. GLOBAL UKURAN + KW + JUMLAH ORANG
-        $globalUkuranKw = HasilRepair::query()
-            ->where('hasil_repairs.id_produksi_repair', $produksiId)
-            ->join('rencana_repairs', 'rencana_repairs.id', '=', 'hasil_repairs.id_rencana_repair')
-            ->join('rencana_pegawais', 'rencana_pegawais.id', '=', 'rencana_repairs.id_rencana_pegawai')
-            ->join('modal_repairs', 'modal_repairs.id', '=', 'rencana_repairs.id_modal_repair')
-            ->join('ukurans', 'ukurans.id', '=', 'modal_repairs.id_ukuran')
-            ->join('jenis_kayus', 'jenis_kayus.id', '=', 'modal_repairs.id_jenis_kayu')
+        // FORMULA QUERY DASAR DENGAN FALLBACK NAMA KAYU DARI MODAL REPAIR / MANUAL
+        $baseQuery = DetailHasilRepair::query()
+            ->where('detail_hasil_repairs.id_produksi_repair', $produksiId)
+            ->leftJoin('modal_repairs', 'modal_repairs.id', '=', 'detail_hasil_repairs.id_modal_repair')
+            ->leftJoin('jenis_kayus AS jk_modal', 'jk_modal.id', '=', 'modal_repairs.id_jenis_kayu')
+            ->leftJoin('jenis_kayus AS jk_direct', 'jk_direct.id', '=', 'detail_hasil_repairs.id_jenis_kayu')
+            ->join('ukurans', 'ukurans.id', '=', 'detail_hasil_repairs.id_ukuran')
             ->selectRaw('
-        jenis_kayus.nama_kayu AS jenis_kayu, -- <-- PERBAIKAN 1: Wajib diselect agar terbaca di Blade
-        CONCAT(
-            TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
-            TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
-            TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
-        ) AS ukuran,
-        rencana_repairs.kw,
-        SUM(CAST(hasil_repairs.jumlah AS UNSIGNED)) AS total,
-        COUNT(DISTINCT rencana_pegawais.id_pegawai) AS jumlah_orang
-    ')
-            ->groupBy('jenis_kayus.nama_kayu', 'ukuran', 'rencana_repairs.kw') // <-- PERBAIKAN 2: Digabung di sini
-            ->orderBy('jenis_kayus.nama_kayu')
-            ->orderBy('ukuran')
-            ->orderBy('rencana_repairs.kw')
-            ->get();
-
-
-        // 4. GLOBAL JENIS KAYU & UKURAN
-        $globalJenisKayuUkuran = HasilRepair::query()
-            ->where('hasil_repairs.id_produksi_repair', $produksiId)
-            ->join('rencana_repairs', 'rencana_repairs.id', '=', 'hasil_repairs.id_rencana_repair')
-            ->join('modal_repairs', 'modal_repairs.id', '=', 'rencana_repairs.id_modal_repair')
-            ->join('ukurans', 'ukurans.id', '=', 'modal_repairs.id_ukuran')
-            ->join('jenis_kayus', 'jenis_kayus.id', '=', 'modal_repairs.id_jenis_kayu')
-            ->selectRaw('
-                jenis_kayus.nama_kayu as jenis_kayu,
+                COALESCE(jk_modal.nama_kayu, jk_direct.nama_kayu, "-") AS jenis_kayu,
                 CONCAT(
                     TRIM(TRAILING ".00" FROM CAST(ukurans.panjang AS CHAR)), " x ",
                     TRIM(TRAILING ".00" FROM CAST(ukurans.lebar AS CHAR)), " x ",
                     TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM CAST(ukurans.tebal AS CHAR)))
                 ) AS ukuran,
-                rencana_repairs.kw as kw,
-                SUM(CAST(hasil_repairs.jumlah AS UNSIGNED)) AS total
-            ')
-            ->groupBy('jenis_kayus.nama_kayu', 'ukuran', 'rencana_repairs.kw')
-            ->orderBy('jenis_kayus.nama_kayu')
+                detail_hasil_repairs.kw,
+                SUM(CAST(detail_hasil_repairs.jumlah AS UNSIGNED)) AS total
+            ');
+
+        // 3. GLOBAL UKURAN + KW + JUMLAH ORANG
+        $globalUkuranKw = (clone $baseQuery)
+            ->leftJoin('detail_repair_pegawai', 'detail_repair_pegawai.detail_hasil_repair_id', '=', 'detail_hasil_repairs.id')
+            ->selectRaw('COUNT(DISTINCT detail_repair_pegawai.rencana_pegawai_repair_id) AS jumlah_orang')
+            ->groupBy(
+                DB::raw('COALESCE(jk_modal.nama_kayu, jk_direct.nama_kayu, "-")'),
+                'ukuran',
+                'detail_hasil_repairs.kw'
+            )
+            ->orderBy(DB::raw('COALESCE(jk_modal.nama_kayu, jk_direct.nama_kayu, "-")'))
             ->orderBy('ukuran')
+            ->orderBy('detail_hasil_repairs.kw')
+            ->get();
+
+        // 4. GLOBAL JENIS KAYU & UKURAN
+        $globalJenisKayuUkuran = (clone $baseQuery)
+            ->groupBy(
+                DB::raw('COALESCE(jk_modal.nama_kayu, jk_direct.nama_kayu, "-")'),
+                'ukuran',
+                'detail_hasil_repairs.kw'
+            )
+            ->orderBy(DB::raw('COALESCE(jk_modal.nama_kayu, jk_direct.nama_kayu, "-")'))
+            ->orderBy('ukuran')
+            ->orderBy('detail_hasil_repairs.kw')
             ->get();
 
         $this->summary = [
-            'totalAll'       => $totalAll,
-            'totalPegawai'   => $totalPegawai,
-            'globalUkuranKw' => $globalUkuranKw,
+            'totalAll'               => $totalAll,
+            'totalPegawai'           => $totalPegawai,
+            'globalUkuranKw'         => $globalUkuranKw,
             'globalJenisKayuUkuran' => $globalJenisKayuUkuran,
         ];
     }

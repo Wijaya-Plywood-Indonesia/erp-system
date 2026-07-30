@@ -34,8 +34,10 @@ class NotaKayusTable
                     ->dateTime('d-m-Y')
                     ->label('Tgl Nota')
                     ->sortable(),
+
                 TextColumn::make('no_nota')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('info_kayu')
                     ->label('Info Kayu')

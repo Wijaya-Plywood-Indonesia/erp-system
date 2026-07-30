@@ -258,7 +258,7 @@
                                 Edit
                             </button>
                             @else
-                            <span class="text-[9px] text-gray-300 dark:text-gray-700 font-bold uppercase" title="Sudah diterima/terpakai di tujuan">🔒 Terkunci</span>
+                            <span class="text-[9px] text-gray-300 dark:text-gray-700 font-bold uppercase" title="Sudah diterima/terpakai di tujuan">Sudah Diterima</span>
                             @endif
                         </div>
                     </div>

@@ -71,6 +71,7 @@ class GudangPlatformJadi extends Page
 
     public array $editPaletQuantities = [0 => ''];
 
+
     public function editKeluar(int $id): void
     {
         $mutasi = PlatformJadiMutasiKeluar::with('palets.bahanHotpress')->find($id);
@@ -92,7 +93,7 @@ class GudangPlatformJadi extends Page
         }
 
         $sudahAdaYangTerserap = $mutasi->palets->contains(
-            fn ($p) => ! is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0
+            fn($p) => ! is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0
         );
 
         if ($sudahAdaYangTerserap) {
@@ -177,7 +178,7 @@ class GudangPlatformJadi extends Page
                 }
 
                 $sudahAdaYangTerserap = $mutasi->palets->contains(
-                    fn ($p) => ! is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0
+                    fn($p) => ! is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0
                 );
 
                 if ($sudahAdaYangTerserap) {
@@ -251,7 +252,7 @@ class GudangPlatformJadi extends Page
                 $q = strtolower(trim($this->search));
                 $barang = strtolower((string) $item->jenisBarang?->nama_jenis_barang);
                 $grade = strtolower((string) $item->kw_grade);
-                $dimensi = strtolower(($item->panjang + 0).'x'.($item->lebar + 0).'x'.($item->tebal + 0));
+                $dimensi = strtolower(($item->panjang + 0) . 'x' . ($item->lebar + 0) . 'x' . ($item->tebal + 0));
 
                 return str_contains($barang, $q)
                     || str_contains($grade, $q)
@@ -313,17 +314,17 @@ class GudangPlatformJadi extends Page
         if (trim($this->antreanSearch) !== '') {
             $q = strtolower(trim($this->antreanSearch));
             $rows = $rows->filter(
-                fn ($r) => str_contains(strtolower((string) $r->jenis_barang), $q)
-                || str_contains(strtolower((string) $r->grade), $q)
-                || str_contains(strtolower(($r->panjang + 0).'x'.($r->lebar + 0).'x'.($r->tebal + 0)), $q)
-                || str_contains(strtolower('palet '.$r->no_palet), $q)
+                fn($r) => str_contains(strtolower((string) $r->jenis_barang), $q)
+                    || str_contains(strtolower((string) $r->grade), $q)
+                    || str_contains(strtolower(($r->panjang + 0) . 'x' . ($r->lebar + 0) . 'x' . ($r->tebal + 0)), $q)
+                    || str_contains(strtolower('palet ' . $r->no_palet), $q)
             );
         }
 
         // Belum diterima di atas (terbaru dulu), sudah diterima di bawah.
         return $rows
             ->sortByDesc('created_at')
-            ->sortBy(fn ($r) => $r->sudah ? 1 : 0)
+            ->sortBy(fn($r) => $r->sudah ? 1 : 0)
             ->values();
     }
 
@@ -418,8 +419,8 @@ class GudangPlatformJadi extends Page
                     'stok_lembar_after' => $after['lembar'],
                     'stok_kubikasi_after' => $after['kubikasi'],
                     'nilai_stok_after' => $after['nilai'],
-                    'keterangan' => 'Serah terima Hasil Sanding Palet '.$hs->no_palet
-                        .' | Diterima: '.$userName,
+                    'keterangan' => 'Serah terima Hasil Sanding Palet ' . $hs->no_palet
+                        . ' | Diterima: ' . $userName,
                 ]);
 
                 $stok->update([
@@ -585,7 +586,7 @@ class GudangPlatformJadi extends Page
                 $stok = StokPlatformJadi::lockForUpdate()->findOrFail($this->selectedStokId);
 
                 if ($totalLembar > (int) $stok->stok_lembar) {
-                    throw new \Exception('Sisa stok tidak mencukupi. Tersedia: '.$stok->stok_lembar.' lembar.');
+                    throw new \Exception('Sisa stok tidak mencukupi. Tersedia: ' . $stok->stok_lembar . ' lembar.');
                 }
 
                 $user = Auth::user();
@@ -646,7 +647,7 @@ class GudangPlatformJadi extends Page
         if (trim($this->keluarSearchQuery) !== '') {
             $q = strtolower(trim($this->keluarSearchQuery));
             $query->where(function ($query) use ($q) {
-                $query->whereHas('jenisBarang', fn ($qr) => $qr->whereRaw('LOWER(nama_jenis_barang) LIKE ?', ["%{$q}%"]))
+                $query->whereHas('jenisBarang', fn($qr) => $qr->whereRaw('LOWER(nama_jenis_barang) LIKE ?', ["%{$q}%"]))
                     ->orWhereRaw('LOWER(kw_grade) LIKE ?', ["%{$q}%"])
                     ->orWhereRaw('LOWER(tujuan) LIKE ?', ["%{$q}%"])
                     ->orWhereRaw('LOWER(keterangan) LIKE ?', ["%{$q}%"]);
@@ -656,7 +657,7 @@ class GudangPlatformJadi extends Page
         return $query->get()->map(function ($rk) {
             $rk->bisa_diedit = is_null($rk->id_produksi_hp)
                 && is_null($rk->diterima_by)
-                && ! $rk->palets->contains(fn ($p) => ! is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0);
+                && ! $rk->palets->contains(fn($p) => ! is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0);
 
             return $rk;
         });
