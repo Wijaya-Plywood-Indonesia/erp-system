@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DetailNotaBarangMasuks\Tables;
 
+use App\Models\BarangUmum;
 use App\Models\DetailNotaBarangKeluar;
 use App\Models\DetailNotaBarangMasuk;
 use App\Models\Grade;
@@ -16,6 +17,7 @@ use App\Models\StokVeneerKering;
 use App\Models\Ukuran;
 use App\Models\VeneerMutasi;
 use App\Models\VeneerMutasiDetail;
+use App\Services\BarangUmumInventoryService;
 use App\Services\PlywoodMutasiService;
 use App\Services\VeneerMutasiService;
 use Filament\Actions\Action;
@@ -37,6 +39,21 @@ use Illuminate\Support\HtmlString;
 
 class DetailNotaBarangMasuksTable
 {
+    protected const BARANG_UMUM_PREFIX = 'Barang Umum - ';
+
+    /**
+     * Format angka qty: tanpa desimal jika bulat, tetap tampilkan desimal
+     * (maks 2 digit, tanpa nol berlebih) jika pecahan.
+     */
+    protected static function formatQty(float $qty): string
+    {
+        $rounded = round($qty, 2);
+
+        return $rounded == floor($rounded)
+            ? number_format($rounded, 0)
+            : rtrim(rtrim(number_format($rounded, 2), '0'), '.');
+    }
+
     /**
      * Cari baris stok plywood tanpa peduli orientasi panjang/lebar maupun
      * beda tipe data (stok menyimpan string "122.00", ukurans cast ke float).
@@ -121,6 +138,52 @@ class DetailNotaBarangMasuksTable
     }
 
     /**
+     * Form fields untuk Barang Umum — dipakai bersama oleh Tambah & Edit.
+     */
+    protected static function barangUmumFormSchema(): array
+    {
+        return [
+            Select::make('id_barang_umum')
+                ->label('Barang Umum')
+                ->options(BarangUmum::orderBy('nama_barang')->pluck('nama_barang', 'id'))
+                ->searchable()
+                ->required()
+                ->live(),
+
+            Placeholder::make('stok_saat_ini')
+                ->label('Stok Saat Ini')
+                ->content(function (callable $get) {
+                    if (! $get('id_barang_umum')) {
+                        return new HtmlString('<span class="text-gray-400 dark:text-gray-500">Pilih barang terlebih dahulu...</span>');
+                    }
+
+                    $barang = BarangUmum::with('stok')->find($get('id_barang_umum'));
+
+                    if (! $barang) {
+                        return new HtmlString('<span class="text-gray-400 dark:text-gray-500">Barang tidak ditemukan.</span>');
+                    }
+
+                    $qty = (float) ($barang->stok?->stok_qty ?? 0);
+
+                    return new HtmlString(
+                        '<strong class="text-success-600 dark:text-success-400 text-lg">'
+                        .static::formatQty($qty).' '.e($barang->satuan).'</strong>'
+                    );
+                }),
+
+            TextInput::make('jumlah')
+                ->label('Jumlah')
+                ->numeric()
+                ->minValue(0.0001)
+                ->required(),
+
+            Textarea::make('keterangan')
+                ->label('Keterangan')
+                ->rows(3),
+        ];
+    }
+
+    /**
      * Cari baris plywood_mutasi_details yang cocok dengan baris detail nota.
      */
     protected static function findPlywoodDetail($record): ?PlywoodMutasiDetail
@@ -185,6 +248,20 @@ class DetailNotaBarangMasuksTable
         }
 
         return null;
+    }
+
+    /**
+     * Ambil record BarangUmum dari nama_barang detail nota (strip prefix).
+     */
+    protected static function findBarangUmumFromRecord($record): ?BarangUmum
+    {
+        if (! str_starts_with($record->nama_barang, static::BARANG_UMUM_PREFIX)) {
+            return null;
+        }
+
+        $namaBarang = trim(substr($record->nama_barang, strlen(static::BARANG_UMUM_PREFIX)));
+
+        return BarangUmum::where('nama_barang', $namaBarang)->first();
     }
 
     public static function configure(Table $table): Table
@@ -444,6 +521,35 @@ class DetailNotaBarangMasuksTable
                         return $nota && empty($nota->divalidasi_oleh);
                     }),
 
+                Action::make('tambah_barang_umum')
+                    ->label('Tambah Barang Umum')
+                    ->icon('heroicon-o-cube')
+                    ->color('gray')
+                    ->form(static::barangUmumFormSchema())
+                    ->action(function (RelationManager $livewire, array $data) {
+                        $nota = $livewire->getOwnerRecord();
+                        if (! $nota) {
+                            return;
+                        }
+
+                        $barang = BarangUmum::findOrFail($data['id_barang_umum']);
+
+                        DetailNotaBarangMasuk::create([
+                            'id_nota_bm' => $nota->id,
+                            'nama_barang' => static::BARANG_UMUM_PREFIX.$barang->nama_barang,
+                            'jumlah' => $data['jumlah'],
+                            'satuan' => $barang->satuan,
+                            'keterangan' => $data['keterangan'] ?? 'Masuk dari BM Barang Umum',
+                        ]);
+
+                        $livewire->dispatch('$refresh');
+                    })
+                    ->visible(function (RelationManager $livewire) {
+                        $nota = $livewire->getOwnerRecord();
+
+                        return $nota && empty($nota->divalidasi_oleh);
+                    }),
+
                 CreateAction::make()
                     ->label('Tambah Barang')
                     ->visible(function (RelationManager $livewire) {
@@ -485,6 +591,9 @@ class DetailNotaBarangMasuksTable
                         try {
                             $hasVeneer = VeneerMutasi::where('id_nota_bm', $nota->id)->exists();
                             $hasPlywood = PlywoodMutasi::where('id_nota_bm', $nota->id)->exists();
+                            $hasBarangUmum = $nota->detail()
+                                ->where('nama_barang', 'like', static::BARANG_UMUM_PREFIX.'%')
+                                ->exists();
 
                             DB::transaction(function () use ($nota) {
                                 app(VeneerMutasiService::class)->processStockFromNota($nota);
@@ -493,12 +602,18 @@ class DetailNotaBarangMasuksTable
                                 $nota->refresh();
 
                                 app(PlywoodMutasiService::class)->processStockFromNota($nota);
+
+                                app(BarangUmumInventoryService::class)->processStockFromNota($nota);
                             });
 
                             $pesan = match (true) {
+                                $hasVeneer && $hasPlywood && $hasBarangUmum => 'Stok veneer, plywood & barang umum telah ditambahkan sesuai isi nota BM.',
                                 $hasVeneer && $hasPlywood => 'Stok veneer & plywood telah ditambahkan sesuai isi nota BM.',
+                                $hasVeneer && $hasBarangUmum => 'Stok veneer & barang umum telah ditambahkan sesuai isi nota BM.',
+                                $hasPlywood && $hasBarangUmum => 'Stok plywood & barang umum telah ditambahkan sesuai isi nota BM.',
                                 $hasVeneer => 'Stok veneer telah ditambahkan sesuai isi nota BM.',
                                 $hasPlywood => 'Stok plywood telah ditambahkan sesuai isi nota BM.',
+                                $hasBarangUmum => 'Stok barang umum telah ditambahkan sesuai isi nota BM.',
                                 default => 'Status nota telah diperbarui.',
                             };
 
@@ -524,6 +639,10 @@ class DetailNotaBarangMasuksTable
             ->recordActions([
                 EditAction::make()
                     ->form(function ($record) {
+                        if (str_starts_with($record->nama_barang, DetailNotaBarangMasuksTable::BARANG_UMUM_PREFIX)) {
+                            return static::barangUmumFormSchema();
+                        }
+
                         if (str_starts_with($record->nama_barang, 'Plywood ')) {
                             return static::plywoodFormSchema();
                         }
@@ -654,8 +773,15 @@ class DetailNotaBarangMasuksTable
                         ];
                     })
                     ->mutateRecordDataUsing(function (array $data, $record): array {
-                        $data['jumlah'] = (int) $record->jumlah;
+                        $data['jumlah'] = (float) $record->jumlah;
                         $data['keterangan'] = $record->keterangan;
+
+                        if (str_starts_with($record->nama_barang, DetailNotaBarangMasuksTable::BARANG_UMUM_PREFIX)) {
+                            $barang = static::findBarangUmumFromRecord($record);
+                            $data['id_barang_umum'] = $barang?->id;
+
+                            return $data;
+                        }
 
                         if (str_starts_with($record->nama_barang, 'Plywood ')) {
                             $detail = static::findPlywoodDetail($record);
@@ -683,6 +809,19 @@ class DetailNotaBarangMasuksTable
                         return $data;
                     })
                     ->using(function ($record, array $data) {
+                        if (str_starts_with($record->nama_barang, DetailNotaBarangMasuksTable::BARANG_UMUM_PREFIX)) {
+                            $barang = BarangUmum::findOrFail($data['id_barang_umum']);
+
+                            $record->update([
+                                'nama_barang' => DetailNotaBarangMasuksTable::BARANG_UMUM_PREFIX.$barang->nama_barang,
+                                'jumlah' => $data['jumlah'],
+                                'satuan' => $barang->satuan,
+                                'keterangan' => $data['keterangan'] ?? $record->keterangan,
+                            ]);
+
+                            return $record;
+                        }
+
                         if (str_starts_with($record->nama_barang, 'Plywood ')) {
                             $matchingDetail = static::findPlywoodDetail($record);
 
@@ -776,6 +915,9 @@ class DetailNotaBarangMasuksTable
                         if (str_starts_with($record->nama_barang, 'Veneer ')) {
                             static::findVeneerDetail($record)?->delete();
                         }
+
+                        // Barang Umum: tidak ada tabel detail perantara sebelum
+                        // validasi, jadi hapus baris nota saja sudah cukup.
                     }),
             ])
             ->toolbarActions([

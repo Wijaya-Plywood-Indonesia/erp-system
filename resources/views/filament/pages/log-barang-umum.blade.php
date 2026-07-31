@@ -49,11 +49,11 @@
                         <th class="px-4 py-3 text-left whitespace-nowrap">Barang</th>
                         <th class="px-4 py-3 text-center whitespace-nowrap">Satuan</th>
                         <th class="px-4 py-3 text-left whitespace-nowrap">Tipe</th>
-                        <th class="px-4 py-3 text-left">Keterangan</th>
                         <th class="px-4 py-3 text-right border-l border-gray-100 dark:border-gray-700 whitespace-nowrap">Qty</th>
                         <th class="px-4 py-3 text-right border-l border-gray-100 dark:border-gray-700 whitespace-nowrap">
                             Stok<div class="text-[10px] font-medium normal-case text-gray-500 tracking-normal">Sebelum → Sesudah</div>
                         </th>
+                        <th class="px-4 py-3 text-left">Keterangan</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
@@ -90,9 +90,7 @@
                             </span>
                         </td>
 
-                        <td class="px-4 py-3 text-[11px] font-black uppercase text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                            {{ $log->keterangan ?? '—' }}
-                        </td>
+                        
 
                         <td @class(['px-4 py-3 text-right font-black text-sm border-l border-gray-50 dark:border-gray-800 whitespace-nowrap tabular-nums',
                             'text-green-600 dark:text-green-400' => $isM,
@@ -110,6 +108,9 @@
                                     {{ $stokAfter }}
                                 </span>
                             </div>
+                        </td>
+                        <td class="px-4 py-3 text-[11px] font-black uppercase text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                            {{ $log->keterangan ?? '—' }}
                         </td>
                     </tr>
                     @empty
