@@ -1,10 +1,10 @@
 <div class="space-y-6">
 
     {{-- HEADER PILIH JENIS STOK (collapsible) --}}
-    <div class="rounded-2xl border border-gray-200 dark:border-gray-700/50 bg-white dark:bg-gradient-to-br dark:from-gray-800/80 dark:to-gray-900/80 p-6 shadow-sm dark:shadow-xl">
+    <div class="rounded-2xl border border-slate-300 dark:border-slate-600/60 border-l-4 border-l-orange-500/70 dark:border-l-orange-500/60 bg-slate-100 dark:bg-slate-800/50 p-6 shadow-sm">
 
         {{-- Header bar (klik untuk expand/collapse) --}}
-        <div class="flex items-center justify-between cursor-pointer select-none" wire:click="toggleHeader">
+        <div class="flex items-center justify-between cursor-pointer select-none -m-2 p-2 rounded-xl transition-colors hover:bg-slate-200/60 dark:hover:bg-slate-700/40" wire:click="toggleHeader">
             <div class="flex items-center gap-4">
                 <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-500/20 border border-orange-300 dark:border-orange-500/30">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-orange-500 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -13,52 +13,62 @@
                 </div>
                 <div>
                     <h2 class="text-gray-900 dark:text-white font-semibold text-lg">Stock Opname</h2>
-                    <p class="text-gray-500 dark:text-gray-400 text-sm">
+                    <p class="text-slate-600 dark:text-slate-400 text-sm">
                         @if($jenisStok && $headerCollapsed)
                             Jenis stok:
-                            <span class="text-orange-600 dark:text-orange-400 font-medium">
+                            <span class="text-orange-600 dark:text-orange-400 font-semibold">
                                 {{ \App\Livewire\OpnameStokTable::JENIS_STOK_LABELS[$jenisStok] ?? $jenisStok }}
                             </span>
-                            <span class="text-gray-400 dark:text-gray-500">— klik untuk ganti</span>
                         @else
                             Pilih jenis stok untuk memulai opname
                         @endif
                     </p>
                 </div>
             </div>
-            <svg xmlns="http://www.w3.org/2000/svg"
-                 class="h-5 w-5 text-gray-400 transition-transform duration-200 {{ $headerCollapsed ? '' : 'rotate-180' }}"
-                 fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
+
+            <div class="flex items-center gap-3">
+                @if($jenisStok && $headerCollapsed)
+                <span class="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700/60 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    Ganti jenis stok
+                </span>
+                @endif
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     class="h-5 w-5 text-slate-400 dark:text-slate-500 transition-transform duration-200 {{ $headerCollapsed ? '' : 'rotate-180' }}"
+                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+            </div>
         </div>
 
         {{-- GRID JENIS STOK --}}
         @unless($headerCollapsed)
         <div class="grid grid-cols-3 sm:grid-cols-5 gap-3 mt-6">
             @foreach([
-    'veneer_basah'  => ['label' => 'Veneer Basah',      'icon' => '💧'],
-    'veneer_kering' => ['label' => 'Veneer Kering',     'icon' => '☀️'],
-    'veneer_jadi'   => ['label' => 'Veneer Jadi',       'icon' => '📄'],
-    'platform_mth'  => ['label' => 'Platform MTH',      'icon' => '🧱'],
-    'triplek_mth'   => ['label' => 'Triplek MTH',       'icon' => '🗂️'],
-    'platform_jadi' => ['label' => 'Platform Jadi',     'icon' => '🟫'],
-    'triplek_jadi'  => ['label' => 'Triplek Jadi',      'icon' => '📚'],
-    'gudang_satu'   => ['label' => 'Gudang Satu',       'icon' => '🏬'],
-    'plywood'       => ['label' => 'Plywood Siap Jual', 'icon' => '✨'],
-] as $value => $item)
+                'veneer_basah'  => ['label' => 'Veneer Basah',      'icon' => '💧'],
+                'veneer_kering' => ['label' => 'Veneer Kering',     'icon' => '☀️'],
+                'veneer_jadi'   => ['label' => 'Veneer Jadi',       'icon' => '📄'],
+                'platform_mth'  => ['label' => 'Platform MTH',      'icon' => '🧱'],
+                'triplek_mth'   => ['label' => 'Triplek MTH',       'icon' => '🗂️'],
+                'platform_jadi' => ['label' => 'Platform Jadi',     'icon' => '🟫'],
+                'triplek_jadi'  => ['label' => 'Triplek Jadi',      'icon' => '📚'],
+                'gudang_satu'   => ['label' => 'Gudang Satu',       'icon' => '🏬'],
+                'plywood'       => ['label' => 'Plywood Siap Jual', 'icon' => '✨'],
+            ] as $value => $item)
             <button
                 wire:click="$set('jenisStok', '{{ $value }}')"
                 class="relative flex flex-col items-center gap-2 p-4 rounded-xl border transition-all duration-200 text-center
                     {{ $jenisStok === $value
-                        ? 'border-orange-500 bg-orange-50 dark:bg-orange-500/15 shadow-lg shadow-orange-500/10'
-                        : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700/50' }}"
+                        ? 'border-orange-500 bg-orange-50 dark:bg-orange-500/15 shadow-sm'
+                        : 'border-slate-300 dark:border-slate-600/60 bg-white dark:bg-slate-700/40 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/70' }}"
             >
                 @if($jenisStok === $value)
                 <span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-orange-500 dark:bg-orange-400"></span>
                 @endif
                 <span class="text-2xl">{{ $item['icon'] }}</span>
-                <span class="text-xs font-medium {{ $jenisStok === $value ? 'text-orange-600 dark:text-orange-300' : 'text-gray-700 dark:text-gray-300' }} leading-tight">
+                <span class="text-xs font-medium {{ $jenisStok === $value ? 'text-orange-600 dark:text-orange-300' : 'text-slate-700 dark:text-slate-300' }} leading-tight">
                     {{ $item['label'] }}
                 </span>
             </button>
@@ -80,6 +90,15 @@
                 <span class="px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 text-xs font-mono">
                     {{ count($rows) }} barang
                 </span>
+                @php $terhapus = count($originalRows) - count(array_intersect(
+                    collect($originalRows)->pluck('_uid')->all(),
+                    collect($rows)->pluck('_uid')->all()
+                )); @endphp
+                @if($terhapus > 0)
+                <span class="px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-mono">
+                    {{ $terhapus }} akan dinolkan
+                </span>
+                @endif
             </div>
             <span class="text-gray-400 dark:text-gray-500 text-xs">Isi kolom Stok Fisik &amp; Kbk Fisik untuk barang yang ingin disesuaikan</span>
         </div>
@@ -102,8 +121,9 @@
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
                     @foreach($rows as $i => $row)
-@php $diisi = isset($row['stok_fisik']) && $row['stok_fisik'] !== null && $row['stok_fisik'] !== ''; @endphp
-<tr wire:key="row-{{ $row['_uid'] }}" class="transition-colors {{ $diisi
+                    @php $diisi = (isset($row['stok_fisik']) && $row['stok_fisik'] !== null && $row['stok_fisik'] !== '')
+                        || (isset($row['kubikasi_fisik']) && $row['kubikasi_fisik'] !== null && $row['kubikasi_fisik'] !== ''); @endphp
+                    <tr wire:key="row-{{ $row['_uid'] }}" class="transition-colors {{ $diisi
                         ? 'bg-green-50 hover:bg-green-100 dark:bg-green-900/10 dark:hover:bg-green-900/20'
                         : 'bg-white hover:bg-gray-50 dark:bg-gray-900/50 dark:hover:bg-gray-800/30' }}">
 
@@ -115,7 +135,7 @@
                                 <div x-data="searchSelect({
                                     options: {{ json_encode(collect($jenisBarangOptions)->map(fn($v,$k) => ['id'=>$k,'label'=>$v])->values()) }},
                                     selected: {{ $row['id_jenis_barang'] ?? 'null' }},
-                                    onChange: (val) => $wire.set('rows.{{ $i }}.id_jenis_barang', val)
+                                    onChange: (val) => $wire.setField('{{ $row['_uid'] }}', 'id_jenis_barang', val)
                                 })">
                                     @include('livewire.partials.search-select')
                                 </div>
@@ -123,7 +143,7 @@
                                 <div x-data="searchSelect({
                                     options: {{ json_encode(collect($jenisKayuOptions)->map(fn($v,$k) => ['id'=>$k,'label'=>$v])->values()) }},
                                     selected: {{ $row['id_jenis_kayu'] ?? 'null' }},
-                                    onChange: (val) => $wire.set('rows.{{ $i }}.id_jenis_kayu', val)
+                                    onChange: (val) => $wire.setField('{{ $row['_uid'] }}', 'id_jenis_kayu', val)
                                 })">
                                     @include('livewire.partials.search-select')
                                 </div>
@@ -135,7 +155,7 @@
                             <div x-data="searchSelect({
                                 options: {{ json_encode(collect($ukuranOptions)->map(fn($v,$k) => ['id'=>$k,'label'=>$v])->values()) }},
                                 selected: {{ $row['id_ukuran'] ?? 'null' }},
-                                onChange: (val) => $wire.set('rows.{{ $i }}.id_ukuran', val)
+                                onChange: (val) => $wire.setField('{{ $row['_uid'] }}', 'id_ukuran', val)
                             })">
                                 @include('livewire.partials.search-select')
                             </div>
@@ -146,7 +166,7 @@
                             <div x-data="searchSelect({
                                 options: {{ json_encode(collect($gradeOptions)->map(fn($v,$k) => ['id'=>$k,'label'=>$v])->values()) }},
                                 selected: '{{ $row['kw'] ?? '' }}',
-                                onChange: (val) => $wire.set('rows.{{ $i }}.kw', val)
+                                onChange: (val) => $wire.setField('{{ $row['_uid'] }}', 'kw', val)
                             })">
                                 @include('livewire.partials.search-select')
                             </div>
@@ -209,11 +229,11 @@
                             />
                         </td>
 
-                        {{-- Hapus --}}
+                        {{-- Hapus (berbasis _uid, bukan index) --}}
                         <td class="px-3 py-2">
                             <button
-                                wire:click="hapusBaris({{ $i }})"
-                                wire:confirm="Hapus baris ini?"
+                                wire:click="hapusBaris('{{ $row['_uid'] }}')"
+                                wire:confirm="Hapus baris ini? Stok sistem akan dinolkan saat Anda klik Sesuaikan Stok."
                                 class="text-gray-400 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1 rounded"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -282,14 +302,37 @@ function searchSelect({ options, selected, onChange }) {
         open: false,
         onChange,
         dropdownStyle: '',
+        // Normalisasi untuk membandingkan nilai: JS peka huruf besar-kecil
+        // dan spasi, sedangkan collation MySQL default tidak. Akibatnya
+        // 'b1' di DB tidak cocok dengan opsi 'B1' dan dropdown tampak kosong.
+        norm(v) {
+            return String(v ?? '').trim().toLowerCase();
+        },
         get filtered() {
             if (!this.search) return this.options;
-            const q = this.search.toLowerCase();
-            return this.options.filter(o => o.label.toLowerCase().includes(q));
+            const q = this.norm(this.search);
+            return this.options.filter(o => this.norm(o.label).includes(q));
         },
         get selectedLabel() {
-            const found = this.options.find(o => String(o.id) === String(this.selected));
-            return found ? found.label : null;
+            if (this.selected === null || this.selected === '' || this.selected === undefined) {
+                return null;
+            }
+
+            const target = this.norm(this.selected);
+            const found  = this.options.find(o => this.norm(o.id) === target);
+
+            // Kalau benar-benar tidak ada di master, tampilkan nilai aslinya.
+            // Jangan jatuh ke "Pilih...", karena baris ini sebenarnya berisi.
+            return found ? found.label : String(this.selected).trim();
+        },
+        // True kalau nilainya ada tapi tidak terdaftar di master —
+        // dipakai partial untuk memberi penanda visual.
+        get selectedTidakDiMaster() {
+            if (this.selected === null || this.selected === '' || this.selected === undefined) {
+                return false;
+            }
+            const target = this.norm(this.selected);
+            return !this.options.some(o => this.norm(o.id) === target);
         },
         toggle() {
             this.open = !this.open;
