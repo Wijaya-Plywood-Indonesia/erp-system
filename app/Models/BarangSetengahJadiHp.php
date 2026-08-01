@@ -39,4 +39,23 @@ class BarangSetengahJadiHp extends Model
     {
         return $this->hasMany(DetailDempul::class, 'id_barang_setengah_jadi_hp');
     }
+
+    public function scopeKategori($query, string $keyword)
+{
+    return $query->whereHas('grade.kategoriBarang', function ($q) use ($keyword) {
+        $q->where('nama_kategori', 'like', "%{$keyword}%");
+    });
+}
+
+public function getLabelAttribute(): string
+{
+    $kategori = $this->grade?->kategoriBarang?->nama_kategori ?? '-';
+    $jenis = $this->jenisBarang?->nama_jenis_barang;   // kode spesies, mis. "S"
+    $ukuran = $this->ukuran?->nama_ukuran;
+    $grade = $this->grade?->nama_grade;
+
+    $parts = array_filter([$kategori, $jenis, $ukuran, $grade ? "{$grade}" : null]);
+
+    return implode(' - ', $parts);
+}
 }
