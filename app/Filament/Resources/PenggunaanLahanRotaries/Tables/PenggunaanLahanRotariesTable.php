@@ -5,6 +5,7 @@ namespace App\Filament\Resources\PenggunaanLahanRotaries\Tables;
 use App\Models\HppAverageLog;
 use App\Models\HppAverageSummarie;
 use App\Models\PenggunaanLahanRotary;
+use App\Services\LogCoreStokService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -261,6 +262,24 @@ class PenggunaanLahanRotariesTable
                                     'hpp_average'   => 0,
                                     'id_last_log'   => $log->id,
                                 ]);
+
+                                if ($batangKeluar > 0) {
+                                    app(LogCoreStokService::class)->tambahStok(
+                                        idJenisKayu: $idJenisKayu,
+                                        panjang: $item->panjang,
+                                        qty: $batangKeluar,
+                                        hargaSatuan: 0,
+                                        referensi: $record,
+                                        keterangan: sprintf(
+                                            'SELESAI LAHAN | Lahan: %s - %s | Jenis Kayu: %s | Panjang: %s | Hasil LogCore',
+                                            $kodeLahan,
+                                            $namaLahan,
+                                            $namaKayu,
+                                            $item->panjang
+                                        ),
+                                        tanggal: $tglProduksi,
+                                    );
+                                }
 
                                 // Akumulasi grand total untuk disimpan ke record
                                 $grandTotalBatangKeluar   += $batangKeluar;
