@@ -4,11 +4,15 @@ namespace App\Services;
 
 use App\Models\BarangUmum;
 use App\Models\LogBarangUmum;
+use App\Models\NotaBarangKeluar;
+use App\Models\NotaBarangMasuk;
 use App\Models\StokBarangUmum;
 use Illuminate\Support\Facades\DB;
 
 class BarangUmumInventoryService
 {
+    protected const BARANG_UMUM_PREFIX = 'Barang Umum - ';
+
     /**
      * Catat transaksi masuk atau keluar untuk satu barang umum.
      * Bisa dipanggil manual (dari form input) atau otomatis dari modul lain.
@@ -80,5 +84,89 @@ class BarangUmumInventoryService
 
             return $log;
         });
+    }
+
+    /**
+     * Proses semua baris detail Nota Barang Masuk yang berasal dari
+     * "Tambah Barang Umum" dan catat sebagai transaksi masuk ke stok.
+     * Dipanggil saat nota divalidasi.
+     */
+    public function processStockFromNota(NotaBarangMasuk $nota): void
+    {
+        foreach ($nota->detail as $detail) {
+            if (! str_starts_with($detail->nama_barang, static::BARANG_UMUM_PREFIX)) {
+                continue;
+            }
+
+            $namaBarang = trim(substr($detail->nama_barang, strlen(static::BARANG_UMUM_PREFIX)));
+            $barang = BarangUmum::where('nama_barang', $namaBarang)->first();
+
+            if (! $barang) {
+                // Barang mungkin sudah dihapus/diubah namanya dari master, skip aman.
+                continue;
+            }
+
+            $namaValidator = $nota->divalidasiOleh?->name ?? 'Sistem';
+
+            $keterangan = "Nota {$nota->no_nota}".($detail->keterangan ? " - {$detail->keterangan}" : '')
+                ." (divalidasi oleh {$namaValidator})";
+
+            $this->catatTransaksi(
+                idBarangUmum: $barang->id,
+                tipeTransaksi: 'masuk',
+                qty: (float) $detail->jumlah,
+                tanggal: $nota->tanggal->format('Y-m-d'),
+                keterangan: $keterangan,
+                referensiType: NotaBarangMasuk::class,
+                referensiId: $nota->id,
+            );
+        }
+    }
+
+    /**
+     * Proses semua baris detail Nota Barang Keluar yang berasal dari
+     * "Keluar Barang Umum" dan catat sebagai transaksi keluar dari stok.
+     * Dipanggil saat nota divalidasi.
+     *
+     * @throws \RuntimeException jika stok tidak cukup untuk salah satu baris.
+     */
+    public function processStockFromNotaKeluar(NotaBarangKeluar $nota): void
+    {
+        foreach ($nota->detail as $detail) {
+            if (! str_starts_with($detail->nama_barang, static::BARANG_UMUM_PREFIX)) {
+                continue;
+            }
+
+            $namaBarang = trim(substr($detail->nama_barang, strlen(static::BARANG_UMUM_PREFIX)));
+            $barang = BarangUmum::where('nama_barang', $namaBarang)->first();
+
+            if (! $barang) {
+                // Barang mungkin sudah dihapus/diubah namanya dari master, skip aman.
+                continue;
+            }
+
+            $stokSaatIni = (float) ($barang->stok?->stok_qty ?? 0);
+
+            if ($stokSaatIni < (float) $detail->jumlah) {
+                throw new \RuntimeException(
+                    "Stok {$barang->nama_barang} tidak cukup. Stok saat ini: {$stokSaatIni} {$barang->satuan}."
+                );
+            }
+
+            $namaValidator = $nota->divalidasiOleh?->name ?? 'Sistem';
+
+            $keterangan = "Nota {$nota->no_nota}".($detail->keterangan ? " - {$detail->keterangan}" : '')
+                ." (divalidasi oleh {$namaValidator})";
+
+            $this->catatTransaksi(
+                idBarangUmum: $barang->id,
+                tipeTransaksi: 'keluar',
+                qty: (float) $detail->jumlah,
+                tanggal: $nota->tanggal->format('Y-m-d'),
+                keterangan: $keterangan,
+                referensiType: NotaBarangKeluar::class,
+                referensiId: $nota->id,
+            );
+        }
     }
 }
