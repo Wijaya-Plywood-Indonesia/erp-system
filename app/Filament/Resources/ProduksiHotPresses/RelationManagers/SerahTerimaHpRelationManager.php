@@ -520,16 +520,23 @@ class SerahTerimaHpRelationManager extends RelationManager
                                                 : 'Terima dari Sanding'),
                                     ]);
 
-                                    // Stok triplek BERTAMBAH kalau barang berasal dari hotpress
-                                    // ATAU dari Gudang Triplek Mentah. Serah manual dari Sanding
-                                    // -> Graji tidak mengubah stok (sementara).
+                                    // Stok triplek BERTAMBAH kalau barang berasal dari hotpress.
                                     if ($fresh->id_triplek_hasil_hp) {
                                         $this->prosesTerimaTriplek($fresh, $stokTriplekService);
-                                    } elseif ($fresh->id_triplek_mth_mutasi_keluar) {
-                                        // 🌟 Dari GUDANG TRIPLEK MENTAH: potong stok triplek mentah,
-                                        // tulis log 'keluar', mutasi sudah ditandai diterima di atas.
-                                        $this->prosesKeluarTriplekMth($fresh, $stokTriplekService);
                                     }
+                                    // 🚫 DINONAKTIFKAN SEMENTARA (atas permintaan): pengurangan
+                                    // stok Triplek Mentah saat diterima dari Gudang Triplek
+                                    // Mentah TIDAK dibutuhkan untuk saat ini. Barang tetap bisa
+                                    // "Diterima" seperti biasa (status/diterima_oleh tetap
+                                    // ter-update di atas), hanya saja baris stok Triplek Mentah
+                                    // TIDAK dipotong otomatis lagi.
+                                    // Untuk mengaktifkan kembali, un-comment blok di bawah ini:
+                                    // elseif ($fresh->id_triplek_mth_mutasi_keluar) {
+                                    //     // 🌟 Dari GUDANG TRIPLEK MENTAH: potong stok triplek
+                                    //     // mentah, tulis log 'keluar', mutasi sudah ditandai
+                                    //     // diterima di atas.
+                                    //     $this->prosesKeluarTriplekMth($fresh, $stokTriplekService);
+                                    // }
 
                                     return;
                                 }
@@ -561,12 +568,20 @@ class SerahTerimaHpRelationManager extends RelationManager
                                         // apa pun di sini (tambahStokGudangSatu: false).
                                         app(TerimaTriplekJadiService::class)
                                             ->konfirmasi($fresh, tambahStokGudangSatu: false);
-                                    } elseif ($fresh->id_platform_mth_mutasi_keluar) {
-                                        // 🌟 Dari GUDANG PLATFORM MENTAH: potong stok platform
-                                        // mentah, tulis log 'keluar', mutasi sudah ditandai
-                                        // diterima di atas.
-                                        $this->prosesKeluarPlatformMth($fresh, $stokPlatformService);
                                     }
+                                    // 🚫 DINONAKTIFKAN SEMENTARA (atas permintaan): pengurangan
+                                    // stok Platform Mentah saat diterima dari Gudang Platform
+                                    // Mentah TIDAK dibutuhkan untuk saat ini. Barang tetap bisa
+                                    // "Diterima" seperti biasa (status/diterima_oleh tetap
+                                    // ter-update di atas), hanya saja baris stok Platform Mentah
+                                    // TIDAK dipotong otomatis lagi.
+                                    // Untuk mengaktifkan kembali, un-comment blok di bawah ini:
+                                    // elseif ($fresh->id_platform_mth_mutasi_keluar) {
+                                    //     // 🌟 Dari GUDANG PLATFORM MENTAH: potong stok platform
+                                    //     // mentah, tulis log 'keluar', mutasi sudah ditandai
+                                    //     // diterima di atas.
+                                    //     $this->prosesKeluarPlatformMth($fresh, $stokPlatformService);
+                                    // }
                                     // Serah manual dari Graji -> Sanding: tetap tanpa efek stok.
                                 }
                             });
@@ -686,6 +701,10 @@ class SerahTerimaHpRelationManager extends RelationManager
     }
 
     /**
+     * 🚫 SEMENTARA TIDAK DIPANGGIL (lihat catatan di action 'terima' untuk tipe
+     * 'sanding'). Method ini dibiarkan utuh supaya gampang diaktifkan kembali —
+     * cukup un-comment pemanggilannya di atas.
+     *
      * Barang berasal dari Gudang Platform Mentah (mutasi keluar manual menuju
      * Sanding). Potong stok Platform Mentah sesuai kuantitas yang tercatat
      * di mutasi keluar tersebut. HPP belum dihitung (mengikuti hpp_average
@@ -713,6 +732,10 @@ class SerahTerimaHpRelationManager extends RelationManager
     }
 
     /**
+     * 🚫 SEMENTARA TIDAK DIPANGGIL (lihat catatan di action 'terima' untuk tipe
+     * 'graji'). Method ini dibiarkan utuh supaya gampang diaktifkan kembali —
+     * cukup un-comment pemanggilannya di atas.
+     *
      * Barang berasal dari Gudang Triplek Mentah (mutasi keluar manual menuju
      * Graji Triplek). Potong stok Triplek Mentah sesuai kuantitas yang
      * tercatat di mutasi keluar tersebut.
