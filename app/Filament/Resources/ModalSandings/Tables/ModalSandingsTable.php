@@ -9,7 +9,6 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use GuzzleHttp\Promise\Create;
 
 class ModalSandingsTable
 {
@@ -21,6 +20,8 @@ class ModalSandingsTable
                 'barangSetengahJadi.ukuran',
                 'barangSetengahJadi.jenisBarang',
                 'serahTerimaHp.triplekMutasiKeluar.jenisKayu',
+                'serahTerimaHp.platformMthMutasiKeluar.jenisKayu',
+                'serahTerimaHp.triplekMthMutasiKeluar.jenisKayu',
             ]))
             ->columns([
                 TextColumn::make('no_palet')
@@ -32,9 +33,10 @@ class ModalSandingsTable
                 TextColumn::make('barangSetengahJadiInfo')
                     ->label('Barang Setengah Jadi')
                     ->getStateUsing(function ($record) {
+                        $serah = $record->serahTerimaHp;
+
                         // Barang dari Gudang Triplek Jadi tidak punya barangSetengahJadi —
                         // rakit label dari mutasi keluar (jenis kayu / ukuran / grade).
-                        $serah = $record->serahTerimaHp;
                         if ($serah?->id_triplek_mutasi_keluar !== null) {
                             $m = $serah->triplekMutasiKeluar;
                             if (! $m) {
@@ -50,6 +52,37 @@ class ModalSandingsTable
                                 .($m->kw_grade ?? '-');
                         }
 
+                        // Barang dari Gudang Platform Mentah — sama seperti Triplek Jadi,
+                        // tidak punya barangSetengahJadi, label diambil dari mutasi keluar.
+                        if ($serah?->id_platform_mth_mutasi_keluar !== null) {
+                            $m = $serah->platformMthMutasiKeluar;
+                            if (! $m) {
+                                return 'Platform Mentah — -';
+                            }
+                            $ukuran = ($m->panjang + 0).' x '.($m->lebar + 0).' x '.($m->tebal + 0);
+
+                            // Barang di Gudang Platform Mentah selalu berkategori Platform
+                            // (tidak menyimpan field kategori sendiri), jadi di-hardcode.
+                            return "Platform — {$ukuran} - "
+                                .($m->jenisKayu?->nama_kayu ?? '-').' - '
+                                .($m->kw_grade ?? '-');
+                        }
+
+                        // Barang dari Gudang Triplek Mentah — sama pola dengan Platform
+                        // Mentah / Triplek Jadi, tidak punya barangSetengahJadi, label
+                        // diambil dari mutasi keluar. Kategorinya selalu Plywood.
+                        if ($serah?->id_triplek_mth_mutasi_keluar !== null) {
+                            $m = $serah->triplekMthMutasiKeluar;
+                            if (! $m) {
+                                return 'Triplek Mentah — -';
+                            }
+                            $ukuran = ($m->panjang + 0).' x '.($m->lebar + 0).' x '.($m->tebal + 0);
+
+                            return "Plywood — {$ukuran} - "
+                                .($m->jenisKayu?->nama_kayu ?? '-').' - '
+                                .($m->kw_grade ?? '-');
+                        }
+
                         // Sumber lama (hotpress / graji): format asli, tidak diubah.
                         $kategori = $record->barangSetengahJadi?->grade?->kategoriBarang?->nama_kategori ?? '-';
                         $ukuran = $record->barangSetengahJadi?->ukuran?->dimensi ?? '-';
@@ -57,9 +90,8 @@ class ModalSandingsTable
                         $jenis = $record->barangSetengahJadi?->jenisBarang?->nama_jenis_barang ?? '-';
 
                         return "{$kategori} — {$ukuran} - {$jenis} - {$grade}";
-                    })
-                ,
-                //--- INI BUAT FILTER AJA
+                    }),
+                // --- INI BUAT FILTER AJA
                 TextColumn::make('barangSetengahJadi.grade.kategoriBarang.nama_kategori')
                     ->label('Kategori')
                     ->sortable()
@@ -73,8 +105,7 @@ class ModalSandingsTable
                             $q->whereRaw("CONCAT(panjang, ' x ', lebar, ' x ', tebal) LIKE ?", ["%{$search}%"]);
                         });
                     })
-                    ->toggleable(isToggledHiddenByDefault: true)
-                ,
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('barangSetengahJadi.grade.nama_grade')
                     ->label('Grade')
@@ -119,30 +150,26 @@ class ModalSandingsTable
                 CreateAction::make()
                     ->label('+ Tambah Modal')
                     ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
             ->recordActions([
                 EditAction::make()
-                ->label('')
-                ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ->label('')
+                    ->hidden(
+                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
                 DeleteAction::make()
-                ->label('')
-                ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ->label('')
+                    ->hidden(
+                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->hidden(
-                            fn($livewire) =>
-                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                            fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                         ),
                 ]),
             ]);
