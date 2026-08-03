@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\PurchaseOrders\Schemas;
+namespace App\Filament\Resources\PurchaseOrders\Tables;
 
 use App\Models\PurchaseOrder;
 use Filament\Infolists\Components\TextEntry;
