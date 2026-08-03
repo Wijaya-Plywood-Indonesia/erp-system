@@ -56,16 +56,13 @@
                                 {{ $st->tipe_sumber === 'dryer' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }}">
                         {{ $st->tipe_sumber === 'dryer' ? 'Press Dryer' : 'Kedi' }}
                     </span>
-                    <span class="text-[10px] font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap shrink-0">
-                        @if($st->tipe_sumber === 'dryer')
-                        DRY-{{ $noPalet }}
-                        @else
-                        KDI-{{ $noPalet }}
-                        @endif
+                    <span
+                        class="text-[10px] font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap shrink-0">
+                        Palet {{ $noPalet }}
                     </span>
                     <span
                         class="font-mono text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap shrink-0">
-                        {{ $this->trimAngka($ukuran?->panjang) }}×{{ $this->trimAngka($ukuran?->lebar) }}×{{ $this->trimAngka($ukuran?->tebal) }}
+                        {{ number_format((float) $ukuran?->panjang, 2) }}×{{ number_format((float) $ukuran?->lebar, 2) }}×{{ number_format((float) $ukuran?->tebal, 2) }}
                         <span class="text-[10px] text-gray-400">mm</span>
                     </span>
                     <span
@@ -116,16 +113,13 @@
                                     {{ $st->tipe_sumber === 'dryer' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }}">
                             {{ $st->tipe_sumber === 'dryer' ? 'Press Dryer' : 'Kedi' }}
                         </span>
-                        <span class="text-[10px] font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap shrink-0">
-                            @if($st->tipe_sumber === 'dryer')
-                            DRY-{{ $noPalet }}
-                            @else
-                            KD-{{ $noPalet }}
-                            @endif
+                        <span
+                            class="text-[10px] font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap shrink-0">
+                            Palet {{ $noPalet }}
                         </span>
                         <span
                             class="font-mono text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap shrink-0">
-                            {{ $this->trimAngka($ukuran?->panjang) }}×{{ $this->trimAngka($ukuran?->lebar) }}×{{ $this->trimAngka($ukuran?->tebal) }}
+                            {{ number_format((float) $ukuran?->panjang, 2) }}×{{ number_format((float) $ukuran?->lebar, 2) }}×{{ number_format((float) $ukuran?->tebal, 2) }}
                             <span class="text-[10px] text-gray-400">mm</span>
                         </span>
                         <span
@@ -201,7 +195,7 @@
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span
                                     class="font-mono text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap">
-                                    {{ $this->trimAngka($rk->ukuran?->panjang) }}×{{ $this->trimAngka($rk->ukuran?->lebar) }}×{{ $this->trimAngka($rk->ukuran?->tebal) }}
+                                    {{ number_format((float) $rk->ukuran?->panjang, 2) }}×{{ number_format((float) $rk->ukuran?->lebar, 2) }}×{{ number_format((float) $rk->ukuran?->tebal, 2) }}
                                     <span class="text-[10px] text-gray-400">mm</span>
                                 </span>
                                 <span
@@ -257,7 +251,7 @@
                                 Edit
                             </button>
                             @else
-                            <span class="text-[9px] text-gray-300 dark:text-gray-700 font-bold uppercase" title="Sebagian/semua palet sudah diterima">🔒 Terkunci</span>
+                            <span class="text-[9px] text-gray-300 dark:text-gray-700 font-bold uppercase" title="Sebagian/semua palet sudah diterima">Sudah Diterima</span>
                             @endif
                         </div>
                     </div>
@@ -294,11 +288,11 @@
                         selectedStokId: @entangle('selectedStokId'),
                         options: [
                             @foreach ($faceback->concat($core) as $s)
-{
-    id: '{{ $s->id }}',
-    nama: '{{ $s->jenisKayu?->nama_kayu }} (KW {{ $s->kw }}) - Sisa: {{ number_format((float) $s->total_lembar) }} lbr',
-    no: '{{ $this->trimAngka($s->ukuran?->panjang) }}x{{ $this->trimAngka($s->ukuran?->lebar) }}x{{ $this->trimAngka($s->ukuran?->tebal) }}'
-}, @endforeach
+                        {
+                            id: '{{ $s->id }}',
+                            nama: '{{ $s->jenisKayu?->nama_kayu }} (KW {{ $s->kw }}) - Sisa: {{ number_format((float) $s->total_lembar) }} lbr',
+                            no: '{{ number_format((float) $s->ukuran?->panjang, 2) }}x{{ number_format((float) $s->ukuran?->lebar, 2) }}x{{ number_format((float) $s->ukuran?->tebal, 2) }}'
+                        }, @endforeach
                         ],
                         get filteredOptions() {
                             if (this.searchTerm === '') return this.options;

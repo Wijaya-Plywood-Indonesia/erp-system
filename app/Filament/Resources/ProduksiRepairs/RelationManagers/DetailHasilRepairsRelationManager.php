@@ -59,12 +59,11 @@ class DetailHasilRepairsRelationManager extends RelationManager
                     ->label('Pegawai Repair')
                     ->relationship(
                         name: 'rencanaPegawais',
-                        titleAttribute: 'id', // Gunakan 'id' sebagai atribut default agar tidak error order clause
+                        titleAttribute: 'id',
                         modifyQueryUsing: function ($query) {
                             $produksiId = $this->getOwnerRecord()?->id;
 
                             if ($produksiId) {
-                                // Pastikan eager load relasi pegawai jika ada
                                 $query->with('pegawai')
                                     ->where('id_produksi_repair', $produksiId);
                             }
@@ -72,13 +71,70 @@ class DetailHasilRepairsRelationManager extends RelationManager
                             return $query;
                         }
                     )
-                    ->getOptionLabelFromRecordUsing(fn($record) => $record->pegawai?->nama_pegawai ?? $record->nama_pegawai ?? "Pegawai #{$record->id}")
+                    // 1. Pencarian kustom berdasarkan kode_pegawai & nama_pegawai
+                    ->getSearchResultsUsing(function (string $search) {
+                        $produksiId = $this->getOwnerRecord()?->id;
+
+                        return \App\Models\RencanaPegawai::query()
+                            ->with('pegawai')
+                            ->when($produksiId, fn($q) => $q->where('id_produksi_repair', $produksiId))
+                            ->where(function ($query) use ($search) {
+                                $query->where('id', 'LIKE', "%{$search}%")
+                                    ->orWhereHas('pegawai', function ($q) use ($search) {
+                                        $q->where('nama_pegawai', 'LIKE', "%{$search}%")
+                                            ->orWhere('kode_pegawai', 'LIKE', "%{$search}%");
+                                    });
+                            })
+                            ->limit(50)
+                            ->get()
+                            ->mapWithKeys(function ($record) {
+                                $pegawai = $record->pegawai;
+
+                                if ($pegawai) {
+                                    $kode = $pegawai->kode_pegawai ? "{$pegawai->kode_pegawai} - " : '';
+                                    $label = "{$kode}{$pegawai->nama_pegawai}";
+                                } else {
+                                    $label = "Pegawai #{$record->id}";
+                                }
+
+                                return [$record->id => $label];
+                            });
+                    })
+                    // 2. Format label untuk data yang terpilih/tersimpan saat form dirender
+                    ->getOptionLabelsUsing(function (array $values) {
+                        return \App\Models\RencanaPegawai::with('pegawai')
+                            ->whereIn('id', $values)
+                            ->get()
+                            ->mapWithKeys(function ($record) {
+                                $pegawai = $record->pegawai;
+
+                                if ($pegawai) {
+                                    $kode = $pegawai->kode_pegawai ? "{$pegawai->kode_pegawai} - " : '';
+                                    $label = "{$kode}{$pegawai->nama_pegawai}";
+                                } else {
+                                    $label = "Pegawai #{$record->id}";
+                                }
+
+                                return [$record->id => $label];
+                            });
+                    })
+                    ->getOptionLabelFromRecordUsing(function ($record) {
+                        $pegawai = $record->pegawai;
+                        if (! $pegawai) return "Pegawai #{$record->id}";
+
+                        $kode = $pegawai->kode_pegawai ? "{$pegawai->kode_pegawai} - " : '';
+
+                        return "{$kode}{$pegawai->nama_pegawai}";
+                    })
                     ->multiple()
                     ->required()
                     ->preload()
                     ->searchable()
                     ->columnSpanFull(),
 
+                // ===================================================
+                // 2. SATU-SATUNYA DROPDOWN SELECT DENGAN ACTION BUTTON
+                // ===================================================
                 // ===================================================
                 // 2. SATU-SATUNYA DROPDOWN SELECT DENGAN ACTION BUTTON
                 // ===================================================
@@ -99,31 +155,38 @@ class DetailHasilRepairsRelationManager extends RelationManager
                     ->dehydrated(false)
 
                     // ===================================================
-                    // 1. OPTIONS DEFAULT (Hanya Modal yang Stoknya > 0)
+                    // 1. OPTIONS DEFAULT (Hanya Modal dari Produksi Repair ini)
                     // ===================================================
                     ->options(function ($get, $record) {
                         if ($get('is_ukuran_manual')) {
                             return Ukuran::all()->pluck('dimensi', 'id');
                         }
 
+                        // Ambil ID Produksi Repair dari record parent saat ini
+                        $produksiId = $this->getOwnerRecord()?->id;
+
+                        if (! $produksiId) {
+                            return [];
+                        }
+
                         return ModalRepair::with(['ukuran', 'jenisKayu'])
+                            ->where('id_produksi_repair', $produksiId) // <--- LOCK KE TRANSAKSI SAAT INI
                             ->withSum('detailHasilRepairs as total_terpakai', 'jumlah')
+                            ->latest()
                             ->get()
                             ->filter(function ($modal) use ($record) {
                                 $totalTerpakai = $modal->total_terpakai ?? 0;
 
-                                // Jika sedang EDIT record ini, kembalikan jumlah dari record yang sedang diedit ke sisa stok
                                 if ($record && $record->id_modal_repair == $modal->id) {
                                     $totalTerpakai -= $record->jumlah;
                                 }
 
                                 $sisaStok = $modal->jumlah - $totalTerpakai;
 
-                                // HANYA TAMPILKAN JIKA SISA STOK > 0
                                 return $sisaStok > 0;
                             })
                             ->mapWithKeys(function ($modal) use ($record) {
-                                $jenisKayu = $modal->jenisKayu?->nama_kayu ?? '-'; // Menggunakan nama_kayu
+                                $jenisKayu = $modal->jenisKayu?->nama_kayu ?? '-';
                                 $ukuran = $modal->ukuran?->dimensi ?? '-';
                                 $kw = $modal->kw ?? '-';
 
@@ -139,7 +202,7 @@ class DetailHasilRepairsRelationManager extends RelationManager
                     })
 
                     // ===================================================
-                    // 2. SEARCH RESULTS (Pencarian Fleksibel & Tepat Kolom)
+                    // 2. SEARCH RESULTS (Locked ke Produksi Repair saat ini)
                     // ===================================================
                     ->getSearchResultsUsing(function (string $search, $get, $record) {
                         $cleanSearch = str_replace([',', '.'], '', trim($search));
@@ -157,18 +220,26 @@ class DetailHasilRepairsRelationManager extends RelationManager
                                 ->pluck('dimensi', 'id');
                         }
 
+                        $produksiId = $this->getOwnerRecord()?->id;
+
+                        if (! $produksiId) {
+                            return [];
+                        }
+
                         return ModalRepair::with(['ukuran', 'jenisKayu'])
+                            ->where('id_produksi_repair', $produksiId) // <--- LOCK KE TRANSAKSI SAAT INI
                             ->withSum('detailHasilRepairs as total_terpakai', 'jumlah')
                             ->where(function ($query) use ($search, $cleanSearch) {
                                 $query->where('kw', 'LIKE', "%{$search}%")
                                     ->orWhere('jumlah', 'LIKE', "%{$cleanSearch}%")
                                     ->orWhereHas('jenisKayu', function ($q) use ($search) {
-                                        $q->where('nama_kayu', 'LIKE', "%{$search}%"); // Menggunakan nama_kayu
+                                        $q->where('nama_kayu', 'LIKE', "%{$search}%");
                                     })
                                     ->orWhereHas('ukuran', function ($q) use ($search) {
                                         $q->whereRaw("CONCAT(panjang, ' x ', lebar, ' x ', tebal) LIKE ?", ["%{$search}%"]);
                                     });
                             })
+                            ->latest()
                             ->get()
                             ->filter(function ($modal) use ($record) {
                                 $totalTerpakai = $modal->total_terpakai ?? 0;
@@ -181,7 +252,7 @@ class DetailHasilRepairsRelationManager extends RelationManager
                                 return $sisaStok > 0;
                             })
                             ->mapWithKeys(function ($modal) use ($record) {
-                                $jenisKayu = $modal->jenisKayu?->nama_kayu ?? '-'; // Menggunakan nama_kayu
+                                $jenisKayu = $modal->jenisKayu?->nama_kayu ?? '-';
                                 $ukuran = $modal->ukuran?->dimensi ?? '-';
                                 $kw = $modal->kw ?? '-';
 
@@ -212,7 +283,7 @@ class DetailHasilRepairsRelationManager extends RelationManager
 
                         if (! $modal) return null;
 
-                        $jenisKayu = $modal->jenisKayu?->nama_kayu ?? '-'; // Menggunakan nama_kayu
+                        $jenisKayu = $modal->jenisKayu?->nama_kayu ?? '-';
                         $ukuran = $modal->ukuran?->dimensi ?? '-';
                         $kw = $modal->kw ?? '-';
                         $sisaStok = number_format($modal->jumlah - ($modal->total_terpakai ?? 0));

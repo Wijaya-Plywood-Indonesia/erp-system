@@ -26,36 +26,6 @@
 
         <hr class="border-gray-200 dark:border-gray-700">
 
-        {{-- [SECTION 2] GLOBAL UKURAN + KW (RINCIAN DENGAN JUMLAH ORANG) --}}
-        <div class="space-y-4">
-            <div class="flex items-center gap-2 font-semibold text-lg text-gray-900 dark:text-gray-100">
-                <x-heroicon-m-clipboard-document-list class="w-5 h-5 text-gray-400" />
-                Global Ukuran + KW
-            </div>
-
-            <div class="grid grid-cols-1 gap-3">
-                @forelse ($summary['globalUkuranKw'] ?? [] as $row)
-                <div
-                    class="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm dark:bg-gray-800 dark:border-gray-700 transition border border-transparent">
-
-                    {{-- KIRI: Jenis Kayu, Ukuran, KW & Detail Orang --}}
-                    <div class="flex flex-col">
-                        <span class="text-sm font-bold text-gray-800 dark:text-gray-200">
-                            {{ $row->jenis_kayu }} | {{ $row->ukuran }} | KW {{ $row->kw }} — {{ $row->jumlah_orang }} Orang Mengerjakan
-                        </span>
-                    </div>
-
-                    {{-- KANAN: Total Hasil --}}
-                    <div class="text-lg font-bold text-gray-900 dark:text-white">
-                        {{ number_format($row->total) }}
-                    </div>
-                </div>
-                @empty
-                <div class="text-center text-sm text-gray-500 py-4 italic">Belum ada data produksi.</div>
-                @endforelse
-            </div>
-        </div>
-
         {{-- [SECTION 4] RINGKASAN JENIS KAYU & UKURAN (RESPONSIVE) --}}
         @if (!empty($summary['globalJenisKayuUkuran']) && count($summary['globalJenisKayuUkuran']) > 0)
         <div class="space-y-4 pt-6 border-t border-gray-100 dark:border-gray-800">

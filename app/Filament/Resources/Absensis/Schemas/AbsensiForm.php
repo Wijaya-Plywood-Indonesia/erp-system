@@ -24,7 +24,15 @@ class AbsensiForm
                     ->maxDate(now()->format('Y-m-d'))
                     ->default(now()->format('Y-m-d'))
                     ->suffixIcon('heroicon-o-calendar')
-                    ->suffixIconColor('primary'),
+                    ->suffixIconColor('primary')
+                    ->unique(
+                        table: 'absensis',
+                        column: 'tanggal',
+                        ignoreRecord: true
+                    )
+                    ->validationMessages([
+                        'unique' => 'Data absensi untuk tanggal ini sudah pernah diinputkan.',
+                    ]),
                 FileUpload::make('file_path')
                     ->label('Upload File Logs')
                     ->disk('public')

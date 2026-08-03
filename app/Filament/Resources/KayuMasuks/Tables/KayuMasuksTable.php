@@ -15,7 +15,7 @@ class KayuMasuksTable
 {
     public static function configure(Table $table): Table
     {
-        $isAdmin = Auth::user()->hasRole('admin');
+        $isAdmin = Auth::user()->hasRole(['admin', 'super_admin', 'Super Admin', 'admin_kayu']);
 
         $isLocked = function ($record) use ($isAdmin) {
             // 1. Admin BEBAS edit kapan saja

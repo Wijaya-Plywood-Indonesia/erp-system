@@ -1,6 +1,7 @@
 <?php
 
 use App\Exports\ExportExcelPersentaseKayuService;
+use App\Filament\Pages\LeaderBoardSupplier;
 use App\Http\Controllers\PreviewPersentaseKayu;
 use App\Services\ProduksiInflowService;
 use App\Services\ProduksiOutflowService;
@@ -14,6 +15,8 @@ use App\Http\Controllers\NotaBKController;
 use App\Http\Controllers\NotaBMController;
 use App\Http\Controllers\LaporanKayuMasukController;
 use App\Http\Controllers\NotaKayuTurusController;
+use App\Models\NotaKayu;
+use App\Models\SupplierKayu;
 
 Route::middleware(['auth', 'verified'])->prefix('admin')->group(function () {
     // Route spesifik untuk preview excel
@@ -77,3 +80,38 @@ Route::get('/nota-kayu/{record}/turus2', [NotaKayuTurusController::class, 'show2
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/internal/supplier-detail/{id}', function ($id) {
+    $supplier = SupplierKayu::find($id);
+    if (!$supplier) {
+        return response()->json(['error' => 'Not found'], 404);
+    }
+
+    $notas = NotaKayu::query()
+        ->with(['kayuMasuk.detailTurusanKayus'])
+        ->whereHas('kayuMasuk', fn($q) => $q->where('id_supplier_kayus', $id))
+        ->whereRaw("LOWER(TRIM(status_pelunasan)) LIKE 'lunas%'")
+        ->get();
+
+    $page = new LeaderBoardSupplier();
+
+    $invoices = $notas->map(function ($nota) use ($page) {
+        $calc = $page->calculateNotaTotals($nota);
+        return [
+            'id'          => $nota->id,
+            'nomor_nota'  => $nota->no_nota,
+            'tanggal'     => $nota->kayuMasuk?->tgl_kayu_masuk,
+            'grand_total' => $calc['totalAkhir'],
+            'kubikasi'    => $calc['totalKubikasi'],
+            'status'      => 'lunas',
+        ];
+    })->values();
+
+    return response()->json([
+        'name'            => $supplier->nama_supplier ?? $supplier->nama ?? 'Supplier #' . $id,
+        'total_pembelian' => $invoices->sum('grand_total'),
+        'total_kubikasi'  => round($invoices->sum('kubikasi'), 4),
+        'nota_dicetak'    => $invoices->count(),
+        'invoices'        => $invoices,
+    ]);
+})->middleware(['web', 'auth'])->name('internal.supplier-detail');

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
@@ -10,43 +11,74 @@ use Illuminate\Database\QueryException;
 
 class ProduksiRotary extends Model
 {
-    //
+    use HasUuids;
+
+    // Menandaskan bahwa Primary Key tetap ID (Auto Increment)
+    protected $primaryKey = 'id';
+    protected $keyType = 'int';
+    public $incrementing = true;
+
     protected $fillable = [
+        'uuid',
         'id_mesin',
         'tgl_produksi',
         'kendala',
         'jam_kendala',
-        'jam_selesai'
+        'jam_selesai',
     ];
+
+    /**
+     * Memberitahu HasUuids untuk mengisi kolom 'uuid', BUKAN 'id'
+     */
+    public function uniqueIds(): array
+    {
+        return ['uuid'];
+    }
+
+    /**
+     * Memberitahu Filament/Laravel untuk memakai 'uuid' sebagai route key,
+     * bukan 'id', sehingga URL admin panel memakai UUID.
+     */
+    public function getRouteKeyName(): string
+    {
+        return 'uuid';
+    }
 
     public function mesin()
     {
         return $this->belongsTo(Mesin::class, 'id_mesin');
     }
+
     public function produksi_rotaries()
     {
         return $this->hasMany(ProduksiRotary::class, 'id_produksi');
     }
+
     public function detailPegawaiRotary()
     {
         return $this->hasMany(PegawaiRotary::class, 'id_produksi');
     }
+
     public function detailLahanRotary()
     {
         return $this->hasMany(PenggunaanLahanRotary::class, 'id_produksi');
     }
+
     public function detailValidasiHasilRotary()
     {
         return $this->hasMany(ValidasiHasilRotary::class, 'id_produksi');
     }
+
     public function detailGantiPisauRotary()
     {
         return $this->hasMany(GantiPisauRotary::class, 'id_produksi');
     }
+
     public function detailPaletRotary()
     {
         return $this->hasMany(DetailHasilPaletRotary::class, 'id_produksi');
     }
+
     public function detailKayuPecah()
     {
         return $this->hasMany(KayuPecahRotary::class, 'id_produksi');
@@ -65,20 +97,25 @@ class ProduksiRotary extends Model
     public function serahTerima(): HasManyThrough
     {
         return $this->hasManyThrough(
-            SerahTerimaPivot::class,             // model pivot (anonymous — lihat poin 5)
+            SerahTerimaPivot::class,
             DetailHasilPaletRotary::class,
-            'id_produksi',                       // FK di detail_hasil_palet_rotaries
-            'id_detail_hasil_palet_rotary',      // FK di pivot
+            'id_produksi',
+            'id_detail_hasil_palet_rotary',
             'id',
             'id'
         );
+    }
+
+    public function kendalaRotaries(): HasMany
+    {
+        return $this->hasMany(KendalaRotary::class, 'produksi_rotary_id');
     }
 
     protected static function booted()
     {
         static::deleting(function ($record) {
             try {
-                // Coba hapus record anak manual, jika mau
+                // Logic hapus record anak jika ada
             } catch (QueryException $e) {
                 if ($e->getCode() == '23000') {
                     Notification::make()
@@ -87,7 +124,7 @@ class ProduksiRotary extends Model
                         ->danger()
                         ->send();
 
-                    return false; // Batalkan penghapusan
+                    return false;
                 }
             }
         });
@@ -103,10 +140,5 @@ class ProduksiRotary extends Model
                 ]);
             }
         });
-    }
-
-    public function kendalaRotaries(): \Illuminate\Database\Eloquent\Relations\HasMany
-    {
-        return $this->hasMany(KendalaRotary::class, 'produksi_rotary_id');
     }
 }

@@ -81,7 +81,7 @@
     <tr>
       <td style="width: 130px">Nama</td>
       <td style="width: 10px">:</td>
-      <td><strong>Anis Rusnaa’ifah</strong></td>
+      <td><strong>Safira Herditiya Jasmine</strong></td>
     </tr>
     <tr>
       <td>Alamat</td>
@@ -378,7 +378,7 @@
 
       <!-- TTD PIHAK PERTAMA -->
       <td style="height: 80px; vertical-align: bottom; text-align: left;">
-        <img src="{{ asset('storage/app/public/ttd/anis.png') }}" style="height:70px;">
+        <img src="{{ asset('storage/app/public/ttd/safira.png') }}" style="height:70px;">
       </td>
 
       <!-- TTD PIHAK KEDUA -->
@@ -393,7 +393,7 @@
       <td style="text-align: left;">
 
 
-        <strong>(Anis Rusnaa’ifah)</strong>
+        <strong>(Safira Herditiya Jasmine)</strong>
       </td>
       <td style="text-align: left;">
         <strong>({{ $record->nama }})</strong>
