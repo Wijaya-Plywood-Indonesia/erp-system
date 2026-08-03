@@ -48,6 +48,18 @@ class HasilSanding extends Model
         return $this->belongsTo(User::class, 'diserahkan_oleh');
     }
 
+    /** Relasi ke ModalSanding berdasarkan id_produksi_sanding untuk eager loading */
+    public function modalSandings()
+    {
+        return $this->hasMany(ModalSanding::class, 'id_produksi_sanding', 'id_produksi_sanding');
+    }
+
+    /** Accessor untuk mengambil ModalSanding yang sesuai dengan no_palet */
+    public function getModalSandingAttribute()
+    {
+        return $this->modalSandings->firstWhere('no_palet', $this->no_palet);
+    }
+
     // ─── Helper serah ─────────────────────────────────────────────
 
     public function sudahDiserahkan(): bool

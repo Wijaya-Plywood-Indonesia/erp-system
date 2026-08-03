@@ -59,16 +59,84 @@ class HasilSandingsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn ($query) => $query->with([
+                'barangSetengahJadi.grade.kategoriBarang',
+                'barangSetengahJadi.ukuran',
+                'barangSetengahJadi.jenisBarang',
+                'modalSandings.barangSetengahJadi.grade.kategoriBarang',
+                'modalSandings.barangSetengahJadi.ukuran',
+                'modalSandings.barangSetengahJadi.jenisBarang',
+                'modalSandings.serahTerimaHp.triplekMutasiKeluar.jenisKayu',
+                'modalSandings.serahTerimaHp.platformMthMutasiKeluar.jenisKayu',
+                'modalSandings.serahTerimaHp.triplekMthMutasiKeluar.jenisKayu',
+            ]))
             ->columns([
                 TextColumn::make('barangSetengahJadiInfo')
                     ->label('Barang Setengah Jadi')
                     ->getStateUsing(function ($record) {
-                        $kategori = $record->barangSetengahJadi?->grade?->kategoriBarang?->nama_kategori ?? '-';
-                        $ukuran = $record->barangSetengahJadi?->ukuran?->dimensi ?? '-';
-                        $grade = $record->barangSetengahJadi?->grade?->nama_grade ?? '-';
-                        $jenis = $record->barangSetengahJadi?->jenisBarang?->nama_jenis_barang ?? '-';
+                        // 1. Coba dari HasilSanding langsung (sumber lama / hotpress / graji)
+                        $bsj = $record->barangSetengahJadi;
+                        if ($bsj) {
+                            $kategori = $bsj->grade?->kategoriBarang?->nama_kategori ?? '-';
+                            $ukuran = $bsj->ukuran?->dimensi ?? '-';
+                            $grade = $bsj->grade?->nama_grade ?? '-';
+                            $jenis = $bsj->jenisBarang?->nama_jenis_barang ?? '-';
 
-                        return "{$kategori} — {$ukuran} - {$jenis} - {$grade}";
+                            return "{$kategori} — {$ukuran} - {$jenis} - {$grade}";
+                        }
+
+                        // 2. Jika null, ambil dari ModalSanding (via matching no_palet & id_produksi_sanding)
+                        $modal = $record->modalSanding;
+                        if ($modal) {
+                            $bsj = $modal->barangSetengahJadi;
+                            if ($bsj) {
+                                $kategori = $bsj->grade?->kategoriBarang?->nama_kategori ?? '-';
+                                $ukuran = $bsj->ukuran?->dimensi ?? '-';
+                                $grade = $bsj->grade?->nama_grade ?? '-';
+                                $jenis = $bsj->jenisBarang?->nama_jenis_barang ?? '-';
+
+                                return "{$kategori} — {$ukuran} - {$jenis} - {$grade}";
+                            }
+
+                            // Cek jika dari serahTerimaHp (Triplek Jadi, Platform Mentah, Triplek Mentah)
+                            $serah = $modal->serahTerimaHp;
+                            if ($serah) {
+                                if ($serah->id_triplek_mutasi_keluar !== null) {
+                                    $m = $serah->triplekMutasiKeluar;
+                                    if ($m) {
+                                        $ukuran = ($m->panjang + 0) . ' x ' . ($m->lebar + 0) . ' x ' . ($m->tebal + 0);
+                                        return "Plywood — {$ukuran} - "
+                                            . ($m->jenisKayu?->nama_kayu ?? '-') . ' - '
+                                            . ($m->kw_grade ?? '-');
+                                    }
+                                    return 'Triplek Jadi — -';
+                                }
+
+                                if ($serah->id_platform_mth_mutasi_keluar !== null) {
+                                    $m = $serah->platformMthMutasiKeluar;
+                                    if ($m) {
+                                        $ukuran = ($m->panjang + 0) . ' x ' . ($m->lebar + 0) . ' x ' . ($m->tebal + 0);
+                                        return "Platform — {$ukuran} - "
+                                            . ($m->jenisKayu?->nama_kayu ?? '-') . ' - '
+                                            . ($m->kw_grade ?? '-');
+                                    }
+                                    return 'Platform Mentah — -';
+                                }
+
+                                if ($serah->id_triplek_mth_mutasi_keluar !== null) {
+                                    $m = $serah->triplekMthMutasiKeluar;
+                                    if ($m) {
+                                        $ukuran = ($m->panjang + 0) . ' x ' . ($m->lebar + 0) . ' x ' . ($m->tebal + 0);
+                                        return "Plywood — {$ukuran} - "
+                                            . ($m->jenisKayu?->nama_kayu ?? '-') . ' - '
+                                            . ($m->kw_grade ?? '-');
+                                    }
+                                    return 'Triplek Mentah — -';
+                                }
+                            }
+                        }
+
+                        return '-';
                     }),
 
                 TextColumn::make('kuantitas')
