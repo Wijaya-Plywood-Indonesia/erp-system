@@ -85,12 +85,20 @@ class PengajuanBarangService
             );
         }
 
-        $keterangan = "Pengajuan barang - lokasi: {$pengajuan->lokasi_penggunaan}"
+        // Konteks umum pengajuan (dipakai sebagai header, keterangan per barang ditambahkan di belakangnya)
+        $konteks = "Pengajuan barang - lokasi: {$pengajuan->lokasi_penggunaan}"
             . " | Diajukan oleh: " . ($pengajuan->pengaju?->name ?? '-')
             . " | Disetujui Kepala Produksi: " . ($pengajuan->kepalaProduksi?->name ?? '-')
             . " | Disetujui Admin Barang: " . ($pengajuan->adminBarang?->name ?? '-');
 
         foreach ($items as $item) {
+            // ── Keterangan log sekarang per barang, bukan satu keterangan global untuk semua item ──
+            $keterangan = $konteks;
+
+            if (filled($item->keterangan)) {
+                $keterangan .= " | Keterangan: {$item->keterangan}";
+            }
+
             app(BarangUmumInventoryService::class)->catatTransaksi(
                 idBarangUmum: $item->id_barang_umum,
                 tipeTransaksi: 'keluar',
