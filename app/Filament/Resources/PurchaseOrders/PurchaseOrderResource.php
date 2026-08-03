@@ -9,7 +9,7 @@ use App\Filament\Resources\PurchaseOrders\Pages\ViewPurchaseOrder;
 use App\Filament\Resources\PurchaseOrders\RelationManagers\ItemsRelationManager;
 use App\Filament\Resources\PurchaseOrders\Schemas\PurchaseOrderForm;
 use App\Filament\Resources\PurchaseOrders\Tables\PurchaseOrdersTable;
-use App\Filament\Resources\PurchaseOrders\Schemas\PurchaseOrderInfolist;
+use App\Filament\Resources\PurchaseOrders\Tables\PurchaseOrderInfolist;
 use App\Models\PurchaseOrder;
 use BackedEnum;
 use Filament\Resources\Resource;
