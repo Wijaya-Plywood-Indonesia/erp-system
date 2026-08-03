@@ -21,7 +21,7 @@ class TurusanKayusTable
 {
     public static function configure(Table $table): Table
     {
-        $isAdmin = Auth::user()->hasRole('admin');
+        $isAdmin = Auth::user()->hasRole(['admin', 'super_admin', 'Super Admin', 'admin_kayu']);
 
         $isLocked = function ($record) use ($isAdmin) {
             // Jika Admin, jangan pernah kunci (selalu bisa edit)

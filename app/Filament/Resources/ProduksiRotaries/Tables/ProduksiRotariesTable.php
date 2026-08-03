@@ -21,6 +21,13 @@ class ProduksiRotariesTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(function ($query) {
+                if (!auth()->user()->hasRole('super_admin')) {
+                    $query->where('tgl_produksi', '>=', now()->subDays(3));
+                }
+
+                return $query;
+            })
             ->columns([
                 TextColumn::make('tgl_produksi')
                     ->label('Tanggal')
@@ -51,8 +58,8 @@ class ProduksiRotariesTable
                     ])
                     ->query(function ($query, array $data): void {
                         $query
-                            ->when($data['from'], fn ($q, $d) => $q->whereDate('tgl_produksi', '>=', $d))
-                            ->when($data['until'], fn ($q, $d) => $q->whereDate('tgl_produksi', '<=', $d));
+                            ->when($data['from'], fn($q, $d) => $q->whereDate('tgl_produksi', '>=', $d))
+                            ->when($data['until'], fn($q, $d) => $q->whereDate('tgl_produksi', '<=', $d));
                     }),
             ])
             ->recordActions([
@@ -66,7 +73,7 @@ class ProduksiRotariesTable
                             ->label('Kendala')
                             ->rows(5),
                     ])
-                    ->fillForm(fn ($record): array => [
+                    ->fillForm(fn($record): array => [
                         'kendala' => $record->kendala,
                     ])
                     ->action(function (array $data, $record): void {
