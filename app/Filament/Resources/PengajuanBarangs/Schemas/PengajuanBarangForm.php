@@ -44,7 +44,9 @@ class PengajuanBarangForm
                     ->table([
                         TableColumn::make('Barang'),
                         TableColumn::make('Jumlah')
-                            ->width('160px'),
+                            ->width('120px'),
+                        TableColumn::make('Keterangan')
+                            ->width('260px'),
                     ])
                     ->schema([
                         Select::make('id_barang_umum')
@@ -60,6 +62,11 @@ class PengajuanBarangForm
                             ->numeric()
                             ->minValue(0.0001)
                             ->required(),
+
+                        TextInput::make('keterangan')
+                            ->label('Keterangan')
+                            ->placeholder('mis. untuk ganti bearing rusak')
+                            ->maxLength(255),
                     ])
                     ->minItems(1)
                     ->required()
@@ -70,8 +77,9 @@ class PengajuanBarangForm
                     ->columnSpanFull(),
 
                 Textarea::make('keterangan')
-                    ->label('Keterangan')
-                    ->rows(3)
+                    ->label('Catatan Umum (opsional)')
+                    ->helperText('Catatan tambahan untuk keseluruhan pengajuan ini, di luar keterangan per barang di atas.')
+                    ->rows(2)
                     ->columnSpanFull(),
 
                 FileUpload::make('foto')

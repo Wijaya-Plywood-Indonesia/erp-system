@@ -13,6 +13,7 @@ class PengajuanBarangDetail extends Model
         'id_pengajuan_barang',
         'id_barang_umum',
         'jumlah',
+        'keterangan',
     ];
 
     protected $casts = [
