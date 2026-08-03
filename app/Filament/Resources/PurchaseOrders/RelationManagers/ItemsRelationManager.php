@@ -15,6 +15,7 @@ use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\CheckboxColumn;
@@ -43,7 +44,6 @@ class ItemsRelationManager extends RelationManager
     {
         return $schema
             ->components([
-                // FIELD INI WAJIB ADA DI LEVEL ITEM (bukan di dalam Repeater layers!)
                 Select::make('id_barang_setengah_jadi_hp')
                     ->label('Pilih Barang (Plywood)')
                     ->placeholder('Pilih...')
@@ -93,9 +93,8 @@ class ItemsRelationManager extends RelationManager
                                     )
                                     ->searchable()
                                     ->preload()
+                                    ->live() // DITAMBAHKAN: Agar trigger state update ke hidden input berfungsi
                                     ->columnSpan(2)
-                                    // WAJIB: supaya waktu form edit dibuka, dropdown ini
-                                    // otomatis nunjukin barang veneer yang sudah tersimpan
                                     ->afterStateHydrated(function ($state, callable $set, $record) {
                                         if ($record) {
                                             $set('id_barang_setengah_jadi_hp', $record->id_barang_setengah_jadi_hp);
@@ -113,8 +112,6 @@ class ItemsRelationManager extends RelationManager
                                     ->minValue(1)
                                     ->default(1),
 
-                                // hidden, cuma penampung nama barang terpilih
-                                // supaya kolom lama 'material' tetap terisi tanpa perlu join
                                 TextInput::make('material')
                                     ->hidden()
                                     ->dehydrated(true),
@@ -129,18 +126,36 @@ class ItemsRelationManager extends RelationManager
     {
         return $schema
             ->components([
-                TextEntry::make('barangSetengahJadi.label')->label('Barang'),
-                TextEntry::make('jumlah')->label('Jumlah')->suffix(' Lembar'),
-                TextEntry::make('keterangan')->label('Keterangan')->placeholder('-'),
-
-                RepeatableEntry::make('layers')
-                    ->label('Komposisi Lapisan')
+                Section::make(fn ($record) => $record->barangSetengahJadi?->label ?? '- barang belum dipilih -')
+                    ->description(fn ($record) => "{$record->jumlah} Lembar"
+                        .($record->keterangan ? " · {$record->keterangan}" : ''))
                     ->schema([
-                        TextEntry::make('urutan')->label('Urutan')->formatStateUsing(fn ($state) => "Lapis {$state}"),
-                        TextEntry::make('material')->label('Material Veneer')->placeholder('-'),
-                        TextEntry::make('qty')->label('Kuantitas')->suffix(' Lbr'),
-                    ])
-                    ->columns(3),
+                        TextEntry::make('status_badge')
+                            ->label('Status')
+                            ->state(fn ($record) => $record->status ? 'Selesai' : 'Belum Selesai')
+                            ->badge()
+                            ->color(fn ($record) => $record->status ? 'success' : 'danger'),
+
+                        RepeatableEntry::make('layers')
+                            ->hiddenLabel()
+                            ->schema([
+                                TextEntry::make('urutan')
+                                    ->label('Urutan')
+                                    ->badge()
+                                    ->formatStateUsing(fn ($state) => "Lapis {$state}"),
+                                // DIREVISI: Mengambil label langsung dari relasi barangSetengahJadi
+                                TextEntry::make('barangSetengahJadi.label')
+                                    ->label('Material Veneer')
+                                    ->weight(FontWeight::Medium)
+                                    ->placeholder('-')
+                                    ->default(fn ($record) => $record->material), // fallback ke text lama jika relasi tidak ada
+                                TextEntry::make('qty')
+                                    ->label('Kuantitas')
+                                    ->suffix(' Lbr'),
+                            ])
+                            ->columns(3)
+                            ->placeholder('Belum ada komposisi lapisan untuk barang ini.'),
+                    ]),
             ]);
     }
 
@@ -148,14 +163,46 @@ class ItemsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('keterangan')
-            ->modifyQueryUsing(fn ($query) => $query->with(['barangSetengahJadi', 'layers']))
+            // DIREVISI: Eager load berlapis sampai ke relasi barangSetengahJadi pada layer
+            ->modifyQueryUsing(fn ($query) => $query->with(['barangSetengahJadi', 'layers.barangSetengahJadi']))
             ->columns([
-                // INI YANG SEBELUMNYA HILANG / KOSONG
                 TextColumn::make('barangSetengahJadi.label')
                     ->label('Nama Barang')
                     ->weight(FontWeight::Medium)
                     ->searchable()
-                    ->placeholder('- barang belum dipilih -'),
+                    ->placeholder('- barang belum dipilih -')
+                    // DIREVISI: Memindahkan HTML lapisan ke dalam deskripsi nama barang utama
+                    ->description(function ($record) {
+                        if ($record->layers->isEmpty()) {
+                            return new \Illuminate\Support\HtmlString(
+                                '<div class="text-sm text-gray-500 py-1">Belum ada komposisi lapisan.</div>'
+                            );
+                        }
+
+                        $rows = $record->layers->map(function ($layer) {
+                            // Mengambil dari relasi agar nama barang selalu update, fallback ke text lama
+                            $material = e($layer->barangSetengahJadi?->label ?? $layer->material ?? '-');
+
+                            return <<<HTML
+                                <tr class="border-b border-gray-100 dark:border-gray-700/50">
+                                    <td class="py-1 pr-4">
+                                        <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700">Lapis {$layer->urutan}</span>
+                                    </td>
+                                    <td class="py-1 pr-4 font-medium text-xs text-gray-700 dark:text-gray-300">{$material}</td>
+                                    <td class="py-1 text-xs text-gray-500">{$layer->qty} Lbr</td>
+                                </tr>
+                            HTML;
+                        })->implode('');
+
+                        return new \Illuminate\Support\HtmlString(<<<HTML
+                            <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                <div class="text-[10px] font-semibold uppercase text-gray-400 mb-1">Komposisi Lapisan</div>
+                                <table class="w-full text-left">
+                                    <tbody>{$rows}</tbody>
+                                </table>
+                            </div>
+                        HTML);
+                    }),
 
                 TextColumn::make('jumlah')
                     ->label('Jumlah')

@@ -12,6 +12,7 @@ class PurchaseOrderItemLayer extends Model
 
     protected $fillable = [
         'purchase_order_item_id',
+        'id_barang_setengah_jadi_hp',
         'urutan',
         'material',
         'qty',
