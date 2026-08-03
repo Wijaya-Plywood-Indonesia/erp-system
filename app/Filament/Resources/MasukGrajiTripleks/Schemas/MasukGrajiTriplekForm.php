@@ -12,6 +12,20 @@ use Filament\Schemas\Schema;
 
 class MasukGrajiTriplekForm
 {
+    /**
+     * Eager load sumber barang menuju Graji Triplek yang DIDUKUNG di form ini:
+     * hasil Hotpress (triplekHasilHp) ATAU mutasi keluar dari Gudang Triplek
+     * Mentah. Sengaja TIDAK termasuk `hasilSanding` (serah manual Sanding ->
+     * Graji) — kalau nanti sumber itu mau diaktifkan di sini, tambahkan
+     * relasinya ke sini DAN ke whereSumberValid() di bawah secara eksplisit.
+     */
+    protected const HASIL_RELATIONS = [
+        'triplekHasilHp.barangSetengahJadi.ukuran',
+        'triplekHasilHp.barangSetengahJadi.grade',
+        'triplekHasilHp.barangSetengahJadi.jenisBarang',
+        'triplekMthMutasiKeluar.jenisKayu',
+    ];
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -39,18 +53,34 @@ class MasukGrajiTriplekForm
                             return;
                         }
 
-                        $serahTerima = SerahTerimaHp::with([
-                            'triplekHasilHp.barangSetengahJadi.jenisBarang',
-                            'triplekHasilHp.barangSetengahJadi.ukuran',
-                        ])->find($state);
-
-                        $hasil = $serahTerima?->triplekHasilHp;
-                        $barang = $hasil?->barangSetengahJadi;
+                        $serahTerima = SerahTerimaHp::with(self::HASIL_RELATIONS)->find($state);
 
                         $sisa = $serahTerima?->sisa ?? 0;
                         if ($record && $record->id_serah_terima_hp === (int) $state) {
                             $sisa += (float) $record->isi;
                         }
+
+                        // Barang dari Gudang Triplek Mentah tidak punya barangSetengahJadi
+                        // ataupun no_palet asli — label diambil dari mutasi keluar, dan
+                        // no_palet di-generate ("TM-{id mutasi}") karena kolomnya NOT NULL.
+                        if ($serahTerima?->id_triplek_mth_mutasi_keluar !== null) {
+                            $m = $serahTerima?->triplekMthMutasiKeluar;
+
+                            $set('id_barang_setengah_jadi_hp', null);
+                            $set('no_palet', 'TM-'.$serahTerima->id_triplek_mth_mutasi_keluar);
+                            $set('jenis_barang_label', $m?->jenisKayu?->nama_kayu ?? '-');
+                            $set('ukuran_label', $m
+                                ? ($m->panjang + 0).'x'.($m->lebar + 0).'x'.($m->tebal + 0)
+                                : '-');
+                            $set('sisa_tersedia', $sisa);
+                            $set('isi', $sisa);
+
+                            return;
+                        }
+
+                        // Sumber Hotpress (triplekHasilHp) — punya barangSetengahJadi & no_palet.
+                        $hasil = $serahTerima?->triplekHasilHp;
+                        $barang = $hasil?->barangSetengahJadi;
 
                         $set('id_barang_setengah_jadi_hp', $barang?->id);
                         $set('no_palet', $hasil?->no_palet);
@@ -107,6 +137,18 @@ class MasukGrajiTriplekForm
                     ->disabled()
                     ->dehydrated(false)
                     ->afterStateHydrated(function ($set, ?MasukGrajiTriplek $record) {
+                        $serah = $record?->serahTerimaHp;
+
+                        if (! $serah) {
+                            return;
+                        }
+
+                        if ($serah->id_triplek_mth_mutasi_keluar !== null) {
+                            $set('jenis_barang_label', $serah->triplekMthMutasiKeluar?->jenisKayu?->nama_kayu);
+
+                            return;
+                        }
+
                         if (! $record?->barangSetengahJadiHp) {
                             return;
                         }
@@ -119,6 +161,21 @@ class MasukGrajiTriplekForm
                     ->disabled()
                     ->dehydrated(false)
                     ->afterStateHydrated(function ($set, ?MasukGrajiTriplek $record) {
+                        $serah = $record?->serahTerimaHp;
+
+                        if (! $serah) {
+                            return;
+                        }
+
+                        if ($serah->id_triplek_mth_mutasi_keluar !== null) {
+                            $m = $serah->triplekMthMutasiKeluar;
+                            $set('ukuran_label', $m
+                                ? ($m->panjang + 0).'x'.($m->lebar + 0).'x'.($m->tebal + 0)
+                                : null);
+
+                            return;
+                        }
+
                         if (! $record?->barangSetengahJadiHp) {
                             return;
                         }
@@ -139,14 +196,16 @@ class MasukGrajiTriplekForm
         $currentIsi = (float) ($record?->isi ?? 0);
 
         return SerahTerimaHp::query()
-            ->whereNotNull('id_triplek_hasil_hp')   // <-- tambahan: khusus sumber triplek
             ->where('diterima_oleh', '!=', '-')
-            ->whereIn('tujuan', ['graji_triplek'])
-            ->with([
-                'triplekHasilHp.barangSetengahJadi.ukuran',
-                'triplekHasilHp.barangSetengahJadi.grade',
-                'triplekHasilHp.barangSetengahJadi.jenisBarang',
-            ])
+            ->where('tujuan', 'graji_triplek')
+            // Dibatasi EKSPLISIT hanya ke sumber yang didukung form ini:
+            // Hotpress (id_triplek_hasil_hp) ATAU Gudang Triplek Mentah
+            // (id_triplek_mth_mutasi_keluar). Sengaja TIDAK ikut menarik
+            // id_hasil_sanding (serah manual Sanding -> Graji) supaya barang
+            // dari sumber yang belum tentu dimaksudkan bisa dipakai di sini
+            // tidak tiba-tiba muncul di dropdown.
+
+            ->with(self::HASIL_RELATIONS)
             ->get()
             ->map(function ($item) use ($currentId, $currentIsi) {
                 $sisa = $item->sisa + ($item->id === $currentId ? $currentIsi : 0);
@@ -156,16 +215,39 @@ class MasukGrajiTriplekForm
             ->filter(fn ($pair) => $pair[1] > 0)
             ->mapWithKeys(function ($pair) {
                 [$item, $sisa] = $pair;
+                $sisaLabel = rtrim(rtrim(number_format($sisa, 2, '.', ''), '0'), '.');
+
+                // Barang dari Gudang Triplek Mentah: rakit label dari mutasi
+                // keluar (tidak punya no_palet / barangSetengahJadi).
+                if ($item->id_triplek_mth_mutasi_keluar !== null) {
+                    $m = $item->triplekMthMutasiKeluar;
+
+                    $ukuranLabel = $m
+                        ? ($m->panjang + 0).' x '.($m->lebar + 0).' x '.($m->tebal + 0)
+                        : '-';
+                    $jenis = strtoupper($m?->jenisKayu?->nama_kayu ?? '-');
+                    $gradeLabel = $m?->kw_grade ?? '-';
+
+                    // 🌟 IDENTITAS disamakan gaya dengan sumber lama ("Palet {no}"):
+                    // tanpa tanda pagar/tanggal, cukup nomor mutasi.
+                    $identitas = 'TM'.$item->id_triplek_mth_mutasi_keluar;
+
+                    $label = "{$identitas} - {$ukuranLabel} {$jenis} {$gradeLabel}"
+                        ." — Sisa: {$sisaLabel} (triplek mentah)";
+
+                    return [$item->id => $label];
+                }
+
+                // Sumber Hotpress (triplekHasilHp).
                 $hasil = $item->triplekHasilHp;
                 $barang = $hasil?->barangSetengahJadi;
                 $ukuran = $barang?->ukuran;
 
                 $ukuranLabel = $ukuran
-                    ? "{$ukuran->panjang}x{$ukuran->lebar}x{$ukuran->tebal}"
+                    ? "{$ukuran->panjang} x {$ukuran->lebar} x {$ukuran->tebal}"
                     : '-';
                 $kodeJenisBarang = strtoupper($barang?->jenisBarang?->kode_jenis_barang ?? '-');
                 $gradeLabel = $barang?->grade?->nama_grade ?? '-';
-                $sisaLabel = rtrim(rtrim(number_format($sisa, 2, '.', ''), '0'), '.');
 
                 $label = "Palet {$hasil?->no_palet} - {$ukuranLabel} {$kodeJenisBarang} {$gradeLabel} — Sisa: {$sisaLabel}";
 

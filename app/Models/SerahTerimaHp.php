@@ -15,6 +15,8 @@ class SerahTerimaHp extends Model
         'id_hasil_graji_triplek',
         'id_hasil_sanding',
         'id_triplek_mutasi_keluar',
+        'id_platform_mth_mutasi_keluar',
+        'id_triplek_mth_mutasi_keluar',
         'id_produksi_graji_triplek',
         'id_produksi_sanding',
         'diserahkan_oleh',
@@ -62,6 +64,24 @@ class SerahTerimaHp extends Model
         return $this->belongsTo(TriplekJadiMutasiKeluar::class, 'id_triplek_mutasi_keluar');
     }
 
+    /**
+     * Mutasi keluar dari Gudang Platform Mentah. Terisi hanya untuk barang
+     * yang dikeluarkan dari stok platform mentah dengan tujuan Produksi Sanding.
+     */
+    public function platformMthMutasiKeluar(): BelongsTo
+    {
+        return $this->belongsTo(PlatformMthMutasiKeluar::class, 'id_platform_mth_mutasi_keluar');
+    }
+
+    /**
+     * Mutasi keluar dari Gudang Triplek Mentah. Terisi hanya untuk barang
+     * yang dikeluarkan dari stok triplek mentah dengan tujuan Produksi Graji Triplek.
+     */
+    public function triplekMthMutasiKeluar(): BelongsTo
+    {
+        return $this->belongsTo(TriplekMthMutasiKeluar::class, 'id_triplek_mth_mutasi_keluar');
+    }
+
     public function produksiGrajiTriplek(): BelongsTo
     {
         return $this->belongsTo(ProduksiGrajitriplek::class, 'id_produksi_graji_triplek');
@@ -79,11 +99,14 @@ class SerahTerimaHp extends Model
     /**
      * Tipe sumber untuk keperluan hitungan stok/sisa (bukan asal literalnya):
      * - 'triplek' -> barang ini menuju Graji Triplek (dari HP atau dari Sanding manual)
-     * - 'platform' -> barang ini menuju Sanding (dari HP atau dari Graji manual)
+     * - 'platform' -> barang ini menuju Sanding (dari HP, dari Graji manual,
+     *   atau dari Gudang Platform Mentah)
+     * - 'triplek' -> barang ini menuju Graji Triplek (dari HP, dari Sanding
+     *   manual, atau dari Gudang Triplek Mentah)
      */
     public function getTipeSumberAttribute(): string
     {
-        if ($this->id_platform_hasil_hp || $this->id_hasil_graji_triplek) {
+        if ($this->id_platform_hasil_hp || $this->id_hasil_graji_triplek || $this->id_platform_mth_mutasi_keluar) {
             return 'platform';
         }
 
@@ -101,26 +124,34 @@ class SerahTerimaHp extends Model
             (bool) $this->id_hasil_graji_triplek => 'Graji Triplek',
             (bool) $this->id_hasil_sanding => 'Sanding',
             (bool) $this->id_triplek_mutasi_keluar => 'Gudang Triplek Jadi',
+            (bool) $this->id_platform_mth_mutasi_keluar => 'Gudang Platform Mentah',
+            (bool) $this->id_triplek_mth_mutasi_keluar => 'Gudang Triplek Mentah',
             default => '-',
         };
     }
 
     /**
      * Ambil record hasil produksi apapun sumbernya
-     * (triplek HP, platform HP, hasil Graji Triplek, atau hasil Sanding).
+     * (triplek HP, platform HP, hasil Graji Triplek, hasil Sanding,
+     * mutasi keluar Gudang Platform Mentah, atau mutasi keluar
+     * Gudang Triplek Mentah).
      */
     public function getHasilAttribute()
     {
         return $this->triplekHasilHp
             ?? $this->platformHasilHp
             ?? $this->hasilGrajiTriplek
-            ?? $this->hasilSanding;
+            ?? $this->hasilSanding
+            ?? $this->platformMthMutasiKeluar
+            ?? $this->triplekMthMutasiKeluar;
     }
 
     /**
      * Barang setengah jadi terkait, terlepas dari nama relasi yang beda-beda
      * antar model hasil (TriplekHasilHp/PlatformHasilHp/HasilSanding pakai
      * `barangSetengahJadi`, HasilGrajiTriplek pakai `barangSetengahJadiHp`).
+     * Untuk Gudang Platform Mentah tidak ada barang setengah jadi (langsung
+     * jenis kayu), jadi null.
      */
     public function getBarangSetengahJadiAttribute()
     {
@@ -132,6 +163,7 @@ class SerahTerimaHp extends Model
     /**
      * Jumlah/isi barang.
      * - Dari Gudang Triplek Jadi: pakai stok_lembar mutasi keluar.
+     * - Dari Gudang Platform Mentah: pakai stok_lembar mutasi keluar.
      * - Selain itu (TriplekHasilHp/PlatformHasilHp/HasilGrajiTriplek pakai `isi`,
      *   HasilSanding pakai `kuantitas`).
      */
@@ -139,6 +171,14 @@ class SerahTerimaHp extends Model
     {
         if ($this->id_triplek_mutasi_keluar !== null) {
             return $this->triplekMutasiKeluar->stok_lembar ?? null;
+        }
+
+        if ($this->id_platform_mth_mutasi_keluar !== null) {
+            return $this->platformMthMutasiKeluar->stok_lembar ?? null;
+        }
+
+        if ($this->id_triplek_mth_mutasi_keluar !== null) {
+            return $this->triplekMthMutasiKeluar->stok_lembar ?? null;
         }
 
         return $this->hasil->isi ?? $this->hasil->kuantitas ?? null;
