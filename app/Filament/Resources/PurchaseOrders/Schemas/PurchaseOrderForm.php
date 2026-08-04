@@ -28,15 +28,18 @@ class PurchaseOrderForm
                         DatePicker::make('tgl_order')
                             ->label('Tgl Order (Masuk)')
                             ->native(false)
+                            ->default(now()) 
                             ->required(),
 
                         DatePicker::make('tgl_produksi')
                             ->label('Tgl Produksi')
-                            ->native(false),
+                            ->native(false)
+                            ->placeholder('Pilih tanggal...'), 
 
                         DatePicker::make('tgl_kirim')
                             ->label('Tgl Rencana Kirim')
-                            ->native(false),
+                            ->native(false)
+                            ->placeholder('Pilih tanggal...'), 
 
                         Textarea::make('keterangan')
                             ->label('Keterangan')
