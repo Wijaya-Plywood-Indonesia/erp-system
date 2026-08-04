@@ -81,6 +81,62 @@ class PengajuanBarangsTable
                 TextColumn::make('pengaju.name')
                     ->label('Diajukan Oleh'),
 
+                // ── Kolom Pengawas Produksi: badge jadi tombol verifikasi kalau berhak & masih menunggu ──
+                TextColumn::make('status_pengawas_produksi')
+                    ->label('Pengawas Produksi')
+                    ->badge()
+                    ->color(function (string $state, $record) {
+                        if ($state === 'menunggu'
+                            && Auth::user()?->hasRole(['pengawas_produksi', 'super_admin'])) {
+                            return 'primary';
+                        }
+                        return match ($state) {
+                            'disetujui' => 'success',
+                            'ditolak'   => 'danger',
+                            default     => 'gray',
+                        };
+                    })
+                    ->icon(function (string $state, $record) {
+                        return ($state === 'menunggu'
+                            && Auth::user()?->hasRole(['pengawas_produksi', 'super_admin']))
+                            ? 'heroicon-o-pencil-square'
+                            : null;
+                    })
+                    ->formatStateUsing(function (string $state, $record) {
+                        if ($state === 'menunggu'
+                            && Auth::user()?->hasRole(['pengawas_produksi', 'super_admin'])) {
+                            return 'Verifikasi Sekarang';
+                        }
+                        return ucfirst($state);
+                    })
+                    ->action(
+                        Action::make('verifikasiPengawas')
+                            ->label('Verifikasi (Pengawas Produksi)')
+                            ->modalHeading('Verifikasi - Pengawas Produksi')
+                            ->visible(fn($record) => Auth::user()?->hasRole(['pengawas_produksi', 'super_admin'])
+                                && $record->status_pengawas_produksi === 'menunggu')
+                            ->schema([
+                                Radio::make('keputusan')
+                                    ->label('Keputusan')
+                                    ->options([
+                                        'disetujui' => 'Setujui',
+                                        'ditolak'   => 'Tolak',
+                                    ])
+                                    ->inline()
+                                    ->required()
+                                    ->live(),
+
+                                Textarea::make('alasan')
+                                    ->label('Alasan Penolakan')
+                                    ->rows(2)
+                                    ->visible(fn($get) => $get('keputusan') === 'ditolak')
+                                    ->requiredIf('keputusan', 'ditolak'),
+                            ])
+                            ->action(function ($record, array $data) {
+                                static::putuskan($record, 'pengawas_produksi', $data['keputusan']);
+                            })
+                    ),
+
                 // ── Kolom Kepala Produksi: badge jadi tombol verifikasi kalau berhak & masih menunggu ──
                 TextColumn::make('status_kepala_produksi')
                     ->label('Kepala Produksi')
@@ -197,10 +253,10 @@ class PengajuanBarangsTable
                     ->label('Status')
                     ->badge()
                     ->color(fn($record) => match (true) {
-                        $record->sudahDiproses()         => 'success',
-                        $record->adaYangMenolak()         => 'danger',
-                        $record->sudahDisetujuiKeduanya() => 'warning',
-                        default                            => 'gray',
+                        $record->sudahDiproses()      => 'success',
+                        $record->adaYangMenolak()      => 'danger',
+                        $record->sudahDisetujuiSemua() => 'warning',
+                        default                          => 'gray',
                     }),
 
                 TextColumn::make('keterangan')
@@ -271,18 +327,27 @@ class PengajuanBarangsTable
                         'disetujui' => 'Disetujui',
                         'ditolak'   => 'Ditolak',
                     ]),
+                SelectFilter::make('status_pengawas_produksi')
+                    ->label('Status Pengawas Produksi')
+                    ->options([
+                        'menunggu'  => 'Menunggu',
+                        'disetujui' => 'Disetujui',
+                        'ditolak'   => 'Ditolak',
+                    ]),
             ])
             ->recordActions([
                 // ── Edit: hanya boleh selagi belum ada satupun keputusan (kepala produksi & admin barang masih menunggu) ──
                 EditAction::make()
-                    ->visible(fn($record) => $record->status_kepala_produksi === 'menunggu'
-                        && $record->status_admin_barang === 'menunggu'
+                    ->visible(fn($record) => ($record->status_kepala_produksi === 'menunggu'
+                            || $record->status_admin_barang === 'menunggu'
+                            || $record->status_pengawas_produksi === 'menunggu')
                         && (Auth::id() === $record->diajukan_oleh || Auth::user()?->hasRole('super_admin'))),
 
-                // ── Hapus: sama, hanya selagi belum ada keputusan ──
+                // ── Hapus: sama, tampil selama minimal 1 pihak belum memutuskan ──
                 DeleteAction::make()
-                    ->visible(fn($record) => $record->status_kepala_produksi === 'menunggu'
-                        && $record->status_admin_barang === 'menunggu'
+                    ->visible(fn($record) => ($record->status_kepala_produksi === 'menunggu'
+                            || $record->status_admin_barang === 'menunggu'
+                            || $record->status_pengawas_produksi === 'menunggu')
                         && (Auth::id() === $record->diajukan_oleh || Auth::user()?->hasRole('super_admin'))),
 
                 // ── Retry kalau dulu gagal karena stok kurang ──
@@ -291,7 +356,7 @@ class PengajuanBarangsTable
                     ->icon('heroicon-o-arrow-path')
                     ->color('warning')
                     ->requiresConfirmation()
-                    ->visible(fn($record) => $record->sudahDisetujuiKeduanya() && !$record->sudahDiproses())
+                    ->visible(fn($record) => $record->sudahDisetujuiSemua() && !$record->sudahDiproses())
                     ->action(function ($record) {
                         try {
                             app(PengajuanBarangService::class)->cobaProsesUlang($record);

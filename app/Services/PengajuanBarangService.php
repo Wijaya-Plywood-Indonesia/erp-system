@@ -16,7 +16,7 @@ class PengajuanBarangService
      */
     public function approve(PengajuanBarang $pengajuan, string $role, string $keputusan, int $userId): void
     {
-        if (!in_array($role, ['kepala_produksi', 'admin_barang'], true)) {
+        if (!in_array($role, ['kepala_produksi', 'admin_barang', 'pengawas_produksi'], true)) {
             throw new \InvalidArgumentException("Role tidak dikenali: {$role}");
         }
 
@@ -27,29 +27,43 @@ class PengajuanBarangService
         DB::transaction(function () use ($pengajuan, $role, $keputusan, $userId) {
             $pengajuan = PengajuanBarang::lockForUpdate()->findOrFail($pengajuan->id);
 
-            if ($role === 'kepala_produksi') {
-                if ($pengajuan->status_kepala_produksi !== 'menunggu') {
-                    throw new \RuntimeException('Pengajuan ini sudah pernah diputuskan oleh Kepala Produksi.');
-                }
-                $pengajuan->update([
-                    'status_kepala_produksi' => $keputusan,
-                    'disetujui_kepala_oleh'  => $userId,
-                    'disetujui_kepala_at'    => now(),
-                ]);
-            } else {
-                if ($pengajuan->status_admin_barang !== 'menunggu') {
-                    throw new \RuntimeException('Pengajuan ini sudah pernah diputuskan oleh Admin Barang.');
-                }
-                $pengajuan->update([
-                    'status_admin_barang'  => $keputusan,
-                    'disetujui_admin_oleh' => $userId,
-                    'disetujui_admin_at'   => now(),
-                ]);
+            $kolomStatus = match ($role) {
+                'kepala_produksi'   => 'status_kepala_produksi',
+                'admin_barang'      => 'status_admin_barang',
+                'pengawas_produksi' => 'status_pengawas_produksi',
+            };
+
+            $labelRole = match ($role) {
+                'kepala_produksi'   => 'Kepala Produksi',
+                'admin_barang'      => 'Admin Barang',
+                'pengawas_produksi' => 'Pengawas Produksi',
+            };
+
+            if ($pengajuan->{$kolomStatus} !== 'menunggu') {
+                throw new \RuntimeException("Pengajuan ini sudah pernah diputuskan oleh {$labelRole}.");
             }
+
+            $kolomOleh = match ($role) {
+                'kepala_produksi'   => 'disetujui_kepala_oleh',
+                'admin_barang'      => 'disetujui_admin_oleh',
+                'pengawas_produksi' => 'disetujui_pengawas_oleh',
+            };
+
+            $kolomAt = match ($role) {
+                'kepala_produksi'   => 'disetujui_kepala_at',
+                'admin_barang'      => 'disetujui_admin_at',
+                'pengawas_produksi' => 'disetujui_pengawas_at',
+            };
+
+            $pengajuan->update([
+                $kolomStatus => $keputusan,
+                $kolomOleh   => $userId,
+                $kolomAt     => now(),
+            ]);
 
             $pengajuan->refresh();
 
-            if ($pengajuan->sudahDisetujuiKeduanya() && !$pengajuan->sudahDiproses()) {
+            if ($pengajuan->sudahDisetujuiSemua() && !$pengajuan->sudahDiproses()) {
                 $this->prosesPotongStok($pengajuan);
             }
         });
@@ -86,10 +100,13 @@ class PengajuanBarangService
         }
 
         // Konteks umum pengajuan (dipakai sebagai header, keterangan per barang ditambahkan di belakangnya)
+        // Urutan: lokasi, diajukan oleh, lalu approval Pengawas → Kepala Produksi → Admin Barang.
+        // "Disetujui" tidak diulang per nama karena baris ini hanya jalan setelah ketiganya approve.
         $konteks = "Pengajuan barang - lokasi: {$pengajuan->lokasi_penggunaan}"
-            . " | Diajukan oleh: " . ($pengajuan->pengaju?->name ?? '-')
-            . " | Disetujui Kepala Produksi: " . ($pengajuan->kepalaProduksi?->name ?? '-')
-            . " | Disetujui Admin Barang: " . ($pengajuan->adminBarang?->name ?? '-');
+            . " | Diajukan: " . ($pengajuan->pengaju?->name ?? '-')
+            . " | Pengawas: " . ($pengajuan->pengawasProduksi?->name ?? '-')
+            . " | Kepala Produksi: " . ($pengajuan->kepalaProduksi?->name ?? '-')
+            . " | Admin Barang: " . ($pengajuan->adminBarang?->name ?? '-');
 
         foreach ($items as $item) {
             // ── Keterangan log sekarang per barang, bukan satu keterangan global untuk semua item ──
@@ -122,8 +139,8 @@ class PengajuanBarangService
         DB::transaction(function () use ($pengajuan) {
             $pengajuan = PengajuanBarang::lockForUpdate()->findOrFail($pengajuan->id);
 
-            if (!$pengajuan->sudahDisetujuiKeduanya()) {
-                throw new \RuntimeException('Pengajuan ini belum disetujui oleh kedua pihak.');
+            if (!$pengajuan->sudahDisetujuiSemua()) {
+                throw new \RuntimeException('Pengajuan ini belum disetujui oleh semua pihak.');
             }
 
             if ($pengajuan->sudahDiproses()) {
