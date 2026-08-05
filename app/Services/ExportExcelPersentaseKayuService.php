@@ -3,25 +3,23 @@
 namespace App\Services;
 
 use Maatwebsite\Excel\Concerns\FromArray;
+use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
-use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use Maatwebsite\Excel\Concerns\WithTitle;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class ExportExcelPersentaseKayuService implements
-    FromArray,
-    WithHeadings,
-    WithStyles,
-    WithColumnWidths,
-    WithTitle
+class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, WithHeadings, WithStyles, WithTitle
 {
     protected array $laporan;
+
     protected array $rekap;
+
     protected string $activeSheet;
+
     protected string $date;
 
     protected array $mergeBatches = [];
@@ -59,7 +57,7 @@ class ExportExcelPersentaseKayuService implements
             '',
             (float) $this->rekap['total_harga_v_ongkos'],
             '',
-            (float) $this->rekap['total_harga_vop']
+            (float) $this->rekap['total_harga_vop'],
         ];
 
         $currentRow = 5; // Data dimulai dari baris 4 (1&2 Header, 3 Total)
@@ -71,7 +69,7 @@ class ExportExcelPersentaseKayuService implements
             // Tentukan posisi start dan end merge sebelum manipulasi row
             $this->mergeBatches[] = [
                 'start' => $currentRow,
-                'end' => $currentRow + $outflowCount - 1
+                'end' => $currentRow + $outflowCount - 1,
             ];
 
             foreach ($item['outflow'] as $index => $prod) {
@@ -79,7 +77,10 @@ class ExportExcelPersentaseKayuService implements
                 $isLastInBatch = ($index === $outflowCount - 1);
 
                 $rows[] = [
-                    $prod['tgl'],
+                    // Kolom Tanggal: hanya diisi di baris pertama batch (akan di-merge),
+                    // dan nilainya adalah tanggal outflow TERAKHIR dalam batch ini
+                    // (bukan tanggal pertama), sesuai permintaan.
+                    $isFirstInBatch ? $item['outflow'][$outflowCount - 1]['tgl'] : '',
                     $isLastInBatch ? '✓' : '',
                     $isFirstInBatch ? $item['batch_info']['kode'] : '',
                     $isFirstInBatch ? $item['summary']['total_kayu_masuk'] : '',
@@ -116,7 +117,7 @@ class ExportExcelPersentaseKayuService implements
         return [
             ["KAYU {$this->activeSheet} ( {$this->date} )", '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
             ['Tanggal', 'Habis', 'Kayu', '', '', '', '', 'Veneer', '', '', '', '', 'Jam Kerja', '%', 'harga veneer/m3', 'Pekerja', 'Ongkos/pkj', 'Harga Veneer + Ongkos', 'Penyusutan', 'Harga Veneer + Ongkos + penyusutan'],
-            ['', '', 'Lahan', 'Batang', 'Pecah', 'm3', 'Poin', 'Panjang', 'Lebar', 'Tebal', 'Lembar', 'm3', '', '', '', '', '', '', '', '']
+            ['', '', 'Lahan', 'Batang', 'Pecah', 'm3', 'Poin', 'Panjang', 'Lebar', 'Tebal', 'Lembar', 'm3', '', '', '', '', '', '', '', ''],
         ];
     }
 
@@ -153,29 +154,29 @@ class ExportExcelPersentaseKayuService implements
         $sheet->getStyle('A1:T4')->applyFromArray([
             'font' => ['bold' => true],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
+            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
         ]);
 
         // BARIS TOTAL (Baris 3)
         $sheet->getStyle('A4:L4')->applyFromArray([
             'font' => ['bold' => true],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFC000']], // Oranye/Kuning Emas
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ]);
         $sheet->getStyle('M4:T4')->applyFromArray([
             'font' => ['bold' => true],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FF88BA']], // Oranye/Kuning Emas
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ]);
 
         // COLUMN COLORS (Sesuai Gambar)
-        $sheet->getStyle('F5:G' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Kayu
-        $sheet->getStyle('L5:L' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Veneer m3
-        $sheet->getStyle('N5:N' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda %
-        $sheet->getStyle('O5:O' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('92D050'); // Hijau Harga m3
-        $sheet->getStyle('R5:R' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFC000'); // Oranye Harga V+O
-        $sheet->getStyle('S5:S' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Penyusutan
-        $sheet->getStyle('T5:T' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFF00'); // Kuning Terang VOP
+        $sheet->getStyle('F5:G'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Kayu
+        $sheet->getStyle('L5:L'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Veneer m3
+        $sheet->getStyle('N5:N'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda %
+        $sheet->getStyle('O5:O'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('92D050'); // Hijau Harga m3
+        $sheet->getStyle('R5:R'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFC000'); // Oranye Harga V+O
+        $sheet->getStyle('S5:S'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Penyusutan
+        $sheet->getStyle('T5:T'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFF00'); // Kuning Terang VOP
         // ! TOTAL
         $sheet->getStyle('C4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF'); // Kuning Terang VOP
         $sheet->getStyle('E4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF'); // Kuning Terang VOP
@@ -184,26 +185,29 @@ class ExportExcelPersentaseKayuService implements
         $sheet->getStyle('S4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF'); // Kuning Terang VOP
 
         // ALIGNMENT & BORDERS
-        $sheet->getStyle('A5:T' . $lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-        $sheet->getStyle('A5:T' . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle('A5:T'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getStyle('A5:T'.$lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
-        $sheet->getStyle('A5:F' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle('M5:N' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle('P5:P' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A5:F'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('M5:N'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('P5:P'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         // FORMAT ANGKA
-        $sheet->getStyle('F4:F' . $lastRow)->getNumberFormat()->setFormatCode('0.0000');
-        $sheet->getStyle('L4:L' . $lastRow)->getNumberFormat()->setFormatCode('0.0000');
+        $sheet->getStyle('F4:F'.$lastRow)->getNumberFormat()->setFormatCode('0.0000');
+        $sheet->getStyle('L4:L'.$lastRow)->getNumberFormat()->setFormatCode('0.0000');
         // ! POINT
         // Format Rupiah Standar (Rp 1.000.000)
-        $sheet->getStyle('D4:D' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
-        $sheet->getStyle('G4:G' . $lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
+        $sheet->getStyle('D4:D'.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
+        $sheet->getStyle('G4:G'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
 
         // Untuk baris lainnya
-        $sheet->getStyle('O4:O' . $lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
-        $sheet->getStyle('Q4:T' . $lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
+        $sheet->getStyle('O4:O'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
+        $sheet->getStyle('Q4:T'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
 
-        $mergeRow = ['C', 'D', 'E', 'F', 'G', 'N', 'O', 'R', 'T'];
+        // Kolom yang di-merge per batch. 'A' (Tanggal) ditambahkan agar tanggal
+        // ikut digabung menjadi satu sel per batch (menampilkan tanggal terakhir
+        // dari outflow batch tersebut, yang sudah diset di method array()).
+        $mergeRow = ['A', 'C', 'D', 'E', 'F', 'G', 'N', 'O', 'R', 'T'];
         foreach ($this->mergeBatches as $batch) {
             foreach ($mergeRow as $column) {
                 $sheet->mergeCells("{$column}{$batch['start']}:{$column}{$batch['end']}");
@@ -246,7 +250,6 @@ class ExportExcelPersentaseKayuService implements
             'T' => 20,
         ];
     }
-
 
     public function title(): string
     {
