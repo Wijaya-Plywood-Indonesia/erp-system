@@ -25,6 +25,7 @@
     "spatie/laravel-activitylog": "^4.12"
   },
   "require-dev": {
+    "barryvdh/laravel-debugbar": "^4.4",
     "fakerphp/faker": "^1.23",
     "laravel/pail": "^1.2.2",
     "laravel/pint": "^1.24",
