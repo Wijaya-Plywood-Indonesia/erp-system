@@ -39,6 +39,19 @@ class ProduksiInflowService
      */
     private array $recordsByLahanJenisCache = [];
 
+    /**
+     * OPTIMASI #4: cache SEMUA baris DetailHasilPaletRotary per id_produksi
+     * (dengan relasi produksi/mesin/pegawai/ukuran sudah ditempel), supaya
+     * stitchBatchWithOutflow() TIDAK query 2x ke detail_hasil_palet_rotaries
+     * untuk id_produksi yang sama (sekali by id_penggunaan_lahan, sekali lagi
+     * by id_produksi untuk hitung totalOutputHarian), dan tidak query ulang
+     * ke produksi_rotaries/pegawai_rotaries untuk id_produksi yang sudah
+     * pernah diproses di closure/batch sebelumnya.
+     *
+     * Struktur: [id_produksi => Collection<DetailHasilPaletRotary>]
+     */
+    private array $detailByProduksiCache = [];
+
     public function getLaporanBatch($month = null, $year = null, $nama_lahan = 'Semua Lahan', $perPage = 10)
     {
         $query = PenggunaanLahanRotary::with([
@@ -368,6 +381,19 @@ class ProduksiInflowService
             ->whereIn('id_penggunaan_lahan', $idsPenggunaanLahan)
             ->get();
 
+        // OPTIMASI #4: simpan hasil query ini ke cache per id_produksi, supaya
+        // batch/closure lain yang kebetulan punya id_produksi sama TIDAK perlu
+        // query ulang ke detail_hasil_palet_rotaries / produksi_rotaries /
+        // pegawai_rotaries. Ini menghilangkan pola duplicate query 2-3x per
+        // id_produksi yang sebelumnya terlihat di query log (mis. id 435, 434,
+        // 427, 423, 419, 415, 414 masing-masing di-query ulang untuk closure
+        // yang berbeda-beda padahal datanya identik).
+        foreach ($outflowData->groupBy('id_produksi') as $prodId => $rows) {
+            if (! isset($this->detailByProduksiCache[$prodId])) {
+                $this->detailByProduksiCache[$prodId] = $rows;
+            }
+        }
+
         // Tempel relasi 'mesin' dari cache (dedup per ID mesin, lintas seluruh request)
         $mesinIds = $outflowData->pluck('produksi.id_mesin')->filter()->unique()->all();
         foreach ($mesinIds as $mesinId) {
@@ -402,25 +428,59 @@ class ProduksiInflowService
 
         $produksiIds = $outflowData->pluck('id_produksi')->unique()->toArray();
 
-        // SOLUSI 3 (revisi): TIDAK lagi with('setoranPaletUkuran') di sini juga —
-        // pakai cache Ukuran yang sama persis dari atas. Kalau ID ukurannya sudah
-        // pernah di-cache (kemungkinan besar, karena ini produksi yang sama),
-        // baris di bawah 0 query tambahan sama sekali.
-        $totalOutputHarian = DetailHasilPaletRotary::whereIn('id_produksi', $produksiIds)
-            ->get()
-            ->each(function ($d) use ($ukuranFk) {
-                $d->setRelation(
-                    'setoranPaletUkuran',
-                    $this->cached(Ukuran::class, $d->{$ukuranFk}, ['id', 'panjang', 'lebar', 'tebal'])
-                );
-            })
-            ->groupBy('id_produksi')
-            ->map(function ($details) {
-                return $details->sum(function ($d) {
+        // OPTIMASI #4 (lanjutan): sebelumnya baris ini SELALU query ulang ke
+        // detail_hasil_palet_rotaries by id_produksi, padahal datanya (untuk
+        // id_produksi yang sama) sudah pernah diambil sebelumnya — baik dari
+        // $outflowData di atas, maupun dari pemrosesan closure/batch lain
+        // sebelumnya dalam request yang sama. Sekarang kita hanya query
+        // id_produksi yang BENAR-BENAR belum ada di cache.
+        $missingProduksiIds = array_values(array_filter(
+            $produksiIds,
+            fn ($id) => ! isset($this->detailByProduksiCache[$id])
+        ));
+
+        if (! empty($missingProduksiIds)) {
+            $fetched = DetailHasilPaletRotary::whereIn('id_produksi', $missingProduksiIds)
+                ->get()
+                ->each(function ($d) use ($ukuranFk) {
+                    $d->setRelation(
+                        'setoranPaletUkuran',
+                        $this->cached(Ukuran::class, $d->{$ukuranFk}, ['id', 'panjang', 'lebar', 'tebal'])
+                    );
+                })
+                ->groupBy('id_produksi');
+
+            foreach ($fetched as $prodId => $rows) {
+                $this->detailByProduksiCache[$prodId] = $rows;
+            }
+        }
+
+        // Pastikan semua baris di cache (termasuk yang datang dari $outflowData,
+        // bukan dari query whereIn id_produksi di atas) sudah punya relasi
+        // 'setoranPaletUkuran' ditempel, supaya perhitungan totalOutputHarian
+        // di bawah konsisten walau sumber datanya campuran.
+        foreach ($produksiIds as $prodId) {
+            $rows = $this->detailByProduksiCache[$prodId] ?? collect();
+            foreach ($rows as $d) {
+                if (! $d->relationLoaded('setoranPaletUkuran')) {
+                    $d->setRelation(
+                        'setoranPaletUkuran',
+                        $this->cached(Ukuran::class, $d->{$ukuranFk}, ['id', 'panjang', 'lebar', 'tebal'])
+                    );
+                }
+            }
+        }
+
+        $totalOutputHarian = collect($produksiIds)
+            ->mapWithKeys(function ($prodId) {
+                $details = $this->detailByProduksiCache[$prodId] ?? collect();
+                $sum = $details->sum(function ($d) {
                     $u = $d->setoranPaletUkuran;
 
                     return $u ? ($u->panjang * $u->lebar * $u->tebal * $d->total_lembar) / 10_000_000 : 0;
                 });
+
+                return [$prodId => $sum];
             });
 
         $groupedOutflow = $outflowData->map(function ($hasil) use ($ongkosPekerja, $totalOutputHarian) {
@@ -577,16 +637,23 @@ class ProduksiInflowService
         }
 
         // Ambil Data Stok Opname dari HppAverageLog
-        $opnameQuery = HppAverageLog::where('id_lahan', $idLahan)
-            ->where('id_jenis_kayu', $idJenisKayu)
-            ->where('keterangan', 'like', 'STOK OPNAME%')
-            ->where('created_at', '<=', $batasAtas);
+        // OPTIMASI #5: cache by (idLahan, idJenisKayu, batasAtas, start) — window ini
+        // sering berulang persis antar closure yang berdekatan (mis. batch SELESAI
+        // lalu batch zero-inflow lanjutannya untuk lahan+jenis kayu yang sama).
+        $opnameCacheKey = 'opname_'.$idLahan.'-'.$idJenisKayu.'-'.$batasAtas.'-'.($start ?? 'null');
 
-        if ($start) {
-            $opnameQuery->where('created_at', '>', $start);
-        }
+        $opnames = $this->cachedSingle($opnameCacheKey, function () use ($idLahan, $idJenisKayu, $batasAtas, $start) {
+            $opnameQuery = HppAverageLog::where('id_lahan', $idLahan)
+                ->where('id_jenis_kayu', $idJenisKayu)
+                ->where('keterangan', 'like', 'STOK OPNAME%')
+                ->where('created_at', '<=', $batasAtas);
 
-        $opnames = $opnameQuery->get();
+            if ($start) {
+                $opnameQuery->where('created_at', '>', $start);
+            }
+
+            return $opnameQuery->get();
+        });
 
         $opnameInflows = $opnames->map(function ($log) {
             $isMasuk = $log->tipe_transaksi === 'masuk';
@@ -646,30 +713,6 @@ class ProduksiInflowService
             ->toArray();
 
         return $paginatedClosures;
-    }
-
-    private function getBatchStart($closure)
-    {
-        if (! $closure) {
-            return null;
-        }
-        $batchRecords = PenggunaanLahanRotary::where('id_lahan', $closure->id_lahan)
-            ->where('id_jenis_kayu', $closure->id_jenis_kayu)
-            ->where('created_at', '<=', $closure->created_at)
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        $tempGroup = [];
-        foreach ($batchRecords as $record) {
-            $tempGroup[] = $record;
-            if ($record->id !== $closure->id && $record->jumlah_batang > 0) {
-                array_pop($tempGroup);
-                break;
-            }
-        }
-        $tempGroup = array_reverse($tempGroup);
-
-        return $tempGroup[0] ? $tempGroup[0]->created_at : $closure->created_at;
     }
 
     /**
@@ -795,17 +838,32 @@ class ProduksiInflowService
         $start = $lastClosure ? $lastClosure->created_at : null;
         $notaIds = [];
 
-        $currentClosureLog = HppAverageLog::where('referensi_type', PenggunaanLahanRotary::class)
-            ->where('referensi_id', $closure->id)
-            ->first();
+        // OPTIMASI #5: cache lookup HppAverageLog by referensi (id closure) —
+        // dipanggil dengan id closure yang sama kalau buildLaporanItemForClosure
+        // ke-trigger lebih dari sekali untuk closure yang sama (mis. dipanggil
+        // dari getLaporanBatch dan getLaporanBatchPreview di request yang beda,
+        // atau reprocessing di dalam siklus merge/preview yang sama).
+        $currentClosureLog = $this->cachedSingle(
+            'hpp_ref_'.$closure->id,
+            fn () => HppAverageLog::where('referensi_type', PenggunaanLahanRotary::class)
+                ->where('referensi_id', $closure->id)
+                ->first()
+        );
 
         if ($currentClosureLog) {
-            $lastClosureLog = HppAverageLog::where('id_lahan', $closure->id_lahan)
-                ->where('id_jenis_kayu', $closure->id_jenis_kayu)
-                ->where('tipe_transaksi', 'keluar')
-                ->where('created_at', '<', $currentClosureLog->created_at)
-                ->orderBy('created_at', 'desc')
-                ->first();
+            // OPTIMASI #5: cache by (id_lahan, id_jenis_kayu, created_at closure log) —
+            // kombinasi ini sering berulang persis untuk closure yang saling
+            // berdekatan pada lahan+jenis kayu yang sama.
+            $lastClosureLogKey = 'hpp_keluar_'.$closure->id_lahan.'-'.$closure->id_jenis_kayu.'-'.$currentClosureLog->created_at;
+            $lastClosureLog = $this->cachedSingle(
+                $lastClosureLogKey,
+                fn () => HppAverageLog::where('id_lahan', $closure->id_lahan)
+                    ->where('id_jenis_kayu', $closure->id_jenis_kayu)
+                    ->where('tipe_transaksi', 'keluar')
+                    ->where('created_at', '<', $currentClosureLog->created_at)
+                    ->orderBy('created_at', 'desc')
+                    ->first()
+            );
 
             if ($lastClosureLog) {
                 // OPTIMASI: pakai cache trait supaya id yang sama tidak di-query ulang ke DB.
@@ -814,23 +872,29 @@ class ProduksiInflowService
                     $start = $prevClosure->created_at;
                 }
             } else {
-                $masukLogsQuery = HppAverageLog::where('id_lahan', $closure->id_lahan)
-                    ->where('id_jenis_kayu', $closure->id_jenis_kayu)
-                    ->where('tipe_transaksi', 'masuk')
-                    ->where('referensi_type', NotaKayu::class)
-                    ->where('created_at', '<', $currentClosureLog->created_at);
-
-                $notaIds = $masukLogsQuery->pluck('referensi_id')->toArray();
+                $masukLogsKey = 'hpp_masuk_'.$closure->id_lahan.'-'.$closure->id_jenis_kayu.'-'.$currentClosureLog->created_at;
+                $notaIds = $this->cachedSingle($masukLogsKey, function () use ($closure, $currentClosureLog) {
+                    return HppAverageLog::where('id_lahan', $closure->id_lahan)
+                        ->where('id_jenis_kayu', $closure->id_jenis_kayu)
+                        ->where('tipe_transaksi', 'masuk')
+                        ->where('referensi_type', NotaKayu::class)
+                        ->where('created_at', '<', $currentClosureLog->created_at)
+                        ->pluck('referensi_id')
+                        ->toArray();
+                });
 
                 // Hitung berapa banyak qty yang sudah tercatat di HPP masuk
                 $trackedQty = 0;
                 if (! empty($notaIds)) {
-                    $trackedQty = DetailTurusanKayu::where('lahan_id', $closure->id_lahan)
-                        ->where('jenis_kayu_id', $closure->id_jenis_kayu)
-                        ->whereIn('id_kayu_masuk', function ($q) use ($notaIds) {
-                            $q->select('id_kayu_masuk')->from('nota_kayus')->whereIn('id', $notaIds);
-                        })
-                        ->sum('kuantitas');
+                    $trackedQtyKey = 'tracked_qty_'.$closure->id_lahan.'-'.$closure->id_jenis_kayu.'-'.md5(implode(',', $notaIds));
+                    $trackedQty = $this->cachedSingle($trackedQtyKey, function () use ($closure, $notaIds) {
+                        return DetailTurusanKayu::where('lahan_id', $closure->id_lahan)
+                            ->where('jenis_kayu_id', $closure->id_jenis_kayu)
+                            ->whereIn('id_kayu_masuk', function ($q) use ($notaIds) {
+                                $q->select('id_kayu_masuk')->from('nota_kayus')->whereIn('id', $notaIds);
+                            })
+                            ->sum('kuantitas');
+                    });
                 }
 
                 // Sisa qty yang merupakan saldo awal (pre-HPP)
@@ -839,19 +903,26 @@ class ProduksiInflowService
                 if ($untrackedQty > 0) {
                     $minNotaCreatedAt = null;
                     if (! empty($notaIds)) {
-                        $minNotaCreatedAt = NotaKayu::whereIn('id', $notaIds)->min('created_at');
+                        $minNotaKey = 'min_nota_'.md5(implode(',', $notaIds));
+                        $minNotaCreatedAt = $this->cachedSingle(
+                            $minNotaKey,
+                            fn () => NotaKayu::whereIn('id', $notaIds)->min('created_at')
+                        );
                     }
                     $firstHppTime = $minNotaCreatedAt ?: $currentClosureLog->created_at;
 
                     // Query NotaKayu sebelum HPP secara descending
-                    $preHppNotas = NotaKayu::where('status', 'like', '%Sudah Diperiksa%')
-                        ->where('created_at', '<', $firstHppTime)
-                        ->whereHas('kayuMasuk.detailTurusanKayus', function ($q) use ($closure) {
-                            $q->where('lahan_id', $closure->id_lahan)
-                                ->where('jenis_kayu_id', $closure->id_jenis_kayu);
-                        })
-                        ->orderBy('created_at', 'desc')
-                        ->get();
+                    $preHppKey = 'pre_hpp_notas_'.$closure->id_lahan.'-'.$closure->id_jenis_kayu.'-'.$firstHppTime;
+                    $preHppNotas = $this->cachedSingle($preHppKey, function () use ($closure, $firstHppTime) {
+                        return NotaKayu::where('status', 'like', '%Sudah Diperiksa%')
+                            ->where('created_at', '<', $firstHppTime)
+                            ->whereHas('kayuMasuk.detailTurusanKayus', function ($q) use ($closure) {
+                                $q->where('lahan_id', $closure->id_lahan)
+                                    ->where('jenis_kayu_id', $closure->id_jenis_kayu);
+                            })
+                            ->orderBy('created_at', 'desc')
+                            ->get();
+                    });
 
                     $accumulated = 0;
                     $preHppNotaIds = [];
@@ -859,10 +930,13 @@ class ProduksiInflowService
                         if ($accumulated >= $untrackedQty) {
                             break;
                         }
-                        $qty = DetailTurusanKayu::where('id_kayu_masuk', $n->id_kayu_masuk)
-                            ->where('lahan_id', $closure->id_lahan)
-                            ->where('jenis_kayu_id', $closure->id_jenis_kayu)
-                            ->sum('kuantitas');
+                        $qtyKey = 'qty_kayu_masuk_'.$n->id_kayu_masuk.'-'.$closure->id_lahan.'-'.$closure->id_jenis_kayu;
+                        $qty = $this->cachedSingle($qtyKey, function () use ($n, $closure) {
+                            return DetailTurusanKayu::where('id_kayu_masuk', $n->id_kayu_masuk)
+                                ->where('lahan_id', $closure->id_lahan)
+                                ->where('jenis_kayu_id', $closure->id_jenis_kayu)
+                                ->sum('kuantitas');
+                        });
 
                         $preHppNotaIds[] = $n->id;
                         $accumulated += $qty;
@@ -873,7 +947,11 @@ class ProduksiInflowService
 
                 // Set start boundary to the oldest nota in the merged list, with a subDays(30) fallback if empty
                 if (! empty($notaIds)) {
-                    $minNotaCreatedAt = NotaKayu::whereIn('id', $notaIds)->min('created_at');
+                    $minNotaFinalKey = 'min_nota_final_'.md5(implode(',', $notaIds));
+                    $minNotaCreatedAt = $this->cachedSingle(
+                        $minNotaFinalKey,
+                        fn () => NotaKayu::whereIn('id', $notaIds)->min('created_at')
+                    );
                     if ($minNotaCreatedAt) {
                         $start = Carbon::parse($minNotaCreatedAt)->subDays(30);
                     }

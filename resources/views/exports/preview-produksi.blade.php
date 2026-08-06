@@ -22,15 +22,6 @@
             }
         }
 
-        /* Loading overlay */
-        #loading-overlay {
-            display: none;
-        }
-
-        #loading-overlay.is-active {
-            display: flex;
-        }
-
         @keyframes loading-spin {
             from {
                 transform: rotate(0deg);
@@ -49,34 +40,18 @@
 
 <body class="antialiased text-slate-800 font-bold">
 
-    {{-- LOADING OVERLAY: muncul saat form filter di-submit atau saat pindah tab sheet kayu,
-         karena kedua aksi itu reload penuh halaman & query-nya bisa berat (lihat query log
-         sebelumnya, bisa >1s untuk 1 bulan data). --}}
-    <div id="loading-overlay"
-        class="fixed inset-0 z-[100] bg-slate-900/70 backdrop-blur-sm flex-col items-center justify-center no-print">
-        <svg class="loading-spinner h-12 w-12 text-white mb-4" xmlns="http://www.w3.org/2000/svg" fill="none"
-            viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
-            </circle>
-            <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-        </svg>
-        <p class="text-white font-black text-sm uppercase tracking-wide">Memuat Data...</p>
-        <p class="text-slate-300 text-[10px] font-bold uppercase tracking-wide mt-1">Mohon tunggu, laporan sedang
-            diproses</p>
-    </div>
-
     <div class="p-6">
         <div class="mb-6 bg-white p-4 rounded-lg border border-slate-900 shadow-sm no-print">
             <form id="filter-form" action="{{ url()->current() }}" method="GET">
+                {{-- Simpan sheet aktif supaya tetap terpilih saat bulan/tahun diganti --}}
+                <input type="hidden" name="sheet" id="filter-sheet" value="{{ $activeSheet }}">
+
                 <div class="flex items-center justify-between  gap-4">
-                    {{-- <div class="text-3xl font-bold text-slate-900">
-                        PREVIEW EXPORT EXCEL
-                    </div> --}}
                     <div class="flex items-end gap-4">
 
                         <div>
                             <label class="block text-xs font-black text-slate-700 uppercase mb-1">Bulan Produksi</label>
-                            <select name="bulan"
+                            <select name="bulan" id="filter-bulan"
                                 class="border border-slate-900 rounded px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none">
                                 @foreach (range(1, 12) as $m)
                                     <option value="{{ sprintf('%02d', $m) }}"
@@ -88,7 +63,7 @@
                         </div>
                         <div>
                             <label class="block text-xs font-black text-slate-700 uppercase mb-1">Tahun</label>
-                            <select name="tahun"
+                            <select name="tahun" id="filter-tahun"
                                 class="border border-slate-900 rounded px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none">
                                 @foreach (range(date('Y') - 2, date('Y')) as $y)
                                     <option value="{{ $y }}" {{ $selectedTahun == $y ? 'selected' : '' }}>
@@ -96,10 +71,19 @@
                                 @endforeach
                             </select>
                         </div>
-                        <button type="submit" id="filter-submit-btn"
-                            class="bg-slate-900 text-white px-6 py-2 rounded text-sm font-black hover:bg-slate-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
-                            <span class="btn-label">TAMPILKAN DATA</span>
-                        </button>
+
+                        {{-- Indikator loading kecil di samping dropdown, muncul saat data sedang dimuat ulang --}}
+                        <div id="filter-inline-loading"
+                            class="hidden items-center gap-2 text-xs font-black text-slate-600 uppercase pb-2">
+                            <svg class="loading-spinner h-4 w-4 text-slate-600" xmlns="http://www.w3.org/2000/svg"
+                                fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                    stroke-width="4"></circle>
+                                <path class="opacity-90" fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                            Memuat...
+                        </div>
                     </div>
                     @php
                         // Validasi apakah sheets kosong atau null
@@ -144,282 +128,183 @@
             </form>
         </div>
 
-        <div class="overflow-x-auto rounded-lg shadow-sm border border-slate-900">
-            <table class="w-full border-collapse bg-white text-sm font-sans">
-                <thead>
-                    <tr class="bg-slate-50 border-b border-slate-900 text-slate-900 uppercase">
-                        <th colspan="20" class="py-4 text-center font-black text-lg">
-                            KAYU {{ $activeSheet ?? 'KOSONG' }}
-                        </th>
-                    </tr>
-                    <tr class="bg-slate-100/80 border-b border-slate-900 text-slate-900">
-                        <th rowspan="2" class="border-r border-slate-900 px-3 py-2 w-24 font-bold">Tanggal</th>
-                        <th rowspan="2" class="border-r border-slate-900 px-3 py-2 font-bold">Habis</th>
-                        <th colspan="5" class="border-r border-slate-900 px-3 py-2 font-bold uppercase">Kayu</th>
-                        <th colspan="5" rowspan="2" class="border-r border-slate-900 p-0 w-[352px]">
-                            <table class="w-full table-fixed border-collapse">
-                                <thead>
-                                    <tr>
-                                        <th colspan="5"
-                                            class="border-b border-slate-900 py-2 text-center uppercase tracking-wider font-bold">
-                                            Veneer</th>
-                                    </tr>
-                                    <tr>
-                                        <th rowspan="5"
-                                            class="grid w-[352px] grid-cols-[64px_64px_48px_80px_96px] divide-x divide-slate-900 h-full min-h-[32px] items-center text-[11px] font-bold">
-                                            <div
-                                                class="text-center flex items-center justify-center min-w-16 h-full font-black">
-                                                P</div>
-                                            <div
-                                                class="text-center flex items-center justify-center min-w-16 h-full font-black">
-                                                L</div>
-                                            <div
-                                                class="text-center flex items-center justify-center min-w-12 h-full font-black">
-                                                T</div>
-                                            <div
-                                                class="text-center font-mono flex items-center justify-center min-w-20 h-full font-black">
-                                                TOTAL</div>
-                                            <div
-                                                class="bg-emerald-50/20 text-right pr-2 font-black h-full min-w-24 flex items-center justify-end">
-                                                M³</div>
-                                        </th>
-                                    </tr>
-                                </thead>
-                            </table>
-                        </th>
-                        <th rowspan="2" class="border-r border-slate-900 px-3 py-2 w-32 font-bold">Jam Kerja</th>
-                        <th rowspan="2"
-                            class="border-r border-slate-900 px-3 py-2 bg-blue-50/50 text-blue-800 font-black">%</th>
-                        <th rowspan="2"
-                            class="border-r border-slate-900 px-3 py-2 bg-emerald-100/50 text-emerald-800 font-black uppercase">
-                            Harga Veneer / m³</th>
-                        <th rowspan="2"
-                            class="border-r border-slate-900 px-3 py-2 bg-blue-50/50 text-blue-800 w-24 text-center p-0 font-bold">
-                            Pekerja</th>
-                        <th rowspan="2"
-                            class="border-r border-slate-900 px-3 py-2 bg-amber-50/50 text-amber-800 w-32 text-center p-0 font-bold">
-                            Ongkos / pkj</th>
-                        <th rowspan="2"
-                            class="border-r border-slate-900 px-3 py-2 bg-orange-100/40 text-orange-900 font-black uppercase">
-                            Harga V + Ongkos</th>
-                        <th rowspan="2"
-                            class="border-r border-slate-900 px-3 py-2 bg-blue-50/50 text-blue-800 w-32 text-center p-0 font-bold">
-                            Penyusutan</th>
-                        <th rowspan="2" class="px-3 py-2 bg-yellow-100/40 text-yellow-900 font-black uppercase">
-                            Harga
-                            VOP</th>
-                    </tr>
-                    <tr class="bg-slate-50 border-b border-slate-900 text-slate-900 uppercase">
-                        <th class="border-r border-slate-900 px-2 py-1 font-bold">Lahan</th>
-                        <th class="border-r border-slate-900 px-2 py-1 font-bold">Batang</th>
-                        <th class="border-r border-slate-900 px-2 py-1 font-bold">Pecah</th>
-                        <th class="border-r border-slate-900 px-2 py-1 bg-orange-50/30 font-bold text-orange-900">m³
-                        </th>
-                        <th class="border-r border-slate-900 px-2 py-1 bg-yellow-50/30 font-bold text-yellow-900">Poin
-                        </th>
-                    </tr>
+        <div id="table-wrapper" class="relative overflow-x-auto rounded-lg shadow-sm border border-slate-900">
+            {{-- LOADING OVERLAY LOKAL: hanya menutupi tabel, bukan seluruh halaman.
+                 Dropdown bulan/tahun di luar wrapper ini tetap bisa diklik & diubah
+                 selagi tabel masih memuat data periode sebelumnya.
+                 Ditampilkan default (tanpa 'hidden') supaya SAAT FIRST LOAD pun
+                 area tabel langsung terlihat sedang "memuat", bukan tabel kosong. --}}
+            <div id="table-loading-overlay"
+                class="flex absolute inset-0 z-40 bg-white/80 backdrop-blur-sm flex-col items-center justify-center no-print">
+                <svg class="loading-spinner h-10 w-10 text-slate-700 mb-3" xmlns="http://www.w3.org/2000/svg"
+                    fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                        stroke-width="4">
+                    </circle>
+                    <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z">
+                    </path>
+                </svg>
+                <p class="text-slate-800 font-black text-sm uppercase tracking-wide">Memuat Data...</p>
+            </div>
 
-                    <tr class="bg-slate-100/80 border-b border-slate-900 text-slate-900">
-                        <th colspan="2"
-                            class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
-                            Total</th>
-                        <th colspan="1"
-                            class="border-r border-slate-900 px-3 py-1 text-slate-900 text-center font-bold"></th>
+            {{-- Semua isi <table> ada di dalam fragment ini. Controller bisa
+                 me-render ULANG HANYA bagian ini lewat
+                 view(...)->fragment('table-content') tanpa perlu render ulang
+                 form filter / tab sheet di atas. Dipakai baik untuk request
+                 AJAX first-load maupun ganti filter/sheet. --}}
+            <div id="table-fragment-container">
+                @fragment('table-content')
+                    @php
+                        // Saat FIRST LOAD (non-AJAX), controller sengaja mengirim
+                        // $rekap = null dan $laporan = collect() kosong supaya query
+                        // berat tidak dijalankan di request pertama. Guard di sini
+                        // supaya blade tidak error sebelum data asli datang via fetch().
+                        $rekap = $rekap ?? [];
+                    @endphp
+                    <table class="w-full border-collapse bg-white text-sm font-sans">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-900 text-slate-900 uppercase">
+                                <th colspan="20" class="py-4 text-center font-black text-lg">
+                                    KAYU {{ $activeSheet ?? 'KOSONG' }}
+                                </th>
+                            </tr>
+                            <tr class="bg-slate-100/80 border-b border-slate-900 text-slate-900">
+                                <th rowspan="2" class="border-r border-slate-900 px-3 py-2 w-24 font-bold">Tanggal</th>
+                                <th rowspan="2" class="border-r border-slate-900 px-3 py-2 font-bold">Habis</th>
+                                <th colspan="5" class="border-r border-slate-900 px-3 py-2 font-bold uppercase">Kayu</th>
+                                <th colspan="5" rowspan="2" class="border-r border-slate-900 p-0 w-[352px]">
+                                    <table class="w-full table-fixed border-collapse">
+                                        <thead>
+                                            <tr>
+                                                <th colspan="5"
+                                                    class="border-b border-slate-900 py-2 text-center uppercase tracking-wider font-bold">
+                                                    Veneer</th>
+                                            </tr>
+                                            <tr>
+                                                <th rowspan="5"
+                                                    class="grid w-[352px] grid-cols-[64px_64px_48px_80px_96px] divide-x divide-slate-900 h-full min-h-[32px] items-center text-[11px] font-bold">
+                                                    <div
+                                                        class="text-center flex items-center justify-center min-w-16 h-full font-black">
+                                                        P</div>
+                                                    <div
+                                                        class="text-center flex items-center justify-center min-w-16 h-full font-black">
+                                                        L</div>
+                                                    <div
+                                                        class="text-center flex items-center justify-center min-w-12 h-full font-black">
+                                                        T</div>
+                                                    <div
+                                                        class="text-center font-mono flex items-center justify-center min-w-20 h-full font-black">
+                                                        TOTAL</div>
+                                                    <div
+                                                        class="bg-emerald-50/20 text-right pr-2 font-black h-full min-w-24 flex items-center justify-end">
+                                                        M³</div>
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                    </table>
+                                </th>
+                                <th rowspan="2" class="border-r border-slate-900 px-3 py-2 w-32 font-bold">Jam Kerja
+                                </th>
+                                <th rowspan="2"
+                                    class="border-r border-slate-900 px-3 py-2 bg-blue-50/50 text-blue-800 font-black">%
+                                </th>
+                                <th rowspan="2"
+                                    class="border-r border-slate-900 px-3 py-2 bg-emerald-100/50 text-emerald-800 font-black uppercase">
+                                    Harga Veneer / m³</th>
+                                <th rowspan="2"
+                                    class="border-r border-slate-900 px-3 py-2 bg-blue-50/50 text-blue-800 w-24 text-center p-0 font-bold">
+                                    Pekerja</th>
+                                <th rowspan="2"
+                                    class="border-r border-slate-900 px-3 py-2 bg-amber-50/50 text-amber-800 w-32 text-center p-0 font-bold">
+                                    Ongkos / pkj</th>
+                                <th rowspan="2"
+                                    class="border-r border-slate-900 px-3 py-2 bg-orange-100/40 text-orange-900 font-black uppercase">
+                                    Harga V + Ongkos</th>
+                                <th rowspan="2"
+                                    class="border-r border-slate-900 px-3 py-2 bg-blue-50/50 text-blue-800 w-32 text-center p-0 font-bold">
+                                    Penyusutan</th>
+                                <th rowspan="2"
+                                    class="px-3 py-2 bg-yellow-100/40 text-yellow-900 font-black uppercase">
+                                    Harga
+                                    VOP</th>
+                            </tr>
+                            <tr class="bg-slate-50 border-b border-slate-900 text-slate-900 uppercase">
+                                <th class="border-r border-slate-900 px-2 py-1 font-bold">Lahan</th>
+                                <th class="border-r border-slate-900 px-2 py-1 font-bold">Batang</th>
+                                <th class="border-r border-slate-900 px-2 py-1 font-bold">Pecah</th>
+                                <th class="border-r border-slate-900 px-2 py-1 bg-orange-50/30 font-bold text-orange-900">
+                                    m³
+                                </th>
+                                <th class="border-r border-slate-900 px-2 py-1 bg-yellow-50/30 font-bold text-yellow-900">
+                                    Poin
+                                </th>
+                            </tr>
 
-                        <th colspan="1"
-                            class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
-                            {{ number_format($rekap['total_kayu_masuk'], 0, ',', '.') }}
-                        </th>
+                            <tr class="bg-slate-100/80 border-b border-slate-900 text-slate-900">
+                                <th colspan="2"
+                                    class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
+                                    Total</th>
+                                <th colspan="1"
+                                    class="border-r border-slate-900 px-3 py-1 text-slate-900 text-center font-bold"></th>
 
-                        <th colspan="1"
-                            class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
-                            -</th>
+                                <th colspan="1"
+                                    class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
+                                    {{ number_format($rekap['total_kayu_masuk'] ?? 0, 0, ',', '.') }}
+                                </th>
 
-                        <th colspan="1"
-                            class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
-                            {{ number_format($rekap['total_kubikasi_kayu_masuk'], 4, ',', '.') }}
-                        </th>
+                                <th colspan="1"
+                                    class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
+                                    -</th>
 
-                        <th colspan="1"
-                            class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black whitespace-nowrap">
-                            Rp {{ number_format($rekap['total_poin_masuk'], 0, ',', '.') }}
-                        </th>
+                                <th colspan="1"
+                                    class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
+                                    {{ number_format($rekap['total_kubikasi_kayu_masuk'] ?? 0, 4, ',', '.') }}
+                                </th>
 
-                        <th colspan="4" class=" bg-amber-400"></th>
-                        <th colspan="1" class="flex items-center h-full border-r border-slate-900 justify-end">
-                            <div
-                                class="min-w-24 h-full bg-amber-400 text-end justify-end border-l flex items-center border-slate-900 px-3 py-1 min-h-12 text-slate-900 font-black">
-                                {{ number_format($rekap['total_kubikasi_veneer'], 4, ',', '.') }}
-                            </div>
+                                <th colspan="1"
+                                    class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black whitespace-nowrap">
+                                    Rp {{ number_format($rekap['total_poin_masuk'] ?? 0, 0, ',', '.') }}
+                                </th>
 
-                        </th>
+                                <th colspan="4" class=" bg-amber-400"></th>
+                                <th colspan="1" class="flex items-center h-full border-r border-slate-900 justify-end">
+                                    <div
+                                        class="min-w-24 h-full bg-amber-400 text-end justify-end border-l flex items-center border-slate-900 px-3 py-1 min-h-12 text-slate-900 font-black">
+                                        {{ number_format($rekap['total_kubikasi_veneer'] ?? 0, 4, ',', '.') }}
+                                    </div>
 
-                        <th colspan="1"
-                            class="border-r whitespace-nowrap bg-[#FF88BA] border-slate-900 px-3 py-1 w-32 font-bold">
-                            Rata - Rata
-                        </th>
+                                </th>
 
-                        <th colspan="1" class="border-r border-slate-900 px-3 py-1 w-32 font-bold text-blue-800">
-                            {{ $rekap['rata_rata_rendemen'] }}
-                        </th>
+                                <th colspan="1"
+                                    class="border-r whitespace-nowrap bg-[#FF88BA] border-slate-900 px-3 py-1 w-32 font-bold">
+                                    Rata - Rata
+                                </th>
 
-                        <th
-                            class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
-                            {{-- Menghitung total harga v murni dari poin / m3 veneer --}}
-                            Rp {{ number_format($rekap['total_harga_veneer'], 0, ',', '.') }}
-                        </th>
+                                <th colspan="1"
+                                    class="border-r border-slate-900 px-3 py-1 w-32 font-bold text-blue-800">
+                                    {{ $rekap['rata_rata_rendemen'] ?? '-' }}
+                                </th>
 
-                        <th colspan="2" class="border-r border-slate-900 px-3 py-1 "></th>
-                        <th
-                            class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
-                            Rp {{ number_format($rekap['total_harga_v_ongkos'], 0, ',', '.') }}
-                        </th>
-                        <th colspan="1" class="border-r border-slate-900 px-3 py-1 "></th>
-                        <th
-                            class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
-                            Rp {{ number_format($rekap['total_harga_vop'], 0, ',', '.') }}
-                        </th>
-                    </tr>
-                </thead>
+                                <th
+                                    class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
+                                    {{-- Menghitung total harga v murni dari poin / m3 veneer --}}
+                                    Rp {{ number_format($rekap['total_harga_veneer'] ?? 0, 0, ',', '.') }}
+                                </th>
 
-                <tbody class="divide-y divide-slate-900 border-t border-slate-900 text-slate-900 font-bold">
-                    <tr class="h-6 bg-slate-50">
-                        <td class="border-r border-slate-900"></td>
-                        <td class="border-r border-slate-900"></td>
-                        <td class="border-r border-slate-900"></td>
-                        <td class="border-r border-slate-900"></td>
-                        <td class="border-r border-slate-900"></td>
-                        <td class="border-r border-slate-900"></td>
-                        <td class="border-r border-slate-900"></td>
-                        <td colspan="5" class="p-0 border-r border-slate-900 w-[352px]">
-                            <div class="grid grid-cols-[64px_64px_48px_80px_96px] divide-x divide-slate-900 h-full">
-                                <div class="w-full h-6 border-r border-slate-900"></div>
-                                <div class="w-full h-6 border-r border-slate-900"></div>
-                                <div class="w-full h-6 border-r border-slate-900"></div>
-                                <div class="w-full h-6 border-r border-slate-900"></div>
-                                <div class="w-full h-6"></div>
-                            </div>
-                        </td>
+                                <th colspan="2" class="border-r border-slate-900 px-3 py-1 "></th>
+                                <th
+                                    class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
+                                    Rp {{ number_format($rekap['total_harga_v_ongkos'] ?? 0, 0, ',', '.') }}
+                                </th>
+                                <th colspan="1" class="border-r border-slate-900 px-3 py-1 "></th>
+                                <th
+                                    class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
+                                    Rp {{ number_format($rekap['total_harga_vop'] ?? 0, 0, ',', '.') }}
+                                </th>
+                            </tr>
+                        </thead>
 
-                        <td class="border-r border-slate-900"></td>
-                        <td class="border-r border-slate-900"></td>
-                        <td class="border-r border-slate-900"></td>
-                        <td class="border-r border-slate-900"></td>
-                        <td class="border-r border-slate-900"></td>
-                        <td class="border-r border-slate-900"></td>
-                        <td class="border-r border-slate-900"></td>
-                        <td class="border-slate-900"></td>
-                    </tr>
-                    @foreach ($laporan as $item)
-                        @php
-                            // Ambil tanggal outflow TERAKHIR saja (bukan semua tanggal per baris produksi),
-                            // sama seperti logika di export Excel. $item['outflow'] bisa berupa Collection
-                            // atau array biasa tergantung sumber data, jadi ditangani dua-duanya.
-                            $outflowList = $item['outflow'];
-                            $lastTgl = is_array($outflowList)
-                                ? end($outflowList)['tgl'] ?? ''
-                                : $outflowList->last()['tgl'] ?? '';
-                        @endphp
-                        <tr class="hover:bg-slate-50 transition-colors">
-                            <td class="border-r border-slate-900 p-0">
-                                <div
-                                    class="px-2 py-1 text-center text-slate-900 h-full flex items-center justify-center uppercase w-26 text-[10px] font-black">
-                                    {{ $lastTgl }}
-                                </div>
-                            </td>
-
-                            <td
-                                class="border-r border-slate-900 px-3 py-2 text-center text-emerald-600 font-black text-lg">
-                                ✓</td>
-                            <td class="border-r border-slate-900 px-3 py-2 text-center font-black text-slate-900">
-                                {{ $item['batch_info']['kode'] }}</td>
-                            <td class="border-r border-slate-900 px-3 py-2 text-center text-slate-900 font-bold">
-                                {{ $item['summary']['total_kayu_masuk'] }}</td>
-                            <td class="border-r border-slate-900 px-3 py-2"></td>
-                            <td class="border-r border-slate-900 px-3 py-2 bg-blue-50/30 text-right font-black">
-                                {{ $item['summary']['total_masuk_m3'] }}</td>
-                            <td
-                                class="border-r border-slate-900 px-3 py-2 bg-blue-50/30 text-right tabular-nums whitespace-nowrap font-black">
-                                {{ 'Rp ' . $item['summary']['total_poin'] }}</td>
-
-                            <td colspan="5" class="p-0 border-r w-[352px] border-slate-900">
-                                <div class="flex flex-col divide-y w-full divide-slate-900 h-full">
-                                    @foreach ($item['outflow'] as $produksi)
-                                        <div
-                                            class="grid grid-cols-[64px_64px_48px_80px_96px] w-full divide-x divide-slate-900 h-full min-h-[32px] items-center text-[11px] font-bold">
-                                            <div class="text-center flex items-center justify-center h-full">
-                                                {{ $produksi['panjang'] }}</div>
-                                            <div
-                                                class="text-center flex items-center justify-center h-full font-black text-slate-900">
-                                                {{ $produksi['lebar'] }}</div>
-                                            <div class="text-center flex items-center justify-center h-full">
-                                                {{ $produksi['tebal'] }}</div>
-                                            <div
-                                                class="text-center font-mono flex items-center justify-center h-full font-black">
-                                                {{ $produksi['total_banyak'] }}</div>
-                                            <div
-                                                class="bg-emerald-50/20 text-right pr-2 font-black h-full flex items-center justify-end text-emerald-800">
-                                                {{ $produksi['total_kubikasi'] }}</div>
-                                        </div>
-                                    @endforeach
-                                </div>
-                            </td>
-
-                            <td class="border-r border-slate-900 p-0 text-[10px]">
-                                <div class="flex flex-col divide-y divide-slate-900">
-                                    @foreach ($item['outflow'] as $produksi)
-                                        <div
-                                            class="px-2 py-1 text-center min-h-[32px] flex items-center justify-center w-32 font-bold">
-                                            06:00 - 16:00</div>
-                                    @endforeach
-                                </div>
-                            </td>
-
-                            <td
-                                class="border-r border-slate-900 px-3 py-2 bg-blue-50/30 text-center font-black text-blue-800">
-                                {{ $item['summary']['rendemen'] }}</td>
-                            <td
-                                class="border-r border-slate-900 px-3 py-2 bg-emerald-50/30 text-right font-black text-emerald-800 whitespace-nowrap">
-                                Rp. {{ number_format($item['summary']['harga_veneer'], 0, ',', '.') }}</td>
-
-                            <td class="border-r border-slate-900 p-0">
-                                <div class="flex flex-col divide-y divide-slate-900">
-                                    @foreach ($item['outflow'] as $produksi)
-                                        <div
-                                            class="px-2 py-1 text-center min-h-[32px] flex items-center justify-center w-24 uppercase font-bold">
-                                            {{ $produksi['pekerja'] }}</div>
-                                    @endforeach
-                                </div>
-                            </td>
-                            <td class="border-r border-slate-900 p-0 bg-amber-50/30">
-                                <div class="flex flex-col divide-y divide-slate-900">
-                                    @foreach ($item['outflow'] as $produksi)
-                                        <div
-                                            class="px-2 py-1 text-right min-h-[32px] flex items-center justify-end w-32 pr-2 whitespace-nowrap font-bold">
-                                            Rp. {{ number_format($produksi['ongkos'], 0, ',', '.') }}</div>
-                                    @endforeach
-                                </div>
-                            </td>
-
-                            <td
-                                class="border-r border-slate-900 px-3 py-2 bg-orange-50/40 text-right font-black text-orange-900 whitespace-nowrap">
-                                Rp. {{ number_format($item['summary']['harga_v_ongkos'], 0, ',', '.') }}</td>
-
-                            <td class="border-r border-slate-900 p-0 bg-blue-50/30">
-                                <div class="flex flex-col divide-y divide-slate-900">
-                                    @foreach ($item['outflow'] as $produksi)
-                                        <div
-                                            class="px-2 py-1 text-right min-h-[32px] flex items-center justify-end w-32 pr-2 whitespace-nowrap font-bold">
-                                            Rp. {{ number_format($produksi['penyusutan'], 0, ',', '.') }}</div>
-                                    @endforeach
-                                </div>
-                            </td>
-                            <td
-                                class="px-3 py-2 bg-yellow-50/50 text-right font-black text-slate-900 border-l border-slate-900 whitespace-nowrap">
-                                Rp. {{ number_format($item['summary']['harga_vop'], 0, ',', '.') }}</td>
-                        </tr>
-
-                        @if (!$loop->last)
+                        <tbody class="divide-y divide-slate-900 border-t border-slate-900 text-slate-900 font-bold">
                             <tr class="h-6 bg-slate-50">
                                 <td class="border-r border-slate-900"></td>
                                 <td class="border-r border-slate-900"></td>
@@ -428,14 +313,14 @@
                                 <td class="border-r border-slate-900"></td>
                                 <td class="border-r border-slate-900"></td>
                                 <td class="border-r border-slate-900"></td>
-                                <td colspan="5" class="p-0 border-r border-slate-900 w-[352px] h-full">
+                                <td colspan="5" class="p-0 border-r border-slate-900 w-[352px]">
                                     <div
                                         class="grid grid-cols-[64px_64px_48px_80px_96px] divide-x divide-slate-900 h-full">
-                                        <div class="w-full h-6  border-r border-slate-900"></div>
-                                        <div class="w-full h-6  border-r border-slate-900"></div>
-                                        <div class="w-full h-6  border-r border-slate-900"></div>
-                                        <div class="w-full h-6  border-r border-slate-900"></div>
-                                        <div class="w-full h-6 "></div>
+                                        <div class="w-full h-6 border-r border-slate-900"></div>
+                                        <div class="w-full h-6 border-r border-slate-900"></div>
+                                        <div class="w-full h-6 border-r border-slate-900"></div>
+                                        <div class="w-full h-6 border-r border-slate-900"></div>
+                                        <div class="w-full h-6"></div>
                                     </div>
                                 </td>
 
@@ -448,10 +333,150 @@
                                 <td class="border-r border-slate-900"></td>
                                 <td class="border-slate-900"></td>
                             </tr>
-                        @endif
-                    @endforeach
-                </tbody>
-            </table>
+                            @foreach ($laporan as $item)
+                                @php
+                                    // Ambil tanggal outflow TERAKHIR saja (bukan semua tanggal per baris produksi),
+                                    // sama seperti logika di export Excel. $item['outflow'] bisa berupa Collection
+                                    // atau array biasa tergantung sumber data, jadi ditangani dua-duanya.
+                                    $outflowList = $item['outflow'];
+                                    $lastTgl = is_array($outflowList)
+                                        ? end($outflowList)['tgl'] ?? ''
+                                        : $outflowList->last()['tgl'] ?? '';
+                                @endphp
+                                <tr class="hover:bg-slate-50 transition-colors">
+                                    <td class="border-r border-slate-900 p-0">
+                                        <div
+                                            class="px-2 py-1 text-center text-slate-900 h-full flex items-center justify-center uppercase w-26 text-[10px] font-black">
+                                            {{ $lastTgl }}
+                                        </div>
+                                    </td>
+
+                                    <td
+                                        class="border-r border-slate-900 px-3 py-2 text-center text-emerald-600 font-black text-lg">
+                                        ✓</td>
+                                    <td class="border-r border-slate-900 px-3 py-2 text-center font-black text-slate-900">
+                                        {{ $item['batch_info']['kode'] }}</td>
+                                    <td class="border-r border-slate-900 px-3 py-2 text-center text-slate-900 font-bold">
+                                        {{ $item['summary']['total_kayu_masuk'] }}</td>
+                                    <td class="border-r border-slate-900 px-3 py-2"></td>
+                                    <td class="border-r border-slate-900 px-3 py-2 bg-blue-50/30 text-right font-black">
+                                        {{ $item['summary']['total_masuk_m3'] }}</td>
+                                    <td
+                                        class="border-r border-slate-900 px-3 py-2 bg-blue-50/30 text-right tabular-nums whitespace-nowrap font-black">
+                                        {{ 'Rp ' . $item['summary']['total_poin'] }}</td>
+
+                                    <td colspan="5" class="p-0 border-r w-[352px] border-slate-900">
+                                        <div class="flex flex-col divide-y w-full divide-slate-900 h-full">
+                                            @foreach ($item['outflow'] as $produksi)
+                                                <div
+                                                    class="grid grid-cols-[64px_64px_48px_80px_96px] w-full divide-x divide-slate-900 h-full min-h-[32px] items-center text-[11px] font-bold">
+                                                    <div class="text-center flex items-center justify-center h-full">
+                                                        {{ $produksi['panjang'] }}</div>
+                                                    <div
+                                                        class="text-center flex items-center justify-center h-full font-black text-slate-900">
+                                                        {{ $produksi['lebar'] }}</div>
+                                                    <div class="text-center flex items-center justify-center h-full">
+                                                        {{ $produksi['tebal'] }}</div>
+                                                    <div
+                                                        class="text-center font-mono flex items-center justify-center h-full font-black">
+                                                        {{ $produksi['total_banyak'] }}</div>
+                                                    <div
+                                                        class="bg-emerald-50/20 text-right pr-2 font-black h-full flex items-center justify-end text-emerald-800">
+                                                        {{ $produksi['total_kubikasi'] }}</div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </td>
+
+                                    <td class="border-r border-slate-900 p-0 text-[10px]">
+                                        <div class="flex flex-col divide-y divide-slate-900">
+                                            @foreach ($item['outflow'] as $produksi)
+                                                <div
+                                                    class="px-2 py-1 text-center min-h-[32px] flex items-center justify-center w-32 font-bold">
+                                                    06:00 - 16:00</div>
+                                            @endforeach
+                                        </div>
+                                    </td>
+
+                                    <td
+                                        class="border-r border-slate-900 px-3 py-2 bg-blue-50/30 text-center font-black text-blue-800">
+                                        {{ $item['summary']['rendemen'] }}</td>
+                                    <td
+                                        class="border-r border-slate-900 px-3 py-2 bg-emerald-50/30 text-right font-black text-emerald-800 whitespace-nowrap">
+                                        Rp. {{ number_format($item['summary']['harga_veneer'], 0, ',', '.') }}</td>
+
+                                    <td class="border-r border-slate-900 p-0">
+                                        <div class="flex flex-col divide-y divide-slate-900">
+                                            @foreach ($item['outflow'] as $produksi)
+                                                <div
+                                                    class="px-2 py-1 text-center min-h-[32px] flex items-center justify-center w-24 uppercase font-bold">
+                                                    {{ $produksi['pekerja'] }}</div>
+                                            @endforeach
+                                        </div>
+                                    </td>
+                                    <td class="border-r border-slate-900 p-0 bg-amber-50/30">
+                                        <div class="flex flex-col divide-y divide-slate-900">
+                                            @foreach ($item['outflow'] as $produksi)
+                                                <div
+                                                    class="px-2 py-1 text-right min-h-[32px] flex items-center justify-end w-32 pr-2 whitespace-nowrap font-bold">
+                                                    Rp. {{ number_format($produksi['ongkos'], 0, ',', '.') }}</div>
+                                            @endforeach
+                                        </div>
+                                    </td>
+
+                                    <td
+                                        class="border-r border-slate-900 px-3 py-2 bg-orange-50/40 text-right font-black text-orange-900 whitespace-nowrap">
+                                        Rp. {{ number_format($item['summary']['harga_v_ongkos'], 0, ',', '.') }}</td>
+
+                                    <td class="border-r border-slate-900 p-0 bg-blue-50/30">
+                                        <div class="flex flex-col divide-y divide-slate-900">
+                                            @foreach ($item['outflow'] as $produksi)
+                                                <div
+                                                    class="px-2 py-1 text-right min-h-[32px] flex items-center justify-end w-32 pr-2 whitespace-nowrap font-bold">
+                                                    Rp. {{ number_format($produksi['penyusutan'], 0, ',', '.') }}</div>
+                                            @endforeach
+                                        </div>
+                                    </td>
+                                    <td
+                                        class="px-3 py-2 bg-yellow-50/50 text-right font-black text-slate-900 border-l border-slate-900 whitespace-nowrap">
+                                        Rp. {{ number_format($item['summary']['harga_vop'], 0, ',', '.') }}</td>
+                                </tr>
+
+                                @if (!$loop->last)
+                                    <tr class="h-6 bg-slate-50">
+                                        <td class="border-r border-slate-900"></td>
+                                        <td class="border-r border-slate-900"></td>
+                                        <td class="border-r border-slate-900"></td>
+                                        <td class="border-r border-slate-900"></td>
+                                        <td class="border-r border-slate-900"></td>
+                                        <td class="border-r border-slate-900"></td>
+                                        <td class="border-r border-slate-900"></td>
+                                        <td colspan="5" class="p-0 border-r border-slate-900 w-[352px] h-full">
+                                            <div
+                                                class="grid grid-cols-[64px_64px_48px_80px_96px] divide-x divide-slate-900 h-full">
+                                                <div class="w-full h-6  border-r border-slate-900"></div>
+                                                <div class="w-full h-6  border-r border-slate-900"></div>
+                                                <div class="w-full h-6  border-r border-slate-900"></div>
+                                                <div class="w-full h-6  border-r border-slate-900"></div>
+                                                <div class="w-full h-6 "></div>
+                                            </div>
+                                        </td>
+
+                                        <td class="border-r border-slate-900"></td>
+                                        <td class="border-r border-slate-900"></td>
+                                        <td class="border-r border-slate-900"></td>
+                                        <td class="border-r border-slate-900"></td>
+                                        <td class="border-r border-slate-900"></td>
+                                        <td class="border-r border-slate-900"></td>
+                                        <td class="border-r border-slate-900"></td>
+                                        <td class="border-slate-900"></td>
+                                    </tr>
+                                @endif
+                            @endforeach
+                        </tbody>
+                    </table>
+                @endfragment
+            </div>
         </div>
 
         <div class="mt-4 text-[10px] text-slate-600 font-bold uppercase">
@@ -476,6 +501,8 @@
             <div class="flex items-end h-full">
                 @foreach ($sheets as $sheet)
                     <a href="{{ url()->current() }}?bulan={{ $selectedBulan }}&tahun={{ $selectedTahun }}&sheet={{ urlencode($sheet) }}"
+                        data-bulan="{{ $selectedBulan }}" data-tahun="{{ $selectedTahun }}"
+                        data-sheet="{{ $sheet }}"
                         class="sheet-tab-link px-4 py-1 text-xs font-black transition-all flex items-center h-[85%] 
                     {{ $activeSheet == $sheet
                         ? 'bg-white text-green-800 border-x border-t border-slate-400 rounded-t shadow-sm'
@@ -493,45 +520,149 @@
 
     <script>
         (function() {
-            var overlay = document.getElementById('loading-overlay');
+            var tableWrapper = document.getElementById('table-wrapper');
+            var tableOverlay = document.getElementById('table-loading-overlay');
+            var tableFragmentContainer = document.getElementById('table-fragment-container');
             var filterForm = document.getElementById('filter-form');
-            var submitBtn = document.getElementById('filter-submit-btn');
-            var submitBtnLabel = submitBtn ? submitBtn.querySelector('.btn-label') : null;
-            var sheetLinks = document.querySelectorAll('.sheet-tab-link');
             var exportBtn = document.getElementById('export-excel-btn');
+            var bulanSelect = document.getElementById('filter-bulan');
+            var tahunSelect = document.getElementById('filter-tahun');
+            var sheetHiddenInput = document.getElementById('filter-sheet');
+            var inlineLoading = document.getElementById('filter-inline-loading');
 
-            function showOverlay() {
-                overlay.classList.add('is-active');
+            function showTableLoading() {
+                if (tableOverlay) {
+                    tableOverlay.classList.remove('hidden');
+                    tableOverlay.classList.add('flex');
+                }
+                if (tableWrapper) {
+                    tableWrapper.setAttribute('aria-busy', 'true');
+                    tableWrapper.style.pointerEvents = 'none';
+                }
             }
 
-            function hideOverlay() {
-                overlay.classList.remove('is-active');
+            function hideTableLoading() {
+                if (tableOverlay) {
+                    tableOverlay.classList.add('hidden');
+                    tableOverlay.classList.remove('flex');
+                }
+                if (tableWrapper) {
+                    tableWrapper.removeAttribute('aria-busy');
+                    tableWrapper.style.pointerEvents = '';
+                }
             }
 
-            // Filter form (TAMPILKAN DATA) — reload penuh, query bulanan bisa berat
+            function showInlineLoading() {
+                if (inlineLoading) {
+                    inlineLoading.classList.remove('hidden');
+                    inlineLoading.classList.add('flex');
+                }
+            }
+
+            function hideInlineLoading() {
+                if (inlineLoading) {
+                    inlineLoading.classList.add('hidden');
+                    inlineLoading.classList.remove('flex');
+                }
+            }
+
+            // Ambil query params saat ini, override dengan overrides yang dikasih.
+            function buildParams(overrides) {
+                var params = new URLSearchParams(window.location.search);
+                Object.keys(overrides).forEach(function(key) {
+                    params.set(key, overrides[key]);
+                });
+                return params;
+            }
+
+            // Inti dari LAZY LOAD: fetch tabel via AJAX (controller mengembalikan
+            // HANYA fragment table-content lewat ->fragment('table-content')),
+            // lalu suntikkan ke dalam #table-fragment-container.
+            // Dipakai untuk: first load, ganti bulan/tahun, dan pindah tab sheet.
+            function loadTable(overrides, pushUrl) {
+                showTableLoading();
+                showInlineLoading();
+
+                var params = buildParams(overrides || {});
+                var url = window.location.pathname + '?' + params.toString();
+
+                fetch(url, {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(function(res) {
+                        if (!res.ok) throw new Error('Gagal memuat data (' + res.status + ')');
+                        return res.text();
+                    })
+                    .then(function(html) {
+                        tableFragmentContainer.innerHTML = html;
+                        if (pushUrl !== false) {
+                            window.history.replaceState({}, '', url);
+                        }
+                    })
+                    .catch(function(err) {
+                        tableFragmentContainer.innerHTML =
+                            '<div class="p-6 text-center text-red-600 font-black">' +
+                            'Gagal memuat data. Coba ganti ulang filter.</div>';
+                        console.error(err);
+                    })
+                    .finally(function() {
+                        hideTableLoading();
+                        hideInlineLoading();
+                    });
+            }
+
+            // Ganti bulan/tahun -> fetch ulang, TIDAK reload halaman & TIDAK
+            // mengunci dropdown, jadi user tetap bebas ganti-ganti lagi.
+            [bulanSelect, tahunSelect].forEach(function(select) {
+                if (select) {
+                    select.addEventListener('change', function() {
+                        loadTable({
+                            bulan: bulanSelect.value,
+                            tahun: tahunSelect.value,
+                            sheet: sheetHiddenInput.value
+                        });
+                    });
+                }
+            });
+
+            // Cegah submit form biasa (misal user tekan Enter), arahkan ke loadTable juga.
             if (filterForm) {
-                filterForm.addEventListener('submit', function() {
-                    showOverlay();
-                    if (submitBtn) {
-                        submitBtn.disabled = true;
-                    }
-                    if (submitBtnLabel) {
-                        submitBtnLabel.textContent = 'MEMUAT...';
-                    }
+                filterForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    loadTable({
+                        bulan: bulanSelect.value,
+                        tahun: tahunSelect.value,
+                        sheet: sheetHiddenInput.value
+                    });
                 });
             }
 
-            // Tab pindah sheet kayu — juga reload penuh halaman
-            sheetLinks.forEach(function(link) {
-                link.addEventListener('click', function() {
-                    showOverlay();
+            // Tab pindah sheet -> fetch ulang juga, bukan navigasi penuh.
+            document.querySelectorAll('.sheet-tab-link').forEach(function(link) {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    var sheet = link.getAttribute('data-sheet');
+                    sheetHiddenInput.value = sheet;
+                    loadTable({
+                        bulan: link.getAttribute('data-bulan'),
+                        tahun: link.getAttribute('data-tahun'),
+                        sheet: sheet
+                    });
+
+                    // Update tampilan tab aktif secara instan tanpa nunggu response
+                    document.querySelectorAll('.sheet-tab-link').forEach(function(l) {
+                        l.classList.remove('bg-white', 'text-green-800', 'border-x', 'border-t',
+                            'border-slate-400', 'rounded-t', 'shadow-sm');
+                        l.classList.add('text-white', 'border-x', 'border-transparent');
+                    });
+                    link.classList.add('bg-white', 'text-green-800', 'border-x', 'border-t',
+                        'border-slate-400', 'rounded-t', 'shadow-sm');
+                    link.classList.remove('text-white', 'border-transparent');
                 });
             });
 
-            // Export Excel — buka tab baru, jadi halaman ini TIDAK reload.
-            // Overlay penuh tidak dipakai di sini (supaya user masih bisa lihat
-            // preview sambil export jalan di tab lain), cukup ganti tampilan tombol
-            // jadi state "loading" sebentar untuk feedback klik.
             if (exportBtn) {
                 exportBtn.addEventListener('click', function() {
                     var icon = exportBtn.querySelector('.export-icon');
@@ -550,20 +681,24 @@
                 });
             }
 
-            // Kalau user tekan tombol Back dari browser dan halaman diambil dari
-            // bfcache, overlay & tombol harus balik ke state normal (tidak nyangkut
-            // di kondisi "loading" selamanya).
             window.addEventListener('pageshow', function(event) {
                 if (event.persisted) {
-                    hideOverlay();
-                    if (submitBtn) {
-                        submitBtn.disabled = false;
-                    }
-                    if (submitBtnLabel) {
-                        submitBtnLabel.textContent = 'TAMPILKAN DATA';
-                    }
+                    hideTableLoading();
+                    hideInlineLoading();
                 }
             });
+
+            // *** INI KUNCI PERMINTAAN KAMU ***
+            // First load pun lewat jalur AJAX yang SAMA seperti ganti filter:
+            // begitu shell halaman selesai render, langsung fetch tabel.
+            // Nilai default (bulan/tahun/sheet) diambil dari server, karena URL
+            // awal saat pertama buka halaman bisa saja belum punya query string
+            // sama sekali.
+            loadTable({
+                bulan: @json($selectedBulan),
+                tahun: @json($selectedTahun),
+                sheet: @json($activeSheet)
+            }, true);
         })();
     </script>
 </body>
