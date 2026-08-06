@@ -103,9 +103,9 @@
             <span class="text-gray-400 dark:text-gray-500 text-xs">Isi kolom Stok Fisik &amp; Kbk Fisik untuk barang yang ingin disesuaikan</span>
         </div>
 
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm text-left">
-                <thead class="bg-gray-100 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">
+        <div class="overflow-x-auto" style="max-height: calc(100vh - 280px); overflow-y: auto;">
+    <table class="w-full text-sm text-left">
+        <thead class="bg-gray-100 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider sticky top-0 z-10">
                     <tr>
                         <th class="px-3 py-3 w-8 text-center">#</th>
                         <th class="px-3 py-3">{{ $jenisStok === 'platform_jadi' ? 'Jenis Barang' : 'Jenis Kayu' }}</th>
