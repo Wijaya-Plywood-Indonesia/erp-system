@@ -783,6 +783,7 @@
         let selectStart = null;
         let selectEnd = null;
         let selectHover = null;
+        let rangeInProgress = false; // true = user baru klik 1x, menunggu klik ke-2 untuk perluas range
         let appliedDari = '';
         let appliedSampai = '';
 
@@ -851,7 +852,8 @@
                 const isToday = thisDate.getTime() === today.getTime();
 
                 let rangeStart = selectStart;
-                let rangeEnd = selectEnd || selectHover;
+                // Selama menunggu klik ke-2, tampilkan preview dari titik awal ke tanggal yang di-hover
+                let rangeEnd = rangeInProgress ? (selectHover || selectStart) : selectEnd;
                 if (rangeStart && rangeEnd && rangeStart > rangeEnd) {
                     [rangeStart, rangeEnd] = [rangeEnd, rangeStart];
                 }
@@ -915,22 +917,11 @@
             lbRenderCalendar();
         };
 
-        window.lbPickDay = function(ymd) {
-            // Mencegah timezone shift dengan menambahkan jam lokal T00:00:00
-            const d = new Date(ymd + 'T00:00:00');
-            if (!selectStart || (selectStart && selectEnd)) {
-                selectStart = d;
-                selectEnd = null;
-                document.querySelectorAll('.lb-preset-btn').forEach(b => b.classList.remove('lb-preset-active'));
-            } else {
-                if (d < selectStart) {
-                    selectEnd = selectStart;
-                    selectStart = d;
-                } else {
-                    selectEnd = d;
-                }
+        window.lbHoverDay = function(ymd) {
+            if (rangeInProgress) {
+                selectHover = new Date(ymd + 'T00:00:00');
+                lbRenderCalendar();
             }
-            lbRenderCalendar();
         };
 
         window.lbHoverDay = function(ymd) {
@@ -946,6 +937,7 @@
             selectStart = ranges[preset].dari;
             selectEnd = ranges[preset].sampai;
             selectHover = null;
+            rangeInProgress = false;
             calYear = selectStart.getFullYear();
             calMonth = selectStart.getMonth();
             document.querySelectorAll('.lb-preset-btn').forEach(b => b.classList.remove('lb-preset-active'));
@@ -956,7 +948,7 @@
 
         function getLivewireComponent() {
             if (typeof Livewire === 'undefined') return null;
-            return Livewire.find(@js($this->getId()));
+            return Livewire.find(@js($this -> getId()));
         }
 
         let lbFilterBusy = false;
@@ -1004,6 +996,7 @@
             selectStart = null;
             selectEnd = null;
             selectHover = null;
+            rangeInProgress = false;
             document.getElementById('lb-trigger-label').textContent = 'Semua Periode';
             document.getElementById('lb-date-trigger').classList.remove('lb-active');
             document.getElementById('lb-date-reset').classList.remove('lb-visible');
