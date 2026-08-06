@@ -17,6 +17,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
 
 class PengajuanBarangsTable
@@ -29,6 +30,42 @@ class PengajuanBarangsTable
     {
         $formatted = rtrim(rtrim(number_format($value, 4, '.', ''), '0'), '.');
         return $formatted === '' ? '0' : $formatted;
+    }
+
+    /**
+     * FileUpload kadang menyimpan sebagai array (mis. ["barang_umum/xxx.jpg"])
+     * atau string JSON dari array tersebut — normalisasi dulu jadi path tunggal.
+     */
+    protected static function normalizeFotoPath($foto): ?string
+    {
+        $path = $foto;
+
+        if (is_array($path)) {
+            $path = $path[0] ?? null;
+        } elseif (is_string($path) && str_starts_with(trim($path), '[')) {
+            $decoded = json_decode($path, true);
+            $path = is_array($decoded) ? ($decoded[0] ?? null) : $path;
+        }
+
+        return $path ?: null;
+    }
+
+    /**
+     * URL foto barang umum dari disk public, siap dipakai di <img src="...">.
+     * Null kalau barang tidak punya foto.
+     */
+    protected static function fotoBarangUmumUrl($barangUmum): ?string
+    {
+        $path = static::normalizeFotoPath($barangUmum?->foto);
+
+        if (blank($path)) {
+            return null;
+        }
+
+        $url = Storage::disk('public')->url($path);
+
+        // Rapikan double-slash (mis. akibat APP_URL di .env berakhiran '/')
+        return preg_replace('#(?<!:)//+#', '/', $url);
     }
 
     public static function configure(Table $table): Table
@@ -58,19 +95,42 @@ class PengajuanBarangsTable
                             ->modalCancelActionLabel('Tutup')
                             ->modalContent(function ($record) {
                                 $rows = $record->items
+                                    ->load('barangUmum')
                                     ->map(function ($item) {
                                         $nama   = e($item->barangUmum?->nama_barang ?? '-');
                                         $satuan = e($item->barangUmum?->satuan ?? '');
                                         $jumlah = static::formatQty((float) $item->jumlah);
+                                        $fotoUrl = static::fotoBarangUmumUrl($item->barangUmum);
 
-                                        return "<li class=\"flex justify-between py-1 border-b border-gray-100 dark:border-gray-700\">
-                                                    <span>{$nama}</span>
-                                                    <span class=\"font-medium\">{$jumlah} {$satuan}</span>
+                                        $thumbnail = $fotoUrl
+                                            ? "<img src=\"{$fotoUrl}\" alt=\"{$nama}\" @click=\"preview = '{$fotoUrl}'\" class=\"w-10 h-10 rounded-md object-cover flex-shrink-0 cursor-pointer hover:opacity-75 transition\" />"
+                                            : "<div class=\"w-10 h-10 rounded-md bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0\">
+                                                    <svg xmlns=\"http://www.w3.org/2000/svg\" class=\"w-5 h-5 text-gray-400\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\">
+                                                        <path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\" d=\"M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M14 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\" />
+                                                    </svg>
+                                                </div>";
+
+                                        return "<li class=\"flex items-center justify-between gap-3 py-2 border-b border-gray-100 dark:border-gray-700\">
+                                                    <div class=\"flex items-center gap-3 min-w-0\">
+                                                        {$thumbnail}
+                                                        <span class=\"truncate\">{$nama}</span>
+                                                    </div>
+                                                    <span class=\"font-medium whitespace-nowrap\">{$jumlah} {$satuan}</span>
                                                 </li>";
                                     })
                                     ->implode('');
 
-                                return new HtmlString("<ul class=\"text-sm\">{$rows}</ul>");
+                                return new HtmlString(
+                                    "<div x-data=\"{ preview: null }\">
+                                        <ul class=\"text-sm\">{$rows}</ul>
+
+                                        <div x-show=\"preview\" x-cloak @click=\"preview = null\"
+                                             class=\"fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-6 cursor-zoom-out\"
+                                             style=\"display: none;\">
+                                            <img :src=\"preview\" alt=\"Foto Barang\" class=\"max-w-full max-h-full rounded-lg\" />
+                                        </div>
+                                    </div>"
+                                );
                             })
                     ),
 
