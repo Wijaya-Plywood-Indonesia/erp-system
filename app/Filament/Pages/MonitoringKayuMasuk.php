@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Models\KayuMasuk;
 use App\Models\SupplierKayu;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;
 use Filament\Pages\Page;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,6 +15,7 @@ use Livewire\WithPagination;
 class MonitoringKayuMasuk extends Page
 {
     use WithPagination;
+    use HasPageShield;
 
     protected static ?string $navigationLabel = 'Monitoring Kayu Masuk';
     protected static ?string $title = 'Monitoring Kayu Masuk';
