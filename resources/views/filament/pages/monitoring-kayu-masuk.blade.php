@@ -1,5 +1,6 @@
 <x-filament-panels::page>
     <style>
+        /* Reset border-radius untuk tampilan ala Shadcn UI / Filament Minimalis */
         .fi-main,
         .fi-main *,
         button,
@@ -14,6 +15,41 @@
         [x-cloak] {
             display: none !important;
         }
+
+        /* Animasi Transisi Halus & Tipis saat Membuka Preview Accordion */
+        .accordion-row-enter {
+            animation: subtleFadeDown 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            transform-origin: top;
+        }
+
+        @keyframes subtleFadeDown {
+            from {
+                opacity: 0;
+                transform: translateY(-6px) scaleY(0.98);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scaleY(1);
+            }
+        }
+
+        /* Animasi Transisi Halus Centered Loading Card */
+        .loading-card-enter {
+            animation: loadingPopIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes loadingPopIn {
+            from {
+                opacity: 0;
+                transform: scale(0.92) translateY(6px);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
     </style>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -23,6 +59,7 @@
         class="space-y-4 font-sans text-xs"
         x-data="{
             currentDateTime: '',
+            showAdvancedFilters: false,
             updateTime() {
                 const now = new Date();
                 this.currentDateTime = now.toLocaleDateString('id-ID', {
@@ -48,11 +85,14 @@
             }
         }"
         x-init="updateTime(); setInterval(() => updateTime(), 1000); $nextTick(() => initFlatpickr())">
-        <!-- Toolbar -->
-        <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3 shadow-sm space-y-3 font-sans">
+
+        <!-- NAVBAR TOOLBAR UTAMA -->
+        <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3 shadow-xs space-y-3 font-sans">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="flex flex-wrap items-center gap-3 flex-1">
-                    <div class="relative min-w-[220px] flex-1 sm:flex-initial">
+
+                    <!-- 1. Input Pencarian -->
+                    <div class="relative min-w-[200px] flex-1 sm:flex-initial">
                         <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-400">
                             <x-heroicon-m-magnifying-glass class="w-4 h-4" />
                         </span>
@@ -62,7 +102,8 @@
                             class="w-full pl-9 pr-3 py-1.5 text-xs font-sans bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-amber-600 transition">
                     </div>
 
-                    <div class="relative min-w-[220px]" wire:ignore>
+                    <!-- 2. Rentang Tanggal Flatpickr -->
+                    <div class="relative min-w-[180px]" wire:ignore>
                         <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-400">
                             <x-heroicon-m-calendar class="w-4 h-4" />
                         </span>
@@ -72,10 +113,23 @@
                             class="w-full pl-9 pr-3 py-1.5 text-xs font-sans bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-amber-600 cursor-pointer transition">
                     </div>
 
-                    <button wire:click="toggleAdvancedFilters" type="button"
-                        class="px-3 py-1.5 text-xs font-sans font-semibold border flex items-center gap-2 transition {{ $showAdvancedFilters || $this->hasActiveAdvancedFilters ? 'bg-amber-700 text-white border-amber-700' : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700' }}">
-                        <x-heroicon-m-funnel class="w-4 h-4" />
-                        <span>Filter</span>
+                    <!-- 3. FILTER BULAN (SEJAJAR BARIS UTAMA TOOLBAR) -->
+                    <select wire:model.live="bulan"
+                        class="px-3 py-1.5 text-xs font-sans bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-amber-600 font-semibold cursor-pointer">
+                        <option value="ALL">Semua Bulan</option>
+                        @foreach(['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=>'Mei','06'=>'Juni','07'=>'Juli','08'=>'Agustus','09'=>'September','10'=>'Oktober','11'=>'November','12'=>'Desember'] as $num => $nama)
+                        <option value="{{ $num }}">{{ $nama }}</option>
+                        @endforeach
+                    </select>
+
+                    <!-- 4. Tombol Toggle Filter Opsi Lainnya -->
+                    <button @click="showAdvancedFilters = !showAdvancedFilters" type="button"
+                        :class="showAdvancedFilters || {{ $this->hasActiveAdvancedFilters ? 'true' : 'false' }}
+        ? 'bg-amber-700 text-white border-amber-700 shadow-xs'
+        : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700'"
+                        class="px-3 py-1.5 text-xs font-sans font-semibold border flex items-center gap-2 transition">
+                        <x-heroicon-m-funnel class="w-3.5 h-3.5" />
+                        <span>Filter Opsi</span>
                         @if($this->hasActiveAdvancedFilters)
                         <span class="w-1.5 h-1.5 bg-amber-400"></span>
                         @endif
@@ -87,58 +141,68 @@
                 </div>
             </div>
 
-            @if($showAdvancedFilters)
-            <div class="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap items-center gap-3" x-cloak>
+            <!-- Panel Filter Tambahan (Dropdowns) -->
+            <div x-show="showAdvancedFilters" x-cloak x-transition.opacity.duration.200ms
+                class="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap items-center gap-3">
                 <div class="text-xs font-sans font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1 mr-1">
-                    <x-heroicon-m-adjustments-horizontal class="w-4 h-4" />
-                    <span>Opsi Filter:</span>
+                    <x-heroicon-m-adjustments-horizontal class="w-3.5 h-3.5" />
+                    <span>Filter Tambahan:</span>
                 </div>
 
-                <select wire:model.live="bulan"
-                    class="px-3 py-1.5 text-xs font-sans bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-amber-600 font-semibold">
-                    <option value="ALL">Semua Bulan</option>
-                    @foreach(['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=>'Mei','06'=>'Juni','07'=>'Juli','08'=>'Agustus','09'=>'September','10'=>'Oktober','11'=>'November','12'=>'Desember'] as $num => $nama)
-                    <option value="{{ $num }}">{{ $nama }}</option>
-                    @endforeach
-                </select>
-
                 <select wire:model.live="tahun"
-                    class="px-3 py-1.5 text-xs font-sans bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-amber-600 font-semibold">
+                    class="px-3 py-1.5 text-xs font-sans bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-amber-600 font-semibold cursor-pointer">
                     @for($y = now()->year; $y >= now()->year - 3; $y--)
                     <option value="{{ $y }}">{{ $y }}</option>
                     @endfor
                 </select>
 
                 <select wire:model.live="statusLogistik"
-                    class="px-3 py-1.5 text-xs font-sans bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-amber-600 font-semibold">
+                    class="px-3 py-1.5 text-xs font-sans bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-amber-600 font-semibold cursor-pointer">
                     <option value="ALL">Semua Status Logistik</option>
-                    <option value="BELUM_DIAPA_APAIN">Belum Diapa-apain (Belum Turus/Nota)</option>
+                    <option value="BELUM_DIAPA_APAIN">Belum Turun / Belum Turus</option>
                     <option value="SELESAI_TURUS">Selesai Turus (Belum Ada Nota)</option>
                     <option value="DICETAK_BELUM_LUNAS">Dicetak (Belum Lunas)</option>
                     <option value="DICETAK_SUDAH_LUNAS">Dicetak (Sudah Lunas)</option>
                 </select>
 
                 <select wire:model.live="supplierId"
-                    class="px-3 py-1.5 text-xs font-sans bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-amber-600 font-semibold">
+                    class="px-3 py-1.5 text-xs font-sans bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-amber-600 font-semibold cursor-pointer">
                     <option value="ALL">Semua Supplier</option>
                     @foreach($this->suppliers as $sup)
                     <option value="{{ $sup->id }}">{{ $sup->nama_supplier }}</option>
                     @endforeach
                 </select>
 
-                @if($search !== '' || $statusLogistik !== 'ALL' || $supplierId !== 'ALL' || $dariTanggal || $sampaiTanggal || $showDokumenCol)
+                <!-- TOMBOL RESET FILTER (WARNA NETRAL ZINC/SLATE) -->
+                @if($search !== '' || $statusLogistik !== 'ALL' || $supplierId !== 'ALL' || $dariTanggal || $sampaiTanggal || $bulan !== 'ALL')
                 <button wire:click="resetFilters" type="button"
-                    class="text-xs font-sans text-rose-600 dark:text-rose-400 hover:underline font-semibold px-2 py-1 flex items-center gap-1 border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 ml-auto">
-                    <x-heroicon-m-arrow-path class="w-3.5 h-3.5" />
+                    class="text-xs font-sans text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-semibold px-2.5 py-1 flex items-center gap-1.5 border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition ml-auto">
+                    <x-heroicon-m-arrow-path class="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
                     <span>Reset Filter</span>
                 </button>
                 @endif
             </div>
-            @endif
         </div>
 
-        <!-- Tabel utama -->
-        <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden font-sans">
+        <!-- TABEL UTAMA MONITORING (DENGAN CENTERED LOADING OVERLAY) -->
+        <div class="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs overflow-hidden font-sans min-h-[300px]">
+
+            <!-- INDIKATOR LOADING CIRCLE DI TENGAH TABEL (LIGHT & DARK MODE SUPPORT) -->
+            <div wire:loading.delay.default
+                wire:target="search, statusLogistik, supplierId, dariTanggal, sampaiTanggal, bulan, tahun, resetFilters"
+                class="absolute inset-0 z-30 flex items-center justify-center bg-white/80 dark:bg-zinc-900/80 backdrop-blur-[2px] transition-all">
+                <div class="loading-card-enter flex items-center gap-3 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-5 py-3 shadow-xl">
+                    <!-- Dual-Tone Modern Loading Spinner SVG -->
+                    <svg class="animate-spin h-6 w-6 text-amber-600 dark:text-amber-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3.5"></circle>
+                        <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    <span class="text-xs font-sans font-bold text-zinc-800 dark:text-zinc-200 tracking-wide">
+                        Memuat data...
+                    </span>
+                </div>
+            </div>
+
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs border-collapse font-sans">
                     <thead>
@@ -156,26 +220,26 @@
                         </tr>
                     </thead>
 
-                    @forelse($this->monitoringData as $item)
-                    @php
-                    $hasTurus = $item->has_turus;
-                    $isTurunSelesai = $item->has_turun;
-                    $nota = $item->notaKayu;
-                    $isExpanded = in_array($item->id, $expandedRows, true);
-                    @endphp
-
+                    <!-- DATA UTAMA TABLE BODY -->
                     <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800 border-b border-zinc-200 dark:border-zinc-800">
-                        <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition duration-150">
+                        @forelse($this->monitoringData as $item)
+                        @php
+                        $isTurunSelesai = (bool)$item->has_turun;
+                        $hasTurus = (bool)$item->has_turus;
+                        $nota = $item->notaKayu;
+                        $isExpanded = in_array($item->id, $expandedRows, true);
+                        @endphp
+
+                        <!-- BARIS UTAMA -->
+                        <tr wire:click="toggleRow({{ $item->id }})" wire:key="row-{{ $item->id }}"
+                            class="cursor-pointer select-none hover:bg-amber-50/60 dark:hover:bg-zinc-800/80 transition-colors duration-150 {{ $isExpanded ? 'bg-amber-50/80 dark:bg-amber-950/30 border-l-4 border-l-amber-600' : '' }}">
 
                             <td class="py-3 px-3 text-center">
-                                <button wire:click="toggleRow({{ $item->id }})" type="button"
-                                    class="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 font-sans transition"
-                                    title="Buka Preview & Detail">
-                                    <span>{{ $isExpanded ? '▼' : '►' }}</span>
-                                </button>
+                                <span class="text-zinc-400 dark:text-zinc-500 font-bold text-[10px] transition-transform duration-200 inline-block {{ $isExpanded ? 'transform rotate-90 text-amber-600 dark:text-amber-400' : '' }}">
+                                    ►
+                                </span>
                             </td>
 
-                            <!-- Seri & Tanggal -->
                             <td class="py-3 px-4">
                                 <div class="font-bold text-zinc-900 dark:text-white">
                                     <span class="px-2 py-0.5 font-sans bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-amber-600 dark:text-amber-400 font-semibold">
@@ -184,11 +248,10 @@
                                 </div>
                                 <div class="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 font-sans flex items-center gap-1">
                                     <x-heroicon-m-calendar class="w-3.5 h-3.5 text-zinc-400" />
-                                    <span>{{ $item->updated_at ? $item->updated_at->translatedFormat('d M Y') : '-' }}</span>
+                                    <span>{{ $item->tgl_kayu_masuk ? \Carbon\Carbon::parse($item->tgl_kayu_masuk)->translatedFormat('d M Y') : '-' }}</span>
                                 </div>
                             </td>
 
-                            <!-- Kendaraan (jenis + nopol) & Supplier -->
                             <td class="py-3 px-4">
                                 <div class="font-sans font-bold text-zinc-900 dark:text-zinc-100">
                                     {{ $item->penggunaanKendaraanSupplier?->jenis_kendaraan ?? '-' }}
@@ -207,60 +270,67 @@
                             </td>
                             @endif
 
-                            <!-- Status Turun Kayu -->
                             <td class="py-3 px-4">
                                 @if($isTurunSelesai)
-                                <span class="inline-flex items-center gap-1 text-[11px] font-bold text-sky-800 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/80 border border-sky-300 dark:border-sky-800 px-2 py-0.5">
+                                <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5">
+                                    <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
                                     Selesai Turun
                                 </span>
                                 @else
-                                <span class="inline-flex items-center text-[11px] text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-0.5 font-medium">
+                                <span class="inline-flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-0.5 font-medium">
+                                    <span class="w-1.5 h-1.5 bg-zinc-400 rounded-full"></span>
                                     Belum Turun
                                 </span>
                                 @endif
                             </td>
 
-                            <!-- Status Turus Kayu (badge saja, tanpa angka batang/vol) -->
                             <td class="py-3 px-4">
-                                @if($hasTurus)
+                                @if(!$isTurunSelesai)
+                                <span class="inline-flex items-center text-[11px] text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 px-2 py-0.5 font-normal italic opacity-80" title="Menunggu proses Turun Kayu selesai">
+                                    Belum Turus
+                                </span>
+                                @elseif($hasTurus)
                                 <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5">
-                                    Selesai
+                                    <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                                    Selesai Turus
                                 </span>
                                 @else
                                 <span class="inline-flex items-center gap-1 text-[11px] text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 px-2 py-0.5 font-bold">
+                                    <span class="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse"></span>
                                     Belum Turus
                                 </span>
                                 @endif
                             </td>
 
-                            <!-- Nota & pelunasan (badge saja, tanpa nomor nota) -->
                             <td class="py-3 px-4">
-                                @if($nota)
-                                @if(!$this->isSudahDiperiksa($nota->status))
+                                @if(!$isTurunSelesai || !$hasTurus)
+                                <span class="inline-flex items-center text-[11px] text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 px-2 py-0.5 font-normal italic opacity-80" title="Menunggu proses Turus Kayu selesai">
+                                    Belum Ada Nota
+                                </span>
+                                @elseif(!$nota)
+                                <span class="inline-flex items-center text-[11px] text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-0.5 font-medium">
+                                    Belum Ada Nota
+                                </span>
+                                @elseif(!$this->isSudahDiperiksa($nota->status))
                                 <span class="inline-flex items-center text-[11px] font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/80 border border-sky-200 dark:border-sky-800 px-2 py-0.5">
                                     Dibuat
                                 </span>
                                 @elseif($this->isLunas($nota->status_pelunasan))
-                                <span class="inline-flex items-center text-[11px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5">
-                                    Dicetak (Sudah Lunas)
+                                <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5">
+                                    <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                                    {{ $this->statusPelunasanLabel($nota->status_pelunasan) }}
                                 </span>
                                 @else
                                 <span class="inline-flex items-center text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-800 px-2 py-0.5">
                                     Dicetak ({{ $this->statusPelunasanLabel($nota->status_pelunasan) }})
                                 </span>
                                 @endif
-                                @else
-                                <span class="inline-flex items-center text-[11px] text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-0.5 font-medium">
-                                    Belum Ada Nota
-                                </span>
-                                @endif
                             </td>
-                            <!-- Cek Nota -->
-                            <td class="py-3 px-4 text-center">
-                                @if($nota)
-                                {{-- Ganti URL di bawah sesuai route resource NotaKayu kamu --}}
-                                <a href="{{ url('/admin/nota-kayus/'.$nota->id) }}" target="_blank"
-                                    class="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold bg-cyan-50 dark:bg-cyan-950/80 text-cyan-700 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-800 hover:bg-cyan-100 dark:hover:bg-cyan-900 transition">
+
+                            <td class="py-3 px-4 text-center" @click.stop>
+                                @if($nota && $this->isSudahDiperiksa($nota->status))
+                                <a href="{{ route('nota-kayu.show', $nota->id) }}" target="_blank"
+                                    class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition">
                                     <x-heroicon-m-arrow-top-right-on-square class="w-3.5 h-3.5" />
                                     <span>Cek Nota</span>
                                 </a>
@@ -270,18 +340,25 @@
                             </td>
                         </tr>
 
+                        <!-- SUB-ROW DETAIL ACCORDION -->
                         @if($isExpanded)
-                        @php $detail = $this->getExpandedDetail($item->id); @endphp
+                        @php $detail = $detailsCache[$item->id] ?? null; @endphp
                         @if($detail)
-                        <tr class="bg-zinc-50 dark:bg-zinc-900/90 border-b-2 border-amber-500/40">
+                        <tr x-data x-show="true"
+                            x-transition:enter="transition ease-out duration-200"
+                            x-transition:enter-start="opacity-0 -translate-y-1"
+                            x-transition:enter-end="opacity-100 translate-y-0"
+                            wire:key="detail-{{ $item->id }}"
+                            class="bg-zinc-50 dark:bg-zinc-900/90 border-b-2 border-amber-500/40">
                             <td colspan="{{ $showDokumenCol ? 8 : 7 }}" class="p-4 bg-zinc-50/60 dark:bg-zinc-950/80">
                                 <div class="space-y-4">
                                     <div class="flex flex-wrap justify-between items-center border-b border-zinc-200 dark:border-zinc-800 pb-2 gap-2">
-                                        <div class="font-bold text-xs uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                                            Preview & Detail Seri {{ $item->seri }}
+                                        <div class="font-bold text-xs uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                                            <x-heroicon-m-clipboard-document-list class="w-4 h-4 text-amber-600" />
+                                            <span>Preview & Detail Seri {{ $item->seri }}</span>
                                         </div>
                                         <div class="flex items-center gap-2 text-xs">
-                                            <span class="px-2.5 py-1 text-[10px] font-bold border uppercase tracking-wider {{ $isTurunSelesai ? 'bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800' : 'bg-zinc-100 text-zinc-600 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700' }}">
+                                            <span class="px-2.5 py-1 text-[10px] font-bold border uppercase tracking-wider {{ $isTurunSelesai ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' : 'bg-zinc-100 text-zinc-600 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700' }}">
                                                 Turun: {{ $isTurunSelesai ? 'Selesai Turun' : 'Belum Turun' }}
                                             </span>
                                             <span class="px-2.5 py-1 text-[10px] font-bold border uppercase tracking-wider {{ $hasTurus ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' : 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800' }}">
@@ -292,24 +369,24 @@
 
                                     <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 text-xs">
                                         <div class="lg:col-span-4 flex flex-col gap-4">
-                                            <div class="bg-white dark:bg-zinc-900 p-4 border border-zinc-200 dark:border-zinc-800 space-y-2 flex-1">
+                                            <div class="bg-white dark:bg-zinc-900 p-4 border border-zinc-200 dark:border-zinc-800 space-y-2 flex-1 shadow-2xs">
                                                 <h5 class="font-bold text-zinc-400 dark:text-zinc-400 uppercase text-[10px] tracking-wider border-b border-zinc-100 dark:border-zinc-800 pb-1">
                                                     Informasi Kendaraan & Supplier
                                                 </h5>
                                                 <div class="space-y-1.5 pt-1">
                                                     <div><span class="text-zinc-400">Supplier:</span> <span class="font-bold text-zinc-900 dark:text-white">{{ $item->penggunaanSupplier?->nama_supplier ?? '-' }}</span></div>
-                                                    <div><span class="text-zinc-400">Kendaraan & Nopol:</span> <span class="font-sans font-bold text-cyan-600 dark:text-cyan-300">{{ $item->penggunaanKendaraanSupplier?->jenis_kendaraan ?? '-' }} - {{ $item->penggunaanKendaraanSupplier?->nopol_kendaraan ?? '-' }}</span></div>
+                                                    <div><span class="text-zinc-400">Kendaraan & Nopol:</span> <span class="font-sans font-bold text-indigo-600 dark:text-indigo-400">{{ $item->penggunaanKendaraanSupplier?->jenis_kendaraan ?? '-' }} - {{ $item->penggunaanKendaraanSupplier?->nopol_kendaraan ?? '-' }}</span></div>
                                                     <div><span class="text-zinc-400">Dokumen Angkut:</span> <span class="font-semibold text-amber-600 dark:text-amber-400">{{ $item->jenis_dokumen_angkut ?? '-' }}</span></div>
                                                 </div>
                                             </div>
 
-                                            <div class="bg-white dark:bg-zinc-900 p-4 border border-zinc-200 dark:border-zinc-800 space-y-2 flex-1">
+                                            <div class="bg-white dark:bg-zinc-900 p-4 border border-zinc-200 dark:border-zinc-800 space-y-2 flex-1 shadow-2xs">
                                                 <h5 class="font-bold text-zinc-400 dark:text-zinc-400 uppercase text-[10px] tracking-wider border-b border-zinc-100 dark:border-zinc-800 pb-1">
-                                                    Status Nota
+                                                    Status Nota Kayu
                                                 </h5>
                                                 @if($nota)
                                                 <div class="space-y-1.5 pt-1">
-                                                    <div><span class="text-zinc-400">Tgl. Nota Dicetak:</span> <span class="font-sans font-semibold text-amber-600 dark:text-amber-300">{{ $item->updated_at ? $item->updated_at->translatedFormat('d M Y') : '-' }}</span></div>
+                                                    <div><span class="text-zinc-400">Tgl. Nota Dibuat:</span> <span>{{ $item->tgl_kayu_masuk ? \Carbon\Carbon::parse($item->tgl_kayu_masuk)->translatedFormat('d M Y') : '-' }}</span></div>
                                                     <div><span class="text-zinc-400">Penanggung Jawab:</span> <span class="font-semibold text-zinc-900 dark:text-white">{{ $nota->penanggung_jawab ?? '-' }}</span></div>
                                                     <div><span class="text-zinc-400">Penerima:</span> <span class="font-semibold text-zinc-900 dark:text-white">{{ $nota->penerima ?? '-' }}</span></div>
                                                     <div><span class="text-zinc-400">Satpam:</span> <span class="font-semibold text-zinc-900 dark:text-white">{{ $nota->satpam ?? '-' }}</span></div>
@@ -320,8 +397,7 @@
                                             </div>
                                         </div>
 
-                                        <!-- Perbandingan Detail Kayu Masuk (Turusan 1) vs Detail Turusan (Turusan 2) -->
-                                        <div class="lg:col-span-8 bg-white dark:bg-zinc-900 p-4 border border-zinc-200 dark:border-zinc-800 space-y-2">
+                                        <div class="lg:col-span-8 bg-white dark:bg-zinc-900 p-4 border border-zinc-200 dark:border-zinc-800 space-y-2 shadow-2xs">
                                             <div class="flex justify-between items-center border-b border-zinc-100 dark:border-zinc-800 pb-2">
                                                 <h5 class="font-bold text-zinc-400 dark:text-zinc-400 uppercase text-[10px] tracking-wider">
                                                     Perbandingan Detail & Turusan
@@ -347,7 +423,7 @@
                                                     <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800/80">
                                                         @forelse($comparison as $idx => $row)
                                                         <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 font-sans">
-                                                            <td class="py-2 px-2 text-center text-zinc-400 dark:text-zinc-500">{{ $idx + 1 }}</td>
+                                                            <td class="py-2 px-2 text-center text-zinc-500 dark:text-zinc-400">{{ $idx + 1 }}</td>
                                                             <td class="py-2 px-3 font-sans font-semibold text-zinc-800 dark:text-zinc-200">{{ $row['panjang'] }} {{ $row['jenis_kayu'] }}</td>
                                                             <td class="py-2 px-2 text-center text-zinc-600 dark:text-zinc-300">{{ $row['diameter'] }} cm</td>
                                                             <td class="py-2 px-3 text-center text-amber-600 dark:text-amber-400 font-bold">{{ $row['turusan_1'] }} Btg</td>
@@ -373,17 +449,16 @@
                             </td>
                         </tr>
                         @endif
-                    </tbody>
-                    @empty
-                    <tbody>
+                        @endif
+                        @empty
                         <tr>
                             <td colspan="{{ $showDokumenCol ? 8 : 7 }}" class="text-center py-12 text-zinc-400 dark:text-zinc-500">
                                 <x-heroicon-o-inbox class="w-12 h-12 mx-auto mb-2 text-zinc-300 dark:text-zinc-700" />
                                 <p class="text-xs font-semibold">Tidak ada data kayu masuk yang sesuai filter.</p>
                             </td>
                         </tr>
+                        @endforelse
                     </tbody>
-                    @endforelse
                 </table>
             </div>
 

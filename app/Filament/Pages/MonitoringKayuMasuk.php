@@ -28,10 +28,10 @@ class MonitoringKayuMasuk extends Page
     public ?string $dariTanggal = null;
     public ?string $sampaiTanggal = null;
     public bool $showDokumenCol = false;
-    public bool $showAdvancedFilters = false;
     public array $expandedRows = [];
     public string $bulan = 'ALL';
     public string $tahun;
+    public array $detailsCache = [];
 
     private const CACHE_TTL_SUPPLIER = 21600; // 6 jam
 
@@ -88,11 +88,6 @@ class MonitoringKayuMasuk extends Page
         $this->resetPage();
     }
 
-    public function toggleAdvancedFilters(): void
-    {
-        $this->showAdvancedFilters = ! $this->showAdvancedFilters;
-    }
-
     public function toggleDokumenCol(): void
     {
         $this->showDokumenCol = ! $this->showDokumenCol;
@@ -111,10 +106,16 @@ class MonitoringKayuMasuk extends Page
     {
         if (in_array($id, $this->expandedRows, true)) {
             $this->expandedRows = array_diff($this->expandedRows, [$id]);
+            unset($this->detailsCache[$id]); // buang dari cache biar payload gak menumpuk
             return;
         }
 
         $this->expandedRows[] = $id;
+
+        // Query data SEKALI di sini, bukan setiap kali Blade dirender ulang
+        if (! isset($this->detailsCache[$id])) {
+            $this->detailsCache[$id] = $this->getExpandedDetail($id);
+        }
     }
 
     public function getSuppliersProperty(): Collection
@@ -135,6 +136,7 @@ class MonitoringKayuMasuk extends Page
                 'jenis_dokumen_angkut',
                 'id_supplier_kayus',
                 'id_kendaraan_supplier_kayus',
+                'tgl_kayu_masuk', // BARU — ditambahkan
                 'updated_at',
             ])
             ->with([
@@ -262,10 +264,24 @@ class MonitoringKayuMasuk extends Page
         return false;
     }
 
+    protected function extractTanggalLunas(?string $status): ?string
+    {
+        if (! preg_match('/Lunas\s*-\s*(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2})/', $status ?? '', $matches)) {
+            return null;
+        }
+
+        try {
+            return Carbon::createFromFormat('d/m/Y H:i', $matches[1])->format('d/m/y H:i');
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
     public function statusPelunasanLabel(?string $status): string
     {
         if ($this->isLunas($status)) {
-            return 'LUNAS';
+            $tanggal = $this->extractTanggalLunas($status);
+            return $tanggal ? "Lunas - {$tanggal}" : 'Lunas';
         }
 
         if ($this->isDpPelunasan($status)) {
