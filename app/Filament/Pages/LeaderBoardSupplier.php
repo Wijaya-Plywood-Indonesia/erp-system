@@ -278,7 +278,10 @@ class LeaderBoardSupplier extends Page
         // Terapkan filter tanggal
         $this->applyDateQuery($query);
 
-        $notas = $query->orderByDesc('id')->get();
+        $notas = $query->get()->sortByDesc(function ($nota) {
+            $updatedAt = $nota->updated_at ? $nota->updated_at->format('Y-m-d H:i:s') : '0000-00-00 00:00:00';
+            return $updatedAt . '_' . str_pad((string) $nota->id, 10, '0', STR_PAD_LEFT);
+        })->values();
 
         $invoices = [];
         $totalPembelian = 0;
