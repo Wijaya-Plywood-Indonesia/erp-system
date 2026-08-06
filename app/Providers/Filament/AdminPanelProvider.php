@@ -48,6 +48,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->registration()
             ->globalSearch(false)
             ->viteTheme('resources/css/app.css')
             ->assets([
