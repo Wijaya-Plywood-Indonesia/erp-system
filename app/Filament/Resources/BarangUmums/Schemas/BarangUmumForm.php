@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\BarangUmums\Schemas;
 
 use App\Models\BarangUmum;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
@@ -35,6 +36,14 @@ class BarangUmumForm
                 Textarea::make('keterangan')
                     ->label('Keterangan')
                     ->rows(2)
+                    ->columnSpanFull(),
+
+                FileUpload::make('foto')
+                    ->label('Foto Barang (opsional)')
+                    ->image()
+                    ->disk('public')
+                    ->directory('barang_umum')
+                    ->imageEditor()
                     ->columnSpanFull(),
             ]);
     }
