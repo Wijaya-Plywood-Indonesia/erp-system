@@ -15,6 +15,7 @@ class BarangUmum extends Model
         'satuan',
         'kategori',
         'keterangan',
+        'foto',
     ];
 
     public function stok(): HasOne
