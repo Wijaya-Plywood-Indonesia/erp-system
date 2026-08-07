@@ -34,7 +34,7 @@ class StokTriplekMth extends Page
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->when($this->filterTebal,     fn($q) => $q->where('tebal',     $this->filterTebal))
             ->when($this->filterKw,        fn($q) => $q->where('kw_grade', $this->filterKw))
-            ->where('stok_lembar', '>', 0)
+            ->where('stok_lembar', '<>', 0)
             ->get();
     }
 
@@ -45,24 +45,24 @@ class StokTriplekMth extends Page
 
     public function getKwListProperty()
     {
-        return StokTriplekMthModel::where('stok_lembar', '>', 0)->distinct()->pluck('kw_grade');
+        return StokTriplekMthModel::where('stok_lembar', '<>', 0)->distinct()->pluck('kw_grade');
     }
 
     public function getTebalListProperty()
     {
-        return StokTriplekMthModel::where('stok_lembar', '>', 0)->distinct()->pluck('tebal');
+        return StokTriplekMthModel::where('stok_lembar', '<>', 0)->distinct()->pluck('tebal');
     }
 
     public function getTotalNilaiStokProperty(): float
     {
-        return (float) StokTriplekMthModel::where('stok_lembar', '>', 0)
+        return (float) StokTriplekMthModel::where('stok_lembar', '<>', 0)
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->sum('nilai_stok');
     }
 
     public function getTotalLembarProperty(): int
     {
-        return (int) StokTriplekMthModel::where('stok_lembar', '>', 0)
+        return (int) StokTriplekMthModel::where('stok_lembar', '<>', 0)
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->sum('stok_lembar');
     }

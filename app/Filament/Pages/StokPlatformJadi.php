@@ -34,7 +34,7 @@ class StokPlatformJadi extends Page
             ->when($this->filterJenisBarang, fn($q) => $q->where('id_jenis_barang', $this->filterJenisBarang))
             ->when($this->filterTebal,       fn($q) => $q->where('tebal',     $this->filterTebal))
             ->when($this->filterKw,          fn($q) => $q->where('kw_grade', $this->filterKw))
-            ->where('stok_lembar', '>', 0)
+            ->where('stok_lembar', '<>', 0)
             ->get();
     }
 
@@ -45,24 +45,24 @@ class StokPlatformJadi extends Page
 
     public function getKwListProperty()
     {
-        return StokPlatformJadiModel::where('stok_lembar', '>', 0)->distinct()->pluck('kw_grade');
+        return StokPlatformJadiModel::where('stok_lembar', '<>', 0)->distinct()->pluck('kw_grade');
     }
 
     public function getTebalListProperty()
     {
-        return StokPlatformJadiModel::where('stok_lembar', '>', 0)->distinct()->pluck('tebal');
+        return StokPlatformJadiModel::where('stok_lembar', '<>', 0)->distinct()->pluck('tebal');
     }
 
     public function getTotalNilaiStokProperty(): float
     {
-        return (float) StokPlatformJadiModel::where('stok_lembar', '>', 0)
+        return (float) StokPlatformJadiModel::where('stok_lembar', '<>', 0)
             ->when($this->filterJenisBarang, fn($q) => $q->where('id_jenis_barang', $this->filterJenisBarang))
             ->sum('nilai_stok');
     }
 
     public function getTotalLembarProperty(): int
     {
-        return (int) StokPlatformJadiModel::where('stok_lembar', '>', 0)
+        return (int) StokPlatformJadiModel::where('stok_lembar', '<>', 0)
             ->when($this->filterJenisBarang, fn($q) => $q->where('id_jenis_barang', $this->filterJenisBarang))
             ->sum('stok_lembar');
     }

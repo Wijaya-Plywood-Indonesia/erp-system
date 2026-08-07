@@ -126,7 +126,13 @@
                             </thead>
                             <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
                                 @foreach ($rows as $row)
-                                    <tr class="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                    @php
+                                        $stokMinus = (float) $row->stok_lembar < 0;
+                                    @endphp
+                                    <tr @class([
+                                        'group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors',
+                                        'bg-red-50/40 dark:bg-red-900/10' => $stokMinus,
+                                    ])>
                                         <td
                                             class="px-6 py-4 text-center text-gray-300 dark:text-gray-600 font-mono text-xs">
                                             {{ $loop->iteration }}</td>
@@ -162,16 +168,24 @@
                                         </td>
 
                                         <td class="px-6 py-4 text-center">
-                                            <span
-                                                class="font-black text-gray-700 dark:text-gray-300 tabular-nums text-lg">
+                                            <span @class([
+                                                'font-black tabular-nums text-lg',
+                                                'text-red-600 dark:text-red-400' => $stokMinus,
+                                                'text-gray-700 dark:text-gray-300' => !$stokMinus,
+                                            ])>
                                                 {{ number_format($row->stok_lembar) }}
                                             </span>
                                             <div class="text-[9px] text-gray-400 uppercase tracking-tight">lembar</div>
+                                            @if ($stokMinus)
+                                                <div
+                                                    class="text-[8px] font-black uppercase tracking-tight text-red-500">
+                                                    ⚠ Stok Minus</div>
+                                            @endif
                                         </td>
 
                                         @if ($showKubikasi)
                                             <td
-                                                class="px-6 py-4 text-right font-mono font-black text-blue-600 dark:text-blue-400 tabular-nums">
+                                                class="px-6 py-4 text-right font-mono font-black tabular-nums {{ $stokMinus ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400' }}">
                                                 {{ number_format($row->stok_kubikasi, 4) }}
                                                 <span class="text-xs text-gray-400 font-normal">m³</span>
                                             </td>
@@ -208,7 +222,11 @@
 
                                         @if ($showNilaiStok)
                                             <td class="px-6 py-4 text-right">
-                                                <span class="font-black text-gray-800 dark:text-gray-200 tabular-nums">
+                                                <span @class([
+                                                    'font-black tabular-nums',
+                                                    'text-red-600 dark:text-red-400' => $stokMinus,
+                                                    'text-gray-800 dark:text-gray-200' => !$stokMinus,
+                                                ])>
                                                     Rp {{ number_format($row->nilai_stok ?? 0, 0, ',', '.') }}
                                                 </span>
                                             </td>
@@ -244,7 +262,11 @@
                     <div class="px-6 py-5">
                         <div class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Total Lembar
                         </div>
-                        <div class="text-2xl font-black text-gray-800 dark:text-gray-200 tabular-nums">
+                        <div @class([
+                            'text-2xl font-black tabular-nums',
+                            'text-red-600 dark:text-red-400' => $this->totalLembar < 0,
+                            'text-gray-800 dark:text-gray-200' => $this->totalLembar >= 0,
+                        ])>
                             {{ number_format($this->totalLembar) }}
                         </div>
                         <div class="text-xs text-gray-400 mt-0.5">lembar gudang satu</div>

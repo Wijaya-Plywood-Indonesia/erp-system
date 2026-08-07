@@ -56,7 +56,7 @@ class StokVeneerKering extends Page
                     $u->where('panjang', 122)->where('lebar', 244)->where('tebal', '>', 1)
                 )
             )
-            ->where('stok_m3_sesudah', '>', 0)
+            ->where('stok_m3_sesudah', '<>', 0)
             ->get();
 
         // Hitung total lembar (masuk - keluar) per kombinasi lalu inject ke collection
