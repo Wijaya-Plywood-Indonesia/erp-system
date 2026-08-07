@@ -42,7 +42,7 @@ class StokTriplekJadi extends Page
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->when($this->filterTebal,     fn($q) => $q->where('tebal',     $this->filterTebal))
             ->when($this->filterKw,        fn($q) => $q->where('kw_grade', $this->filterKw))
-            ->where('stok_lembar', '>', 0)
+            ->where('stok_lembar', '<>', 0)
             ->get();
     }
 
@@ -53,29 +53,30 @@ class StokTriplekJadi extends Page
 
     public function getKwListProperty()
     {
-        return StokTriplekJadiModel::where('stok_lembar', '>', 0)->distinct()->pluck('kw_grade');
+        return StokTriplekJadiModel::where('stok_lembar', '<>', 0)->distinct()->pluck('kw_grade');
     }
 
     public function getTebalListProperty()
     {
-        return StokTriplekJadiModel::where('stok_lembar', '>', 0)->distinct()->pluck('tebal');
+        return StokTriplekJadiModel::where('stok_lembar', '<>', 0)->distinct()->pluck('tebal');
     }
 
     public function getTotalNilaiStokProperty(): float
     {
-        return (float) StokTriplekJadiModel::where('stok_lembar', '>', 0)
+        return (float) StokTriplekJadiModel::where('stok_lembar', '<>', 0)
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->sum('nilai_stok');
     }
 
     public function getTotalLembarProperty(): int
     {
-        return (int) StokTriplekJadiModel::where('stok_lembar', '>', 0)
+        return (int) StokTriplekJadiModel::where('stok_lembar', '<>', 0)
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->sum('stok_lembar');
     }
 
     // ─── WIP SANDING PER SPESIFIKASI ─────────────────────────────────────────
+    // (tidak ada perubahan di bagian ini)
 
     /**
      * Kunci unik satu spesifikasi barang. Karena Anda konfirmasi spesifikasi
