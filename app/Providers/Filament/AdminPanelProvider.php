@@ -108,9 +108,16 @@ class AdminPanelProvider extends PanelProvider
 
             ->navigationGroups([
                 //Kategori Menu Produksi
+                NavigationGroup::make('Gudang')
+                    ->icon('heroicon-o-building-storefront')
+                    ->collapsed(),
 
                 NavigationGroup::make('Kontrak')
                     ->icon('heroicon-o-clipboard-document-check')->collapsed(),
+
+                NavigationGroup::make('Pengajuan')
+                    ->icon('heroicon-o-document-text')
+                    ->collapsed(),
 
                 NavigationGroup::make('Opname')
                     ->icon('heroicon-o-clipboard-document-check')->collapsed(),

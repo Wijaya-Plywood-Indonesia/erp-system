@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Livewire\WithPagination;
+use BackedEnum;
+use Filament\Support\Icons\Heroicon;
 
 class MonitoringKayuMasuk extends Page
 {
@@ -18,6 +20,7 @@ class MonitoringKayuMasuk extends Page
     use HasPageShield;
 
     protected static ?string $navigationLabel = 'Monitoring Kayu Masuk';
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
     protected static ?string $title = 'Monitoring Kayu Masuk';
     protected static ?string $slug = 'monitoring-kayu-masuk';
     protected string $view = 'filament.pages.monitoring-kayu-masuk';
