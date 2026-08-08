@@ -167,6 +167,11 @@ class PengajuanBarangsTable
                             && Auth::user()?->hasRole(['pengawas_produksi', 'super_admin'])) {
                             return 'Verifikasi Sekarang';
                         }
+
+                        if (in_array($state, ['disetujui', 'ditolak']) && $record->pengawasProduksi) {
+                            return ucfirst($state).' - '.$record->pengawasProduksi->name;
+                        }
+
                         return ucfirst($state);
                     })
                     ->action(
@@ -223,6 +228,11 @@ class PengajuanBarangsTable
                             && Auth::user()?->hasRole(['kepala_produksi_wijaya', 'super_admin'])) {
                             return 'Verifikasi Sekarang';
                         }
+
+                        if (in_array($state, ['disetujui', 'ditolak']) && $record->kepalaProduksi) {
+                            return ucfirst($state).' - '.$record->kepalaProduksi->name;
+                        }
+
                         return ucfirst($state);
                     })
                     ->action(
@@ -279,6 +289,11 @@ class PengajuanBarangsTable
                             && Auth::user()?->hasRole(['admin_barang', 'super_admin'])) {
                             return 'Verifikasi Sekarang';
                         }
+
+                        if (in_array($state, ['disetujui', 'ditolak']) && $record->adminBarang) {
+                            return ucfirst($state).' - '.$record->adminBarang->name;
+                        }
+
                         return ucfirst($state);
                     })
                     ->action(
