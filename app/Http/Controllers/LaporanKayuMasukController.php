@@ -9,18 +9,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Facades\Excel;
 use Carbon\Carbon;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Pagination\Paginator;
 
 class LaporanKayuMasukController extends Controller
 {
     private const STATUS_LUNAS_PREFIX = 'Lunas%';
-
-    /**
-     * Ekspresi SQL untuk parse tanggal lunas dari string status_pelunasan.
-     * Format string: "Lunas - 30/06/2026 15:48 (nia)"
-     */
-    private const SQL_TGL_LUNAS = "STR_TO_DATE(SUBSTRING_INDEX(SUBSTRING_INDEX(status_pelunasan, ' - ', -1), ' (', 1), '%d/%m/%Y %H:%i')";
 
     /**
      * Menyimpan seluruh data master harga kayu agar tidak query berulang di dalam looping.
@@ -35,7 +27,15 @@ class LaporanKayuMasukController extends Controller
 
     /**
      * Ambil semua NotaKayu berstatus lunas, difilter & diurutkan
-     * berdasarkan TANGGAL LUNAS (diparse dari string status_pelunasan).
+     * berdasarkan kolom `tanggal_lunas` (generated column, lihat migration
+     * add_tanggal_lunas_generated_column_to_nota_kayu_table).
+     *
+     * PERUBAHAN dari versi sebelumnya:
+     * - whereRaw(DATE(STR_TO_DATE(SUBSTRING_INDEX(...)))) diganti whereBetween
+     *   pada kolom fisik tanggal_lunas -> sargable, bisa pakai
+     *   idx_status_tanggal_lunas.
+     * - orderByRaw diganti orderBy biasa -> tidak perlu filesort di ekspresi
+     *   turunan, memakai index yang sama.
      */
     private function ambilNota(Request $request): Collection
     {
@@ -45,32 +45,14 @@ class LaporanKayuMasukController extends Controller
 
         return NotaKayu::query()
             ->where('status_pelunasan', 'LIKE', self::STATUS_LUNAS_PREFIX)
-            ->whereRaw('DATE('.self::SQL_TGL_LUNAS.') >= ?', [$dari])
-            ->whereRaw('DATE('.self::SQL_TGL_LUNAS.') <= ?', [$sampai])
+            ->whereBetween('tanggal_lunas', [$dari, $sampai])
             ->with([
                 'kayuMasuk.detailTurusanKayus.jenisKayu',
                 'kayuMasuk.detailTurusanKayus.lahan',
-                'kayuMasuk.penggunaanSupplier', 
+                'kayuMasuk.penggunaanSupplier',
             ])
-            ->orderByRaw(self::SQL_TGL_LUNAS.' ASC')
+            ->orderBy('tanggal_lunas')
             ->get();
-    }
-
-    /**
-     * Ambil tanggal lunas (format Y-m-d) dari string status_pelunasan,
-     * contoh: "Lunas - 30/06/2026 15:48 (nia)" -> "2026-06-30".
-     */
-    private function tglLunas(?string $statusPelunasan): ?string
-    {
-        if (! $statusPelunasan) {
-            return null;
-        }
-
-        if (preg_match('#(\d{2})/(\d{2})/(\d{4})#', $statusPelunasan, $m)) {
-            return "{$m[3]}-{$m[2]}-{$m[1]}"; // Y-m-d
-        }
-
-        return null;
     }
 
     /**
@@ -97,7 +79,7 @@ class LaporanKayuMasukController extends Controller
 
             if ($kelompok->isNotEmpty()) {
                 $totalBatang = $kelompok->sum('kuantitas');
-                $totalKubikasi = $kelompok->sum(fn ($item) => round($item->kubikasi, 4));
+                $totalKubikasi = $kelompok->sum(fn($item) => round($item->kubikasi, 4));
 
                 $harga = $kelompok->first()->harga ?? 0;
 
@@ -134,7 +116,7 @@ class LaporanKayuMasukController extends Controller
 
         foreach ($notas as $nota) {
             $kayuMasuk = $nota->kayuMasuk;
-            
+
             if (!$kayuMasuk) {
                 continue;
             }
@@ -145,7 +127,9 @@ class LaporanKayuMasukController extends Controller
                 continue;
             }
 
-            $tanggalLunas = $this->tglLunas($nota->status_pelunasan);
+            // tanggal_lunas sudah tersedia langsung dari kolom generated (DATE
+            // -> string 'Y-m-d'), tidak perlu parsing string status_pelunasan lagi.
+            $tanggalLunas = $nota->tanggal_lunas;
 
             // Grup PENYAJIAN: per lahan + jenis + panjang (tanpa grade)
             $grupLahan = $details->groupBy(function ($item) {
@@ -200,10 +184,18 @@ class LaporanKayuMasukController extends Controller
         $allData = $this->buildLaporanData($request);
 
         // 2. Konfigurasi Pagination (misal: 50 data per halaman)
-        $perPage = 50; 
+        $perPage = 50;
         $page = \Illuminate\Pagination\Paginator::resolveCurrentPage('page') ?: 1;
 
         // 3. Potong collection dan ubah menjadi Paginator agar fungsi ->links() bisa bekerja
+        //
+        // CATATAN: ini tetap pagination di memori (bukan LIMIT/OFFSET di SQL),
+        // karena baris laporan hasil grouping lintas-nota, jumlahnya baru
+        // diketahui setelah agregasi. Index tanggal_lunas di atas menekan biaya
+        // query-nya, tapi biaya agregasi PHP untuk seluruh rentang tanggal tetap
+        // ditanggung tiap request. Kalau rentang tanggal yang diizinkan bisa besar
+        // (mis. per tahun) dan datanya banyak, pertimbangkan langkah lanjutan:
+        // materialize hasil agregasi ke tabel ringkasan terjadwal.
         $data = new \Illuminate\Pagination\LengthAwarePaginator(
             $allData->forPage($page, $perPage),
             $allData->count(),
@@ -211,7 +203,7 @@ class LaporanKayuMasukController extends Controller
             $page,
             [
                 'path' => \Illuminate\Pagination\Paginator::resolveCurrentPath(),
-                'query' => $request->query() 
+                'query' => $request->query()
             ]
         );
 
@@ -234,17 +226,17 @@ class LaporanKayuMasukController extends Controller
         ];
 
         if ($request->filled('dari') && $request->filled('sampai')) {
-            $labelTanggal = $request->dari.'_sd_'.$request->sampai;
+            $labelTanggal = $request->dari . '_sd_' . $request->sampai;
         } elseif ($request->filled('dari')) {
-            $labelTanggal = 'dari_'.$request->dari;
+            $labelTanggal = 'dari_' . $request->dari;
         } elseif ($request->filled('sampai')) {
-            $labelTanggal = 'sampai_'.$request->sampai;
+            $labelTanggal = 'sampai_' . $request->sampai;
         } else {
             $labelTanggal = now()->format('Y-m-d');
         }
 
-        $fileName = 'laporan_kayu_'.$labelTanggal.'.xlsx';
-        
+        $fileName = 'laporan_kayu_' . $labelTanggal . '.xlsx';
+
         // Export menggunakan semua data (bukan yang dipotong pagination)
         $data = $this->buildLaporanData($request);
 

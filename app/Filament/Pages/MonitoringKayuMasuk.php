@@ -4,7 +4,6 @@ namespace App\Filament\Pages;
 
 use App\Models\KayuMasuk;
 use App\Models\SupplierKayu;
-use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;
 use Filament\Pages\Page;
@@ -21,7 +20,6 @@ class MonitoringKayuMasuk extends Page
     use HasPageShield;
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-truck';
     protected static ?string $navigationLabel = 'Monitoring Kayu Masuk';
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
     protected static ?string $title = 'Monitoring Kayu Masuk';
     protected static ?string $slug = 'monitoring-kayu-masuk';
     protected string $view = 'filament.pages.monitoring-kayu-masuk';
