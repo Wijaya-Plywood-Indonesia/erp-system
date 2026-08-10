@@ -85,45 +85,39 @@
                             Memuat...
                         </div>
                     </div>
+
+                    {{--
+                        TOMBOL EXPORT — SATU ELEMEN SAJA (bukan @if/@else dua tombol berbeda).
+                        Statusnya (aktif / kosong) sepenuhnya dikendalikan oleh JS lewat class
+                        & atribut data-*, berdasarkan flag `data-sheets-empty` yang dikirim server
+                        di dalam fragment tabel setiap kali difetch ulang (ganti bulan/tahun/sheet).
+                        Nilai awal saat render pertama tetap dihitung dari $isSheetsEmpty server-side
+                        supaya tidak "flash" sebelum JS jalan.
+                    --}}
                     @php
-                        // Validasi apakah sheets kosong atau null
                         $isSheetsEmpty = empty($sheets) || count($sheets) === 0;
                     @endphp
+                    <a id="export-excel-btn"
+                        href="{{ $isSheetsEmpty ? '#' : route('produksi.export-excel', request()->query()) }}"
+                        target="_blank" data-empty="{{ $isSheetsEmpty ? '1' : '0' }}"
+                        data-export-url-base="{{ route('produksi.export-excel') }}"
+                        class="inline-flex items-center px-4 py-2 text-white text-sm font-bold rounded-lg shadow-sm transition-all
+                        {{ $isSheetsEmpty ? 'bg-slate-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700' }}">
 
-                    @if ($isSheetsEmpty)
-                        {{-- Tampilan saat DISABLE --}}
-                        <button type="button"
-                            onclick="alert('Maaf, data kosong. Tidak ada laporan yang bisa di-export untuk periode ini.')"
-                            class="inline-flex items-center px-4 py-2 bg-slate-400 cursor-not-allowed text-white text-sm font-bold rounded-lg shadow-sm">
-
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-
-                            EXPORT EXCEL (KOSONG)
-                        </button>
-                    @else
-                        {{-- Tampilan saat AKTIF --}}
-                        <a href="{{ route('produksi.export-excel', request()->query()) }}" target="_blank"
-                            id="export-excel-btn"
-                            class="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg shadow-sm transition-all">
-
-                            <svg class="export-icon w-4 h-4 mr-2" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <svg class="export-spinner loading-spinner w-4 h-4 mr-2 hidden" fill="none"
-                                viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
-                                    stroke-width="4"></circle>
-                                <path class="opacity-90" fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                            </svg>
-                            <span class="export-label">EXPORT EXCEL</span>
-                        </a>
-                    @endif
+                        <svg class="export-icon w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <svg class="export-spinner loading-spinner w-4 h-4 mr-2 hidden" fill="none"
+                            viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                stroke-width="4"></circle>
+                            <path class="opacity-90" fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                        <span
+                            class="export-label">{{ $isSheetsEmpty ? 'EXPORT EXCEL (KOSONG)' : 'EXPORT EXCEL' }}</span>
+                    </a>
                 </div>
             </form>
         </div>
@@ -151,7 +145,12 @@
                  me-render ULANG HANYA bagian ini lewat
                  view(...)->fragment('table-content') tanpa perlu render ulang
                  form filter / tab sheet di atas. Dipakai baik untuk request
-                 AJAX first-load maupun ganti filter/sheet. --}}
+                 AJAX first-load maupun ganti filter/sheet.
+
+                 PENTING: fragment ini juga membawa `data-sheets-empty` &
+                 `data-sheets-json` di wrapper terluarnya, supaya JS bisa baca
+                 status sheets HASIL FETCH TERBARU dan sinkronkan tombol
+                 export tanpa perlu endpoint/partial terpisah. --}}
             <div id="table-fragment-container">
                 @fragment('table-content')
                     @php
@@ -160,321 +159,336 @@
                         // berat tidak dijalankan di request pertama. Guard di sini
                         // supaya blade tidak error sebelum data asli datang via fetch().
                         $rekap = $rekap ?? [];
+                        $fragmentSheetsEmpty = empty($sheets) || count($sheets) === 0;
                     @endphp
-                    <table class="w-full border-collapse bg-white text-sm font-sans">
-                        <thead>
-                            <tr class="bg-slate-50 border-b border-slate-900 text-slate-900 uppercase">
-                                <th colspan="20" class="py-4 text-center font-black text-lg">
-                                    KAYU {{ $activeSheet ?? 'KOSONG' }}
-                                </th>
-                            </tr>
-                            <tr class="bg-slate-100/80 border-b border-slate-900 text-slate-900">
-                                <th rowspan="2" class="border-r border-slate-900 px-3 py-2 w-24 font-bold">Tanggal</th>
-                                <th rowspan="2" class="border-r border-slate-900 px-3 py-2 font-bold">Habis</th>
-                                <th colspan="5" class="border-r border-slate-900 px-3 py-2 font-bold uppercase">Kayu</th>
-                                <th colspan="5" rowspan="2" class="border-r border-slate-900 p-0 w-[352px]">
-                                    <table class="w-full table-fixed border-collapse">
-                                        <thead>
-                                            <tr>
-                                                <th colspan="5"
-                                                    class="border-b border-slate-900 py-2 text-center uppercase tracking-wider font-bold">
-                                                    Veneer</th>
-                                            </tr>
-                                            <tr>
-                                                <th rowspan="5"
-                                                    class="grid w-[352px] grid-cols-[64px_64px_48px_80px_96px] divide-x divide-slate-900 h-full min-h-[32px] items-center text-[11px] font-bold">
-                                                    <div
-                                                        class="text-center flex items-center justify-center min-w-16 h-full font-black">
-                                                        P</div>
-                                                    <div
-                                                        class="text-center flex items-center justify-center min-w-16 h-full font-black">
-                                                        L</div>
-                                                    <div
-                                                        class="text-center flex items-center justify-center min-w-12 h-full font-black">
-                                                        T</div>
-                                                    <div
-                                                        class="text-center font-mono flex items-center justify-center min-w-20 h-full font-black">
-                                                        TOTAL</div>
-                                                    <div
-                                                        class="bg-emerald-50/20 text-right pr-2 font-black h-full min-w-24 flex items-center justify-end">
-                                                        M³</div>
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                    </table>
-                                </th>
-                                <th rowspan="2" class="border-r border-slate-900 px-3 py-2 w-32 font-bold">Jam Kerja
-                                </th>
-                                <th rowspan="2"
-                                    class="border-r border-slate-900 px-3 py-2 bg-blue-50/50 text-blue-800 font-black">%
-                                </th>
-                                <th rowspan="2"
-                                    class="border-r border-slate-900 px-3 py-2 bg-emerald-100/50 text-emerald-800 font-black uppercase">
-                                    Harga Veneer / m³</th>
-                                <th rowspan="2"
-                                    class="border-r border-slate-900 px-3 py-2 bg-blue-50/50 text-blue-800 w-24 text-center p-0 font-bold">
-                                    Pekerja</th>
-                                <th rowspan="2"
-                                    class="border-r border-slate-900 px-3 py-2 bg-amber-50/50 text-amber-800 w-32 text-center p-0 font-bold">
-                                    Ongkos / pkj</th>
-                                <th rowspan="2"
-                                    class="border-r border-slate-900 px-3 py-2 bg-orange-100/40 text-orange-900 font-black uppercase">
-                                    Harga V + Ongkos</th>
-                                <th rowspan="2"
-                                    class="border-r border-slate-900 px-3 py-2 bg-blue-50/50 text-blue-800 w-32 text-center p-0 font-bold">
-                                    Penyusutan</th>
-                                <th rowspan="2"
-                                    class="px-3 py-2 bg-yellow-100/40 text-yellow-900 font-black uppercase">
-                                    Harga
-                                    VOP</th>
-                            </tr>
-                            <tr class="bg-slate-50 border-b border-slate-900 text-slate-900 uppercase">
-                                <th class="border-r border-slate-900 px-2 py-1 font-bold">Lahan</th>
-                                <th class="border-r border-slate-900 px-2 py-1 font-bold">Batang</th>
-                                <th class="border-r border-slate-900 px-2 py-1 font-bold">Pecah</th>
-                                <th class="border-r border-slate-900 px-2 py-1 bg-orange-50/30 font-bold text-orange-900">
-                                    m³
-                                </th>
-                                <th class="border-r border-slate-900 px-2 py-1 bg-yellow-50/30 font-bold text-yellow-900">
-                                    Poin
-                                </th>
-                            </tr>
-
-                            <tr class="bg-slate-100/80 border-b border-slate-900 text-slate-900">
-                                <th colspan="2"
-                                    class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
-                                    Total</th>
-                                <th colspan="1"
-                                    class="border-r border-slate-900 px-3 py-1 text-slate-900 text-center font-bold"></th>
-
-                                <th colspan="1"
-                                    class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
-                                    {{ number_format($rekap['total_kayu_masuk'] ?? 0, 0, ',', '.') }}
-                                </th>
-
-                                <th colspan="1"
-                                    class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
-                                    -</th>
-
-                                <th colspan="1"
-                                    class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
-                                    {{ number_format($rekap['total_kubikasi_kayu_masuk'] ?? 0, 4, ',', '.') }}
-                                </th>
-
-                                <th colspan="1"
-                                    class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black whitespace-nowrap">
-                                    Rp {{ number_format($rekap['total_poin_masuk'] ?? 0, 0, ',', '.') }}
-                                </th>
-
-                                <th colspan="4" class=" bg-amber-400"></th>
-                                <th colspan="1" class="flex items-center h-full border-r border-slate-900 justify-end">
-                                    <div
-                                        class="min-w-24 h-full bg-amber-400 text-end justify-end border-l flex items-center border-slate-900 px-3 py-1 min-h-12 text-slate-900 font-black">
-                                        {{ number_format($rekap['total_kubikasi_veneer'] ?? 0, 4, ',', '.') }}
-                                    </div>
-
-                                </th>
-
-                                <th colspan="1"
-                                    class="border-r whitespace-nowrap bg-[#FF88BA] border-slate-900 px-3 py-1 w-32 font-bold">
-                                    Rata - Rata
-                                </th>
-
-                                <th colspan="1"
-                                    class="border-r border-slate-900 px-3 py-1 w-32 font-bold text-blue-800">
-                                    {{ $rekap['rata_rata_rendemen'] ?? '-' }}
-                                </th>
-
-                                <th
-                                    class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
-                                    {{-- Menghitung total harga v murni dari poin / m3 veneer --}}
-                                    Rp {{ number_format($rekap['total_harga_veneer'] ?? 0, 0, ',', '.') }}
-                                </th>
-
-                                <th colspan="2" class="border-r border-slate-900 px-3 py-1 "></th>
-                                <th
-                                    class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
-                                    Rp {{ number_format($rekap['total_harga_v_ongkos'] ?? 0, 0, ',', '.') }}
-                                </th>
-                                <th colspan="1" class="border-r border-slate-900 px-3 py-1 "></th>
-                                <th
-                                    class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
-                                    Rp {{ number_format($rekap['total_harga_vop'] ?? 0, 0, ',', '.') }}
-                                </th>
-                            </tr>
-                        </thead>
-
-                        <tbody class="divide-y divide-slate-900 border-t border-slate-900 text-slate-900 font-bold">
-                            <tr class="h-6 bg-slate-50">
-                                <td class="border-r border-slate-900"></td>
-                                <td class="border-r border-slate-900"></td>
-                                <td class="border-r border-slate-900"></td>
-                                <td class="border-r border-slate-900"></td>
-                                <td class="border-r border-slate-900"></td>
-                                <td class="border-r border-slate-900"></td>
-                                <td class="border-r border-slate-900"></td>
-                                <td colspan="5" class="p-0 border-r border-slate-900 w-[352px]">
-                                    <div
-                                        class="grid grid-cols-[64px_64px_48px_80px_96px] divide-x divide-slate-900 h-full">
-                                        <div class="w-full h-6 border-r border-slate-900"></div>
-                                        <div class="w-full h-6 border-r border-slate-900"></div>
-                                        <div class="w-full h-6 border-r border-slate-900"></div>
-                                        <div class="w-full h-6 border-r border-slate-900"></div>
-                                        <div class="w-full h-6"></div>
-                                    </div>
-                                </td>
-
-                                <td class="border-r border-slate-900"></td>
-                                <td class="border-r border-slate-900"></td>
-                                <td class="border-r border-slate-900"></td>
-                                <td class="border-r border-slate-900"></td>
-                                <td class="border-r border-slate-900"></td>
-                                <td class="border-r border-slate-900"></td>
-                                <td class="border-r border-slate-900"></td>
-                                <td class="border-slate-900"></td>
-                            </tr>
-                            @foreach ($laporan as $item)
-                                @php
-                                    // Ambil tanggal outflow TERAKHIR saja (bukan semua tanggal per baris produksi),
-                                    // sama seperti logika di export Excel. $item['outflow'] bisa berupa Collection
-                                    // atau array biasa tergantung sumber data, jadi ditangani dua-duanya.
-                                    $outflowList = $item['outflow'];
-                                    $lastTgl = is_array($outflowList)
-                                        ? end($outflowList)['tgl'] ?? ''
-                                        : $outflowList->last()['tgl'] ?? '';
-                                @endphp
-                                <tr class="hover:bg-slate-50 transition-colors">
-                                    <td class="border-r border-slate-900 p-0">
-                                        <div
-                                            class="px-2 py-1 text-center text-slate-900 h-full flex items-center justify-center uppercase w-26 text-[10px] font-black">
-                                            {{ $lastTgl }}
-                                        </div>
-                                    </td>
-
-                                    <td
-                                        class="border-r border-slate-900 px-3 py-2 text-center text-emerald-600 font-black text-lg">
-                                        ✓</td>
-                                    <td class="border-r border-slate-900 px-3 py-2 text-center font-black text-slate-900">
-                                        {{ $item['batch_info']['kode'] }}</td>
-                                    <td class="border-r border-slate-900 px-3 py-2 text-center text-slate-900 font-bold">
-                                        {{ $item['summary']['total_kayu_masuk'] }}</td>
-                                    <td class="border-r border-slate-900 px-3 py-2"></td>
-                                    <td class="border-r border-slate-900 px-3 py-2 bg-blue-50/30 text-right font-black">
-                                        {{ $item['summary']['total_masuk_m3'] }}</td>
-                                    <td
-                                        class="border-r border-slate-900 px-3 py-2 bg-blue-50/30 text-right tabular-nums whitespace-nowrap font-black">
-                                        {{ 'Rp ' . $item['summary']['total_poin'] }}</td>
-
-                                    <td colspan="5" class="p-0 border-r w-[352px] border-slate-900">
-                                        <div class="flex flex-col divide-y w-full divide-slate-900 h-full">
-                                            @foreach ($item['outflow'] as $produksi)
-                                                <div
-                                                    class="grid grid-cols-[64px_64px_48px_80px_96px] w-full divide-x divide-slate-900 h-full min-h-[32px] items-center text-[11px] font-bold">
-                                                    <div class="text-center flex items-center justify-center h-full">
-                                                        {{ $produksi['panjang'] }}</div>
-                                                    <div
-                                                        class="text-center flex items-center justify-center h-full font-black text-slate-900">
-                                                        {{ $produksi['lebar'] }}</div>
-                                                    <div class="text-center flex items-center justify-center h-full">
-                                                        {{ $produksi['tebal'] }}</div>
-                                                    <div
-                                                        class="text-center font-mono flex items-center justify-center h-full font-black">
-                                                        {{ $produksi['total_banyak'] }}</div>
-                                                    <div
-                                                        class="bg-emerald-50/20 text-right pr-2 font-black h-full flex items-center justify-end text-emerald-800">
-                                                        {{ $produksi['total_kubikasi'] }}</div>
-                                                </div>
-                                            @endforeach
-                                        </div>
-                                    </td>
-
-                                    <td class="border-r border-slate-900 p-0 text-[10px]">
-                                        <div class="flex flex-col divide-y divide-slate-900">
-                                            @foreach ($item['outflow'] as $produksi)
-                                                <div
-                                                    class="px-2 py-1 text-center min-h-[32px] flex items-center justify-center w-32 font-bold">
-                                                    06:00 - 16:00</div>
-                                            @endforeach
-                                        </div>
-                                    </td>
-
-                                    <td
-                                        class="border-r border-slate-900 px-3 py-2 bg-blue-50/30 text-center font-black text-blue-800">
-                                        {{ $item['summary']['rendemen'] }}</td>
-                                    <td
-                                        class="border-r border-slate-900 px-3 py-2 bg-emerald-50/30 text-right font-black text-emerald-800 whitespace-nowrap">
-                                        Rp. {{ number_format($item['summary']['harga_veneer'], 0, ',', '.') }}</td>
-
-                                    <td class="border-r border-slate-900 p-0">
-                                        <div class="flex flex-col divide-y divide-slate-900">
-                                            @foreach ($item['outflow'] as $produksi)
-                                                <div
-                                                    class="px-2 py-1 text-center min-h-[32px] flex items-center justify-center w-24 uppercase font-bold">
-                                                    {{ $produksi['pekerja'] }}</div>
-                                            @endforeach
-                                        </div>
-                                    </td>
-                                    <td class="border-r border-slate-900 p-0 bg-amber-50/30">
-                                        <div class="flex flex-col divide-y divide-slate-900">
-                                            @foreach ($item['outflow'] as $produksi)
-                                                <div
-                                                    class="px-2 py-1 text-right min-h-[32px] flex items-center justify-end w-32 pr-2 whitespace-nowrap font-bold">
-                                                    Rp. {{ number_format($produksi['ongkos'], 0, ',', '.') }}</div>
-                                            @endforeach
-                                        </div>
-                                    </td>
-
-                                    <td
-                                        class="border-r border-slate-900 px-3 py-2 bg-orange-50/40 text-right font-black text-orange-900 whitespace-nowrap">
-                                        Rp. {{ number_format($item['summary']['harga_v_ongkos'], 0, ',', '.') }}</td>
-
-                                    <td class="border-r border-slate-900 p-0 bg-blue-50/30">
-                                        <div class="flex flex-col divide-y divide-slate-900">
-                                            @foreach ($item['outflow'] as $produksi)
-                                                <div
-                                                    class="px-2 py-1 text-right min-h-[32px] flex items-center justify-end w-32 pr-2 whitespace-nowrap font-bold">
-                                                    Rp. {{ number_format($produksi['penyusutan'], 0, ',', '.') }}</div>
-                                            @endforeach
-                                        </div>
-                                    </td>
-                                    <td
-                                        class="px-3 py-2 bg-yellow-50/50 text-right font-black text-slate-900 border-l border-slate-900 whitespace-nowrap">
-                                        Rp. {{ number_format($item['summary']['harga_vop'], 0, ',', '.') }}</td>
+                    <div data-sheets-empty="{{ $fragmentSheetsEmpty ? '1' : '0' }}"
+                        data-export-query="{{ http_build_query(request()->query()) }}">
+                        <table class="w-full border-collapse bg-white text-sm font-sans">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-900 text-slate-900 uppercase">
+                                    <th colspan="20" class="py-4 text-center font-black text-lg">
+                                        KAYU {{ $activeSheet ?? 'KOSONG' }}
+                                    </th>
+                                </tr>
+                                <tr class="bg-slate-100/80 border-b border-slate-900 text-slate-900">
+                                    <th rowspan="2" class="border-r border-slate-900 px-3 py-2 w-24 font-bold">Tanggal
+                                    </th>
+                                    <th rowspan="2" class="border-r border-slate-900 px-3 py-2 font-bold">Habis</th>
+                                    <th colspan="5" class="border-r border-slate-900 px-3 py-2 font-bold uppercase">Kayu
+                                    </th>
+                                    <th colspan="5" rowspan="2" class="border-r border-slate-900 p-0 w-[352px]">
+                                        <table class="w-full table-fixed border-collapse">
+                                            <thead>
+                                                <tr>
+                                                    <th colspan="5"
+                                                        class="border-b border-slate-900 py-2 text-center uppercase tracking-wider font-bold">
+                                                        Veneer</th>
+                                                </tr>
+                                                <tr>
+                                                    <th rowspan="5"
+                                                        class="grid w-[352px] grid-cols-[64px_64px_48px_80px_96px] divide-x divide-slate-900 h-full min-h-[32px] items-center text-[11px] font-bold">
+                                                        <div
+                                                            class="text-center flex items-center justify-center min-w-16 h-full font-black">
+                                                            P</div>
+                                                        <div
+                                                            class="text-center flex items-center justify-center min-w-16 h-full font-black">
+                                                            L</div>
+                                                        <div
+                                                            class="text-center flex items-center justify-center min-w-12 h-full font-black">
+                                                            T</div>
+                                                        <div
+                                                            class="text-center font-mono flex items-center justify-center min-w-20 h-full font-black">
+                                                            TOTAL</div>
+                                                        <div
+                                                            class="bg-emerald-50/20 text-right pr-2 font-black h-full min-w-24 flex items-center justify-end">
+                                                            M³</div>
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                        </table>
+                                    </th>
+                                    <th rowspan="2" class="border-r border-slate-900 px-3 py-2 w-32 font-bold">Jam
+                                        Kerja
+                                    </th>
+                                    <th rowspan="2"
+                                        class="border-r border-slate-900 px-3 py-2 bg-blue-50/50 text-blue-800 font-black">
+                                        %
+                                    </th>
+                                    <th rowspan="2"
+                                        class="border-r border-slate-900 px-3 py-2 bg-emerald-100/50 text-emerald-800 font-black uppercase">
+                                        Harga Veneer / m³</th>
+                                    <th rowspan="2"
+                                        class="border-r border-slate-900 px-3 py-2 bg-blue-50/50 text-blue-800 w-24 text-center p-0 font-bold">
+                                        Pekerja</th>
+                                    <th rowspan="2"
+                                        class="border-r border-slate-900 px-3 py-2 bg-amber-50/50 text-amber-800 w-32 text-center p-0 font-bold">
+                                        Ongkos / pkj</th>
+                                    <th rowspan="2"
+                                        class="border-r border-slate-900 px-3 py-2 bg-orange-100/40 text-orange-900 font-black uppercase">
+                                        Harga V + Ongkos</th>
+                                    <th rowspan="2"
+                                        class="border-r border-slate-900 px-3 py-2 bg-blue-50/50 text-blue-800 w-32 text-center p-0 font-bold">
+                                        Penyusutan</th>
+                                    <th rowspan="2"
+                                        class="px-3 py-2 bg-yellow-100/40 text-yellow-900 font-black uppercase">
+                                        Harga
+                                        VOP</th>
+                                </tr>
+                                <tr class="bg-slate-50 border-b border-slate-900 text-slate-900 uppercase">
+                                    <th class="border-r border-slate-900 px-2 py-1 font-bold">Lahan</th>
+                                    <th class="border-r border-slate-900 px-2 py-1 font-bold">Batang</th>
+                                    <th class="border-r border-slate-900 px-2 py-1 font-bold">Pecah</th>
+                                    <th
+                                        class="border-r border-slate-900 px-2 py-1 bg-orange-50/30 font-bold text-orange-900">
+                                        m³
+                                    </th>
+                                    <th
+                                        class="border-r border-slate-900 px-2 py-1 bg-yellow-50/30 font-bold text-yellow-900">
+                                        Poin
+                                    </th>
                                 </tr>
 
-                                @if (!$loop->last)
-                                    <tr class="h-6 bg-slate-50">
-                                        <td class="border-r border-slate-900"></td>
-                                        <td class="border-r border-slate-900"></td>
-                                        <td class="border-r border-slate-900"></td>
-                                        <td class="border-r border-slate-900"></td>
-                                        <td class="border-r border-slate-900"></td>
-                                        <td class="border-r border-slate-900"></td>
-                                        <td class="border-r border-slate-900"></td>
-                                        <td colspan="5" class="p-0 border-r border-slate-900 w-[352px] h-full">
+                                <tr class="bg-slate-100/80 border-b border-slate-900 text-slate-900">
+                                    <th colspan="2"
+                                        class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
+                                        Total</th>
+                                    <th colspan="1"
+                                        class="border-r border-slate-900 px-3 py-1 text-slate-900 text-center font-bold">
+                                    </th>
+
+                                    <th colspan="1"
+                                        class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
+                                        {{ number_format($rekap['total_kayu_masuk'] ?? 0, 0, ',', '.') }}
+                                    </th>
+
+                                    <th colspan="1"
+                                        class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
+                                        -</th>
+
+                                    <th colspan="1"
+                                        class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black">
+                                        {{ number_format($rekap['total_kubikasi_kayu_masuk'] ?? 0, 4, ',', '.') }}
+                                    </th>
+
+                                    <th colspan="1"
+                                        class="border-r border-slate-900 px-3 py-1 bg-amber-400 text-slate-900 text-center font-black whitespace-nowrap">
+                                        Rp {{ number_format($rekap['total_poin_masuk'] ?? 0, 0, ',', '.') }}
+                                    </th>
+
+                                    <th colspan="4" class=" bg-amber-400"></th>
+                                    <th colspan="1"
+                                        class="flex items-center h-full border-r border-slate-900 justify-end">
+                                        <div
+                                            class="min-w-24 h-full bg-amber-400 text-end justify-end border-l flex items-center border-slate-900 px-3 py-1 min-h-12 text-slate-900 font-black">
+                                            {{ number_format($rekap['total_kubikasi_veneer'] ?? 0, 4, ',', '.') }}
+                                        </div>
+
+                                    </th>
+
+                                    <th colspan="1"
+                                        class="border-r whitespace-nowrap bg-[#FF88BA] border-slate-900 px-3 py-1 w-32 font-bold">
+                                        Rata - Rata
+                                    </th>
+
+                                    <th colspan="1"
+                                        class="border-r border-slate-900 px-3 py-1 w-32 font-bold text-blue-800">
+                                        {{ $rekap['rata_rata_rendemen'] ?? '-' }}
+                                    </th>
+
+                                    <th
+                                        class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
+                                        {{-- Menghitung total harga v murni dari poin / m3 veneer --}}
+                                        Rp {{ number_format($rekap['total_harga_veneer'] ?? 0, 0, ',', '.') }}
+                                    </th>
+
+                                    <th colspan="2" class="border-r border-slate-900 px-3 py-1 "></th>
+                                    <th
+                                        class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
+                                        Rp {{ number_format($rekap['total_harga_v_ongkos'] ?? 0, 0, ',', '.') }}
+                                    </th>
+                                    <th colspan="1" class="border-r border-slate-900 px-3 py-1 "></th>
+                                    <th
+                                        class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
+                                        Rp {{ number_format($rekap['total_harga_vop'] ?? 0, 0, ',', '.') }}
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody class="divide-y divide-slate-900 border-t border-slate-900 text-slate-900 font-bold">
+                                <tr class="h-6 bg-slate-50">
+                                    <td class="border-r border-slate-900"></td>
+                                    <td class="border-r border-slate-900"></td>
+                                    <td class="border-r border-slate-900"></td>
+                                    <td class="border-r border-slate-900"></td>
+                                    <td class="border-r border-slate-900"></td>
+                                    <td class="border-r border-slate-900"></td>
+                                    <td class="border-r border-slate-900"></td>
+                                    <td colspan="5" class="p-0 border-r border-slate-900 w-[352px]">
+                                        <div
+                                            class="grid grid-cols-[64px_64px_48px_80px_96px] divide-x divide-slate-900 h-full">
+                                            <div class="w-full h-6 border-r border-slate-900"></div>
+                                            <div class="w-full h-6 border-r border-slate-900"></div>
+                                            <div class="w-full h-6 border-r border-slate-900"></div>
+                                            <div class="w-full h-6 border-r border-slate-900"></div>
+                                            <div class="w-full h-6"></div>
+                                        </div>
+                                    </td>
+
+                                    <td class="border-r border-slate-900"></td>
+                                    <td class="border-r border-slate-900"></td>
+                                    <td class="border-r border-slate-900"></td>
+                                    <td class="border-r border-slate-900"></td>
+                                    <td class="border-r border-slate-900"></td>
+                                    <td class="border-r border-slate-900"></td>
+                                    <td class="border-r border-slate-900"></td>
+                                    <td class="border-slate-900"></td>
+                                </tr>
+                                @foreach ($laporan as $item)
+                                    @php
+                                        // Ambil tanggal outflow TERAKHIR saja (bukan semua tanggal per baris produksi),
+                                        // sama seperti logika di export Excel. $item['outflow'] bisa berupa Collection
+                                        // atau array biasa tergantung sumber data, jadi ditangani dua-duanya.
+                                        $outflowList = $item['outflow'];
+                                        $lastTgl = is_array($outflowList)
+                                            ? end($outflowList)['tgl'] ?? ''
+                                            : $outflowList->last()['tgl'] ?? '';
+                                    @endphp
+                                    <tr class="hover:bg-slate-50 transition-colors">
+                                        <td class="border-r border-slate-900 p-0">
                                             <div
-                                                class="grid grid-cols-[64px_64px_48px_80px_96px] divide-x divide-slate-900 h-full">
-                                                <div class="w-full h-6  border-r border-slate-900"></div>
-                                                <div class="w-full h-6  border-r border-slate-900"></div>
-                                                <div class="w-full h-6  border-r border-slate-900"></div>
-                                                <div class="w-full h-6  border-r border-slate-900"></div>
-                                                <div class="w-full h-6 "></div>
+                                                class="px-2 py-1 text-center text-slate-900 h-full flex items-center justify-center uppercase w-26 text-[10px] font-black">
+                                                {{ $lastTgl }}
                                             </div>
                                         </td>
 
-                                        <td class="border-r border-slate-900"></td>
-                                        <td class="border-r border-slate-900"></td>
-                                        <td class="border-r border-slate-900"></td>
-                                        <td class="border-r border-slate-900"></td>
-                                        <td class="border-r border-slate-900"></td>
-                                        <td class="border-r border-slate-900"></td>
-                                        <td class="border-r border-slate-900"></td>
-                                        <td class="border-slate-900"></td>
+                                        <td
+                                            class="border-r border-slate-900 px-3 py-2 text-center text-emerald-600 font-black text-lg">
+                                            ✓</td>
+                                        <td
+                                            class="border-r border-slate-900 px-3 py-2 text-center font-black text-slate-900">
+                                            {{ $item['batch_info']['kode'] }}</td>
+                                        <td
+                                            class="border-r border-slate-900 px-3 py-2 text-center text-slate-900 font-bold">
+                                            {{ $item['summary']['total_kayu_masuk'] }}</td>
+                                        <td class="border-r border-slate-900 px-3 py-2"></td>
+                                        <td
+                                            class="border-r border-slate-900 px-3 py-2 bg-blue-50/30 text-right font-black">
+                                            {{ $item['summary']['total_masuk_m3'] }}</td>
+                                        <td
+                                            class="border-r border-slate-900 px-3 py-2 bg-blue-50/30 text-right tabular-nums whitespace-nowrap font-black">
+                                            {{ 'Rp ' . $item['summary']['total_poin'] }}</td>
+
+                                        <td colspan="5" class="p-0 border-r w-[352px] border-slate-900">
+                                            <div class="flex flex-col divide-y w-full divide-slate-900 h-full">
+                                                @foreach ($item['outflow'] as $produksi)
+                                                    <div
+                                                        class="grid grid-cols-[64px_64px_48px_80px_96px] w-full divide-x divide-slate-900 h-full min-h-[32px] items-center text-[11px] font-bold">
+                                                        <div class="text-center flex items-center justify-center h-full">
+                                                            {{ $produksi['panjang'] }}</div>
+                                                        <div
+                                                            class="text-center flex items-center justify-center h-full font-black text-slate-900">
+                                                            {{ $produksi['lebar'] }}</div>
+                                                        <div class="text-center flex items-center justify-center h-full">
+                                                            {{ $produksi['tebal'] }}</div>
+                                                        <div
+                                                            class="text-center font-mono flex items-center justify-center h-full font-black">
+                                                            {{ $produksi['total_banyak'] }}</div>
+                                                        <div
+                                                            class="bg-emerald-50/20 text-right pr-2 font-black h-full flex items-center justify-end text-emerald-800">
+                                                            {{ $produksi['total_kubikasi'] }}</div>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        </td>
+
+                                        <td class="border-r border-slate-900 p-0 text-[10px]">
+                                            <div class="flex flex-col divide-y divide-slate-900">
+                                                @foreach ($item['outflow'] as $produksi)
+                                                    <div
+                                                        class="px-2 py-1 text-center min-h-[32px] flex items-center justify-center w-32 font-bold">
+                                                        06:00 - 16:00</div>
+                                                @endforeach
+                                            </div>
+                                        </td>
+
+                                        <td
+                                            class="border-r border-slate-900 px-3 py-2 bg-blue-50/30 text-center font-black text-blue-800">
+                                            {{ $item['summary']['rendemen'] }}</td>
+                                        <td
+                                            class="border-r border-slate-900 px-3 py-2 bg-emerald-50/30 text-right font-black text-emerald-800 whitespace-nowrap">
+                                            Rp. {{ number_format($item['summary']['harga_veneer'], 0, ',', '.') }}</td>
+
+                                        <td class="border-r border-slate-900 p-0">
+                                            <div class="flex flex-col divide-y divide-slate-900">
+                                                @foreach ($item['outflow'] as $produksi)
+                                                    <div
+                                                        class="px-2 py-1 text-center min-h-[32px] flex items-center justify-center w-24 uppercase font-bold">
+                                                        {{ $produksi['pekerja'] }}</div>
+                                                @endforeach
+                                            </div>
+                                        </td>
+                                        <td class="border-r border-slate-900 p-0 bg-amber-50/30">
+                                            <div class="flex flex-col divide-y divide-slate-900">
+                                                @foreach ($item['outflow'] as $produksi)
+                                                    <div
+                                                        class="px-2 py-1 text-right min-h-[32px] flex items-center justify-end w-32 pr-2 whitespace-nowrap font-bold">
+                                                        Rp. {{ number_format($produksi['ongkos'], 0, ',', '.') }}</div>
+                                                @endforeach
+                                            </div>
+                                        </td>
+
+                                        <td
+                                            class="border-r border-slate-900 px-3 py-2 bg-orange-50/40 text-right font-black text-orange-900 whitespace-nowrap">
+                                            Rp. {{ number_format($item['summary']['harga_v_ongkos'], 0, ',', '.') }}</td>
+
+                                        <td class="border-r border-slate-900 p-0 bg-blue-50/30">
+                                            <div class="flex flex-col divide-y divide-slate-900">
+                                                @foreach ($item['outflow'] as $produksi)
+                                                    <div
+                                                        class="px-2 py-1 text-right min-h-[32px] flex items-center justify-end w-32 pr-2 whitespace-nowrap font-bold">
+                                                        Rp. {{ number_format($produksi['penyusutan'], 0, ',', '.') }}</div>
+                                                @endforeach
+                                            </div>
+                                        </td>
+                                        <td
+                                            class="px-3 py-2 bg-yellow-50/50 text-right font-black text-slate-900 border-l border-slate-900 whitespace-nowrap">
+                                            Rp. {{ number_format($item['summary']['harga_vop'], 0, ',', '.') }}</td>
                                     </tr>
-                                @endif
-                            @endforeach
-                        </tbody>
-                    </table>
+
+                                    @if (!$loop->last)
+                                        <tr class="h-6 bg-slate-50">
+                                            <td class="border-r border-slate-900"></td>
+                                            <td class="border-r border-slate-900"></td>
+                                            <td class="border-r border-slate-900"></td>
+                                            <td class="border-r border-slate-900"></td>
+                                            <td class="border-r border-slate-900"></td>
+                                            <td class="border-r border-slate-900"></td>
+                                            <td class="border-r border-slate-900"></td>
+                                            <td colspan="5" class="p-0 border-r border-slate-900 w-[352px] h-full">
+                                                <div
+                                                    class="grid grid-cols-[64px_64px_48px_80px_96px] divide-x divide-slate-900 h-full">
+                                                    <div class="w-full h-6  border-r border-slate-900"></div>
+                                                    <div class="w-full h-6  border-r border-slate-900"></div>
+                                                    <div class="w-full h-6  border-r border-slate-900"></div>
+                                                    <div class="w-full h-6  border-r border-slate-900"></div>
+                                                    <div class="w-full h-6 "></div>
+                                                </div>
+                                            </td>
+
+                                            <td class="border-r border-slate-900"></td>
+                                            <td class="border-r border-slate-900"></td>
+                                            <td class="border-r border-slate-900"></td>
+                                            <td class="border-r border-slate-900"></td>
+                                            <td class="border-r border-slate-900"></td>
+                                            <td class="border-r border-slate-900"></td>
+                                            <td class="border-r border-slate-900"></td>
+                                            <td class="border-slate-900"></td>
+                                        </tr>
+                                    @endif
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
                 @endfragment
             </div>
         </div>
@@ -529,6 +543,7 @@
             var tahunSelect = document.getElementById('filter-tahun');
             var sheetHiddenInput = document.getElementById('filter-sheet');
             var inlineLoading = document.getElementById('filter-inline-loading');
+            var exportUrlBase = exportBtn ? exportBtn.getAttribute('data-export-url-base') : '';
 
             function showTableLoading() {
                 if (tableOverlay) {
@@ -575,6 +590,36 @@
                 return params;
             }
 
+            // *** KUNCI FIX BUG TOMBOL EXPORT ***
+            // Setelah fragment tabel baru disuntikkan ke DOM, baca atribut
+            // data-sheets-empty & data-export-query yang dikirim server di
+            // dalam fragment tsb (nilai TERBARU sesuai bulan/tahun/sheet yang
+            // baru difetch), lalu update SATU tombol export yang sama:
+            // toggle warna, label, cursor, href, dan disabled state-nya.
+            function syncExportButton() {
+                if (!exportBtn) return;
+
+                var flagHolder = tableFragmentContainer.querySelector('[data-sheets-empty]');
+                var isEmpty = flagHolder ? flagHolder.getAttribute('data-sheets-empty') === '1' : true;
+                var exportQuery = flagHolder ? flagHolder.getAttribute('data-export-query') : '';
+
+                var label = exportBtn.querySelector('.export-label');
+
+                exportBtn.setAttribute('data-empty', isEmpty ? '1' : '0');
+
+                if (isEmpty) {
+                    exportBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+                    exportBtn.classList.add('bg-slate-400', 'cursor-not-allowed');
+                    exportBtn.setAttribute('href', '#');
+                    if (label) label.textContent = 'EXPORT EXCEL (KOSONG)';
+                } else {
+                    exportBtn.classList.remove('bg-slate-400', 'cursor-not-allowed');
+                    exportBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+                    exportBtn.setAttribute('href', exportUrlBase + '?' + exportQuery);
+                    if (label) label.textContent = 'EXPORT EXCEL';
+                }
+            }
+
             // Inti dari LAZY LOAD: fetch tabel via AJAX (controller mengembalikan
             // HANYA fragment table-content lewat ->fragment('table-content')),
             // lalu suntikkan ke dalam #table-fragment-container.
@@ -597,6 +642,7 @@
                     })
                     .then(function(html) {
                         tableFragmentContainer.innerHTML = html;
+                        syncExportButton();
                         if (pushUrl !== false) {
                             window.history.replaceState({}, '', url);
                         }
@@ -663,8 +709,18 @@
                 });
             });
 
+            // Klik tombol export: hanya jalan kalau state-nya TIDAK kosong.
+            // Kalau kosong, tampilkan alert & cegah navigasi (karena href="#").
             if (exportBtn) {
-                exportBtn.addEventListener('click', function() {
+                exportBtn.addEventListener('click', function(e) {
+                    var isEmpty = exportBtn.getAttribute('data-empty') === '1';
+
+                    if (isEmpty) {
+                        e.preventDefault();
+                        alert('Maaf, data kosong. Tidak ada laporan yang bisa di-export untuk periode ini.');
+                        return;
+                    }
+
                     var icon = exportBtn.querySelector('.export-icon');
                     var spinner = exportBtn.querySelector('.export-spinner');
                     var label = exportBtn.querySelector('.export-label');
