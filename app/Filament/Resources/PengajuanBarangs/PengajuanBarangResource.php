@@ -17,7 +17,7 @@ class PengajuanBarangResource extends Resource
     protected static ?string $model = PengajuanBarang::class;
 
     protected static ?string $navigationLabel = 'Pengajuan Barang';
-    protected static string|UnitEnum|null $navigationGroup = 'Pengajuan Barang';
+    protected static string|UnitEnum|null $navigationGroup = 'Pengajuan';
     protected static ?string $modelLabel = 'Pengajuan Barang';
     protected static ?int $navigationSort = 1;
 

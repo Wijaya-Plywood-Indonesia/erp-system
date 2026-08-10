@@ -26,6 +26,7 @@ class LaporanSanding extends Page implements HasForms
     protected static ?string $title = 'Laporan Produksi Sanding';
     protected static ?string $navigationLabel = 'Laporan Produksi Sanding';
     protected static ?int $navigationSort = 18;
+    protected static bool $shouldRegisterNavigation = false;
 
     public $reportData = [
         'detail' => [],

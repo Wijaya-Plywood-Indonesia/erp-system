@@ -72,6 +72,7 @@ class LaporanHarian extends Page implements HasForms
 
     protected string $view = 'filament.pages.laporan-harian';
     protected static ?int $navigationSort = 1;
+    protected static bool $shouldRegisterNavigation = false;
 
     public ?array $data = [
         'tanggal' => null,

@@ -29,6 +29,7 @@ class LaporanStik extends Page
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static ?string $title = 'Laporan Produksi Stik';
     protected static ?int $navigationSort = 5;
+    protected static bool $shouldRegisterNavigation = false;
 
     public $dataStik = [];
     public $tanggal  = null;

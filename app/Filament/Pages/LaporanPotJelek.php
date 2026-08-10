@@ -33,6 +33,7 @@ class LaporanPotJelek extends Page
     protected static ?string $navigationLabel = 'Laporan Produksi Pot Jelek';
     protected string $view = 'filament.pages.laporan-pot-jelek'; // Sesuaikan dengan nama blade Anda
     protected static ?int $navigationSort = 10;
+    protected static bool $shouldRegisterNavigation = false;
 
     public array $data = [
         'tanggal' => null,

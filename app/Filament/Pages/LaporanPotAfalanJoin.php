@@ -32,6 +32,7 @@ class LaporanPotAfalanJoin extends Page
     protected static ?string $navigationLabel = 'Laporan Produksi Pot Af Join';
     protected string $view = 'filament.pages.laporan-pot-afalan';
     protected static ?int $navigationSort = 9;
+    protected static bool $shouldRegisterNavigation = false;
 
     public array $data = [
         'tanggal' => null,

@@ -27,6 +27,7 @@ class LaporanProduksiNyusup extends Page implements HasForms
     protected static ?string $title = 'Laporan Produksi Nyusup';
     protected static ?string $navigationLabel = 'Laporan Produksi Nyusup';
     protected static ?int $navigationSort = 16;
+    protected static bool $shouldRegisterNavigation = false;
 
     public $reportData = [
         'detail' => [],

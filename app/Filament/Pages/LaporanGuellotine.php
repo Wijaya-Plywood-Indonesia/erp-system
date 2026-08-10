@@ -26,6 +26,7 @@ class LaporanGuellotine extends Page
     protected static ?string $title = 'Laporan Guellotine';
     protected string $view = 'filament.pages.laporan-guellotine';
     protected static ?int $navigationSort = 8;
+    protected static bool $shouldRegisterNavigation = false;
 
     public array $data = ['tanggal' => null];
     public array $laporan = [];
