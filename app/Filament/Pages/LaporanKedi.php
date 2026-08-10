@@ -27,6 +27,7 @@ class LaporanKedi extends Page
     protected static ?string $title = 'Laporan Produksi Kedi';
     protected static ?int $navigationSort = 4;
     protected string $view = 'filament.pages.laporan-kedi';
+    protected static bool $shouldRegisterNavigation = false;
 
     public array $dataKedi = [];
     public ?string $tanggal = null;

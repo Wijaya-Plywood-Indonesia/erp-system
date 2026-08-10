@@ -38,6 +38,7 @@ class LaporanPressDryer extends Page implements HasForms
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static ?string $title = 'Laporan Produksi Dryer';
     protected static ?int $navigationSort = 3;
+    protected static bool $shouldRegisterNavigation = false;
 
     public array $data = [
         'tanggal' => null,

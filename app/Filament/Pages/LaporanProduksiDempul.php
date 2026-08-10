@@ -27,6 +27,7 @@ class LaporanProduksiDempul extends Page implements HasForms
     protected static ?string $title = 'Laporan Produksi Dempul';
     protected static ?string $navigationLabel = 'Laporan Produksi Dempul';
     protected static ?int $navigationSort = 14;
+    protected static bool $shouldRegisterNavigation = false;
 
     public $reportData = [
         'detail' => [],

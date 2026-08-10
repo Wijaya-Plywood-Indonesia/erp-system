@@ -31,6 +31,7 @@ class LaporanRepairs extends Page
     protected static ?string $title = 'Laporan Produksi Repairs';
     protected string $view = 'filament.pages.laporan-repairs';
     protected static ?int $navigationSort = 6;
+    protected static bool $shouldRegisterNavigation = false;
 
     public array $data = [
         'tanggal' => null,

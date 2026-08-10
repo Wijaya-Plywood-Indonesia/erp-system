@@ -26,6 +26,7 @@ class LaporanPilihVeneer extends Page implements HasForms
     protected static ?string $title = 'Laporan Produksi Pilih Veneer';
     protected static ?string $navigationLabel = 'Laporan Produksi Pilih Veneer';
     protected static ?int $navigationSort = 13;
+    protected static bool $shouldRegisterNavigation = false;
 
     public $reportData = [
         'detail' => [],

@@ -27,6 +27,7 @@ class LaporanPotSiku extends Page implements HasForms
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static ?string $title = 'Laporan Produksi Pot Siku';
     protected static ?int $navigationSort = 6;
+    protected static bool $shouldRegisterNavigation = false;
 
     public $dataSiku = [];
     public $tanggal = null;

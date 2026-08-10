@@ -23,7 +23,9 @@ class RekapKayuMasukResource extends Resource
     protected static ?string $modelLabel = 'Laporan Kayu Masuk';
     protected static ?string $pluralModelLabel = 'Laporan Kayu Masuk';
     protected static string|UnitEnum|null $navigationGroup = 'Laporan';
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-chart-bar';
+    protected static ?int $navigationSort = 1;
+    protected static bool $shouldRegisterNavigation = false;
     //end
 
     public static function table(Table $table): Table
