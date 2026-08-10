@@ -5,23 +5,50 @@ namespace App\Providers;
 use App\Models\ModalSanding;
 use App\Models\NotaKayu;
 use App\Models\PenggunaanLahanRotary;
-use App\Observers\ModalSandingObserver;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\ServiceProvider;
 use App\Models\RencanaKerjaHp;
-use App\Observers\NotaKayuObserver;
-use App\Observers\RencanaKerjaHpObserver;
-use Filament\Support\Facades\FilamentView;
-use Illuminate\Support\Facades\Blade;
 use App\Models\ValidasiHasilRotary;
-use App\Observers\RotaryObserver;
-use App\Observers\ValidasiHasilRotaryObserver;
+use App\Models\ValidasiKedi;
+use App\Models\ValidasiNyusup;
+use App\Models\ValidasiPilihPlywood;
 use App\Models\ValidasiPressDryer;
 use App\Models\ValidasiStik;
-use App\Models\ValidasiKedi;
+use App\Observers\ModalSandingObserver;
+use App\Observers\NotaKayuObserver;
 use App\Observers\ProductionValidationObserver;
+use App\Observers\RencanaKerjaHpObserver;
+use App\Observers\RotaryObserver;
+use App\Observers\ValidasiHasilRotaryObserver;
+use App\Observers\ValidasiNyusupObserver;
+use App\Observers\ValidasiPilihPlywoodObserver;
+use App\Services\AbsensiSources\DempulAbsensiSource;
+use App\Services\AbsensiSources\DryerAbsensiSource;
+use App\Services\AbsensiSources\GrajiBalkenAbsensiSource;
+use App\Services\AbsensiSources\GrajiStikAbsensiSource;
+use App\Services\AbsensiSources\GrajiTriplekAbsensiSource;
+use App\Services\AbsensiSources\GuellotineAbsensiSource;
+use App\Services\AbsensiSources\HpAbsensiSource;
+use App\Services\AbsensiSources\JointAbsensiSource;
+use App\Services\AbsensiSources\KediAbsensiSource;
+use App\Services\AbsensiSources\LainLainAbsensiSource;
+use App\Services\AbsensiSources\NyusupAbsensiSource;
+use App\Services\AbsensiSources\PilihPlywoodAbsensiSource;
+use App\Services\AbsensiSources\PilihVeneerAbsensiSource;
+use App\Services\AbsensiSources\PotAfJointAbsensiSource;
+use App\Services\AbsensiSources\PotJelekAbsensiSource;
+use App\Services\AbsensiSources\PotSikuAbsensiSource;
+use App\Services\AbsensiSources\RepairAbsensiSource;
+use App\Services\AbsensiSources\RotaryAbsensiSource;
+use App\Services\AbsensiSources\SandingAbsensiSource;
+use App\Services\AbsensiSources\SandingJointAbsensiSource;
+use App\Services\AbsensiSources\StikAbsensiSource;
+use App\Services\AbsensiSources\TembelTriplekAbsensiSource;
+use App\Services\AbsensiSources\TerimaGudangSatuAbsensiSource;
+use App\Services\NewRekapAbsensiPegawaiService;
+use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -32,7 +59,7 @@ class AppServiceProvider extends ServiceProvider
     {
         FilamentView::registerRenderHook(
             PanelsRenderHook::BODY_END,
-            fn(): HtmlString => new HtmlString(<<<'HTML'
+            fn (): HtmlString => new HtmlString(<<<'HTML'
         <!-- Lightbox Overlay untuk preview foto -->
         <div id="foto-lightbox"
              style="display:none; position:fixed; inset:0; z-index:9999;
@@ -74,6 +101,36 @@ class AppServiceProvider extends ServiceProvider
         </script>
     HTML),
         );
+
+        $this->app->singleton(NewRekapAbsensiPegawaiService::class, function () {
+            return new NewRekapAbsensiPegawaiService([
+                new DryerAbsensiSource,
+                new RotaryAbsensiSource,
+                new PotSikuAbsensiSource,
+                new PotJelekAbsensiSource,
+                new GrajiStikAbsensiSource,
+                new KediAbsensiSource,
+                new StikAbsensiSource,
+                new RepairAbsensiSource,
+                new JointAbsensiSource,
+                new PotAfJointAbsensiSource,
+                new SandingJointAbsensiSource,
+                new HpAbsensiSource,
+                new GrajiBalkenAbsensiSource,
+                new GuellotineAbsensiSource,
+                new PilihVeneerAbsensiSource,
+                new SandingAbsensiSource,
+                new TembelTriplekAbsensiSource,
+                new DempulAbsensiSource,
+                new GrajiTriplekAbsensiSource,
+                new NyusupAbsensiSource,
+                new PilihPlywoodAbsensiSource,
+                new TerimaGudangSatuAbsensiSource,
+                new LainLainAbsensiSource,
+                // nanti tambah sumber baru cukup di sini, misal:
+                // new FingerAbsensiSource(),
+            ]);
+        });
     }
 
     /**
@@ -90,14 +147,14 @@ class AppServiceProvider extends ServiceProvider
         ValidasiPressDryer::observe(ProductionValidationObserver::class);
         ValidasiStik::observe(ProductionValidationObserver::class);
         ValidasiKedi::observe(ProductionValidationObserver::class);
-        \App\Models\ValidasiPilihPlywood::observe(\App\Observers\ValidasiPilihPlywoodObserver::class);
-        \App\Models\ValidasiNyusup::observe(\App\Observers\ValidasiNyusupObserver::class);
+        ValidasiPilihPlywood::observe(ValidasiPilihPlywoodObserver::class);
+        ValidasiNyusup::observe(ValidasiNyusupObserver::class);
         // PlatformHasilHp::observe(PlatformHasilHpObserver::class);
         // TriplekHasilHp::observe(TriplekHasilHpObserver::class);
 
         FilamentView::registerRenderHook(
             'panels::body.end',
-            fn(): string => Blade::render(<<<'HTML'
+            fn (): string => Blade::render(<<<'HTML'
 
                 <!-- Load Library LocalForage -->
                 <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
