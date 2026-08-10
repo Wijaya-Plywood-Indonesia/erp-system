@@ -8,6 +8,7 @@ use App\Filament\Pages\OpnameStokKayu;
 use App\Filament\Pages\OpnameStokPage;
 use App\Filament\Pages\LaporanJurnalKayuMasuk;
 use App\Http\Middleware\RunDailyScheduler;
+use App\Livewire\AbsenWajibModal;
 use App\Livewire\GradingWizard;
 use Filament\Http\Middleware\Authenticate;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
@@ -22,6 +23,7 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
 
@@ -32,6 +34,7 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Illuminate\Support\Facades\Blade;
 
 // Reverb and Vite Config
 use Filament\Support\Assets\Js;
@@ -103,8 +106,19 @@ class AdminPanelProvider extends PanelProvider
             ->sidebarCollapsibleOnDesktop()
 
             ->livewireComponents([
-                GradingWizard::class
+                GradingWizard::class,
+                AbsenWajibModal::class,
             ])
+
+            // Modal wajib absen dirender di setiap halaman panel (setelah login).
+            // Hanya tampil jika auth()->user() punya id_pegawai dan belum absen hari ini
+            // (logic pengecekan ada di dalam komponen AbsenWajibModal itu sendiri).
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): string => auth()->check()
+                    ? Blade::render('@livewire(\'absen-wajib-modal\')')
+                    : ''
+            )
 
             ->navigationGroups([
                 //Kategori Menu Produksi

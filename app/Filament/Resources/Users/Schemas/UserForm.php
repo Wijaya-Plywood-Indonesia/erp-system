@@ -34,7 +34,30 @@ class UserForm
                                         if ($state && !str_contains($state, '@')) {
                                             $set('email', $state . '@wijayaplywoods.com');
                                         }
+                                    }),
+
+                                Select::make('id_pegawai')
+                                    ->label('Pegawai')
+                                    ->relationship(
+                                        name: 'pegawai',
+                                        titleAttribute: 'nama_pegawai',
+                                        modifyQueryUsing: fn ($query) => $query->orderBy('nama_pegawai'),
+                                    )
+                                    ->getOptionLabelFromRecordUsing(function ($record) {
+                                        $kode = $record->kode_pegawai;
+                                        $nama = $record->nama_pegawai;
+
+                                        if ($kode && $nama) {
+                                            return "{$kode} - {$nama}";
+                                        }
+
+                                        return $nama ?: $kode ?: "Pegawai #{$record->id}";
                                     })
+                                    ->searchable(['kode_pegawai', 'nama_pegawai'])
+                                    ->preload()
+                                    ->nullable()
+                                    ->columnSpanFull()
+                                    ->helperText('Hubungkan akun ini ke pegawai agar sistem bisa mendeteksi absen harian di menu Lain Lain. Kosongkan jika akun ini bukan pegawai (misal admin/HR).'),
                             ]),
                     ])
                     ->collapsible(),
