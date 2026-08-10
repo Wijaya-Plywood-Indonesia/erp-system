@@ -181,7 +181,7 @@
                 grid-column: 1 / -1;
                 margin-bottom: 5px;
             }
-            
+
             .preview-panel {
                 padding: 10px;
             }
@@ -302,13 +302,24 @@
             flex: 1;
         }
 
+        /* --- KOLOM MANUAL (bukan CSS column-count) ---
+           $pageGroups sekarang berisi 3 array kolom yang sudah dibagi seimbang di controller
+           berdasarkan jumlah "units" tiap grup, sehingga tidak akan pernah meluber ke kolom ke-4
+           dan pembagian antar kolom lebih presisi dibanding auto-flow browser. */
         .columns-container {
-            column-count: 3;
-            column-gap: 20px;
-            column-fill: auto;
+            display: flex;
+            gap: 20px;
             height: 125mm;
             box-sizing: border-box;
             margin-bottom: 5px;
+            align-items: flex-start;
+        }
+
+        .column-item {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
         }
 
         .group-wrapper {
@@ -452,42 +463,42 @@
         <div class="sidebar-panel">
             <div class="sidebar-content">
                 <h2>Edit Data Cetak</h2>
-                
+
                 <div class="form-group">
                     <label>No. Nota</label>
                     <input type="text" id="input-no-nota" value="{{ $record->no_nota }}" />
                 </div>
-                
+
                 <div class="form-group">
                     <label>Seri</label>
                     <input type="text" id="input-seri" value="{{ $record->kayuMasuk->seri }}" />
                 </div>
-                
+
                 <div class="form-group">
                     <label>Nama Supplier</label>
                     <input type="text" id="input-nama" value="{{ $record->kayuMasuk->penggunaanSupplier->nama_supplier ?? '-' }}" />
                 </div>
-                
+
                 <div class="form-group">
                     <label>Tanggal</label>
                     <input type="text" id="input-tanggal" value="{{ \Carbon\Carbon::parse($record->kayuMasuk->tgl_kayu_masuk)->format('d-m-Y') }}" />
                 </div>
-                
+
                 <div class="form-group">
                     <label>No. Polisi (Nopol)</label>
                     <input type="text" id="input-nopol" value="{{ $record->kayuMasuk->penggunaanKendaraanSupplier->nopol_kendaraan ?? '-' }}" />
                 </div>
-                
+
                 <div class="form-group">
                     <label>Dokumen Legal</label>
                     <input type="text" id="input-legal" value="{{ $record->kayuMasuk->penggunaanDokumenKayu->dokumen_legal ?? '-' }}" />
                 </div>
-                
+
                 <div class="form-group" style="margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px;">
                     <label>Penanggung Jawab</label>
                     <input type="text" id="input-penanggung-jawab" value="{{ $record->penanggung_jawab ?? 'via' }}" />
                 </div>
-                
+
                 <div class="form-group">
                     <label>Grader Kayu</label>
                     <input type="text" id="input-grader" value="{{ $record->penerima ?? 'pak kadam' }}" />
@@ -510,13 +521,15 @@
 
             <div id="nota-area-landscape">
 
-                @foreach($pages as $pageIndex => $pageGroups)
+                {{-- $pages: array per halaman. Setiap halaman ($pageColumns) berisi TEPAT 3 array kolom
+                     yang sudah dibagi seimbang di controller (bin-packing berdasarkan units). --}}
+                @foreach($pages as $pageIndex => $pageColumns)
 
                     <div class="page-container" id="page-{{ $pageIndex }}">
 
                         <div class="page-header">
                             <h3>Nota Turus Kayu</h3>
-                            
+
                             <table class="header-table">
                                 <tr>
                                     <td width="50%">
@@ -571,108 +584,115 @@
 
                         <div class="columns-container">
 
-                            @foreach($pageGroups as $group)
+                            @foreach($pageColumns as $columnGroups)
 
-                                <div class="group-wrapper">
-                                    
-                                    <div class="group-title">
-                                        {{ $group['kodeLahan'] }} - {{ $group['panjang'] }} CM ({{ $group['grade'] == 1 ? 'A' : 'B' }})
-                                        @if($group['is_continued']) <span style="font-size: 8px; color: #555;">(Sbg)</span> @endif
-                                    </div>
+                                <div class="column-item">
 
-                                    <table class="data-table">
-                                        <thead>
-                                            <tr>
-                                                <th style="width: 15%">D</th>
-                                                <th style="width: 65%; text-align: left;">Turus</th>
-                                                <th style="width: 20%">Btg</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @forelse($group['rows'] as $row)
-                                                <tr>
-                                                    <td style="text-align: center; font-weight: bold;">
-                                                        {{ $row['diameter'] }}
-                                                    </td>
-                                                    <td style="text-align: left;">
-                                                        <div class="tally-wrapper">
-                                                            @php
-                                                                $cnt = (int)$row['batang'];
-                                                                $groups = floor($cnt / 5);
-                                                                $rem = $cnt % 5;
-                                                                $tallyText = str_repeat('||||/ ', $groups) . str_repeat('|', $rem);
-                                                            @endphp
-                                                            <span style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;">{{ $tallyText }}</span>
+                                    @foreach($columnGroups as $group)
 
-                                                            @for($i = 0; $i < $groups; $i++)
-                                                                <svg
-                                                                    width="16"
-                                                                    height="16"
-                                                                    viewBox="0 0 50 50"
-                                                                    style="
-                                                                        stroke:#222;
-                                                                        fill:none;
-                                                                        stroke-width:5px;
-                                                                        stroke-linecap:round;
-                                                                        stroke-linejoin:round;
-                                                                    "
-                                                                >
-                                                                    <path d="M10 5 V45" />
-                                                                    <path d="M20 5 V45" />
-                                                                    <path d="M30 5 V45" />
-                                                                    <path d="M40 5 V45" />
-                                                                    <path
-                                                                        d="M5 45 L45 5"
-                                                                        style="
-                                                                            stroke:#d00;
-                                                                            opacity:0.7;
-                                                                        "
-                                                                    />
-                                                                </svg>
-                                                            @endfor
+                                        <div class="group-wrapper">
 
-                                                            @if($rem > 0)
-                                                                <svg
-                                                                    width="16"
-                                                                    height="16"
-                                                                    viewBox="0 0 50 50"
-                                                                    style="
-                                                                        stroke:#222;
-                                                                        fill:none;
-                                                                        stroke-width:5px;
-                                                                        stroke-linecap:round;
-                                                                        stroke-linejoin:round;
-                                                                    "
-                                                                >
-                                                                    @for($j = 1; $j <= $rem; $j++)
-                                                                        <path d="M{{ $j * 10 }} 5 V45" />
+                                            <div class="group-title">
+                                                {{ $group['kodeLahan'] }} - {{ $group['panjang'] }} CM ({{ $group['grade'] == 1 ? 'A' : 'B' }})
+                                            </div>
+
+                                            <table class="data-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th style="width: 15%">D</th>
+                                                        <th style="width: 65%; text-align: left;">Turus</th>
+                                                        <th style="width: 20%">Btg</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @forelse($group['rows'] as $row)
+                                                        <tr>
+                                                            <td style="text-align: center; font-weight: bold;">
+                                                                {{ $row['diameter'] }}
+                                                            </td>
+                                                            <td style="text-align: left;">
+                                                                <div class="tally-wrapper">
+                                                                    @php
+                                                                        $cnt = (int)$row['batang'];
+                                                                        $groups = floor($cnt / 5);
+                                                                        $rem = $cnt % 5;
+                                                                        $tallyText = str_repeat('||||/ ', $groups) . str_repeat('|', $rem);
+                                                                    @endphp
+                                                                    <span style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;">{{ $tallyText }}</span>
+
+                                                                    @for($i = 0; $i < $groups; $i++)
+                                                                        <svg
+                                                                            width="16"
+                                                                            height="16"
+                                                                            viewBox="0 0 50 50"
+                                                                            style="
+                                                                                stroke:#222;
+                                                                                fill:none;
+                                                                                stroke-width:5px;
+                                                                                stroke-linecap:round;
+                                                                                stroke-linejoin:round;
+                                                                            "
+                                                                        >
+                                                                            <path d="M10 5 V45" />
+                                                                            <path d="M20 5 V45" />
+                                                                            <path d="M30 5 V45" />
+                                                                            <path d="M40 5 V45" />
+                                                                            <path
+                                                                                d="M5 45 L45 5"
+                                                                                style="
+                                                                                    stroke:#d00;
+                                                                                    opacity:0.7;
+                                                                                "
+                                                                            />
+                                                                        </svg>
                                                                     @endfor
-                                                                </svg>
-                                                            @endif
-                                                        </div>
-                                                    </td>
-                                                    <td style="text-align: center; font-weight: bold;">
-                                                        {{ number_format($row['batang'], 0, ',', '.') }}
-                                                    </td>
-                                                </tr>
-                                            @empty
-                                                <tr>
-                                                    <td colspan="3" style="text-align: center">Data Kosong</td>
-                                                </tr>
-                                            @endforelse
-                                        </tbody>
-                                        
-                                        @if(!isset($group['show_subtotal']) || $group['show_subtotal'])
-                                            <tfoot>
-                                                <tr style="background: #f7f7f7; font-weight: bold;">
-                                                    <td colspan="2" style="text-align: center">Subtotal</td>
-                                                    <td style="text-align: center">
-                                                        {{ number_format($group['subBatang'], 0, ',', '.') }}
-                                                    </td>
-                                                </tr>
-                                            </tfoot>
-                                        @endif
-                                    </table>
+
+                                                                    @if($rem > 0)
+                                                                        <svg
+                                                                            width="16"
+                                                                            height="16"
+                                                                            viewBox="0 0 50 50"
+                                                                            style="
+                                                                                stroke:#222;
+                                                                                fill:none;
+                                                                                stroke-width:5px;
+                                                                                stroke-linecap:round;
+                                                                                stroke-linejoin:round;
+                                                                            "
+                                                                        >
+                                                                            @for($j = 1; $j <= $rem; $j++)
+                                                                                <path d="M{{ $j * 10 }} 5 V45" />
+                                                                            @endfor
+                                                                        </svg>
+                                                                    @endif
+                                                                </div>
+                                                            </td>
+                                                            <td style="text-align: center; font-weight: bold;">
+                                                                {{ number_format($row['batang'], 0, ',', '.') }}
+                                                            </td>
+                                                        </tr>
+                                                    @empty
+                                                        <tr>
+                                                            <td colspan="3" style="text-align: center">Data Kosong</td>
+                                                        </tr>
+                                                    @endforelse
+                                                </tbody>
+
+                                                @if(!isset($group['show_subtotal']) || $group['show_subtotal'])
+                                                    <tfoot>
+                                                        <tr style="background: #f7f7f7; font-weight: bold;">
+                                                            <td colspan="2" style="text-align: center">Subtotal</td>
+                                                            <td style="text-align: center">
+                                                                {{ number_format($group['subBatang'], 0, ',', '.') }}
+                                                            </td>
+                                                        </tr>
+                                                    </tfoot>
+                                                @endif
+                                            </table>
+
+                                        </div>
+
+                                    @endforeach
 
                                 </div>
 
@@ -681,7 +701,7 @@
                         </div>
 
                         <div class="page-footer">
-                            
+
                             @if($loop->last)
                                 <div class="total-box">
                                     <table>
@@ -746,7 +766,7 @@
             const sidebar = document.querySelector('.sidebar-panel');
             const btn = document.getElementById('btn-toggle-sidebar');
             const isCollapsed = sidebar.classList.toggle('collapsed');
-            
+
             if (isCollapsed) {
                 btn.textContent = 'Tampilkan Form';
                 btn.style.background = '#0284c7';
