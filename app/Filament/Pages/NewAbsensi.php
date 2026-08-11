@@ -7,12 +7,12 @@ use App\Services\DownloadAbsensiUploadService;
 use App\Services\NewRekapAbsensiPegawaiService;
 use App\Services\UploadFingerService;
 use BackedEnum;
-use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Schema;
 use Illuminate\Support\Collection;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
@@ -30,6 +30,8 @@ class NewAbsensi extends Page implements HasForms
 
     public ?string $tanggal = null;
 
+    public string $activeTab = 'data';
+
     /**
      * @var array<int, TemporaryUploadedFile>|null
      */
@@ -38,36 +40,43 @@ class NewAbsensi extends Page implements HasForms
     public function mount(): void
     {
         $this->tanggal = now()->format('Y-m-d');
-        $this->form->fill(['tanggal' => $this->tanggal]);
+        $this->uploadForm->fill();
     }
 
-    protected function getFormSchema(): array
+    /**
+     * Filament butuh tahu form mana saja yang aktif di halaman ini
+     * supaya masing-masing punya state & validasi sendiri-sendiri.
+     */
+    protected function getForms(): array
     {
         return [
-            DatePicker::make('tanggal')
-                ->label('Tanggal')
-                ->native(false)
-                ->displayFormat('d/m/Y')
-                ->default(now())
-                ->live()
-                ->afterStateUpdated(fn ($state) => $this->tanggal = $state),
-
-            FileUpload::make('fingerFiles')
-                ->label('Upload File Finger (bisa lebih dari 1, dari mesin berbeda sekalipun)')
-                ->multiple()
-                ->storeFiles(false)
-                ->maxFiles(10)
-                ->rules(['file', 'extensions:txt,dat']),
+            'uploadForm',
         ];
     }
 
     /**
-     * Dipanggil dari tombol "Proses Upload". Terpisah dari filter tanggal
-     * di atas supaya user bisa upload tanpa perlu tanggal filter berubah.
+     * Form upload file finger — hanya dirender di tab Upload.
+     */
+    public function uploadForm(Schema $schema): Schema
+    {
+        return $schema
+            ->schema([
+                FileUpload::make('fingerFiles')
+                    ->label('Upload File Finger (bisa lebih dari 1, dari mesin berbeda sekalipun)')
+                    ->multiple()
+                    ->storeFiles(false)
+                    ->maxFiles(10)
+                    ->rules(['file', 'extensions:txt,dat']),
+            ])
+            ->statePath('uploadData');
+    }
+
+    /**
+     * Dipanggil dari tombol "Proses Upload".
      */
     public function uploadFinger(): void
     {
-        $data = $this->form->getState();
+        $data = $this->uploadForm->getState();
 
         if (empty($data['fingerFiles'])) {
             Notification::make()
@@ -91,7 +100,7 @@ class NewAbsensi extends Page implements HasForms
                 ->send();
 
             $this->fingerFiles = null;
-            $this->form->fill(['tanggal' => $this->tanggal, 'fingerFiles' => null]);
+            $this->uploadForm->fill();
         } catch (\Throwable $e) {
             Notification::make()
                 ->title('Gagal memproses file')
