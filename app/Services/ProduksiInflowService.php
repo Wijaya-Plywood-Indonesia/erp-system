@@ -340,12 +340,9 @@ class ProduksiInflowService
         $produksiIds = $outflowData->pluck('id_produksi')->unique()->toArray();
 
         // === FIX BUG "JUMLAH PEKERJA BEDA ANTARA PREVIEW & EXPORT" ===
-        // detailByProduksiCache HANYA boleh diisi dari query LENGKAP (whereIn
-        // id_produksi tanpa filter lahan) di bawah ini. JANGAN seed dari
-        // $outflowData (yang sudah terpotong per id_penggunaan_lahan/lahan ini
-        // saja) — kalau di-seed dari situ, id_produksi yang dipakai bareng oleh
-        // beberapa lahan dalam 1 hari akan "terkunci" dengan data tidak lengkap,
-        // dan query lengkap di bawah tidak akan pernah jalan untuk id_produksi itu.
+        // detailByProduksiCache HANYA boleh diisi dari query LENGKAP (semua lahan)
+        // per id_produksi di bawah ini. JANGAN seed dari $outflowData (yang sudah
+        // terpotong per id_penggunaan_lahan/lahan ini saja).
         $missingProduksiIds = array_values(array_filter(
             $produksiIds,
             fn ($id) => ! isset($this->detailByProduksiCache[$id])
@@ -400,14 +397,21 @@ class ProduksiInflowService
             $m3TotalAllLahan = isset($totalOutputHarian[$hasil->id_produksi]) ? (float) $totalOutputHarian[$hasil->id_produksi] : 0.0;
             $pekerja = $produksi ? ($produksi->detailPegawaiRotary ? $produksi->detailPegawaiRotary->count() : 0) : 0;
 
-            // FIX: JANGAN round/max(1,...) di sini. Simpan $msa MENTAH (float) per
-            // baris — pembulatan & floor minimal-1-orang HARUS dilakukan sekali saja
-            // di level grup (tgl+mesin+ukuran), bukan per baris pecahan detail. Kalau
-            // dibulatkan per baris duluan, beberapa baris pecahan kecil dari 1
-            // id_produksi yang sama masing-masing kena floor "minimal 1 orang",
-            // sehingga totalnya membengkak (mis. 3 orang asli jadi tampil 5).
-            $msa = ($m3TotalAllLahan > 0) ? ($pekerja * ($m3 / $m3TotalAllLahan)) : 0.0;
-            $penyusutan = ($produksi && $produksi->mesin) ? ($produksi->mesin->penyusutan ?? 0) : 0;
+            // Persentase kontribusi kubikasi baris ini terhadap total output produksi
+            // (mesin yang sama) hari itu. Dipakai untuk PEKERJA & PENYUSUTAN sekaligus.
+            $persentaseKubikasi = ($m3TotalAllLahan > 0) ? ($m3 / $m3TotalAllLahan) : 0.0;
+
+            // Pekerja: simpan msa MENTAH (float) per baris — TIDAK dibulatkan di sini.
+            // round() + max(1,...) baru diterapkan SEKALI nanti di level grup.
+            $msa = $pekerja * $persentaseKubikasi;
+
+            // Penyusutan: pakai pola YANG SAMA PERSIS seperti pekerja — simpan
+            // porsi mentah (penyusutan mesin dikali persentase kubikasi baris ini),
+            // JANGAN dijumlah/diambil flat di sini. Agregasi (sum) baru dilakukan
+            // sekali di level grup, supaya konsisten dan tidak dobel-hitung kalau
+            // 1 grup berisi beberapa baris detail kecil dari id_produksi yang sama.
+            $penyusutanMesin = ($produksi && $produksi->mesin) ? ($produksi->mesin->penyusutan ?? 0) : 0;
+            $penyusutanPorsi = $penyusutanMesin * $persentaseKubikasi;
 
             return [
                 'tgl' => $produksi ? Carbon::parse($produksi->tgl_produksi)->format('d-m-Y') : ($hasil->created_at ? Carbon::parse($hasil->created_at)->format('d-m-Y') : '-'),
@@ -417,18 +421,20 @@ class ProduksiInflowService
                 'banyak' => $totalLembar,
                 'kubikasi' => $m3,
                 'msa' => $msa, // raw, belum dibulatkan
-                'penyusutan' => $penyusutan,
+                'penyusutan_porsi' => $penyusutanPorsi, // raw, belum di-sum level grup
                 'panjang' => $ukuran->panjang,
                 'lebar' => $ukuran->lebar,
                 'tebal' => $ukuran->tebal,
             ];
         })->groupBy(fn ($item) => $item['tgl'].$item['mesin'].$item['ukuran'])
             ->map(function ($group) use ($ongkosPekerja) {
-                // Bulatkan & beri floor minimal 1 orang SEKALI di sini, dari total
-                // msa mentah seluruh baris dalam grup — bukan menjumlah hasil yang
-                // sudah dibulatkan per baris.
                 $totalMsa = $group->sum('msa');
                 $totalPekerja = max(1, round($totalMsa));
+
+                // Penyusutan grup = jumlah seluruh porsi mentah dari baris-baris dalam
+                // grup ini (bukan flat/ambil salah satu baris saja), konsisten dengan
+                // cara pekerja diagregasi di atas.
+                $totalPenyusutan = $group->sum('penyusutan_porsi');
 
                 return [
                     'tgl' => $group[0]['tgl'],
@@ -439,7 +445,7 @@ class ProduksiInflowService
                     'total_kubikasi' => number_format($group->sum('kubikasi'), 4),
                     'pekerja' => $totalPekerja.' Orang',
                     'ongkos' => $totalPekerja * $ongkosPekerja,
-                    'penyusutan' => $group[0]['penyusutan'],
+                    'penyusutan' => $totalPenyusutan,
                     'panjang' => $group[0]['panjang'],
                     'lebar' => $group[0]['lebar'],
                     'tebal' => $group[0]['tebal'],
