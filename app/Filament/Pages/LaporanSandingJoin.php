@@ -33,6 +33,7 @@ class LaporanSandingJoin extends Page
     protected static ?string $navigationLabel = 'Laporan Produksi Sanding Join';
     protected string $view = 'filament.pages.laporan-sanding-join';
     protected static ?int $navigationSort = 8; // Disesuaikan agar di bawah Joint
+    protected static bool $shouldRegisterNavigation = false;
 
     public array $data = [
         'tanggal' => null,

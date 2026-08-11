@@ -11,12 +11,14 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Livewire\WithPagination;
+use BackedEnum;
+use Filament\Support\Icons\Heroicon;
 
 class MonitoringKayuMasuk extends Page
 {
     use WithPagination;
     use HasPageShield;
-
+    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-truck';
     protected static ?string $navigationLabel = 'Monitoring Kayu Masuk';
     protected static ?string $title = 'Monitoring Kayu Masuk';
     protected static ?string $slug = 'monitoring-kayu-masuk';
@@ -180,18 +182,18 @@ class MonitoringKayuMasuk extends Page
                 'DICETAK_BELUM_LUNAS' => $query->whereHas(
                     'notaKayu',
                     fn($n) => $n->whereRaw('UPPER(TRIM(status)) LIKE ?', ['%SUDAH DIPERIKSA%'])
-                        ->whereRaw('UPPER(TRIM(status_pelunasan)) != ?', ['LUNAS'])
+                        ->whereRaw('UPPER(TRIM(status_pelunasan)) NOT LIKE ?', ['LUNAS%'])
                 ),
                 'DICETAK_SUDAH_LUNAS' => $query->whereHas(
                     'notaKayu',
                     fn($n) => $n->whereRaw('UPPER(TRIM(status)) LIKE ?', ['%SUDAH DIPERIKSA%'])
-                        ->whereRaw('UPPER(TRIM(status_pelunasan)) = ?', ['LUNAS'])
+                        ->whereRaw('UPPER(TRIM(status_pelunasan)) LIKE ?', ['LUNAS%'])
                 ),
                 default => null,
             };
         }
 
-        return $query->latest('updated_at')->paginate(15);
+        return $query->latest('updated_at')->paginate(50);
     }
 
     public function getExpandedDetail(int $kayuMasukId): ?array

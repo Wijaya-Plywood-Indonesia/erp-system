@@ -11,7 +11,7 @@ class LogLogCorePage extends Page
 {
     use HasPageShield;
     protected string $view = 'filament.pages.log-log-core-page';
-    protected static bool $shouldRegisterNavigation = true;
+    protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Log LogCore';
     protected static string|UnitEnum|null $navigationGroup = 'Log';
     protected static ?string $title = 'Log LogCore';

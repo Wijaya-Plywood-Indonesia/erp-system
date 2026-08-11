@@ -28,6 +28,7 @@ class LaporanProduksiHotPress extends Page implements HasForms
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static ?string $title = 'Laporan Produksi Hot Press';
     protected static ?int $navigationSort = 11;
+    protected static bool $shouldRegisterNavigation = false;
 
     public $dataHp = [];
     public $tanggal = null;

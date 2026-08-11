@@ -8,6 +8,7 @@ use App\Filament\Pages\LaporanKayuKeluar;
 use App\Filament\Pages\OpnameStokKayu;
 use App\Filament\Pages\OpnameStokPage;
 use App\Http\Middleware\RunDailyScheduler;
+use App\Livewire\AbsenWajibModal;
 use App\Livewire\GradingWizard;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
@@ -20,6 +21,7 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Assets\Js;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -27,6 +29,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Blade;
 // Reverb and Vite Config
 use Illuminate\Support\Facades\Vite;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
@@ -98,13 +101,31 @@ class AdminPanelProvider extends PanelProvider
 
             ->livewireComponents([
                 GradingWizard::class,
+                AbsenWajibModal::class,
             ])
+
+            // Modal wajib absen dirender di setiap halaman panel (setelah login).
+            // Hanya tampil jika auth()->user() punya id_pegawai dan belum absen hari ini
+            // (logic pengecekan ada di dalam komponen AbsenWajibModal itu sendiri).
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): string => auth()->check()
+                    ? Blade::render('@livewire(\'absen-wajib-modal\')')
+                    : ''
+            )
 
             ->navigationGroups([
                 // Kategori Menu Produksi
+                NavigationGroup::make('Gudang')
+                    ->icon('heroicon-o-building-storefront')
+                    ->collapsed(),
 
                 NavigationGroup::make('Kontrak')
                     ->icon('heroicon-o-clipboard-document-check')->collapsed(),
+
+                NavigationGroup::make('Pengajuan')
+                    ->icon('heroicon-o-document-text')
+                    ->collapsed(),
 
                 NavigationGroup::make('Opname')
                     ->icon('heroicon-o-clipboard-document-check')->collapsed(),

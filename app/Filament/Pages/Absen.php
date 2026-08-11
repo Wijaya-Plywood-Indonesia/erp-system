@@ -82,6 +82,7 @@ class Absen extends Page implements HasForms
     protected static ?string $title = 'Absensi Pegawai';
     protected string $view = 'filament.pages.absen';
     protected static ?int $navigationSort = 1;
+    protected static bool $shouldRegisterNavigation = false;
 
     public array $data = [
         'tanggal' => null,

@@ -32,6 +32,7 @@ class LaporanJoin extends Page
     protected static ?string $title = 'Laporan Produksi Join';
     protected string $view = 'filament.pages.laporan-join';
     protected static ?int $navigationSort = 7;
+    protected static bool $shouldRegisterNavigation = false;
 
     public array $data = [
         'tanggal' => null,
