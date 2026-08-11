@@ -7,7 +7,9 @@ use App\Filament\Pages\LaporanKayuKeluar;
 use App\Filament\Pages\OpnameStokKayu;
 use App\Filament\Pages\OpnameStokPage;
 use App\Filament\Pages\LaporanJurnalKayuMasuk;
+use App\Filament\Pages\PortalWahana;
 use App\Http\Middleware\RunDailyScheduler;
+use App\Http\Middleware\RedirectToPortalForAdmins;
 use App\Livewire\AbsenWajibModal;
 use App\Livewire\GradingWizard;
 use Filament\Http\Middleware\Authenticate;
@@ -16,7 +18,9 @@ use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 
+use Filament\Navigation\NavigationBuilder;
 use Filament\Navigation\NavigationGroup;
+use Filament\Navigation\NavigationItem;
 
 
 use Filament\Pages\Dashboard;
@@ -73,6 +77,7 @@ class AdminPanelProvider extends PanelProvider
                 LaporanKayuKeluar::class,
                 LaporanJurnalKayuMasuk::class,
                 OpnameStokPage::class,
+                PortalWahana::class,
             ])
             ->brandName(
                 in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com'])
@@ -95,6 +100,7 @@ class AdminPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
                 RunDailyScheduler::class,
+                RedirectToPortalForAdmins::class,
             ])
             ->plugins([
                 FilamentShieldPlugin::make()
