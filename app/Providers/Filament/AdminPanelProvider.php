@@ -3,49 +3,43 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\DashboardHppDryer;
+use App\Filament\Pages\LaporanJurnalKayuMasuk;
 use App\Filament\Pages\LaporanKayuKeluar;
 use App\Filament\Pages\OpnameStokKayu;
 use App\Filament\Pages\OpnameStokPage;
-use App\Filament\Pages\LaporanJurnalKayuMasuk;
 use App\Http\Middleware\RunDailyScheduler;
 use App\Livewire\AbsenWajibModal;
 use App\Livewire\GradingWizard;
-use Filament\Http\Middleware\Authenticate;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
+use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-
 use Filament\Navigation\NavigationGroup;
-
-
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\Support\Assets\Js;
 use Filament\Support\Colors\Color;
 use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
-
-
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
-use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Illuminate\Support\Facades\Blade;
-
 // Reverb and Vite Config
-use Filament\Support\Assets\Js;
 use Illuminate\Support\Facades\Vite;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
 {
-
     public function panel(Panel $panel): Panel
     {
         $currentHost = request()->getHost();
+
         return $panel
             ->default()
             ->id('admin')
@@ -121,7 +115,7 @@ class AdminPanelProvider extends PanelProvider
             )
 
             ->navigationGroups([
-                //Kategori Menu Produksi
+                // Kategori Menu Produksi
                 NavigationGroup::make('Gudang')
                     ->icon('heroicon-o-building-storefront')
                     ->collapsed(),
@@ -170,7 +164,6 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Lain Lain')
                     ->icon('heroicon-o-ellipsis-horizontal-circle')->collapsed(),
 
-
                 NavigationGroup::make('Laporan')
                     ->icon('heroicon-o-clipboard-document-list')
                     ->collapsed(),
@@ -196,7 +189,6 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Akses Pengguna')
                     ->icon('heroicon-o-lock-closed')->collapsed(),
 
-            ])
-        ;
+            ]);
     }
 }
