@@ -43,6 +43,9 @@ use App\Services\AbsensiSources\SandingJointAbsensiSource;
 use App\Services\AbsensiSources\StikAbsensiSource;
 use App\Services\AbsensiSources\TembelTriplekAbsensiSource;
 use App\Services\AbsensiSources\TerimaGudangSatuAbsensiSource;
+use App\Services\FingerParsers\FingerParserManager;
+use App\Services\FingerParsers\KantorDatParser;
+use App\Services\FingerParsers\MesinZkParser;
 use App\Services\NewRekapAbsensiPegawaiService;
 use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
@@ -101,6 +104,13 @@ class AppServiceProvider extends ServiceProvider
         </script>
     HTML),
         );
+
+        $this->app->singleton(FingerParserManager::class, function () {
+            return new FingerParserManager([
+                new MesinZkParser,
+                new KantorDatParser,
+            ]);
+        });
 
         $this->app->singleton(NewRekapAbsensiPegawaiService::class, function () {
             return new NewRekapAbsensiPegawaiService([

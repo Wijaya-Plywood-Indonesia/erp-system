@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\DetailAbsensi;
+use App\Models\NewDataFinger;
 use App\Models\Pegawai;
 use App\Services\AbsensiSources\AbsensiSourceInterface;
 use Illuminate\Support\Carbon;
@@ -25,6 +25,8 @@ class NewRekapAbsensiPegawaiService
             ->sortBy('nama_pegawai')
             ->values();
 
+        $rekap = $this->gabungkanMultiSumber($rekap);
+
         return $this->enrichWithFinger($rekap, $tanggal);
     }
 
@@ -44,17 +46,20 @@ class NewRekapAbsensiPegawaiService
 
         $tanggalBerikutnya = Carbon::parse($tanggal)->addDay()->format('Y-m-d');
 
-        $fingerHariIni = DetailAbsensi::query()
+        // Data finger sudah 1 row per (kode_pegawai, tanggal), hasil agregat
+        // MIN/MAX dari proses upload. Cukup keyBy kode_pegawai, tanpa perlu
+        // groupBy + first() lagi seperti versi lama.
+        $fingerHariIni = NewDataFinger::query()
             ->whereDate('tanggal', $tanggal)
             ->whereIn('kode_pegawai', $kodePegawaiList)
             ->get()
-            ->groupBy('kode_pegawai');
+            ->keyBy('kode_pegawai');
 
-        $fingerBesok = DetailAbsensi::query()
+        $fingerBesok = NewDataFinger::query()
             ->whereDate('tanggal', $tanggalBerikutnya)
             ->whereIn('kode_pegawai', $kodePegawaiList)
             ->get()
-            ->groupBy('kode_pegawai');
+            ->keyBy('kode_pegawai');
 
         return $rekap->map(function ($row) use ($kodeByIdPegawai, $fingerHariIni, $fingerBesok) {
             $kode = $kodeByIdPegawai->get($row['id_pegawai']);
@@ -67,14 +72,16 @@ class NewRekapAbsensiPegawaiService
                 return $row;
             }
 
-            $recordHariIni = ($fingerHariIni->get($kode) ?? collect())->first();
+            $recordHariIni = $fingerHariIni->get($kode);
 
             if ($row['shift'] === 'malam') {
-                // jam_masuk_finger: jam_pulang dari record hari ini
+                // Shift malam: masuk hari ini, pulang besok pagi.
+                // jam_masuk_finger diambil dari jam_pulang record hari ini
+                // (karena checklog masuk malam biasanya belum ke-tap sebagai
+                // "masuk" murni oleh mesin, ikutin logic lama).
                 $row['jam_masuk_finger'] = $recordHariIni?->jam_pulang;
 
-                // jam_pulang_finger: jam_masuk dari record besok
-                $recordBesok = ($fingerBesok->get($kode) ?? collect())->first();
+                $recordBesok = $fingerBesok->get($kode);
                 $row['jam_pulang_finger'] = $recordBesok?->jam_masuk;
             } else {
                 $row['jam_masuk_finger'] = $recordHariIni?->jam_masuk;
@@ -100,14 +107,26 @@ class NewRekapAbsensiPegawaiService
         // Kumpulkan semua kode_pegawai yang SUDAH tercatat di produksi hari ini
         $kodeSudahAdaProduksi = $rekap->pluck('kode_pegawai')->filter()->unique();
 
+        // Cegah "absen bocor": pegawai yang shift MALAM kemarin, checkout-nya
+        // kecatat di tanggal hari ini (karena shift malam nyebrang hari).
+        // Row finger hari ini punya kode_pegawai yang sama, tapi itu cuma
+        // ekor checkout shift kemarin, BUKAN checklog baru hari ini.
+        // Jadi mereka wajib dikecualikan dari daftar "Lain-lain" hari ini.
+        $kodeShiftMalamKemarin = $this->getKodePegawaiShiftMalam(
+            Carbon::parse($tanggal)->subDay()->format('Y-m-d')
+        );
+
+        $kodeDikecualikan = $kodeSudahAdaProduksi->merge($kodeShiftMalamKemarin)->unique();
+
         // Ambil semua data finger hari ini
-        $semuaFinger = DetailAbsensi::query()
+        $semuaFinger = NewDataFinger::query()
             ->whereDate('tanggal', $tanggal)
             ->get();
 
         // Filter yang kode_pegawai-nya TIDAK ada di rekap produksi
+        // MAUPUN bukan ekor checkout shift malam kemarin.
         $fingerTanpaProduksi = $semuaFinger->filter(
-            fn ($item) => ! $kodeSudahAdaProduksi->contains($item->kode_pegawai)
+            fn ($item) => ! $kodeDikecualikan->contains($item->kode_pegawai)
         );
 
         if ($fingerTanpaProduksi->isEmpty()) {
@@ -133,5 +152,57 @@ class NewRekapAbsensiPegawaiService
                 'tanggal' => $item->tanggal,
             ];
         })->sortBy('nama_pegawai')->values();
+    }
+
+    /**
+     * Kalau 1 pegawai muncul di lebih dari 1 sumber produksi pada tanggal
+     * yang sama (misal kerja di Kedi & Repair sekaligus), gabung jadi 1
+     * row saja. Kolom "sumber" jadi array supaya bisa ditampilkan sebagai
+     * beberapa badge dalam 1 baris (bukan baris terpisah).
+     */
+    protected function gabungkanMultiSumber(Collection $rekap): Collection
+    {
+        return $rekap
+            ->groupBy(fn ($row) => $row['id_pegawai'] ?? $row['nama_pegawai'])
+            ->map(function ($rows) {
+                $pertama = $rows->first();
+
+                // Kumpulkan semua label sumber unik dari pegawai ini,
+                // pertahankan urutan kemunculan pertama kali.
+                $pertama['sumber_label'] = $rows
+                    ->pluck('sumber_label')
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                return $pertama;
+            })
+            ->values();
+    }
+
+    protected function getKodePegawaiShiftMalam(string $tanggal): Collection
+    {
+        $rekap = collect($this->sources)
+            ->flatMap(fn ($source) => $source->fetch($tanggal))
+            ->values();
+
+        if ($rekap->isEmpty()) {
+            return collect();
+        }
+
+        $idPegawaiShiftMalam = $rekap
+            ->where('shift', 'malam')
+            ->pluck('id_pegawai')
+            ->filter()
+            ->unique();
+
+        if ($idPegawaiShiftMalam->isEmpty()) {
+            return collect();
+        }
+
+        return Pegawai::query()
+            ->whereIn('id', $idPegawaiShiftMalam)
+            ->pluck('kode_pegawai');
     }
 }
