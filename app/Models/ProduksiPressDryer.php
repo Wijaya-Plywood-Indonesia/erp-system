@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
@@ -9,6 +10,8 @@ use Illuminate\Validation\ValidationException;
 
 class ProduksiPressDryer extends Model
 {
+    use HasRouteUuid;
+
     protected $table = 'produksi_press_dryers';
 
     protected $fillable = [
@@ -61,7 +64,7 @@ class ProduksiPressDryer extends Model
 
     public function getLabelAttribute()
     {
-        return $this->tanggal_produksi.' | '.$this->shift;
+        return $this->tanggal_produksi . ' | ' . $this->shift;
     }
 
     protected static function booted()

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiRotaries\Tables;
 
+use App\Services\ProductionAccessService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -21,13 +22,7 @@ class ProduksiRotariesTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(function ($query) {
-                if (!auth()->user()->hasRole('super_admin')) {
-                    $query->where('tgl_produksi', '>=', now()->subDays(3));
-                }
-
-                return $query;
-            })
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tgl_produksi'))
             ->columns([
                 TextColumn::make('tgl_produksi')
                     ->label('Tanggal')
