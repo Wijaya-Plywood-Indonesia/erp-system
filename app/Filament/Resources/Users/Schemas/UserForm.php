@@ -41,7 +41,9 @@ class UserForm
                                     ->relationship(
                                         name: 'pegawai',
                                         titleAttribute: 'nama_pegawai',
-                                        modifyQueryUsing: fn ($query) => $query->orderBy('nama_pegawai'),
+                                        modifyQueryUsing: fn ($query) => $query
+                                            ->orderByRaw('(nama_pegawai IS NULL OR nama_pegawai = "") ASC')
+                                            ->orderBy('nama_pegawai'),
                                     )
                                     ->getOptionLabelFromRecordUsing(function ($record) {
                                         $kode = $record->kode_pegawai;
