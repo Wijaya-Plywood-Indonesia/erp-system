@@ -55,6 +55,13 @@
             <div wire:loading.class="opacity-40" wire:target="tanggal"
                 class="transition-opacity duration-200 space-y-6">
 
+                {{-- Aksi: Export Excel --}}
+                <div class="flex flex-wrap items-center gap-3">
+                    <x-filament::button wire:click="exportExcel" color="success" icon="heroicon-o-table-cells">
+                        Export Excel
+                    </x-filament::button>
+                </div>
+
                 {{-- Tabel Rekap Utama --}}
                 <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm dark:border-gray-700">
                     <table class="w-full text-sm text-left border-collapse">
@@ -80,14 +87,28 @@
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                             @forelse ($this->getRekap() as $row)
                                 <tr class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                                    <td class="px-4 py-2.5 whitespace-nowrap">
-                                        <div class="flex flex-wrap gap-1">
-                                            @foreach ((array) $row['sumber_label'] as $sumber)
-                                                <span
-                                                    class="inline-flex min-w-[64px] items-center justify-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 dark:border-primary-500/20 dark:bg-primary-500/10 dark:text-primary-400">
-                                                    {{ $sumber }}
-                                                </span>
-                                            @endforeach
+                                    <td class="px-4 py-2.5">
+                                        <div class="flex flex-col gap-1">
+                                            @forelse ((array) $row['sumber_label'] as $sumber)
+                                                @php
+                                                    $parts = explode(':', $sumber, 2);
+                                                    $mainDiv = trim($parts[0]);
+                                                    $detailDiv = isset($parts[1]) ? trim($parts[1]) : '';
+                                                @endphp
+                                                <div class="flex flex-wrap items-center gap-1.5">
+                                                    <span
+                                                        class="inline-flex min-w-[64px] items-center justify-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 dark:border-primary-500/20 dark:bg-primary-500/10 dark:text-primary-400">
+                                                        {{ $mainDiv }}
+                                                    </span>
+                                                    @if ($detailDiv !== '')
+                                                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                                                            {{ $detailDiv }}
+                                                        </span>
+                                                    @endif
+                                                </div>
+                                            @empty
+                                                <span class="text-gray-400">-</span>
+                                            @endforelse
                                         </div>
                                     </td>
                                     <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
@@ -97,24 +118,32 @@
                                         {{ $row['nama_pegawai'] }}
                                     </td>
                                     <td class="px-4 py-2.5">
-                                        @php
-                                            $shiftColors = [
-                                                'pagi' =>
-                                                    'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-400',
-                                                'siang' =>
-                                                    'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400',
-                                                'malam' =>
-                                                    'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400',
-                                            ];
-                                            $shiftKey = strtolower($row['shift'] ?? '');
-                                            $shiftClass =
-                                                $shiftColors[$shiftKey] ??
-                                                'border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-500/20 dark:bg-gray-500/10 dark:text-gray-400';
-                                        @endphp
-                                        <span
-                                            class="inline-flex min-w-[64px] items-center justify-center rounded-full border px-2.5 py-1 text-xs font-medium capitalize {{ $shiftClass }}">
-                                            {{ $row['shift'] }}
-                                        </span>
+                                        {{-- Badge shift cuma dirender kalau shift-nya beneran ada isinya.
+                                             Pegawai hasil lengkapiSemuaPegawai() punya shift = null
+                                             (tidak ada data source hari itu), jadi harus jatuh ke
+                                             tampilan "-" polos tanpa border/pill, bukan badge kosong. --}}
+                                        @if (!empty($row['shift']))
+                                            @php
+                                                $shiftColors = [
+                                                    'pagi' =>
+                                                        'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-400',
+                                                    'siang' =>
+                                                        'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400',
+                                                    'malam' =>
+                                                        'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400',
+                                                ];
+                                                $shiftKey = strtolower($row['shift']);
+                                                $shiftClass =
+                                                    $shiftColors[$shiftKey] ??
+                                                    'border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-500/20 dark:bg-gray-500/10 dark:text-gray-400';
+                                            @endphp
+                                            <span
+                                                class="inline-flex min-w-[64px] items-center justify-center rounded-full border px-2.5 py-1 text-xs font-medium capitalize {{ $shiftClass }}">
+                                                {{ $row['shift'] }}
+                                            </span>
+                                        @else
+                                            <span class="text-gray-400">-</span>
+                                        @endif
                                     </td>
                                     <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
                                         {{ $row['jam_masuk'] ?? '-' }}

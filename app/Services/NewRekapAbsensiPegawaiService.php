@@ -11,6 +11,20 @@ use Illuminate\Support\Collection;
 
 class NewRekapAbsensiPegawaiService
 {
+    /**
+     * Jadwal standar shift pagi, dipakai sebagai FALLBACK acuan di
+     * resolveJamFingerNonMalam() kalau jam_masuk/jam_pulang produksi
+     * kosong (row hasil lengkapiSemuaPegawai(), atau source yang gak
+     * ngasih jam kerja). Supaya grouping raw finger tetap bisa nebak
+     * "lebih deket ke masuk atau pulang" walau gak ada data produksi
+     * sama sekali, bukan cuma nyerah balik ke perilaku lama.
+     */
+    protected const JAM_MASUK_SHIFT_PAGI_DEFAULT = '08:00:00';
+
+    protected const JAM_PULANG_SHIFT_PAGI_DEFAULT = '16:00:00';
+
+    protected const TOLERANSI_SESI_TUNGGAL_MENIT = 15;
+
     /** @var AbsensiSourceInterface[] */
     protected array $sources;
 
@@ -32,6 +46,8 @@ class NewRekapAbsensiPegawaiService
         $rekap = $this->normalisasiJam($rekap);
 
         $rekap = $this->gabungkanMultiSumber($rekap);
+
+        $rekap = $this->lengkapiSemuaPegawai($rekap);
 
         $rekap = $this->enrichWithFinger($rekap, $tanggal);
 
@@ -60,6 +76,47 @@ class NewRekapAbsensiPegawaiService
 
             return $row;
         });
+    }
+
+    /**
+     * Pastikan SEMUA pegawai dari tabel `pegawais` muncul di rekap, bukan
+     * cuma yang kebetulan ke-fetch dari source hari itu. Pegawai yang tidak
+     * punya data dari source manapun akan ditambahkan sebagai row kosong
+     * (jam_masuk, jam_pulang, shift = null) supaya tetap kelihatan di
+     * laporan sebagai "tidak ada data" pada tanggal tersebut.
+     *
+     * Ditaruh SETELAH gabungkanMultiSumber (supaya key id_pegawai yang
+     * dipakai untuk dedupe sudah bersih) dan SEBELUM enrichWithFinger
+     * (supaya pegawai yang row-nya baru ditambahkan di sini tetap bisa
+     * dapat jam_masuk_finger/jam_pulang_finger kalau ternyata dia ada
+     * scan finger walau tidak ke-fetch dari source manapun).
+     */
+    protected function lengkapiSemuaPegawai(Collection $rekap): Collection
+    {
+        $idPegawaiSudahAda = $rekap
+            ->pluck('id_pegawai')
+            ->filter()
+            ->unique();
+
+        $pegawaiBelumAda = Pegawai::query()
+            ->whereNotIn('id', $idPegawaiSudahAda)
+            ->get(['id', 'kode_pegawai', 'nama_pegawai']);
+
+        if ($pegawaiBelumAda->isEmpty()) {
+            return $rekap;
+        }
+
+        $rowKosong = $pegawaiBelumAda->map(fn ($pegawai) => [
+            'id_pegawai' => $pegawai->id,
+            'kode_pegawai' => $pegawai->kode_pegawai,
+            'nama_pegawai' => $pegawai->nama_pegawai,
+            'shift' => null,
+            'jam_masuk' => null,
+            'jam_pulang' => null,
+            'sumber_label' => [],
+        ]);
+
+        return $rekap->concat($rowKosong)->values();
     }
 
     protected function enrichWithFinger(Collection $rekap, string $tanggal): Collection
@@ -109,12 +166,97 @@ class NewRekapAbsensiPegawaiService
                 $recordBesok = $fingerBesok->get($kode);
                 $row['jam_pulang_finger'] = $recordBesok?->jam_masuk;
             } else {
-                $row['jam_masuk_finger'] = $recordHariIni?->jam_masuk;
-                $row['jam_pulang_finger'] = $recordHariIni?->jam_pulang;
+                [$row['jam_masuk_finger'], $row['jam_pulang_finger']] = $this->resolveJamFingerNonMalam(
+                    $recordHariIni?->jam_masuk,
+                    $recordHariIni?->jam_pulang,
+                    $row['jam_masuk'] ?? null,
+                    $row['jam_pulang'] ?? null
+                );
             }
 
             return $row;
         });
+    }
+
+    /**
+     * Khusus shift NON-malam. Kalau finger cuma di-upload untuk satu sesi
+     * scan (mis. upload pagi doang), raw jam_masuk & jam_pulang dari mesin
+     * finger jadi hampir sama persis (selisih beberapa detik), karena
+     * dua-duanya diambil dari scan yang sama. Kalau dibiarkan apa adanya,
+     * jam_masuk_finger & jam_pulang_finger jadi kembar padahal cuma 1 tap.
+     *
+     * Fix: kalau selisih raw jam_masuk & jam_pulang finger <= toleransi
+     * (indikasi 1 sesi scan aja), bandingkan scan itu ke jam_masuk/jam_pulang
+     * PRODUKSI (dari $row, hasil getRekap sebelum di-enrich). Assign scan ke
+     * field yang paling dekat (jam_masuk_finger ATAU jam_pulang_finger, gak
+     * dua-duanya), asal jaraknya juga <= toleransi dari salah satu acuan itu.
+     *
+     * Kalau jam_masuk/jam_pulang produksi kosong (row hasil
+     * lengkapiSemuaPegawai(), atau source yang gak ngasih jam kerja),
+     * TETAP dicoba di-grouping — pakai jadwal standar shift pagi
+     * (JAM_MASUK_SHIFT_PAGI_DEFAULT / JAM_PULANG_SHIFT_PAGI_DEFAULT)
+     * sebagai acuan pengganti, bukan langsung nyerah ke perilaku lama.
+     *
+     * Fallback ke perilaku lama (pasang jam_masuk_finger & jam_pulang_finger
+     * apa adanya dari record finger, min/max seperti biasa) HANYA kalau:
+     * raw masuk/pulang finger beneran berjauhan (bukan 1 sesi), atau hasil
+     * scan di luar toleransi dari kedua acuan (termasuk acuan default
+     * shift pagi), atau parsing gagal.
+     *
+     * @return array{0: ?string, 1: ?string} [jam_masuk_finger, jam_pulang_finger]
+     */
+    protected function resolveJamFingerNonMalam(
+        ?string $rawMasuk,
+        ?string $rawPulang,
+        ?string $jamMasukProduksi,
+        ?string $jamPulangProduksi
+    ): array {
+        // Kalau salah satu raw kosong, gak ada apa-apa buat dibandingkan —
+        // pasang apa adanya seperti perilaku lama.
+        if (! $rawMasuk || ! $rawPulang) {
+            return [$rawMasuk, $rawPulang];
+        }
+
+        try {
+            $tRawMasuk = Carbon::parse($rawMasuk);
+            $tRawPulang = Carbon::parse($rawPulang);
+        } catch (\Throwable $e) {
+            return [$rawMasuk, $rawPulang];
+        }
+
+        // Raw masuk & pulang finger berjauhan (> toleransi) -> memang 2 sesi
+        // scan beneran (masuk pagi, pulang sore/malam). Biarkan seperti biasa.
+        if ($tRawMasuk->diffInMinutes($tRawPulang) > self::TOLERANSI_SESI_TUNGGAL_MENIT) {
+            return [$rawMasuk, $rawPulang];
+        }
+
+        // Produksi kosong (mis. row hasil lengkapiSemuaPegawai(), atau
+        // source yang gak ngasih jam kerja) -> tetap coba grouping, tapi
+        // pakai jadwal standar shift pagi sebagai acuan, bukan nyerah
+        // balikin raw apa adanya.
+        $jamMasukProduksi ??= self::JAM_MASUK_SHIFT_PAGI_DEFAULT;
+        $jamPulangProduksi ??= self::JAM_PULANG_SHIFT_PAGI_DEFAULT;
+
+        // Representasi waktu tunggal dari sesi scan ini (dua-duanya udah
+        // deket, pakai raw masuk sebagai acuan).
+        $tScan = $tRawMasuk;
+
+        try {
+            $diffKeMasuk = $tScan->diffInMinutes(Carbon::parse($jamMasukProduksi));
+            $diffKePulang = $tScan->diffInMinutes(Carbon::parse($jamPulangProduksi));
+        } catch (\Throwable $e) {
+            return [$rawMasuk, $rawPulang];
+        }
+
+        // Di luar toleransi dari KEDUA acuan (termasuk acuan default shift
+        // pagi) -> fallback lama, jangan maksa nebak.
+        if (min($diffKeMasuk, $diffKePulang) > self::TOLERANSI_SESI_TUNGGAL_MENIT) {
+            return [$rawMasuk, $rawPulang];
+        }
+
+        return $diffKeMasuk <= $diffKePulang
+            ? [$rawMasuk, null]
+            : [null, $rawPulang];
     }
 
     public function availableSources(): Collection
