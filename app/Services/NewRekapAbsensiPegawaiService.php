@@ -161,6 +161,13 @@ class NewRekapAbsensiPegawaiService
             $recordHariIni = $fingerHariIni->get($kode);
 
             if ($row['shift'] === 'malam') {
+                // Mesin finger nyatet berdasarkan tanggal kalender scan
+                // terjadi, bukan berdasarkan sesi shift. Scan malam hari H
+                // (jam masuk kerja) tercatat sebagai jam_pulang device di
+                // tanggal H (karena itu scan terakhir hari itu). Scan subuh
+                // H+1 (jam pulang kerja) tercatat sebagai jam_masuk device
+                // di tanggal H+1 (karena itu scan pertama hari itu).
+                // JANGAN disederhanakan jadi jam_masuk -> jam_masuk_finger.
                 $row['jam_masuk_finger'] = $recordHariIni?->jam_pulang;
 
                 $recordBesok = $fingerBesok->get($kode);
@@ -186,10 +193,15 @@ class NewRekapAbsensiPegawaiService
      * jam_masuk_finger & jam_pulang_finger jadi kembar padahal cuma 1 tap.
      *
      * Fix: kalau selisih raw jam_masuk & jam_pulang finger <= toleransi
-     * (indikasi 1 sesi scan aja), bandingkan scan itu ke jam_masuk/jam_pulang
-     * PRODUKSI (dari $row, hasil getRekap sebelum di-enrich). Assign scan ke
-     * field yang paling dekat (jam_masuk_finger ATAU jam_pulang_finger, gak
-     * dua-duanya), asal jaraknya juga <= toleransi dari salah satu acuan itu.
+     * (indikasi 1 sesi scan aja), itu SUDAH PASTI 1 sesi scan — sisanya
+     * cuma soal menentukan taruh di kolom jam_masuk_finger atau
+     * jam_pulang_finger (gak dua-duanya). Penentuan arah dilakukan dengan
+     * membandingkan scan itu ke jam_masuk/jam_pulang PRODUKSI (dari $row,
+     * hasil getRekap sebelum di-enrich) — assign ke yang JARAKNYA PALING
+     * DEKAT (relatif, siapa pun yang menang), BUKAN dengan syarat jarak
+     * itu harus di dalam toleransi. Toleransi 15 menit HANYA dipakai di
+     * langkah pertama untuk mendeteksi "1 sesi vs 2 sesi", bukan untuk
+     * memutuskan boleh/tidaknya dedupe di langkah ini.
      *
      * Kalau jam_masuk/jam_pulang produksi kosong (row hasil
      * lengkapiSemuaPegawai(), atau source yang gak ngasih jam kerja),
@@ -198,10 +210,10 @@ class NewRekapAbsensiPegawaiService
      * sebagai acuan pengganti, bukan langsung nyerah ke perilaku lama.
      *
      * Fallback ke perilaku lama (pasang jam_masuk_finger & jam_pulang_finger
-     * apa adanya dari record finger, min/max seperti biasa) HANYA kalau:
-     * raw masuk/pulang finger beneran berjauhan (bukan 1 sesi), atau hasil
-     * scan di luar toleransi dari kedua acuan (termasuk acuan default
-     * shift pagi), atau parsing gagal.
+     * apa adanya dari record finger) HANYA kalau: raw masuk/pulang finger
+     * beneran berjauhan (bukan 1 sesi), atau parsing gagal. Begitu terbukti
+     * 1 sesi, TIDAK ADA fallback lain — harus tetap didedupe ke salah satu
+     * kolom, seberapa pun jauhnya jam tap dari kedua acuan.
      *
      * @return array{0: ?string, 1: ?string} [jam_masuk_finger, jam_pulang_finger]
      */
@@ -230,6 +242,7 @@ class NewRekapAbsensiPegawaiService
             return [$rawMasuk, $rawPulang];
         }
 
+        // Sampai sini berarti raw masuk & pulang SUDAH PASTI 1 sesi scan.
         // Produksi kosong (mis. row hasil lengkapiSemuaPegawai(), atau
         // source yang gak ngasih jam kerja) -> tetap coba grouping, tapi
         // pakai jadwal standar shift pagi sebagai acuan, bukan nyerah
@@ -245,15 +258,16 @@ class NewRekapAbsensiPegawaiService
             $diffKeMasuk = $tScan->diffInMinutes(Carbon::parse($jamMasukProduksi));
             $diffKePulang = $tScan->diffInMinutes(Carbon::parse($jamPulangProduksi));
         } catch (\Throwable $e) {
-            return [$rawMasuk, $rawPulang];
+            // Gagal parse acuan -> tetap 1 sesi, tapi gak ada petunjuk arah.
+            // Fallback aman: taruh di jam_masuk (asumsi tap tunggal = masuk).
+            return [$rawMasuk, null];
         }
 
-        // Di luar toleransi dari KEDUA acuan (termasuk acuan default shift
-        // pagi) -> fallback lama, jangan maksa nebak.
-        if (min($diffKeMasuk, $diffKePulang) > self::TOLERANSI_SESI_TUNGGAL_MENIT) {
-            return [$rawMasuk, $rawPulang];
-        }
-
+        // TIDAK ADA fallback "di luar toleransi kedua acuan -> kembalikan
+        // raw apa adanya" di sini. Karena udah terbukti 1 sesi scan (lolos
+        // pengecekan di atas), harus tetap didedupe ke salah satu kolom —
+        // assign ke acuan yang jaraknya PALING DEKAT (relatif), seberapa
+        // pun jauhnya jarak itu dari kedua acuan.
         return $diffKeMasuk <= $diffKePulang
             ? [$rawMasuk, null]
             : [null, $rawPulang];
@@ -273,6 +287,12 @@ class NewRekapAbsensiPegawaiService
 
         $kodeSudahAdaProduksi = $rekap->pluck('kode_pegawai')->filter()->unique();
 
+        // Pegawai shift malam yang scan-nya "nyangkut" ke tanggal besok
+        // (lihat catatan di enrichWithFinger) akan muncul lagi di data
+        // mesin finger hari ini (sisa scan subuhnya), padahal dia sudah
+        // sah tercatat shift malam KEMARIN. Tanpa exclusion ini, dia akan
+        // salah kedeteksi sebagai anomali "absen finger tapi gak ada di
+        // rekap produksi". JANGAN dihapus.
         $kodeShiftMalamKemarin = $this->getKodePegawaiShiftMalam(
             Carbon::parse($tanggal)->subDay()->format('Y-m-d')
         );
