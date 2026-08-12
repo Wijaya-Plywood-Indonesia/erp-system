@@ -352,13 +352,14 @@ class NewRekapAbsensiPegawaiService
 
     /**
      * Urutkan hasil rekap. Untuk brand WAHANA, pakai grup prioritas kode:
-     *   1. Kode 8000-8999 (nama_pegawai A-Z di dalam grup)
-     *   2. Kode 9000-9999 (nama_pegawai A-Z di dalam grup)
-     *   3. Kode 7000-7999 (nama_pegawai A-Z di dalam grup)
-     *   4. Sisanya (0-6999 dan kode di luar rentang manapun) — diurutkan
-     *      kode_pegawai ASCENDING (kecil ke besar), BUKAN nama_pegawai.
+     *   1. Kode 8000-8999
+     *   2. Kode 9000-9999
+     *   3. Kode 7000-7999
+     *   4. Sisanya (0-6999 dan kode di luar rentang manapun)
+     * Di dalam SETIAP grup (termasuk grup 8000/9000/7000), diurutkan
+     * kode_pegawai ASCENDING (kecil ke besar) — BUKAN nama_pegawai.
      * Untuk brand LAIN (Wijaya, dst), urutan balik ke simpel: kode_pegawai
-     * ascending seperti biasa.
+     * ascending seperti biasa (tanpa grouping).
      */
     protected function urutkanByGrupKode(Collection $rekap): Collection
     {
@@ -377,23 +378,18 @@ class NewRekapAbsensiPegawaiService
         // multi-kolom Laravel bisa membandingkan lewat data_get() secara
         // langsung, alih-alih lewat closure kustom yang gampang salah pakai.
         //
-        // Kunci urutan kedua beda tergantung grup:
-        //   - Grup 8000/9000/7000 (grup 0,1,2): diurutkan by nama_pegawai
-        //     supaya enak dibaca di dalam grup yang sama.
-        //   - Grup default/sisanya (grup 3): diurutkan by kode_pegawai
-        //     ascending (kecil ke besar), BUKAN by nama.
+        // Kunci urutan kedua SAMA untuk semua grup (0,1,2,3): kode_pegawai
+        // ascending (zero-padded supaya string-compare tetap benar secara
+        // numerik). Kode kosong/invalid ditaruh paling belakang dalam
+        // grupnya masing-masing.
         $rekap = $rekap->map(function ($row) {
             $grup = $this->grupKode($row['kode_pegawai'] ?? null);
             $row['_grup_urutan'] = $grup;
 
-            if ($grup === 3) {
-                $kode = $row['kode_pegawai'] ?? null;
-                $row['_sort_kedua'] = ($kode && is_numeric($kode))
-                    ? str_pad((string) (int) $kode, 10, '0', STR_PAD_LEFT)
-                    : str_repeat('9', 10); // kode kosong/invalid ditaruh paling belakang dalam grupnya
-            } else {
-                $row['_sort_kedua'] = $row['nama_pegawai'] ?? '';
-            }
+            $kode = $row['kode_pegawai'] ?? null;
+            $row['_sort_kedua'] = ($kode && is_numeric($kode))
+                ? str_pad((string) (int) $kode, 10, '0', STR_PAD_LEFT)
+                : str_repeat('9', 10); // kode kosong/invalid ditaruh paling belakang dalam grupnya
 
             return $row;
         });
