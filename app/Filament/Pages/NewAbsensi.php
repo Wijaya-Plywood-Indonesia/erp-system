@@ -98,6 +98,7 @@ class NewAbsensi extends Page implements HasForms
             $upload = app(UploadFingerService::class)->handle(
                 $data['fingerFiles'],
                 auth()->user()?->name ?? 'system',
+                $this->tanggal ?? now()->format('Y-m-d'), // tanggal dari datepicker di UI
             );
 
             Notification::make()
