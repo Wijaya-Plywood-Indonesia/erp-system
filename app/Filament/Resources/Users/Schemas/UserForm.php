@@ -42,7 +42,7 @@ class UserForm
                                         name: 'pegawai',
                                         titleAttribute: 'nama_pegawai',
                                         modifyQueryUsing: fn ($query) => $query
-                                            ->orderByRaw('(nama_pegawai IS NULL OR nama_pegawai = "") ASC')
+                                            ->orderByRaw("CASE WHEN nama_pegawai IS NULL OR nama_pegawai = '' THEN 1 ELSE 0 END ASC")
                                             ->orderBy('nama_pegawai'),
                                     )
                                     ->getOptionLabelFromRecordUsing(function ($record) {
