@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiNyusups\Tables;
 
+use App\Services\ProductionAccessService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -21,6 +22,7 @@ class ProduksiNyusupsTable
     {
         return $table
             ->defaultSort('tanggal_produksi', 'desc')
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_produksi'))
             ->columns([
                 TextColumn::make('tanggal_produksi')
                     ->label('Tanggal Produksi')

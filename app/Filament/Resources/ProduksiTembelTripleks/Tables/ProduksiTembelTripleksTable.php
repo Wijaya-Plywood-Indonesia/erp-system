@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiTembelTripleks\Tables;
 
+use App\Services\ProductionAccessService;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -19,6 +20,7 @@ class ProduksiTembelTripleksTable
     {
         return $table
             ->defaultSort('tanggal', 'desc')
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal'))
             ->columns([
                 TextColumn::make('tanggal')
                     ->label('Tanggal Produksi')

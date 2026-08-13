@@ -2,15 +2,19 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class ProduksiPilihPlywood extends Model
 {
+    use HasRouteUuid;
+
     protected $table = 'produksi_pilih_plywood';
 
     protected $fillable = [
         'tanggal_produksi',
+        'uuid',
         'kendala',
     ];
 

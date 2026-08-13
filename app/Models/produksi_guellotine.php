@@ -2,15 +2,18 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 
 class produksi_guellotine extends Model
 {
+    use HasRouteUuid;
     protected $table = 'produksi_guellotine';
 
     protected $fillable = [
         'tanggal_produksi',
         'kendala',
+        'uuid',
     ];
 
     public function pegawaiGuellotine()

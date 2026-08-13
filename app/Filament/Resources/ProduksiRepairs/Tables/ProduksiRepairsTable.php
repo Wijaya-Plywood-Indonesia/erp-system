@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiRepairs\Tables;
 
+use App\Services\ProductionAccessService;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Actions\Action;
@@ -20,7 +21,7 @@ class ProduksiRepairsTable
     {
         return $table
             ->defaultSort('tanggal', 'desc')
-
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal'))
             ->columns([
                 TextColumn::make('tanggal')
                     ->label('Tanggal Repair')
@@ -32,23 +33,24 @@ class ProduksiRepairsTable
                     ->label('Kendala')
                     ->limit(40)
                     ->placeholder('Tidak ada kendala')
-                    ->tooltip(fn ($record) => $record->kendala),
+                    ->tooltip(fn($record) => $record->kendala),
             ])
 
             ->recordActions([
                 /* ================= KENDALA ================= */
                 Action::make('kelola_kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
+                    ->label(fn($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
                     ->icon('heroicon-m-chat-bubble-left-right')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'gray')
-                    ->visible(fn ($record) => ! $record->validasiRepairs()->exists())
+                    ->color(fn($record) => $record->kendala ? 'info' : 'gray')
+                    ->visible(fn($record) => ! $record->validasiRepairs()->exists())
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Catatan Kendala')
                             ->required()
                             ->rows(4),
                     ])
-                    ->mountUsing(fn ($form, $record) =>
+                    ->mountUsing(
+                        fn($form, $record) =>
                         $form->fill(['kendala' => $record->kendala])
                     )
                     ->action(function (array $data, $record): void {
@@ -65,13 +67,13 @@ class ProduksiRepairsTable
                     ->modalWidth('lg'),
 
                 EditAction::make()
-                    ->visible(fn ($record) => ! $record->validasiRepairs()->exists()),
+                    ->visible(fn($record) => ! $record->validasiRepairs()->exists()),
 
                 ViewAction::make(),
 
                 /* ================= DELETE ================= */
                 DeleteAction::make()
-                    ->visible(fn ($record) => ! $record->validasiRepairs()->exists())
+                    ->visible(fn($record) => ! $record->validasiRepairs()->exists())
                     ->before(function ($record) {
 
                         $hasRelation =

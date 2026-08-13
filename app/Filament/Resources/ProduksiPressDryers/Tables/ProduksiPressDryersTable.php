@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ProduksiPressDryers\Tables;
 
 use App\Models\ProduksiPressDryer;
+use App\Services\ProductionAccessService;
 use App\Services\ProduksiDryerApiService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -25,6 +26,7 @@ class ProduksiPressDryersTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_produksi'))
             ->columns([
                 TextColumn::make('tanggal_produksi')
                     ->date()
