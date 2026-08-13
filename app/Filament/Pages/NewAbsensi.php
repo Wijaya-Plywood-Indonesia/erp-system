@@ -69,7 +69,7 @@ class NewAbsensi extends Page implements HasForms
         return $schema
             ->schema([
                 FileUpload::make('fingerFiles')
-                    ->label('Upload File Finger (bisa lebih dari 1, dari mesin berbeda sekalipun)')
+                    ->label('Upload File Finger ')
                     ->multiple()
                     ->storeFiles(false)
                     ->maxFiles(10)
