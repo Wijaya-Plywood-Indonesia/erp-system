@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiHotPresses\Tables;
 
+use App\Services\ProductionAccessService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -23,7 +24,7 @@ class ProduksiHotPressesTable
     {
         return $table
             ->defaultSort('tanggal_produksi', 'desc')
-
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_produksi'))
             ->columns([
                 TextColumn::make('tanggal_produksi')
                     ->label('Tanggal Produksi')
@@ -31,19 +32,19 @@ class ProduksiHotPressesTable
                     ->sortable(),
 
                 TextColumn::make('shift')
-    ->label('Shift')
-    ->badge()
-    ->formatStateUsing(fn ($state) => ucfirst($state))
-    ->colors([
-        'warning' => 'pagi',
-        'info' => 'malam',
-    ]),
+                    ->label('Shift')
+                    ->badge()
+                    ->formatStateUsing(fn($state) => ucfirst($state))
+                    ->colors([
+                        'warning' => 'pagi',
+                        'info' => 'malam',
+                    ]),
 
                 TextColumn::make('kendala')
                     ->label('Kendala')
                     ->limit(40)
                     ->placeholder('Tidak ada kendala')
-                    ->tooltip(fn ($record) => $record->kendala)
+                    ->tooltip(fn($record) => $record->kendala)
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\BadgeColumn::make('validasiTerakhir.status')
@@ -79,11 +80,11 @@ class ProduksiHotPressesTable
                         return $query
                             ->when(
                                 $data['from'],
-                                fn ($q, $date) => $q->whereDate('tanggal_produksi', '>=', $date)
+                                fn($q, $date) => $q->whereDate('tanggal_produksi', '>=', $date)
                             )
                             ->when(
                                 $data['until'],
-                                fn ($q, $date) => $q->whereDate('tanggal_produksi', '<=', $date)
+                                fn($q, $date) => $q->whereDate('tanggal_produksi', '<=', $date)
                             );
                     }),
             ])
@@ -91,17 +92,18 @@ class ProduksiHotPressesTable
             ->recordActions([
                 /* ================= KENDALA ================= */
                 Action::make('kelola_kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
+                    ->label(fn($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
                     ->icon('heroicon-m-chat-bubble-left-right')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'gray')
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'gray')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Catatan Kendala')
                             ->required()
                             ->rows(4),
                     ])
-                    ->mountUsing(fn ($form, $record) =>
+                    ->mountUsing(
+                        fn($form, $record) =>
                         $form->fill(['kendala' => $record->kendala])
                     )
                     ->action(function (array $data, $record): void {
@@ -118,13 +120,13 @@ class ProduksiHotPressesTable
                     ->modalWidth('lg'),
 
                 EditAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
                 ViewAction::make(),
 
                 /* ================= DELETE ================= */
                 DeleteAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->before(function ($record) {
 
                         $hasRelation =

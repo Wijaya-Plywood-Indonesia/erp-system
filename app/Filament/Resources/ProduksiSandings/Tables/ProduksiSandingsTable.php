@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiSandings\Tables;
 
+use App\Services\ProductionAccessService;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -24,6 +25,7 @@ class ProduksiSandingsTable
              * 'tanggal' secara Descending (DESC) agar data terbaru di atas.
              */
             ->defaultSort('tanggal', 'desc')
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal'))
             ->columns([
                 TextColumn::make('tanggal')
                     ->label('Tanggal Produksi')

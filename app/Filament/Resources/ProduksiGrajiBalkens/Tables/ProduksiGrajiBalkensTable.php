@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiGrajiBalkens\Tables;
 
+use App\Services\ProductionAccessService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -22,6 +23,7 @@ class ProduksiGrajiBalkensTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_produksi'))
             ->columns([
                 TextColumn::make('tanggal_produksi')
                     ->label('Tanggal Produksi')
@@ -33,7 +35,7 @@ class ProduksiGrajiBalkensTable
                     ->label('Kendala')
                     ->limit(50)
                     ->placeholder('Tidak ada kendala')
-                    ->tooltip(fn ($record) => $record->kendala)
+                    ->tooltip(fn($record) => $record->kendala)
                     ->toggleable(),
 
                 TextColumn::make('created_at')
@@ -53,28 +55,29 @@ class ProduksiGrajiBalkensTable
                         return $query
                             ->when(
                                 $data['from'],
-                                fn ($q, $date) =>
-                                    $q->whereDate('tanggal_produksi', '>=', $date)
+                                fn($q, $date) =>
+                                $q->whereDate('tanggal_produksi', '>=', $date)
                             )
                             ->when(
                                 $data['until'],
-                                fn ($q, $date) =>
-                                    $q->whereDate('tanggal_produksi', '<=', $date)
+                                fn($q, $date) =>
+                                $q->whereDate('tanggal_produksi', '<=', $date)
                             );
                     }),
             ])
             ->recordActions([
                 Action::make('kelola_kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
+                    ->label(fn($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
                     ->icon('heroicon-m-chat-bubble-left-right')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'gray')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'gray')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Catatan Kendala Produksi')
                             ->required()
                             ->rows(4),
                     ])
-                    ->mountUsing(fn ($form, $record) =>
+                    ->mountUsing(
+                        fn($form, $record) =>
                         $form->fill(['kendala' => $record->kendala])
                     )
                     ->action(function (array $data, $record): void {
@@ -91,12 +94,12 @@ class ProduksiGrajiBalkensTable
                     ->modalWidth('lg'),
 
                 EditAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
                 ViewAction::make(),
 
                 DeleteAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->before(function ($record) {
 
                         $hasRelation =
@@ -119,9 +122,10 @@ class ProduksiGrajiBalkensTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->visible(fn ($records) =>
+                        ->visible(
+                            fn($records) =>
                             $records->every(
-                                fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi'
+                                fn($r) => $r->validasiTerakhir?->status !== 'divalidasi'
                             )
                         )
                         ->before(function ($records) {

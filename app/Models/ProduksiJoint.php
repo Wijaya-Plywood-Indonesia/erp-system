@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 
 class ProduksiJoint extends Model
 {
+    use HasRouteUuid;
+
     protected $table = 'produksi_joint';
 
     protected $fillable = [

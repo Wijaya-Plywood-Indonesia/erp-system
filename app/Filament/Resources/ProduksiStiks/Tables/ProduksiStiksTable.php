@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiStiks\Tables;
 
+use App\Services\ProductionAccessService;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
@@ -22,6 +23,7 @@ class ProduksiStiksTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_produksi'))
             ->columns([
                 TextColumn::make('tanggal_produksi')
                     ->label('Tanggal Produksi')
@@ -32,13 +34,13 @@ class ProduksiStiksTable
                 TextColumn::make('validasiTerakhir.status')
                     ->label('Status Validasi')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'divalidasi'   => 'success',
                         'ditangguhkan' => 'warning',
                         'ditolak'      => 'danger',
                         default        => 'gray',
                     })
-                    ->icon(fn (string $state): string => match ($state) {
+                    ->icon(fn(string $state): string => match ($state) {
                         'divalidasi'   => 'heroicon-m-check-circle',
                         'ditolak'      => 'heroicon-m-x-circle',
                         'ditangguhkan' => 'heroicon-m-exclamation-circle',
@@ -51,7 +53,7 @@ class ProduksiStiksTable
                     ->label('Kendala')
                     ->limit(30)
                     ->placeholder('Tidak ada kendala')
-                    ->tooltip(fn ($record): ?string => $record->kendala)
+                    ->tooltip(fn($record): ?string => $record->kendala)
                     ->toggleable(),
 
                 TextColumn::make('created_at')
@@ -72,30 +74,31 @@ class ProduksiStiksTable
                         return $query
                             ->when(
                                 $data['from'],
-                                fn ($q, $date) =>
-                                    $q->whereDate('tanggal_produksi', '>=', $date)
+                                fn($q, $date) =>
+                                $q->whereDate('tanggal_produksi', '>=', $date)
                             )
                             ->when(
                                 $data['until'],
-                                fn ($q, $date) =>
-                                    $q->whereDate('tanggal_produksi', '<=', $date)
+                                fn($q, $date) =>
+                                $q->whereDate('tanggal_produksi', '<=', $date)
                             );
                     }),
             ])
 
             ->recordActions([
                 Action::make('kelola_kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
+                    ->label(fn($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
                     ->icon('heroicon-m-chat-bubble-left-right')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'gray')
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'gray')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Catatan Kendala Lapangan')
                             ->required()
                             ->rows(4),
                     ])
-                    ->mountUsing(fn ($form, $record) =>
+                    ->mountUsing(
+                        fn($form, $record) =>
                         $form->fill(['kendala' => $record->kendala])
                     )
                     ->action(function (array $data, $record): void {
@@ -112,12 +115,12 @@ class ProduksiStiksTable
                     ->modalWidth('lg'),
 
                 EditAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
                 ViewAction::make(),
 
                 DeleteAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->before(function ($record) {
 
                         $hasRelation =
@@ -142,9 +145,10 @@ class ProduksiStiksTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->visible(fn ($records) =>
+                        ->visible(
+                            fn($records) =>
                             $records->every(
-                                fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi'
+                                fn($r) => $r->validasiTerakhir?->status !== 'divalidasi'
                             )
                         )
                         ->before(function ($records) {
