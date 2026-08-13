@@ -192,16 +192,30 @@ class NewRekapAbsensiPegawaiService
      * dua-duanya diambil dari scan yang sama. Kalau dibiarkan apa adanya,
      * jam_masuk_finger & jam_pulang_finger jadi kembar padahal cuma 1 tap.
      *
-     * Fix: kalau selisih raw jam_masuk & jam_pulang finger <= toleransi
-     * (indikasi 1 sesi scan aja), itu SUDAH PASTI 1 sesi scan — sisanya
-     * cuma soal menentukan taruh di kolom jam_masuk_finger atau
-     * jam_pulang_finger (gak dua-duanya). Penentuan arah dilakukan dengan
-     * membandingkan scan itu ke jam_masuk/jam_pulang PRODUKSI (dari $row,
-     * hasil getRekap sebelum di-enrich) — assign ke yang JARAKNYA PALING
-     * DEKAT (relatif, siapa pun yang menang), BUKAN dengan syarat jarak
-     * itu harus di dalam toleransi. Toleransi 15 menit HANYA dipakai di
-     * langkah pertama untuk mendeteksi "1 sesi vs 2 sesi", bukan untuk
-     * memutuskan boleh/tidaknya dedupe di langkah ini.
+     * Deteksi "1 sesi vs 2 sesi" TETAP pakai toleransi 15 menit antara raw
+     * jam_masuk & jam_pulang finger, seperti sebelumnya:
+     * - > toleransi -> 2 sesi scan beneran (masuk pagi, pulang sore/malam).
+     *   Biarkan apa adanya.
+     * - <= toleransi -> SUDAH PASTI 1 sesi scan, harus didedupe ke salah
+     *   satu kolom (jam_masuk_finger ATAU jam_pulang_finger, gak dua-duanya).
+     *
+     * PENENTUAN ARAH (versi baru, per-pasangan, bukan titik scan tunggal):
+     * - diffKePulang = selisih raw jam_pulang finger ke jam_pulang PRODUKSI
+     *   (dari $row, hasil getRekap sebelum di-enrich).
+     * - diffKeMasuk  = selisih raw jam_masuk finger ke jam_masuk PRODUKSI.
+     * - Kedua selisih dihitung pakai Carbon::diffInMinutes(), yang SUDAH
+     *   otomatis nilai absolut (kalau hasil pengurangan minus, otomatis
+     *   dijadikan plus) — jadi TIDAK bandingkan satu titik scan tunggal ke
+     *   dua acuan sekaligus seperti versi lama, tapi bandingkan tiap raw ke
+     *   acuan PASANGANNYA SENDIRI.
+     * - diffKePulang < diffKeMasuk -> scan ini lebih "mirip" jam pulang ->
+     *   JANGAN tampilkan jam_masuk_finger (return [null, rawPulang]).
+     * - Selain itu (diffKePulang >= diffKeMasuk) -> JANGAN tampilkan
+     *   jam_pulang_finger (return [rawMasuk, null]).
+     * - TIDAK ADA syarat "harus di dalam toleransi" untuk assign ini —
+     *   begitu terbukti 1 sesi (lolos pengecekan toleransi di atas), harus
+     *   tetap didedupe ke salah satu kolom, seberapa pun jauhnya jarak scan
+     *   dari kedua acuan.
      *
      * Kalau jam_masuk/jam_pulang produksi kosong (row hasil
      * lengkapiSemuaPegawai(), atau source yang gak ngasih jam kerja),
@@ -211,9 +225,7 @@ class NewRekapAbsensiPegawaiService
      *
      * Fallback ke perilaku lama (pasang jam_masuk_finger & jam_pulang_finger
      * apa adanya dari record finger) HANYA kalau: raw masuk/pulang finger
-     * beneran berjauhan (bukan 1 sesi), atau parsing gagal. Begitu terbukti
-     * 1 sesi, TIDAK ADA fallback lain — harus tetap didedupe ke salah satu
-     * kolom, seberapa pun jauhnya jam tap dari kedua acuan.
+     * beneran berjauhan (bukan 1 sesi), atau parsing gagal.
      *
      * @return array{0: ?string, 1: ?string} [jam_masuk_finger, jam_pulang_finger]
      */
@@ -225,7 +237,7 @@ class NewRekapAbsensiPegawaiService
     ): array {
         // Kalau salah satu raw kosong, gak ada apa-apa buat dibandingkan —
         // pasang apa adanya seperti perilaku lama.
-        if (! $rawMasuk || ! $rawPulang) {
+        if (! $rawMasuk || ! $rawPulang || $rawMasuk === '-' || $rawPulang === '-') {
             return [$rawMasuk, $rawPulang];
         }
 
@@ -238,39 +250,41 @@ class NewRekapAbsensiPegawaiService
 
         // Raw masuk & pulang finger berjauhan (> toleransi) -> memang 2 sesi
         // scan beneran (masuk pagi, pulang sore/malam). Biarkan seperti biasa.
-        if ($tRawMasuk->diffInMinutes($tRawPulang) > self::TOLERANSI_SESI_TUNGGAL_MENIT) {
+        if (abs($tRawMasuk->diffInMinutes($tRawPulang)) > self::TOLERANSI_SESI_TUNGGAL_MENIT) {
             return [$rawMasuk, $rawPulang];
         }
 
         // Sampai sini berarti raw masuk & pulang SUDAH PASTI 1 sesi scan.
-        // Produksi kosong (mis. row hasil lengkapiSemuaPegawai(), atau
-        // source yang gak ngasih jam kerja) -> tetap coba grouping, tapi
-        // pakai jadwal standar shift pagi sebagai acuan, bukan nyerah
-        // balikin raw apa adanya.
-        $jamMasukProduksi ??= self::JAM_MASUK_SHIFT_PAGI_DEFAULT;
-        $jamPulangProduksi ??= self::JAM_PULANG_SHIFT_PAGI_DEFAULT;
-
-        // Representasi waktu tunggal dari sesi scan ini (dua-duanya udah
-        // deket, pakai raw masuk sebagai acuan).
-        $tScan = $tRawMasuk;
-
-        try {
-            $diffKeMasuk = $tScan->diffInMinutes(Carbon::parse($jamMasukProduksi));
-            $diffKePulang = $tScan->diffInMinutes(Carbon::parse($jamPulangProduksi));
-        } catch (\Throwable $e) {
-            // Gagal parse acuan -> tetap 1 sesi, tapi gak ada petunjuk arah.
-            // Fallback aman: taruh di jam_masuk (asumsi tap tunggal = masuk).
-            return [$rawMasuk, null];
+        // Coba parse jam masuk/pulang produksi. Jika kosong atau tidak valid,
+        // pakai jadwal standar shift pagi sebagai acuan.
+        $tJamMasukProduksi = null;
+        if (! empty($jamMasukProduksi) && $jamMasukProduksi !== '-') {
+            try {
+                $tJamMasukProduksi = Carbon::parse($jamMasukProduksi);
+            } catch (\Throwable $e) {
+            }
         }
+        $tJamMasukProduksi ??= Carbon::parse(self::JAM_MASUK_SHIFT_PAGI_DEFAULT);
 
-        // TIDAK ADA fallback "di luar toleransi kedua acuan -> kembalikan
-        // raw apa adanya" di sini. Karena udah terbukti 1 sesi scan (lolos
-        // pengecekan di atas), harus tetap didedupe ke salah satu kolom —
-        // assign ke acuan yang jaraknya PALING DEKAT (relatif), seberapa
-        // pun jauhnya jarak itu dari kedua acuan.
-        return $diffKeMasuk <= $diffKePulang
-            ? [$rawMasuk, null]
-            : [null, $rawPulang];
+        $tJamPulangProduksi = null;
+        if (! empty($jamPulangProduksi) && $jamPulangProduksi !== '-') {
+            try {
+                $tJamPulangProduksi = Carbon::parse($jamPulangProduksi);
+            } catch (\Throwable $e) {
+            }
+        }
+        $tJamPulangProduksi ??= Carbon::parse(self::JAM_PULANG_SHIFT_PAGI_DEFAULT);
+
+        // Bandingkan tiap raw ke acuan PASANGANNYA SENDIRI.
+        $diffKePulang = abs($tRawPulang->diffInMinutes($tJamPulangProduksi));
+        $diffKeMasuk = abs($tRawMasuk->diffInMinutes($tJamMasukProduksi));
+
+        // diffKePulang < diffKeMasuk -> scan ini lebih dekat ke pulang ->
+        // jangan tampilkan jam_masuk_finger. Selain itu -> jangan tampilkan
+        // jam_pulang_finger.
+        return $diffKePulang < $diffKeMasuk
+            ? [null, $rawPulang]
+            : [$rawMasuk, null];
     }
 
     public function availableSources(): Collection
