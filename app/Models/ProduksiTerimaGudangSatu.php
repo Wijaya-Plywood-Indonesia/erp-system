@@ -2,16 +2,19 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ProduksiTerimaGudangSatu extends Model
 {
+    use HasRouteUuid;
     protected $table = 'produksi_terima_gudang_satu';
 
     protected $fillable = [
         'tanggal_produksi',
         'kendala',
+        'uuid'
     ];
 
     public function pegawaiTerimaGudangSatu()

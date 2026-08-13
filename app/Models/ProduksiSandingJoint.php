@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use App\Filament\Resources\ValidasiSandings\Schemas\ValidasiSandingForm;
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 
 class ProduksiSandingJoint extends Model
 {
+    use HasRouteUuid;
+
     protected $table = 'produksi_sanding_joint';
 
     protected $fillable = [

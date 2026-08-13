@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DetailLainLains\Tables;
 
+use App\Services\ProductionAccessService;
 use Carbon\Carbon;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -16,6 +17,7 @@ class DetailLainLainsTable
     {
         return $table
             ->defaultSort('tanggal', 'desc')
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal'))
             ->columns([
                 TextColumn::make('tanggal')
                     ->label('Tanggal ')

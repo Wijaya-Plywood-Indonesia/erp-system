@@ -22,12 +22,22 @@ class UploadFingerService
 
     /**
      * @param  UploadedFile[]  $files  Bisa 1 atau lebih file (multi-mesin), diproses sebagai 1 batch.
+     * @param  string  $tanggalBatch  Tanggal dari datepicker di UI (filter tanggal
+     *                                halaman). Dipakai SEBAGAI-ADANYA untuk kolom
+     *                                `tanggal` di NewAbsensiUpload (label/filter
+     *                                riwayat batch saja). TIDAK memengaruhi tanggal
+     *                                per-tap yang tersimpan ke NewDataFinger — itu
+     *                                tetap murni hasil parsing isi file mentah.
      */
-    public function handle(array $files, string $uploadedBy): NewAbsensiUpload
+    public function handle(array $files, string $uploadedBy, string $tanggalBatch): NewAbsensiUpload
     {
-        // 1. Simpan semua file fisik ke storage dulu.
+        // 1. Simpan semua file fisik ke storage dulu, dengan nama yang lebih manusiawi.
         $storedPaths = collect($files)->map(
-            fn (UploadedFile $file) => $file->store(self::UPLOAD_FOLDER, self::DISK)
+            fn (UploadedFile $file) => $file->storeAs(
+                self::UPLOAD_FOLDER,
+                $this->generateHumanFileName($file),
+                self::DISK
+            )
         )->values();
 
         // 2. Parse semua file jadi tap mentah yang seragam.
@@ -47,10 +57,10 @@ class UploadFingerService
             throw new \RuntimeException('Tidak ada data tap yang berhasil dibaca dari file yang diupload. Cek kembali format file.');
         }
 
-        // 3. Tanggal batch = tanggal termuda yang ditemukan di seluruh file
-        //    (cuma buat label/filter riwayat, bukan buat filter parsing).
-        $tanggalBatch = $semuaTap->min('tanggal');
-
+        // 3. Tanggal batch = dari datepicker UI ($tanggalBatch, parameter),
+        //    BUKAN lagi hasil min() dari tanggal parsing file. Ini cuma
+        //    label/filter riwayat upload, sama sekali tidak dipakai untuk
+        //    menentukan tanggal tap per pegawai di new_data_finger.
         return DB::transaction(function () use ($storedPaths, $uploadedBy, $tanggalBatch, $semuaTap) {
             // 4. Buat 1 row batch upload.
             $upload = NewAbsensiUpload::create([
@@ -82,6 +92,23 @@ class UploadFingerService
 
             return $upload;
         });
+    }
+
+    /**
+     * Bikin nama file yang lebih manusiawi berdasarkan sumber & tanggal upload.
+     * .txt dianggap dari mesin fingerprint pabrik, selain itu dianggap dari kantor.
+     *
+     * Contoh hasil: pabrik-12-08-2026.txt / kantor-12-08-2026.dat
+     */
+    protected function generateHumanFileName(UploadedFile $file): string
+    {
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        $sumber = $extension === 'txt' ? 'pabrik' : 'kantor';
+
+        $tanggal = now()->format('d-m-Y');
+
+        return "{$sumber}-{$tanggal}.{$extension}";
     }
 
     protected function mergeRow(array $item, int $uploadId): void

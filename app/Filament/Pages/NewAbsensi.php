@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Exports\NewRekapAbsensiExport;
 use App\Models\NewAbsensiUpload;
 use App\Services\DownloadAbsensiUploadService;
 use App\Services\NewRekapAbsensiPegawaiService;
@@ -15,6 +16,7 @@ use Filament\Pages\Page;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Collection;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Maatwebsite\Excel\Facades\Excel;
 
 class NewAbsensi extends Page implements HasForms
 {
@@ -31,6 +33,11 @@ class NewAbsensi extends Page implements HasForms
     public ?string $tanggal = null;
 
     public string $activeTab = 'data';
+
+    /**
+     * @var array<string, mixed>
+     */
+    public array $uploadData = [];
 
     /**
      * @var array<int, TemporaryUploadedFile>|null
@@ -62,7 +69,7 @@ class NewAbsensi extends Page implements HasForms
         return $schema
             ->schema([
                 FileUpload::make('fingerFiles')
-                    ->label('Upload File Finger (bisa lebih dari 1, dari mesin berbeda sekalipun)')
+                    ->label('Upload File Finger ')
                     ->multiple()
                     ->storeFiles(false)
                     ->maxFiles(10)
@@ -91,6 +98,7 @@ class NewAbsensi extends Page implements HasForms
             $upload = app(UploadFingerService::class)->handle(
                 $data['fingerFiles'],
                 auth()->user()?->name ?? 'system',
+                $this->tanggal ?? now()->format('Y-m-d'), // tanggal dari datepicker di UI
             );
 
             Notification::make()
@@ -122,6 +130,21 @@ class NewAbsensi extends Page implements HasForms
         $tanggal = $this->tanggal ?? now()->format('Y-m-d');
 
         return app(NewRekapAbsensiPegawaiService::class)->getAbsensiLainLain($tanggal);
+    }
+
+    /**
+     * Dipanggil dari tombol "Export Excel" di tab Data Absensi.
+     */
+    public function exportExcel()
+    {
+        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+
+        $rekap = app(NewRekapAbsensiPegawaiService::class)->getRekap($tanggal);
+
+        return Excel::download(
+            new NewRekapAbsensiExport($rekap, $tanggal),
+            "Absen-{$tanggal}.xlsx"
+        );
     }
 
     /**

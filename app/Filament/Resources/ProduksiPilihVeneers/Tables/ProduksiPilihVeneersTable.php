@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiPilihVeneers\Tables;
 
+use App\Services\ProductionAccessService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -22,6 +23,7 @@ class ProduksiPilihVeneersTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_produksi'))
             ->columns([
                 TextColumn::make('tanggal_produksi')
                     ->label('Tanggal Produksi')

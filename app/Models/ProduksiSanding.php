@@ -2,11 +2,12 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 
 class ProduksiSanding extends Model
 {
-    //
+    use HasRouteUuid;
 
     protected $table = 'produksi_sandings';
 
@@ -15,6 +16,7 @@ class ProduksiSanding extends Model
         'id_mesin',
         'kendala',
         'shift',
+        'uuid'
     ];
 
     protected $casts = [

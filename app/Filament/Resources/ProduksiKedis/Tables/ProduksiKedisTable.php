@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiKedis\Tables;
 
+use App\Services\ProductionAccessService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -24,6 +25,7 @@ class ProduksiKedisTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal'))
             ->columns([
                 TextColumn::make('tanggal')
                     ->label('Tgl Masuk')
@@ -41,8 +43,8 @@ class ProduksiKedisTable
                     ->date('d/m/Y')
                     ->sortable()
                     ->placeholder('Belum Bongkar')
-                    ->color(fn ($record) => 
-                        (!$record->tanggal_actual_bongkar || !$record->rencana_bongkar) ? 'gray' : (
+                    ->color(
+                        fn($record) => (!$record->tanggal_actual_bongkar || !$record->rencana_bongkar) ? 'gray' : (
                             $record->tanggal_actual_bongkar->lt($record->rencana_bongkar) ? 'info' : (
                                 $record->tanggal_actual_bongkar->eq($record->rencana_bongkar) ? 'success' : 'warning'
                             )
@@ -63,7 +65,7 @@ class ProduksiKedisTable
                         if (!$record->isBongkarDivalidasi()) return 'Belum Validasi';
                         return 'Sudah Validasi';
                     })
-                    ->color(fn ($state) => match ($state) {
+                    ->color(fn($state) => match ($state) {
                         'Belum Masuk' => 'gray',
                         'Belum Bongkar' => 'info',
                         'Belum Validasi' => 'warning',
@@ -99,7 +101,7 @@ class ProduksiKedisTable
                         };
                     })
                     ->icons([
-                        'heroicon-o-check-circle' => fn ($state) => in_array($state, ['divalidasi', 'disetujui']),
+                        'heroicon-o-check-circle' => fn($state) => in_array($state, ['divalidasi', 'disetujui']),
                     ]),
 
                 TextColumn::make('created_at')
@@ -122,11 +124,11 @@ class ProduksiKedisTable
                         return $query
                             ->when(
                                 $data['from'],
-                                fn (Builder $q, $date) => $q->whereDate('tanggal', '>=', $date)
+                                fn(Builder $q, $date) => $q->whereDate('tanggal', '>=', $date)
                             )
                             ->when(
                                 $data['until'],
-                                fn (Builder $q, $date) => $q->whereDate('tanggal', '<=', $date)
+                                fn(Builder $q, $date) => $q->whereDate('tanggal', '<=', $date)
                             );
                     }),
             ])
@@ -190,19 +192,21 @@ class ProduksiKedisTable
                     ->modalSubmitActionLabel('Mulai Bongkar'),
 
                 EditAction::make()
-                    ->visible(fn($record) => 
-                        $record->status === 'masuk' && 
-                        !$record->detailMasukKedi()->exists() &&
-                        $record->validasiTerakhir?->status !== 'divalidasi'
+                    ->visible(
+                        fn($record) =>
+                        $record->status === 'masuk' &&
+                            !$record->detailMasukKedi()->exists() &&
+                            $record->validasiTerakhir?->status !== 'divalidasi'
                     ),
 
                 ViewAction::make(),
 
                 DeleteAction::make()
-                    ->visible(fn($record) => 
-                        $record->status === 'masuk' && 
-                        !$record->detailMasukKedi()->exists() &&
-                        $record->validasiTerakhir?->status !== 'divalidasi'
+                    ->visible(
+                        fn($record) =>
+                        $record->status === 'masuk' &&
+                            !$record->detailMasukKedi()->exists() &&
+                            $record->validasiTerakhir?->status !== 'divalidasi'
                     )
                     ->before(function ($record) {
                         $hasRelation =
