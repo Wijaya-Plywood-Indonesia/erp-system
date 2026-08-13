@@ -44,6 +44,11 @@ class LaporanSanding extends Page implements HasForms
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('rekapSanding')
+                ->label('Rekap Per Tanggal')
+                ->icon('heroicon-o-table-cells')
+                ->color('primary')
+                ->url(fn () => \App\Filament\Pages\RekapSanding::getUrl()),
             Action::make('refresh')
                 ->label('Refresh Data')
                 ->icon('heroicon-o-arrow-path')

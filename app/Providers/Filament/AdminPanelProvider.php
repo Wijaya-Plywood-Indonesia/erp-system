@@ -7,7 +7,10 @@ use App\Filament\Pages\LaporanKayuKeluar;
 use App\Filament\Pages\OpnameStokKayu;
 use App\Filament\Pages\OpnameStokPage;
 use App\Filament\Pages\LaporanJurnalKayuMasuk;
+use App\Filament\Pages\PortalWahana;
 use App\Http\Middleware\RunDailyScheduler;
+use App\Http\Middleware\RedirectToPortalForAdmins;
+use App\Livewire\AbsenWajibModal;
 use App\Livewire\GradingWizard;
 use Filament\Http\Middleware\Authenticate;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
@@ -15,13 +18,16 @@ use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 
+use Filament\Navigation\NavigationBuilder;
 use Filament\Navigation\NavigationGroup;
+use Filament\Navigation\NavigationItem;
 
 
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
 
@@ -32,6 +38,7 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Illuminate\Support\Facades\Blade;
 
 // Reverb and Vite Config
 use Filament\Support\Assets\Js;
@@ -70,6 +77,7 @@ class AdminPanelProvider extends PanelProvider
                 LaporanKayuKeluar::class,
                 LaporanJurnalKayuMasuk::class,
                 OpnameStokPage::class,
+                PortalWahana::class,
             ])
             ->brandName(
                 in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com'])
@@ -92,6 +100,7 @@ class AdminPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
                 RunDailyScheduler::class,
+                RedirectToPortalForAdmins::class,
             ])
             ->plugins([
                 FilamentShieldPlugin::make()
@@ -103,8 +112,19 @@ class AdminPanelProvider extends PanelProvider
             ->sidebarCollapsibleOnDesktop()
 
             ->livewireComponents([
-                GradingWizard::class
+                GradingWizard::class,
+                AbsenWajibModal::class,
             ])
+
+            // Modal wajib absen dirender di setiap halaman panel (setelah login).
+            // Hanya tampil jika auth()->user() punya id_pegawai dan belum absen hari ini
+            // (logic pengecekan ada di dalam komponen AbsenWajibModal itu sendiri).
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): string => auth()->check()
+                    ? Blade::render('@livewire(\'absen-wajib-modal\')')
+                    : ''
+            )
 
             ->navigationGroups([
                 //Kategori Menu Produksi

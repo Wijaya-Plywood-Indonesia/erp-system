@@ -112,4 +112,9 @@ class Pegawai extends Model
     {
         return $this->hasMany(DetailAbsensi::class, 'id_pegawai');
     }
+
+    public function users()
+    {
+        return $this->hasMany(User::class, 'id_pegawai');
+    }
 }
