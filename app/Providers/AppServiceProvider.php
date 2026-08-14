@@ -43,6 +43,7 @@ use App\Services\AbsensiSources\SandingJointAbsensiSource;
 use App\Services\AbsensiSources\StikAbsensiSource;
 use App\Services\AbsensiSources\TembelTriplekAbsensiSource;
 use App\Services\AbsensiSources\TerimaGudangSatuAbsensiSource;
+use App\Services\AbsensiSources\TurunKayuAbsensiSource;
 use App\Services\FingerParsers\FingerParserManager;
 use App\Services\FingerParsers\KantorDatParser;
 use App\Services\FingerParsers\MesinZkParser;
@@ -137,6 +138,7 @@ class AppServiceProvider extends ServiceProvider
                 new PilihPlywoodAbsensiSource,
                 new TerimaGudangSatuAbsensiSource,
                 new LainLainAbsensiSource,
+                new TurunKayuAbsensiSource,
                 // nanti tambah sumber baru cukup di sini, misal:
                 // new FingerAbsensiSource(),
             ]);
