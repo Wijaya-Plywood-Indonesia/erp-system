@@ -25,6 +25,24 @@ class NewRekapAbsensiPegawaiService
 
     protected const TOLERANSI_SESI_TUNGGAL_MENIT = 15;
 
+    /**
+     * Batas total durasi kerja gabungan (SEMUA lini produksi milik satu
+     * pegawai di tanggal yang sama) dalam menit. Kalau totalnya di bawah
+     * ini, jam_masuk_finger & jam_pulang_finger TIDAK ditampilkan sama
+     * sekali untuk hari itu.
+     *
+     * Kasus yang di-fix: pegawai diinput "Izin" di lain-lain dengan
+     * jam_masuk/jam_pulang 00:00:00-00:00:00, TAPI karena dia shift malam
+     * KEMARIN, sisa scan subuhnya hari ini ketangkep enrichWithFinger dan
+     * salah nempel seolah dia scan beneran hari ini padahal cuma izin.
+     *
+     * TIDAK memakai durasi per-lini saja, melainkan TOTAL semua lini —
+     * supaya kasus pegawai yang beneran kerja 08:00-10:00 di satu lini
+     * tapi juga diinput izin 00:00:00-00:00:00 di lini/lain-lain lain
+     * TETAP tampil fingernya (total 120 menit, bukan 0).
+     */
+    protected const BATAS_TOTAL_DURASI_MENIT = 60;
+
     /** @var AbsensiSourceInterface[] */
     protected array $sources;
 
@@ -35,6 +53,11 @@ class NewRekapAbsensiPegawaiService
 
     public function getRekap(string $tanggal): Collection
     {
+        // ⚠️ Urutan pipeline ini HARAM diacak (lihat README — Haram #4):
+        // normalisasiJam() → gabungkanMultiSumber() → enrichWithFinger()
+        // → urutkanByGrupKode(). enrichWithFinger butuh id_pegawai yang
+        // sudah bersih dari gabungkanMultiSumber; normalisasiJam harus di
+        // depan supaya format jam konsisten sebelum dipakai di step lain.
         $rekap = collect($this->sources)
             ->flatMap(fn ($source) => $source->fetch($tanggal))
             ->values();
@@ -90,6 +113,13 @@ class NewRekapAbsensiPegawaiService
      * (supaya pegawai yang row-nya baru ditambahkan di sini tetap bisa
      * dapat jam_masuk_finger/jam_pulang_finger kalau ternyata dia ada
      * scan finger walau tidak ke-fetch dari source manapun).
+     *
+     * Row hasil method ini SENGAJA tidak diberi '_total_durasi_menit'
+     * (field itu cuma dihitung di gabungkanMultiSumber, untuk row yang
+     * benar-benar berasal dari source produksi). enrichWithFinger
+     * memperlakukan absennya field ini sebagai "tidak perlu di-suppress",
+     * supaya pegawai yang sama sekali tidak ada data produksi tetap bisa
+     * ke-enrich finger seperti perilaku sebelumnya.
      */
     protected function lengkapiSemuaPegawai(Collection $rekap): Collection
     {
@@ -135,6 +165,9 @@ class NewRekapAbsensiPegawaiService
 
         $tanggalBerikutnya = Carbon::parse($tanggal)->addDay()->format('Y-m-d');
 
+        // ⚠️ HARAM diubah jadi query 1 tanggal saja (lihat README — Haram
+        // #2). jam_pulang_finger shift malam SELALU null kalau ini
+        // dihapus, karena datanya emang ada di tanggal besok.
         $fingerHariIni = NewDataFinger::query()
             ->whereDate('tanggal', $tanggal)
             ->whereIn('kode_pegawai', $kodePegawaiList)
@@ -154,6 +187,26 @@ class NewRekapAbsensiPegawaiService
             if (! $kode) {
                 $row['jam_masuk_finger'] = null;
                 $row['jam_pulang_finger'] = null;
+                unset($row['_total_durasi_menit']);
+
+                return $row;
+            }
+
+            // Total durasi kerja gabungan SEMUA lini produksi milik pegawai
+            // ini di tanggal yang sama (dihitung di gabungkanMultiSumber).
+            // Kalau totalnya di bawah BATAS_TOTAL_DURASI_MENIT -> jangan
+            // tampilkan finger sama sekali untuk hari ini.
+            //
+            // Field ini SENGAJA absen (null-coalesce ke null lewat ??)
+            // untuk row hasil lengkapiSemuaPegawai() — pegawai tanpa data
+            // produksi sama sekali TIDAK di-suppress oleh rule ini, supaya
+            // perilaku lama untuk kasus itu tetap terjaga.
+            $totalDurasi = $row['_total_durasi_menit'] ?? null;
+            unset($row['_total_durasi_menit']);
+
+            if ($totalDurasi !== null && $totalDurasi < self::BATAS_TOTAL_DURASI_MENIT) {
+                $row['jam_masuk_finger'] = null;
+                $row['jam_pulang_finger'] = null;
 
                 return $row;
             }
@@ -161,13 +214,14 @@ class NewRekapAbsensiPegawaiService
             $recordHariIni = $fingerHariIni->get($kode);
 
             if ($row['shift'] === 'malam') {
-                // Mesin finger nyatet berdasarkan tanggal kalender scan
-                // terjadi, bukan berdasarkan sesi shift. Scan malam hari H
-                // (jam masuk kerja) tercatat sebagai jam_pulang device di
-                // tanggal H (karena itu scan terakhir hari itu). Scan subuh
-                // H+1 (jam pulang kerja) tercatat sebagai jam_masuk device
-                // di tanggal H+1 (karena itu scan pertama hari itu).
-                // JANGAN disederhanakan jadi jam_masuk -> jam_masuk_finger.
+                // ⚠️ HARAM diubah (lihat README — Haram #1). Mesin finger
+                // nyatet berdasarkan tanggal kalender scan terjadi, bukan
+                // berdasarkan sesi shift. Scan malam hari H (jam masuk
+                // kerja) tercatat sebagai jam_pulang device di tanggal H
+                // (scan terakhir hari itu). Scan subuh H+1 (jam pulang
+                // kerja) tercatat sebagai jam_masuk device di tanggal H+1
+                // (scan pertama hari itu). JANGAN disederhanakan jadi
+                // jam_masuk -> jam_masuk_finger.
                 $row['jam_masuk_finger'] = $recordHariIni?->jam_pulang;
 
                 $recordBesok = $fingerBesok->get($kode);
@@ -301,12 +355,12 @@ class NewRekapAbsensiPegawaiService
 
         $kodeSudahAdaProduksi = $rekap->pluck('kode_pegawai')->filter()->unique();
 
-        // Pegawai shift malam yang scan-nya "nyangkut" ke tanggal besok
-        // (lihat catatan di enrichWithFinger) akan muncul lagi di data
-        // mesin finger hari ini (sisa scan subuhnya), padahal dia sudah
-        // sah tercatat shift malam KEMARIN. Tanpa exclusion ini, dia akan
-        // salah kedeteksi sebagai anomali "absen finger tapi gak ada di
-        // rekap produksi". JANGAN dihapus.
+        // ⚠️ HARAM dihapus (lihat README — Haram #3). Pegawai shift malam
+        // yang scan-nya "nyangkut" ke tanggal besok (lihat catatan di
+        // enrichWithFinger) akan muncul lagi di data mesin finger hari
+        // ini (sisa scan subuhnya), padahal dia sudah sah tercatat shift
+        // malam KEMARIN. Tanpa exclusion ini, dia akan salah kedeteksi
+        // sebagai anomali "absen finger tapi gak ada di rekap produksi".
         $kodeShiftMalamKemarin = $this->getKodePegawaiShiftMalam(
             Carbon::parse($tanggal)->subDay()->format('Y-m-d')
         );
@@ -345,23 +399,98 @@ class NewRekapAbsensiPegawaiService
         })->sortBy('nama_pegawai')->values();
     }
 
+    /**
+     * Gabung row milik pegawai yang sama dari >1 lini produksi (source)
+     * jadi 1 row.
+     *
+     * Representasi utama yang dipakai (jam_masuk, jam_pulang, shift, dst)
+     * adalah row dengan DURASI KERJA TERPANJANG di antara semua lini
+     * (bukan lagi row pertama berdasar urutan source seperti sebelumnya).
+     * Ini supaya kalau pegawai kebetulan "Izin" (00:00:00-00:00:00) di
+     * satu lini tapi punya jam kerja beneran di lini lain, jam kerja
+     * beneran itu yang tampil sebagai representasi, bukan jam izinnya.
+     *
+     * '_total_durasi_menit' = jumlah durasi kerja SEMUA lini (bukan cuma
+     * yang jadi representasi). Dipakai oleh enrichWithFinger() untuk
+     * memutuskan apakah jam_masuk_finger/jam_pulang_finger perlu
+     * disembunyikan (total < BATAS_TOTAL_DURASI_MENIT), supaya kasus
+     * "kerja 08:00-10:00 di lini A + izin 00:00-00:00 di lini B" tetap
+     * dihitung total 120 menit dan fingernya TETAP tampil.
+     */
     protected function gabungkanMultiSumber(Collection $rekap): Collection
     {
         return $rekap
             ->groupBy(fn ($row) => $row['id_pegawai'] ?? $row['nama_pegawai'])
             ->map(function ($rows) {
-                $pertama = $rows->first();
+                $rowsWithDurasi = $rows->map(function ($row) {
+                    $row['_durasi_menit'] = $this->hitungDurasiMenit(
+                        $row['jam_masuk'] ?? null,
+                        $row['jam_pulang'] ?? null
+                    );
 
-                $pertama['sumber_label'] = $rows
+                    return $row;
+                });
+
+                // Representasi utama = durasi kerja terpanjang. Kalau semua
+                // durasi sama (termasuk semua 0), sortByDesc tetap stabil
+                // ambil yang pertama muncul, jadi untuk kasus tanpa
+                // perbedaan durasi perilakunya sama seperti sebelumnya.
+                $utama = $rowsWithDurasi->sortByDesc('_durasi_menit')->first();
+
+                $utama['sumber_label'] = $rowsWithDurasi
                     ->pluck('sumber_label')
                     ->filter()
                     ->unique()
                     ->values()
                     ->all();
 
-                return $pertama;
+                $utama['_total_durasi_menit'] = $rowsWithDurasi->sum('_durasi_menit');
+
+                unset($utama['_durasi_menit']);
+
+                return $utama;
             })
             ->values();
+    }
+
+    /**
+     * Hitung durasi kerja dalam menit dari jam_masuk & jam_pulang (format
+     * H:i:s, sudah dinormalisasi oleh normalisasiJam() sebelum method ini
+     * dipanggil).
+     *
+     * Return 0 kalau:
+     * - salah satu jam kosong / '-' / gagal parse.
+     * - jam_masuk === jam_pulang persis sama (kasus izin
+     *   "00:00:00-00:00:00" HARUS dianggap 0 menit, BUKAN 24 jam —
+     *   makanya dicek eksplisit duluan sebelum logic lintas-hari di
+     *   bawah, supaya gak ketriger addDay() dan jadi 1440 menit).
+     *
+     * Kalau jam_pulang <= jam_masuk (dan bukan kasus sama persis di atas),
+     * dianggap lintas tengah malam (+1 hari) supaya durasi shift malam
+     * tetap positif dan masuk akal.
+     */
+    protected function hitungDurasiMenit(?string $jamMasuk, ?string $jamPulang): int
+    {
+        if (empty($jamMasuk) || empty($jamPulang) || $jamMasuk === '-' || $jamPulang === '-') {
+            return 0;
+        }
+
+        if ($jamMasuk === $jamPulang) {
+            return 0;
+        }
+
+        try {
+            $masuk = Carbon::parse($jamMasuk);
+            $pulang = Carbon::parse($jamPulang);
+        } catch (\Throwable $e) {
+            return 0;
+        }
+
+        if ($pulang->lessThanOrEqualTo($masuk)) {
+            $pulang->addDay();
+        }
+
+        return (int) $masuk->diffInMinutes($pulang);
     }
 
     /**
@@ -392,7 +521,8 @@ class NewRekapAbsensiPegawaiService
         // multi-kolom Laravel bisa membandingkan lewat data_get() secara
         // langsung, alih-alih lewat closure kustom yang gampang salah pakai.
         //
-        // Kunci urutan kedua SAMA untuk semua grup (0,1,2,3): kode_pegawai
+        // ⚠️ HARAM diganti ke nama_pegawai (lihat README — Haram #5). Kunci
+        // urutan kedua SAMA untuk semua grup (0,1,2,3): kode_pegawai
         // ascending (zero-padded supaya string-compare tetap benar secara
         // numerik). Kode kosong/invalid ditaruh paling belakang dalam
         // grupnya masing-masing.
