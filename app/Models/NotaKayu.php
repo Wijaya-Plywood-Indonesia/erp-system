@@ -9,6 +9,7 @@ class NotaKayu extends Model
     //
     protected $primaryKey = 'id';
     protected $fillable = [
+        'uuid',
         'id_kayu_masuk',
         'no_nota',
         'penanggung_jawab',
