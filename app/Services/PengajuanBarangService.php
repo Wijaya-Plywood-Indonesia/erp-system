@@ -9,14 +9,14 @@ use Illuminate\Support\Facades\DB;
 class PengajuanBarangService
 {
     /**
-     * Set keputusan approval untuk satu role ('kepala_produksi' | 'admin_barang').
+     * Set keputusan approval untuk satu role ('kepala_produksi' | 'admin_barang_umum' | 'pengawas_produksi').
      * Kalau setelah ini kedua-duanya sudah 'disetujui' dan belum pernah diproses,
      * stok Barang Umum otomatis dipotong (untuk semua item di pengajuan ini)
      * dalam transaksi yang sama.
      */
     public function approve(PengajuanBarang $pengajuan, string $role, string $keputusan, int $userId): void
     {
-        if (!in_array($role, ['kepala_produksi', 'admin_barang', 'pengawas_produksi'], true)) {
+        if (!in_array($role, ['kepala_produksi', 'admin_barang_umum', 'pengawas_produksi'], true)) {
             throw new \InvalidArgumentException("Role tidak dikenali: {$role}");
         }
 
@@ -29,13 +29,13 @@ class PengajuanBarangService
 
             $kolomStatus = match ($role) {
                 'kepala_produksi'   => 'status_kepala_produksi',
-                'admin_barang'      => 'status_admin_barang',
+                'admin_barang_umum' => 'status_admin_barang',
                 'pengawas_produksi' => 'status_pengawas_produksi',
             };
 
             $labelRole = match ($role) {
                 'kepala_produksi'   => 'Kepala Produksi',
-                'admin_barang'      => 'Admin Barang',
+                'admin_barang_umum' => 'Admin Barang',
                 'pengawas_produksi' => 'Pengawas Produksi',
             };
 
@@ -45,13 +45,13 @@ class PengajuanBarangService
 
             $kolomOleh = match ($role) {
                 'kepala_produksi'   => 'disetujui_kepala_oleh',
-                'admin_barang'      => 'disetujui_admin_oleh',
+                'admin_barang_umum' => 'disetujui_admin_oleh',
                 'pengawas_produksi' => 'disetujui_pengawas_oleh',
             };
 
             $kolomAt = match ($role) {
                 'kepala_produksi'   => 'disetujui_kepala_at',
-                'admin_barang'      => 'disetujui_admin_at',
+                'admin_barang_umum' => 'disetujui_admin_at',
                 'pengawas_produksi' => 'disetujui_pengawas_at',
             };
 
