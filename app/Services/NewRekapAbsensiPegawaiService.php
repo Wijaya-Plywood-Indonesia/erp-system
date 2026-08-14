@@ -1,14 +1,11 @@
 <?php
-
 namespace App\Services;
-
 use App\Models\NewDataFinger;
 use App\Models\Pegawai;
 use App\Services\AbsensiSources\AbsensiSourceInterface;
 use Filament\Facades\Filament;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-
 class NewRekapAbsensiPegawaiService
 {
     /**
@@ -20,11 +17,8 @@ class NewRekapAbsensiPegawaiService
      * sama sekali, bukan cuma nyerah balik ke perilaku lama.
      */
     protected const JAM_MASUK_SHIFT_PAGI_DEFAULT = '08:00:00';
-
     protected const JAM_PULANG_SHIFT_PAGI_DEFAULT = '16:00:00';
-
     protected const TOLERANSI_SESI_TUNGGAL_MENIT = 15;
-
     /**
      * Batas total durasi kerja gabungan (SEMUA lini produksi milik satu
      * pegawai di tanggal yang sama) dalam menit. Kalau totalnya di bawah
@@ -42,15 +36,12 @@ class NewRekapAbsensiPegawaiService
      * TETAP tampil fingernya (total 120 menit, bukan 0).
      */
     protected const BATAS_TOTAL_DURASI_MENIT = 60;
-
     /** @var AbsensiSourceInterface[] */
     protected array $sources;
-
     public function __construct(array $sources)
     {
         $this->sources = $sources;
     }
-
     public function getRekap(string $tanggal): Collection
     {
         // ⚠️ Urutan pipeline ini HARAM diacak (lihat README — Haram #4):
@@ -61,22 +52,16 @@ class NewRekapAbsensiPegawaiService
         $rekap = collect($this->sources)
             ->flatMap(fn ($source) => $source->fetch($tanggal))
             ->values();
-
         // Beberapa source (mis. Repair) return jam_masuk/jam_pulang dalam
         // format datetime penuh (Y-m-d H:i:s), sementara source lain sudah
         // H:i:s saja. Normalisasi semua ke H:i:s di sini supaya konsisten
         // sebelum diproses lebih lanjut (gabung sumber, sorting, dst).
         $rekap = $this->normalisasiJam($rekap);
-
         $rekap = $this->gabungkanMultiSumber($rekap);
-
         $rekap = $this->lengkapiSemuaPegawai($rekap);
-
         $rekap = $this->enrichWithFinger($rekap, $tanggal);
-
         return $this->urutkanByGrupKode($rekap);
     }
-
     /**
      * Normalisasi field jam_masuk & jam_pulang jadi format H:i:s saja,
      * apapun format aslinya dari source (bisa H:i:s murni atau
@@ -96,11 +81,43 @@ class NewRekapAbsensiPegawaiService
                     }
                 }
             }
-
             return $row;
         });
     }
-
+    /**
+     * Tentukan shift ('malam' / 'pagi' / null) HANYA berdasarkan
+     * perbandingan jam_pulang vs jam_masuk PRODUKSI — bukan lagi dari
+     * field 'shift' mentah yang dikirim source.
+     *
+     * Rule: jam_pulang < jam_masuk (strict, bukan <=) => malam, karena itu
+     * berarti pulangnya "lewat tengah malam" (mis. masuk 22:00, pulang
+     * 06:00 -> 06:00 < 22:00 -> malam).
+     *
+     * ⚠️ SENGAJA pakai '<' bukan '<=' — kalau jam_masuk === jam_pulang
+     * persis sama (kasus "Izin" 00:00:00-00:00:00), itu BUKAN shift malam,
+     * itu cuma durasi 0. Ini konsisten dengan hitungDurasiMenit() yang
+     * sudah lebih dulu menangani kasus sama persis sebagai 0 menit (bukan
+     * 1440 menit lintas hari). Kalau dipaksa '<=', semua row izin
+     * 00:00-00:00 bakal salah kedeteksi sebagai shift malam.
+     *
+     * Return null kalau salah satu jam kosong / '-' / gagal parse — row
+     * seperti ini (mis. hasil lengkapiSemuaPegawai(), pegawai tanpa data
+     * produksi) diperlakukan sebagai NON-malam di semua pemanggil,
+     * sama seperti perilaku lama waktu field 'shift' kosong.
+     */
+    protected function tentukanShiftDariJam(?string $jamMasuk, ?string $jamPulang): ?string
+    {
+        if (empty($jamMasuk) || empty($jamPulang) || $jamMasuk === '-' || $jamPulang === '-') {
+            return null;
+        }
+        try {
+            $masuk = Carbon::parse($jamMasuk)->format('H:i:s');
+            $pulang = Carbon::parse($jamPulang)->format('H:i:s');
+        } catch (\Throwable $e) {
+            return null;
+        }
+        return $pulang < $masuk ? 'malam' : 'pagi';
+    }
     /**
      * Pastikan SEMUA pegawai dari tabel `pegawais` muncul di rekap, bukan
      * cuma yang kebetulan ke-fetch dari source hari itu. Pegawai yang tidak
@@ -127,15 +144,12 @@ class NewRekapAbsensiPegawaiService
             ->pluck('id_pegawai')
             ->filter()
             ->unique();
-
         $pegawaiBelumAda = Pegawai::query()
             ->whereNotIn('id', $idPegawaiSudahAda)
             ->get(['id', 'kode_pegawai', 'nama_pegawai']);
-
         if ($pegawaiBelumAda->isEmpty()) {
             return $rekap;
         }
-
         $rowKosong = $pegawaiBelumAda->map(fn ($pegawai) => [
             'id_pegawai' => $pegawai->id,
             'kode_pegawai' => $pegawai->kode_pegawai,
@@ -145,26 +159,19 @@ class NewRekapAbsensiPegawaiService
             'jam_pulang' => null,
             'sumber_label' => [],
         ]);
-
         return $rekap->concat($rowKosong)->values();
     }
-
     protected function enrichWithFinger(Collection $rekap, string $tanggal): Collection
     {
         if ($rekap->isEmpty()) {
             return $rekap;
         }
-
         $idPegawaiList = $rekap->pluck('id_pegawai')->filter()->unique();
-
         $kodeByIdPegawai = Pegawai::query()
             ->whereIn('id', $idPegawaiList)
             ->pluck('kode_pegawai', 'id');
-
         $kodePegawaiList = $kodeByIdPegawai->values()->unique();
-
         $tanggalBerikutnya = Carbon::parse($tanggal)->addDay()->format('Y-m-d');
-
         // ⚠️ HARAM diubah jadi query 1 tanggal saja (lihat README — Haram
         // #2). jam_pulang_finger shift malam SELALU null kalau ini
         // dihapus, karena datanya emang ada di tanggal besok.
@@ -173,25 +180,20 @@ class NewRekapAbsensiPegawaiService
             ->whereIn('kode_pegawai', $kodePegawaiList)
             ->get()
             ->keyBy('kode_pegawai');
-
         $fingerBesok = NewDataFinger::query()
             ->whereDate('tanggal', $tanggalBerikutnya)
             ->whereIn('kode_pegawai', $kodePegawaiList)
             ->get()
             ->keyBy('kode_pegawai');
-
         return $rekap->map(function ($row) use ($kodeByIdPegawai, $fingerHariIni, $fingerBesok) {
             $kode = $kodeByIdPegawai->get($row['id_pegawai']);
             $row['kode_pegawai'] = $kode;
-
             if (! $kode) {
                 $row['jam_masuk_finger'] = null;
                 $row['jam_pulang_finger'] = null;
                 unset($row['_total_durasi_menit']);
-
                 return $row;
             }
-
             // Total durasi kerja gabungan SEMUA lini produksi milik pegawai
             // ini di tanggal yang sama (dihitung di gabungkanMultiSumber).
             // Kalau totalnya di bawah BATAS_TOTAL_DURASI_MENIT -> jangan
@@ -203,17 +205,21 @@ class NewRekapAbsensiPegawaiService
             // perilaku lama untuk kasus itu tetap terjaga.
             $totalDurasi = $row['_total_durasi_menit'] ?? null;
             unset($row['_total_durasi_menit']);
-
             if ($totalDurasi !== null && $totalDurasi < self::BATAS_TOTAL_DURASI_MENIT) {
                 $row['jam_masuk_finger'] = null;
                 $row['jam_pulang_finger'] = null;
-
                 return $row;
             }
-
             $recordHariIni = $fingerHariIni->get($kode);
-
-            if ($row['shift'] === 'malam') {
+            // ⚠️ Shift SEKARANG ditentukan dari perbandingan jam produksi
+            // (jam_pulang < jam_masuk => malam), BUKAN dari field 'shift'
+            // mentah yang dikirim source. Lihat tentukanShiftDariJam().
+            // Ini TIDAK mengubah logic swap field di bawah (Haram #1) —
+            // hanya mengubah CARA menentukan apakah row ini "malam" atau
+            // bukan.
+            $shift = $this->tentukanShiftDariJam($row['jam_masuk'] ?? null, $row['jam_pulang'] ?? null);
+            $row['shift'] = $shift;
+            if ($shift === 'malam') {
                 // ⚠️ HARAM diubah (lihat README — Haram #1). Mesin finger
                 // nyatet berdasarkan tanggal kalender scan terjadi, bukan
                 // berdasarkan sesi shift. Scan malam hari H (jam masuk
@@ -223,7 +229,6 @@ class NewRekapAbsensiPegawaiService
                 // (scan pertama hari itu). JANGAN disederhanakan jadi
                 // jam_masuk -> jam_masuk_finger.
                 $row['jam_masuk_finger'] = $recordHariIni?->jam_pulang;
-
                 $recordBesok = $fingerBesok->get($kode);
                 $row['jam_pulang_finger'] = $recordBesok?->jam_masuk;
             } else {
@@ -234,11 +239,9 @@ class NewRekapAbsensiPegawaiService
                     $row['jam_pulang'] ?? null
                 );
             }
-
             return $row;
         });
     }
-
     /**
      * Khusus shift NON-malam. Kalau finger cuma di-upload untuk satu sesi
      * scan (mis. upload pagi doang), raw jam_masuk & jam_pulang dari mesin
@@ -294,20 +297,17 @@ class NewRekapAbsensiPegawaiService
         if (! $rawMasuk || ! $rawPulang || $rawMasuk === '-' || $rawPulang === '-') {
             return [$rawMasuk, $rawPulang];
         }
-
         try {
             $tRawMasuk = Carbon::parse($rawMasuk);
             $tRawPulang = Carbon::parse($rawPulang);
         } catch (\Throwable $e) {
             return [$rawMasuk, $rawPulang];
         }
-
         // Raw masuk & pulang finger berjauhan (> toleransi) -> memang 2 sesi
         // scan beneran (masuk pagi, pulang sore/malam). Biarkan seperti biasa.
         if (abs($tRawMasuk->diffInMinutes($tRawPulang)) > self::TOLERANSI_SESI_TUNGGAL_MENIT) {
             return [$rawMasuk, $rawPulang];
         }
-
         // Sampai sini berarti raw masuk & pulang SUDAH PASTI 1 sesi scan.
         // Coba parse jam masuk/pulang produksi. Jika kosong atau tidak valid,
         // pakai jadwal standar shift pagi sebagai acuan.
@@ -319,7 +319,6 @@ class NewRekapAbsensiPegawaiService
             }
         }
         $tJamMasukProduksi ??= Carbon::parse(self::JAM_MASUK_SHIFT_PAGI_DEFAULT);
-
         $tJamPulangProduksi = null;
         if (! empty($jamPulangProduksi) && $jamPulangProduksi !== '-') {
             try {
@@ -328,11 +327,9 @@ class NewRekapAbsensiPegawaiService
             }
         }
         $tJamPulangProduksi ??= Carbon::parse(self::JAM_PULANG_SHIFT_PAGI_DEFAULT);
-
         // Bandingkan tiap raw ke acuan PASANGANNYA SENDIRI.
         $diffKePulang = abs($tRawPulang->diffInMinutes($tJamPulangProduksi));
         $diffKeMasuk = abs($tRawMasuk->diffInMinutes($tJamMasukProduksi));
-
         // diffKePulang < diffKeMasuk -> scan ini lebih dekat ke pulang ->
         // jangan tampilkan jam_masuk_finger. Selain itu -> jangan tampilkan
         // jam_pulang_finger.
@@ -340,7 +337,6 @@ class NewRekapAbsensiPegawaiService
             ? [null, $rawPulang]
             : [$rawMasuk, null];
     }
-
     public function availableSources(): Collection
     {
         return collect($this->sources)->map(fn ($s) => [
@@ -348,13 +344,10 @@ class NewRekapAbsensiPegawaiService
             'label' => $s->label(),
         ]);
     }
-
     public function getAbsensiLainLain(string $tanggal): Collection
     {
         $rekap = $this->getRekap($tanggal);
-
         $kodeSudahAdaProduksi = $rekap->pluck('kode_pegawai')->filter()->unique();
-
         // ⚠️ HARAM dihapus (lihat README — Haram #3). Pegawai shift malam
         // yang scan-nya "nyangkut" ke tanggal besok (lihat catatan di
         // enrichWithFinger) akan muncul lagi di data mesin finger hari
@@ -364,31 +357,23 @@ class NewRekapAbsensiPegawaiService
         $kodeShiftMalamKemarin = $this->getKodePegawaiShiftMalam(
             Carbon::parse($tanggal)->subDay()->format('Y-m-d')
         );
-
         $kodeDikecualikan = $kodeSudahAdaProduksi->merge($kodeShiftMalamKemarin)->unique();
-
         $semuaFinger = NewDataFinger::query()
             ->whereDate('tanggal', $tanggal)
             ->get();
-
         $fingerTanpaProduksi = $semuaFinger->filter(
             fn ($item) => ! $kodeDikecualikan->contains($item->kode_pegawai)
         );
-
         if ($fingerTanpaProduksi->isEmpty()) {
             return collect();
         }
-
         $kodeList = $fingerTanpaProduksi->pluck('kode_pegawai')->unique();
-
         $pegawaiByKode = Pegawai::query()
             ->whereIn('kode_pegawai', $kodeList)
             ->get()
             ->keyBy('kode_pegawai');
-
         return $fingerTanpaProduksi->map(function ($item) use ($pegawaiByKode) {
             $pegawai = $pegawaiByKode->get($item->kode_pegawai);
-
             return [
                 'kode_pegawai' => $item->kode_pegawai,
                 'nama_pegawai' => $pegawai?->nama_pegawai ?? "Kode: {$item->kode_pegawai} (tidak ditemukan)",
@@ -398,7 +383,6 @@ class NewRekapAbsensiPegawaiService
             ];
         })->sortBy('nama_pegawai')->values();
     }
-
     /**
      * Gabung row milik pegawai yang sama dari >1 lini produksi (source)
      * jadi 1 row.
@@ -427,32 +411,25 @@ class NewRekapAbsensiPegawaiService
                         $row['jam_masuk'] ?? null,
                         $row['jam_pulang'] ?? null
                     );
-
                     return $row;
                 });
-
                 // Representasi utama = durasi kerja terpanjang. Kalau semua
                 // durasi sama (termasuk semua 0), sortByDesc tetap stabil
                 // ambil yang pertama muncul, jadi untuk kasus tanpa
                 // perbedaan durasi perilakunya sama seperti sebelumnya.
                 $utama = $rowsWithDurasi->sortByDesc('_durasi_menit')->first();
-
                 $utama['sumber_label'] = $rowsWithDurasi
                     ->pluck('sumber_label')
                     ->filter()
                     ->unique()
                     ->values()
                     ->all();
-
                 $utama['_total_durasi_menit'] = $rowsWithDurasi->sum('_durasi_menit');
-
                 unset($utama['_durasi_menit']);
-
                 return $utama;
             })
             ->values();
     }
-
     /**
      * Hitung durasi kerja dalam menit dari jam_masuk & jam_pulang (format
      * H:i:s, sudah dinormalisasi oleh normalisasiJam() sebelum method ini
@@ -474,25 +451,20 @@ class NewRekapAbsensiPegawaiService
         if (empty($jamMasuk) || empty($jamPulang) || $jamMasuk === '-' || $jamPulang === '-') {
             return 0;
         }
-
         if ($jamMasuk === $jamPulang) {
             return 0;
         }
-
         try {
             $masuk = Carbon::parse($jamMasuk);
             $pulang = Carbon::parse($jamPulang);
         } catch (\Throwable $e) {
             return 0;
         }
-
         if ($pulang->lessThanOrEqualTo($masuk)) {
             $pulang->addDay();
         }
-
         return (int) $masuk->diffInMinutes($pulang);
     }
-
     /**
      * Urutkan hasil rekap. Untuk brand WAHANA, pakai grup prioritas kode:
      *   1. Kode 8000-8999
@@ -510,12 +482,10 @@ class NewRekapAbsensiPegawaiService
             return $rekap
                 ->sortBy(function ($row) {
                     $kode = $row['kode_pegawai'] ?? null;
-
                     return $kode && is_numeric($kode) ? (int) $kode : PHP_INT_MAX;
                 })
                 ->values();
         }
-
         // Hitung dulu nomor grup + kunci urutan kedua sebagai field biasa
         // di tiap row, baru sortBy pakai nama field. Ini supaya sortBy
         // multi-kolom Laravel bisa membandingkan lewat data_get() secara
@@ -529,42 +499,33 @@ class NewRekapAbsensiPegawaiService
         $rekap = $rekap->map(function ($row) {
             $grup = $this->grupKode($row['kode_pegawai'] ?? null);
             $row['_grup_urutan'] = $grup;
-
             $kode = $row['kode_pegawai'] ?? null;
             $row['_sort_kedua'] = ($kode && is_numeric($kode))
                 ? str_pad((string) (int) $kode, 10, '0', STR_PAD_LEFT)
                 : str_repeat('9', 10); // kode kosong/invalid ditaruh paling belakang dalam grupnya
-
             return $row;
         });
-
         return $rekap
             ->sortBy(['_grup_urutan', '_sort_kedua'])
             ->values()
             ->map(function ($row) {
                 // Field internal, gak perlu ikut ke view
                 unset($row['_grup_urutan'], $row['_sort_kedua']);
-
                 return $row;
             });
     }
-
     protected function isBrandWahana(): bool
     {
         $panel = Filament::getCurrentPanel()
             ?? Filament::getPanel('admin');
-
         return $panel?->getBrandName() === 'Wahana';
     }
-
     protected function grupKode(?string $kodePegawai): int
     {
         if (! $kodePegawai || ! is_numeric($kodePegawai)) {
             return 4; // kode kosong/tidak valid ditaruh paling belakang
         }
-
         $kode = (int) $kodePegawai;
-
         return match (true) {
             $kode >= 8000 && $kode <= 8999 => 0,
             $kode >= 9000 && $kode <= 9999 => 1,
@@ -572,27 +533,36 @@ class NewRekapAbsensiPegawaiService
             default => 3, // sisanya: 0-6999 dan kode di luar rentang manapun
         };
     }
-
+    /**
+     * Ambil semua kode_pegawai yang shift-nya 'malam' di tanggal tertentu.
+     * Fetch langsung dari sources (bukan dari hasil getRekap() yang sudah
+     * diproses), sama seperti sebelumnya.
+     *
+     * ⚠️ Deteksi shift malam SEKARANG pakai tentukanShiftDariJam() (bandingkan
+     * jam_pulang vs jam_masuk mentah dari source), BUKAN field 'shift'
+     * mentah lagi. Row mentah di sini belum lewat normalisasiJam(), tapi
+     * itu aman karena tentukanShiftDariJam() sudah parse pakai Carbon::parse()
+     * sendiri (bisa handle H:i:s maupun datetime penuh).
+     */
     protected function getKodePegawaiShiftMalam(string $tanggal): Collection
     {
         $rekap = collect($this->sources)
             ->flatMap(fn ($source) => $source->fetch($tanggal))
             ->values();
-
         if ($rekap->isEmpty()) {
             return collect();
         }
-
         $idPegawaiShiftMalam = $rekap
-            ->where('shift', 'malam')
+            ->filter(fn ($row) => $this->tentukanShiftDariJam(
+                $row['jam_masuk'] ?? null,
+                $row['jam_pulang'] ?? null
+            ) === 'malam')
             ->pluck('id_pegawai')
             ->filter()
             ->unique();
-
         if ($idPegawaiShiftMalam->isEmpty()) {
             return collect();
         }
-
         return Pegawai::query()
             ->whereIn('id', $idPegawaiShiftMalam)
             ->pluck('kode_pegawai');
