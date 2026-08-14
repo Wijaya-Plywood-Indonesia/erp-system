@@ -103,10 +103,13 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
     }
 
     /**
-     * Sama seperti pembersihan Divisi di AbsenExport: uppercase, dedup,
-     * dan untuk entri "LAIN-LAIN" ambil detailnya kalau ada. Di sini
-     * sumbernya array 'sumber_label' dari service, bukan string
-     * comma-separated seperti di AbsenExport, jadi tidak perlu explode.
+     * Sama seperti pembersihan Divisi di AbsenExport: uppercase, dedup.
+     * Sumbernya array 'sumber_label' dari service, formatnya:
+     *   "Nama Sumber"            -> tanpa detail
+     *   "Nama Sumber: Detail"    -> dengan detail (mis. tugas Kedi, hasil Lain-lain)
+     *
+     * Semua sumber yang punya detail (setelah ':') akan ditampilkan
+     * detailnya dalam kurung, bukan cuma khusus LAIN-LAIN.
      */
     protected function formatDivisi(array $row): string
     {
@@ -118,7 +121,8 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
 
         return collect((array) $sumber)
             ->map(function ($item) {
-                $itemUpper = strtoupper(trim($item));
+                $item = trim($item);
+                $itemUpper = strtoupper($item);
 
                 if (str_contains($itemUpper, 'LAIN-LAIN')) {
                     $detail = trim(str_ireplace(['LAIN-LAIN', ':', '-'], '', $item));
@@ -126,9 +130,15 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
                     return $detail !== '' ? "LAIN-LAIN ($detail)" : 'LAIN-LAIN';
                 }
 
-                $name = trim(explode(':', explode('(', $item)[0])[0]);
+                // Ambil nama sumber (sebelum ':') dan detailnya (setelah ':')
+                if (str_contains($item, ':')) {
+                    [$name, $detail] = array_map('trim', explode(':', $item, 2));
+                    $name = strtoupper($name);
 
-                return strtoupper($name);
+                    return $detail !== '' ? "{$name} ({$detail})" : $name;
+                }
+
+                return strtoupper($item);
             })
             ->unique()
             ->implode(', ') ?: '-';
