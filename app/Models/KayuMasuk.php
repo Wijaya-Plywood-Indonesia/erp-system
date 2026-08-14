@@ -12,6 +12,7 @@ class KayuMasuk extends Model
     protected $table = 'kayu_masuks';
 
     protected $fillable = [
+        'uuid',
         'jenis_dokumen_angkut',
         'upload_dokumen_angkut',
         'tgl_kayu_masuk',

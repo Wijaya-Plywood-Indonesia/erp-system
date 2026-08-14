@@ -890,7 +890,7 @@ class DetailNotaBarangKeluarsTable
 
                     // 3. Opsi Keluar Barang Umum
                     Action::make('keluar_barang_umum')
-                        ->label('Umum')
+                        ->label('Barang Umum')
                         ->icon('heroicon-o-archive-box')
                         ->form(static::barangUmumFormSchema())
                         ->action(function (RelationManager $livewire, array $data) {
@@ -957,7 +957,7 @@ class DetailNotaBarangKeluarsTable
 
                     // 5. Opsi Input Barang Manual
                     CreateAction::make()
-                        ->label('Lainnya')
+                        ->label('Tambah Barang(Lainnya)')
                         ->icon('heroicon-o-plus-circle'),
                 ])
                     ->label('Tambah Item Barang')
