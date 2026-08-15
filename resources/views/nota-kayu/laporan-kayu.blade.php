@@ -107,6 +107,7 @@
             display: flex;
             justify-content: center;
         }
+
         .pagination {
             display: flex;
             list-style: none;
@@ -114,6 +115,7 @@
             margin: 0;
             gap: 5px;
         }
+
         .page-item .page-link {
             display: block;
             padding: 8px 14px;
@@ -125,14 +127,17 @@
             font-size: 14px;
             transition: 0.2s;
         }
+
         .page-item .page-link:hover {
             background: #f1f1f1;
         }
+
         .page-item.active .page-link {
             background: #3498db;
             color: white;
             border-color: #3498db;
         }
+
         .page-item.disabled .page-link {
             color: #bdc3c7;
             pointer-events: none;
@@ -149,12 +154,14 @@
         <form action="{{ url()->current() }}" method="GET" class="flex-container">
             <div class="form-group">
                 <label>Mulai Dari</label>
-                <input type="text" id="dari" name="dari" placeholder="Tanggal Awal" value="{{ request('dari') }}">
+                <input type="text" id="dari" name="dari" placeholder="Tanggal Awal"
+                    value="{{ request('dari') }}">
             </div>
 
             <div class="form-group">
                 <label>Sampai Dengan</label>
-                <input type="text" id="sampai" name="sampai" placeholder="Tanggal Akhir" value="{{ request('sampai') }}">
+                <input type="text" id="sampai" name="sampai" placeholder="Tanggal Akhir"
+                    value="{{ request('sampai') }}">
             </div>
 
             <button type="submit" class="btn btn-filter">Filter</button>
@@ -169,6 +176,7 @@
     <table>
         <thead>
             <tr>
+                <th>Tgl Kayu Masuk</th>
                 <th>Tanggal</th>
                 <th>Nama</th>
                 <th>Seri</th>
@@ -182,21 +190,22 @@
         </thead>
         <tbody>
             @forelse ($data as $row)
-            <tr>
-                <td>{{ \Carbon\Carbon::parse($row->tanggal)->format('d/m/Y') }}</td>
-                <td>{{ $row->nama }}</td>
-                <td>{{ $row->seri }}</td>
-                <td>{{ $row->panjang }}</td>
-                <td>{{ $row->jenis }}</td>
-                <td>{{ $row->lahan }}</td>
-                <td>{{ $row->banyak }}</td>
-                <td>{{ number_format($row->m3, 4) }}</td>
-                <td>{{ number_format($row->poin, 0, ',', '.') }}</td>
-            </tr>
+                <tr>
+                    <td>{{ $row->tgl_kayu_masuk }}</td>
+                    <td>{{ $row->tanggal }}</td>
+                    <td>{{ $row->nama }}</td>
+                    <td>{{ $row->seri }}</td>
+                    <td>{{ $row->panjang }}</td>
+                    <td>{{ $row->jenis }}</td>
+                    <td>{{ $row->lahan }}</td>
+                    <td>{{ $row->banyak }}</td>
+                    <td>{{ number_format($row->m3, 4) }}</td>
+                    <td>{{ number_format($row->poin, 0, ',', '.') }}</td>
+                </tr>
             @empty
-            <tr>
-                <td colspan="9" style="padding: 30px; color: #999;">Data tidak ditemukan.</td>
-            </tr>
+                <tr>
+                    <td colspan="10" style="padding: 30px; color: #999;">Data tidak ditemukan.</td>
+                </tr>
             @endforelse
         </tbody>
     </table>
