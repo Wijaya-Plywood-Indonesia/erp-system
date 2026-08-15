@@ -269,7 +269,7 @@ class PengajuanBarangsTable
                     ->badge()
                     ->color(function (string $state, $record) {
                         if ($state === 'menunggu'
-                            && Auth::user()?->hasRole(['admin_barang', 'super_admin'])) {
+                            && Auth::user()?->hasRole(['admin_barang_umum', 'super_admin'])) {
                             return 'primary';
                         }
                         return match ($state) {
@@ -280,13 +280,13 @@ class PengajuanBarangsTable
                     })
                     ->icon(function (string $state, $record) {
                         return ($state === 'menunggu'
-                            && Auth::user()?->hasRole(['admin_barang', 'super_admin']))
+                            && Auth::user()?->hasRole(['admin_barang_umum', 'super_admin']))
                             ? 'heroicon-o-pencil-square'
                             : null;
                     })
                     ->formatStateUsing(function (string $state, $record) {
                         if ($state === 'menunggu'
-                            && Auth::user()?->hasRole(['admin_barang', 'super_admin'])) {
+                            && Auth::user()?->hasRole(['admin_barang_umum', 'super_admin'])) {
                             return 'Verifikasi Sekarang';
                         }
 
@@ -300,7 +300,7 @@ class PengajuanBarangsTable
                         Action::make('verifikasiAdmin')
                             ->label('Verifikasi (Admin Barang)')
                             ->modalHeading('Verifikasi - Admin Barang')
-                            ->visible(fn($record) => Auth::user()?->hasRole(['admin_barang', 'super_admin'])
+                            ->visible(fn($record) => Auth::user()?->hasRole(['admin_barang_umum', 'super_admin'])
                                 && $record->status_admin_barang === 'menunggu')
                             ->schema([
                                 Radio::make('keputusan')
@@ -320,7 +320,7 @@ class PengajuanBarangsTable
                                     ->requiredIf('keputusan', 'ditolak'),
                             ])
                             ->action(function ($record, array $data) {
-                                static::putuskan($record, 'admin_barang', $data['keputusan']);
+                                static::putuskan($record, 'admin_barang_umum', $data['keputusan']);
                             })
                     ),
 

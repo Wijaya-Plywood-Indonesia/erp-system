@@ -8,6 +8,7 @@ use App\Services\DownloadAbsensiUploadService;
 use App\Services\NewRekapAbsensiPegawaiService;
 use App\Services\UploadFingerService;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
@@ -20,6 +21,7 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class NewAbsensi extends Page implements HasForms
 {
+    use HasPageShield;
     use InteractsWithForms;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
@@ -69,7 +71,7 @@ class NewAbsensi extends Page implements HasForms
         return $schema
             ->schema([
                 FileUpload::make('fingerFiles')
-                    ->label('Upload File Finger (bisa lebih dari 1, dari mesin berbeda sekalipun)')
+                    ->label('Upload File Finger ')
                     ->multiple()
                     ->storeFiles(false)
                     ->maxFiles(10)

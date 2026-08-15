@@ -22,21 +22,28 @@ class KediAbsensiSource implements AbsensiSourceInterface
         return DetailPegawaiKedi::query()
             ->with(['pegawai', 'produksiKedi'])
             ->whereHas('produksiKedi', function ($q) use ($tanggal) {
-                $q->whereDate('tanggal', $tanggal);
+                $q->whereDate('tanggal_bongkar', $tanggal);
             })
             ->get()
-            ->map(fn ($item) => [
-                'sumber' => $this->key(),
-                'sumber_label' => $this->label(),
-                'id_pegawai' => $item->id_pegawai,
-                'nama_pegawai' => $item->pegawai?->nama_pegawai ?? '-',
-                'tanggal' => $item->produksiKedi?->tanggal,
-                'shift' => 'pagi', // tabel produksi_kedi tidak punya kolom shift
-                'jam_masuk' => $item->masuk,
-                'jam_pulang' => $item->pulang,
-                'izin' => $item->ijin,
-                'keterangan' => $item->ket,
-                'ref_id' => $item->id,
-            ]);
+            ->map(function ($item) {
+                $label = $this->label();
+                if (! empty($item->tugas)) {
+                    $label .= ': '.$item->tugas;
+                }
+
+                return [
+                    'sumber' => $this->key(),
+                    'sumber_label' => $label,
+                    'id_pegawai' => $item->id_pegawai,
+                    'nama_pegawai' => $item->pegawai?->nama_pegawai ?? '-',
+                    'tanggal' => $item->produksiKedi?->tanggal_bongkar,
+                    'shift' => 'pagi', // tabel produksi_kedi tidak punya kolom shift
+                    'jam_masuk' => $item->masuk,
+                    'jam_pulang' => $item->pulang,
+                    'izin' => $item->ijin,
+                    'keterangan' => $item->ket,
+                    'ref_id' => $item->id,
+                ];
+            });
     }
 }

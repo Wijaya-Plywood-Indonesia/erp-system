@@ -72,9 +72,9 @@
                                 <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Kode Pegawai</th>
                                 <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Nama Pegawai</th>
                                 <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Shift</th>
-                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Jam Masuk (Input)
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Jam Kerja (Masuk)
                                 </th>
-                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Jam Pulang (Input)
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Jam Kerja (Pulang)
                                 </th>
                                 <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Jam Masuk (Finger)
                                 </th>
