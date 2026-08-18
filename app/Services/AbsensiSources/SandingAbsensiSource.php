@@ -25,18 +25,22 @@ class SandingAbsensiSource implements AbsensiSourceInterface
                 $q->whereDate('tanggal', $tanggal);
             })
             ->get()
-            ->map(fn ($item) => [
-                'sumber' => $this->key(),
-                'sumber_label' => $this->label(),
-                'id_pegawai' => $item->id_pegawai,
-                'nama_pegawai' => $item->pegawai?->nama_pegawai ?? '-',
-                'tanggal' => $item->produksiSanding?->tanggal,
-                'shift' => strtolower($item->produksiSanding?->shift ?? 'pagi'),
-                'jam_masuk' => $item->masuk,
-                'jam_pulang' => $item->pulang,
-                'izin' => $item->ijin,
-                'keterangan' => $item->ket,
-                'ref_id' => $item->id,
-            ]);
+            ->map(function ($item) {
+                $shift = strtolower($item->produksiSanding?->shift ?? 'pagi');
+
+                return [
+                    'sumber' => $this->key(),
+                    'sumber_label' => $this->label().' '.ucfirst($shift),
+                    'id_pegawai' => $item->id_pegawai,
+                    'nama_pegawai' => $item->pegawai?->nama_pegawai ?? '-',
+                    'tanggal' => $item->produksiSanding?->tanggal,
+                    'shift' => $shift,
+                    'jam_masuk' => $item->masuk,
+                    'jam_pulang' => $item->pulang,
+                    'izin' => $item->ijin,
+                    'keterangan' => $item->ket,
+                    'ref_id' => $item->id,
+                ];
+            });
     }
 }
