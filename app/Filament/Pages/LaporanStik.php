@@ -18,7 +18,6 @@ use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 
-
 class LaporanStik extends Page
 {
     use InteractsWithForms;
@@ -31,6 +30,7 @@ class LaporanStik extends Page
     protected static ?int $navigationSort = 5;
     protected static bool $shouldRegisterNavigation = false;
 
+    public $dataProduksi = [];
     public $dataStik = [];
     public $tanggal  = null;
     public $summary  = [];
@@ -38,8 +38,8 @@ class LaporanStik extends Page
 
     public function mount(): void
     {
-        $this->form->fill(['tanggal' => $this->tanggal]);
         $this->tanggal = now()->format('Y-m-d');
+        $this->form->fill(['tanggal' => $this->tanggal]);
         $this->loadAllData();
     }
 
@@ -48,13 +48,14 @@ class LaporanStik extends Page
         return [
             DatePicker::make('tanggal')
                 ->label('Pilih Tanggal')
-                ->reactive()
                 ->format('Y-m-d')
                 ->displayFormat('d/m/Y')
                 ->live()
                 ->required()
                 ->maxDate(now())
                 ->default(now())
+                ->native(false)
+                ->closeOnDateSelection()
                 ->suffixIconColor('primary')
                 ->afterStateUpdated(function ($state) {
                     $this->tanggal = $state;
@@ -80,39 +81,13 @@ class LaporanStik extends Page
         $base      = $thousands * 1000;
         $remainder = $number - $base;
 
-        if ($remainder < 300)      return $base;
-        elseif ($remainder < 800)  return $base + 500;
-        else                       return $base + 1000;
-    }
-
-    /**
-     * Normalisasi nilai field kw menjadi key 'kw1'/'kw2'/'kw3'/'kw4' / 'af'.
-     * Menangani berbagai format: 'kw1', 'KW1', 'KW 1', '1', 1, 'kw-1', 'af', 'AF', dsb.
-     */
-    protected function normalizeKw(mixed $kw): string
-    {
-        if ($kw === null || $kw === '') return 'kw1';
-
-        $str = strtolower(trim((string) $kw));
-
-        // Cek apakah af
-        if (str_contains($str, 'af')) {
-            return 'af';
+        if ($remainder < 300) {
+            return (int) $base;
+        } elseif ($remainder < 800) {
+            return (int) ($base + 500);
+        } else {
+            return (int) ($base + 1000);
         }
-
-        // Jika berupa angka murni (int atau string angka): langsung jadikan kw{n}
-        if (is_numeric($kw)) {
-            $n = (int) $kw;
-            return in_array($n, [1, 2, 3, 4]) ? "kw{$n}" : 'kw1';
-        }
-
-        // Ambil angka di akhir string: 'kw1', 'KW 2', 'Kw-3', 'kw_4', dll.
-        if (preg_match('/(\d)$/', $str, $m)) {
-            $n = (int) $m[1];
-            return in_array($n, [1, 2, 3, 4]) ? "kw{$n}" : 'kw1';
-        }
-
-        return 'kw1'; // fallback
     }
 
     public function loadAllData(): void
@@ -122,142 +97,139 @@ class LaporanStik extends Page
 
         $produksiList = ProduksiStik::with([
             'detailPegawaiStik.pegawai',
-            'detailHasilStik',
             'detailHasilStik.ukuran',
             'detailHasilStik.jenisKayu',
         ])
             ->whereDate('tanggal_produksi', $tanggal)
             ->get();
 
-        $targetRef        = Target::where('id_mesin', 8)->where('id_ukuran', 33)->first();
-        $stdTarget        = $targetRef ? (float) $targetRef->target : 3000;
-        $stdJam           = $targetRef ? (int) $targetRef->jam : 10;
-        $stdPotonganHarga = $targetRef ? (float) $targetRef->potongan : 0;
-
+        $this->dataProduksi = [];
         $this->dataStik = [];
 
         foreach ($produksiList as $produksi) {
             $tanggalFormat = Carbon::parse($produksi->tanggal_produksi)->format('d/m/Y');
+            $namaMesin     = 'MESIN STIK';
 
-            $hasil   = $produksi->detailHasilStik?->sum('total_lembar') ?? 0;
-            $selisih = $stdTarget - $hasil;
+            // 1. Grouping detail hasil berdasarkan Ukuran (id_ukuran)
+            $groupedByUkuran = collect($produksi->detailHasilStik ?? [])->groupBy(function ($dh) {
+                return $dh->id_ukuran ?? 0;
+            });
 
-            $jumlahPekerja    = $produksi->detailPegawaiStik?->count() ?? 0;
-            $potonganPerOrang = 0;
+            // 2. Loop per Ukuran
+            foreach ($groupedByUkuran as $idUkuranKey => $hasilList) {
+                $firstHasil = $hasilList->first();
+                $ukuran     = $firstHasil?->ukuran;
+                $idUkuran   = $firstHasil?->id_ukuran;
+                $idJenisKayu = $firstHasil?->id_jenis_kayu;
 
-            if ($selisih > 0 && $jumlahPekerja > 0) {
-                $potonganPerOrang = ($selisih * $stdPotonganHarga) / $jumlahPekerja;
-            }
+                // Format kode ukuran (contoh: 2441220.5)
+                $p = $ukuran?->panjang ?? '';
+                $l = $ukuran?->lebar ?? '';
+                $t = $ukuran?->tebal ?? '';
+                $pureKodeUkuran = ($p && $l && $t !== '') ? "{$p}{$l}{$t}" : 'STIK';
 
-            // ── DATA PEKERJA ─────────────────────────────────────
-            $pekerja = [];
-            foreach ($produksi->detailPegawaiStik ?? [] as $detail) {
-                $pekerja[] = [
-                    'id'         => $detail->pegawai?->kode_pegawai ?? '-',
-                    'nama'       => $detail->pegawai?->nama_pegawai ?? '-',
-                    'jam_masuk'  => $detail->masuk  ? Carbon::parse($detail->masuk)->format('H:i')  : '-',
-                    'jam_pulang' => $detail->pulang ? Carbon::parse($detail->pulang)->format('H:i') : '-',
-                    'ijin'       => $detail->ijin   ?? '-',
-                    'pot_target' => $potonganPerOrang > 0
-                        ? number_format($this->roundToNearestHundred($potonganPerOrang), 0, '', '.')
-                        : '-',
-                    'keterangan' => $detail->ket ?? '-',
-                ];
-            }
+                // Total hasil khusus ukuran ini
+                $hasilUkuran = (int) $hasilList->sum('total_lembar');
 
-            // ── DETAIL HASIL (untuk sheet "Hasil Stik") ───────────
-            // Group per kombinasi ukuran + jenis_kayu, pisahkan nilai ke kolom kw1–kw4
-            $grouped = [];
+                // 3. Query Target Harian Master dari Tabel Targets
+                $targetItem = Target::where('id_mesin', 8)
+                    ->when($idUkuran, fn($q) => $q->where('id_ukuran', $idUkuran))
+                    ->when($idJenisKayu, fn($q) => $q->where('id_jenis_kayu', $idJenisKayu))
+                    ->orderByDesc('id')
+                    ->first();
 
-            foreach ($produksi->detailHasilStik ?? [] as $dh) {
-                $ukuran    = $dh->ukuran;
-                $jenisKayu = $dh->jenisKayu;
+                if (!$targetItem && $pureKodeUkuran !== 'STIK') {
+                    $targetItem = Target::where('id_mesin', 8)
+                        ->where('kode_ukuran', $pureKodeUkuran)
+                        ->orderByDesc('id')
+                        ->first();
+                }
 
-                $p     = $ukuran?->panjang ?? '-';
-                $l     = $ukuran?->lebar   ?? '-';
-                $t     = $ukuran?->tebal   ?? '-';
-                $jenis = $jenisKayu?->kode_kayu ?? ($jenisKayu?->nama_kayu ?? '-');
-                $kwKey = $this->normalizeKw($dh->kw); // 'kw1'/'kw2'/'kw3'/'kw4'
-                $total = (int) ($dh->total_lembar ?? 0);
+                if ($targetItem) {
+                    $targetNormal  = (float) ($targetItem->target ?? 0);   // Membaca: 1.600
+                    $potonganTarif = (float) ($targetItem->potongan ?? 0); // Membaca: 143.75
+                    $stdJam        = (float) ($targetItem->jam ?: 9);      // Membaca: 9.0
+                } else {
+                    $targetNormal  = 0;
+                    $potonganTarif = 0;
+                    $stdJam        = 9.0;
+                }
 
-                $groupKey = "{$p}|{$l}|{$t}|{$jenis}";
+                // 4. Hitung Selisih: (Hasil - Target)
+                $selisih = $hasilUkuran - $targetNormal;
 
-                if (!isset($grouped[$groupKey])) {
-                    $grouped[$groupKey] = [
-                        'panjang'    => $p,
-                        'lebar'      => $l,
-                        'tebal'      => $t,
-                        'jenis_kayu' => $jenis,
-                        'kw1'        => 0,
-                        'kw2'        => 0,
-                        'kw3'        => 0,
-                        'kw4'        => 0,
-                        'af'         => 0,
-                        'total'      => 0,
+                // 5. Hitung Potongan per Orang
+                $jumlahPekerja    = $produksi->detailPegawaiStik?->count() ?? 0;
+                $potonganPerOrang = 0;
+
+                if ($selisih < 0 && $jumlahPekerja > 0 && $potonganTarif > 0) {
+                    $kurangTarget     = abs($selisih);
+                    $potonganPerOrang = ($kurangTarget * $potonganTarif) / $jumlahPekerja;
+                }
+
+                // 6. Data Pekerja
+                $pekerja = [];
+                foreach ($produksi->detailPegawaiStik ?? [] as $detail) {
+                    $pekerja[] = [
+                        'id'         => $detail->pegawai?->kode_pegawai ?? '-',
+                        'nama'       => $detail->pegawai?->nama_pegawai ?? '-',
+                        'jam_masuk'  => $detail->masuk  ? Carbon::parse($detail->masuk)->format('H:i')  : '-',
+                        'jam_pulang' => $detail->pulang ? Carbon::parse($detail->pulang)->format('H:i') : '-',
+                        'ijin'       => $detail->ijin   ?? '-',
+                        'pot_target' => $potonganPerOrang > 0
+                            ? number_format($this->roundToNearestHundred($potonganPerOrang), 0, '', '.')
+                            : 0,
+                        'keterangan' => $detail->ket ?? '-',
                     ];
                 }
 
-                $grouped[$groupKey][$kwKey] += $total;
-                $grouped[$groupKey]['total'] += $total;
-            }
+                // 7. Kendala
+                $daftarKendala = [];
+                if (!empty($produksi->kendala) && $produksi->kendala !== 'Tidak ada kendala.') {
+                    $daftarKendala[] = [
+                        'kendala'      => $produksi->kendala,
+                        'durasi_menit' => $produksi->total_kendala_menit ?? null,
+                        'jam_mulai'    => null,
+                        'jam_selesai'  => null,
+                        'keterangan'   => '-',
+                    ];
+                }
 
-            // Ubah 0 menjadi '' supaya sel Excel kosong (lebih rapi)
-            $detailHasilArray = [];
-            foreach ($grouped as $item) {
-                $detailHasilArray[] = [
-                    'panjang'    => $item['panjang'],
-                    'lebar'      => $item['lebar'],
-                    'tebal'      => $item['tebal'],
-                    'jenis_kayu' => $item['jenis_kayu'],
-                    'kw1'        => $item['kw1'] > 0 ? $item['kw1'] : '',
-                    'kw2'        => $item['kw2'] > 0 ? $item['kw2'] : '',
-                    'kw3'        => $item['kw3'] > 0 ? $item['kw3'] : '',
-                    'kw4'        => $item['kw4'] > 0 ? $item['kw4'] : '',
-                    'af'         => $item['af'] > 0 ? $item['af'] : '',
-                    'total'      => $item['total'] > 0 ? $item['total'] : '',
+                $totalKendalaMenit      = $produksi->total_kendala_menit ?? 0;
+                $totalDowntimeFormatted = $totalKendalaMenit > 0 ? "{$totalKendalaMenit} menit" : '-';
+
+                $itemData = [
+                    'group_key'                => $produksi->id . '_' . $idUkuranKey,
+                    'mesin'                    => $namaMesin,
+                    'ukuran'                   => $pureKodeUkuran, // Contoh: '2441220.5'
+                    'tanggal'                  => $tanggalFormat,
+                    'pekerja'                  => $pekerja,
+                    'hasil'                    => $hasilUkuran,
+                    'target'                   => $targetNormal,   // Menampilkan Target Master (misal 1.600)
+                    'target_normal'            => $targetNormal,
+                    'selisih'                  => $selisih,
+                    'jam_kerja'                => $stdJam,         // Menampilkan Jam Produksi Master (misal 9.0 jam)
+                    'total_kendala_menit'      => $totalKendalaMenit,
+                    'total_downtime_formatted' => $totalDowntimeFormatted,
+                    'kendala'                  => $produksi->kendala ?? '-',
+                    'daftar_kendala'           => $daftarKendala,
                 ];
-            }
 
-            $this->dataStik[] = [
-                'tanggal'       => $tanggalFormat,
-                'kode_ukuran'   => 'STIK',
-                'pekerja'       => $pekerja,
-                'detail_hasil'  => $detailHasilArray, // untuk sheet "Hasil Stik"
-                'kendala'       => $produksi->kendala ?? 'Tidak ada kendala.',
-                'target_harian' => $stdTarget,
-                'hasil_harian'  => $hasil,
-                'selisih'       => $selisih,
-                'jam_kerja'     => $stdJam,
-                'summary'       => ['jumlah_pekerja' => count($pekerja)],
-            ];
+                $this->dataProduksi[] = $itemData;
+                $this->dataStik[]     = $itemData;
+            }
         }
 
-        $this->calculateOverallSummary();
         $this->isLoading = false;
-    }
-
-    protected function calculateOverallSummary(): void
-    {
-        $this->summary = ['total_hasil' => 0, 'total_pekerja' => 0, 'total_potongan' => 0];
-
-        foreach ($this->dataStik as $data) {
-            $this->summary['total_hasil']   += $data['hasil_harian'];
-            $this->summary['total_pekerja'] += $data['summary']['jumlah_pekerja'];
-
-            foreach ($data['pekerja'] as $p) {
-                $val = ($p['pot_target'] !== '-') ? str_replace('.', '', $p['pot_target']) : 0;
-                $this->summary['total_potongan'] += is_numeric($val) ? (int) $val : 0;
-            }
-        }
     }
 
     public function exportToExcel()
     {
-        if (empty($this->dataStik)) return;
+        if (empty($this->dataProduksi)) return;
 
         $tanggal  = $this->tanggal ?? now()->format('Y-m-d');
         $filename = 'Laporan-Produksi-Stik-' . Carbon::parse($tanggal)->format('Y-m-d') . '.xlsx';
 
-        return Excel::download(new LaporanProduksiStikExport($this->dataStik), $filename);
+        return Excel::download(new LaporanProduksiStikExport($this->dataProduksi), $filename);
     }
 }

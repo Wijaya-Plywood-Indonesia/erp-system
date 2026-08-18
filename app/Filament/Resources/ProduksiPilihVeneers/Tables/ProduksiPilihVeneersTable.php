@@ -23,7 +23,7 @@ class ProduksiPilihVeneersTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_produksi'))
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_produksi', 7))
             ->columns([
                 TextColumn::make('tanggal_produksi')
                     ->label('Tanggal Produksi')

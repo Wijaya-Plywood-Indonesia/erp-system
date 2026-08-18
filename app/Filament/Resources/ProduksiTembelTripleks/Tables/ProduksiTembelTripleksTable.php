@@ -20,7 +20,7 @@ class ProduksiTembelTripleksTable
     {
         return $table
             ->defaultSort('tanggal', 'desc')
-            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal'))
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal', 7))
             ->columns([
                 TextColumn::make('tanggal')
                     ->label('Tanggal Produksi')
