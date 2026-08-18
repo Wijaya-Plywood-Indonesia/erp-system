@@ -27,8 +27,6 @@ class DryerDataMap
                 ? $mesinList->implode(' & ')
                 : 'TIDAK ADA MESIN';
 
-            $mesinUtamaId = $item->detailMesins->first()?->id_mesin_dryer;
-
             $shift = strtoupper($item->shift ?? 'PAGI');
             $tanggal = Carbon::parse($item->tanggal_produksi)->format('d/m/Y');
 
@@ -113,11 +111,15 @@ class DryerDataMap
             $kodeUkuran = null;
             $ukuranId = null;
 
-            $targetModel = null;
-
 
             /* ============================================================
-             * 3. CEK DETAIL HASIL & CARI TARGET
+             * 3. HITUNG TOTAL HASIL (SELALU DALAM M3)
+             * ------------------------------------------------------------
+             * Halaman/model ini (ProduksiPressDryer) eksklusif untuk
+             * produksi Dryer. Jadi hasil SELALU dihitung kubikasi (m3),
+             * apapun status detailMesins (sudah diisi atau belum).
+             * Sebelumnya kode ini fallback ke hitung "lembar" (sum isi)
+             * kalau detailMesins kosong -> itu bug, sudah dihapus.
              * ============================================================ */
 
             if ($item->detailHasils->isEmpty()) {
@@ -125,107 +127,52 @@ class DryerDataMap
                 $ukuranDisplay = 'BELUM INPUT HASIL';
                 $totalHasil = 0;
 
-                if ($mesinUtamaId) {
-
-                    if (stripos($namaMesin, 'DRYER') !== false) {
-                        if ($shift === 'MALAM') {
-                            $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
-                        } else {
-                            $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
-                        }
-                    } elseif (stripos($namaMesin, 'DRYER 1') !== false || $mesinUtamaId == 17) {
-                        $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
-                    } elseif (stripos($namaMesin, 'DRYER 2') !== false || $mesinUtamaId == 18) {
-                        $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
-                    } else {
-                        $targetModel = Target::where('id_mesin', $mesinUtamaId)
-                            ->whereNull('id_ukuran')
-                            ->first();
-                    }
-                }
-
-                Log::warning('PressDryer tanpa detail hasil (target tetap dicari)', [
+                Log::warning('PressDryer tanpa detail hasil', [
                     'id_produksi' => $item->id,
                     'mesin' => $namaMesin,
                     'shift' => $shift,
-                    'target_ditemukan' => $targetModel !== null,
-                    'target' => $targetModel->target ?? 0,
                 ]);
 
             } else {
 
-                /* 3A. Ambil ukuran & total hasil */
                 $firstHasil = $item->detailHasils->first();
                 $ukuranId = $firstHasil?->id_ukuran ?? null;
 
-                if (stripos($namaMesin, 'DRYER') !== false) {
-                    // Dryer uses kubikasi (m3)
-                    $totalHasil = $item->detailHasils->sum(function ($dh) {
-                        $ukuran = $dh->ukuran ?? null;
-                        $panjang = $ukuran?->panjang ?? null;
-                        $lebar = $ukuran?->lebar ?? null;
-                        $tebal = $ukuran?->tebal ?? null;
-                        $isi = $dh->isi ?? 0;
+                $totalHasil = $item->detailHasils->sum(function ($dh) {
+                    $ukuran = $dh->ukuran ?? null;
+                    $panjang = $ukuran?->panjang ?? null;
+                    $lebar = $ukuran?->lebar ?? null;
+                    $tebal = $ukuran?->tebal ?? null;
+                    $isi = $dh->isi ?? 0;
 
-                        if ($panjang && $lebar && $tebal && $isi) {
-                            return ($panjang * $lebar * $tebal * $isi) / 10000000;
-                        }
-                        return 0;
-                    });
-                    $totalHasil = round($totalHasil, 4);
-                } else {
-                    $totalHasil = $item->detailHasils->sum('isi') ?? 0;
-                }
-
-                /* 3B. Cari target: mesin + ukuran */
-                if ($mesinUtamaId) {
-
-                    if (stripos($namaMesin, 'DRYER') !== false) {
-                        if ($shift === 'MALAM') {
-                            $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
-                        } else {
-                            $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
-                        }
-                    } elseif (stripos($namaMesin, 'DRYER 1') !== false || $mesinUtamaId == 17) {
-                        $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
-                    } elseif (stripos($namaMesin, 'DRYER 2') !== false || $mesinUtamaId == 18) {
-                        $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
-                    } else {
-                        $targetModel = Target::where('id_mesin', $mesinUtamaId)
-                            ->when($ukuranId !== null, function ($q) use ($ukuranId) {
-                                return $q->where('id_ukuran', $ukuranId);
-                            })
-                            ->first();
-
-                        if (!$targetModel) {
-                            $targetModel = Target::where('id_mesin', $mesinUtamaId)
-                                ->whereNull('id_ukuran')
-                                ->first();
-                        }
+                    if ($panjang && $lebar && $tebal && $isi) {
+                        return ($panjang * $lebar * $tebal * $isi) / 10000000;
                     }
-
-                }
+                    return 0;
+                });
+                $totalHasil = round($totalHasil, 4);
             }
 
             /* ============================================================
-             * 3C. FALLBACK JIKA TARGET BELUM DITEMUKAN
+             * 4. CARI TARGET (SELALU BERDASARKAN SHIFT)
+             * ------------------------------------------------------------
+             * Target Dryer ditentukan oleh shift (PAGI/MALAM), bukan oleh
+             * mesin fisik yang dipakai (DRYER 1 / DRYER 2 selalu jalan
+             * bersamaan per shift). Ini TIDAK boleh bergantung pada
+             * detailMesins sudah diisi atau belum, supaya operator yang
+             * belum sempat assign mesin tetap dapat perhitungan target &
+             * potongan yang benar.
              * ============================================================ */
-            if ($targetModel === null && $mesinUtamaId) {
-                if (stripos($namaMesin, 'DRYER') !== false) {
-                    if ($shift === 'MALAM') {
-                        $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
-                    } else {
-                        $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
-                    }
-                } elseif (stripos($namaMesin, 'DRYER 1') !== false || $mesinUtamaId == 17) {
-                    $targetModel = Target::where('kode_ukuran', 'DRYER PAGI')->first();
-                } elseif (stripos($namaMesin, 'DRYER 2') !== false || $mesinUtamaId == 18) {
-                    $targetModel = Target::where('kode_ukuran', 'DRYER MALAM')->first();
-                } else {
-                    $targetModel = Target::where('id_mesin', $mesinUtamaId)
-                        ->whereNull('id_ukuran')
-                        ->first();
-                }
+
+            $targetModel = $shift === 'MALAM'
+                ? Target::where('kode_ukuran', 'DRYER MALAM')->first()
+                : Target::where('kode_ukuran', 'DRYER PAGI')->first();
+
+            if (!$targetModel) {
+                Log::warning('Target Dryer tidak ditemukan untuk shift ini', [
+                    'id_produksi' => $item->id,
+                    'shift' => $shift,
+                ]);
             }
 
             $targetHarian = $targetModel->target ?? 0;
@@ -234,7 +181,7 @@ class DryerDataMap
             $kodeUkuran = $targetModel->kode_ukuran ?? null;
 
             /* ============================================================
-             * 3D. FORMAT UKURAN
+             * 5. FORMAT UKURAN (label tampilan)
              * ============================================================ */
             if ($kodeUkuran && $kodeUkuran !== '') {
                 $ukuranDisplay = preg_replace(
@@ -244,7 +191,7 @@ class DryerDataMap
                 );
                 $ukuranDisplay = trim($ukuranDisplay) ?: $kodeUkuran;
             } else {
-                if ($totalHasil === 0) {
+                if ($totalHasil == 0) {
                     $ukuranDisplay = 'BELUM INPUT HASIL';
                 } else {
                     $ukuranDisplay = "UKURAN BELUM DISET (id: {$ukuranId})";
@@ -253,7 +200,7 @@ class DryerDataMap
 
 
             /* ============================================================
-             * 4. HITUNG POTONGAN TARGET (PEMBULATAN 3 TINGKAT)
+             * 6. HITUNG POTONGAN TARGET (PEMBULATAN 3 TINGKAT)
              * ============================================================ */
 
             $selisihProduksi = $totalHasil - $targetHarian;
@@ -283,7 +230,7 @@ class DryerDataMap
 
 
             /* ============================================================
-             * 5. DETAIL PEKERJA
+             * 7. DETAIL PEKERJA
              * ============================================================ */
 
             $pekerja = $item->detailPegawais->map(function ($det) use ($potonganPerOrang) {
@@ -301,7 +248,7 @@ class DryerDataMap
 
 
             /* ============================================================
-             * 5B. DETAIL HASIL PER PALET (untuk sheet Hasil Produksi)
+             * 7B. DETAIL HASIL PER PALET (untuk sheet Hasil Produksi)
              * ============================================================ */
 
             $detailHasils = $item->detailHasils->map(function ($dh) {
@@ -341,7 +288,7 @@ class DryerDataMap
 
 
             /* ============================================================
-             * 5C. DETAIL MASUK (MODAL UNTUK MENGHITUNG KEHILANGAN)
+             * 7C. DETAIL MASUK (MODAL UNTUK MENGHITUNG KEHILANGAN)
              * ============================================================ */
             $detailMasuks = $item->detailMasuks->map(function ($dm) {
                 $ukuran  = $dm->ukuran ?? null;
@@ -371,7 +318,7 @@ class DryerDataMap
             $targetPerJam = $jamKerja > 0 ? round($targetHarian / $jamKerja, 4) : 0;
 
             /* ============================================================
-             * 6. MASUKKAN KE RESULT
+             * 8. MASUKKAN KE RESULT
              * ============================================================ */
 
             $result[] = [
