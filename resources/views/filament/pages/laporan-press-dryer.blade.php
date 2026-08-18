@@ -23,7 +23,8 @@
     <div class="space-y-12 mt-6">
         @forelse ($groupedByMesin as $mesinNama => $produksiList) @php $first =
         $produksiList->first(); $pekerja = $first['pekerja'] ?? []; $kodeUkuran
-        = $first['ukuran'] ?? 'TIDAK ADA UKURAN'; $totalPekerja =
+        = $first['ukuran'] ?? 'TIDAK ADA UKURAN'; $mesinOnly =
+        $first['mesin_only'] ?? $mesinNama; $totalPekerja =
         count($pekerja); $hasil = $first['hasil'] ?? 0; $target =
         $first['target'] ?? 0; $selisih = $first['selisih'] ?? 0; $warna =
         $selisih >= 0 ? 'text-green-400' : 'text-red-400'; $tanda = $selisih >=
@@ -35,8 +36,7 @@
         >
             <div class="bg-zinc-800 p-4 text-white">
                 <h2 class="text-lg font-bold text-center">
-                    PEKERJA MESIN: {{ strtoupper($mesinNama) }} -
-                    {{ strtoupper($kodeUkuran) }}
+                    PEKERJA MESIN: {{ strtoupper($mesinOnly) }} 
                 </h2>
             </div>
 
@@ -262,7 +262,7 @@
                 ) {
                     window.livewire.emit("loadData");
                 } else {
-                    console.warn("Livewire is not available to call loadData");
+                    console.warn("Livewire is not available to call loadData"); 
                 }
             });
         });
