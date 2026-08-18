@@ -5,10 +5,10 @@ namespace App\Http\Controllers;
 use App\Exports\LaporanKayu;
 use App\Models\HargaKayu;
 use App\Models\NotaKayu;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Facades\Excel;
-use Carbon\Carbon;
 
 class LaporanKayuMasukController extends Controller
 {
@@ -61,8 +61,8 @@ class LaporanKayuMasukController extends Controller
     private function masterHargaGrouped(): Collection
     {
         return $this->masterHargaGroupedCache ??= $this->masterHarga
-            ->groupBy(fn($h) => "{$h->id_jenis_kayu}|{$h->grade}|{$h->panjang}")
-            ->map(fn($group) => $group->sortBy('diameter_terkecil')->values());
+            ->groupBy(fn ($h) => "{$h->id_jenis_kayu}|{$h->grade}|{$h->panjang}")
+            ->map(fn ($group) => $group->sortBy('diameter_terkecil')->values());
     }
 
     /**
@@ -83,7 +83,7 @@ class LaporanKayuMasukController extends Controller
 
             if ($kelompok->isNotEmpty()) {
                 $totalBatang = $kelompok->sum('kuantitas');
-                $totalKubikasi = $kelompok->sum(fn($item) => round($item->kubikasi, 4));
+                $totalKubikasi = $kelompok->sum(fn ($item) => round($item->kubikasi, 4));
 
                 $harga = $kelompok->first()->harga ?? 0;
 
@@ -121,14 +121,18 @@ class LaporanKayuMasukController extends Controller
 
         foreach ($notas as $nota) {
             $kayuMasuk = $nota->kayuMasuk;
-            if (!$kayuMasuk) continue;
+            if (! $kayuMasuk) {
+                continue;
+            }
 
             $details = $kayuMasuk->detailTurusanKayus ?? collect();
-            if ($details->isEmpty()) continue;
+            if ($details->isEmpty()) {
+                continue;
+            }
 
             $tanggalLunas = $nota->tanggal_lunas;
 
-            $grupLahan = $details->groupBy(fn($item) => implode('|', [
+            $grupLahan = $details->groupBy(fn ($item) => implode('|', [
                 $item->lahan_id,
                 $item->jenis_kayu_id,
                 $item->panjang,
@@ -153,7 +157,12 @@ class LaporanKayuMasukController extends Controller
                 }
 
                 $hasil->push((object) [
-                    'tanggal' => $tanggalLunas,
+                    'tgl_kayu_masuk' => $kayuMasuk->tgl_kayu_masuk
+                        ? Carbon::parse($kayuMasuk->tgl_kayu_masuk)->format('d/m/Y')
+                        : '-',
+                    'tanggal' => $tanggalLunas
+                        ? Carbon::parse($tanggalLunas)->format('d/m/Y')
+                        : '-',
                     'nama' => trim($kayuMasuk->penggunaanSupplier->nama_supplier ?? '-'),
                     'seri' => $kayuMasuk->seri,
                     'panjang' => $first->panjang,
@@ -211,6 +220,7 @@ class LaporanKayuMasukController extends Controller
     public function export(Request $request)
     {
         $columns = [
+            ['label' => 'Tgl Kayu Masuk', 'field' => 'tgl_kayu_masuk'],
             ['label' => 'Tanggal', 'field' => 'tanggal'],
             ['label' => 'Nama Supplier', 'field' => 'nama'],
             ['label' => 'Seri', 'field' => 'seri'],
@@ -223,16 +233,16 @@ class LaporanKayuMasukController extends Controller
         ];
 
         if ($request->filled('dari') && $request->filled('sampai')) {
-            $labelTanggal = $request->dari . '_sd_' . $request->sampai;
+            $labelTanggal = $request->dari.'_sd_'.$request->sampai;
         } elseif ($request->filled('dari')) {
-            $labelTanggal = 'dari_' . $request->dari;
+            $labelTanggal = 'dari_'.$request->dari;
         } elseif ($request->filled('sampai')) {
-            $labelTanggal = 'sampai_' . $request->sampai;
+            $labelTanggal = 'sampai_'.$request->sampai;
         } else {
             $labelTanggal = now()->format('Y-m-d');
         }
 
-        $fileName = 'laporan_kayu_' . $labelTanggal . '.xlsx';
+        $fileName = 'laporan_kayu_'.$labelTanggal.'.xlsx';
 
         // Export menggunakan semua data (bukan yang dipotong pagination)
         $data = $this->buildLaporanData($request);
