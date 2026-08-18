@@ -152,6 +152,11 @@ class PersentaseKayu extends Page implements HasTable
                     'total_harga_veneer' => 0,
                     'total_harga_v_ongkos' => 0,
                     'total_harga_vop' => 0,
+                    // FIX: tambahkan default untuk kolom baru
+                    // "Veneer+Ongkos+Susut+Bahan Penolong" supaya tidak
+                    // undefined-array-key saat halaman pertama render
+                    // (sebelum wire:init memicu loadData()).
+                    'total_harga_vopb' => 0,
                 ],
             ];
         }
