@@ -24,20 +24,41 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
 
     protected array $mergeBatches = [];
 
+    /**
+     * true kalau MINIMAL SATU baris outflow di laporan ini punya bahan penolong
+     * (Solasi). Kalau semua kosong, kolom "Solasi", "Biaya Bahan Penolong", dan
+     * "Harga Veneer+Ongkos+Penyusutan+Bahan Penolong" disembunyikan total
+     * (header + sel), bukan cuma diisi "-", sama seperti pola yang dipakai di
+     * halaman Blade-nya.
+     */
+    protected bool $adaBahanPenolong;
+
     public function __construct(array $laporan, array $rekap, string $activeSheet, string $date)
     {
         $this->laporan = $laporan;
         $this->rekap = $rekap;
         $this->activeSheet = $activeSheet;
         $this->date = $date;
+
+        $this->adaBahanPenolong = collect($laporan)->contains(
+            fn ($item) => ($item['summary']['total_bahan_penolong'] ?? 0) > 0
+        );
     }
 
     public function array(): array
     {
         $rows = [];
 
+        // Kolom "Harga Total / m³" SELALU ada di paling akhir, baik ada bahan
+        // penolong maupun tidak. Nilainya = (harga_vopb kalau batch punya bahan
+        // penolong, kalau tidak harga_vop) DIBAGI total kubikasi produksi (m³)
+        // batch tersebut — jadi murni rate per m³, bukan nominal total lagi.
+        // Total kolom: 20 kolom dasar (A-T) + 3 kolom bahan penolong (U,V,W)
+        // kalau adaBahanPenolong + 1 kolom "Harga Total/m3" (selalu ada).
+        $jumlahKolom = $this->adaBahanPenolong ? 24 : 21;
+
         // BARIS TOTAL (Sesuai gambar di bawah header)
-        $rows[] = [
+        $totalRow = [
             'Total',
             '',
             '',
@@ -60,6 +81,39 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
             (float) $this->rekap['total_harga_vop'],
         ];
 
+        if ($this->adaBahanPenolong) {
+            // Kolom Solasi di baris Total dikosongkan (bukan daftar, cuma info per baris),
+            // dan kolom "Biaya Bahan Penolong" diisi rata-rata biaya bahan penolong per m³
+            // dari SELURUH batch (total biaya bahan penolong / total kubikasi keluar).
+            // Ini MEMANG rate per m³ (bukan nominal) — sudah dikonfirmasi benar.
+            $totalBahanSemua = collect($this->laporan)->sum(fn ($item) => $item['summary']['total_bahan_penolong'] ?? 0);
+            $totalKeluarM3Semua = collect($this->laporan)->sum(fn ($item) => (float) ($item['summary']['total_keluar_m3'] ?? 0));
+            $bahanPerM3Total = $totalKeluarM3Semua > 0 ? $totalBahanSemua / $totalKeluarM3Semua : 0;
+
+            $totalRow[] = '';
+            $totalRow[] = (float) $bahanPerM3Total;
+
+            // Kolom "Harga Veneer+Ongkos+Penyusutan+Bahan Penolong" di baris Total,
+            // diambil dari $rekap['total_harga_vopb'] (sudah dihitung sebagai
+            // total_harga_vop + total bahan penolong NOMINAL, bukan dibagi m3 lagi
+            // — lihat ProduksiInflowService::getSummaryLaporanLahan()).
+            $totalRow[] = (float) ($this->rekap['total_harga_vopb'] ?? 0);
+        }
+
+        // Kolom "Harga Total / m³" di baris Total = (Harga VOPB atau VOP total) /
+        // total kubikasi veneer keseluruhan. Beda dengan kolom "Harga V+O+P+Bahan
+        // Penolong" di atas yang masih nominal total, kolom ini murni rate per m³.
+        $totalHargaVOPorBSemua = $this->adaBahanPenolong
+            ? (float) ($this->rekap['total_harga_vopb'] ?? 0)
+            : (float) ($this->rekap['total_harga_vop'] ?? 0);
+        $totalKubikasiVeneerSemua = (float) ($this->rekap['total_kubikasi_veneer'] ?? 0);
+
+        $totalRow[] = $totalKubikasiVeneerSemua > 0
+            ? $totalHargaVOPorBSemua / $totalKubikasiVeneerSemua
+            : 0;
+
+        $rows[] = $totalRow;
+
         $currentRow = 5; // Data dimulai dari baris 4 (1&2 Header, 3 Total)
         foreach ($this->laporan as $item) {
             $outflowCount = count($item['outflow']);
@@ -76,7 +130,7 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
                 $isFirstInBatch = ($index === 0);
                 $isLastInBatch = ($index === $outflowCount - 1);
 
-                $rows[] = [
+                $row = [
                     // Kolom Tanggal: hanya diisi di baris pertama batch (akan di-merge),
                     // dan nilainya adalah tanggal outflow TERAKHIR dalam batch ini
                     // (bukan tanggal pertama), sesuai permintaan.
@@ -101,11 +155,57 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
                     (float) $prod['penyusutan'],
                     $isFirstInBatch ? (float) $item['summary']['harga_vop'] : '',
                 ];
+
+                if ($this->adaBahanPenolong) {
+                    // Kolom Solasi: daftar "jumlah x Rp harga_satuan" per baris produksi
+                    // ini (sama seperti tampilan di Blade), atau '-' kalau baris ini
+                    // memang tidak punya bahan penolong sama sekali.
+                    $bahanList = collect($prod['bahan_penolong'] ?? []);
+                    $solasiText = $bahanList->isNotEmpty()
+                        ? $bahanList->map(fn ($b) => (int) $b['jumlah'].' x Rp '.number_format($b['harga_satuan'] ?? 0, 0, ',', '.'))->implode(', ')
+                        : '-';
+
+                    // Kolom Biaya Bahan Penolong: subtotal bahan penolong baris ini
+                    // dibagi kubikasi baris ini (Rp / m³) — SUDAH DIKONFIRMASI BENAR,
+                    // ini memang rate per m³, bukan nominal total.
+                    $subtotalBahanBaris = $bahanList->sum('subtotal');
+                    $kubikasiBaris = (float) $prod['total_kubikasi'];
+                    $bahanPerM3Baris = $kubikasiBaris > 0 ? $subtotalBahanBaris / $kubikasiBaris : 0;
+
+                    $row[] = $solasiText;
+                    $row[] = $subtotalBahanBaris > 0 ? (float) $bahanPerM3Baris : '-';
+
+                    // Kolom "Harga Veneer+Ongkos+Penyusutan+Bahan Penolong" per batch,
+                    // hanya diisi di baris pertama batch (akan di-merge), diambil dari
+                    // $item['summary']['harga_vopb'] — sudah dihitung sebagai
+                    // harga_vop + bahan penolong NOMINAL (bukan dibagi m3 lagi), lihat
+                    // ProduksiInflowService::buildLaporanItemForClosure().
+                    $row[] = $isFirstInBatch ? (float) $item['summary']['harga_vopb'] : '';
+                }
+
+                // Kolom "Harga Total / m³" SELALU ada, diisi hanya di baris pertama
+                // batch (akan di-merge sama seperti kolom harga lain). Nilainya =
+                // (harga_vopb kalau batch ini punya bahan penolong, kalau tidak
+                // harga_vop) DIBAGI total kubikasi produksi batch ini
+                // ($totalM3Keluar, sudah dihitung di atas dari
+                // $item['summary']['total_keluar_m3'], fallback 1 biar tidak div/0).
+                if ($isFirstInBatch) {
+                    $adaBahanDiBatchIni = ($item['summary']['total_bahan_penolong'] ?? 0) > 0;
+                    $hargaVOPorBBatch = $adaBahanDiBatchIni
+                        ? (float) $item['summary']['harga_vopb']
+                        : (float) $item['summary']['harga_vop'];
+
+                    $row[] = $totalM3Keluar > 0 ? $hargaVOPorBBatch / $totalM3Keluar : 0;
+                } else {
+                    $row[] = '';
+                }
+
+                $rows[] = $row;
                 $currentRow++;
             }
 
             // TAMBAHKAN BARIS KOSONG SETIAP SELESAI SATU BATCH
-            $rows[] = array_fill(0, 20, ''); // Membuat 20 kolom kosong
+            $rows[] = array_fill(0, $jumlahKolom, ''); // Membuat kolom kosong (menyesuaikan jumlah kolom aktif)
             $currentRow++; // Loncat satu baris agar batch berikutnya tidak menabrak baris kosong
         }
 
@@ -114,28 +214,55 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
 
     public function headings(): array
     {
-        return [
-            ["KAYU {$this->activeSheet} ( {$this->date} )", '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
-            ['Tanggal', 'Habis', 'Kayu', '', '', '', '', 'Veneer', '', '', '', '', 'Jam Kerja', '%', 'harga veneer/m3', 'Pekerja', 'Ongkos/pkj', 'Harga Veneer + Ongkos', 'Penyusutan', 'Harga Veneer + Ongkos + penyusutan'],
-            ['', '', 'Lahan', 'Batang', 'Pecah', 'm3', 'Poin', 'Panjang', 'Lebar', 'Tebal', 'Lembar', 'm3', '', '', '', '', '', '', '', ''],
-        ];
+        $row1 = ["KAYU {$this->activeSheet} ( {$this->date} )", '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+        $row2 = ['Tanggal', 'Habis', 'Kayu', '', '', '', '', 'Veneer', '', '', '', '', 'Jam Kerja', '%', 'harga veneer/m3', 'Pekerja', 'Ongkos/pkj', 'Harga Veneer + Ongkos', 'Penyusutan', 'Harga Veneer + Ongkos + penyusutan'];
+        $row3 = ['', '', 'Lahan', 'Batang', 'Pecah', 'm3', 'Poin', 'Panjang', 'Lebar', 'Tebal', 'Lembar', 'm3', '', '', '', '', '', '', '', ''];
+
+        if ($this->adaBahanPenolong) {
+            $row1[] = '';
+            $row1[] = '';
+            $row1[] = '';
+
+            $row2[] = 'Solasi';
+            $row2[] = 'Biaya Bahan Penolong';
+            $row2[] = 'Harga Veneer + Ongkos + Penyusutan + Bahan Penolong';
+
+            $row3[] = '';
+            $row3[] = '';
+            $row3[] = '';
+        }
+
+        // Kolom "Harga Total / m³" SELALU ada di paling akhir, ada atau tidaknya
+        // bahan penolong.
+        $row1[] = '';
+        $row2[] = 'Harga Total / m³';
+        $row3[] = '';
+
+        return [$row1, $row2, $row3];
     }
 
     public function styles(Worksheet $sheet)
     {
         $lastRow = $sheet->getHighestRow();
 
-        $sheet->getRowDimension(1)->setRowHeight(18); // Angka 35 bisa Anda sesuaikan (default sekitar 15)
-        $sheet->getRowDimension(2)->setRowHeight(25); // Angka 35 bisa Anda sesuaikan (default sekitar 15)
-        $sheet->getRowDimension(4)->setRowHeight(18); // Angka 35 bisa Anda sesuaikan (default sekitar 15)
+        // Kolom terakhir: 'X' kalau ada bahan penolong (U,V,W,X), 'U' kalau
+        // tidak (cuma kolom "Harga Total / m³" saja yang ditambahkan).
+        $lastCol = $this->adaBahanPenolong ? 'X' : 'U';
 
-        $sheet->getStyle('A1:T4')->getAlignment()->setWrapText(true);
+        // Kolom "Harga Total / m³" SELALU ada di posisi terakhir:
+        // - 'X' kalau adaBahanPenolong (setelah U=Solasi, V=Biaya Bahan Penolong, W=Harga VOPB)
+        // - 'U' kalau tidak (langsung setelah T=Harga VOP)
+        $totalPerM3Col = $this->adaBahanPenolong ? 'X' : 'U';
 
-        // Tambahkan juga Vertical Center agar teks berada di tengah secara vertikal
-        $sheet->getStyle('A1:T4')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getRowDimension(1)->setRowHeight(18);
+        $sheet->getRowDimension(2)->setRowHeight(25);
+        $sheet->getRowDimension(4)->setRowHeight(18);
+
+        $sheet->getStyle("A1:{$lastCol}4")->getAlignment()->setWrapText(true);
+        $sheet->getStyle("A1:{$lastCol}4")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
 
         // MERGING HEADERS
-        $sheet->mergeCells('A1:T1'); // ! NAMA LAHAN
+        $sheet->mergeCells("A1:{$lastCol}1"); // ! NAMA LAHAN
         $sheet->mergeCells('A4:B4'); // ! TOTAL
         $sheet->mergeCells('A2:A3'); // Tanggal
         $sheet->mergeCells('B2:B3'); // Habis
@@ -150,8 +277,17 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
         $sheet->mergeCells('S2:S3'); // Penyusutan
         $sheet->mergeCells('T2:T3'); // Harga V+O+P
 
+        if ($this->adaBahanPenolong) {
+            $sheet->mergeCells('U2:U3'); // Solasi
+            $sheet->mergeCells('V2:V3'); // Biaya Bahan Penolong
+            $sheet->mergeCells('W2:W3'); // Harga V+O+P+Bahan Penolong
+        }
+
+        // Merge header kolom "Harga Total / m³" (selalu ada)
+        $sheet->mergeCells("{$totalPerM3Col}2:{$totalPerM3Col}3");
+
         // HEADER STYLE
-        $sheet->getStyle('A1:T4')->applyFromArray([
+        $sheet->getStyle("A1:{$lastCol}4")->applyFromArray([
             'font' => ['bold' => true],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
             'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
@@ -160,66 +296,92 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
         // BARIS TOTAL (Baris 3)
         $sheet->getStyle('A4:L4')->applyFromArray([
             'font' => ['bold' => true],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFC000']], // Oranye/Kuning Emas
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFC000']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ]);
-        $sheet->getStyle('M4:T4')->applyFromArray([
+        $sheet->getStyle("M4:{$lastCol}4")->applyFromArray([
             'font' => ['bold' => true],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FF88BA']], // Oranye/Kuning Emas
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FF88BA']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ]);
 
         // COLUMN COLORS (Sesuai Gambar)
-        $sheet->getStyle('F5:G'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Kayu
-        $sheet->getStyle('L5:L'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Veneer m3
-        $sheet->getStyle('N5:N'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda %
-        $sheet->getStyle('O5:O'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('92D050'); // Hijau Harga m3
-        $sheet->getStyle('R5:R'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFC000'); // Oranye Harga V+O
-        $sheet->getStyle('S5:S'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE'); // Biru Muda Penyusutan
-        $sheet->getStyle('T5:T'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFF00'); // Kuning Terang VOP
+        $sheet->getStyle('F5:G'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE');
+        $sheet->getStyle('L5:L'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE');
+        $sheet->getStyle('N5:N'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE');
+        $sheet->getStyle('O5:O'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('92D050');
+        $sheet->getStyle('R5:R'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFC000');
+        $sheet->getStyle('S5:S'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BDD7EE');
+        $sheet->getStyle('T5:T'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFF00');
+        if ($this->adaBahanPenolong) {
+            $sheet->getStyle('V5:V'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('C6E0B4');
+            $sheet->getStyle('W5:W'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFC000');
+        }
+
+        // Warna kuning terang (senada kolom VOP) untuk kolom ringkasan akhir
+        // "Harga Total / m³" yang selalu ada.
+        $sheet->getStyle("{$totalPerM3Col}5:{$totalPerM3Col}{$lastRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFF00');
+
         // ! TOTAL
-        $sheet->getStyle('C4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF'); // Kuning Terang VOP
-        $sheet->getStyle('E4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF'); // Kuning Terang VOP
-        $sheet->getStyle('H4:K4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF'); // Kuning Terang VOP
-        $sheet->getStyle('P4:Q4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF'); // Kuning Terang VOP
-        $sheet->getStyle('S4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF'); // Kuning Terang VOP
+        $sheet->getStyle('C4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF');
+        $sheet->getStyle('E4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF');
+        $sheet->getStyle('H4:K4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF');
+        $sheet->getStyle('P4:Q4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF');
+        $sheet->getStyle('S4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF');
+        if ($this->adaBahanPenolong) {
+            $sheet->getStyle('U4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF');
+        }
 
         // ALIGNMENT & BORDERS
-        $sheet->getStyle('A5:T'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-        $sheet->getStyle('A5:T'.$lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle("A5:{$lastCol}{$lastRow}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getStyle("A5:{$lastCol}{$lastRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
         $sheet->getStyle('A5:F'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle('M5:N'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle('P5:P'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        if ($this->adaBahanPenolong) {
+            $sheet->getStyle('U5:V'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        }
 
         // FORMAT ANGKA
         $sheet->getStyle('F4:F'.$lastRow)->getNumberFormat()->setFormatCode('0.0000');
         $sheet->getStyle('L4:L'.$lastRow)->getNumberFormat()->setFormatCode('0.0000');
-        // ! POINT
-        // Format Rupiah Standar (Rp 1.000.000)
         $sheet->getStyle('D4:D'.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
         $sheet->getStyle('G4:G'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
-
-        // Untuk baris lainnya
         $sheet->getStyle('O4:O'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
         $sheet->getStyle('Q4:T'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
+
+        if ($this->adaBahanPenolong) {
+            // Format "Rp .../m3" untuk kolom Biaya Bahan Penolong (per kubikasi, bukan total).
+            $sheet->getStyle('V4:V'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0.00_)"/m³";_("Rp"* (#,##0.00)"/m³";_("Rp"* "-"_);_(@_)');
+            // Format Rupiah standar untuk kolom Harga V+O+P+Bahan Penolong.
+            $sheet->getStyle('W4:W'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
+        }
+
+        // Format "Rp .../m3" untuk kolom "Harga Total / m³" (sekarang rate per
+        // m³ juga, sama seperti kolom Biaya Bahan Penolong).
+        $sheet->getStyle("{$totalPerM3Col}4:{$totalPerM3Col}{$lastRow}")->getNumberFormat()->setFormatCode('_("Rp"* #,##0.00_)"/m³";_("Rp"* (#,##0.00)"/m³";_("Rp"* "-"_);_(@_)');
 
         // Kolom yang di-merge per batch. 'A' (Tanggal) ditambahkan agar tanggal
         // ikut digabung menjadi satu sel per batch (menampilkan tanggal terakhir
         // dari outflow batch tersebut, yang sudah diset di method array()).
         $mergeRow = ['A', 'C', 'D', 'E', 'F', 'G', 'N', 'O', 'R', 'T'];
+        if ($this->adaBahanPenolong) {
+            $mergeRow[] = 'W';
+        }
+        // Kolom "Harga Total / m³" juga hanya diisi di baris pertama batch,
+        // jadi harus ikut di-merge per batch juga.
+        $mergeRow[] = $totalPerM3Col;
         foreach ($this->mergeBatches as $batch) {
             foreach ($mergeRow as $column) {
                 $sheet->mergeCells("{$column}{$batch['start']}:{$column}{$batch['end']}");
-
-                // Tambahkan ini agar teks berada di tengah secara vertikal (Center)
                 $sheet->getStyle("{$column}{$batch['start']}")
                     ->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setHorizontal(Alignment::HORIZONTAL_CENTER);
             }
             $theEnd = $batch['end'] + 1;
-            $sheet->getStyle("A{$theEnd}:T{$theEnd}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF');
+            $sheet->getStyle("A{$theEnd}:{$lastCol}{$theEnd}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF');
         }
 
         return [];
@@ -227,7 +389,7 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
 
     public function columnWidths(): array
     {
-        return [
+        $widths = [
             'A' => 12,
             'B' => 7,
             'C' => 8,
@@ -249,6 +411,17 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
             'S' => 12,
             'T' => 20,
         ];
+
+        if ($this->adaBahanPenolong) {
+            $widths['U'] = 22; // Solasi (daftar "jumlah x Rp harga")
+            $widths['V'] = 20; // Biaya Bahan Penolong (Rp / m³)
+            $widths['W'] = 26; // Harga V+O+P+Bahan Penolong
+            $widths['X'] = 20; // Harga Total / m³ (selalu ada)
+        } else {
+            $widths['U'] = 20; // Harga Total / m³ (selalu ada, posisi U kalau tanpa bahan penolong)
+        }
+
+        return $widths;
     }
 
     public function title(): string
