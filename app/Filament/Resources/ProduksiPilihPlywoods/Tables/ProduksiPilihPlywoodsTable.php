@@ -21,7 +21,7 @@ class ProduksiPilihPlywoodsTable
     {
         return $table
             ->defaultSort('tanggal_produksi', 'desc')
-            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_produksi'))
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_produksi', 7))
             ->columns([
                 TextColumn::make('tanggal_produksi')
                     ->date()

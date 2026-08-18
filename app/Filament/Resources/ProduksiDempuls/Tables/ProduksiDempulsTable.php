@@ -22,9 +22,9 @@ class ProduksiDempulsTable
         $kolomTanggal = ProduksiDempul::kolomTanggalAktif();
 
         return $table
-            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_dempul'))
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_produksi', 7))
             ->columns([
-                TextColumn::make('tanggal_dempul')
+                TextColumn::make('tanggal_produksi')
                     ->label('Tanggal Dempul')
                     ->date('d/m/Y')
                     ->sortable(query: function ($query, string $direction) use ($kolomTanggal) {

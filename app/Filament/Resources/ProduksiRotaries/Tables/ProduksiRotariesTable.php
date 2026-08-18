@@ -22,7 +22,7 @@ class ProduksiRotariesTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tgl_produksi'))
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tgl_produksi', 7))
             ->columns([
                 TextColumn::make('tgl_produksi')
                     ->label('Tanggal')

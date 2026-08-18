@@ -6,17 +6,18 @@ use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithTitle;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 
 // ============================================================
-//  MAIN EXPORT — membungkus 2 sheet
+//  MAIN EXPORT — Membungkus 2 Sheet (Pekerja & Hasil)
 // ============================================================
 class LaporanProduksiStikExport implements WithMultipleSheets
 {
@@ -37,17 +38,12 @@ class LaporanProduksiStikExport implements WithMultipleSheets
 }
 
 // ============================================================
-use Maatwebsite\Excel\Concerns\WithEvents;
-use Maatwebsite\Excel\Events\AfterSheet;
-
-// ============================================================
-//  SHEET 1 — "Laporan Produksi Stik" (Rotary Style)
+//  SHEET 1 — "Laporan Produksi Stik" (Sesuai Desain Web Card)
 // ============================================================
 class LaporanProduksiStikSheetPekerja implements FromCollection, WithHeadings, WithTitle, WithEvents
 {
-    protected $dataStik;
-    protected $mergeRanges = [];
-    protected $tableRanges = [];
+    protected Collection $dataStik;
+    protected array $cardRanges = [];
 
     public function __construct(array $dataStik)
     {
@@ -57,220 +53,223 @@ class LaporanProduksiStikSheetPekerja implements FromCollection, WithHeadings, W
     public function collection(): Collection
     {
         $allRows = [];
-        $this->mergeRanges = [];
-        $this->tableRanges = [];
+        $this->cardRanges = [];
 
         if ($this->dataStik->isEmpty()) {
-            return collect($allRows);
+            return collect([['Tidak ada data produksi untuk tanggal ini.']]);
         }
 
         $allRows[] = ['LAPORAN PRODUKSI STIK'];
         $allRows[] = ['TANGGAL: ' . ($this->dataStik->first()['tanggal'] ?? '')];
-        $allRows[] = array_fill(0, 11, '');
+        $allRows[] = array_fill(0, 7, '');
 
-        $index = 0;
         foreach ($this->dataStik as $produksi) {
-            $pekerja       = $produksi['pekerja']       ?? [];
-            $kendala       = $produksi['kendala']       ?? 'Tidak ada kendala.';
-            $target        = $produksi['target_harian'] ?? 0;
-            $jamKerja      = $produksi['jam_kerja']     ?? 0;
-            $hasil         = $produksi['hasil_harian']  ?? 0;
-            $selisih       = $produksi['selisih']       ?? 0;
+            $mesinNama     = $produksi['mesin'] ?? 'MESIN STIK';
+            $kodeUkuran    = $produksi['ukuran'] ?? 'TIDAK ADA UKURAN';
+            $pekerja       = $produksi['pekerja'] ?? [];
+            $target        = (int) ($produksi['target'] ?? 0);
+            $jamKerja      = (float) ($produksi['jam_kerja'] ?? 9);
+            $hasil         = (int) ($produksi['hasil'] ?? 0);
+            $selisih       = (int) ($produksi['selisih'] ?? 0);
+            $tanggal       = $produksi['tanggal'] ?? '-';
+            $totalDowntime = $produksi['total_downtime_formatted'] ?? '-';
+            $kendala       = $produksi['kendala'] ?? '-';
             $totalPekerja  = count($pekerja);
-            $selisihTampil = $selisih * -1;
 
-            $targetPerJam  = $jamKerja > 0 ? $target / $jamKerja : 0;
+            // 1. JUDUL HEADER CARD
+            $titleRow = count($allRows) + 1;
+            $allRows[] = ['PEKERJA STIK: ' . strtoupper($mesinNama) . ' - ' . strtoupper($kodeUkuran), '', '', '', '', '', ''];
 
-            $allRows[] = ['PRODUKSI STIK - Entri ke-' . ($index + 1)];
-            $allRows[] = array_fill(0, 11, '');
+            // 2. HEADER TABEL "DATA PEKERJA"
+            $subTitleRow = count($allRows) + 1;
+            $allRows[] = ['DATA PEKERJA', '', '', '', '', '', ''];
 
-            $headerRow = count($allRows) + 1;
-            $allRows[] = ['ID', 'Nama', 'Potongan Gaji', 'Keterangan', '', 'Target Harian', 'Jam Kerja', 'Target/Jam', 'Hasil', 'Selisih', 'Kendala'];
+            // 3. HEADER KOLOM PEKERJA (7 Kolom)
+            $colHeaderRow = count($allRows) + 1;
+            $allRows[] = ['ID', 'Nama', 'Masuk', 'Pulang', 'Ijin', 'Potongan Target', 'Keterangan'];
 
+            // 4. DATA BARIS PEKERJA
             $workerStartRow = count($allRows) + 1;
-            $N = count($pekerja);
-            $workerEndRow = $workerStartRow + $N - 1;
-            $totalRow = $workerStartRow + $N;
-
-            if ($N > 0) {
-                // Merge summary columns
-                if ($N > 1) {
-                    $this->mergeRanges[] = "F{$workerStartRow}:F{$workerEndRow}";
-                    $this->mergeRanges[] = "G{$workerStartRow}:G{$workerEndRow}";
-                    $this->mergeRanges[] = "H{$workerStartRow}:H{$workerEndRow}";
-                    $this->mergeRanges[] = "I{$workerStartRow}:I{$workerEndRow}";
-                    $this->mergeRanges[] = "J{$workerStartRow}:J{$workerEndRow}";
-                    $this->mergeRanges[] = "K{$workerStartRow}:K{$workerEndRow}";
+            if (empty($pekerja)) {
+                $allRows[] = ['-', 'Tidak ada data pekerja untuk ukuran ini.', '-', '-', '-', 0, '-'];
+            } else {
+                foreach ($pekerja as $p) {
+                    $potRaw = (int) str_replace(['.', 'Rp ', '-', ' '], '', $p['pot_target'] ?? '0');
+                    $allRows[] = [
+                        $p['id']         ?? '-',
+                        $p['nama']       ?? '-',
+                        $p['jam_masuk']  ?? '-',
+                        $p['jam_pulang'] ?? '-',
+                        $p['ijin']       ?? '-',
+                        $potRaw > 0 ? (int) $potRaw : 0,
+                        $p['keterangan'] ?? '-',
+                    ];
                 }
             }
+            $workerEndRow = count($allRows);
 
-            foreach ($pekerja as $idx => $p) {
-                $potTargetRaw = (int) str_replace(['.', 'Rp ', '-'], '', $p['pot_target'] ?? '0');
-                
-                // Combine attendance details into Keterangan column
-                $ketParts = [];
-                if (!empty($p['jam_masuk']) && $p['jam_masuk'] !== '-') {
-                    $ketParts[] = "Masuk: " . $p['jam_masuk'] . ($p['jam_pulang'] !== '-' ? " - " . $p['jam_pulang'] : "");
-                }
-                if (!empty($p['ijin']) && $p['ijin'] !== '-') {
-                    $ketParts[] = "Ijin: " . $p['ijin'];
-                }
-                if (!empty($p['keterangan']) && $p['keterangan'] !== '-') {
-                    $ketParts[] = $p['keterangan'];
-                }
-                $ketString = !empty($ketParts) ? implode(" | ", $ketParts) : '-';
+            // 5. FOOTER SUMMARY BARIS 1 (Format Ringkasan)
+            $tanda = $selisih >= 0 ? '+' : '';
+            $summaryText = "Pekerja: {$totalPekerja} | Target: " . number_format($target, 0, ',', '.') .
+                " | Jam Produksi: " . number_format($jamKerja, 1) . " jam" .
+                " | Hasil: " . number_format($hasil, 0, ',', '.') .
+                " | Selisih: {$tanda}" . number_format($selisih, 0, ',', '.') .
+                " | Tanggal: {$tanggal} | Total Downtime: {$totalDowntime}";
 
-                $allRows[] = [
-                    $p['id']         ?? '-',
-                    $p['nama']       ?? '-',
-                    $potTargetRaw > 0 ? (int) $potTargetRaw : 0,
-                    $ketString,
-                    '',
-                    $idx === 0 ? (int) $target : '',
-                    $idx === 0 ? (int) $jamKerja : '',
-                    $idx === 0 ? round((float) $targetPerJam, 2) : '',
-                    $idx === 0 ? (int) $hasil : '',
-                    $idx === 0 ? (int) $selisihTampil : '',
-                    $idx === 0 ? $kendala : ''
-                ];
+            $footerRow1 = count($allRows) + 1;
+            $allRows[] = [$summaryText, '', '', '', '', '', ''];
+
+            // 6. FOOTER BARIS 2 (Kendala jika ada)
+            $hasKendala = (!empty($kendala) && $kendala !== 'Tidak ada kendala.' && $kendala !== '-');
+            $footerRow2 = null;
+            if ($hasKendala) {
+                $footerRow2 = count($allRows) + 1;
+                $allRows[] = ["Kendala: {$kendala}", '', '', '', '', '', ''];
             }
 
-            // Total Row
-            $allRows[] = [
-                'TOTAL',
-                $N . ' pekerja',
-                $N > 0 ? "=SUM(C{$workerStartRow}:C{$workerEndRow})" : 0,
-                '',
-                '',
-                $N > 0 ? "=SUM(F{$workerStartRow}:F{$workerEndRow})" : 0,
-                (int) $jamKerja,
-                $N > 0 ? "=SUM(H{$workerStartRow}:H{$workerEndRow})" : 0,
-                $N > 0 ? "=SUM(I{$workerStartRow}:I{$workerEndRow})" : 0,
-                $N > 0 ? "=SUM(J{$workerStartRow}:J{$workerEndRow})" : 0,
-                ''
+            // Simpan posisi baris untuk styling dinamis
+            $this->cardRanges[] = [
+                'title'       => $titleRow,
+                'sub_title'   => $subTitleRow,
+                'col_header'  => $colHeaderRow,
+                'start_data'  => $workerStartRow,
+                'end_data'    => $workerEndRow,
+                'footer_1'    => $footerRow1,
+                'footer_2'    => $footerRow2,
             ];
 
-            $allRows[] = array_fill(0, 11, '');
-            $allRows[] = array_fill(0, 11, '');
-
-            $this->tableRanges[] = [
-                'header' => $headerRow,
-                'start'  => $workerStartRow,
-                'end'    => $workerEndRow,
-                'total'  => $totalRow
-            ];
-
-            $index++;
+            // Jarak pemisah antar card
+            $allRows[] = array_fill(0, 7, '');
+            $allRows[] = array_fill(0, 7, '');
         }
 
         return collect($allRows);
     }
 
-    public function headings(): array { return []; }
-    public function title(): string   { return 'Laporan Produksi Stik'; }
+    public function headings(): array
+    {
+        return [];
+    }
+    public function title(): string
+    {
+        return 'Laporan Produksi Stik';
+    }
 
     public function registerEvents(): array
     {
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-                
-                // Set explicit column widths
-                $sheet->getColumnDimension('A')->setWidth(10);
-                $sheet->getColumnDimension('B')->setWidth(25);
-                $sheet->getColumnDimension('C')->setWidth(15);
-                $sheet->getColumnDimension('D')->setWidth(25);
-                $sheet->getColumnDimension('E')->setWidth(5);
-                $sheet->getColumnDimension('F')->setWidth(15);
-                $sheet->getColumnDimension('G')->setWidth(12);
-                $sheet->getColumnDimension('H')->setWidth(12);
-                $sheet->getColumnDimension('I')->setWidth(12);
-                $sheet->getColumnDimension('J')->setWidth(12);
-                $sheet->getColumnDimension('K')->setWidth(45);
 
-                // Merge cells dynamically
-                foreach ($this->mergeRanges as $range) {
-                    $sheet->mergeCells($range);
-                }
+                // Lebar 7 Kolom
+                $sheet->getColumnDimension('A')->setWidth(12);
+                $sheet->getColumnDimension('B')->setWidth(26);
+                $sheet->getColumnDimension('C')->setWidth(14);
+                $sheet->getColumnDimension('D')->setWidth(14);
+                $sheet->getColumnDimension('E')->setWidth(12);
+                $sheet->getColumnDimension('F')->setWidth(20);
+                $sheet->getColumnDimension('G')->setWidth(35);
 
-                // Apply styles, borders, alignments and colors for each table
-                foreach ($this->tableRanges as $range) {
-                    $headerRow = $range['header'];
-                    $startRow = $range['start'];
-                    $endRow = $range['end'];
-                    $totalRow = $range['total'];
+                // Style Judul Utama Dokumen
+                $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+                $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(11);
 
-                    // 1. Grid borders for the entire table (A{header} to K{total})
-                    $sheet->getStyle("A{$headerRow}:K{$totalRow}")->applyFromArray([
+                foreach ($this->cardRanges as $card) {
+                    $tRow   = $card['title'];
+                    $stRow  = $card['sub_title'];
+                    $hRow   = $card['col_header'];
+                    $dStart = $card['start_data'];
+                    $dEnd   = $card['end_data'];
+                    $fRow1  = $card['footer_1'];
+                    $fRow2  = $card['footer_2'];
+                    $lastRow = $fRow2 ?? $fRow1;
+
+                    // 1. Header Card (PEKERJA STIK: ...)
+                    $sheet->mergeCells("A{$tRow}:G{$tRow}");
+                    $sheet->getStyle("A{$tRow}:G{$tRow}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
+                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '27272A']], // Zinc 800
+                        'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                    ]);
+                    $sheet->getRowDimension($tRow)->setRowHeight(24);
+
+                    // 2. Sub-Header (DATA PEKERJA)
+                    $sheet->mergeCells("A{$stRow}:G{$stRow}");
+                    $sheet->getStyle("A{$stRow}:G{$stRow}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 12],
+                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '3F3F46']], // Zinc 700
+                        'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                    ]);
+                    $sheet->getRowDimension($stRow)->setRowHeight(22);
+
+                    // 3. Kolom Header (ID, Nama, Masuk, Pulang, ...)
+                    $sheet->getStyle("A{$hRow}:G{$hRow}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['rgb' => '18181B'], 'size' => 10],
+                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E4E4E7']], // Zinc 200
+                        'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                    ]);
+                    $sheet->getRowDimension($hRow)->setRowHeight(20);
+
+                    // 4. Data Baris Pekerja (Border & Alignment)
+                    $sheet->getStyle("A{$dStart}:G{$dEnd}")->applyFromArray([
+                        'font' => ['size' => 10],
+                        'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+                    ]);
+
+                    // Alignment per kolom
+                    $sheet->getStyle("A{$dStart}:A{$dEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("B{$dStart}:B{$dEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                    $sheet->getStyle("C{$dStart}:C{$dEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("D{$dStart}:D{$dEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("E{$dStart}:E{$dEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("F{$dStart}:F{$dEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    $sheet->getStyle("G{$dStart}:G{$dEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+
+                    // Format Rupiah untuk kolom Potongan Target (F)
+                    $sheet->getStyle("F{$dStart}:F{$dEnd}")->getNumberFormat()->setFormatCode('"Rp "#,##0;("Rp "#,##0);"-"');
+
+                    // 5. Footer Summary Baris 1
+                    $sheet->mergeCells("A{$fRow1}:G{$fRow1}");
+                    $sheet->getStyle("A{$fRow1}:G{$fRow1}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['rgb' => '27272A'], 'size' => 10],
+                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F4F4F5']], // Zinc 100
+                        'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                    ]);
+                    $sheet->getRowDimension($fRow1)->setRowHeight(22);
+
+                    // 6. Footer Kendala Baris 2 (jika ada)
+                    if ($fRow2) {
+                        $sheet->mergeCells("A{$fRow2}:G{$fRow2}");
+                        $sheet->getStyle("A{$fRow2}:G{$fRow2}")->applyFromArray([
+                            'font' => ['italic' => true, 'color' => ['rgb' => 'CA8A04'], 'size' => 9], // Yellow-600
+                            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FAFAFA']],
+                            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                        ]);
+                        $sheet->getRowDimension($fRow2)->setRowHeight(18);
+                    }
+
+                    // 7. Seluruh Kotak Tabel (Grid Border)
+                    $sheet->getStyle("A{$tRow}:G{$lastRow}")->applyFromArray([
                         'borders' => [
                             'allBorders' => [
-                                'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
-                                'color' => ['argb' => 'FFCBD5E1'],
-                            ]
-                        ]
-                    ]);
-
-                    // 2. Header row style
-                    $sheet->getStyle("A{$headerRow}:K{$headerRow}")->applyFromArray([
-                        'font' => ['bold' => true, 'color' => ['argb' => 'FF1E293B']],
-                        'fill' => [
-                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFE2E8F0']
+                                'borderStyle' => Border::BORDER_THIN,
+                                'color' => ['rgb' => 'D4D4D8'], // Zinc 300
+                            ],
+                            'outline' => [
+                                'borderStyle' => Border::BORDER_MEDIUM,
+                                'color' => ['rgb' => '71717A'], // Zinc 500
+                            ],
                         ],
-                        'alignment' => [
-                            'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-                            'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
-                        ]
                     ]);
-
-                    // 3. Total row style
-                    $sheet->getStyle("A{$totalRow}:K{$totalRow}")->applyFromArray([
-                        'font' => ['bold' => true, 'color' => ['argb' => 'FF1E293B']],
-                        'fill' => [
-                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFF1F5F9']
-                        ]
-                    ]);
-
-                    // 4. Alignments for worker data cells (A{start} to K{end})
-                    if ($startRow <= $endRow) {
-                        $sheet->getStyle("A{$startRow}:A{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle("B{$startRow}:B{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
-                        $sheet->getStyle("C{$startRow}:C{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
-                        $sheet->getStyle("D{$startRow}:D{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
-                        
-                        $sheet->getStyle("F{$startRow}:F{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
-                        $sheet->getStyle("G{$startRow}:G{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle("H{$startRow}:H{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
-                        $sheet->getStyle("I{$startRow}:I{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
-                        $sheet->getStyle("J{$startRow}:J{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
-                        $sheet->getStyle("K{$startRow}:K{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
-                        
-                        // Vertical alignment top for merged cells
-                        $sheet->getStyle("F{$startRow}:K{$endRow}")->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP);
-
-                        // Number formats
-                        $sheet->getStyle("C{$startRow}:C{$totalRow}")->getNumberFormat()->setFormatCode('#,##0;(#,##0);"-"');
-                        $sheet->getStyle("F{$startRow}:F{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
-                        $sheet->getStyle("H{$startRow}:H{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
-                        $sheet->getStyle("I{$startRow}:I{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
-                        $sheet->getStyle("J{$startRow}:J{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
-                    }
                 }
-
-                // Enable wrap text and top vertical alignment for Keterangan (D) and Kendala (K)
-                $highestRow = $sheet->getHighestRow();
-                $sheet->getStyle("D1:D{$highestRow}")->getAlignment()->setWrapText(true);
-                $sheet->getStyle("K1:K{$highestRow}")->getAlignment()->setWrapText(true);
-            }
+            },
         ];
     }
 }
 
 // ============================================================
 //  SHEET 2 — "Hasil Stik"
-//  Menggunakan data 'detail_hasil' yang sudah disiapkan
-//  oleh LaporanStik::loadAllData() — sudah digroup & dikw-kan
+//  (Rincian Hasil P x L x T & Rekap Kw1 - Kw4 / AF)
 // ============================================================
 class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
 {
@@ -295,34 +294,32 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
 
         foreach ($this->dataStik as $produksi) {
             $tanggal      = $produksi['tanggal']      ?? '-';
-            $pekerja      = $produksi['pekerja']       ?? [];
-            // ✅ Gunakan 'detail_hasil' sesuai key dari LaporanStik::loadAllData()
+            $pekerja      = $produksi['pekerja']      ?? [];
             $detailHasil  = $produksi['detail_hasil']  ?? [];
             $totalPekerja = count($pekerja);
+            $kodeUkuran   = $produksi['ukuran']       ?? 'STIK';
 
-            // ── JUDUL SEKSI ──────────────────────────────────────
-            $rows[] = ['PRODUKSI STIK', '', '', '', '', '', '', '', '', '', '', ''];
+            // ── JUDUL SEKSI CARD ───────────────────────────────────
+            $rows[] = ["PRODUKSI STIK - {$kodeUkuran}", '', '', '', '', '', '', '', '', '', '', ''];
             $this->styleMap[$rowIndex] = 'section_title';
             $rowIndex++;
 
-            // ── HEADER KOLOM ─────────────────────────────────────
+            // ── HEADER KOLOM ───────────────────────────────────────
             $rows[] = ['Tanggal', 'p', 'l', 't', 'jenis', 'kw1', 'kw2', 'kw3', 'kw4', 'kw af', 'byk', 'TTL PKJ'];
             $this->styleMap[$rowIndex] = 'col_header';
             $rowIndex++;
 
-            // ── DATA ROWS ────────────────────────────────────────
+            // ── DATA ROWS ──────────────────────────────────────────
             $dataStartRow = $rowIndex;
 
             if (empty($detailHasil)) {
-                // Fallback jika belum ada input hasil
-                $rows[] = [$tanggal, '-', '-', '-', '-', '', '', '', '', '', $produksi['hasil_harian'] ?? 0, $totalPekerja];
+                $rows[] = [$tanggal, '-', '-', '-', '-', '', '', '', '', '', $produksi['hasil'] ?? 0, $totalPekerja];
                 $this->styleMap[$rowIndex] = 'data';
                 $rowIndex++;
             } else {
                 foreach ($detailHasil as $i => $detail) {
                     $rows[] = [
-                        // Tanggal dan TTL PKJ hanya di baris pertama, sisanya kosong (akan di-merge)
-                        $i === 0 ? $tanggal      : '',
+                        $i === 0 ? $tanggal : '',
                         $detail['panjang']    ?? '-',
                         $detail['lebar']      ?? '-',
                         $detail['tebal']      ?? '-',
@@ -348,7 +345,7 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
                 }
             }
 
-            // ── BARIS KOSONG PEMISAH ─────────────────────────────
+            // ── BARIS PEMISAH ──────────────────────────────────────
             $rows[] = ['', '', '', '', '', '', '', '', '', '', '', ''];
             $rowIndex++;
         }
@@ -356,14 +353,17 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
         return $rows;
     }
 
-    public function title(): string { return 'Hasil Stik'; }
+    public function title(): string
+    {
+        return 'Hasil Stik';
+    }
 
     public function styles(Worksheet $sheet)
     {
         $blueDark  = '1F4E79';
         $blueLight = '2E75B6';
 
-        // ── MERGE CELL ───────────────────────────────────────────
+        // ── MERGE CELL ─────────────────────────────────────────────
         foreach ($this->mergeRanges as $range) {
             $sheet->mergeCells($range);
             $sheet->getStyle($range)->getAlignment()
@@ -371,16 +371,15 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
                 ->setVertical(Alignment::VERTICAL_CENTER);
         }
 
-        // ── STYLE PER BARIS ───────────────────────────────────────
+        // ── STYLE PER BARIS ─────────────────────────────────────────
         foreach ($this->styleMap as $rowNum => $type) {
             switch ($type) {
-
                 case 'section_title':
                     $sheet->mergeCells("A{$rowNum}:L{$rowNum}");
                     $sheet->getStyle("A{$rowNum}:L{$rowNum}")->applyFromArray([
                         'font' => [
                             'bold'  => true,
-                            'size'  => 14,
+                            'size'  => 12,
                             'color' => ['rgb' => 'FFFFFF'],
                             'name'  => 'Arial',
                         ],
@@ -394,7 +393,7 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
                             'indent'     => 1,
                         ],
                     ]);
-                    $sheet->getRowDimension($rowNum)->setRowHeight(28);
+                    $sheet->getRowDimension($rowNum)->setRowHeight(26);
                     break;
 
                 case 'col_header':
@@ -441,23 +440,21 @@ class LaporanProduksiStikSheetHasil implements FromArray, WithTitle, WithStyles
                             ],
                         ],
                     ]);
-                    $sheet->getRowDimension($rowNum)->setRowHeight(16);
+                    $sheet->getRowDimension($rowNum)->setRowHeight(18);
                     break;
             }
         }
 
-        // ── LEBAR KOLOM ──────────────────────────────────────────
+        // ── LEBAR KOLOM ────────────────────────────────────────────
         $sheet->getColumnDimension('A')->setWidth(13);
         $sheet->getColumnDimension('B')->setWidth(7);
         $sheet->getColumnDimension('C')->setWidth(7);
         $sheet->getColumnDimension('D')->setWidth(7);
         $sheet->getColumnDimension('E')->setWidth(9);
-        foreach (['F','G','H','I','J','K'] as $col) {
+        foreach (['F', 'G', 'H', 'I', 'J', 'K'] as $col) {
             $sheet->getColumnDimension($col)->setWidth(8);
         }
         $sheet->getColumnDimension('L')->setWidth(10);
-
-        $sheet->freezePane('A3');
 
         return [];
     }

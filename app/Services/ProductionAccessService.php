@@ -7,36 +7,29 @@ use Illuminate\Database\Eloquent\Builder;
 class ProductionAccessService
 {
     /**
-     * Tentukan berapa hari data dapat diakses oleh user non-admin.
-     */
-    protected static int $daysLimit = 3;
-
-    /**
-     * Cek apakah user saat ini memiliki akses penuh ke seluruh riwayat data.
-     */
-    public static function canAccessAllHistory(): bool
-    {
-        $user = auth()->user();
-
-        if (!$user) {
-            return false;
-        }
-
-        // Jika ke depan ingin menambah role lain, tinggal tambahkan di sini (misal: 'admin', 'manager')
-        return $user->hasAnyRole(['super_admin', 'admin']);
-    }
-
-    /**
-     * Terapkan filter query berdasarkan hak akses user.
+     * Membatasi query tanggal produksi berdasarkan role pengguna.
      *
      * @param Builder $query
      * @param string $dateColumn Nama kolom tanggal pada tabel (default: 'tgl_produksi')
+     * @param int $days Rentang hari untuk non-super_admin (default: 3)
      * @return Builder
      */
-    public static function applyDateRestriction(Builder $query, string $dateColumn = 'tgl_produksi'): Builder
-    {
-        if (!static::canAccessAllHistory()) {
-            $query->where($dateColumn, '>=', now()->subDays(static::$daysLimit));
+    public static function applyDateRestriction(
+        Builder $query,
+        string $dateColumn = 'tgl_produksi',
+        int $days = 3
+    ): Builder {
+        $user = auth()->user();
+
+        if (!$user) {
+            return $query->whereDate($dateColumn, '>=', now()->subDays($days));
+        }
+
+        // Daftar role yang bisa melihat seluruh data tanpa batas
+        $allowedRoles = ['super_admin', 'admin'];
+
+        if (!$user->hasAnyRole($allowedRoles)) {
+            $query->whereDate($dateColumn, '>=', now()->subDays($days));
         }
 
         return $query;
