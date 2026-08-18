@@ -36,8 +36,7 @@
         >
             <div class="bg-zinc-800 p-4 text-white">
                 <h2 class="text-lg font-bold text-center">
-                    PEKERJA MESIN: {{ strtoupper($mesinOnly) }} -
-                    {{ strtoupper($kodeUkuran) }}
+                    PEKERJA MESIN: {{ strtoupper($mesinOnly) }} 
                 </h2>
             </div>
 
@@ -263,7 +262,7 @@
                 ) {
                     window.livewire.emit("loadData");
                 } else {
-                    console.warn("Livewire is not available to call loadData");
+                    console.warn("Livewire is not available to call loadData"); 
                 }
             });
         });
