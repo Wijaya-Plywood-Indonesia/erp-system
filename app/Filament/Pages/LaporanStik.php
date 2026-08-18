@@ -18,6 +18,11 @@ use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 
+// --- TAMBAHAN: dependency untuk shadow-mode TargetPotonganService ---
+use App\Enums\Mesin;
+use App\Actions\HitungPotonganProduksiAction;
+use Illuminate\Support\Facades\Log;
+
 class LaporanStik extends Page
 {
     use InteractsWithForms;
@@ -131,7 +136,7 @@ class LaporanStik extends Page
                 // Total hasil khusus ukuran ini
                 $hasilUkuran = (int) $hasilList->sum('total_lembar');
 
-                // 3. Query Target Harian Master dari Tabel Targets
+                // 3. Query Target Harian Master dari Tabel Targets (LOGIKA LAMA — tidak diubah)
                 $targetItem = Target::where('id_mesin', 8)
                     ->when($idUkuran, fn($q) => $q->where('id_ukuran', $idUkuran))
                     ->when($idJenisKayu, fn($q) => $q->where('id_jenis_kayu', $idJenisKayu))
@@ -155,10 +160,10 @@ class LaporanStik extends Page
                     $stdJam        = 9.0;
                 }
 
-                // 4. Hitung Selisih: (Hasil - Target)
+                // 4. Hitung Selisih: (Hasil - Target)  — LOGIKA LAMA, tidak diubah
                 $selisih = $hasilUkuran - $targetNormal;
 
-                // 5. Hitung Potongan per Orang
+                // 5. Hitung Potongan per Orang — LOGIKA LAMA, tidak diubah
                 $jumlahPekerja    = $produksi->detailPegawaiStik?->count() ?? 0;
                 $potonganPerOrang = 0;
 
@@ -167,7 +172,52 @@ class LaporanStik extends Page
                     $potonganPerOrang = ($kurangTarget * $potonganTarif) / $jumlahPekerja;
                 }
 
-                // 6. Data Pekerja
+                // --- TAMBAHAN: SHADOW-MODE, panggil Service/Action baru secara paralel ---
+                // Tidak mengubah nilai apa pun yang sudah dipakai di atas.
+                // Tujuannya cuma membandingkan hasil lama vs baru dulu.
+                $shadow = null;
+                try {
+                    $shadow = app(HitungPotonganProduksiAction::class)->execute(
+                        mesin: Mesin::Stik,
+                        orgAktual: $jumlahPekerja,
+                        jamAktual: $stdJam,   // sengaja disamakan jam normal, sesuai catatan dokumentasi
+                        menitAktual: 0,
+                        hasilAktual: $hasilUkuran,
+                        idUkuran: $idUkuran,
+                        idJenisKayu: $idJenisKayu,
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('Shadow TargetPotonganService gagal dihitung', [
+                        'produksi_id' => $produksi->id,
+                        'id_ukuran'   => $idUkuran,
+                        'error'       => $e->getMessage(),
+                    ]);
+                }
+
+                $potonganBaruPerOrang = $shadow?->potonganPerOrang ?? 0;
+
+                // Bandingkan hasil lama vs baru, catat kalau bedanya signifikan
+                $potonganLamaDibulatkan = $potonganPerOrang > 0
+                    ? $this->roundToNearestHundred($potonganPerOrang)
+                    : 0;
+
+                if (abs($potonganLamaDibulatkan - $potonganBaruPerOrang) > 0) {
+                    Log::info('Shadow-mode: selisih potongan lama vs baru', [
+                        'tanggal'          => $tanggalFormat,
+                        'produksi_id'      => $produksi->id,
+                        'id_ukuran'        => $idUkuran,
+                        'id_jenis_kayu'    => $idJenisKayu,
+                        'hasil'            => $hasilUkuran,
+                        'target_lama'      => $targetNormal,
+                        'target_adjusted'  => $shadow?->targetAdjusted,
+                        'potongan_lama'    => $potonganLamaDibulatkan,
+                        'potongan_baru'    => $potonganBaruPerOrang,
+                        'resolver_dipakai' => $targetItem?->kode_ukuran === $pureKodeUkuran ? 'fallback_kode_ukuran' : 'id_ukuran/id_mesin',
+                    ]);
+                }
+                // --- AKHIR TAMBAHAN SHADOW-MODE ---
+
+                // 6. Data Pekerja  (masih pakai $potonganPerOrang LAMA untuk tampilan)
                 $pekerja = [];
                 foreach ($produksi->detailPegawaiStik ?? [] as $detail) {
                     $pekerja[] = [
@@ -177,7 +227,7 @@ class LaporanStik extends Page
                         'jam_pulang' => $detail->pulang ? Carbon::parse($detail->pulang)->format('H:i') : '-',
                         'ijin'       => $detail->ijin   ?? '-',
                         'pot_target' => $potonganPerOrang > 0
-                            ? number_format($this->roundToNearestHundred($potonganPerOrang), 0, '', '.')
+                            ? number_format($potonganLamaDibulatkan, 0, '', '.')
                             : 0,
                         'keterangan' => $detail->ket ?? '-',
                     ];
@@ -213,6 +263,10 @@ class LaporanStik extends Page
                     'total_downtime_formatted' => $totalDowntimeFormatted,
                     'kendala'                  => $produksi->kendala ?? '-',
                     'daftar_kendala'           => $daftarKendala,
+
+                    // --- TAMBAHAN: field hasil shadow-mode, HANYA untuk verifikasi/debug ---
+                    'target_adjusted_baru'     => $shadow?->targetAdjusted,
+                    'potongan_per_orang_baru'  => $potonganBaruPerOrang,
                 ];
 
                 $this->dataProduksi[] = $itemData;
