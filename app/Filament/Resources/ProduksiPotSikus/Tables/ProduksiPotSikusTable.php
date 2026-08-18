@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiPotSikus\Tables;
 
+use App\Services\ProductionAccessService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -21,6 +22,7 @@ class ProduksiPotSikusTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_produksi', 7))
             ->columns([
                 TextColumn::make('tanggal_produksi')
                     ->date()
@@ -29,7 +31,7 @@ class ProduksiPotSikusTable
                 TextColumn::make('kendala')
                     ->label('Kendala')
                     ->limit(50)
-                    ->tooltip(fn (string $state): string => $state)
+                    ->tooltip(fn(string $state): string => $state)
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('created_at')
@@ -51,21 +53,21 @@ class ProduksiPotSikusTable
                         return $query
                             ->when(
                                 $data['from'],
-                                fn (Builder $query, $date) =>
-                                    $query->whereDate('tanggal_produksi', '>=', $date),
+                                fn(Builder $query, $date) =>
+                                $query->whereDate('tanggal_produksi', '>=', $date),
                             )
                             ->when(
                                 $data['until'],
-                                fn (Builder $query, $date) =>
-                                    $query->whereDate('tanggal_produksi', '<=', $date),
+                                fn(Builder $query, $date) =>
+                                $query->whereDate('tanggal_produksi', '<=', $date),
                             );
                     }),
             ])
             ->recordActions([
                 Action::make('kelola_kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn ($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'warning')
+                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Kendala')
@@ -87,16 +89,16 @@ class ProduksiPotSikusTable
                             ->success()
                             ->send();
                     })
-                    ->modalHeading(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
                     ->modalSubmitActionLabel('Simpan'),
 
                 EditAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi'),
 
                 ViewAction::make(),
 
                 DeleteAction::make()
-                    ->visible(fn ($record) => $record->validasiTerakhir?->status !== 'divalidasi')
+                    ->visible(fn($record) => $record->validasiTerakhir?->status !== 'divalidasi')
                     ->before(function ($record) {
 
                         $hasDetail =
@@ -120,10 +122,10 @@ class ProduksiPotSikusTable
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->visible(
-                            fn ($records) =>
-                                $records->every(
-                                    fn ($r) => $r->validasiTerakhir?->status !== 'divalidasi'
-                                )
+                            fn($records) =>
+                            $records->every(
+                                fn($r) => $r->validasiTerakhir?->status !== 'divalidasi'
+                            )
                         ),
                 ]),
             ]);

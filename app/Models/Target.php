@@ -16,6 +16,8 @@ class Target extends Model
         'id_mesin',
         'id_ukuran',
         'id_jenis_kayu',
+        'id_kategori_barang',
+        'grade',
         'kode_ukuran',
         'target',
         'orang',
@@ -57,7 +59,6 @@ class Target extends Model
         $kodeKayu = $this->jenisKayu?->kode_kayu ?? '-';
 
         return "{$namaMesin} | {$ukuran} | {$kodeKayu}";
-
     }
 
     // Target Repair
@@ -89,4 +90,8 @@ class Target extends Model
 
     protected $appends = ['deskripsi'];
 
+    public function kategoriBarang()
+    {
+        return $this->belongsTo(KategoriBarang::class, 'id_kategori_barang');
+    }
 }

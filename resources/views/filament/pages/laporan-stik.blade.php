@@ -1,101 +1,213 @@
 <x-filament-panels::page>
-    {{-- Form Filter Tanggal --}}
-    <div class="bg-white dark:bg-gray-900 p-4 rounded-lg shadow mb-4">
+    <!-- HEADER FILTER TANGGAL -->
+    <div class="p-4 bg-white dark:bg-zinc-900 rounded-lg shadow border border-zinc-200 dark:border-zinc-800">
         {{ $this->form }}
     </div>
 
-    <div wire:loading wire:target="loadAllData" class="w-full text-center py-4">
-        <span class="text-gray-500">Memuat data...</span>
+    <!-- Loading Indicator Overlay -->
+    @if($isLoading)
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-75 dark:bg-zinc-900 dark:bg-opacity-75">
+        <div class="flex items-center space-x-3">
+            <x-filament::loading-indicator class="w-8 h-8 text-primary-600" />
+            <span class="text-lg font-medium text-zinc-700 dark:text-zinc-300">Memuat data...</span>
+        </div>
     </div>
+    @endif
 
-    <div wire:loading.remove>
-        @forelse($dataStik as $data)
-            @php
-                // Hitung Selisih untuk Tampilan
-                $selisih = $data['selisih'] ?? 0;
-                // Nilai selisih dibalik (dikalikan -1) agar jika kurang target, nilainya negatif di tampilan, sesuai contoh Anda.
-                $selisihTampil = $selisih * -1; 
-                
-                // Logika Warna
-                // Selisih: Hijau jika <= 0 (Target tercapai), Merah jika > 0 (Kurang Target)
-                $warnaSelisih = $selisih <= 0 ? 'text-green-400' : 'text-red-400';
-            @endphp
-            
-            <div class="mb-8 border border-gray-700 rounded-lg overflow-hidden bg-gray-900 text-white shadow-lg">
-                
-                {{-- Header Section Report --}}
-                <div class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
-                    <h3 class="text-lg font-bold text-white">
-                        LAPORAN PRODUKSI STIK - {{ $data['tanggal'] ?? '-' }}
-                    </h3>
-                    <span class="px-3 py-1 text-xs font-semibold rounded bg-blue-600 text-white">
-                        Target: {{ number_format($data['target_harian'] ?? 0, 0, ',', '.') }}
-                    </span>
-                </div>
-                
-                {{-- Kendala (Dipindahkan ke atas tabel, di bawah header) --}}
-                <div class="p-4 bg-gray-800/50 text-sm border-b border-gray-700">
-                    <span class="text-gray-400 font-semibold">Kendala:</span> 
-                    <span class="font-bold text-yellow-500 text-xs">{{ $data['kendala'] ?? 'Tidak ada kendala.' }}</span>
-                </div>
+    @php
+    $dataProduksi = $dataProduksi ?? [];
+    $groupedByCard = collect($dataProduksi)->groupBy('group_key');
+    @endphp
 
-                {{-- Table Data Pekerja --}}
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left text-gray-300">
-                        <thead class="text-xs text-gray-400 uppercase bg-gray-800">
-                            <tr>
-                                <th scope="col" class="px-6 py-3">ID</th>
-                                <th scope="col" class="px-6 py-3">Nama</th>
-                                <th scope="col" class="px-6 py-3">Masuk</th>
-                                <th scope="col" class="px-6 py-3">Pulang</th>
-                                <th scope="col" class="px-6 py-3">Ijin</th>
-                                <th scope="col" class="px-6 py-3">Keterangan</th>
-                                <th scope="col" class="px-6 py-3 text-red-400">Potongan Target</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($data['pekerja'] as $pekerja)
-                                <tr class="bg-gray-900 border-b border-gray-800 hover:bg-gray-800">
-                                    <td class="px-6 py-4">{{ $pekerja['id'] ?? '-' }}</td>
-                                    <td class="px-6 py-4 font-medium text-white">{{ $pekerja['nama'] ?? '-' }}</td>
-                                    <td class="px-6 py-4">{{ $pekerja['jam_masuk'] ?? '-' }}</td>
-                                    <td class="px-6 py-4">{{ $pekerja['jam_pulang'] ?? '-' }}</td>
-                                    <td class="px-6 py-4">{{ $pekerja['ijin'] ?? '-' }}</td>
-                                    <td class="px-6 py-4">{{ $pekerja['keterangan'] ?? '-' }}</td>
-                                    <td class="px-6 py-4 text-red-400 font-bold">
-                                        {{ $pekerja['pot_target'] !== '-' ? 'Rp ' . $pekerja['pot_target'] : '-' }}
-                                    </td>
-                                </tr>
-                            @endforeach
-                            @if(empty($data['pekerja']))
+    <div class="space-y-12 mt-6">
+        @forelse ($groupedByCard as $groupKey => $produksiList)
+        @php
+        $first = $produksiList->first();
+        $mesinNama = $first['mesin'] ?? 'MESIN STIK';
+        $pekerja = $first['pekerja'] ?? [];
+        $kodeUkuran = $first['ukuran'] ?? 'TIDAK ADA UKURAN';
+        $totalPekerja = count($pekerja);
+        $hasil = $first['hasil'] ?? 0;
+        $target = $first['target'] ?? 0;
+        $selisih = $first['selisih'] ?? 0;
+        $warna = $selisih >= 0 ? 'text-green-400' : 'text-red-400';
+        $tanda = $selisih >= 0 ? '+' : '';
+        $jamKerja = $first['jam_kerja'] ?? 9;
+        $totalKendalaMenit = $first['total_kendala_menit'] ?? 0;
+        $totalDowntimeFormatted = $first['total_downtime_formatted'] ?? '-';
+        $kendala = $first['kendala'] ?? '-';
+        $daftarKendala = $first['daftar_kendala'] ?? [];
+        @endphp
+
+        <!-- CARD MESIN & UKURAN -->
+        <div
+            class="bg-white dark:bg-zinc-900 rounded-sm shadow-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+            <div class="bg-zinc-800 p-4 text-white">
+                <h2 class="text-lg font-bold text-center uppercase tracking-wide">
+                    PEKERJA STIK: {{ strtoupper($mesinNama) }} - {{ strtoupper($kodeUkuran) }}
+                </h2>
+            </div>
+
+            <div class="p-4">
+                <div class="w-full overflow-x-auto">
+                    <div class="min-w-[800px]">
+                        <table class="w-full text-sm border-collapse border border-zinc-300 dark:border-zinc-600">
+                            <thead>
                                 <tr>
-                                    <td colspan="7" class="px-6 py-4 text-center text-gray-500">
-                                        Tidak ada data pekerja
+                                    <th
+                                        colspan="7"
+                                        class="p-4 text-xl font-bold text-center bg-zinc-700 text-white">
+                                        DATA PEKERJA
+                                    </th>
+                                </tr>
+
+                                <tr
+                                    class="bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-300 border-t border-zinc-300 dark:border-zinc-600 text-xs">
+                                    <th class="p-2 text-center font-medium w-16">ID</th>
+                                    <th class="p-2 text-left font-medium w-40">Nama</th>
+                                    <th class="p-2 text-center font-medium w-20">Masuk</th>
+                                    <th class="p-2 text-center font-medium w-20">Pulang</th>
+                                    <th class="p-2 text-center font-medium w-16">Ijin</th>
+                                    <th class="p-2 text-right font-medium w-36">Potongan Target</th>
+                                    <th class="p-2 text-left font-medium">Keterangan</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @forelse ($pekerja as $i => $p)
+                                <tr
+                                    class="{{
+                                            $i % 2 === 1
+                                                ? 'bg-zinc-50 dark:bg-zinc-800/50'
+                                                : 'bg-white dark:bg-zinc-900'
+                                        }} border-t border-zinc-300 dark:border-zinc-700 text-xs">
+                                    <td class="p-2 text-center border-r border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">
+                                        {{ $p["id"] ?? "-" }}
+                                    </td>
+
+                                    <td class="p-2 text-left border-r border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium">
+                                        {{ $p["nama"] ?? "-" }}
+                                    </td>
+
+                                    <td class="p-2 text-center border-r border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">
+                                        {{ $p["jam_masuk"] ?? "-" }}
+                                    </td>
+
+                                    <td class="p-2 text-center border-r border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">
+                                        {{ $p["jam_pulang"] ?? "-" }}
+                                    </td>
+
+                                    <td class="p-2 text-center border-r border-zinc-300 dark:border-zinc-700 text-yellow-600 dark:text-yellow-400">
+                                        {{ $p["ijin"] ?? "-" }}
+                                    </td>
+
+                                    <td class="p-2 text-right border-r border-zinc-300 dark:border-zinc-700 font-bold {{
+                                            $selisih < 0 && !empty($p['pot_target']) && $p['pot_target'] != 0
+                                                ? 'text-red-600 dark:text-red-400'
+                                                : 'text-zinc-700 dark:text-zinc-300'
+                                        }}">
+                                        {{ (!empty($p["pot_target"]) && $p["pot_target"] != 0) ? 'Rp ' . $p["pot_target"] : '-' }}
+                                    </td>
+
+                                    <td class="p-2 text-left text-zinc-700 dark:text-zinc-300">
+                                        {{ $p["keterangan"] ?? "-" }}
                                     </td>
                                 </tr>
-                            @endif
-                        </tbody>
-                        
-                        {{-- FOOTER: Ringkasan data dipindahkan ke bawah tabel --}}
-                        <tfoot class="bg-gray-800 text-xs font-semibold border-t border-gray-700">
-                            <tr>
-                                <td colspan="7" class="px-6 py-3 text-right">
-                                    <span class="mr-4">Pekerja: <strong class="text-yellow-400">{{ $data['summary']['jumlah_pekerja'] ?? 0 }}</strong> |</span>
-                                    <span class="mr-4">Target: <strong>{{ number_format($data['target_harian'] ?? 0, 0, ',', '.') }}</strong> |</span>
-                                    <span class="mr-4">Jam Produksi: <strong>{{ $data['jam_kerja'] ?? 0 }}</strong> |</span>
-                                    <span class="mr-4">Hasil: <strong class="text-green-400">{{ number_format($data['hasil_harian'] ?? 0, 0, ',', '.') }}</strong> |</span>
-                                    <span class="mr-4">Selisih: <strong class="{{ $warnaSelisih }}">{{ number_format($selisihTampil, 0, ',', '.') }}</strong> |</span>
-                                    <span>Tanggal: <strong>{{ $data['tanggal'] ?? '-' }}</strong></span>
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
+                                @empty
+                                <tr>
+                                    <td colspan="7" class="p-4 text-center text-zinc-500 dark:text-zinc-400 text-sm">
+                                        Tidak ada data pekerja untuk ukuran ini.
+                                    </td>
+                                </tr>
+                                @endforelse
+                            </tbody>
+
+                            <tfoot class="bg-zinc-100 dark:bg-zinc-800 border-t-2 border-zinc-300 dark:border-zinc-600 text-xs">
+                                <!-- BARIS 1: RINGKASAN DATA LENGKAP -->
+                                <tr>
+                                    <td colspan="7" class="p-3 text-center text-zinc-600 dark:text-zinc-400 space-x-3">
+                                        <span class="font-medium">Pekerja:</span>
+                                        <strong class="text-zinc-900 dark:text-zinc-100">{{ $totalPekerja }}</strong>
+
+                                        <span class="text-zinc-400">|</span>
+
+                                        <span class="font-medium">Target:</span>
+                                        <strong class="font-mono text-zinc-900 dark:text-zinc-100">{{ number_format($target, 0, ',', '.') }}</strong>
+
+                                        <span class="text-zinc-400">|</span>
+
+                                        <span class="font-medium">Jam Produksi:</span>
+                                        <strong class="font-mono text-zinc-900 dark:text-zinc-100">{{ number_format($jamKerja, 1) }} jam</strong>
+
+                                        <span class="text-zinc-400">|</span>
+
+                                        <span class="font-medium">Hasil:</span>
+                                        <strong class="font-mono {{ $warna }}">{{ number_format($hasil, 0, ',', '.') }}</strong>
+
+                                        <span class="text-zinc-400">|</span>
+
+                                        <span class="font-medium">Selisih:</span>
+                                        <strong class="font-mono {{ $warna }}">{{ $tanda }}{{ number_format(abs($selisih), 0, ',', '.') }}</strong>
+
+                                        <span class="text-zinc-400">|</span>
+
+                                        <span class="text-xs">Tanggal: {{ $first["tanggal"] }}</span>
+
+                                        <span class="text-zinc-400">|</span>
+
+                                        <span class="font-medium">Total Downtime:</span>
+                                        <strong class="font-mono {{ $totalKendalaMenit > 0 ? 'text-red-600 dark:text-red-400' : '' }}">
+                                            {{ $totalDowntimeFormatted }}
+                                        </strong>
+                                    </td>
+                                </tr>
+
+                                <!-- BARIS 2: KENDALA (JIKA ADA) -->
+                                @if(count($daftarKendala) > 0)
+                                <tr>
+                                    <td colspan="7" class="p-3 text-xs border-t border-zinc-300 dark:border-zinc-600">
+                                        <div class="flex items-start justify-center gap-2">
+                                            <span class="font-medium text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
+                                                Kendala:
+                                            </span>
+                                            <div class="flex-1 max-w-3xl">
+                                                <div class="space-y-1">
+                                                    @foreach($daftarKendala as $k)
+                                                    <div class="text-zinc-700 dark:text-zinc-300">
+                                                        <span class="font-semibold text-red-600 dark:text-red-400">
+                                                            {{ $k['kendala'] }}
+                                                        </span>
+                                                        @if(!empty($k['durasi_menit']))
+                                                        <span class="text-zinc-500 dark:text-zinc-400">
+                                                            — {{ $k['durasi_menit'] }} menit
+                                                            @if(!empty($k['jam_mulai']) && !empty($k['jam_selesai']))
+                                                            ({{ $k['jam_mulai'] }} - {{ $k['jam_selesai'] }})
+                                                            @endif
+                                                        </span>
+                                                        @endif
+                                                        @if(!empty($k['keterangan']) && $k['keterangan'] !== '-')
+                                                        <span class="text-zinc-600 dark:text-zinc-400 italic">
+                                                            — {{ $k['keterangan'] }}
+                                                        </span>
+                                                        @endif
+                                                    </div>
+                                                    @endforeach
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                @endif
+                            </tfoot>
+                        </table>
+                    </div>
                 </div>
             </div>
+        </div>
         @empty
-            <div class="p-6 text-center bg-gray-800 rounded-lg">
-                <p class="text-gray-400">Belum ada data produksi stik untuk tanggal ini.</p>
-            </div>
+        <div class="text-center p-12 text-zinc-500 dark:text-zinc-400 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-700">
+            <p class="text-lg">Tidak ada data produksi untuk tanggal ini.</p>
+        </div>
         @endforelse
     </div>
 </x-filament-panels::page>
