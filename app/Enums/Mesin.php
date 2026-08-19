@@ -42,4 +42,13 @@ enum Mesin: int
             default => StrategiPembagian::Kolektif,
         };
     }
+
+    /** Mesin yang target-nya TETAP (tidak diskalakan oleh org/jam aktual). */
+    public function pakaiPenyesuaianJam(): bool
+    {
+        return match ($this) {
+            self::Stik => false, // target selalu tetap sesuai master, terlepas dari org/jam
+            default => true,
+        };
+    }
 }

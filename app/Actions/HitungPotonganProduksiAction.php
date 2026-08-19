@@ -14,11 +14,12 @@ class HitungPotonganProduksiAction
         private readonly TargetPotonganService $service = new TargetPotonganService(),
     ) {}
 
+    /**
+     * @param \App\DataTransferObjects\PekerjaKerjaInput[] $pekerja
+     */
     public function execute(
         Mesin $mesin,
-        int $orgAktual,
-        float $jamAktual,
-        float $menitAktual,
+        array $pekerja,
         float $hasilAktual,
         ?int $idUkuran = null,
         ?int $idJenisKayu = null,
@@ -34,11 +35,10 @@ class HitungPotonganProduksiAction
             targetNormal: (float) $target->target,
             orgNormal: (int) $target->orang,
             jamNormal: (float) $target->jam,
-            orgAktual: $orgAktual,
-            jamAktual: $jamAktual,
-            menitAktual: $menitAktual,
+            pekerja: $pekerja,
             hasilAktual: $hasilAktual,
             biayaPerUnit: (float) $target->potongan,
+            gaji: (float) $target->gaji,
         );
 
         return $this->service->hitung($input);
