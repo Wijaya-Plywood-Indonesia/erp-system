@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\BahanPenolongRotary;
 use App\Models\DetailHasilPaletRotary;
 use App\Models\DetailTurusanKayu;
 use App\Models\HargaKayu;
@@ -53,6 +54,25 @@ class ProduksiInflowService
      * Struktur: [id_produksi => Collection<DetailHasilPaletRotary>]
      */
     private array $detailByProduksiCache = [];
+
+    /**
+     * OPTIMASI #5: cache SEMUA baris BahanPenolongRotary per id_produksi.
+     * Sama seperti detailByProduksiCache: HANYA boleh diisi dari query
+     * whereIn(id_produksi) yang lengkap (bukan hasil filter per-lahan),
+     * supaya konsisten dengan pola caching lain di service ini.
+     *
+     * Bahan penolong DITAMPILKAN sebagai info tambahan saja di outflow_detail
+     * (dialokasikan proporsional berdasarkan persentase kubikasi baris, sama
+     * seperti pola pekerja/penyusutan) — TIDAK ikut memengaruhi perhitungan
+     * harga_v_ongkos / harga_vop.
+     *
+     * Relasi 'bahanPenolong' (ke BahanPenolongProduksi) di-eager-load SEKALIAN
+     * kolom harga/satuan supaya subtotal bisa dihitung tanpa query tambahan
+     * per baris.
+     *
+     * Struktur: [id_produksi => Collection<BahanPenolongRotary>]
+     */
+    private array $bahanPenolongByProduksiCache = [];
 
     public function getLaporanBatch($month = null, $year = null, $nama_lahan = 'Semua Lahan', $perPage = 10)
     {
@@ -197,6 +217,12 @@ class ProduksiInflowService
         $harga_v_ongkos_penyusutan = $batch['grand_total_outflow_m3'] > 0
             ? (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj'] + $batch['grand_total_outflow_penyusutan']) / $batch['grand_total_outflow_m3'])
             : 0.0;
+        // harga_vopb = harga_vop (poin+ongkos+penyusutan, sudah dibagi m3) + total bahan
+        // penolong sebagai NOMINAL LANGSUNG (bukan ikut dibagi m3 lagi). Bahan penolong
+        // (mis. solasi) adalah biaya tambahan flat per batch (42.000 x 10 = 420.000),
+        // bukan biaya yang harus di-blend/dirata-rata ke harga per m3 seperti
+        // poin/ongkos/penyusutan.
+        $harga_v_ongkos_penyusutan_bahan = $harga_v_ongkos_penyusutan + $batch['grand_total_outflow_bahan_penolong'];
 
         $outflowCollection = collect($batch['outflow_detail']);
         $jenis_kayu = $outflowCollection->contains(function ($item) {
@@ -223,6 +249,18 @@ class ProduksiInflowService
                     : 0.0,
                 'harga_v_ongkos' => $harga_v_ongkos,
                 'harga_vop' => $harga_v_ongkos_penyusutan,
+                'harga_vopb' => $harga_v_ongkos_penyusutan_bahan,
+                // Dipakai di Blade untuk menyembunyikan kolom "Veneer+Ongkos+Susut+Bahan Penolong"
+                // kalau batch ini memang tidak punya bahan penolong sama sekali.
+                'total_bahan_penolong' => $batch['grand_total_outflow_bahan_penolong'],
+                // === RAW TOTALS (bukan rasio) ===
+                // Disimpan mentah supaya getSummaryLaporanLahan() bisa menghitung harga
+                // gabungan lintas-batch dari TOTAL (Σkomponen / Σm3), BUKAN dari
+                // avg() rasio per-batch. avg() dari rasio per-batch salah kalau volume
+                // m3 antar batch tidak sama besar (bias ke batch bervolume kecil).
+                'total_poin_raw' => (float) $dataMasuk->sum('poin'),
+                'total_ongkos_pkj' => (float) $batch['grand_total_outflow_ongkos_pkj'],
+                'total_penyusutan' => (float) $batch['grand_total_outflow_penyusutan'],
             ],
         ];
     }
@@ -275,21 +313,42 @@ class ProduksiInflowService
     {
         $totalMasukM3 = $laporanFinalCollection->sum('summary.total_masuk_m3');
         $totalKeluarM3 = $laporanFinalCollection->sum('summary.total_keluar_m3');
-        $totalHargaVeneer = $laporanFinalCollection->avg('summary.harga_veneer');
+
+        // === RAW TOTALS (Σ dari semua batch) ===
+        // Semua harga gabungan (harga_veneer, harga_v_ongkos, harga_vop, harga_vopb)
+        // WAJIB dihitung dari total mentah dibagi total m3 keluar (weighted by
+        // volume) — pola yang sama persis dengan mergeZeroInflowBatches() saat
+        // menggabungkan batch. TIDAK BOLEH pakai avg() dari rasio per-batch, karena
+        // itu menganggap tiap batch berbobot sama padahal volumenya beda-beda —
+        // hasilnya bias/"halu" dibanding angka riil.
+        $totalPoin = $laporanFinalCollection->sum('summary.total_poin_raw');
+        $totalOngkos = $laporanFinalCollection->sum('summary.total_ongkos_pkj');
+        $totalPenyusutan = $laporanFinalCollection->sum('summary.total_penyusutan');
+        $totalBahanPenolong = $laporanFinalCollection->sum('summary.total_bahan_penolong');
 
         return [
             'total_kayu_masuk' => $laporanFinalCollection->sum('summary.total_kayu_masuk') ?? 0,
             'total_kubikasi_kayu_masuk' => $totalMasukM3 ?? 0,
-            'total_poin_masuk' => $laporanFinalCollection->sum(function ($item) {
-                return (float) str_replace(['.', ','], ['', '.'], $item['summary']['total_poin']);
-            }) ?? 0,
+            'total_poin_masuk' => $totalPoin ?? 0,
             'total_kubikasi_veneer' => $totalKeluarM3 ?? 0,
             'rata_rata_rendemen' => $totalMasukM3 > 0
                 ? number_format(($totalKeluarM3 / $totalMasukM3) * 100, 2).'%'
                 : '0%',
-            'total_harga_veneer' => $totalHargaVeneer ?? 0,
-            'total_harga_v_ongkos' => $laporanFinalCollection->avg('summary.harga_v_ongkos') ?? 0,
-            'total_harga_vop' => $laporanFinalCollection->avg('summary.harga_vop') ?? 0,
+            'total_harga_veneer' => $totalKeluarM3 > 0
+                ? (float) ($totalPoin / $totalKeluarM3)
+                : 0.0,
+            'total_harga_v_ongkos' => $totalKeluarM3 > 0
+                ? (float) (($totalPoin + $totalOngkos) / $totalKeluarM3)
+                : 0.0,
+            'total_harga_vop' => $totalKeluarM3 > 0
+                ? (float) (($totalPoin + $totalOngkos + $totalPenyusutan) / $totalKeluarM3)
+                : 0.0,
+            // total_bahan_penolong ditambahkan sebagai NOMINAL LANGSUNG ke total_harga_vop
+            // (konsisten dengan buildLaporanItemForClosure() & mergeZeroInflowBatches()),
+            // bukan ikut dibagi total_keluar_m3.
+            'total_harga_vopb' => ($totalKeluarM3 > 0
+                ? (float) (($totalPoin + $totalOngkos + $totalPenyusutan) / $totalKeluarM3)
+                : 0.0) + $totalBahanPenolong,
         ];
     }
 
@@ -376,6 +435,39 @@ class ProduksiInflowService
             }
         }
 
+        // === OPTIMASI #5: seed bahan_penolong_rotary per id_produksi ===
+        // Sama seperti detailByProduksiCache di atas: HANYA diisi dari query
+        // whereIn(id_produksi) yang LENGKAP, bukan dari $outflowData yang sudah
+        // difilter per-lahan. Ini murni info tambahan (tidak dipakai untuk
+        // hitung harga_v_ongkos/harga_vop), tapi tetap ikut pola caching yang
+        // sama biar konsisten dan tidak query berulang untuk id_produksi yang
+        // sama.
+        $missingBahanIds = array_values(array_filter(
+            $produksiIds,
+            fn ($id) => ! isset($this->bahanPenolongByProduksiCache[$id])
+        ));
+
+        if (! empty($missingBahanIds)) {
+            $fetchedBahan = BahanPenolongRotary::with([
+                'bahanPenolong:id,nama_bahan_penolong,satuan,harga',
+            ])
+                ->whereIn('id_produksi', $missingBahanIds)
+                ->get()
+                ->groupBy('id_produksi');
+
+            foreach ($fetchedBahan as $prodId => $rows) {
+                $this->bahanPenolongByProduksiCache[$prodId] = $rows;
+            }
+
+            // Pastikan id_produksi tanpa bahan penolong tetap tercatat sebagai
+            // collection kosong, supaya tidak query ulang di kemudian hari.
+            foreach ($missingBahanIds as $prodId) {
+                if (! isset($this->bahanPenolongByProduksiCache[$prodId])) {
+                    $this->bahanPenolongByProduksiCache[$prodId] = collect();
+                }
+            }
+        }
+
         $totalOutputHarian = collect($produksiIds)
             ->mapWithKeys(function ($prodId) {
                 $details = $this->detailByProduksiCache[$prodId] ?? collect();
@@ -398,7 +490,8 @@ class ProduksiInflowService
             $pekerja = $produksi ? ($produksi->detailPegawaiRotary ? $produksi->detailPegawaiRotary->count() : 0) : 0;
 
             // Persentase kontribusi kubikasi baris ini terhadap total output produksi
-            // (mesin yang sama) hari itu. Dipakai untuk PEKERJA & PENYUSUTAN sekaligus.
+            // (mesin yang sama) hari itu. Dipakai untuk PEKERJA & PENYUSUTAN sekaligus,
+            // dan sekarang juga untuk BAHAN PENOLONG (info tambahan, bukan biaya).
             $persentaseKubikasi = ($m3TotalAllLahan > 0) ? ($m3 / $m3TotalAllLahan) : 0.0;
 
             // Pekerja: simpan msa MENTAH (float) per baris — TIDAK dibulatkan di sini.
@@ -413,6 +506,36 @@ class ProduksiInflowService
             $penyusutanMesin = ($produksi && $produksi->mesin) ? ($produksi->mesin->penyusutan ?? 0) : 0;
             $penyusutanPorsi = $penyusutanMesin * $persentaseKubikasi;
 
+            // Bahan penolong: pola SAMA PERSIS seperti penyusutan — simpan porsi
+            // mentah (jumlah bahan x persentase kubikasi baris ini) per baris,
+            // per nama_bahan, LENGKAP dengan harga_satuan dari master
+            // BahanPenolongProduksi. Di-sum sekali di level grup nanti. INFO
+            // TAMBAHAN saja — TIDAK ikut ke grand_total_outflow_ongkos_pkj/
+            // penyusutan, jadi harga_v_ongkos & harga_vop tidak terpengaruh
+            // sama sekali.
+            //
+            // HARDCODE: bahan penolong di lahan rotary ini SELALU "Solasi"
+            // (satu-satunya jenis bahan penolong yang dipakai di sini), jadi
+            // nama_bahan tidak lagi diambil dari kolom nama_bahan pivot atau
+            // dari master bahan_penolong — langsung dipaksa jadi "Solasi"
+            // supaya label di laporan konsisten, apa pun yang tercatat di DB.
+            $bahanRows = $this->bahanPenolongByProduksiCache[$hasil->id_produksi] ?? collect();
+            $bahanPorsi = $bahanRows->map(function ($b) use ($persentaseKubikasi) {
+                $master = $b->bahanPenolong;
+
+                $namaBahan = 'Solasi';
+
+                $satuan = $master->satuan ?? '';
+                $hargaSatuan = (float) ($master->harga ?? 0);
+
+                return [
+                    'nama_bahan' => $namaBahan,
+                    'satuan' => $satuan,
+                    'jumlah_porsi' => $b->jumlah * $persentaseKubikasi,
+                    'harga_satuan' => $hargaSatuan,
+                ];
+            })->values();
+
             return [
                 'tgl' => $produksi ? Carbon::parse($produksi->tgl_produksi)->format('d-m-Y') : ($hasil->created_at ? Carbon::parse($hasil->created_at)->format('d-m-Y') : '-'),
                 'mesin' => $produksi ? ($produksi->mesin ? ($produksi->mesin->nama_mesin ?? 'Unknown') : 'Unknown') : 'Unknown',
@@ -422,6 +545,7 @@ class ProduksiInflowService
                 'kubikasi' => $m3,
                 'msa' => $msa, // raw, belum dibulatkan
                 'penyusutan_porsi' => $penyusutanPorsi, // raw, belum di-sum level grup
+                'bahan_penolong_porsi' => $bahanPorsi, // raw, belum di-sum level grup (info saja)
                 'panjang' => $ukuran->panjang,
                 'lebar' => $ukuran->lebar,
                 'tebal' => $ukuran->tebal,
@@ -436,6 +560,38 @@ class ProduksiInflowService
                 // cara pekerja diagregasi di atas.
                 $totalPenyusutan = $group->sum('penyusutan_porsi');
 
+                // Bahan penolong grup = gabungkan seluruh porsi mentah dari baris-baris
+                // dalam grup ini, lalu sum per nama_bahan (yang sekarang selalu
+                // "Solasi"). harga_satuan diambil dari master (sama untuk semua baris
+                // dengan nama_bahan yang sama), dan subtotal = jumlah x harga_satuan.
+                // Murni ditampilkan sebagai info tambahan, TIDAK memengaruhi
+                // harga_v_ongkos / harga_vop.
+                $bahanPenolong = $group
+                    ->pluck('bahan_penolong_porsi')
+                    ->flatten(1)
+                    ->groupBy('nama_bahan')
+                    ->map(function ($items, $nama) {
+                        // FIX: jumlah dibulatkan ke bilangan bulat NORMAL (bukan 2 desimal
+                        // lagi), dan subtotal WAJIB dihitung dari jumlah yang SUDAH
+                        // dibulatkan ini — bukan dari jumlah_porsi desimal asli. Ini supaya
+                        // subtotal (dan turunannya: total_bahan_penolong, harga_vopb, Harga
+                        // Total/m³) SELALU konsisten & bisa di-cross-check manual dengan
+                        // angka Solasi yang tampil di layar/export.
+                        $jumlah = round($items->sum('jumlah_porsi'));
+                        $hargaSatuan = (float) ($items->first()['harga_satuan'] ?? 0);
+                        $satuan = $items->first()['satuan'] ?? '';
+
+                        return [
+                            'nama_bahan' => $nama,
+                            'jumlah' => $jumlah,
+                            'satuan' => $satuan,
+                            'harga_satuan' => $hargaSatuan,
+                            'subtotal' => $jumlah * $hargaSatuan,
+                        ];
+                    })
+                    ->values()
+                    ->all();
+
                 return [
                     'tgl' => $group[0]['tgl'],
                     'mesin' => $group[0]['mesin'],
@@ -446,6 +602,8 @@ class ProduksiInflowService
                     'pekerja' => $totalPekerja.' Orang',
                     'ongkos' => $totalPekerja * $ongkosPekerja,
                     'penyusutan' => $totalPenyusutan,
+                    'bahan_penolong' => $bahanPenolong, // info tambahan, TIDAK dipakai di harga_v_ongkos/harga_vop
+                    'total_bahan_penolong' => collect($bahanPenolong)->sum('subtotal'),
                     'panjang' => $group[0]['panjang'],
                     'lebar' => $group[0]['lebar'],
                     'tebal' => $group[0]['tebal'],
@@ -459,6 +617,7 @@ class ProduksiInflowService
             'grand_total_outflow_m3' => collect($groupedOutflow)->sum('total_kubikasi'),
             'grand_total_outflow_ongkos_pkj' => collect($groupedOutflow)->sum('ongkos'),
             'grand_total_outflow_penyusutan' => collect($groupedOutflow)->sum('penyusutan'),
+            'grand_total_outflow_bahan_penolong' => collect($groupedOutflow)->sum('total_bahan_penolong'),
             'outflow_detail' => $groupedOutflow,
             'info' => [
                 'lahan' => $first->lahan->nama_lahan ?? '-',
@@ -703,6 +862,7 @@ class ProduksiInflowService
                     $totalOutflowM3 = collect($parent['outflow'])->sum(fn ($x) => (float) str_replace(',', '', $x['total_kubikasi']));
                     $totalOngkos = collect($parent['outflow'])->sum('ongkos');
                     $totalPenyusutan = collect($parent['outflow'])->sum('penyusutan');
+                    $totalBahanPenolong = collect($parent['outflow'])->sum('total_bahan_penolong');
 
                     $parent['summary']['total_keluar_m3'] = (float) number_format($totalOutflowM3, 4);
 
@@ -724,6 +884,20 @@ class ProduksiInflowService
                     $parent['summary']['harga_vop'] = $totalOutflowM3 > 0
                         ? (float) (($totalPoinVal + $totalOngkos + $totalPenyusutan) / $totalOutflowM3)
                         : 0.0;
+
+                    // Sama seperti di buildLaporanItemForClosure(): bahan penolong
+                    // ditambahkan sebagai NOMINAL LANGSUNG ke harga_vop, bukan ikut
+                    // dibagi total_keluar_m3 lagi.
+                    $parent['summary']['harga_vopb'] = $parent['summary']['harga_vop'] + $totalBahanPenolong;
+
+                    $parent['summary']['total_bahan_penolong'] = $totalBahanPenolong;
+
+                    // Jaga raw totals tetap sinkron setelah merge, supaya
+                    // getSummaryLaporanLahan() tetap akurat kalau dipanggil
+                    // dengan collection hasil merge ini.
+                    $parent['summary']['total_poin_raw'] = $totalPoinVal;
+                    $parent['summary']['total_ongkos_pkj'] = $totalOngkos;
+                    $parent['summary']['total_penyusutan'] = $totalPenyusutan;
 
                     $parent['batch_info']['tgl_tutup_lahan'] = $item['batch_info']['tgl_tutup_lahan'];
                     $parent['batch_info']['jumlah_batang_akhir'] = $item['batch_info']['jumlah_batang_akhir'];
