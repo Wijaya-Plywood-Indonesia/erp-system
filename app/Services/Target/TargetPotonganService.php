@@ -4,32 +4,48 @@ namespace App\Services\Target;
 
 use App\DataTransferObjects\TargetHitungInput;
 use App\DataTransferObjects\TargetHitungResult;
+use App\Enums\StrategiPembagian;
 
 class TargetPotonganService
 {
-    public function hitung(TargetHitungInput $in): TargetHitungResult
+    /**
+     * Hitung target adjusted & potongan.
+     *
+     * Rate per-orang-per-menit dihitung dari master Target (targetNormal /
+     * jamNormal / orgNormal). Cara MEMBAGI potongan ke tiap pekerja
+     * ditentukan oleh $strategi (Kolektif / IndividualTarget) — bukan lagi
+     * hardcoded di sini, supaya gampang nambah cara pembagian baru tanpa
+     * ubah rumus rate.
+     */
+    public function hitung(TargetHitungInput $in, StrategiPembagian $strategi): TargetHitungResult
     {
         $menitNormalTotal = $in->jamNormal * 60;
-        $ratePerMenit = $in->orgNormal > 0 && $menitNormalTotal > 0
-            ? $in->targetNormal / $menitNormalTotal : 0;
+
+        $ratePerMenit = ($in->orgNormal > 0 && $menitNormalTotal > 0)
+            ? $in->targetNormal / $menitNormalTotal
+            : 0;
+
         $ratePerOrgPerMenit = $in->orgNormal > 0 ? $ratePerMenit / $in->orgNormal : 0;
 
-        $totalMenitAktual = array_sum(array_map(fn($p) => $p->menitKerja, $in->pekerja));
-        $orgAktual = count($in->pekerja);
+        $strategy = StrategiPembagianFactory::make($strategi);
 
-        $targetAdjusted = $ratePerOrgPerMenit * $totalMenitAktual;
+        $hasil = $strategy->bagikan(
+            pekerja: $in->pekerja,
+            ratePerOrgPerMenit: $ratePerOrgPerMenit,
+            biayaPerUnit: $in->biayaPerUnit,
+            hasilAktual: $in->hasilAktual,
+            gaji: $in->gaji,
+        );
+
+        $targetAdjusted = $hasil['targetAdjusted'];
         $kekurangan     = max(0, $targetAdjusted - $in->hasilAktual);
+        $potonganTotal  = array_sum($hasil['potonganPerPegawai']);
 
-        // Hasil nol: tiap orang kena potongan penuh sebesar gaji harian masing-masing, tanpa dibagi
-        if ($in->hasilAktual <= 0) {
-            $potongan         = $in->gaji * $orgAktual; // total, cuma untuk pelaporan/summary
-            $potonganPerOrang = $in->gaji;                // langsung gaji per orang, TIDAK dibagi
-        } else {
-            $potongan         = $kekurangan * $in->biayaPerUnit;
-            $potonganPerOrang = $orgAktual > 0
-                ? round(($potongan / $orgAktual) / 500) * 500 : 0;
-        }
-
-        return new TargetHitungResult($targetAdjusted, $kekurangan, $potongan, $potonganPerOrang);
+        return new TargetHitungResult(
+            targetAdjusted: $targetAdjusted,
+            kekurangan: $kekurangan,
+            potongan: $potonganTotal,
+            potonganPerPegawai: $hasil['potonganPerPegawai'],
+        );
     }
 }
