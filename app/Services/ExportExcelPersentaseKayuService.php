@@ -26,10 +26,13 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
 
     /**
      * true kalau MINIMAL SATU baris outflow di laporan ini punya bahan penolong
-     * (Solasi). Kalau semua kosong, kolom "Solasi", "Biaya Bahan Penolong", dan
-     * "Harga Veneer+Ongkos+Penyusutan+Bahan Penolong" disembunyikan total
-     * (header + sel), bukan cuma diisi "-", sama seperti pola yang dipakai di
-     * halaman Blade-nya.
+     * (Solasi). Kalau semua kosong, kolom "Solasi" dan "Biaya Bahan Penolong"
+     * disembunyikan total (header + sel), bukan cuma diisi "-", sama seperti
+     * pola yang dipakai di halaman Blade-nya.
+     *
+     * CATATAN: kolom "Harga Veneer+Ongkos+Penyusutan+Bahan Penolong" DIHAPUS
+     * dari export ini atas permintaan — sekarang hanya ada 2 kolom bahan
+     * penolong (Solasi, Biaya Bahan Penolong), bukan 3.
      */
     protected bool $adaBahanPenolong;
 
@@ -53,9 +56,9 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
         // penolong maupun tidak. Nilainya = (harga_vopb kalau batch punya bahan
         // penolong, kalau tidak harga_vop) DIBAGI total kubikasi produksi (m³)
         // batch tersebut — jadi murni rate per m³, bukan nominal total lagi.
-        // Total kolom: 20 kolom dasar (A-T) + 3 kolom bahan penolong (U,V,W)
+        // Total kolom: 20 kolom dasar (A-T) + 2 kolom bahan penolong (U,V)
         // kalau adaBahanPenolong + 1 kolom "Harga Total/m3" (selalu ada).
-        $jumlahKolom = $this->adaBahanPenolong ? 24 : 21;
+        $jumlahKolom = $this->adaBahanPenolong ? 23 : 21;
 
         // BARIS TOTAL (Sesuai gambar di bawah header)
         $totalRow = [
@@ -93,16 +96,11 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
             $totalRow[] = '';
             $totalRow[] = (float) $bahanPerM3Total;
 
-            // Kolom "Harga Veneer+Ongkos+Penyusutan+Bahan Penolong" di baris Total,
-            // diambil dari $rekap['total_harga_vopb'] (sudah dihitung sebagai
-            // total_harga_vop + total bahan penolong NOMINAL, bukan dibagi m3 lagi
-            // — lihat ProduksiInflowService::getSummaryLaporanLahan()).
-            $totalRow[] = (float) ($this->rekap['total_harga_vopb'] ?? 0);
+            // Kolom "Harga Veneer+Ongkos+Penyusutan+Bahan Penolong" DIHAPUS dari export ini.
         }
 
         // Kolom "Harga Total / m³" di baris Total = (Harga VOPB atau VOP total) /
-        // total kubikasi veneer keseluruhan. Beda dengan kolom "Harga V+O+P+Bahan
-        // Penolong" di atas yang masih nominal total, kolom ini murni rate per m³.
+        // total kubikasi veneer keseluruhan. Ini murni rate per m³.
         $totalHargaVOPorBSemua = $this->adaBahanPenolong
             ? (float) ($this->rekap['total_harga_vopb'] ?? 0)
             : (float) ($this->rekap['total_harga_vop'] ?? 0);
@@ -157,17 +155,19 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
                 ];
 
                 if ($this->adaBahanPenolong) {
-                    // Kolom Solasi: daftar "jumlah x Rp harga_satuan" per baris produksi
-                    // ini (sama seperti tampilan di Blade), atau '-' kalau baris ini
-                    // memang tidak punya bahan penolong sama sekali.
+                    // Kolom Solasi: total NOMINAL per baris produksi ini (jumlah
+                    // roll dibulatkan normal, dikali harga_satuan) — Opsi B,
+                    // ditampilkan langsung sebagai Rupiah, bukan format "3 x Rp ...".
                     $bahanList = collect($prod['bahan_penolong'] ?? []);
                     $solasiText = $bahanList->isNotEmpty()
-                        ? $bahanList->map(fn ($b) => (int) $b['jumlah'].' x Rp '.number_format($b['harga_satuan'] ?? 0, 0, ',', '.'))->implode(', ')
+                        ? $bahanList->map(fn ($b) => 'Rp '.number_format(round($b['jumlah'] ?? 0) * ($b['harga_satuan'] ?? 0), 0, ',', '.'))->implode(', ')
                         : '-';
 
                     // Kolom Biaya Bahan Penolong: subtotal bahan penolong baris ini
-                    // dibagi kubikasi baris ini (Rp / m³) — SUDAH DIKONFIRMASI BENAR,
-                    // ini memang rate per m³, bukan nominal total.
+                    // (dari jumlah DESIMAL ASLI, bukan dibulatkan) dibagi kubikasi
+                    // baris ini (Rp / m³) — SUDAH DIKONFIRMASI BENAR, ini memang
+                    // rate per m³, bukan nominal total, dan TIDAK ikut dibulatkan
+                    // seperti kolom Solasi di atas.
                     $subtotalBahanBaris = $bahanList->sum('subtotal');
                     $kubikasiBaris = (float) $prod['total_kubikasi'];
                     $bahanPerM3Baris = $kubikasiBaris > 0 ? $subtotalBahanBaris / $kubikasiBaris : 0;
@@ -175,12 +175,8 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
                     $row[] = $solasiText;
                     $row[] = $subtotalBahanBaris > 0 ? (float) $bahanPerM3Baris : '-';
 
-                    // Kolom "Harga Veneer+Ongkos+Penyusutan+Bahan Penolong" per batch,
-                    // hanya diisi di baris pertama batch (akan di-merge), diambil dari
-                    // $item['summary']['harga_vopb'] — sudah dihitung sebagai
-                    // harga_vop + bahan penolong NOMINAL (bukan dibagi m3 lagi), lihat
-                    // ProduksiInflowService::buildLaporanItemForClosure().
-                    $row[] = $isFirstInBatch ? (float) $item['summary']['harga_vopb'] : '';
+                    // Kolom "Harga Veneer+Ongkos+Penyusutan+Bahan Penolong" DIHAPUS
+                    // dari export ini — tidak ada lagi $row[] untuk itu.
                 }
 
                 // Kolom "Harga Total / m³" SELALU ada, diisi hanya di baris pertama
@@ -221,13 +217,10 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
         if ($this->adaBahanPenolong) {
             $row1[] = '';
             $row1[] = '';
-            $row1[] = '';
 
             $row2[] = 'Solasi';
-            $row2[] = 'Biaya Bahan Penolong';
-            $row2[] = 'Harga Veneer + Ongkos + Penyusutan + Bahan Penolong';
+            $row2[] = 'Solasi / m³';
 
-            $row3[] = '';
             $row3[] = '';
             $row3[] = '';
         }
@@ -245,14 +238,15 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
     {
         $lastRow = $sheet->getHighestRow();
 
-        // Kolom terakhir: 'X' kalau ada bahan penolong (U,V,W,X), 'U' kalau
-        // tidak (cuma kolom "Harga Total / m³" saja yang ditambahkan).
-        $lastCol = $this->adaBahanPenolong ? 'X' : 'U';
+        // Kolom terakhir: 'W' kalau ada bahan penolong (U=Solasi, V=Biaya Bahan
+        // Penolong, W=Harga Total/m³), 'U' kalau tidak (cuma kolom "Harga
+        // Total / m³" saja yang ditambahkan).
+        $lastCol = $this->adaBahanPenolong ? 'W' : 'U';
 
-        // Kolom "Harga Total / m³" SELALU ada di posisi terakhir:
-        // - 'X' kalau adaBahanPenolong (setelah U=Solasi, V=Biaya Bahan Penolong, W=Harga VOPB)
+        // Posisi kolom "Harga Total / m³":
+        // - 'W' kalau adaBahanPenolong (setelah U=Solasi, V=Biaya Bahan Penolong)
         // - 'U' kalau tidak (langsung setelah T=Harga VOP)
-        $totalPerM3Col = $this->adaBahanPenolong ? 'X' : 'U';
+        $totalPerM3Col = $this->adaBahanPenolong ? 'W' : 'U';
 
         $sheet->getRowDimension(1)->setRowHeight(18);
         $sheet->getRowDimension(2)->setRowHeight(25);
@@ -280,7 +274,6 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
         if ($this->adaBahanPenolong) {
             $sheet->mergeCells('U2:U3'); // Solasi
             $sheet->mergeCells('V2:V3'); // Biaya Bahan Penolong
-            $sheet->mergeCells('W2:W3'); // Harga V+O+P+Bahan Penolong
         }
 
         // Merge header kolom "Harga Total / m³" (selalu ada)
@@ -315,7 +308,6 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
         $sheet->getStyle('T5:T'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFF00');
         if ($this->adaBahanPenolong) {
             $sheet->getStyle('V5:V'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('C6E0B4');
-            $sheet->getStyle('W5:W'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFC000');
         }
 
         // Warna kuning terang (senada kolom VOP) untuk kolom ringkasan akhir
@@ -354,21 +346,15 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
         if ($this->adaBahanPenolong) {
             // Format "Rp .../m3" untuk kolom Biaya Bahan Penolong (per kubikasi, bukan total).
             $sheet->getStyle('V4:V'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0.00_)"/m³";_("Rp"* (#,##0.00)"/m³";_("Rp"* "-"_);_(@_)');
-            // Format Rupiah standar untuk kolom Harga V+O+P+Bahan Penolong.
-            $sheet->getStyle('W4:W'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
         }
 
-        // Format "Rp .../m3" untuk kolom "Harga Total / m³" (sekarang rate per
-        // m³ juga, sama seperti kolom Biaya Bahan Penolong).
+        // Format "Rp .../m3" untuk kolom "Harga Total / m³" (rate per m³).
         $sheet->getStyle("{$totalPerM3Col}4:{$totalPerM3Col}{$lastRow}")->getNumberFormat()->setFormatCode('_("Rp"* #,##0.00_)"/m³";_("Rp"* (#,##0.00)"/m³";_("Rp"* "-"_);_(@_)');
 
         // Kolom yang di-merge per batch. 'A' (Tanggal) ditambahkan agar tanggal
         // ikut digabung menjadi satu sel per batch (menampilkan tanggal terakhir
         // dari outflow batch tersebut, yang sudah diset di method array()).
         $mergeRow = ['A', 'C', 'D', 'E', 'F', 'G', 'N', 'O', 'R', 'T'];
-        if ($this->adaBahanPenolong) {
-            $mergeRow[] = 'W';
-        }
         // Kolom "Harga Total / m³" juga hanya diisi di baris pertama batch,
         // jadi harus ikut di-merge per batch juga.
         $mergeRow[] = $totalPerM3Col;
@@ -413,10 +399,9 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
         ];
 
         if ($this->adaBahanPenolong) {
-            $widths['U'] = 22; // Solasi (daftar "jumlah x Rp harga")
+            $widths['U'] = 22; // Solasi (nominal langsung, Opsi B)
             $widths['V'] = 20; // Biaya Bahan Penolong (Rp / m³)
-            $widths['W'] = 26; // Harga V+O+P+Bahan Penolong
-            $widths['X'] = 20; // Harga Total / m³ (selalu ada)
+            $widths['W'] = 20; // Harga Total / m³ (selalu ada, sekarang di posisi W)
         } else {
             $widths['U'] = 20; // Harga Total / m³ (selalu ada, posisi U kalau tanpa bahan penolong)
         }

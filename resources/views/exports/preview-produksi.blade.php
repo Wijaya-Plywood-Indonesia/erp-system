@@ -162,11 +162,10 @@
                         $fragmentSheetsEmpty = empty($sheets) || count($sheets) === 0;
 
                         // FIX: sama seperti di halaman index (Livewire) & Excel export,
-                        // kolom "Solasi", "Biaya Bahan Penolong", dan
-                        // "Harga Veneer+Ongkos+Penyusutan+Bahan Penolong" hanya
-                        // ditampilkan kalau MINIMAL SATU baris laporan punya bahan
-                        // penolong. $laporan di sini adalah Collection biasa (bukan
-                        // paginator), jadi langsung bisa di-contains().
+                        // kolom "Solasi" dan "Biaya Bahan Penolong" hanya ditampilkan
+                        // kalau MINIMAL SATU baris laporan punya bahan penolong.
+                        // Kolom "Harga VOP + Bahan Penolong" DIHAPUS dari preview ini
+                        // (konsisten dengan export Excel).
                         $adaBahanPenolong = collect($laporan)->contains(
                             fn($item) => ($item['summary']['total_bahan_penolong'] ?? 0) > 0,
                         );
@@ -175,7 +174,10 @@
                         // menyesuaikan jumlah kolom aktual di tabel. +1 selalu
                         // untuk kolom "Harga Total / m³" yang selalu ada, sama
                         // seperti di export Excel.
-                        $totalKolom = $adaBahanPenolong ? 24 : 21;
+                        // 20 kolom dasar + 2 kolom bahan penolong (Solasi, Biaya
+                        // Bahan Penolong) kalau adaBahanPenolong + 1 kolom Harga
+                        // Total/m³ (selalu ada).
+                        $totalKolom = $adaBahanPenolong ? 23 : 21;
 
                         // Nilai baris Total untuk kolom "Harga Total / m³", sama
                         // persis rumusnya dengan ExportExcelPersentaseKayuService:
@@ -267,9 +269,6 @@
                                         <th rowspan="2"
                                             class="border-r border-slate-900 px-3 py-2 bg-lime-100/50 text-lime-800 w-32 text-center font-black uppercase">
                                             Biaya Bahan Penolong</th>
-                                        <th rowspan="2"
-                                            class="border-r border-slate-900 px-3 py-2 bg-yellow-200/60 text-yellow-900 font-black uppercase">
-                                            Harga VOP + Bahan Penolong</th>
                                     @endif
                                     <th rowspan="2"
                                         class="px-3 py-2 bg-yellow-300/50 text-yellow-900 font-black uppercase">
@@ -354,12 +353,6 @@
                                     </th>
                                     @if ($adaBahanPenolong)
                                         <th colspan="2" class="border-r border-slate-900 px-3 py-1 "></th>
-                                        <th
-                                            class="border-r border-slate-900 px-3 py-1 bg-[#FF88BA] font-black text-slate-900 whitespace-nowrap">
-                                            {{-- Rata-rata Harga Veneer+Ongkos+Penyusutan+Bahan Penolong,
-                                                 dihitung dari ProduksiInflowService::getSummaryLaporanLahan() --}}
-                                            Rp {{ number_format($rekap['total_harga_vopb'] ?? 0, 0, ',', '.') }}
-                                        </th>
                                     @endif
                                     <th class="px-3 py-1 bg-yellow-300/60 font-black text-slate-900 whitespace-nowrap">
                                         {{-- Kolom "Harga Total / m³" baris Total: (Harga VOPB atau VOP total)
@@ -398,7 +391,6 @@
                                     <td class="border-r border-slate-900"></td>
                                     <td class="border-r border-slate-900"></td>
                                     @if ($adaBahanPenolong)
-                                        <td class="border-r border-slate-900"></td>
                                         <td class="border-r border-slate-900"></td>
                                         <td class="border-r border-slate-900"></td>
                                     @endif
@@ -528,17 +520,17 @@
                                             Rp. {{ number_format($item['summary']['harga_vop'], 0, ',', '.') }}</td>
 
                                         @if ($adaBahanPenolong)
-                                            {{-- Kolom Solasi: daftar "jumlah x Rp harga" per baris outflow,
-                                                 sama pola dengan kolom Pekerja/Ongkos/Penyusutan di atas
-                                                 (satu div per baris outflow dalam batch ini). --}}
+                                            {{-- Kolom Solasi: NOMINAL LANGSUNG per baris outflow (jumlah roll
+                                                 dibulatkan normal, dikali harga_satuan) — Opsi B, konsisten
+                                                 dengan Blade index & export Excel. --}}
                                             <td class="border-r border-slate-900 p-0 bg-slate-50/60 text-[10px]">
                                                 <div class="flex flex-col divide-y divide-slate-900">
                                                     @foreach ($item['outflow'] as $produksi)
                                                         <div
                                                             class="px-2 py-1 text-center min-h-[32px] flex items-center justify-center w-32 font-bold">
                                                             @forelse (($produksi['bahan_penolong'] ?? []) as $bp)
-                                                                {{ (int) $bp['jumlah'] }} x Rp
-                                                                {{ number_format($bp['harga_satuan'] ?? 0, 0, ',', '.') }}
+                                                                Rp
+                                                                {{ number_format(round($bp['jumlah'] ?? 0) * ($bp['harga_satuan'] ?? 0), 0, ',', '.') }}
                                                                 @if (!$loop->last)
                                                                     ,
                                                                 @endif
@@ -550,7 +542,9 @@
                                                 </div>
                                             </td>
 
-                                            {{-- Kolom Biaya Bahan Penolong per m³, per baris outflow --}}
+                                            {{-- Kolom Biaya Bahan Penolong per m³, per baris outflow (tetap
+                                                 pakai jumlah desimal asli/subtotal, TIDAK ikut dibulatkan
+                                                 seperti kolom Solasi di atas). --}}
                                             <td class="border-r border-slate-900 p-0 bg-lime-50/40">
                                                 <div class="flex flex-col divide-y divide-slate-900">
                                                     @foreach ($item['outflow'] as $produksi)
@@ -578,19 +572,6 @@
                                                         </div>
                                                     @endforeach
                                                 </div>
-                                            </td>
-
-                                            {{-- Kolom Harga Veneer+Ongkos+Penyusutan+Bahan Penolong: satu nilai
-                                                 per batch, diambil dari $item['summary']['harga_vopb'] yang
-                                                 dihitung ProduksiInflowService::buildLaporanItemForClosure(). --}}
-                                            <td
-                                                class="border-r border-slate-900 px-3 py-2 bg-yellow-100/60 text-right font-black text-slate-900 whitespace-nowrap">
-                                                @if (($item['summary']['total_bahan_penolong'] ?? 0) > 0)
-                                                    Rp.
-                                                    {{ number_format($item['summary']['harga_vopb'] ?? 0, 0, ',', '.') }}
-                                                @else
-                                                    <span class="text-slate-400 font-normal">-</span>
-                                                @endif
                                             </td>
                                         @endif
 
@@ -629,7 +610,6 @@
                                             <td class="border-r border-slate-900"></td>
                                             <td class="border-r border-slate-900"></td>
                                             @if ($adaBahanPenolong)
-                                                <td class="border-r border-slate-900"></td>
                                                 <td class="border-r border-slate-900"></td>
                                                 <td class="border-r border-slate-900"></td>
                                             @endif
