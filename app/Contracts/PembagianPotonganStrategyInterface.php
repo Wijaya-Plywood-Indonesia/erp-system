@@ -2,13 +2,17 @@
 // app/Contracts/PembagianPotonganStrategyInterface.php
 namespace App\Contracts;
 
-use App\DataTransferObjects\TargetHitungResult;
-
 interface PembagianPotonganStrategyInterface
 {
     /**
-     * @param PekerjaKerjaInput[] $pekerja
-     * @return array<string, float> idPegawai => potonganPerOrang
+     * @param \App\DataTransferObjects\PekerjaKerjaInput[] $pekerja
+     * @return array{targetAdjusted: float, potonganPerPegawai: array<string, float>}
      */
-    public function bagikan(array $pekerja, TargetHitungResult $hasilKolektif, float $ratePerOrgPerMenit, float $biayaPerUnit): array;
+    public function bagikan(
+        array $pekerja,
+        float $ratePerOrgPerMenit,
+        float $biayaPerUnit,
+        float $hasilAktual,
+        float $gaji,
+    ): array;
 }

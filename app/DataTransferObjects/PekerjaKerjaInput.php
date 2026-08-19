@@ -6,6 +6,7 @@ final class PekerjaKerjaInput
 {
     public function __construct(
         public readonly string $idPegawai,
-        public readonly float $menitKerja,   // durasi kerja aktual pegawai ini, dalam menit
+        public readonly float $menitKerja,
+        public readonly float $hasilIndividu = 0,
     ) {}
 }

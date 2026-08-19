@@ -2,16 +2,23 @@
 // app/Services/Target/Strategies/IndividualTargetStrategy.php
 namespace App\Services\Target\Strategies;
 
-class IndividualTargetStrategy implements \App\Contracts\PembagianPotonganStrategyInterface
-{
-    public function bagikan(array $pekerja, $hasilKolektif, float $ratePerOrgPerMenit, float $biayaPerUnit): array
-    {
-        return collect($pekerja)->mapWithKeys(function ($p) use ($ratePerOrgPerMenit, $biayaPerUnit) {
-            $targetIndividu = $ratePerOrgPerMenit * $p->menitKerja; // target proporsional jam dia sendiri
-            $kekuranganIndividu = max(0, $targetIndividu - $p->hasilIndividu);
-            $potongan = round(($kekuranganIndividu * $biayaPerUnit) / 500) * 500;
+use App\Contracts\PembagianPotonganStrategyInterface;
 
-            return [$p->idPegawai => $potongan];
-        })->all();
+class IndividualTargetStrategy implements PembagianPotonganStrategyInterface
+{
+    public function bagikan(array $pekerja, float $ratePerOrgPerMenit, float $biayaPerUnit, float $hasilAktual, float $gaji): array
+    {
+        $targetTotal = 0;
+        $map = [];
+
+        foreach ($pekerja as $p) {
+            $targetIndividu = $ratePerOrgPerMenit * $p->menitKerja;
+            $targetTotal   += $targetIndividu;
+
+            $kekuranganIndividu = max(0, $targetIndividu - $p->hasilIndividu);
+            $map[$p->idPegawai] = round(($kekuranganIndividu * $biayaPerUnit) / 500) * 500;
+        }
+
+        return ['targetAdjusted' => $targetTotal, 'potonganPerPegawai' => $map];
     }
 }

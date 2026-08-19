@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\DataTransferObjects\PekerjaKerjaInput;
 use Filament\Pages\Page;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Components\DatePicker;
@@ -104,9 +105,6 @@ class LaporanStik extends Page
 
         $this->dataProduksi = [];
 
-        // === DIHAPUS: blok manual $targetItem, $targetPalet, $potonganTarif, $stdJam ===
-        // Semua itu sekarang tanggung jawab StikTargetResolver di dalam Action, tidak perlu diambil manual di sini.
-
         foreach ($produksiList as $produksi) {
             $tanggalFormat = Carbon::parse($produksi->tanggal_produksi)->format('d/m/Y');
             $namaMesin     = 'MESIN STIK';
@@ -135,41 +133,42 @@ class LaporanStik extends Page
 
             $hasilPalet = count($daftarHasil);
 
-            // === BARU: bentuk daftar durasi kerja per pegawai ===
+            // Bentuk daftar durasi kerja per pegawai (Stik tidak pakai hasilIndividu, biarkan default 0)
             $pekerjaInput = collect($produksi->detailPegawaiStik ?? [])->map(function ($detail) {
                 $masuk  = $detail->masuk  ? Carbon::parse($detail->masuk)  : null;
                 $pulang = $detail->pulang ? Carbon::parse($detail->pulang) : null;
-                $menitIstirahat = $detail->menit_istirahat ?? 60; // default 1 jam kalau tidak tercatat
+                $menitIstirahat = $detail->menit_istirahat ?? 60;
                 $menit = ($masuk && $pulang) ? max(0, abs($pulang->diffInMinutes($masuk)) - $menitIstirahat) : (9 * 60);
 
-                return new \App\DataTransferObjects\PekerjaKerjaInput(
+                return new PekerjaKerjaInput(
                     idPegawai: $detail->pegawai?->kode_pegawai ?? '-',
                     menitKerja: $menit,
                 );
             })->all();
-            // dd($pekerjaInput);
 
-            // === BARU: panggil Action, gantikan seluruh perhitungan manual selisih & potongan ===
+            // Panggil Action — sekarang return array ['targetAdjusted' => ..., 'potonganPerPegawai' => [...]]
             $result = app(\App\Actions\HitungPotonganProduksiAction::class)->execute(
                 mesin: \App\Enums\Mesin::Stik,
                 pekerja: $pekerjaInput,
                 hasilAktual: $hasilPalet,
             );
 
-            $targetPalet      = $result?->targetAdjusted ?? 0;
-            $selisihPalet     = $hasilPalet - $targetPalet;
-            $potonganPerOrang = $result?->potonganPerOrang ?? 0;
-
-            $potonganDibulatkan = $potonganPerOrang > 0
-                ? $this->roundToNearestHundred($potonganPerOrang)
-                : 0;
+            $targetPalet         = $result['targetAdjusted'] ?? 0;
+            $selisihPalet        = $hasilPalet - $targetPalet;
+            $potonganPerPegawai  = $result['potonganPerPegawai'] ?? [];
 
             $jumlahPekerja = $produksi->detailPegawaiStik?->count() ?? 0;
 
             $pekerja = [];
             foreach ($produksi->detailPegawaiStik ?? [] as $detail) {
+                $idPegawai = $detail->pegawai?->kode_pegawai ?? '-';
+                $potonganPegawaiIni = $potonganPerPegawai[$idPegawai] ?? 0;
+                $potonganDibulatkan = $potonganPegawaiIni > 0
+                    ? $this->roundToNearestHundred($potonganPegawaiIni)
+                    : 0;
+
                 $pekerja[] = [
-                    'id'         => $detail->pegawai?->kode_pegawai ?? '-',
+                    'id'         => $idPegawai,
                     'nama'       => $detail->pegawai?->nama_pegawai ?? '-',
                     'jam_masuk'  => $detail->masuk ? Carbon::parse($detail->masuk)->format('H:i') : '-',
                     'jam_pulang' => $detail->pulang ? Carbon::parse($detail->pulang)->format('H:i') : '-',
@@ -192,9 +191,9 @@ class LaporanStik extends Page
                 'pekerja'                  => $pekerja,
                 'hasil_palet'              => $hasilPalet,
                 'total_lembar'             => $totalLembar,
-                'target_palet'             => round($targetPalet), // sekarang dinamis, bukan angka master mentah
+                'target_palet'             => round($targetPalet),
                 'selisih_palet'            => $selisihPalet,
-                'jam_kerja'                => 9, // opsional: bisa dihapus dari view kalau tidak lagi representatif
+                'jam_kerja'                => 9,
                 'total_kendala_menit'      => $totalKendalaMenit,
                 'total_downtime_formatted' => $totalDowntimeFormatted,
                 'kendala'                  => $produksi->kendala ?? '-',
