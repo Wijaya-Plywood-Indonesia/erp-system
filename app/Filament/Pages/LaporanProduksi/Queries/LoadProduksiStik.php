@@ -13,7 +13,7 @@ class LoadProduksiStik
         return ProduksiStik::with([
             'detailPegawaiStik.pegawai:id,kode_pegawai,nama_pegawai',
         ])
-        ->whereDate('tanggal_produksi', $tanggal)
-        ->get();
+            ->whereDate('tanggal_produksi', $tanggal)
+            ->get();
     }
 }

@@ -2,9 +2,11 @@
 // app/Actions/HitungPotonganProduksiAction.php
 namespace App\Actions;
 
+use App\DataTransferObjects\PekerjaKerjaInput;
 use App\DataTransferObjects\TargetHitungInput;
 use App\DataTransferObjects\TargetHitungResult;
 use App\Enums\Mesin;
+use App\Enums\StrategiPembagian;
 use App\Services\Target\TargetPotonganService;
 use App\Services\Target\TargetResolverFactory;
 
@@ -14,11 +16,13 @@ class HitungPotonganProduksiAction
         private readonly TargetPotonganService $service = new TargetPotonganService(),
     ) {}
 
+    /**
+     * @param PekerjaKerjaInput[] $pekerja  durasi kerja aktual (menit) & (opsional) hasil individu tiap pegawai
+     */
     public function execute(
         Mesin $mesin,
-        int $orgAktual,
-        float $jamAktual,
-        float $menitAktual,
+        StrategiPembagian $strategi,
+        array $pekerja,
         float $hasilAktual,
         ?int $idUkuran = null,
         ?int $idJenisKayu = null,
@@ -34,13 +38,12 @@ class HitungPotonganProduksiAction
             targetNormal: (float) $target->target,
             orgNormal: (int) $target->orang,
             jamNormal: (float) $target->jam,
-            orgAktual: $orgAktual,
-            jamAktual: $jamAktual,
-            menitAktual: $menitAktual,
+            pekerja: $pekerja,
             hasilAktual: $hasilAktual,
             biayaPerUnit: (float) $target->potongan,
+            gaji: (float) ($target->gaji ?? 0),
         );
 
-        return $this->service->hitung($input);
+        return $this->service->hitung($input, $strategi);
     }
 }
