@@ -19,7 +19,7 @@ enum Mesin: int
     {
         return match ($this) {
             self::DryerPagi, self::DryerMalam => Satuan::Kubikasi,
-            self::Bongkar, self::Stik => Satuan::Palet,
+            self::Bongkar => Satuan::Palet,
             default => Satuan::Lembar,
         };
     }
@@ -34,21 +34,21 @@ enum Mesin: int
         };
     }
 
-    // app/Enums/Mesin.php (tambahan)
+    /**
+     * Strategi default pembagian potongan ke pegawai untuk mesin ini.
+     * - Kolektif: 1 target untuk tim, potongan dibagi RATA ke semua orang.
+     * - IndividualTarget: tiap orang punya target & hasil sendiri (piecework).
+     *
+     * Catatan: Joint TIDAK dipakai lewat sini — Joint punya logika khusus
+     * "kolektif lintas ukuran" yang di-orchestrate di JoinDataMap sendiri
+     * (net kekurangan/kelebihan rupiah digabung dulu lintas ukuran, baru
+     * dibagi rata), bukan lewat Action::execute() biasa per grup.
+     */
     public function strategiPembagian(): StrategiPembagian
     {
         return match ($this) {
             self::Repair => StrategiPembagian::IndividualTarget,
             default => StrategiPembagian::Kolektif,
-        };
-    }
-
-    /** Mesin yang target-nya TETAP (tidak diskalakan oleh org/jam aktual). */
-    public function pakaiPenyesuaianJam(): bool
-    {
-        return match ($this) {
-            self::Stik => false, // target selalu tetap sesuai master, terlepas dari org/jam
-            default => true,
         };
     }
 }
