@@ -551,12 +551,13 @@
                                                                         class="px-2 py-2 {{ $kk['penyusutan'] == 0 && 'text-red-600 dark:text-red-400' }}">
                                                                         {{ $kk['penyusutan'] != 0 ? 'Rp ' . number_format($kk['penyusutan'] ?? 0) : '0 ( Belum Diatur )' }}
                                                                     </td>
+                                                                    {{-- Kolom Solasi: HANYA info jumlah roll, dibulatkan normal untuk keterbacaan.
+         Angka bulat ini TIDAK dipakai untuk hitung biaya di kolom sebelah. --}}
                                                                     <td class="px-2 py-2 whitespace-nowrap">
                                                                         @forelse ($kk['bahan_penolong'] ?? [] as $bp)
                                                                             <span
-                                                                                class="text-gray-700 dark:text-gray-300">{{ (int) $bp['jumlah'] }}
-                                                                                x Rp.
-                                                                                {{ number_format($bp['harga_satuan'] ?? 0, 0, ',', '.') }}</span>
+                                                                                class="text-gray-700 dark:text-gray-300">Rp
+                                                                                {{ number_format(round($bp['jumlah'] ?? 0) * ($bp['harga_satuan'] ?? 0), 0, ',', '.') }}</span>
                                                                             @if (!$loop->last)
                                                                                 ,
                                                                             @endif
@@ -565,6 +566,9 @@
                                                                                 class="text-gray-400 dark:text-gray-500 text-[10px] italic">-</span>
                                                                         @endforelse
                                                                     </td>
+                                                                    {{-- Kolom Biaya Bahan Penolong: TOTAL HARGA sebenarnya, dihitung dari
+         $bp['subtotal'] (jumlah desimal asli x harga_satuan) yang sudah
+         di-generate di service — bukan dari angka Solasi yang dibulatkan. --}}
                                                                     <td
                                                                         class="px-2 py-2 whitespace-nowrap font-bold {{ collect($kk['bahan_penolong'] ?? [])->sum('subtotal') > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500' }}">
                                                                         @php

@@ -571,7 +571,13 @@ class ProduksiInflowService
                     ->flatten(1)
                     ->groupBy('nama_bahan')
                     ->map(function ($items, $nama) {
-                        $jumlah = round($items->sum('jumlah_porsi'), 2);
+                        // FIX: jumlah dibulatkan ke bilangan bulat NORMAL (bukan 2 desimal
+                        // lagi), dan subtotal WAJIB dihitung dari jumlah yang SUDAH
+                        // dibulatkan ini — bukan dari jumlah_porsi desimal asli. Ini supaya
+                        // subtotal (dan turunannya: total_bahan_penolong, harga_vopb, Harga
+                        // Total/m³) SELALU konsisten & bisa di-cross-check manual dengan
+                        // angka Solasi yang tampil di layar/export.
+                        $jumlah = round($items->sum('jumlah_porsi'));
                         $hargaSatuan = (float) ($items->first()['harga_satuan'] ?? 0);
                         $satuan = $items->first()['satuan'] ?? '';
 
