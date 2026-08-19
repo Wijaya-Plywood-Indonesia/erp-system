@@ -2,43 +2,48 @@
 // app/Actions/HitungPotonganProduksiAction.php
 namespace App\Actions;
 
+use App\DataTransferObjects\PekerjaKerjaInput;
+use App\DataTransferObjects\TargetHitungInput;
+use App\DataTransferObjects\TargetHitungResult;
 use App\Enums\Mesin;
+use App\Enums\StrategiPembagian;
+use App\Services\Target\TargetPotonganService;
 use App\Services\Target\TargetResolverFactory;
-use App\Services\Target\StrategiPembagianFactory;
 
 class HitungPotonganProduksiAction
 {
+    public function __construct(
+        private readonly TargetPotonganService $service = new TargetPotonganService(),
+    ) {}
+
     /**
-     * @param \App\DataTransferObjects\PekerjaKerjaInput[] $pekerja
-     * @return array{targetAdjusted: float, potonganPerPegawai: array<string, float>}
+     * @param PekerjaKerjaInput[] $pekerja  durasi kerja aktual (menit) & (opsional) hasil individu tiap pegawai
      */
     public function execute(
         Mesin $mesin,
+        StrategiPembagian $strategi,
         array $pekerja,
-        float $hasilAktual = 0,
+        float $hasilAktual,
         ?int $idUkuran = null,
         ?int $idJenisKayu = null,
-    ): array {
+    ): ?TargetHitungResult {
         $resolver = TargetResolverFactory::make($mesin);
         $target   = $resolver->resolve($mesin->value, $idUkuran, $idJenisKayu);
 
         if (!$target) {
-            return ['targetAdjusted' => 0, 'potonganPerPegawai' => []];
+            return null;
         }
 
-        $menitNormalTotal   = ((float) $target->jam) * 60;
-        $ratePerMenit       = $target->orang > 0 && $menitNormalTotal > 0
-            ? $target->target / $menitNormalTotal : 0;
-        $ratePerOrgPerMenit = $target->orang > 0 ? $ratePerMenit / $target->orang : 0;
-
-        $strategi = StrategiPembagianFactory::make($mesin->strategiPembagian());
-
-        return $strategi->bagikan(
+        $input = new TargetHitungInput(
+            targetNormal: (float) $target->target,
+            orgNormal: (int) $target->orang,
+            jamNormal: (float) $target->jam,
             pekerja: $pekerja,
-            ratePerOrgPerMenit: $ratePerOrgPerMenit,
-            biayaPerUnit: (float) $target->potongan,
             hasilAktual: $hasilAktual,
-            gaji: (float) $target->gaji,
+            biayaPerUnit: (float) $target->potongan,
+            gaji: (float) ($target->gaji ?? 0),
         );
+
+        return $this->service->hitung($input, $strategi);
     }
 }
