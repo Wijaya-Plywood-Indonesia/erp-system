@@ -25,18 +25,22 @@ class HpAbsensiSource implements AbsensiSourceInterface
                 $q->whereDate('tanggal_produksi', $tanggal);
             })
             ->get()
-            ->map(fn ($item) => [
-                'sumber' => $this->key(),
-                'sumber_label' => $this->label(),
-                'id_pegawai' => $item->id_pegawai,
-                'nama_pegawai' => $item->pegawaiHp?->nama_pegawai ?? '-',
-                'tanggal' => $item->produksiHp?->tanggal_produksi,
-                'shift' => strtolower($item->produksiHp?->shift ?? 'pagi'),
-                'jam_masuk' => $item->masuk,
-                'jam_pulang' => $item->pulang,
-                'izin' => $item->ijin,
-                'keterangan' => $item->ket,
-                'ref_id' => $item->id,
-            ]);
+            ->map(function ($item) {
+                $shift = strtolower($item->produksiHp?->shift ?? 'pagi');
+
+                return [
+                    'sumber' => $this->key(),
+                    'sumber_label' => $this->label().' '.ucfirst($shift),
+                    'id_pegawai' => $item->id_pegawai,
+                    'nama_pegawai' => $item->pegawaiHp?->nama_pegawai ?? '-',
+                    'tanggal' => $item->produksiHp?->tanggal_produksi,
+                    'shift' => $shift,
+                    'jam_masuk' => $item->masuk,
+                    'jam_pulang' => $item->pulang,
+                    'izin' => $item->ijin,
+                    'keterangan' => $item->ket,
+                    'ref_id' => $item->id,
+                ];
+            });
     }
 }
