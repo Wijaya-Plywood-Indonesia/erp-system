@@ -2,45 +2,43 @@
 // app/Actions/HitungPotonganProduksiAction.php
 namespace App\Actions;
 
-use App\DataTransferObjects\TargetHitungInput;
-use App\DataTransferObjects\TargetHitungResult;
 use App\Enums\Mesin;
-use App\Services\Target\TargetPotonganService;
 use App\Services\Target\TargetResolverFactory;
+use App\Services\Target\StrategiPembagianFactory;
 
 class HitungPotonganProduksiAction
 {
-    public function __construct(
-        private readonly TargetPotonganService $service = new TargetPotonganService(),
-    ) {}
-
+    /**
+     * @param \App\DataTransferObjects\PekerjaKerjaInput[] $pekerja
+     * @return array{targetAdjusted: float, potonganPerPegawai: array<string, float>}
+     */
     public function execute(
         Mesin $mesin,
-        int $orgAktual,
-        float $jamAktual,
-        float $menitAktual,
-        float $hasilAktual,
+        array $pekerja,
+        float $hasilAktual = 0,
         ?int $idUkuran = null,
         ?int $idJenisKayu = null,
-    ): ?TargetHitungResult {
+    ): array {
         $resolver = TargetResolverFactory::make($mesin);
         $target   = $resolver->resolve($mesin->value, $idUkuran, $idJenisKayu);
 
         if (!$target) {
-            return null;
+            return ['targetAdjusted' => 0, 'potonganPerPegawai' => []];
         }
 
-        $input = new TargetHitungInput(
-            targetNormal: (float) $target->target,
-            orgNormal: (int) $target->orang,
-            jamNormal: (float) $target->jam,
-            orgAktual: $orgAktual,
-            jamAktual: $jamAktual,
-            menitAktual: $menitAktual,
-            hasilAktual: $hasilAktual,
-            biayaPerUnit: (float) $target->potongan,
-        );
+        $menitNormalTotal   = ((float) $target->jam) * 60;
+        $ratePerMenit       = $target->orang > 0 && $menitNormalTotal > 0
+            ? $target->target / $menitNormalTotal : 0;
+        $ratePerOrgPerMenit = $target->orang > 0 ? $ratePerMenit / $target->orang : 0;
 
-        return $this->service->hitung($input);
+        $strategi = StrategiPembagianFactory::make($mesin->strategiPembagian());
+
+        return $strategi->bagikan(
+            pekerja: $pekerja,
+            ratePerOrgPerMenit: $ratePerOrgPerMenit,
+            biayaPerUnit: (float) $target->potongan,
+            hasilAktual: $hasilAktual,
+            gaji: (float) $target->gaji,
+        );
     }
 }
