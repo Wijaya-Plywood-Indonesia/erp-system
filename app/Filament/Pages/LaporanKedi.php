@@ -2,34 +2,40 @@
 
 namespace App\Filament\Pages;
 
-use Filament\Pages\Page;
-use Filament\Forms\Concerns\InteractsWithForms;
-use Filament\Forms\Components\DatePicker;
-use Filament\Notifications\Notification;
-use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\LaporanProduksiKediExport;
 use App\Models\ProduksiKedi;
-use Filament\Actions\Action;
-use Carbon\Carbon;
-use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Actions;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Carbon\Carbon;
+use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\Grid;
+use Maatwebsite\Excel\Facades\Excel;
 use UnitEnum;
 
 class LaporanKedi extends Page
 {
-    use InteractsWithForms;
     use HasPageShield;
+    use InteractsWithForms;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
+
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
+
     protected static ?string $title = 'Laporan Produksi Kedi';
+
     protected static ?int $navigationSort = 4;
+
     protected string $view = 'filament.pages.laporan-kedi';
+
     protected static bool $shouldRegisterNavigation = false;
 
     public array $dataKedi = [];
+
     public ?string $tanggal = null;
 
     public bool $isLoading = false;
@@ -91,11 +97,26 @@ class LaporanKedi extends Page
                 ->body('Tidak ada data Produksi Kedi untuk rentang tanggal ini.')
                 ->danger()
                 ->send();
+
             return;
         }
 
-        $filename = 'Laporan-Produksi-Kedi-' . $this->tanggal . '.xlsx';
-        return Excel::download(new LaporanProduksiKediExport($this->dataKedi), $filename);
+        // Query ulang dengan relasi lengkap untuk KediWorkerMap (perhitungan potongan)
+        $produksiForPotongan = ProduksiKedi::with([
+            'detailBongkarKedi.jenisKayu',
+            'detailMasukKedi.jenisKayu',
+            'detailPegawaiKedi.pegawai',
+        ])
+            ->whereDate('tanggal_actual_bongkar', $this->tanggal)
+            ->orderBy('tanggal_actual_bongkar')
+            ->get();
+
+        $filename = 'Laporan-Produksi-Kedi-'.$this->tanggal.'.xlsx';
+
+        return Excel::download(
+            new LaporanProduksiKediExport($this->dataKedi, $produksiForPotongan),
+            $filename
+        );
     }
 
     public function loadAllData(): void
@@ -131,8 +152,8 @@ class LaporanKedi extends Page
 
             // Group Detail Masuk
             $detailMasuk = $produksi->detailMasukKedi
-                ->groupBy(fn($d) => $d->id_ukuran . '-' . $d->id_jenis_kayu . '-' . $d->kw)
-                ->map(fn($group) => [
+                ->groupBy(fn ($d) => $d->id_ukuran.'-'.$d->id_jenis_kayu.'-'.$d->kw)
+                ->map(fn ($group) => [
                     'no_palet' => $group->pluck('no_palet')->unique()->implode(', '),
                     'mesin' => $produksi->mesin?->nama_mesin ?? '-',
                     'ukuran' => $group->first()->ukuran?->dimensi ?? '-',
@@ -146,8 +167,8 @@ class LaporanKedi extends Page
 
             // Group Detail Bongkar
             $detailBongkar = $produksi->detailBongkarKedi
-                ->groupBy(fn($d) => $d->id_ukuran . '-' . $d->id_jenis_kayu . '-' . $d->kw)
-                ->map(fn($group) => [
+                ->groupBy(fn ($d) => $d->id_ukuran.'-'.$d->id_jenis_kayu.'-'.$d->kw)
+                ->map(fn ($group) => [
                     'no_palet' => $group->pluck('no_palet')->unique()->implode(', '),
                     'mesin' => $produksi->mesin?->nama_mesin ?? '-',
                     'ukuran' => $group->first()->ukuran?->dimensi ?? '-',
@@ -162,10 +183,10 @@ class LaporanKedi extends Page
                 'tanggal_keluar' => $produksi->tanggal_actual_bongkar
                     ? Carbon::parse($produksi->tanggal_actual_bongkar)->format('d/m/Y')
                     : '-',
-                
+
                 // TAMBAHKAN BARIS INI AGAR BISA DIBACA EXCEL:
-                'tanggal_actual_bongkar' => $produksi->tanggal_actual_bongkar 
-                    ? Carbon::parse($produksi->tanggal_actual_bongkar)->format('d/m/Y') 
+                'tanggal_actual_bongkar' => $produksi->tanggal_actual_bongkar
+                    ? Carbon::parse($produksi->tanggal_actual_bongkar)->format('d/m/Y')
                     : null,
 
                 'status' => $produksi->status,
@@ -175,7 +196,7 @@ class LaporanKedi extends Page
                 'validasi_oleh' => $produksi->validasiTerakhir?->role ?? '-',
                 'total_pekerja' => $produksi->detailPegawaiKedi->count(),
                 'ongkos_mesin' => (float) ($produksi->mesin?->ongkos_mesin ?? 0),
-                'kendala_kedis' => $produksi->kendalaKedis->map(fn($k) => [
+                'kendala_kedis' => $produksi->kendalaKedis->map(fn ($k) => [
                     'tanggal' => $k->waktu_mulai ? Carbon::parse($k->waktu_mulai)->format('d/m/Y') : '-',
                     'mesin' => $k->mesin?->nama_mesin ?? '-',
                     'waktu_mulai' => $k->waktu_mulai ? Carbon::parse($k->waktu_mulai)->format('H:i') : '-',
