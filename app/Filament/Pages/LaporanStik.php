@@ -18,12 +18,6 @@ use Carbon\Carbon;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
-use Illuminate\Support\Facades\Log;
-
-// --- TAMBAHAN: dependency untuk shadow-mode TargetPotonganService ---
-use App\Enums\Mesin;
-use App\Actions\HitungPotonganProduksiAction;
-use Illuminate\Support\Facades\Log;
 
 class LaporanStik extends Page
 {
