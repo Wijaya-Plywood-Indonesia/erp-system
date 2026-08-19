@@ -31,14 +31,12 @@
         0 ? '+' : ''; $jamKerja = $first['jam_kerja'] ?? 0; @endphp
 
         <!-- CARD MESIN -->
-        <div
-            class="bg-white dark:bg-zinc-900 rounded-sm shadow-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden"
-        >
-            <div class="bg-zinc-800 p-4 text-white">
-                <h2 class="text-lg font-bold text-center">
-                    PEKERJA MESIN: {{ strtoupper($mesinOnly) }} 
-                </h2>
-            </div>
+<div class="bg-white dark:bg-zinc-900 rounded-sm shadow-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+    <div class="bg-zinc-800 p-4 text-white">
+        <h2 class="text-lg font-bold text-center">
+            PEKERJA MESIN: {{ strtoupper($mesinOnly) }} SHIFT: {{ strtoupper($first['shift'] ?? '') }}
+        </h2>
+    </div>
 
             <div class="p-4">
                 <div class="w-full overflow-x-auto">
