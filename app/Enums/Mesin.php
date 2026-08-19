@@ -19,7 +19,7 @@ enum Mesin: int
     {
         return match ($this) {
             self::DryerPagi, self::DryerMalam => Satuan::Kubikasi,
-            self::Bongkar => Satuan::Palet,
+            self::Bongkar, self::Stik => Satuan::Palet,
             default => Satuan::Lembar,
         };
     }
@@ -31,6 +31,24 @@ enum Mesin: int
         return match ($this) {
             self::DryerPagi, self::DryerMalam, self::Bongkar, self::Stik => true,
             default => false,
+        };
+    }
+
+    // app/Enums/Mesin.php (tambahan)
+    public function strategiPembagian(): StrategiPembagian
+    {
+        return match ($this) {
+            self::Repair => StrategiPembagian::IndividualTarget,
+            default => StrategiPembagian::Kolektif,
+        };
+    }
+
+    /** Mesin yang target-nya TETAP (tidak diskalakan oleh org/jam aktual). */
+    public function pakaiPenyesuaianJam(): bool
+    {
+        return match ($this) {
+            self::Stik => false, // target selalu tetap sesuai master, terlepas dari org/jam
+            default => true,
         };
     }
 }
