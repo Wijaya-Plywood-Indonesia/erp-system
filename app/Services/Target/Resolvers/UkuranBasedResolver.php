@@ -9,11 +9,29 @@ class UkuranBasedResolver implements TargetResolverInterface
 {
     public function resolve(int $idMesin, ?int $idUkuran = null, ?int $idJenisKayu = null): ?Target
     {
-        return Target::query()
+        $target = Target::query()
             ->where('id_mesin', $idMesin)
             ->when($idUkuran, fn($q) => $q->where('id_ukuran', $idUkuran))
             ->when($idJenisKayu, fn($q) => $q->where('id_jenis_kayu', $idJenisKayu))
             ->orderByDesc('id')
             ->first();
+
+        if (!$target && $idUkuran) {
+            $ukuranNol = \App\Models\Ukuran::where('panjang', 0)
+                ->where('lebar', 0)
+                ->where('tebal', 0)
+                ->first();
+
+            if ($ukuranNol && $ukuranNol->id !== $idUkuran) {
+                $target = Target::query()
+                    ->where('id_mesin', $idMesin)
+                    ->where('id_ukuran', $ukuranNol->id)
+                    ->when($idJenisKayu, fn($q) => $q->where('id_jenis_kayu', $idJenisKayu))
+                    ->orderByDesc('id')
+                    ->first();
+            }
+        }
+
+        return $target;
     }
 }

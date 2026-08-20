@@ -26,9 +26,10 @@ class HitungPotonganProduksiAction
         float $hasilAktual,
         ?int $idUkuran = null,
         ?int $idJenisKayu = null,
+        ?\App\Models\Target $targetOverride = null,
     ): ?TargetHitungResult {
         $resolver = TargetResolverFactory::make($mesin);
-        $target   = $resolver->resolve($mesin->value, $idUkuran, $idJenisKayu);
+        $target   = $targetOverride ?? $resolver->resolve($mesin->value, $idUkuran, $idJenisKayu);
 
         if (!$target) {
             return null;
