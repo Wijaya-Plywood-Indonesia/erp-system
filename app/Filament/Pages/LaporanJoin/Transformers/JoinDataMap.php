@@ -33,9 +33,16 @@ class JoinDataMap
             $totalPersonMenit = 0;
             $jumlahPekerja    = $produksi->pegawaiJoint->count();
             $pekerjaInput     = []; // PekerjaKerjaInput[], dipakai lagi di step 3 (ProporsionalStrategy)
+            $totalGajiTim     = 0;  // buat flag "potongan melebihi gaji normal"
 
             foreach ($produksi->pegawaiJoint as $pj) {
-                if (!$pj->pegawai || !$pj->masuk || !$pj->pulang) {
+                if (!$pj->pegawai) {
+                    continue;
+                }
+
+                $totalGajiTim += (float) ($pj->pegawai->gaji ?? 0);
+
+                if (!$pj->masuk || !$pj->pulang) {
                     continue;
                 }
 
@@ -62,24 +69,32 @@ class JoinDataMap
             $jamAktualRata    = $avgMenitPerOrang / 60;
 
             /* ============================================================
-             * 2. HITUNG TARGET-ADJUSTED & DELTA RUPIAH PER UKURAN — BELUM
-             *    DIBAGI KE PEGAWAI. Karena kru sama kerja di banyak ukuran
-             *    sekaligus dalam 1 hari, kita GABUNG (net) dulu surplus dan
-             *    defisitnya lintas ukuran, baru tentukan apakah tim ini
-             *    kena potongan atau tidak secara keseluruhan.
+             * 2. HITUNG TARGET-ADJUSTED & CAPAIAN (%) PER UKURAN
+             * ------------------------------------------------------------
+             * PENTING: target tiap ukuran dirancang dengan basis "1 kru
+             * kerja 1 hari PENUH cuma buat ukuran itu doang" (makanya org &
+             * jam normalnya sama semua). Kalau 1 kru ngerjain BEBERAPA
+             * ukuran di hari yang sama, jam kerja mereka otomatis KEBAGI ke
+             * semua ukuran itu — bukan berarti tiap ukuran dapat jam PENUH
+             * sendiri-sendiri.
              *
-             * Kenapa begini: kalau dievaluasi per-ukuran sendiri-sendiri,
-             * tim bisa dianggap "kurang" di ukuran A padahal sebenarnya
-             * mereka SUDAH LEBIH capai di ukuran B — surplus itu seharusnya
-             * menutupi defisitnya, bukan dua-duanya dievaluasi terpisah.
+             * Makanya capaian di-GABUNG dengan cara JUMLAH PERSEN tiap
+             * ukuran (sama seperti widget HotPress temanmu), BUKAN
+             * dijumlah nilai Rupiah-nya. Kalau kru cuma sempat ±10% dari
+             * target tiap ukuran karena waktunya kebagi ke 10 ukuran, itu
+             * WAJAR (bukan kurang kerja) — dan totalnya emang seharusnya
+             * bisa nyampe ~100% kalau 1 hari kerja mereka terpakai penuh
+             * secara produktif, gak peduli dibagi ke berapa ukuran.
              * ============================================================ */
 
             $hasilGrouped = $produksi->hasilJoint->groupBy(function ($h) {
                 return $h->id_ukuran . '|' . $h->id_jenis_kayu . '|' . $h->kw;
             });
 
-            $ukuranGroups   = []; // data mentah per ukuran, dipakai lagi di step 4
-            $netDeltaRupiah = 0;  // total (hasil - targetAdjusted) * biayaPerUnit, digabung semua ukuran
+            $ukuranGroups    = []; // data mentah per ukuran, dipakai lagi di step 4
+            $sumCapaianPersen = 0;  // Σ (hasil_i/target_i x 100) — INI yang dijumlah, bukan rupiah
+            $sumNilaiTarget   = 0;  // buat hitung rata-rata "nilai 1 hari penuh" di step 3
+            $jumlahUkuranAda  = 0;
 
             foreach ($hasilGrouped as $hasilRows) {
                 $firstHasil     = $hasilRows->first();
@@ -118,6 +133,7 @@ class JoinDataMap
                         'kw'              => $kw,
                         'hasil'           => $hasilGrup,
                         'target_adjusted' => 0,
+                        'capaian_persen'  => null,
                         'has_target'      => false,
                     ];
                     continue;
@@ -127,10 +143,17 @@ class JoinDataMap
                 $ratePerOrgPerMenit = $rateInfo['ratePerOrgPerMenit'];
                 $biayaPerUnit       = (float) $target->potongan;
 
-                $targetAdjusted = $ratePerOrgPerMenit * $jumlahPekerja * $avgMenitPerOrang;
+                // Target di sini pakai basis NORMAL (org & jam normal target
+                // itu sendiri) — BUKAN target-adjusted dari jam aktual kru
+                // hari ini, karena jam aktual kru itu memang sengaja dibagi
+                // ke banyak ukuran, bukan dipakai penuh untuk 1 ukuran.
+                $targetNormal = (float) $target->target;
+                $capaian      = $targetNormal > 0 ? ($hasilGrup / $targetNormal) * 100 : 100.0;
+                $nilaiTarget  = $targetNormal * $biayaPerUnit;
 
-                $deltaGrup = ($hasilGrup - $targetAdjusted) * $biayaPerUnit; // + = surplus, - = defisit
-                $netDeltaRupiah += $deltaGrup;
+                $sumCapaianPersen += $capaian;
+                $sumNilaiTarget   += $nilaiTarget;
+                $jumlahUkuranAda  += 1;
 
                 $ukuranGroups[] = [
                     'kode_ukuran'     => $kodeUkuran,
@@ -138,26 +161,36 @@ class JoinDataMap
                     'jenis_kayu'      => $jenisKayuModel->nama_kayu ?? '-',
                     'kw'              => $kw,
                     'hasil'           => $hasilGrup,
-                    'target_adjusted' => $targetAdjusted,
-                    'selisih'         => $hasilGrup - $targetAdjusted,
+                    'target_adjusted' => $targetNormal,
+                    'selisih'         => $hasilGrup - $targetNormal,
+                    'capaian_persen'  => $capaian,
                     'has_target'      => true,
                 ];
             }
 
             /* ============================================================
-             * 3. TENTUKAN POTONGAN KOLEKTIF TIM (SETELAH NETTING), LALU
-             *    BAGI KE PEKERJA PAKAI ProporsionalStrategy (sesuai porsi
-             *    jam kerja tiap orang — BUKAN rata), karena tidak semua
-             *    pekerja tentu kerja durasi yang sama persis.
+             * 3. CAPAIAN GLOBAL (JUMLAH PERSEN) → POTONGAN KOLEKTIF
              * ------------------------------------------------------------
-             * Kalau net gabungan masih defisit (netDeltaRupiah < 0), itu
-             * baru jadi potongan kolektif tim, dibagi proporsional.
+             * capaianGlobal = Σ semua capaian_persen ukuran hari ini.
+             * >= 100% -> 1 hari kerja kru terpakai penuh secara produktif,
+             * TIDAK dipotong, walau tiap ukuran individually di bawah 100%.
+             * < 100%  -> kekuranganPersen x nilaiSatuHariPenuh (RATA-RATA
+             * nilai target per ukuran, BUKAN dijumlah — karena kru cuma
+             * punya 1 "jatah hari kerja", bukan 1 jatah per ukuran).
              * ============================================================ */
 
-            $potonganTotalTim = $netDeltaRupiah < 0 ? abs($netDeltaRupiah) : 0;
+            $capaianGlobal      = $sumCapaianPersen;
+            $nilaiSatuHariPenuh = $jumlahUkuranAda > 0 ? ($sumNilaiTarget / $jumlahUkuranAda) : 0;
+            $kekuranganPersen   = max(0, 100 - $capaianGlobal) / 100;
+            $potonganTotalTim   = $kekuranganPersen * $nilaiSatuHariPenuh;
 
-            $proporsional        = new ProporsionalStrategy();
-            $potonganPerPegawai  = $proporsional->bagikan($pekerjaInput, $potonganTotalTim);
+            $proporsional       = new ProporsionalStrategy();
+            $potonganPerPegawai = $proporsional->bagikan($pekerjaInput, $potonganTotalTim);
+
+            // Flag informasi (BUKAN cap/pembatas) kalau potongan gabungan tim
+            // melebihi total gaji normal tim hari itu — biar kelihatan di
+            // laporan, keputusan lanjut diserahkan ke atasan/HR.
+            $potonganMelebihiGaji = $totalGajiTim > 0 && $potonganTotalTim > $totalGajiTim;
 
             /* ============================================================
              * 4. SUSUN OUTPUT PER UKURAN (untuk kartu tampilan)
@@ -183,13 +216,16 @@ class JoinDataMap
                             'hasil'           => $grup['hasil'],
                             'target_adjusted' => $grup['target_adjusted'],
                             'selisih'         => $grup['selisih'] ?? ($grup['hasil'] - $grup['target_adjusted']),
+                            'capaian_persen'  => $grup['capaian_persen'],
                             'jam_aktual'      => $jamAktualRata,
                             'jumlah_pekerja'  => $jumlahPekerja,
                             'tanggal'         => $tanggal,
                             'has_target'      => $grup['has_target'],
-                            // Info tambahan: hasil netting seluruh kru hari ini (sama untuk semua kartu)
-                            'net_delta_tim'      => $netDeltaRupiah,
-                            'potongan_total_tim' => $potonganTotalTim,
+                            // Info tambahan: capaian GLOBAL tim hari ini (sama untuk semua kartu)
+                            'rata2_capaian_tim'      => $capaianGlobal,
+                            'potongan_total_tim'     => $potonganTotalTim,
+                            'potongan_melebihi_gaji' => $potonganMelebihiGaji,
+                            'total_gaji_tim'         => $totalGajiTim,
                         ];
                     }
 
@@ -202,9 +238,8 @@ class JoinDataMap
                         'keterangan' => $pj->ket ?? '-',
                         'hasil'      => $grup['hasil'],
                         // Potongan per orang dibagi PROPORSIONAL sesuai jam
-                        // kerja masing-masing (bukan rata), dari hasil
-                        // netting kolektif lintas ukuran — sama di semua
-                        // kartu ukuran hari itu.
+                        // kerja masing-masing, dari hasil rata-rata capaian
+                        // kolektif lintas ukuran — sama di semua kartu.
                         'pot_target' => $potonganPerPegawai[(string) ($pj->id_pegawai ?? $pj->pegawai->id)] ?? 0,
                     ];
                 }
