@@ -25,19 +25,24 @@
     ->map(function($item) {
     if (!is_array($item)) { return null; }
     return [
-    'kode_ukuran'     => $item['kode_ukuran'] ?? '-',
-    'nomor_meja'      => $item['nomor_meja'] ?? '-',
-    'ukuran'          => $item['ukuran'] ?? '-',
-    'jenis_kayu'      => $item['jenis_kayu'] ?? '-',
-    'kw'              => $item['kw'] ?? '-',
-    'tanggal'         => $item['tanggal'] ?? '-',
-    'jam_aktual'      => $item['jam_aktual'] ?? 0,
-    'jumlah_pekerja'  => $item['jumlah_pekerja'] ?? 0,
-    'target_adjusted' => $item['target_adjusted'] ?? 0,
-    'hasil'           => $item['hasil'] ?? 0,
-    'selisih'         => $item['selisih'] ?? 0,
-    'has_target'      => $item['has_target'] ?? false,
-    'pekerja'         => $item['pekerja'] ?? [],
+    'kode_ukuran'            => $item['kode_ukuran'] ?? '-',
+    'nomor_meja'             => $item['nomor_meja'] ?? '-',
+    'ukuran'                 => $item['ukuran'] ?? '-',
+    'jenis_kayu'             => $item['jenis_kayu'] ?? '-',
+    'kw'                     => $item['kw'] ?? '-',
+    'tanggal'                => $item['tanggal'] ?? '-',
+    'jam_aktual'             => $item['jam_aktual'] ?? 0,
+    'jumlah_pekerja'         => $item['jumlah_pekerja'] ?? 0,
+    'target_adjusted'        => $item['target_adjusted'] ?? 0,
+    'hasil'                  => $item['hasil'] ?? 0,
+    'selisih'                => $item['selisih'] ?? 0,
+    'capaian_persen'         => $item['capaian_persen'] ?? null,
+    'has_target'             => $item['has_target'] ?? false,
+    'pekerja'                => $item['pekerja'] ?? [],
+    'rata2_capaian_tim'      => $item['rata2_capaian_tim'] ?? null,
+    'potongan_total_tim'     => $item['potongan_total_tim'] ?? 0,
+    'potongan_melebihi_gaji' => $item['potongan_melebihi_gaji'] ?? false,
+    'total_gaji_tim'         => $item['total_gaji_tim'] ?? 0,
     ];
     })
     ->filter()
@@ -64,6 +69,11 @@
                     @endif
                 </h2>
                 <div class="flex gap-4 items-center">
+                    @if($data['capaian_persen'] !== null)
+                    <span class="text-xs px-2 py-1 rounded {{ $data['capaian_persen'] >= 100 ? 'bg-green-700' : 'bg-red-700' }}">
+                        Capaian: {{ number_format($data['capaian_persen'], 1, ',', '.') }}%
+                    </span>
+                    @endif
                     <span class="text-xs bg-zinc-700 px-2 py-1 rounded">{{ $data['jenis_kayu'] }}</span>
                     <span class="text-xs bg-primary-600 px-2 py-1 rounded">KW {{ $data['kw'] }}</span>
                 </div>
@@ -135,7 +145,7 @@
 
                                         <span class="text-zinc-400">|</span>
 
-                                        <span class="font-medium">Target (Adjusted):</span>
+                                        <span class="font-medium">Target (Normal, per ukuran):</span>
                                         <strong class="font-mono text-zinc-900 dark:text-white">{{ number_format($data["target_adjusted"], 2, ',', '.') }}</strong>
 
                                         <span class="text-zinc-400">|</span>
@@ -160,6 +170,23 @@
                                         <span class="text-xs">Tgl: {{ $data["tanggal"] }}</span>
                                     </td>
                                 </tr>
+                                @if($data['rata2_capaian_tim'] !== null)
+                                <tr>
+                                    <td colspan="7" class="p-2 text-center text-[11px] text-zinc-500 dark:text-zinc-400 border-t border-zinc-300 dark:border-zinc-700">
+                                        Capaian GLOBAL tim (jumlah persen semua ukuran hari ini, basis: target normal per ukuran, BUKAN dibagi jam aktual):
+                                        <strong class="{{ $data['rata2_capaian_tim'] >= 100 ? 'text-green-400' : 'text-red-400' }}">
+                                            {{ number_format($data['rata2_capaian_tim'], 1, ',', '.') }}%
+                                        </strong>
+                                        <span class="text-zinc-400">|</span>
+                                        Potongan total tim: <strong>Rp {{ number_format($data['potongan_total_tim']) }}</strong>
+                                        @if($data['potongan_melebihi_gaji'])
+                                        <span class="ml-2 px-2 py-0.5 rounded bg-yellow-600 text-white text-[10px] font-bold">
+                                            ⚠ POTONGAN MELEBIHI TOTAL GAJI NORMAL TIM (Rp {{ number_format($data['total_gaji_tim']) }})
+                                        </span>
+                                        @endif
+                                    </td>
+                                </tr>
+                                @endif
                             </tfoot>
                         </table>
                     </div>

@@ -25,10 +25,16 @@
         $produksiList->first(); $pekerja = $first['pekerja'] ?? []; $kodeUkuran
         = $first['ukuran'] ?? 'TIDAK ADA UKURAN'; $mesinOnly =
         $first['mesin_only'] ?? $mesinNama; $totalPekerja =
-        count($pekerja); $hasil = $first['hasil'] ?? 0; $target =
-        $first['target'] ?? 0; $selisih = $first['selisih'] ?? 0; $warna =
+        count($pekerja); $hasil = $first['hasil'] ?? 0;
+        // PENTING: pakai target_adjusted (sudah disesuaikan org/jam aktual),
+        // BUKAN 'target' (itu target normal/master, cuma buat referensi).
+        $target = $first['target_adjusted'] ?? 0;
+        $targetNormal = $first['target'] ?? 0;
+        $selisih = $first['selisih'] ?? 0; $warna =
         $selisih >= 0 ? 'text-green-400' : 'text-red-400'; $tanda = $selisih >=
-        0 ? '+' : ''; $jamKerja = $first['jam_kerja'] ?? 0; @endphp
+        0 ? '+' : '-';
+        // pakai jam_aktual (rata-rata jam kerja bersih tim), bukan jam_kerja (jam normal)
+        $jamKerja = $first['jam_aktual'] ?? 0; @endphp
 
         <!-- CARD MESIN -->
 <div class="bg-white dark:bg-zinc-900 rounded-sm shadow-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
@@ -174,18 +180,19 @@
 
                                         <span class="text-zinc-400">|</span>
 
-                                        <span class="font-medium">Target:</span>
+                                        <span class="font-medium">Target (Adjusted):</span>
                                         <strong class="font-mono">{{
                                             number_format($target, 4, ',', '.')
                                         }}</strong>
+                                        <span class="text-[10px] text-zinc-400">(normal: {{ number_format($targetNormal, 4, ',', '.') }})</span>
 
                                         <span class="text-zinc-400">|</span>
 
                                         <span class="font-medium"
-                                            >Jam Produksi :</span
+                                            >Jam Aktual (rata²) :</span
                                         >
                                         <strong class="font-mono">{{
-                                            number_format($jamKerja)
+                                            number_format($jamKerja, 2, ',', '.')
                                         }}</strong>
 
                                         <span class="text-zinc-400">|</span>
@@ -260,7 +267,7 @@
                 ) {
                     window.livewire.emit("loadData");
                 } else {
-                    console.warn("Livewire is not available to call loadData"); 
+                    console.warn("Livewire is not available to call loadData");
                 }
             });
         });
