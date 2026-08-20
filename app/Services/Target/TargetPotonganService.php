@@ -2,8 +2,10 @@
 // app/Services/Target/TargetPotonganService.php
 namespace App\Services\Target;
 
+use App\DataTransferObjects\PekerjaKerjaInput;
 use App\DataTransferObjects\TargetHitungInput;
 use App\DataTransferObjects\TargetHitungResult;
+use App\DataTransferObjects\UkuranHasilInput;
 use App\Enums\StrategiPembagian;
 
 class TargetPotonganService
@@ -47,5 +49,42 @@ class TargetPotonganService
             potongan: $potonganTotal,
             potonganPerPegawai: $hasil['potonganPerPegawai'],
         );
+    }
+
+    /**
+     * @param UkuranHasilInput[] $ukuranList
+     * @param PekerjaKerjaInput[] $pekerja
+     */
+    public function hitungMultiUkuranKolektif(array $ukuranList, array $pekerja, float $gaji): TargetHitungResult
+    {
+        $totalTarget    = 0;
+        $totalHasil     = 0;
+        $totalKekurangan = 0;
+        $totalDenda     = 0;
+
+        foreach ($ukuranList as $u) {
+            $totalTarget += $u->targetHarian;
+            $totalHasil  += $u->hasilAktual;
+            $kekurangan   = max(0, $u->targetHarian - $u->hasilAktual);
+            $totalKekurangan += $kekurangan;
+            $totalDenda  += $kekurangan * $u->biayaPerUnit;
+        }
+
+        $orgAktual = count($pekerja);
+
+        if ($totalHasil <= 0) {
+            $potonganPerOrang = $gaji;
+            $potonganTotal    = $gaji * $orgAktual;
+        } else {
+            $potonganTotal    = $totalDenda;
+            $potonganPerOrang = $orgAktual > 0
+                ? round(($potonganTotal / $orgAktual) / 500) * 500 : 0;
+        }
+
+        $potonganPerPegawai = collect($pekerja)
+            ->mapWithKeys(fn($p) => [$p->idPegawai => $potonganPerOrang])
+            ->all();
+
+        return new TargetHitungResult($totalTarget, $totalKekurangan, $potonganTotal, $potonganPerPegawai);
     }
 }

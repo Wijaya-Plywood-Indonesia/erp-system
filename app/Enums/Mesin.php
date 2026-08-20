@@ -14,6 +14,7 @@ enum Mesin: int
     case Stik      = 8;
     case DryerPagi  = 17;
     case DryerMalam = 18;
+    case SandingJoint = 11;
 
     public function satuan(): Satuan
     {

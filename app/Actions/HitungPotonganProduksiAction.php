@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\DataTransferObjects\PekerjaKerjaInput;
 use App\DataTransferObjects\TargetHitungInput;
 use App\DataTransferObjects\TargetHitungResult;
+use App\DataTransferObjects\UkuranHasilInput;
 use App\Enums\Mesin;
 use App\Enums\StrategiPembagian;
 use App\Models\Target;
@@ -83,5 +84,14 @@ class HitungPotonganProduksiAction
     {
         $resolver = TargetResolverFactory::make($mesin);
         return $resolver->resolve($mesin->value, $idUkuran, $idJenisKayu);
+    }
+
+    /**
+     * @param UkuranHasilInput[] $ukuranList
+     * @param PekerjaKerjaInput[] $pekerja
+     */
+    public function executeMultiUkuran(array $ukuranList, array $pekerja, float $gaji): TargetHitungResult
+    {
+        return $this->service->hitungMultiUkuranKolektif($ukuranList, $pekerja, $gaji);
     }
 }

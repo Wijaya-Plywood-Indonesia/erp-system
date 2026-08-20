@@ -40,6 +40,7 @@ class LaporanSandingJoin extends Page
     ];
 
     public array $laporan = [];
+    public array $dataPekerja = [];
     public array $dataProduksi = [];
     public bool $isLoading = false;
 
@@ -129,8 +130,8 @@ class LaporanSandingJoin extends Page
 
             $this->dataProduksi = [];
             $this->laporan = [];
+            $this->dataPekerja = []; // BARU
 
-            // Memanggil Query Class Sanding Joint
             $raw = LoadLaporanSandingJoin::run($tanggal);
 
             Log::info('Sanding Join Query executed', [
@@ -139,9 +140,12 @@ class LaporanSandingJoin extends Page
             ]);
 
             if ($raw->isNotEmpty()) {
-                // Memanggil Transformer SandingJoinDataMap
-                $this->dataProduksi = SandingJoinDataMap::make($raw);
-                $this->laporan = $this->dataProduksi;
+                // Transformer sekarang return ['per_ukuran' => [...], 'pekerja' => [...]]
+                $hasilTransform = SandingJoinDataMap::make($raw);
+
+                $this->dataProduksi = $hasilTransform['per_ukuran'];
+                $this->laporan      = $hasilTransform['per_ukuran'];
+                $this->dataPekerja  = $hasilTransform['pekerja']; // BARU
             } else {
                 Notification::make()
                     ->warning()
@@ -195,6 +199,7 @@ class LaporanSandingJoin extends Page
         return [
             'laporan' => $this->laporan,
             'dataProduksi' => $this->dataProduksi,
+            'dataPekerja'  => $this->dataPekerja,
             'isLoading' => $this->isLoading,
             'summary' => $this->calculateSummary(),
         ];
@@ -209,10 +214,6 @@ class LaporanSandingJoin extends Page
         foreach ($this->laporan as $row) {
             $totalAll += $row['hasil'];
 
-            foreach ($row['pekerja'] as $p) {
-                $uniquePegawai[$p['nama']] = true;
-            }
-
             $key = $row['ukuran'] . '|' . $row['kw'];
             if (!isset($globalUkuranKw[$key])) {
                 $globalUkuranKw[$key] = (object)[
@@ -222,6 +223,11 @@ class LaporanSandingJoin extends Page
                 ];
             }
             $globalUkuranKw[$key]->total += $row['hasil'];
+        }
+
+        // BARU: unique pegawai dihitung dari dataPekerja, bukan dari dalam loop $laporan
+        foreach ($this->dataPekerja as $p) {
+            $uniquePegawai[$p['nama']] = true;
         }
 
         return [
