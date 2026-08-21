@@ -16,7 +16,6 @@ use UnitEnum;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
-// Mengarah ke namespace Pot Jelek yang baru
 use App\Filament\Pages\LaporanPotJelek\Queries\LoadLaporanPotJelek;
 use App\Filament\Pages\LaporanPotJelek\Transformers\PotJelekDataMap;
 use Maatwebsite\Excel\Facades\Excel;
@@ -31,7 +30,7 @@ class LaporanPotJelek extends Page
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static ?string $title = 'Laporan Produksi Potong Jelek';
     protected static ?string $navigationLabel = 'Laporan Produksi Pot Jelek';
-    protected string $view = 'filament.pages.laporan-pot-jelek'; // Sesuaikan dengan nama blade Anda
+    protected string $view = 'filament.pages.laporan-pot-jelek';
     protected static ?int $navigationSort = 10;
     protected static bool $shouldRegisterNavigation = false;
 
@@ -39,7 +38,6 @@ class LaporanPotJelek extends Page
         'tanggal' => null,
     ];
 
-    public array $laporan = [];
     public array $dataProduksi = [];
     public bool $isLoading = false;
 
@@ -87,7 +85,7 @@ class LaporanPotJelek extends Page
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
                 ->action(fn() => $this->exportExcel())
-                ->visible(fn() => !empty($this->laporan)),
+                ->visible(fn() => !empty($this->dataProduksi)),
         ];
     }
 
@@ -128,9 +126,7 @@ class LaporanPotJelek extends Page
             $tanggal = $this->data['tanggal'] ?? now()->format('Y-m-d');
 
             $this->dataProduksi = [];
-            $this->laporan = [];
 
-            // Memanggil Query Class Potong Jelek
             $raw = LoadLaporanPotJelek::run($tanggal);
 
             Log::info('Potong Jelek Query executed', [
@@ -139,9 +135,10 @@ class LaporanPotJelek extends Page
             ]);
 
             if ($raw->isNotEmpty()) {
-                // Memanggil Transformer PotJelekDataMap
+                // PotJelekDataMap::make() sekarang menghitung target PER
+                // UKURAN (bukan flat) + capaian global per individu, lihat
+                // README perhitungan potongan (pola sama dengan Join & Pot Siku).
                 $this->dataProduksi = PotJelekDataMap::make($raw);
-                $this->laporan = $this->dataProduksi;
             } else {
                 Notification::make()
                     ->warning()
@@ -173,10 +170,9 @@ class LaporanPotJelek extends Page
         try {
             $tanggal = Carbon::parse($this->data['tanggal'])->format('d-m-Y');
 
-            // Ganti ke class export Pot Jelek jika sudah Anda buat
             if (class_exists('App\Exports\LaporanPotJelekExport')) {
                 return Excel::download(
-                    new LaporanPotJelekExport($this->laporan, $this->data['tanggal']),
+                    new LaporanPotJelekExport($this->dataProduksi, $this->data['tanggal']),
                     "laporan-pot-jelek-{$tanggal}.xlsx"
                 );
             }
@@ -194,26 +190,8 @@ class LaporanPotJelek extends Page
     public function getViewData(): array
     {
         return [
-            'laporan' => $this->laporan,
             'dataProduksi' => $this->dataProduksi,
             'isLoading' => $this->isLoading,
-            'summary' => $this->calculateSummary(),
-        ];
-    }
-
-    private function calculateSummary(): array
-    {
-        $totalAll = 0;
-        $uniquePegawai = [];
-
-        foreach ($this->laporan as $row) {
-            $totalAll += ($row['hasil'] ?? 0); // Mengambil total_hasil per orang
-            $uniquePegawai[$row['kode_nama']] = true;
-        }
-
-        return [
-            'totalAll' => $totalAll,
-            'totalPegawai' => count($uniquePegawai),
         ];
     }
 }
