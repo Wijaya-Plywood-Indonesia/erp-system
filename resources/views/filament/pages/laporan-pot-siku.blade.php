@@ -17,11 +17,7 @@
     @php
     $dataSiku = $dataSiku ?? [];
 
-    // CATATAN: sama seperti Join, PotSikuDataMap sudah menghasilkan struktur
-    // final per pegawai (capaian_global_persen, potongan, items[]) — di sini
-    // kita TIDAK menghitung ulang apa pun, cukup meratakan (flatten) semua
-    // pegawai dari semua produksi hari itu jadi 1 list untuk dirender jadi
-    // card per pegawai, sama seperti Join card per meja.
+
     $semuaPekerja = collect($dataSiku)
     ->flatMap(function ($produksi) {
     return collect($produksi['pekerja'] ?? [])->map(function ($p) use ($produksi) {
@@ -50,6 +46,7 @@
         $tercapai      = $capaianGlobal >= 100;
         $potongan      = (int) ($p['potongan'] ?? 0);
         $totalBarang   = count($p['items'] ?? []);
+        $jamAktual     = $p['jam_aktual_bersih'] ?? null;
         @endphp
 
         <div class="bg-white dark:bg-zinc-900 rounded-sm shadow-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
@@ -75,7 +72,7 @@
 
             <div class="p-4">
                 <div class="w-full overflow-x-auto">
-                    <div class="min-w-[800px]">
+                    <div class="min-w-[900px]">
                         <table class="w-full text-sm border-collapse border border-zinc-300 dark:border-zinc-600">
                             <thead>
                                 <tr>
@@ -147,6 +144,13 @@
 
                                         <span class="font-medium">Pulang:</span>
                                         <strong class="font-mono text-zinc-900 dark:text-white">{{ $p['jam_pulang'] }}</strong>
+
+                                        <span class="text-zinc-400">|</span>
+
+                                        <span class="font-medium">Jam Aktual (bersih, sudah dikurangi istirahat):</span>
+                                        <strong class="font-mono text-zinc-900 dark:text-white">
+                                            {{ $jamAktual !== null ? number_format($jamAktual, 2, ',', '.') . ' jam' : '-' }}
+                                        </strong>
 
                                         <span class="text-zinc-400">|</span>
 
