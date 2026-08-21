@@ -29,8 +29,9 @@ class HitungPotonganProduksiAction
         float $hasilAktual,
         ?int $idUkuran = null,
         ?int $idJenisKayu = null,
+        ?Target $targetOverride = null,
     ): ?TargetHitungResult {
-        $target = $this->resolveTarget($mesin, $idUkuran, $idJenisKayu);
+        $target = $targetOverride ?? $this->resolveTarget($mesin, $idUkuran, $idJenisKayu);
 
         if (! $target) {
             return null;

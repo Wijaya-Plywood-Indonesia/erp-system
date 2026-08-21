@@ -64,9 +64,13 @@ class PotAfalanDataMap
                         'kw' => $kwRaw,
                         'hasil' => $hasil,
                         'jumlah' => 0,
+                        'no_palet_list' => [],
                     ];
                 }
                 $groupedHasil[$keyH]['jumlah'] += $hasil->jumlah;
+                if (!empty($hasil->no_palet)) {
+                    $groupedHasil[$keyH]['no_palet_list'][] = $hasil->no_palet;
+                }
             }
 
             // 3. Compute total achievement (Pencapaian) across all sizes
@@ -136,6 +140,7 @@ class PotAfalanDataMap
 
                 $targetModel = $resolver->resolve(Mesin::PotAfalanJoint->value, $gh['id_ukuran'], $gh['id_jenis_kayu']);
                 $targetHarian = 0;
+                $capaianPersen = null;
                 if ($targetModel) {
                     $menitNormalTotal = $targetModel->jam * 60;
                     $ratePerMenit = ($targetModel->orang > 0 && $menitNormalTotal > 0)
@@ -144,16 +149,23 @@ class PotAfalanDataMap
                     $ratePerOrgPerMenit = $targetModel->orang > 0 ? $ratePerMenit / $targetModel->orang : 0;
                     $targetAdjusted = $ratePerOrgPerMenit * $totalMenit;
                     $targetHarian = (int) $targetAdjusted;
+                    $capaianPersen = $targetAdjusted > 0 ? ($gh['jumlah'] / $targetAdjusted) * 100 : 0;
                 }
+
+                $noPalets = $gh['no_palet_list'] ?? [];
+                $noPaletStr = !empty($noPalets) ? implode(', ', array_unique($noPalets)) : '-';
 
                 $detailProduksiList[] = [
                     'ukuran' => $ukuranModel->nama_ukuran ?? '-',
                     'kode_ukuran' => $kodeUkuran,
                     'jenis_kayu' => $jenisKayuModel->nama_kayu ?? '-',
                     'kw' => $gh['kw'],
+                    'no_palet_list' => $noPaletStr,
                     'target' => $targetHarian,
                     'hasil' => $gh['jumlah'],
                     'selisih' => $gh['jumlah'] - $targetHarian,
+                    'capaian_persen' => $capaianPersen,
+                    'has_target' => $targetModel !== null,
                 ];
             }
 
