@@ -7,13 +7,10 @@
     <!-- Loading Indicator -->
     @if($isLoading)
     <div
-        class="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-75 dark:bg-zinc-900 dark:bg-opacity-75"
-    >
+        class="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-75 dark:bg-zinc-900 dark:bg-opacity-75">
         <div class="flex items-center space-x-3">
             <x-filament::loading-indicator class="w-8 h-8 text-primary-600" />
-            <span class="text-lg font-medium text-zinc-700 dark:text-zinc-300"
-                >Memuat data...</span
-            >
+            <span class="text-lg font-medium text-zinc-700 dark:text-zinc-300">Memuat data...</span>
         </div>
     </div>
     @endif @php $dataProduksi = $dataProduksi ?? []; $groupedByMesin =
@@ -30,14 +27,13 @@
         $warna = $selisih >= 0 ? 'text-green-400' : 'text-red-400'; $tanda =
         $selisih >= 0 ? '+' : ''; $jamKerja = $first['jam_kerja'] ?? 0;
         $jamKerjaEfektif = $first['jam_kerja_efektif'] ?? 0; $totalKendalaMenit
-        = $first['total_kendala_menit'] ?? 0; $totalDowntimeFormatted = 
+        = $first['total_kendala_menit'] ?? 0; $totalDowntimeFormatted =
         $first['total_downtime_formatted'] ?? '-'; $kendala = $first['kendala'] ??
         '-'; $daftarKendala = $first['daftar_kendala'] ?? []; @endphp
 
         <!-- CARD MESIN -->
         <div
-            class="bg-white dark:bg-zinc-900 rounded-sm shadow-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden"
-        >
+            class="bg-white dark:bg-zinc-900 rounded-sm shadow-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
             <div class="bg-zinc-800 p-4 text-white">
                 <h2 class="text-lg font-bold text-center">
                     PEKERJA MESIN: {{ strtoupper($mesinNama) }} -
@@ -49,54 +45,44 @@
                 <div class="w-full overflow-x-auto">
                     <div class="min-w-[800px]">
                         <table
-                            class="w-full text-sm border-collapse border border-zinc-300 dark:border-zinc-600"
-                        >
+                            class="w-full text-sm border-collapse border border-zinc-300 dark:border-zinc-600">
                             <thead>
                                 <tr>
                                     <th
                                         colspan="7"
-                                        class="p-4 text-xl font-bold text-center bg-zinc-700 text-white"
-                                    >
+                                        class="p-4 text-xl font-bold text-center bg-zinc-700 text-white">
                                         DATA PEKERJA
                                     </th>
                                 </tr>
 
                                 <tr
-                                    class="bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-300 border-t border-zinc-300 dark:border-zinc-600"
-                                >
+                                    class="bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-300 border-t border-zinc-300 dark:border-zinc-600">
                                     <th
-                                        class="p-2 text-center text-xs font-medium w-16"
-                                    >
+                                        class="p-2 text-center text-xs font-medium w-16">
                                         ID
                                     </th>
                                     <th
-                                        class="p-2 text-left text-xs font-medium w-40"
-                                    >
+                                        class="p-2 text-left text-xs font-medium w-40">
                                         Nama
                                     </th>
                                     <th
-                                        class="p-2 text-center text-xs font-medium w-20"
-                                    >
+                                        class="p-2 text-center text-xs font-medium w-20">
                                         Masuk
                                     </th>
                                     <th
-                                        class="p-2 text-center text-xs font-medium w-20"
-                                    >
+                                        class="p-2 text-center text-xs font-medium w-20">
                                         Pulang
                                     </th>
                                     <th
-                                        class="p-2 text-center text-xs font-medium w-16"
-                                    >
+                                        class="p-2 text-center text-xs font-medium w-16">
                                         Ijin
                                     </th>
                                     <th
-                                        class="p-2 text-right text-xs font-medium w-36"
-                                    >
+                                        class="p-2 text-right text-xs font-medium w-36">
                                         Potongan Target
                                     </th>
                                     <th
-                                        class="p-2 text-left text-xs font-medium"
-                                    >
+                                        class="p-2 text-left text-xs font-medium">
                                         Keterangan
                                     </th>
                                 </tr>
@@ -109,35 +95,29 @@
                                         $i % 2 === 1
                                             ? 'bg-zinc-50 dark:bg-zinc-800/50'
                                             : 'bg-white dark:bg-zinc-900'
-                                    }} border-t border-zinc-300 dark:border-zinc-700"
-                                >
+                                    }} border-t border-zinc-300 dark:border-zinc-700">
                                     <td
-                                        class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
-                                    >
+                                        class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">
                                         {{ $p["id"] ?? "-" }}
                                     </td>
 
                                     <td
-                                        class="p-2 text-left text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium"
-                                    >
+                                        class="p-2 text-left text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium">
                                         {{ $p["nama"] ?? "-" }}
                                     </td>
 
                                     <td
-                                        class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
-                                    >
+                                        class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">
                                         {{ $p["jam_masuk"] ?? "-" }}
                                     </td>
 
                                     <td
-                                        class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
-                                    >
+                                        class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">
                                         {{ $p["jam_pulang"] ?? "-" }}
                                     </td>
 
                                     <td
-                                        class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-yellow-600 dark:text-yellow-400"
-                                    >
+                                        class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-yellow-600 dark:text-yellow-400">
                                         {{ $p["ijin"] ?? "-" }}
                                     </td>
 
@@ -146,14 +126,12 @@
                                             $selisih < 0
                                                 ? 'text-red-600 dark:text-red-400'
                                                 : 'text-zinc-700'
-                                        }}"
-                                    >
+                                        }}">
                                         Rp {{ $p["pot_target"] ?? 0 }}
                                     </td>
 
                                     <td
-                                        class="p-2 text-left text-xs text-zinc-700 dark:text-zinc-300"
-                                    >
+                                        class="p-2 text-left text-xs text-zinc-700 dark:text-zinc-300">
                                         {{ $p["keterangan"] ?? "-" }}
                                     </td>
                                 </tr>
@@ -161,8 +139,7 @@
                                 <tr>
                                     <td
                                         colspan="7"
-                                        class="p-4 text-center text-zinc-500 dark:text-zinc-400 text-sm"
-                                    >
+                                        class="p-4 text-center text-zinc-500 dark:text-zinc-400 text-sm">
                                         Tidak ada data pekerja untuk mesin ini.
                                     </td>
                                 </tr>
@@ -170,14 +147,12 @@
                             </tbody>
 
                             <tfoot
-                                class="bg-zinc-100 dark:bg-zinc-800 border-t-2 border-zinc-300 dark:border-zinc-600"
-                            >
+                                class="bg-zinc-100 dark:bg-zinc-800 border-t-2 border-zinc-300 dark:border-zinc-600">
                                 <!-- BARIS 1: DATA UTAMA -->
                                 <tr>
                                     <td
                                         colspan="7"
-                                        class="p-3 text-center text-xs text-zinc-600 dark:text-zinc-400 space-x-3"
-                                    >
+                                        class="p-3 text-center text-xs text-zinc-600 dark:text-zinc-400 space-x-3">
                                         <span class="font-medium">Pekerja:</span>
                                         <strong>{{ $totalPekerja }}</strong>
 
@@ -219,8 +194,7 @@
                                 <tr>
                                     <td
                                         colspan="7"
-                                        class="p-3 text-xs border-t border-zinc-300 dark:border-zinc-600"
-                                    >
+                                        class="p-3 text-xs border-t border-zinc-300 dark:border-zinc-600">
                                         <div class="flex items-start justify-center gap-2">
                                             <span class="font-medium text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
                                                 Kendala:
@@ -233,7 +207,7 @@
                                                             {{ $k['kendala'] }}
                                                         </span>
                                                         <span class="text-zinc-500 dark:text-zinc-400">
-                                                            — {{ $k['durasi_menit'] }} menit 
+                                                            — {{ $k['durasi_menit'] }} menit
                                                             ({{ $k['jam_mulai'] }} - {{ $k['jam_selesai'] }})
                                                         </span>
                                                         @if($k['keterangan'] !== '-')
