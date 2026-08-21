@@ -139,7 +139,9 @@ class LaporanJoin extends Page
             ]);
 
             if ($raw->isNotEmpty()) {
-                // Memanggil Transformer JoinDataMap
+                // Memanggil Transformer JoinDataMap — struktur BARU: 1 elemen
+                // per MEJA/KRU (bukan lagi per meja+ukuran), dengan 'pekerja'
+                // (tabel atas) dan 'items' (tabel bawah, list ukuran).
                 $this->dataProduksi = JoinDataMap::make($raw);
                 $this->laporan = $this->dataProduksi;
 
@@ -201,7 +203,7 @@ class LaporanJoin extends Page
                 return;
             }
 
-            // JoinDataMap return flat array langsung (bukan ['detail' => ...])
+            // JoinDataMap return array per meja (bukan flat per ukuran lagi)
             $detailData = JoinDataMap::make($raw);
 
             if (empty($detailData)) {
@@ -215,7 +217,7 @@ class LaporanJoin extends Page
 
             return Excel::download(
                 new LaporanJoinExport(
-                    $detailData,   // ← Sheet 1: flat array detail per meja
+                    $detailData,   // ← Sheet 1: array per meja (pekerja + items)
                     $tanggalQuery  // ← Sheet 2: query ulang dari DB
                 ),
                 "laporan-joint-{$tanggalFile}.xlsx"
@@ -245,7 +247,13 @@ class LaporanJoin extends Page
     }
 
     /**
-     * Helper untuk menghitung summary data yang akan dikirim ke widget blade
+     * Helper untuk menghitung summary data yang akan dikirim ke widget blade.
+     *
+     * PERBAIKAN: disesuaikan ke struktur baru JoinDataMap (1 elemen per
+     * MEJA/KRU, bukan lagi per meja+ukuran). Dulu 'hasil'/'ukuran'/'kw'
+     * ada di level atas tiap $row — sekarang itu semua pindah ke dalam
+     * $row['items'][], dan daftar pekerja ada di $row['pekerja'][]. Ini
+     * penyebab error "Undefined array key 'hasil'" sebelumnya.
      */
     private function calculateSummary(): array
     {
@@ -254,23 +262,23 @@ class LaporanJoin extends Page
         $globalUkuranKw = [];
 
         foreach ($this->laporan as $row) {
-            $totalAll += $row['hasil'];
+            foreach (($row['items'] ?? []) as $item) {
+                $totalAll += $item['hasil'] ?? 0;
 
-            // Hitung total unik pegawai
-            foreach ($row['pekerja'] as $p) {
-                $uniquePegawai[$p['nama']] = true;
+                $key = ($item['ukuran'] ?? '-') . '|' . ($item['kw'] ?? '-');
+                if (!isset($globalUkuranKw[$key])) {
+                    $globalUkuranKw[$key] = (object)[
+                        'ukuran' => $item['ukuran'] ?? '-',
+                        'kw' => $item['kw'] ?? '-',
+                        'total' => 0,
+                    ];
+                }
+                $globalUkuranKw[$key]->total += $item['hasil'] ?? 0;
             }
 
-            // Mapping untuk widget blade (ukuran + kw)
-            $key = $row['ukuran'] . '|' . $row['kw'];
-            if (!isset($globalUkuranKw[$key])) {
-                $globalUkuranKw[$key] = (object)[
-                    'ukuran' => $row['ukuran'],
-                    'kw' => $row['kw'],
-                    'total' => 0
-                ];
+            foreach (($row['pekerja'] ?? []) as $p) {
+                $uniquePegawai[$p['nama'] ?? uniqid()] = true;
             }
-            $globalUkuranKw[$key]->total += $row['hasil'];
         }
 
         return [
