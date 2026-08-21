@@ -11,6 +11,7 @@ enum Mesin: int
     case Repair    = 9;
     case Joint     = 10;
     case PotSiku   = 16;
+    case PotJelek  = 15;
     case Bongkar   = 7;
     case Stik      = 8;
     case DryerPagi  = 17;
