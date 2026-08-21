@@ -11,8 +11,10 @@ use Filament\Forms\Components\DatePicker;
 use App\Exports\LaporanPotSikuExport;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Models\ProduksiPotSiku;
-use App\Models\Target;
+use App\Filament\Pages\LaporanPotSiku\Transformers\PotSikuDataMap;
 use Carbon\Carbon;
+use Exception;
+use Illuminate\Support\Facades\Log;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
@@ -31,6 +33,7 @@ class LaporanPotSiku extends Page implements HasForms
 
     public $dataSiku = [];
     public $tanggal = null;
+    public bool $isLoading = false;
 
     protected function getHeaderActions(): array
     {
@@ -54,7 +57,7 @@ class LaporanPotSiku extends Page implements HasForms
     {
         try {
             if (empty($this->dataSiku)) {
-                throw new \Exception('Tidak ada data untuk diunduh.');
+                throw new Exception('Tidak ada data untuk diunduh.');
             }
 
             $tglFile = Carbon::parse($this->tanggal)->format('d-m-Y');
@@ -63,7 +66,7 @@ class LaporanPotSiku extends Page implements HasForms
                 new LaporanPotSikuExport($this->dataSiku, $this->tanggal),
                 "laporan-pot-siku-{$tglFile}.xlsx"
             );
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Notification::make()
                 ->danger()
                 ->title('Gagal Export Excel')
@@ -81,15 +84,13 @@ class LaporanPotSiku extends Page implements HasForms
 
     public function mount(): void
     {
-        // Default ke hari ini
         $this->tanggal = now()->format('Y-m-d');
 
-        // Jika hari ini kosong, coba cari tanggal terakhir yang ada datanya
         $existsToday = ProduksiPotSiku::whereDate('tanggal_produksi', $this->tanggal)->exists();
         if (!$existsToday) {
             $lastDate = ProduksiPotSiku::latest('tanggal_produksi')->value('tanggal_produksi');
             if ($lastDate) {
-                $this->tanggal = $lastDate instanceof \Carbon\Carbon ? $lastDate->format('Y-m-d') : $lastDate;
+                $this->tanggal = $lastDate instanceof Carbon ? $lastDate->format('Y-m-d') : $lastDate;
             }
         }
 
@@ -119,29 +120,22 @@ class LaporanPotSiku extends Page implements HasForms
         ];
     }
 
-    protected function roundToNearestHundred(float $number): int
-    {
-        $thousands = floor($number / 1000);
-        $base = $thousands * 1000;
-        $remainder = $number - $base;
-
-        if ($remainder < 300)
-            return $base;
-        if ($remainder < 800)
-            return $base + 500;
-
-        return $base + 1000;
-    }
-
     public function onTanggalUpdated($state)
     {
         $this->tanggal = $state;
         $this->loadAllData();
     }
 
+    /**
+     * Ambil semua produksi Pot Siku di tanggal terpilih, transform TIAP
+     * produksi lewat PotSikuDataMap::make() (target per ukuran dari DB,
+     * capaian global per individu — lihat README Join untuk konsep
+     * rumusnya, Pot Siku pakai pola yang sama tapi per-orang).
+     */
     public function loadAllData()
     {
-        // Pastikan format tanggal selalu Y-m-d untuk query database
+        $this->isLoading = true;
+
         $tanggal = now()->format('Y-m-d');
         if ($this->tanggal) {
             try {
@@ -163,8 +157,10 @@ class LaporanPotSiku extends Page implements HasForms
             'pegawaiPotSiku.pegawai',
             'detailBarangDikerjakanPotSiku.jenisKayu',
             'detailBarangDikerjakanPotSiku.ukuran',
+            'detailBarangDikerjakanPotSiku.pegawaiPotSiku.pegawai',
+            'validasiTerakhir',
         ])
-            ->where('tanggal_produksi', $tanggal)
+            ->whereDate('tanggal_produksi', $tanggal)
             ->get();
 
         if ($produksiList->isEmpty()) {
@@ -181,72 +177,13 @@ class LaporanPotSiku extends Page implements HasForms
                 ->send();
         }
 
-        $targetRef = Target::where('kode_ukuran', 'POT SIKU')->first();
+        // PENTING: setiap produksi ditransform lewat PotSikuDataMap::make(),
+        // bukan dibangun manual di sini lagi (target flat 300 sudah dibuang).
+        $this->dataSiku = $produksiList
+            ->map(fn (ProduksiPotSiku $produksi) => PotSikuDataMap::make($produksi))
+            ->values()
+            ->toArray();
 
-        // Target null-safe fallback
-        $stdTarget = $targetRef?->target ?? 150;
-        $stdJam = $targetRef?->jam ?? 10;
-        $stdPotonganHarga = $targetRef?->potongan ?? 766.67;
-
-        // ✅ TARGET BARU PER PEKERJA
-        $targetPerPegawai = 300; // cm
-
-        $this->dataSiku = [];
-
-        foreach ($produksiList as $produksi) {
-            $perPekerja = [];
-
-            foreach ($produksi->pegawaiPotSiku as $p) {
-                $details = $produksi->detailBarangDikerjakanPotSiku
-                    ->where('id_pegawai_pot_siku', $p->id);
-
-                $hasilIndividu = (int) $details->sum('tinggi');
-
-                // 🔥 hitung berdasarkan target 300
-                $selisihIndividu = $targetPerPegawai - $hasilIndividu;
-
-                $potongan = 0;
-                if ($selisihIndividu > 0) {
-                    $potongan = $this->roundToNearestHundred(
-                        $selisihIndividu * $stdPotonganHarga
-                    );
-                }
-
-                $detailTabel = [];
-                foreach ($details as $d) {
-                    $detailTabel[] = [
-                        'jenis_kayu' => $d->jenisKayu->nama_kayu ?? 'Tidak Terdata',
-                        'p' => $d->ukuran->panjang ?? 0,
-                        'l' => $d->ukuran->lebar ?? 0,
-                        't' => $d->ukuran->tebal ?? 0,
-                        'ukuran' => $d->ukuran->nama_ukuran ?? '-',
-                        'kw' => $d->kw ?? '-',
-                        'tinggi' => $d->tinggi,
-                    ];
-                }
-
-                $perPekerja[] = [
-                    'kode_pegawai' => $p->pegawai->kode_pegawai ?? '-',
-                    'nama_pegawai' => $p->pegawai->nama_pegawai ?? '-',
-                    'jam_masuk' => $p->masuk ? Carbon::parse($p->masuk)->format('H:i') : '-',
-                    'jam_pulang' => $p->pulang ? Carbon::parse($p->pulang)->format('H:i') : '-',
-                    'ijin' => $p->ijin ?? '-',
-                    'ket' => $p->ket ?? '-',
-                    'hasil' => $hasilIndividu,
-                    'target' => $targetPerPegawai, // 🔥 penting untuk progress bar
-                    'selisih' => $selisihIndividu > 0 ? $selisihIndividu : 0,
-                    'potongan_target' => $potongan,
-                    'detail_barang' => $detailTabel,
-                ];
-            }
-
-            $this->dataSiku[] = [
-                'tanggal' => Carbon::parse($produksi->tanggal_produksi)->format('d/m/Y'),
-                'kendala' => $produksi->kendala ?? 'Tidak ada kendala.',
-                'target_harian' => $stdTarget,
-                'jam_kerja' => $stdJam,
-                'pekerja_list' => $perPekerja,
-            ];
-        }
+        $this->isLoading = false;
     }
 }
