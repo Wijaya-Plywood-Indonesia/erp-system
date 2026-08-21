@@ -3,7 +3,6 @@
 namespace App\Filament\Pages;
 
 use Filament\Pages\Page;
-use Filament\Forms;
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\DatePicker;
 use Filament\Notifications\Notification;
@@ -28,7 +27,7 @@ class LaporanRepairs extends Page
 
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
-    protected static ?string $title = 'Laporan Produksi Repairs';
+    protected static ?string $title = 'Laporan Produksi Repair';
     protected string $view = 'filament.pages.laporan-repairs';
     protected static ?int $navigationSort = 6;
     protected static bool $shouldRegisterNavigation = false;
@@ -53,7 +52,7 @@ class LaporanRepairs extends Page
         return $schema
             ->schema([
                 DatePicker::make('tanggal')
-                    ->label('Pilih Tanggal Laporan')
+                    ->label('Pilih Tanggal Laporan Repair')
                     ->native(false)
                     ->format('Y-m-d')
                     ->displayFormat('d/m/Y')
@@ -65,15 +64,12 @@ class LaporanRepairs extends Page
                     ->default(now())
                     ->suffixIcon('heroicon-o-calendar')
                     ->suffixIconColor('primary')
-                    ->helperText('Pilih tanggal untuk melihat laporan repair'),
+                    ->helperText('Pilih tanggal untuk melihat laporan hasil produksi repair'),
             ])
             ->statePath('data')
             ->columns(1);
     }
 
-    /**
-     * Header Actions untuk refresh dan export (opsional)
-     */
     protected function getHeaderActions(): array
     {
         return [
@@ -92,9 +88,6 @@ class LaporanRepairs extends Page
         ];
     }
 
-    /**
-     * Update saat tanggal berubah
-     */
     public function onTanggalUpdated($state): void
     {
         try {
@@ -113,12 +106,11 @@ class LaporanRepairs extends Page
             $this->data['tanggal'] = $tanggal;
             $this->loadData();
         } catch (Exception $e) {
-            Log::error('Error parsing date: ' . $e->getMessage());
+            Log::error('Error parsing date Repair: ' . $e->getMessage());
 
             Notification::make()
                 ->danger()
                 ->title('Format Tanggal Tidak Valid')
-                ->body('Silakan pilih tanggal yang valid.')
                 ->send();
 
             $this->data['tanggal'] = now()->format('Y-m-d');
@@ -126,9 +118,6 @@ class LaporanRepairs extends Page
         }
     }
 
-    /**
-     * Load data dari database
-     */
     public function loadData(): void
     {
         try {
@@ -138,36 +127,33 @@ class LaporanRepairs extends Page
             $this->dataProduksi = [];
             $this->laporan = [];
 
-            // 1. Ambil data dari query
             $raw = LoadLaporanRepairs::run($tanggal);
 
             if ($raw->isNotEmpty()) {
-                // 2. Transform langsung menggunakan RepairDataMap
                 $mappedData = RepairDataMap::make($raw);
 
                 $this->dataProduksi = $mappedData;
-                $this->laporan = $mappedData;
+                $this->laporan      = $mappedData;
 
                 Log::info('Data laporan repair berhasil dimuat', [
-                    'total_baris' => count($mappedData),
-                    'tanggal' => $tanggal,
+                    'total_meja' => count($mappedData),
+                    'tanggal'    => $tanggal,
                 ]);
             } else {
                 Notification::make()
                     ->warning()
-                    ->title('Tidak Ada Data')
+                    ->title('Tidak Ada Data Repair')
                     ->body('Tidak ditemukan data repair untuk tanggal ' . Carbon::parse($tanggal)->format('d/m/Y'))
                     ->send();
             }
         } catch (Exception $e) {
-            Log::error('Error loading repair report', [
-                'message' => $e->getMessage(),
+            Log::error('Error loading repair report: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
             ]);
 
             Notification::make()
                 ->danger()
-                ->title('Error Memuat Data')
+                ->title('Error Memuat Data Repair')
                 ->body('Terjadi kesalahan: ' . $e->getMessage())
                 ->send();
         } finally {
@@ -175,65 +161,31 @@ class LaporanRepairs extends Page
         }
     }
 
-    /**
-     * Refresh data
-     */
     public function refresh(): void
     {
         $this->loadData();
-
-        Notification::make()
-            ->success()
-            ->title('Data Diperbarui')
-            ->body('Data berhasil dimuat ulang untuk tanggal ' . Carbon::parse($this->data['tanggal'])->format('d/m/Y'))
-            ->send();
+        Notification::make()->success()->title('Data Diperbarui')->send();
     }
 
-    /*
-        Export Data ke Excel
-    */
     public function exportExcel()
     {
         try {
             $tanggalQuery = Carbon::parse($this->data['tanggal'])->format('Y-m-d');
             $tanggalFile  = Carbon::parse($this->data['tanggal'])->format('d-m-Y');
 
-            $raw = LoadLaporanRepairs::run($tanggalQuery);
-
-            if ($raw->isEmpty()) {
+            if (empty($this->laporan)) {
                 Notification::make()
                     ->warning()
                     ->title('Tidak Ada Data')
-                    ->body('Tidak ada data repair untuk tanggal ' . Carbon::parse($tanggalQuery)->format('d/m/Y'))
-                    ->send();
-                return;
-            }
-
-            // ✅ RepairDataMap return flat array langsung, BUKAN ['detail' => ...]
-            $detailData = RepairDataMap::make($raw);
-
-            if (empty($detailData)) {
-                Notification::make()
-                    ->warning()
-                    ->title('Tidak Ada Data Detail')
-                    ->body('Tidak ada data untuk diekspor.')
                     ->send();
                 return;
             }
 
             return Excel::download(
-                new LaporanRepairExport(
-                    $detailData,   // ← flat array langsung
-                    $tanggalQuery
-                ),
+                new LaporanRepairExport($this->laporan, $tanggalQuery),
                 "laporan-repair-{$tanggalFile}.xlsx"
             );
         } catch (Exception $e) {
-            Log::error('Export Excel gagal', [
-                'message' => $e->getMessage(),
-                'trace'   => $e->getTraceAsString(),
-            ]);
-
             Notification::make()
                 ->danger()
                 ->title('Gagal Export Excel')
@@ -242,16 +194,12 @@ class LaporanRepairs extends Page
         }
     }
 
-
-    /**
-     * Kirim data ke view
-     */
     public function getViewData(): array
     {
         return [
-            'laporan' => $this->laporan,
+            'laporan'      => $this->laporan,
             'dataProduksi' => $this->dataProduksi,
-            'isLoading' => $this->isLoading,
+            'isLoading'    => $this->isLoading,
         ];
     }
 }

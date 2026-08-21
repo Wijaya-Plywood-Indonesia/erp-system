@@ -180,8 +180,9 @@ class LaporanSandingJoin extends Page
 
             return Excel::download(
                 new LaporanSandingJoinExport(
-                    $this->laporan, // ← argument 1: detail data
-                    $tanggalQuery   // ← argument 2: tanggal untuk query Sheet 2
+                    $this->laporan,     // argumen 1: array data per ukuran
+                    $this->dataPekerja, // argumen 2: array daftar pekerja tim
+                    $tanggalQuery       // argumen 3: string tanggal laporan
                 ),
                 "laporan-sanding-joint-{$tanggalFile}.xlsx"
             );
