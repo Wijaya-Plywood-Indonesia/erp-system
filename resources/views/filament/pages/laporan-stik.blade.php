@@ -65,8 +65,8 @@
                                 <tr>
                                     <th class="p-2.5 text-center w-24">No. Palet</th>
                                     <th class="p-2.5 text-left">Jenis Kayu</th>
-                                    <th class="p-2.5 text-left">Ukuran (P x L x T)</th>
-                                    <th class="p-2.5 text-center w-28">Kualitas (KW)</th>
+                                    <th class="p-2.5 text-left">Ukuran</th>
+                                    <th class="p-2.5 text-center w-28">Kualitas</th>
                                     <th class="p-2.5 text-right w-36">Total Lembar</th>
                                 </tr>
                             </thead>

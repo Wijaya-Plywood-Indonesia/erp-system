@@ -8,13 +8,10 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Components\DatePicker;
 
 use App\Models\ProduksiStik;
-use App\Models\Target;
-
 use Filament\Actions\Action;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\LaporanProduksiStikExport;
 use Carbon\Carbon;
-
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
@@ -40,6 +37,17 @@ class LaporanStik extends Page
         $this->tanggal = now()->format('Y-m-d');
         $this->form->fill(['tanggal' => $this->tanggal]);
         $this->loadAllData();
+    }
+
+    private function getProduksiStikData(string $tanggal)
+    {
+        return ProduksiStik::with([
+            'detailPegawaiStik.pegawai:id,kode_pegawai,nama_pegawai',
+            'detailHasilStik.ukuran',
+            'detailHasilStik.jenisKayu',
+        ])
+            ->whereDate('tanggal_produksi', $tanggal)
+            ->get();
     }
 
     protected function getFormSchema(): array
@@ -94,13 +102,7 @@ class LaporanStik extends Page
         $this->isLoading = true;
         $tanggal = $this->tanggal ?? now()->format('Y-m-d');
 
-        $produksiList = ProduksiStik::with([
-            'detailPegawaiStik.pegawai',
-            'detailHasilStik.ukuran',
-            'detailHasilStik.jenisKayu',
-        ])
-            ->whereDate('tanggal_produksi', $tanggal)
-            ->get();
+        $produksiList = $this->getProduksiStikData($tanggal);
 
         $this->dataProduksi = [];
 
@@ -145,16 +147,16 @@ class LaporanStik extends Page
                 );
             })->all();
 
-            // Panggil Action — sekarang return array ['targetAdjusted' => ..., 'potonganPerPegawai' => [...]]
             $result = app(\App\Actions\HitungPotonganProduksiAction::class)->execute(
                 mesin: \App\Enums\Mesin::Stik,
+                strategi: \App\Enums\StrategiPembagian::Kolektif,   // BARU: wajib dikirim eksplisit
                 pekerja: $pekerjaInput,
                 hasilAktual: $hasilPalet,
             );
 
-            $targetPalet         = $result['targetAdjusted'] ?? 0;
-            $selisihPalet        = $hasilPalet - $targetPalet;
-            $potonganPerPegawai  = $result['potonganPerPegawai'] ?? [];
+            $targetPalet        = $result?->targetAdjusted ?? 0;
+            $selisihPalet       = $hasilPalet - $targetPalet;
+            $potonganPerPegawai = $result?->potonganPerPegawai ?? [];
 
             $jumlahPekerja = $produksi->detailPegawaiStik?->count() ?? 0;
 
