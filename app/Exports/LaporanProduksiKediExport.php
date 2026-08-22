@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Actions\HitungPotonganProduksiAction;
+use App\DataTransferObjects\PekerjaKerjaInput;
 use App\Enums\Mesin;
 use App\Exports\Sheets\JurnalKediSheet;
 use App\Models\Target;
@@ -455,7 +456,9 @@ class LaporanKediPotonganSheet implements FromCollection, WithEvents, WithTitle
             return $rows;
         }
 
-        $aggregated = collect($this->buildAggregatedPotongan($this->produksiKediCollection));
+        $built = $this->buildAggregatedPotongan($this->produksiKediCollection);
+        $aggregated = collect($built['rows']);
+        $summaries = $built['summary']; // label => ['hasil' => float, 'target' => float|null, 'selisih' => float|null, 'satuan' => string]
 
         if ($aggregated->isEmpty()) {
             $rows->push(['Tidak ada data potongan untuk tanggal ini.']);
@@ -470,6 +473,41 @@ class LaporanKediPotonganSheet implements FromCollection, WithEvents, WithTitle
             // Judul grup
             $rows->push([strtoupper($label)]);
             $currentRow++;
+
+            // Baris ringkasan: Hasil Aktual vs Target vs Selisih
+            $sum = $summaries[$label] ?? null;
+            $infoRow = $currentRow + 1;
+            if ($sum) {
+                $satuan = $sum['satuan'] ?? '';
+                $targetText = $sum['target'] !== null ? number_format($sum['target'], 0, ',', '.') : '-';
+                $selisihText = $sum['selisih'] !== null
+                    ? ($sum['selisih'] >= 0 ? '+' : '').number_format($sum['selisih'], 0, ',', '.')
+                    : '-';
+                $rows->push([
+                    'Hasil Aktual: '.number_format($sum['hasil'], 0, ',', '.').' '.$satuan
+                        .'   |   Target: '.$targetText.' '.$satuan
+                        .'   |   Selisih: '.$selisihText.' '.$satuan,
+                ]);
+                $currentRow++;
+
+                // Baris kedua: info jam
+                $jamNormalText = ($sum['jam_normal'] ?? null) !== null
+                    ? number_format($sum['jam_normal'], 1, ',', '.').' jam'
+                    : '-';
+                $jamAktualTotalText = number_format($sum['jam_aktual_total'] ?? 0, 1, ',', '.').' jam';
+                $jamAktualRataText = number_format($sum['jam_aktual_rata'] ?? 0, 1, ',', '.').' jam/orang';
+                $rows->push([
+                    'Jam Target (normal): '.$jamNormalText
+                        .'   |   Jam Aktual Total: '.$jamAktualTotalText
+                        .'   |   Rata-rata: '.$jamAktualRataText,
+                ]);
+                $jamInfoRow = $currentRow + 1;
+                $currentRow++;
+            } else {
+                $rows->push(['']);
+                $currentRow++;
+                $jamInfoRow = null;
+            }
 
             // Header
             $headerRow = $currentRow + 1;
@@ -509,6 +547,8 @@ class LaporanKediPotonganSheet implements FromCollection, WithEvents, WithTitle
             $currentRow++;
 
             $this->tableRanges[] = [
+                'info' => $infoRow,
+                'jam_info' => $jamInfoRow,
                 'header' => $headerRow,
                 'start' => $startRow,
                 'end' => $endRow,
@@ -538,16 +578,18 @@ class LaporanKediPotonganSheet implements FromCollection, WithEvents, WithTitle
      * menjumlahkan potongannya akan memberi hasil yang berbeda (biasanya
      * lebih besar) dibanding menghitung sekali dari total gabungan.
      */
+    /**
+     * @return array{rows: array, summary: array<string, array{hasil: float, target: float|null, selisih: float|null, satuan: string}>}
+     */
     private function buildAggregatedPotongan(Collection $produksiCollection): array
     {
-        $action = new HitungPotonganProduksiAction;
-
         // Group HANYA per status (bongkar/masuk) — semua sesi bongkar hari itu,
         // apapun mesin/jenis kayunya, digabung jadi satu perhitungan target/potongan.
         // Jenis kayu tidak lagi jadi pemisah kalkulasi, hanya info label tampilan.
         $groups = $produksiCollection->groupBy(fn ($produksi) => $produksi->status);
 
         $results = [];
+        $summaries = [];
 
         foreach ($groups as $status => $groupProduksi) {
             // --- A. Gabungkan hasil produksi dari SEMUA sesi (semua mesin/jenis kayu) ---
@@ -640,51 +682,88 @@ class LaporanKediPotonganSheet implements FromCollection, WithEvents, WithTitle
             }
 
             $jumlahPekerja = count($uniquePegawai);
-            $potonganPerOrang = 0;
 
-            // --- C. Hitung target/potongan SEKALI pakai total gabungan & pegawai unik ---
+            // --- C. Hitung target/potongan via arsitektur resmi (Action + Strategi) ---
+            $potonganPerPegawai = []; // kodep => nilai potongan (Rp)
+
             if ($status === 'bongkar') {
                 $mesinEnum = Mesin::Bongkar;
-                $resolver = TargetResolverFactory::make($mesinEnum);
-                $targetModel = $resolver->resolve($mesinEnum->value);
+                $strategi = $mesinEnum->strategiPembagian(); // Kolektif (default) untuk Bongkar
 
-                $jamKerjaNormal = $targetModel->jam ?? 0;
-                $jamNormalMenit = $jamKerjaNormal * 60;
-
-                $totalPersonMenit = 0;
-
-                foreach ($uniquePegawai as $p) {
-                    $grossMenit = $jamNormalMenit; // fallback kalau masuk/pulang kosong
-
+                // Susun input pekerja: satu entri per pegawai UNIK (sudah di-dedupe di step B),
+                // menitKerja dihitung dari rentang jam terluas hari itu.
+                $pekerjaInput = [];
+                foreach ($uniquePegawai as $kodep => $p) {
+                    $menitKerja = 0;
                     if ($p['masuk'] && $p['pulang']) {
-                        $grossMenit = $p['masuk']->diffInMinutes($p['pulang']);
+                        $menitKerja = max(0, $p['masuk']->diffInMinutes($p['pulang']));
                     }
-
-                    $totalPersonMenit += max(0, $grossMenit);
+                    $pekerjaInput[] = new PekerjaKerjaInput(
+                        idPegawai: $kodep,
+                        menitKerja: (float) $menitKerja,
+                    );
                 }
 
-                $avgMenitPerOrang = $jumlahPekerja > 0 ? $totalPersonMenit / $jumlahPekerja : 0;
-                $jamAktual = (int) floor($avgMenitPerOrang / 60);
-                $menitAktual = $avgMenitPerOrang - ($jamAktual * 60);
+                $action = new HitungPotonganProduksiAction;
 
+                // NOTE: dipanggil dengan positional argument (bukan named argument)
+                // untuk menghindari error "Unknown named parameter" apabila nama
+                // parameter di Action/DTO berbeda dari yang diharapkan (mis. karena
+                // cache class lama / opcache belum di-refresh setelah rename).
+                // Urutan wajib sama persis dengan signature:
+                // execute(Mesin $mesin, StrategiPembagian $strategi, array $pekerja, float $hasilAktual, ?int $idUkuran = null, ?int $idJenisKayu = null)
                 $hitung = $action->execute(
-                    mesin: $mesinEnum,
-                    orgAktual: $jumlahPekerja,
-                    jamAktual: (float) $jamAktual,
-                    menitAktual: (float) $menitAktual,
-                    hasilAktual: (float) $totalHasil,
+                    $mesinEnum,
+                    $strategi,
+                    $pekerjaInput,
+                    (float) $totalHasil,
                 );
 
-                $potonganPerOrang = $hitung?->potonganPerOrang ?? 0;
+                $potonganPerPegawai = $hitung?->potonganPerPegawai ?? [];
+
+                // Ambil target dari hasil hitung (nama properti bisa bervariasi antar versi,
+                // jadi dicoba beberapa kemungkinan supaya tetap tampil kalau salah satu ada).
+                $targetDisplay = null;
+                if ($hitung) {
+                    foreach (['targetAdjusted', 'targetNormal', 'target'] as $prop) {
+                        if (isset($hitung->{$prop})) {
+                            $targetDisplay = (float) $hitung->{$prop};
+                            break;
+                        }
+                    }
+                }
+
+                // Ambil jam normal (target) langsung dari row master Target milik mesin ini.
+                $targetModelBongkar = TargetResolverFactory::make($mesinEnum)->resolve($mesinEnum->value, null, null);
+                $jamNormal = $targetModelBongkar->jam ?? null;
+
+                // Total jam kerja aktual = jumlah menit kerja semua pegawai unik / 60.
+                $totalMenitAktual = 0;
+                foreach ($pekerjaInput as $pi) {
+                    $totalMenitAktual += $pi->menitKerja;
+                }
+                $totalJamAktual = $totalMenitAktual / 60;
+                $rataJamPerOrang = $jumlahPekerja > 0 ? ($totalJamAktual / $jumlahPekerja) : 0;
+
+                $summaries[$labelDivisi] = [
+                    'hasil' => (float) $totalHasil,
+                    'target' => $targetDisplay,
+                    'selisih' => $targetDisplay !== null ? ((float) $totalHasil - $targetDisplay) : null,
+                    'satuan' => 'pcs',
+                    'jam_normal' => $jamNormal !== null ? (float) $jamNormal : null,
+                    'jam_aktual_total' => $totalJamAktual,
+                    'jam_aktual_rata' => $rataJamPerOrang,
+                ];
             } else {
-                // Jalur lama: MASUK
-                $kodeTargetDicari = $status === 'masuk' ? 'MASUK' : 'KEDI';
+                // Jalur lama: MASUK (belum dimigrasikan ke strategi resmi)
+                $kodeTargetDicari = 'MASUK';
                 $targetRef = Target::where('kode_ukuran', $kodeTargetDicari)->first();
 
                 $stdTarget = (int) ($targetRef->target ?? 0);
                 $stdPotHarga = (int) ($targetRef->potongan ?? 0);
 
                 $selisih = $totalHasil - $stdTarget;
+                $potonganPerOrangLegacy = 0;
 
                 if ($stdTarget > 0 && $selisih < 0 && $stdPotHarga > 0 && $jumlahPekerja > 0) {
                     $kekurangan = abs($selisih);
@@ -695,18 +774,43 @@ class LaporanKediPotonganSheet implements FromCollection, WithEvents, WithTitle
                     $ratusan = $potonganRaw % 1000;
 
                     if ($ratusan < 300) {
-                        $potonganPerOrang = $ribuan * 1000;
+                        $potonganPerOrangLegacy = $ribuan * 1000;
                     } elseif ($ratusan >= 300 && $ratusan < 800) {
-                        $potonganPerOrang = ($ribuan * 1000) + 500;
+                        $potonganPerOrangLegacy = ($ribuan * 1000) + 500;
                     } else {
-                        $potonganPerOrang = ($ribuan + 1) * 1000;
+                        $potonganPerOrangLegacy = ($ribuan + 1) * 1000;
                     }
                 }
+
+                foreach ($uniquePegawai as $kodep => $p) {
+                    $potonganPerPegawai[$kodep] = $potonganPerOrangLegacy;
+                }
+
+                // Jam normal dari master Target MASUK, jam aktual dari rentang masuk-pulang tiap pegawai unik.
+                $jamNormalMasuk = $targetRef->jam ?? null;
+                $totalMenitAktualMasuk = 0;
+                foreach ($uniquePegawai as $kodep => $p) {
+                    if ($p['masuk'] && $p['pulang']) {
+                        $totalMenitAktualMasuk += max(0, $p['masuk']->diffInMinutes($p['pulang']));
+                    }
+                }
+                $totalJamAktualMasuk = $totalMenitAktualMasuk / 60;
+                $rataJamPerOrangMasuk = $jumlahPekerja > 0 ? ($totalJamAktualMasuk / $jumlahPekerja) : 0;
+
+                $summaries[$labelDivisi] = [
+                    'hasil' => (float) $totalHasil,
+                    'target' => $stdTarget > 0 ? (float) $stdTarget : null,
+                    'selisih' => $stdTarget > 0 ? ((float) $totalHasil - $stdTarget) : null,
+                    'satuan' => 'pcs',
+                    'jam_normal' => $jamNormalMasuk !== null ? (float) $jamNormalMasuk : null,
+                    'jam_aktual_total' => $totalJamAktualMasuk,
+                    'jam_aktual_rata' => $rataJamPerOrangMasuk,
+                ];
             }
 
             // --- D. Bangun baris output, satu baris per pegawai unik ---
             foreach ($uniquePegawai as $kodep => $p) {
-                $potonganFinal = $p['potongan_manual'] ?? $potonganPerOrang;
+                $potonganFinal = $p['potongan_manual'] ?? ($potonganPerPegawai[$kodep] ?? 0);
 
                 $results[] = [
                     'hasil' => $labelDivisi,
@@ -721,7 +825,10 @@ class LaporanKediPotonganSheet implements FromCollection, WithEvents, WithTitle
             }
         }
 
-        return $results;
+        return [
+            'rows' => $results,
+            'summary' => $summaries,
+        ];
     }
 
     public function registerEvents(): array
@@ -740,10 +847,38 @@ class LaporanKediPotonganSheet implements FromCollection, WithEvents, WithTitle
                 $sheet->getColumnDimension('H')->setWidth(18);
 
                 foreach ($this->tableRanges as $range) {
+                    $infoRow = $range['info'] ?? null;
+                    $jamInfoRow = $range['jam_info'] ?? null;
                     $headerRow = $range['header'];
                     $startRow = $range['start'];
                     $endRow = $range['end'];
                     $totalRow = $range['total'];
+
+                    if ($infoRow) {
+                        $sheet->mergeCells("A{$infoRow}:H{$infoRow}");
+                        $sheet->getStyle("A{$infoRow}:H{$infoRow}")->applyFromArray([
+                            'font' => ['italic' => true, 'size' => 10, 'color' => ['argb' => 'FF334155']],
+                            'fill' => [
+                                'fillType' => Fill::FILL_SOLID,
+                                'startColor' => ['argb' => 'FFFFF7ED'],
+                            ],
+                            'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
+                        ]);
+                        $sheet->getRowDimension($infoRow)->setRowHeight(18);
+                    }
+
+                    if ($jamInfoRow) {
+                        $sheet->mergeCells("A{$jamInfoRow}:H{$jamInfoRow}");
+                        $sheet->getStyle("A{$jamInfoRow}:H{$jamInfoRow}")->applyFromArray([
+                            'font' => ['italic' => true, 'size' => 10, 'color' => ['argb' => 'FF334155']],
+                            'fill' => [
+                                'fillType' => Fill::FILL_SOLID,
+                                'startColor' => ['argb' => 'FFEFF6FF'],
+                            ],
+                            'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
+                        ]);
+                        $sheet->getRowDimension($jamInfoRow)->setRowHeight(18);
+                    }
 
                     // Border seluruh tabel
                     $sheet->getStyle("A{$headerRow}:H{$totalRow}")->applyFromArray([
@@ -786,8 +921,8 @@ class LaporanKediPotonganSheet implements FromCollection, WithEvents, WithTitle
                         $sheet->getStyle("H{$startRow}:H{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
                     }
 
-                    // Judul grup (baris di atas header) — merge & bold
-                    $titleRow = $headerRow - 1;
+                    // Judul grup (3 baris di atas header: judul, info hasil/target, info jam) — merge & bold
+                    $titleRow = $headerRow - 3;
                     $sheet->mergeCells("A{$titleRow}:H{$titleRow}");
                     $sheet->getStyle("A{$titleRow}:H{$titleRow}")->applyFromArray([
                         'font' => ['bold' => true, 'size' => 12, 'color' => ['argb' => 'FFFFFFFF']],

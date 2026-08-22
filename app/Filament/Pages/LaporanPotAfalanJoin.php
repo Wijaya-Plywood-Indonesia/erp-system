@@ -2,36 +2,38 @@
 
 namespace App\Filament\Pages;
 
-use Filament\Pages\Page;
-use Filament\Forms;
-use Filament\Schemas\Schema;
-use Filament\Forms\Components\DatePicker;
-use Filament\Notifications\Notification;
-use Filament\Actions\Action;
-use Carbon\Carbon;
-
-use BackedEnum;
-use UnitEnum;
-
-use Exception;
-use Illuminate\Support\Facades\Log;
-
+use App\Exports\LaporanPotAfalanJoinExport;
 use App\Filament\Pages\LaporanPotAfalanJoin\Queries\LoadLaporanPotAfalan;
 use App\Filament\Pages\LaporanPotAfalanJoin\Transformers\PotAfalanDataMap;
-use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\LaporanPotAfalanJoinExport;
+use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Carbon\Carbon;
+use Exception;
+use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Log;
+use Maatwebsite\Excel\Facades\Excel;
+use UnitEnum;
 
 class LaporanPotAfalanJoin extends Page
 {
     use HasPageShield;
 
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
+
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
+
     protected static ?string $title = 'Laporan Produksi Potong Afalan Join';
+
     protected static ?string $navigationLabel = 'Laporan Produksi Pot Af Join';
+
     protected string $view = 'filament.pages.laporan-pot-afalan';
+
     protected static ?int $navigationSort = 9;
+
     protected static bool $shouldRegisterNavigation = false;
 
     public array $data = [
@@ -39,7 +41,9 @@ class LaporanPotAfalanJoin extends Page
     ];
 
     public array $laporan = [];
+
     public array $dataProduksi = [];
+
     public bool $isLoading = false;
 
     public function mount(): void
@@ -65,7 +69,7 @@ class LaporanPotAfalanJoin extends Page
                     ->displayFormat('d/m/Y')
                     ->live()
                     ->closeOnDateSelection()
-                    ->afterStateUpdated(fn($state) => $this->onTanggalUpdated($state))
+                    ->afterStateUpdated(fn ($state) => $this->onTanggalUpdated($state))
                     ->required()
                     ->maxDate(now())
                     ->default(now())
@@ -84,14 +88,14 @@ class LaporanPotAfalanJoin extends Page
                 ->label('Refresh Data')
                 ->icon('heroicon-o-arrow-path')
                 ->color('gray')
-                ->action(fn() => $this->refresh()),
+                ->action(fn () => $this->refresh()),
 
             Action::make('exportExcel')
                 ->label('Download Excel')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
-                ->action(fn() => $this->exportExcel())
-                ->visible(fn() => !empty($this->laporan)),
+                ->action(fn () => $this->exportExcel())
+                ->visible(fn () => ! empty($this->laporan)),
         ];
     }
 
@@ -114,7 +118,7 @@ class LaporanPotAfalanJoin extends Page
             $this->loadData();
 
         } catch (Exception $e) {
-            Log::error('Error parsing date Potong Afalan: ' . $e->getMessage());
+            Log::error('Error parsing date Potong Afalan: '.$e->getMessage());
 
             Notification::make()
                 ->danger()
@@ -136,33 +140,33 @@ class LaporanPotAfalanJoin extends Page
             $tanggal = Carbon::parse($tanggal)->format('Y-m-d');
 
             $this->dataProduksi = [];
-            $this->laporan      = [];
+            $this->laporan = [];
 
             $raw = LoadLaporanPotAfalan::run($tanggal);
 
             Log::info('Potong Afalan Query executed', [
                 'records_found' => $raw->count(),
-                'tanggal'       => $tanggal,
+                'tanggal' => $tanggal,
             ]);
 
             if ($raw->isNotEmpty()) {
                 $this->dataProduksi = PotAfalanDataMap::make($raw);
-                $this->laporan      = $this->dataProduksi;
+                $this->laporan = $this->dataProduksi;
             } else {
                 Notification::make()
                     ->warning()
                     ->title('Tidak Ada Data Potong Afalan')
-                    ->body('Tidak ditemukan data produksi potong afalan untuk tanggal ' . Carbon::parse($tanggal)->format('d/m/Y'))
+                    ->body('Tidak ditemukan data produksi potong afalan untuk tanggal '.Carbon::parse($tanggal)->format('d/m/Y'))
                     ->send();
             }
 
         } catch (Exception $e) {
-            Log::error('Error loading potong afalan data: ' . $e->getMessage());
+            Log::error('Error loading potong afalan data: '.$e->getMessage());
 
             Notification::make()
                 ->danger()
                 ->title('Error Memuat Data Potong Afalan')
-                ->body('Terjadi kesalahan: ' . $e->getMessage())
+                ->body('Terjadi kesalahan: '.$e->getMessage())
                 ->send();
         } finally {
             $this->isLoading = false;
@@ -197,40 +201,42 @@ class LaporanPotAfalanJoin extends Page
     public function getViewData(): array
     {
         return [
-            'laporan'      => $this->laporan,
+            'laporan' => $this->laporan,
             'dataProduksi' => $this->dataProduksi,
-            'isLoading'    => $this->isLoading,
-            'summary'      => $this->calculateSummary(),
+            'isLoading' => $this->isLoading,
+            'summary' => $this->calculateSummary(),
         ];
     }
 
     private function calculateSummary(): array
     {
-        $totalAll      = 0;
+        $totalAll = 0;
         $uniquePegawai = [];
         $globalUkuranKw = [];
 
-        foreach ($this->laporan as $row) {
-            $totalAll += $row['hasil'];
+        foreach ($this->laporan as $table) {
+            foreach ($table['detail_produksi'] as $prod) {
+                $totalAll += $prod['hasil'];
 
-            foreach ($row['pekerja'] as $p) {
+                $key = $prod['ukuran'].'|'.$prod['kw'];
+                if (! isset($globalUkuranKw[$key])) {
+                    $globalUkuranKw[$key] = (object) [
+                        'ukuran' => $prod['ukuran'],
+                        'kw' => $prod['kw'],
+                        'total' => 0,
+                    ];
+                }
+                $globalUkuranKw[$key]->total += $prod['hasil'];
+            }
+
+            foreach ($table['rekap_pekerja'] as $p) {
                 $uniquePegawai[$p['nama']] = true;
             }
-
-            $key = $row['ukuran'] . '|' . $row['kw'];
-            if (!isset($globalUkuranKw[$key])) {
-                $globalUkuranKw[$key] = (object)[
-                    'ukuran' => $row['ukuran'],
-                    'kw'     => $row['kw'],
-                    'total'  => 0,
-                ];
-            }
-            $globalUkuranKw[$key]->total += $row['hasil'];
         }
 
         return [
-            'totalAll'       => $totalAll,
-            'totalPegawai'   => count($uniquePegawai),
+            'totalAll' => $totalAll,
+            'totalPegawai' => count($uniquePegawai),
             'globalUkuranKw' => array_values($globalUkuranKw),
         ];
     }

@@ -1,5 +1,7 @@
 <?php
+
 // app/Actions/HitungPotonganProduksiAction.php
+
 namespace App\Actions;
 
 use App\DataTransferObjects\PekerjaKerjaInput;
@@ -15,11 +17,11 @@ use App\Services\Target\TargetResolverFactory;
 class HitungPotonganProduksiAction
 {
     public function __construct(
-        private readonly TargetPotonganService $service = new TargetPotonganService(),
+        private readonly TargetPotonganService $service = new TargetPotonganService,
     ) {}
 
     /**
-     * @param PekerjaKerjaInput[] $pekerja  durasi kerja aktual (menit) & (opsional) hasil individu tiap pegawai
+     * @param  PekerjaKerjaInput[]  $pekerja  durasi kerja aktual (menit) & (opsional) hasil individu tiap pegawai
      */
     public function execute(
         Mesin $mesin,
@@ -32,7 +34,7 @@ class HitungPotonganProduksiAction
     ): ?TargetHitungResult {
         $target = $this->resolveTarget($mesin, $idUkuran, $idJenisKayu, $grade);
 
-        if (!$target) {
+        if (! $target) {
             return null;
         }
 
@@ -70,7 +72,7 @@ class HitungPotonganProduksiAction
     ): ?array {
         $target = $this->resolveTarget($mesin, $idUkuran, $idJenisKayu, $grade);
 
-        if (!$target) {
+        if (! $target) {
             return null;
         }
 
@@ -96,6 +98,8 @@ class HitungPotonganProduksiAction
         ?string $grade = null,
     ): ?Target {
         $resolver = TargetResolverFactory::make($mesin);
+
+        return $resolver->resolve($mesin->value, $idUkuran, $idJenisKayu);
         return $resolver->resolve($mesin->value, $idUkuran, $idJenisKayu, $grade);
     }
 

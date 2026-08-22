@@ -217,12 +217,21 @@ class ProduksiInflowService
         $harga_v_ongkos_penyusutan = $batch['grand_total_outflow_m3'] > 0
             ? (($dataMasuk->sum('poin') + $batch['grand_total_outflow_ongkos_pkj'] + $batch['grand_total_outflow_penyusutan']) / $batch['grand_total_outflow_m3'])
             : 0.0;
-        // harga_vopb = harga_vop (poin+ongkos+penyusutan, sudah dibagi m3) + total bahan
-        // penolong sebagai NOMINAL LANGSUNG (bukan ikut dibagi m3 lagi). Bahan penolong
-        // (mis. solasi) adalah biaya tambahan flat per batch (42.000 x 10 = 420.000),
-        // bukan biaya yang harus di-blend/dirata-rata ke harga per m3 seperti
-        // poin/ongkos/penyusutan.
-        $harga_v_ongkos_penyusutan_bahan = $harga_v_ongkos_penyusutan + $batch['grand_total_outflow_bahan_penolong'];
+        // FIX (unit consistency bug): harga_vopb = harga_vop (rupiah PER M3) ditambah
+        // bahan penolong yang JUGA sudah dikonversi ke rupiah per m3. Sebelumnya
+        // grand_total_outflow_bahan_penolong (nominal rupiah TOTAL/flat, mis. 420.000)
+        // dijumlahkan langsung ke harga_v_ongkos_penyusutan (rupiah/m3, mis. 2.469.674)
+        // tanpa dibagi kubikasi dulu — dua satuan berbeda dijumlahkan mentah-mentah.
+        // Efeknya makin parah saat diakumulasi lintas banyak batch di
+        // getSummaryLaporanLahan() (bisa meledak jadi puluhan juta). Sekarang bahan
+        // penolong dibagi grand_total_outflow_m3 dulu supaya benar-benar "rupiah/m3",
+        // baru dijumlahkan ke harga_vop — konsisten dengan cara kolom "Rp x / m3" di
+        // level baris/grup outflow dihitung di Blade (lihat $bahanPerM3Baris,
+        // $bahanPenolongPerM3).
+        $hargaBahanPenolongPerM3 = $batch['grand_total_outflow_m3'] > 0
+            ? ($batch['grand_total_outflow_bahan_penolong'] / $batch['grand_total_outflow_m3'])
+            : 0.0;
+        $harga_v_ongkos_penyusutan_bahan = $harga_v_ongkos_penyusutan + $hargaBahanPenolongPerM3;
 
         $outflowCollection = collect($batch['outflow_detail']);
         $jenis_kayu = $outflowCollection->contains(function ($item) {
@@ -326,6 +335,22 @@ class ProduksiInflowService
         $totalPenyusutan = $laporanFinalCollection->sum('summary.total_penyusutan');
         $totalBahanPenolong = $laporanFinalCollection->sum('summary.total_bahan_penolong');
 
+        $totalHargaVop = $totalKeluarM3 > 0
+            ? (float) (($totalPoin + $totalOngkos + $totalPenyusutan) / $totalKeluarM3)
+            : 0.0;
+
+        // FIX (unit consistency bug): total_bahan_penolong di sini adalah AKUMULASI
+        // NOMINAL RUPIAH dari SEMUA batch dalam $laporanFinalCollection (bisa
+        // puluhan batch dalam sebulan, tiap batch nyumbang ratusan ribu → total bisa
+        // puluhan juta). Sebelumnya nominal akumulasi ini dijumlahkan mentah-mentah
+        // ke total_harga_vop (yang satuannya rupiah PER M3), menghasilkan angka yang
+        // tidak masuk akal (mis. Rp 30 juta / m3). Sekarang dibagi totalKeluarM3
+        // dulu (weighted by volume, sama seperti pola total_harga_vop di atas)
+        // supaya satuannya konsisten sebelum dijumlahkan.
+        $hargaBahanPenolongPerM3 = $totalKeluarM3 > 0
+            ? ($totalBahanPenolong / $totalKeluarM3)
+            : 0.0;
+
         return [
             'total_kayu_masuk' => $laporanFinalCollection->sum('summary.total_kayu_masuk') ?? 0,
             'total_kubikasi_kayu_masuk' => $totalMasukM3 ?? 0,
@@ -340,15 +365,12 @@ class ProduksiInflowService
             'total_harga_v_ongkos' => $totalKeluarM3 > 0
                 ? (float) (($totalPoin + $totalOngkos) / $totalKeluarM3)
                 : 0.0,
-            'total_harga_vop' => $totalKeluarM3 > 0
-                ? (float) (($totalPoin + $totalOngkos + $totalPenyusutan) / $totalKeluarM3)
-                : 0.0,
-            // total_bahan_penolong ditambahkan sebagai NOMINAL LANGSUNG ke total_harga_vop
-            // (konsisten dengan buildLaporanItemForClosure() & mergeZeroInflowBatches()),
-            // bukan ikut dibagi total_keluar_m3.
-            'total_harga_vopb' => ($totalKeluarM3 > 0
-                ? (float) (($totalPoin + $totalOngkos + $totalPenyusutan) / $totalKeluarM3)
-                : 0.0) + $totalBahanPenolong,
+            'total_harga_vop' => $totalHargaVop,
+            // total_bahan_penolong ditambahkan sebagai NOMINAL PER-M3 (sudah dibagi
+            // totalKeluarM3 di atas), konsisten dengan buildLaporanItemForClosure()
+            // & mergeZeroInflowBatches() yang juga membagi dengan kubikasi keluar
+            // sebelum menjumlahkan ke harga_vop.
+            'total_harga_vopb' => $totalHargaVop + $hargaBahanPenolongPerM3,
         ];
     }
 
@@ -885,10 +907,16 @@ class ProduksiInflowService
                         ? (float) (($totalPoinVal + $totalOngkos + $totalPenyusutan) / $totalOutflowM3)
                         : 0.0;
 
-                    // Sama seperti di buildLaporanItemForClosure(): bahan penolong
-                    // ditambahkan sebagai NOMINAL LANGSUNG ke harga_vop, bukan ikut
-                    // dibagi total_keluar_m3 lagi.
-                    $parent['summary']['harga_vopb'] = $parent['summary']['harga_vop'] + $totalBahanPenolong;
+                    // FIX (unit consistency bug): sama seperti di buildLaporanItemForClosure()
+                    // & getSummaryLaporanLahan() — totalBahanPenolong di sini adalah nominal
+                    // rupiah gabungan hasil merge beberapa baris outflow (bisa lebih dari satu
+                    // batch zero-inflow yang digabung ke parent yang sama), jadi WAJIB dibagi
+                    // totalOutflowM3 dulu (jadi rupiah/m3) sebelum ditambahkan ke harga_vop,
+                    // bukan dijumlahkan sebagai nominal rupiah total langsung seperti sebelumnya.
+                    $hargaBahanPenolongPerM3 = $totalOutflowM3 > 0
+                        ? ($totalBahanPenolong / $totalOutflowM3)
+                        : 0.0;
+                    $parent['summary']['harga_vopb'] = $parent['summary']['harga_vop'] + $hargaBahanPenolongPerM3;
 
                     $parent['summary']['total_bahan_penolong'] = $totalBahanPenolong;
 
