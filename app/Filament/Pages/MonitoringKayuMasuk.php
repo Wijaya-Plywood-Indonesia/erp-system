@@ -30,7 +30,7 @@ class MonitoringKayuMasuk extends Page
     public ?string $dariTanggal = null;
     public ?string $sampaiTanggal = null;
     public bool $showDokumenCol = false;
-    public array $expandedRows = [];
+    public ?int $expandedRow = null;
     public string $bulan = 'ALL';
     public string $tahun;
     public array $detailsCache = [];
@@ -104,17 +104,19 @@ class MonitoringKayuMasuk extends Page
         $this->resetPage();
     }
 
+    // SESUDAH
     public function toggleRow(int $id): void
     {
-        if (in_array($id, $this->expandedRows, true)) {
-            $this->expandedRows = array_diff($this->expandedRows, [$id]);
-            unset($this->detailsCache[$id]); // buang dari cache biar payload gak menumpuk
+        if ($this->expandedRow === $id) {
+            unset($this->detailsCache[$id]);
+            $this->expandedRow = null;
             return;
         }
+        if ($this->expandedRow !== null) {
+            unset($this->detailsCache[$this->expandedRow]);
+        }
 
-        $this->expandedRows[] = $id;
-
-        // Query data SEKALI di sini, bukan setiap kali Blade dirender ulang
+        $this->expandedRow = $id;
         if (! isset($this->detailsCache[$id])) {
             $this->detailsCache[$id] = $this->getExpandedDetail($id);
         }
