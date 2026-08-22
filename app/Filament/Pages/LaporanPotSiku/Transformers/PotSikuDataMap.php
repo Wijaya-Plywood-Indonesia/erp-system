@@ -11,10 +11,35 @@ use Illuminate\Support\Facades\Log;
 class PotSikuDataMap
 {
     /**
-     * @return array{
-     *   tanggal: string, kendala: string, validasi: ?array,
-     *   pegawai_summary: array, items: array
-     * }
+     * Jam istirahat pabrik (tetap): 12:00 - 13:00.
+     * Dipotong dari jam kerja HANYA jika rentang masuk-pulang pegawai
+     * benar-benar beririsan dengan jam istirahat ini. Kalau pegawai
+     * pulang sebelum jam istirahat mulai, atau masuk setelah jam
+     * istirahat selesai, TIDAK ada potongan sama sekali.
+     */
+    private const ISTIRAHAT_MULAI   = '12:00';
+    private const ISTIRAHAT_SELESAI = '13:00';
+
+    /**
+     * Tiap baris Target Pot Siku dirancang basis "1 ORANG kerja jam NORMAL
+     * penuh (9 jam) khusus untuk 1 ukuran itu" (org=1 semua baris).
+     *
+     * DUA penyesuaian dipakai bareng di sini:
+     *
+     * 1) ADJUSTED ke jam aktual individu — kalau jam kerja aktual pegawai
+     *    (masuk-pulang) beda dari jam normal target, target ikut menyusut/
+     *    membesar proporsional. Sama untuk SEMUA ukuran yang dia kerjakan
+     *    hari itu (1 orang cuma punya 1 rentang jam kerja). Jam istirahat
+     *    HANYA dipotong kalau benar-benar beririsan dengan rentang
+     *    masuk-pulang (lihat hitungMenitKerjaBersih).
+     *
+     * 2) JUMLAH PERSEN GLOBAL — karena 1 pegawai bisa kerja beberapa
+     *    ukuran dalam 1 hari (jam kerjanya kebagi ke semua ukuran itu,
+     *    sama seperti kasus Join), capaian tiap ukuran dijumlah (bukan
+     *    dirata-rata) jadi capaian global per orang. >=100% -> gak
+     *    dipotong walau tiap ukuran individually di bawah 100%.
+     *
+     * @return array{tanggal: string, kendala: string, validasi: ?array, pekerja: array}
      */
     public static function make(ProduksiPotSiku $produksi): array
     {
@@ -22,27 +47,6 @@ class PotSikuDataMap
 
         $tanggal = Carbon::parse($produksi->tanggal_produksi)->format('d/m/Y');
         $details = $produksi->detailBarangDikerjakanPotSiku ?? collect();
-
-        /* ================================================================
-         * 1. HITUNG CAPAIAN GLOBAL PER PEGAWAI (INDIVIDUAL)
-         * ----------------------------------------------------------------
-         * Sama seperti Join: tiap baris Target Pot Siku dirancang dengan
-         * basis "1 ORANG kerja 9 jam PENUH khusus untuk 1 ukuran itu"
-         * (org=1 di semua baris Target Pot Siku). Karena 1 pegawai bisa
-         * kerja beberapa ukuran dalam 1 hari, jam kerjanya otomatis
-         * KEBAGI ke semua ukuran itu — sama seperti kasus Join.
-         *
-         * Makanya dipakai rumus "jumlah persen" (bukan flat 300, bukan
-         * rata-rata): tiap ukuran yang DIA kerjakan dihitung capaian-nya
-         * sendiri, dijumlah jadi capaian global PER ORANG. >=100% berarti
-         * 1 hari kerjanya sudah terpakai penuh secara produktif walau
-         * dibagi ke beberapa ukuran — TIDAK dipotong.
-         *
-         * Target di sini TETAP FLAT terhadap jam kerja aktual pegawai
-         * (tidak di-adjust ke jam masuk-pulang) — sesuai keputusan: target
-         * per ukuran diambil apa adanya dari tabel Target, bukan dihitung
-         * ulang berdasarkan jam kerja aktual hari itu.
-         * ================================================================ */
 
         $porPegawai = $details->groupBy('id_pegawai_pot_siku');
 
@@ -55,9 +59,9 @@ class PotSikuDataMap
                 return null;
             }
             if (!array_key_exists($idUkuran, $targetCache)) {
-                // idJenisKayu sengaja null -> UkuranBasedResolver akan skip
-                // filter jenis kayu (baris Target Pot Siku tidak dibedakan
-                // per jenis kayu, cuma per ukuran).
+                // idJenisKayu sengaja null -> resolver skip filter jenis
+                // kayu (baris Target Pot Siku tidak dibedakan per jenis
+                // kayu, cuma per ukuran).
                 $targetCache[$idUkuran] = $action->resolveTargetDanRate(
                     Mesin::PotSiku,
                     $idUkuran,
@@ -67,22 +71,45 @@ class PotSikuDataMap
             return $targetCache[$idUkuran];
         };
 
-        $potonganPerPegawai = []; // id_pegawai_pot_siku => Rupiah
-        $capaianGlobalPerPegawai = []; // id_pegawai_pot_siku => %
-        $namaPerPegawai = [];
+        $pekerjaOutput = [];
 
         foreach ($porPegawai as $idPegawaiPotSiku => $rows) {
-            $namaPerPegawai[$idPegawaiPotSiku] = $rows->first()->pegawaiPotSiku?->pegawai?->nama_pegawai
-                ?? $rows->first()->pegawaiPotSiku?->pegawai?->nama
-                ?? '-';
+            $pps = $rows->first()->pegawaiPotSiku;
 
+            /* ============================================================
+             * 0. JAM AKTUAL INDIVIDU
+             * ------------------------------------------------------------
+             * Istirahat pabrik 12:00-13:00 HANYA dipotong kalau rentang
+             * masuk-pulang pegawai beneran beririsan dengan jam itu (lihat
+             * hitungMenitKerjaBersih). Kalau pegawai pulang sebelum jam
+             * istirahat mulai (mis. masuk 06:00, pulang 11:00), tidak ada
+             * potongan sama sekali.
+             * ============================================================ */
+            $jamAktualMenit = null;
+            if ($pps?->masuk && $pps?->pulang) {
+                $jamAktualMenit = self::hitungMenitKerjaBersih(
+                    Carbon::parse($pps->masuk),
+                    Carbon::parse($pps->pulang)
+                );
+            }
+
+            /* ============================================================
+             * 1. CAPAIAN PER UKURAN (target sudah ADJUSTED ke jam aktual)
+             * ============================================================ */
             $rowsByUkuran = $rows->groupBy('id_ukuran');
 
             $sumCapaianPersen = 0;
             $sumNilaiTarget   = 0;
             $jumlahUkuranAda  = 0;
+            $itemsPegawai     = [];
 
             foreach ($rowsByUkuran as $idUkuran => $rowsUkuran) {
+                $first       = $rowsUkuran->first();
+                $ukuranModel = $first->ukuran;
+                $ukuranLabel = $ukuranModel
+                    ? "{$ukuranModel->panjang}x{$ukuranModel->lebar}x{$ukuranModel->tebal}"
+                    : ($ukuranModel->nama_ukuran ?? '-');
+
                 $hasilUkuran = (int) $rowsUkuran->sum(fn ($r) => (int) ($r->tinggi ?? 0));
 
                 $rateInfo = $resolveTarget($idUkuran ? (int) $idUkuran : null);
@@ -93,12 +120,28 @@ class PotSikuDataMap
                         'id_pegawai_pot_siku' => $idPegawaiPotSiku,
                         'id_ukuran' => $idUkuran,
                     ]);
+
+                    $itemsPegawai[] = [
+                        'ukuran'         => $ukuranLabel,
+                        'jenis_kayu'     => $first->jenisKayu?->nama_kayu ?? $first->jenisKayu?->nama ?? '-',
+                        'kw'             => $first->kw ?? '-',
+                        'hasil'          => $hasilUkuran,
+                        'target'         => 0,
+                        'capaian_persen' => null,
+                        'has_target'     => false,
+                        'no_palet_list'  => $rowsUkuran->pluck('no_palet')->filter()->implode(', ') ?: '-',
+                    ];
                     continue;
                 }
 
-                $target       = $rateInfo['target'];
-                $targetUkuran = (float) $target->target;
-                $biayaPerCm   = (float) $target->potongan;
+                $target             = $rateInfo['target'];
+                $ratePerOrgPerMenit = $rateInfo['ratePerOrgPerMenit'];
+                $biayaPerCm         = (float) $target->potongan;
+
+                // Fallback ke jam normal target kalau data jam aktual kosong
+                // (anggap kerja penuh).
+                $menitDipakai = $jamAktualMenit ?? ((float) $target->jam * 60);
+                $targetUkuran = $ratePerOrgPerMenit * 1 * $menitDipakai; // orgAktual = 1 (individual)
 
                 $capaian = $targetUkuran > 0 ? ($hasilUkuran / $targetUkuran) * 100 : 100.0;
                 $nilai   = $targetUkuran * $biayaPerCm;
@@ -106,70 +149,44 @@ class PotSikuDataMap
                 $sumCapaianPersen += $capaian;
                 $sumNilaiTarget   += $nilai;
                 $jumlahUkuranAda  += 1;
-            }
 
-            $capaianGlobal = $sumCapaianPersen; // dijumlah, bukan dirata-rata (lihat README Join)
-            $capaianGlobalPerPegawai[$idPegawaiPotSiku] = $capaianGlobal;
-
-            if ($jumlahUkuranAda === 0) {
-                $potonganPerPegawai[$idPegawaiPotSiku] = 0;
-                continue;
-            }
-
-            $nilaiSatuHariPenuh = $sumNilaiTarget / $jumlahUkuranAda;
-            $kekuranganPersen   = max(0, 100 - $capaianGlobal) / 100;
-            $potonganOrang      = $kekuranganPersen * $nilaiSatuHariPenuh;
-
-            $potonganPerPegawai[$idPegawaiPotSiku] = round($potonganOrang / 500) * 500;
-        }
-
-        /* ================================================================
-         * 2. SUSUN OUTPUT PER PEGAWAI (untuk kartu tampilan — 1 kartu =
-         *    1 pegawai, isinya semua ukuran/barang yang dia kerjakan hari
-         *    itu, plus 1 angka potongan gabungan di kartu itu).
-         * ================================================================ */
-
-        $pekerjaOutput = [];
-
-        foreach ($porPegawai as $idPegawaiPotSiku => $rows) {
-            $pps = $rows->first()->pegawaiPotSiku;
-
-            $itemsPegawai = $rows->groupBy('id_ukuran')->map(function ($rowsUkuran) use ($resolveTarget) {
-                $first        = $rowsUkuran->first();
-                $ukuranModel  = $first->ukuran;
-                $ukuranLabel  = $ukuranModel
-                    ? "{$ukuranModel->panjang}x{$ukuranModel->lebar}x{$ukuranModel->tebal}"
-                    : ($ukuranModel->nama_ukuran ?? '-');
-
-                $rateInfo     = $resolveTarget($first->id_ukuran ? (int) $first->id_ukuran : null);
-                $targetUkuran = $rateInfo ? (float) $rateInfo['target']->target : 0;
-                $hasilUkuran  = (int) $rowsUkuran->sum(fn ($r) => (int) ($r->tinggi ?? 0));
-                $capaian      = $targetUkuran > 0 ? ($hasilUkuran / $targetUkuran) * 100 : ($rateInfo ? 100.0 : null);
-
-                return [
+                $itemsPegawai[] = [
                     'ukuran'         => $ukuranLabel,
                     'jenis_kayu'     => $first->jenisKayu?->nama_kayu ?? $first->jenisKayu?->nama ?? '-',
                     'kw'             => $first->kw ?? '-',
-                    'target'         => $targetUkuran,
                     'hasil'          => $hasilUkuran,
+                    'target'         => $targetUkuran,
                     'selisih'        => $hasilUkuran - $targetUkuran,
                     'capaian_persen' => $capaian,
-                    'has_target'     => $rateInfo !== null,
+                    'has_target'     => true,
                     'no_palet_list'  => $rowsUkuran->pluck('no_palet')->filter()->implode(', ') ?: '-',
                 ];
-            })->values()->toArray();
+            }
+
+            /* ============================================================
+             * 2. CAPAIAN GLOBAL & POTONGAN
+             * ============================================================ */
+            $capaianGlobal = $sumCapaianPersen; // dijumlah, bukan dirata-rata (lihat README Join)
+
+            $potonganOrang = 0;
+            if ($jumlahUkuranAda > 0) {
+                $nilaiSatuHariPenuh = $sumNilaiTarget / $jumlahUkuranAda;
+                $kekuranganPersen   = max(0, 100 - $capaianGlobal) / 100;
+                $potonganOrang      = round(($kekuranganPersen * $nilaiSatuHariPenuh) / 500) * 500;
+            }
 
             $pekerjaOutput[] = [
                 'id_pegawai_pot_siku'   => $idPegawaiPotSiku,
                 'kode_pegawai'          => $pps?->pegawai?->kode_pegawai ?? '-',
-                'nama'                  => $namaPerPegawai[$idPegawaiPotSiku] ?? '-',
+                'nama'                  => $pps?->pegawai?->nama_pegawai ?? $pps?->pegawai?->nama ?? '-',
                 'jam_masuk'             => $pps?->masuk ? Carbon::parse($pps->masuk)->format('H:i') : '-',
                 'jam_pulang'            => $pps?->pulang ? Carbon::parse($pps->pulang)->format('H:i') : '-',
+                'jam_aktual_bersih'     => $jamAktualMenit !== null ? round($jamAktualMenit / 60, 2) : null,
                 'ijin'                  => $pps?->ijin ?? '-',
                 'keterangan'            => $pps?->ket ?? '-',
                 'total_hasil'           => (int) $rows->sum(fn ($r) => (int) ($r->tinggi ?? 0)),
-                'capaian_global_persen' => round($capaianGlobalPerPegawai[$idPegawaiPotSiku] ?? 0, 1),
-                'potongan'              => $potonganPerPegawai[$idPegawaiPotSiku] ?? 0,
+                'capaian_global_persen' => round($capaianGlobal, 1),
+                'potongan'              => $potonganOrang,
                 'items'                 => $itemsPegawai,
             ];
         }
@@ -185,5 +202,38 @@ class PotSikuDataMap
                 : null,
             'pekerja' => $pekerjaOutput,
         ];
+    }
+
+    /**
+     * Hitung menit kerja bersih = durasi (masuk -> pulang) DIKURANGI
+     * irisan waktu dengan jam istirahat pabrik (12:00-13:00).
+     *
+     * Kalau rentang kerja tidak menyentuh jam istirahat sama sekali
+     * (misal masuk 06:00 pulang 11:00, atau masuk 14:00 pulang 20:00),
+     * tidak ada potongan sama sekali. Kalau rentang kerja hanya kena
+     * sebagian jam istirahat (misal pulang 12:30), yang dipotong cuma
+     * irisannya (30 menit), bukan flat 1 jam.
+     */
+    private static function hitungMenitKerjaBersih(Carbon $masuk, Carbon $pulang): int
+    {
+        if ($pulang->lessThan($masuk)) {
+            $pulang = $pulang->copy()->addDay();
+        }
+
+        $totalMenit = $masuk->diffInMinutes($pulang);
+
+        $istirahatMulai = Carbon::parse($masuk->format('Y-m-d') . ' ' . self::ISTIRAHAT_MULAI);
+        $istirahatSelesai = Carbon::parse($masuk->format('Y-m-d') . ' ' . self::ISTIRAHAT_SELESAI);
+
+        // Irisan antara [masuk, pulang] dan [istirahatMulai, istirahatSelesai]
+        $overlapMulai   = $masuk->greaterThan($istirahatMulai) ? $masuk : $istirahatMulai;
+        $overlapSelesai = $pulang->lessThan($istirahatSelesai) ? $pulang : $istirahatSelesai;
+
+        $menitIstirahatTerpotong = 0;
+        if ($overlapSelesai->greaterThan($overlapMulai)) {
+            $menitIstirahatTerpotong = $overlapMulai->diffInMinutes($overlapSelesai);
+        }
+
+        return max(0, $totalMenit - $menitIstirahatTerpotong);
     }
 }

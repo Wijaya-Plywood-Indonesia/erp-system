@@ -35,6 +35,10 @@ class LaporanPotSiku extends Page implements HasForms
     public $tanggal = null;
     public bool $isLoading = false;
 
+    // Menandakan apakah tanggal yang ditampilkan adalah hasil fallback
+    // (bukan hari ini), supaya bisa ditampilkan info ke user di Blade.
+    public bool $isFallbackDate = false;
+
     protected function getHeaderActions(): array
     {
         return [
@@ -84,15 +88,9 @@ class LaporanPotSiku extends Page implements HasForms
 
     public function mount(): void
     {
+        // Selalu mulai dari HARI INI sebagai default.
         $this->tanggal = now()->format('Y-m-d');
-
-        $existsToday = ProduksiPotSiku::whereDate('tanggal_produksi', $this->tanggal)->exists();
-        if (!$existsToday) {
-            $lastDate = ProduksiPotSiku::latest('tanggal_produksi')->value('tanggal_produksi');
-            if ($lastDate) {
-                $this->tanggal = $lastDate instanceof Carbon ? $lastDate->format('Y-m-d') : $lastDate;
-            }
-        }
+        $this->isFallbackDate = false;
 
         $this->form->fill(['tanggal' => $this->tanggal]);
         $this->loadAllData();
@@ -131,37 +129,49 @@ class LaporanPotSiku extends Page implements HasForms
      * produksi lewat PotSikuDataMap::make() (target per ukuran dari DB,
      * capaian global per individu — lihat README Join untuk konsep
      * rumusnya, Pot Siku pakai pola yang sama tapi per-orang).
+     *
+     * CATATAN PERILAKU TANGGAL:
+     * - Tanggal yang dipakai untuk query adalah $this->tanggal apa adanya
+     *   (baik dari mount() = hari ini, maupun dari perubahan DatePicker
+     *   oleh user).
+     * - Fallback ke "tanggal terakhir yang ada data" HANYA terjadi saat
+     *   load awal (mount) jika hari ini kosong. Saat user memilih tanggal
+     *   secara manual lalu datanya kosong, TIDAK ada fallback — sistem
+     *   cukup menampilkan pesan "data tidak ditemukan", supaya user tidak
+     *   bingung tanggalnya berubah sendiri di luar kehendaknya.
      */
     public function loadAllData()
     {
         $this->isLoading = true;
 
-        $tanggal = now()->format('Y-m-d');
-        if ($this->tanggal) {
-            try {
-                if ($this->tanggal instanceof Carbon) {
-                    $tanggal = $this->tanggal->format('Y-m-d');
-                } elseif (is_string($this->tanggal)) {
-                    if (str_contains($this->tanggal, '/')) {
-                        $tanggal = Carbon::createFromFormat('d/m/Y', $this->tanggal)->format('Y-m-d');
-                    } else {
-                        $tanggal = Carbon::parse($this->tanggal)->format('Y-m-d');
-                    }
-                }
-            } catch (Exception $e) {
-                Log::error('Error parsing date in loadAllData LaporanPotSiku: ' . $e->getMessage());
-            }
-        }
+        $tanggal = $this->normalizeTanggal($this->tanggal);
 
-        $produksiList = ProduksiPotSiku::with([
-            'pegawaiPotSiku.pegawai',
-            'detailBarangDikerjakanPotSiku.jenisKayu',
-            'detailBarangDikerjakanPotSiku.ukuran',
-            'detailBarangDikerjakanPotSiku.pegawaiPotSiku.pegawai',
-            'validasiTerakhir',
-        ])
-            ->whereDate('tanggal_produksi', $tanggal)
-            ->get();
+        $produksiList = $this->queryProduksi($tanggal);
+
+        // Fallback HANYA berlaku ketika tanggal yang sedang aktif adalah
+        // hari ini dan datanya kosong (skenario load pertama kali dibuka).
+        if ($produksiList->isEmpty() && $tanggal === now()->format('Y-m-d')) {
+            $lastDate = ProduksiPotSiku::latest('tanggal_produksi')->value('tanggal_produksi');
+
+            if ($lastDate) {
+                $lastDateFormatted = $lastDate instanceof Carbon
+                    ? $lastDate->format('Y-m-d')
+                    : Carbon::parse($lastDate)->format('Y-m-d');
+
+                if ($lastDateFormatted !== $tanggal) {
+                    $tanggal = $lastDateFormatted;
+                    $this->tanggal = $tanggal;
+                    $this->isFallbackDate = true;
+
+                    // Sinkronkan tampilan DatePicker dengan tanggal fallback.
+                    $this->form->fill(['tanggal' => $this->tanggal]);
+
+                    $produksiList = $this->queryProduksi($tanggal);
+                }
+            }
+        } else {
+            $this->isFallbackDate = false;
+        }
 
         if ($produksiList->isEmpty()) {
             Notification::make()
@@ -170,11 +180,19 @@ class LaporanPotSiku extends Page implements HasForms
                 ->body('Tidak ada data Produksi Pot Siku untuk tanggal ' . Carbon::parse($tanggal)->format('d/m/Y'))
                 ->send();
         } else {
-            Notification::make()
-                ->success()
-                ->title('Data Ditemukan')
-                ->body('Ditemukan ' . $produksiList->count() . ' data produksi.')
-                ->send();
+            if ($this->isFallbackDate) {
+                Notification::make()
+                    ->info()
+                    ->title('Menampilkan Data Terakhir')
+                    ->body('Belum ada data hari ini. Menampilkan data terakhir tanggal ' . Carbon::parse($tanggal)->format('d/m/Y') . '.')
+                    ->send();
+            } else {
+                Notification::make()
+                    ->success()
+                    ->title('Data Ditemukan')
+                    ->body('Ditemukan ' . $produksiList->count() . ' data produksi.')
+                    ->send();
+            }
         }
 
         // PENTING: setiap produksi ditransform lewat PotSikuDataMap::make(),
@@ -185,5 +203,48 @@ class LaporanPotSiku extends Page implements HasForms
             ->toArray();
 
         $this->isLoading = false;
+    }
+
+    /**
+     * Normalisasi berbagai kemungkinan format input tanggal (Carbon,
+     * 'Y-m-d', atau 'd/m/Y') menjadi string 'Y-m-d' yang konsisten
+     * untuk query database.
+     */
+    protected function normalizeTanggal($tanggal): string
+    {
+        if (!$tanggal) {
+            return now()->format('Y-m-d');
+        }
+
+        try {
+            if ($tanggal instanceof Carbon) {
+                return $tanggal->format('Y-m-d');
+            }
+
+            if (is_string($tanggal)) {
+                if (str_contains($tanggal, '/')) {
+                    return Carbon::createFromFormat('d/m/Y', $tanggal)->format('Y-m-d');
+                }
+
+                return Carbon::parse($tanggal)->format('Y-m-d');
+            }
+        } catch (Exception $e) {
+            Log::error('Error parsing date in LaporanPotSiku: ' . $e->getMessage());
+        }
+
+        return now()->format('Y-m-d');
+    }
+
+    protected function queryProduksi(string $tanggal)
+    {
+        return ProduksiPotSiku::with([
+            'pegawaiPotSiku.pegawai',
+            'detailBarangDikerjakanPotSiku.jenisKayu',
+            'detailBarangDikerjakanPotSiku.ukuran',
+            'detailBarangDikerjakanPotSiku.pegawaiPotSiku.pegawai',
+            'validasiTerakhir',
+        ])
+            ->whereDate('tanggal_produksi', $tanggal)
+            ->get();
     }
 }
