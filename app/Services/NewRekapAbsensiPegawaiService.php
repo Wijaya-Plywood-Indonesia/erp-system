@@ -622,6 +622,48 @@ class NewRekapAbsensiPegawaiService
                         'jam_pulang_finger' => $simPulang,
                     ];
                 })(),
+                // NEW: sama persis dengan 'simulasi_pagi' di atas —
+                // memanggil ULANG resolveJamFingerNonMalam() apa adanya
+                // (tidak ada logic baru/duplikat di luar fungsi itu), jadi
+                // otomatis kena toleransi 15 menit TOLERANSI_SESI_TUNGGAL_MENIT
+                // untuk deteksi 1-sesi-vs-2-sesi, dedupe arah berdasarkan
+                // diff terkecil per-pasangan (Haram #6), dan fallback ke
+                // JAM_MASUK_SHIFT_PAGI_DEFAULT / JAM_PULANG_SHIFT_PAGI_DEFAULT
+                // karena parameter jam produksi di sini SENGAJA
+                // dikosongkan/null — persis alasan yang sama dengan
+                // 'simulasi_pagi' di atas (dipaksa selalu pakai default
+                // shift pagi, BUKAN jadwal produksi asli row).
+                //
+                // BEDANYA HANYA SATU: raw yang dipakai di sini adalah raw
+                // finger BESOK ($recordBesok->jam_masuk /
+                // $recordBesok->jam_pulang), bukan raw finger hari ini
+                // ($recordHariIni). Tujuannya supaya kolom "Finger Masuk
+                // (Besok)" / "Finger Pulang (Besok)" di
+                // NewRekapAbsensiExport (kolom L-M, sumbernya dari
+                // simulasi_pagi_besok) ikut kena logic dedupe 1-sesi-vs-
+                // 2-sesi yang sama seperti kolom "(Hari Ini)" (kolom J-K,
+                // sumbernya dari simulasi_pagi), alih-alih menampilkan
+                // raw finger besok mentah apa adanya.
+                //
+                // Dihitung SELALU, terlepas dari $shift row ini sebenarnya
+                // apa — sama seperti 'simulasi_pagi' & 'simulasi_malam' di
+                // atas, PURELY ADDITIVE untuk preview. TIDAK PERNAH dipakai
+                // untuk mengisi jam_masuk_finger/jam_pulang_finger yang
+                // asli (itu tetap murni ikut percabangan if/else di atas).
+                // TIDAK menyentuh Haram #1, #6, atau #7 manapun.
+                'simulasi_pagi_besok' => (function () use ($recordBesok) {
+                    [$simMasuk, $simPulang] = $this->resolveJamFingerNonMalam(
+                        $recordBesok?->jam_masuk,
+                        $recordBesok?->jam_pulang,
+                        null,
+                        null
+                    );
+
+                    return [
+                        'jam_masuk_finger' => $simMasuk,
+                        'jam_pulang_finger' => $simPulang,
+                    ];
+                })(),
             ];
 
             return $row;

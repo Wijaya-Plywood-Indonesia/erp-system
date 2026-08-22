@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
@@ -46,6 +47,14 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
 
     public function headings(): array
     {
+        // Tanggal aktual buat label kolom J-M, menggantikan teks statis
+        // "Hari Ini" / "Besok". Dihitung dari $this->tanggal (tanggal yang
+        // dipilih user di halaman), BUKAN dari now() — supaya labelnya
+        // selalu match dengan tanggal rekap yang lagi di-export, bukan
+        // tanggal export dijalankan.
+        $tanggalHariIni = Carbon::parse($this->tanggal)->format('d/m/Y');
+        $tanggalBesok = Carbon::parse($this->tanggal)->addDay()->format('d/m/Y');
+
         return [
             'Kodep',
             'Nama Pegawai',
@@ -56,6 +65,10 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
             'Divisi',
             'Ijin',
             'Keterangan',
+            "Finger Masuk ({$tanggalHariIni})",
+            "Finger Pulang ({$tanggalHariIni})",
+            "Finger Masuk ({$tanggalBesok})",
+            "Finger Pulang ({$tanggalBesok})",
         ];
     }
 
@@ -64,6 +77,20 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
      */
     public function map($row): array
     {
+        // Kolom J-M TIDAK lagi pakai raw finger mentah. Sekarang pakai hasil
+        // resolveJamFingerNonMalam() (toleransi 15 menit, dedupe arah
+        // per-pasangan) dengan jadwal SHIFT PAGI sebagai default acuan —
+        // persis logic yang sama dipakai untuk shift non-malam beneran,
+        // cuma dijalankan lagi terpisah untuk raw hari ini & raw besok.
+        // Sumbernya dari _finger_preview.simulasi_pagi (hari ini) dan
+        // _finger_preview.simulasi_pagi_besok (besok), yang dihitung di
+        // NewRekapAbsensiPegawaiService::enrichWithFinger().
+        // is_array() guard supaya aman kalau _finger_preview null (row
+        // tanpa kode_pegawai).
+        $preview = $row['_finger_preview'] ?? null;
+        $simPagiHariIni = is_array($preview) ? ($preview['simulasi_pagi'] ?? null) : null;
+        $simPagiBesok = is_array($preview) ? ($preview['simulasi_pagi_besok'] ?? null) : null;
+
         return [
             $row['kode_pegawai'] ?? '-',
             $row['nama_pegawai'] ?? '-',
@@ -74,6 +101,10 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
             $this->formatDivisi($row),
             $row['izin'] ?? '',
             $row['keterangan'] ?? '',
+            $this->convertTimeToExcel($simPagiHariIni['jam_masuk_finger'] ?? null),
+            $this->convertTimeToExcel($simPagiHariIni['jam_pulang_finger'] ?? null),
+            $this->convertTimeToExcel($simPagiBesok['jam_masuk_finger'] ?? null),
+            $this->convertTimeToExcel($simPagiBesok['jam_pulang_finger'] ?? null),
         ];
     }
 
@@ -154,7 +185,7 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
         $lastRow = $this->rekap->count() + 1;
 
         // 1. Style Header
-        $sheet->getStyle('A1:I1')->applyFromArray([
+        $sheet->getStyle('A1:M1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '333333']],
             'alignment' => [
@@ -163,13 +194,18 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
             ],
         ]);
 
-        // 2. Format Kolom Waktu
+        // 2. Format Kolom Waktu (Finger dipakai + Sistem)
         $sheet->getStyle("C2:F{$lastRow}")
             ->getNumberFormat()
             ->setFormatCode('hh:mm:ss');
 
+        // 2b. Format Kolom Waktu Finger Hari Ini / Besok (dedup pagi)
+        $sheet->getStyle("J2:M{$lastRow}")
+            ->getNumberFormat()
+            ->setFormatCode('hh:mm:ss');
+
         // 3. Grid / Border
-        $sheet->getStyle("A1:I{$lastRow}")->applyFromArray([
+        $sheet->getStyle("A1:M{$lastRow}")->applyFromArray([
             'borders' => [
                 'allBorders' => [
                     'borderStyle' => Border::BORDER_THIN,
@@ -183,6 +219,7 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
         $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("C2:F{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("H2:H{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("J2:M{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         // Wrap Text untuk kolom Divisi & Keterangan
         $sheet->getStyle("G2:G{$lastRow}")->getAlignment()->setWrapText(true);
@@ -214,6 +251,10 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
             'G' => 40,
             'H' => 10,
             'I' => 45,
+            'J' => 16,
+            'K' => 16,
+            'L' => 16,
+            'M' => 16,
         ];
     }
 }
