@@ -96,7 +96,17 @@
                                     $preview = $row['_finger_preview'] ?? null;
                                     $adaPreview = $preview && ($preview['hari_ini'] || $preview['besok']);
                                     $isMalam = strtolower($row['shift'] ?? '') === 'malam';
-                                    $isExpanded = $this->isRowExpanded($rowKey);
+                                    // GANTI: default expand SEKARANG true (row otomatis
+                                    // terbuka tanpa perlu klik), kecuali user sudah pernah
+                                    // toggle row ini secara eksplisit (baik buka maupun
+                                    // tutup) — statenya dibaca langsung dari
+                                    // $this->expandedRows (public property di komponen),
+                                    // bukan lewat isRowExpanded() lagi (yang defaultnya
+                                    // false kalau key belum ada). Tombol toggle tetap
+                                    // berfungsi normal untuk collapse manual per row.
+                                    $isExpanded = array_key_exists($rowKey, $this->expandedRows)
+                                        ? $this->expandedRows[$rowKey]
+                                        : true;
                                     // Nilai FINAL yang beneran dipakai di kolom "Jam Masuk
 // (Finger)" / "Jam Pulang (Finger)" tabel utama — hasil
                                     // enrichWithFinger() di service (baik lewat swap shift
@@ -242,114 +252,47 @@
                                 </tr>
 
                                 {{-- Expandable preview row — hanya dirender kalau ada data
-                                     finger buat dipreview & lagi di-expand. Isinya beda
-                                     tergantung shift:
-                                     - pagi/siang: cuma panel "Simulasi Pagi".
-                                     - malam: panel "Simulasi Pagi" + panel "Simulasi Malam"
-                                       (karena jam pulang finger shift malam emang datang
-                                       dari tanggal besok — lihat Haram #1 di README).
-                                     Ditambah panel "Raw Finger" yang SELALU tampil kalau
-                                     ada data — nunjukin scan mentah dari mesin finger
-                                     (belum lewat resolveJamFingerNonMalam() / dedupe /
-                                     swap shift malam apapun), buat cross-check manual.
-
-                                     NOTE (badge mapping): Untuk shift malam, kolom yang
-                                     BENERAN dipakai sebagai jam_masuk_finger/jam_pulang_finger
-                                     (Haram #1 di rekap.md) BUKAN posisi raw yang "kelihatan
-                                     natural" (jam_masuk hari ini / jam_pulang besok), tapi
-                                     KEBALIKANNYA (jam_pulang hari ini / jam_masuk besok).
-                                     Badge hijau kecil di bawah ini PURELY VISUAL — cuma
-                                     nunjuk ke admin field mana yang dipakai, TIDAK mengubah
-                                     value atau logic apapun. Tidak menyentuh enrichWithFinger()
+                                     finger buat dipreview & lagi di-expand (SEKARANG default
+                                     terbuka untuk semua row, lihat perhitungan $isExpanded
+                                     di atas). Panel "Simulasi pagi / Simulasi malam" yang
+                                     dulu ada di sini SUDAH DIHAPUS — sekarang cuma tersisa
+                                     panel "Raw finger" di bawah, yang menampilkan hasil
+                                     simulasi_pagi (hari ini) / simulasi_pagi_besok (besok)
+                                     — resolveJamFingerNonMalam(): toleransi 15 menit, dedupe
+                                     arah per-pasangan, fallback jadwal default shift pagi.
+                                     Sumbernya SAMA PERSIS dengan kolom J-M di
+                                     NewRekapAbsensiExport, supaya preview UI konsisten
+                                     dengan hasil Excel. PURELY tampilan, tidak dipakai
+                                     logic apapun, tidak menyentuh enrichWithFinger()
                                      ataupun urutan pipeline di rekap.md. --}}
                                 @if ($adaPreview && $isExpanded)
                                     @php
                                         $hi = $preview['hari_ini'] ?? null;
-                                        $hiMasukRaw = $hi['jam_masuk'] ?? null;
-                                        $hiPulangRaw = $hi['jam_pulang'] ?? null;
-                                        // NEW: raw scan tanggal besok (kalau ada) — dipakai
-                                        // buat panel "Raw Finger" di bawah. PURELY tampilan,
-                                        // sama sekali tidak menyentuh $preview['besok'] yang
-                                        // sudah ada / logic manapun di service.
+                                        // Sumber value panel "Raw finger" hari ini —
+                                        // simulasi_pagi (resolveJamFingerNonMalam()).
+                                        $simPagiHariIni = $preview['simulasi_pagi'] ?? null;
+                                        $hiMasukRaw = $simPagiHariIni['jam_masuk_finger'] ?? null;
+                                        $hiPulangRaw = $simPagiHariIni['jam_pulang_finger'] ?? null;
+
+                                        // Sumber value panel "Raw finger" besok —
+                                        // simulasi_pagi_besok (logic sama, raw diambil dari
+                                        // finger tanggal besok).
                                         $besok = $preview['besok'] ?? null;
-                                        $besokMasukRaw = $besok['jam_masuk'] ?? null;
-                                        $besokPulangRaw = $besok['jam_pulang'] ?? null;
-                                        // Simulasi HASIL HITUNGAN (bukan raw polos) seandainya row
-                                        // ini diperlakukan lewat cabang shift malam (Haram #1).
-                                        // PURELY ADDITIVE — tidak pernah dipakai isi jam_masuk_finger
-                                        // / jam_pulang_finger asli.
-                                        $sim = $preview['simulasi_malam'] ?? null;
-                                        $simMasuk = $sim['jam_masuk_finger'] ?? null;
-                                        $simPulang = $sim['jam_pulang_finger'] ?? null;
-                                        // NEW: simulasi HASIL HITUNGAN seandainya row ini
-                                        // diperlakukan lewat cabang NON-malam
-                                        // (resolveJamFingerNonMalam() — Haram #6: toleransi 15
-                                        // menit, dedupe arah per-pasangan, fallback jadwal
-                                        // default shift pagi). Menggantikan panel "Raw finger"
-                                        // yang lama — sekarang selalu menampilkan hasil SUDAH
-                                        // didedupe/disaring, bukan raw mentah lagi. PURELY
-                                        // ADDITIVE untuk preview, tidak pernah dipakai mengisi
-                                        // jam_masuk_finger / jam_pulang_finger asli.
-                                        $simPagi = $preview['simulasi_pagi'] ?? null;
-                                        $simPagiMasuk = $simPagi['jam_masuk_finger'] ?? null;
-                                        $simPagiPulang = $simPagi['jam_pulang_finger'] ?? null;
+                                        $simPagiBesok = $preview['simulasi_pagi_besok'] ?? null;
+                                        $besokMasukRaw = $simPagiBesok['jam_masuk_finger'] ?? null;
+                                        $besokPulangRaw = $simPagiBesok['jam_pulang_finger'] ?? null;
                                     @endphp
                                     <tr wire:key="row-preview-{{ $rowKey }}"
                                         class="bg-gray-50/70 dark:bg-gray-800/40">
                                         <td colspan="11" class="px-6 py-3">
                                             <div class="flex flex-col gap-3 text-sm">
 
-                                                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-6">
-                                                    <span
-                                                        class="shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">
-                                                        Simulasi pagi
-                                                    </span>
-
-                                                    <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-                                                        <div class="flex items-center gap-1.5">
-                                                            <span class="text-gray-400">Masuk</span>
-                                                            <span class="font-medium text-gray-700 dark:text-gray-300">
-                                                                {{ $simPagiMasuk ?? '-' }}
-                                                            </span>
-                                                        </div>
-                                                        <div class="flex items-center gap-1.5">
-                                                            <span class="text-gray-400">Pulang</span>
-                                                            <span class="font-medium text-gray-700 dark:text-gray-300">
-                                                                {{ $simPagiPulang ?? '-' }}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-
-                                                    @if ($preview['besok'] ?? null)
-                                                        <span
-                                                            class="hidden h-4 w-px bg-gray-200 dark:bg-gray-700 lg:block"></span>
-                                                        <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-                                                            <span
-                                                                class="shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">
-                                                                Simulasi malam
-                                                            </span>
-                                                            <div class="flex items-center gap-1.5">
-                                                                <span class="text-gray-400">Masuk</span>
-                                                                <span
-                                                                    class="font-medium text-gray-600 dark:text-gray-400">{{ $simMasuk ?? '-' }}</span>
-                                                            </div>
-                                                            <div class="flex items-center gap-1.5">
-                                                                <span class="text-gray-400">Pulang</span>
-                                                                <span
-                                                                    class="font-medium text-gray-600 dark:text-gray-400">{{ $simPulang ?? '-' }}</span>
-                                                            </div>
-                                                        </div>
-                                                    @endif
-                                                </div>
-
-                                                {{-- NEW: Panel Raw Finger — nampilin scan mentah
-                                                     dari mesin finger apa adanya (belum lewat
-                                                     dedupe/swap/toleransi manapun), dipisah per
+                                                {{-- Panel "Raw finger" — menampilkan hasil
+                                                     simulasi_pagi (hari ini) & simulasi_pagi_besok
+                                                     (besok), bukan raw db mentah. Dipisah per
                                                      tanggal (hari ini / besok) karena scan shift
-                                                     malam nyebrang tanggal (lihat Haram #1/#2).
-                                                     PURELY tampilan, tidak dipakai logic apapun. --}}
-                                                <div
-                                                    class="flex flex-col gap-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-700 lg:flex-row lg:items-center lg:gap-6">
+                                                     malam nyebrang tanggal (lihat Haram #1/#2). --}}
+                                                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-6">
                                                     <span
                                                         class="shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">
                                                         Raw finger
@@ -357,8 +300,7 @@
 
                                                     <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
                                                         <span class="text-xs text-gray-400">
-                                                            Hari
-                                                            ini{{ $hi['tanggal'] ?? null ? ' (' . \Illuminate\Support\Carbon::parse($hi['tanggal'])->format('d/m') . ')' : '' }}
+                                                            {{ $hi['tanggal'] ?? null ? \Illuminate\Support\Carbon::parse($hi['tanggal'])->format('d/m') : '-' }}
                                                         </span>
                                                         <div class="flex items-center gap-1.5">
                                                             <span class="text-gray-400">Masuk</span>
@@ -377,7 +319,7 @@
                                                             class="hidden h-4 w-px bg-gray-200 dark:bg-gray-700 lg:block"></span>
                                                         <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
                                                             <span class="text-xs text-gray-400">
-                                                                Besok{{ $besok['tanggal'] ?? null ? ' (' . \Illuminate\Support\Carbon::parse($besok['tanggal'])->format('d/m') . ')' : '' }}
+                                                                {{ $besok['tanggal'] ?? null ? \Illuminate\Support\Carbon::parse($besok['tanggal'])->format('d/m') : '-' }}
                                                             </span>
                                                             <div class="flex items-center gap-1.5">
                                                                 <span class="text-gray-400">Masuk</span>
