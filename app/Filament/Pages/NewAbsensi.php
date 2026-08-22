@@ -46,6 +46,20 @@ class NewAbsensi extends Page implements HasForms
      */
     public ?array $fingerFiles = null;
 
+    /**
+     * Baris-baris (dikunci per id_pegawai, fallback nama_pegawai kalau id
+     * kosong — sama seperti key yang dipakai gabungkanMultiSumber() di
+     * service) yang lagi dalam kondisi "expanded" di tabel Data Absensi.
+     * Dipakai buat expandable row preview finger (shift pagi & malam).
+     *
+     * Sengaja pakai Livewire property (bukan Alpine-only x-data) supaya
+     * satu toggle bisa dipakai bareng antara row utama & row detail tanpa
+     * perlu wrapping element tambahan yang gak valid di dalam <tbody>.
+     *
+     * @var array<string, bool>
+     */
+    public array $expandedRows = [];
+
     public function mount(): void
     {
         $this->tanggal = now()->format('Y-m-d');
@@ -196,5 +210,27 @@ class NewAbsensi extends Page implements HasForms
         }
 
         return app(DownloadAbsensiUploadService::class)->download($uploads);
+    }
+
+    /**
+     * Toggle expand/collapse baris preview finger (shift pagi & malam) di
+     * tabel Data Absensi. $rowKey dikirim dari blade — sama persis dengan
+     * key yang dipakai buat wire:key row itu (id_pegawai, fallback
+     * nama_pegawai kalau id kosong).
+     */
+    public function toggleRow(string $rowKey): void
+    {
+        if (! empty($this->expandedRows[$rowKey])) {
+            unset($this->expandedRows[$rowKey]);
+
+            return;
+        }
+
+        $this->expandedRows[$rowKey] = true;
+    }
+
+    public function isRowExpanded(string $rowKey): bool
+    {
+        return ! empty($this->expandedRows[$rowKey]);
     }
 }

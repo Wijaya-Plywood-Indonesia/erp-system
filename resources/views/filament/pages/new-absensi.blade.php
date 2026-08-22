@@ -68,6 +68,7 @@
                         <thead
                             class="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:bg-gray-800 dark:text-gray-300">
                             <tr>
+                                <th class="px-2 py-3 border-b border-gray-200 dark:border-gray-700 w-8"></th>
                                 <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Sumber</th>
                                 <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Kode Pegawai</th>
                                 <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Nama Pegawai</th>
@@ -86,7 +87,66 @@
                         </thead>
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                             @forelse ($this->getRekap() as $row)
-                                <tr class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                @php
+                                    // Key yang sama dengan yang dipakai groupBy() di
+                                    // gabungkanMultiSumber() service: id_pegawai, fallback
+                                    // nama_pegawai kalau id kosong. Dipakai sebagai wire:key
+                                    // & identifier expand/collapse (toggleRow).
+                                    $rowKey = (string) ($row['id_pegawai'] ?? $row['nama_pegawai']);
+                                    $preview = $row['_finger_preview'] ?? null;
+                                    $adaPreview = $preview && ($preview['hari_ini'] || $preview['besok']);
+                                    $isMalam = strtolower($row['shift'] ?? '') === 'malam';
+                                    $isExpanded = $this->isRowExpanded($rowKey);
+                                    // Nilai FINAL yang beneran dipakai di kolom "Jam Masuk
+// (Finger)" / "Jam Pulang (Finger)" tabel utama — hasil
+                                    // enrichWithFinger() di service (baik lewat swap shift
+                                    // malam / Haram #1, maupun lewat resolveJamFingerNonMalam
+                                    // untuk shift pagi/siang). Dipakai di bawah cuma buat
+                                    // MENCOCOKKAN raw preview ke nilai final ini (badge), TIDAK
+                                    // menghitung ulang apapun — jadi berlaku sama untuk semua
+                                    // shift tanpa perlu logic baru di service.
+                                    $masukFingerDipakai = $row['jam_masuk_finger'] ?? null;
+                                    $pulangFingerDipakai = $row['jam_pulang_finger'] ?? null;
+                                    // Status telat: bandingkan jam_masuk_finger FINAL (yang
+                                    // beneran dipakai, sudah lewat semua logic Haram #1/#6) ke
+                                    // jam_masuk jadwal produksi. Purely tampilan, tidak
+                                    // mempengaruhi data/perhitungan apapun di service.
+                                    $telatMenit = null;
+                                    $jamMasukProduksi = $row['jam_masuk'] ?? null;
+                                    if (
+                                        !empty($jamMasukProduksi) &&
+                                        $jamMasukProduksi !== '-' &&
+                                        !empty($masukFingerDipakai) &&
+                                        $masukFingerDipakai !== '-'
+                                    ) {
+                                        try {
+                                            $tProduksi = \Illuminate\Support\Carbon::parse($jamMasukProduksi);
+                                            $tFinger = \Illuminate\Support\Carbon::parse($masukFingerDipakai);
+                                            if ($tFinger->gt($tProduksi)) {
+                                                $telatMenit = (int) $tProduksi->diffInMinutes($tFinger);
+                                            }
+                                        } catch (\Throwable $e) {
+                                            // gagal parse, biarkan null (gak dianggap telat)
+                                        }
+                                    }
+                                @endphp
+                                <tr wire:key="row-{{ $rowKey }}"
+                                    class="transition-colors {{ $telatMenit ? 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 dark:hover:bg-amber-500/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50' }}">
+                                    <td class="px-2 py-2.5 text-center">
+                                        @if ($adaPreview)
+                                            <button type="button" wire:click="toggleRow('{{ $rowKey }}')"
+                                                title="Preview absen"
+                                                class="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
+                                                    fill="currentColor"
+                                                    class="h-4 w-4 transition-transform duration-150 {{ $isExpanded ? 'rotate-90' : '' }}">
+                                                    <path fill-rule="evenodd"
+                                                        d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+                                                        clip-rule="evenodd" />
+                                                </svg>
+                                            </button>
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-2.5">
                                         <div class="flex flex-col gap-1">
                                             @forelse ((array) $row['sumber_label'] as $sumber)
@@ -151,8 +211,17 @@
                                     <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
                                         {{ $row['jam_pulang'] ?? '-' }}
                                     </td>
-                                    <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
-                                        {{ $row['jam_masuk_finger'] ?? '-' }}
+                                    <td
+                                        class="px-4 py-2.5 {{ $telatMenit ? 'text-amber-700 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400' }}">
+                                        <span
+                                            class="{{ $telatMenit ? 'font-medium' : '' }}">{{ $row['jam_masuk_finger'] ?? '-' }}</span>
+                                        @if ($telatMenit)
+                                            <span
+                                                class="ml-1 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400"
+                                                title="Telat {{ $telatMenit }} menit dari jadwal">
+                                                +{{ $telatMenit }}m
+                                            </span>
+                                        @endif
                                     </td>
                                     <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
                                         {{ $row['jam_pulang_finger'] ?? '-' }}
@@ -171,9 +240,167 @@
                                         {{ $row['keterangan'] ?? '-' }}
                                     </td>
                                 </tr>
+
+                                {{-- Expandable preview row — hanya dirender kalau ada data
+                                     finger buat dipreview & lagi di-expand. Isinya beda
+                                     tergantung shift:
+                                     - pagi/siang: cuma panel "Simulasi Pagi".
+                                     - malam: panel "Simulasi Pagi" + panel "Simulasi Malam"
+                                       (karena jam pulang finger shift malam emang datang
+                                       dari tanggal besok — lihat Haram #1 di README).
+                                     Ditambah panel "Raw Finger" yang SELALU tampil kalau
+                                     ada data — nunjukin scan mentah dari mesin finger
+                                     (belum lewat resolveJamFingerNonMalam() / dedupe /
+                                     swap shift malam apapun), buat cross-check manual.
+
+                                     NOTE (badge mapping): Untuk shift malam, kolom yang
+                                     BENERAN dipakai sebagai jam_masuk_finger/jam_pulang_finger
+                                     (Haram #1 di rekap.md) BUKAN posisi raw yang "kelihatan
+                                     natural" (jam_masuk hari ini / jam_pulang besok), tapi
+                                     KEBALIKANNYA (jam_pulang hari ini / jam_masuk besok).
+                                     Badge hijau kecil di bawah ini PURELY VISUAL — cuma
+                                     nunjuk ke admin field mana yang dipakai, TIDAK mengubah
+                                     value atau logic apapun. Tidak menyentuh enrichWithFinger()
+                                     ataupun urutan pipeline di rekap.md. --}}
+                                @if ($adaPreview && $isExpanded)
+                                    @php
+                                        $hi = $preview['hari_ini'] ?? null;
+                                        $hiMasukRaw = $hi['jam_masuk'] ?? null;
+                                        $hiPulangRaw = $hi['jam_pulang'] ?? null;
+                                        // NEW: raw scan tanggal besok (kalau ada) — dipakai
+                                        // buat panel "Raw Finger" di bawah. PURELY tampilan,
+                                        // sama sekali tidak menyentuh $preview['besok'] yang
+                                        // sudah ada / logic manapun di service.
+                                        $besok = $preview['besok'] ?? null;
+                                        $besokMasukRaw = $besok['jam_masuk'] ?? null;
+                                        $besokPulangRaw = $besok['jam_pulang'] ?? null;
+                                        // Simulasi HASIL HITUNGAN (bukan raw polos) seandainya row
+                                        // ini diperlakukan lewat cabang shift malam (Haram #1).
+                                        // PURELY ADDITIVE — tidak pernah dipakai isi jam_masuk_finger
+                                        // / jam_pulang_finger asli.
+                                        $sim = $preview['simulasi_malam'] ?? null;
+                                        $simMasuk = $sim['jam_masuk_finger'] ?? null;
+                                        $simPulang = $sim['jam_pulang_finger'] ?? null;
+                                        // NEW: simulasi HASIL HITUNGAN seandainya row ini
+                                        // diperlakukan lewat cabang NON-malam
+                                        // (resolveJamFingerNonMalam() — Haram #6: toleransi 15
+                                        // menit, dedupe arah per-pasangan, fallback jadwal
+                                        // default shift pagi). Menggantikan panel "Raw finger"
+                                        // yang lama — sekarang selalu menampilkan hasil SUDAH
+                                        // didedupe/disaring, bukan raw mentah lagi. PURELY
+                                        // ADDITIVE untuk preview, tidak pernah dipakai mengisi
+                                        // jam_masuk_finger / jam_pulang_finger asli.
+                                        $simPagi = $preview['simulasi_pagi'] ?? null;
+                                        $simPagiMasuk = $simPagi['jam_masuk_finger'] ?? null;
+                                        $simPagiPulang = $simPagi['jam_pulang_finger'] ?? null;
+                                    @endphp
+                                    <tr wire:key="row-preview-{{ $rowKey }}"
+                                        class="bg-gray-50/70 dark:bg-gray-800/40">
+                                        <td colspan="11" class="px-6 py-3">
+                                            <div class="flex flex-col gap-3 text-sm">
+
+                                                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-6">
+                                                    <span
+                                                        class="shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">
+                                                        Simulasi pagi
+                                                    </span>
+
+                                                    <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+                                                        <div class="flex items-center gap-1.5">
+                                                            <span class="text-gray-400">Masuk</span>
+                                                            <span class="font-medium text-gray-700 dark:text-gray-300">
+                                                                {{ $simPagiMasuk ?? '-' }}
+                                                            </span>
+                                                        </div>
+                                                        <div class="flex items-center gap-1.5">
+                                                            <span class="text-gray-400">Pulang</span>
+                                                            <span class="font-medium text-gray-700 dark:text-gray-300">
+                                                                {{ $simPagiPulang ?? '-' }}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    @if ($preview['besok'] ?? null)
+                                                        <span
+                                                            class="hidden h-4 w-px bg-gray-200 dark:bg-gray-700 lg:block"></span>
+                                                        <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+                                                            <span
+                                                                class="shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">
+                                                                Simulasi malam
+                                                            </span>
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="text-gray-400">Masuk</span>
+                                                                <span
+                                                                    class="font-medium text-gray-600 dark:text-gray-400">{{ $simMasuk ?? '-' }}</span>
+                                                            </div>
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="text-gray-400">Pulang</span>
+                                                                <span
+                                                                    class="font-medium text-gray-600 dark:text-gray-400">{{ $simPulang ?? '-' }}</span>
+                                                            </div>
+                                                        </div>
+                                                    @endif
+                                                </div>
+
+                                                {{-- NEW: Panel Raw Finger — nampilin scan mentah
+                                                     dari mesin finger apa adanya (belum lewat
+                                                     dedupe/swap/toleransi manapun), dipisah per
+                                                     tanggal (hari ini / besok) karena scan shift
+                                                     malam nyebrang tanggal (lihat Haram #1/#2).
+                                                     PURELY tampilan, tidak dipakai logic apapun. --}}
+                                                <div
+                                                    class="flex flex-col gap-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-700 lg:flex-row lg:items-center lg:gap-6">
+                                                    <span
+                                                        class="shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">
+                                                        Raw finger
+                                                    </span>
+
+                                                    <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+                                                        <span class="text-xs text-gray-400">
+                                                            Hari
+                                                            ini{{ $hi['tanggal'] ?? null ? ' (' . \Illuminate\Support\Carbon::parse($hi['tanggal'])->format('d/m') . ')' : '' }}
+                                                        </span>
+                                                        <div class="flex items-center gap-1.5">
+                                                            <span class="text-gray-400">Masuk</span>
+                                                            <span
+                                                                class="font-mono text-gray-600 dark:text-gray-400">{{ $hiMasukRaw ?? '-' }}</span>
+                                                        </div>
+                                                        <div class="flex items-center gap-1.5">
+                                                            <span class="text-gray-400">Pulang</span>
+                                                            <span
+                                                                class="font-mono text-gray-600 dark:text-gray-400">{{ $hiPulangRaw ?? '-' }}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    @if ($besok)
+                                                        <span
+                                                            class="hidden h-4 w-px bg-gray-200 dark:bg-gray-700 lg:block"></span>
+                                                        <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+                                                            <span class="text-xs text-gray-400">
+                                                                Besok{{ $besok['tanggal'] ?? null ? ' (' . \Illuminate\Support\Carbon::parse($besok['tanggal'])->format('d/m') . ')' : '' }}
+                                                            </span>
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="text-gray-400">Masuk</span>
+                                                                <span
+                                                                    class="font-mono text-gray-600 dark:text-gray-400">{{ $besokMasukRaw ?? '-' }}</span>
+                                                            </div>
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="text-gray-400">Pulang</span>
+                                                                <span
+                                                                    class="font-mono text-gray-600 dark:text-gray-400">{{ $besokPulangRaw ?? '-' }}</span>
+                                                            </div>
+                                                        </div>
+                                                    @endif
+                                                </div>
+
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endif
                             @empty
                                 <tr>
-                                    <td colspan="10" class="px-4 py-10 text-center text-gray-400 dark:text-gray-500">
+                                    <td colspan="11"
+                                        class="px-4 py-10 text-center text-gray-400 dark:text-gray-500">
                                         <div class="flex flex-col items-center gap-2">
                                             <x-heroicon-o-inbox class="h-8 w-8 text-gray-300 dark:text-gray-600" />
                                             <span>Tidak ada data absensi pada tanggal ini.</span>
@@ -206,7 +433,8 @@
                                     </th>
                                     <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Nama Pegawai
                                     </th>
-                                    <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Jam Masuk</th>
+                                    <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Jam Masuk
+                                    </th>
                                     <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Jam Pulang
                                     </th>
                                 </tr>

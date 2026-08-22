@@ -1,24 +1,56 @@
 <?php
+
 namespace App\Services;
+
 use App\Models\NewDataFinger;
 use App\Models\Pegawai;
 use App\Services\AbsensiSources\AbsensiSourceInterface;
 use Filament\Facades\Filament;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+
 class NewRekapAbsensiPegawaiService
 {
     /**
-     * Jadwal standar shift pagi, dipakai sebagai FALLBACK acuan di
+     * Jadwal standar shift PAGI, dipakai sebagai FALLBACK acuan di
      * resolveJamFingerNonMalam() kalau jam_masuk/jam_pulang produksi
      * kosong (row hasil lengkapiSemuaPegawai(), atau source yang gak
      * ngasih jam kerja). Supaya grouping raw finger tetap bisa nebak
      * "lebih deket ke masuk atau pulang" walau gak ada data produksi
      * sama sekali, bukan cuma nyerah balik ke perilaku lama.
+     *
+     * NEW: diubah dari 08:00-16:00 -> 06:00-16:00 supaya simulasi pagi &
+     * simulasi malam SALING MIRROR (pagi 06:00-16:00, malam 16:00-06:00),
+     * jadi panel "Simulasi pagi" / "Simulasi malam" di UI beneran
+     * merepresentasikan simulasi jadwal yang berlawanan, bukan cuma jam
+     * kerja kantor generik. TIDAK mengubah logic/algoritma
+     * resolveJamFingerNonMalam() sama sekali — cuma nilai konstanta.
      */
-    protected const JAM_MASUK_SHIFT_PAGI_DEFAULT = '08:00:00';
-    protected const JAM_PULANG_SHIFT_PAGI_DEFAULT = '16:00:00';
+    protected const JAM_MASUK_SHIFT_PAGI_DEFAULT = '06:00:00';
+
+    protected const JAM_PULANG_SHIFT_PAGI_DEFAULT = '20:00:00';
+
+    /**
+     * NEW: Jadwal standar shift MALAM, dipakai sebagai FALLBACK acuan di
+     * validasiJamMasukFingerMalam() kalau jam_masuk produksi kosong (row
+     * hasil lengkapiSemuaPegawai(), atau source yang gak ngasih jam
+     * kerja). Sebelumnya kalau jam_masuk produksi kosong,
+     * validasiJamMasukFingerMalam() langsung "nyerah" (kandidat
+     * dikembalikan apa adanya tanpa validasi apapun). Sekarang, supaya
+     * panel "Simulasi malam" di preview BENERAN simulasi (bukan raw tanpa
+     * saringan), dipakai jadwal default ini sebagai acuan pengganti —
+     * pola sama persis dengan JAM_MASUK_SHIFT_PAGI_DEFAULT di atas.
+     *
+     * PENTING: ini TIDAK mengubah SUMBER field yang divalidasi (Haram #1
+     * tetap utuh — kandidatnya tetap recordHariIni?->jam_pulang). Ini
+     * cuma acuan pengganti kalau acuan asli (jam_masuk produksi) kosong.
+     */
+    protected const JAM_MASUK_SHIFT_MALAM_DEFAULT = '16:00:00';
+
+    protected const JAM_PULANG_SHIFT_MALAM_DEFAULT = '06:00:00';
+
     protected const TOLERANSI_SESI_TUNGGAL_MENIT = 15;
+
     /**
      * Batas total durasi kerja gabungan (SEMUA lini produksi milik satu
      * pegawai di tanggal yang sama) dalam menit. Kalau totalnya di bawah
@@ -36,12 +68,73 @@ class NewRekapAbsensiPegawaiService
      * TETAP tampil fingernya (total 120 menit, bukan 0).
      */
     protected const BATAS_TOTAL_DURASI_MENIT = 60;
+
+    /**
+     * NEW: Batas berapa menit kandidat jam_masuk_finger shift malam
+     * (Haram #1: recordHariIni?->jam_pulang) BOLEH lebih CEPAT/awal
+     * dibanding jadwal jam_masuk produksi, sebelum dianggap tidak valid.
+     *
+     * REVISI TOTAL dari pendekatan lama (validasi jarak absolut 1 arah
+     * dengan threshold 7 jam lalu 15 jam) — pendekatan itu dibuang karena
+     * threshold tunggal ke SATU acuan gampang salah di dua arah sekaligus:
+     * kependekan bisa nge-hide checkout valid yang kebetulan jauh dari
+     * jadwal masuk, kepanjangan bisa meloloskan scan yang jelas-jelas
+     * jauh lebih dekat ke jadwal PULANG (lihat kasus Bayu Dewantoro:
+     * jadwal masuk 17:00, kandidat 06:03 — 11 jam LEBIH CEPAT dari jadwal
+     * masuk, ikut lolos di threshold 15 jam padahal itu jelas sisa scan
+     * checkout shift kemarin).
+     *
+     * ATURAN BARU (lebih sederhana & terarah): kandidat HANYA digugurkan
+     * kalau dia LEBIH CEPAT dari jadwal masuk lebih dari
+     * TOLERANSI_MASUK_LEBIH_CEPAT_MALAM_MENIT. Kalau kandidat SAMA DENGAN
+     * atau LEBIH TELAT dari jadwal masuk (berapa pun telatnya), TETAP
+     * lolos apa adanya — TIDAK ada batas atas untuk keterlambatan, cuma
+     * batas untuk "terlalu cepat/pagi".
+     *
+     * Kenapa cukup 1 arah (cuma soal "kecepetan") dan bukan 2 arah lagi:
+     * kalau kandidat sama sekali bukan scan masuk (misal sisa scan
+     * checkout shift kemarin), nilainya SELALU lebih kecil/lebih pagi
+     * dari jadwal masuk shift malam yang biasanya sore/malam hari (mis.
+     * 17:00, 22:00) — jadi cukup dicek "seberapa jauh dia di BELAKANG
+     * jadwal masuk", tidak perlu bandingkan ke jadwal pulang segala.
+     *
+     * Dipakai untuk sisi MASUK (jam_masuk_finger). Sisi PULANG
+     * (jam_pulang_finger, dari recordBesok?->jam_masuk) divalidasi
+     * SIMETRIS lewat validasiJamPulangFingerMalam() & konstanta
+     * TOLERANSI_PULANG_LEBIH_LAMBAT_MALAM_MENIT di bawah — keduanya
+     * SAMA-SAMA divalidasi, tidak ada sisi yang dibiarkan mentah tanpa
+     * saringan.
+     */
+    protected const TOLERANSI_MASUK_LEBIH_CEPAT_MALAM_MENIT = 300; // 5 jam
+
+    /**
+     * NEW: Batas berapa menit kandidat jam_pulang_finger shift malam
+     * (Haram #1: recordBesok?->jam_masuk) BOLEH lebih TELAT/lambat
+     * dibanding jadwal jam_pulang produksi, sebelum dianggap tidak valid.
+     *
+     * Simetris dengan TOLERANSI_MASUK_LEBIH_CEPAT_MALAM_MENIT di atas,
+     * tapi arahnya kebalik: kandidat pulang = scan PERTAMA di tanggal
+     * besok. Kalau scan itu jauh lebih TELAT dari jadwal pulang shift
+     * malam, kemungkinan besar itu BUKAN scan checkout shift malam hari
+     * ini — melainkan scan check-in shift BERIKUTNYA (mis. shift malam
+     * berikutnya, atau shift lain) yang kebetulan jadi scan pertama di
+     * hari itu. Kandidat yang SAMA atau LEBIH CEPAT dari jadwal pulang
+     * (checkout lebih awal, berapa pun cepatnya) TETAP lolos apa adanya —
+     * tidak ada batas bawah untuk checkout yang lebih cepat.
+     *
+     * Dipisah dari konstanta masuk (walau nilainya sama, 5 jam) supaya
+     * bisa diubah independen kalau nanti ternyata butuh angka beda.
+     */
+    protected const TOLERANSI_PULANG_LEBIH_LAMBAT_MALAM_MENIT = 300; // 5 jam
+
     /** @var AbsensiSourceInterface[] */
     protected array $sources;
+
     public function __construct(array $sources)
     {
         $this->sources = $sources;
     }
+
     public function getRekap(string $tanggal): Collection
     {
         // ⚠️ Urutan pipeline ini HARAM diacak (lihat README — Haram #4):
@@ -60,8 +153,10 @@ class NewRekapAbsensiPegawaiService
         $rekap = $this->gabungkanMultiSumber($rekap);
         $rekap = $this->lengkapiSemuaPegawai($rekap);
         $rekap = $this->enrichWithFinger($rekap, $tanggal);
+
         return $this->urutkanByGrupKode($rekap);
     }
+
     /**
      * Normalisasi field jam_masuk & jam_pulang jadi format H:i:s saja,
      * apapun format aslinya dari source (bisa H:i:s murni atau
@@ -81,9 +176,11 @@ class NewRekapAbsensiPegawaiService
                     }
                 }
             }
+
             return $row;
         });
     }
+
     /**
      * Tentukan shift ('malam' / 'pagi' / null) HANYA berdasarkan
      * perbandingan jam_pulang vs jam_masuk PRODUKSI — bukan lagi dari
@@ -116,8 +213,141 @@ class NewRekapAbsensiPegawaiService
         } catch (\Throwable $e) {
             return null;
         }
+
         return $pulang < $masuk ? 'malam' : 'pagi';
     }
+
+    /**
+     * NEW: Validasi khusus SISI MASUK shift malam. Menggantikan seluruh
+     * pendekatan validasi jarak absolut yang lama (7 jam lalu 15 jam,
+     * dua arah masuk & pulang) — lihat catatan panjang di
+     * TOLERANSI_MASUK_LEBIH_CEPAT_MALAM_MENIT di atas untuk alasannya.
+     *
+     * $kandidatMasukFinger = recordHariIni?->jam_pulang (SUMBER-nya TETAP
+     * sama persis dengan Haram #1 — fungsi ini TIDAK mengganti sumber
+     * field, cuma menentukan apakah nilainya layak dipakai atau tidak).
+     *
+     * Logic: hitung selisih $jamMasukProduksi (acuan) dikurangi
+     * $kandidatMasukFinger. Kalau kandidat LEBIH CEPAT dari acuan (nilai
+     * positif) dan selisihnya > TOLERANSI_MASUK_LEBIH_CEPAT_MALAM_MENIT,
+     * berarti kandidat ini kemungkinan besar sisa scan checkout shift
+     * SEBELUMNYA yang nyangkut, bukan scan masuk beneran → null (jadi
+     * '-'). Kalau kandidat SAMA atau LEBIH TELAT dari acuan (selisih <=
+     * 0), TETAP lolos apa adanya — tidak ada batas atas untuk telat.
+     *
+     * Kalau jam_masuk produksi kosong/'-' (row hasil
+     * lengkapiSemuaPegawai(), atau source yang gak ngasih jam kerja),
+     * dipakai JAM_MASUK_SHIFT_MALAM_DEFAULT (16:00) sebagai acuan
+     * pengganti — pola sama seperti fallback JAM_MASUK_SHIFT_PAGI_DEFAULT
+     * di resolveJamFingerNonMalam().
+     *
+     * Perhitungan selisih TIDAK sirkular (tidak dibungkus ke rentang 24
+     * jam) — kandidat & acuan sama-sama waktu di tanggal kalender yang
+     * sama, jadi pengurangan langsung sudah benar tanpa perlu pembulatan
+     * lintas tengah malam.
+     *
+     * ⚠️ FIX (whitebox review): sebelumnya selisih dihitung pakai
+     * `$tAcuan->diffInMinutes($tKandidat, false) * -1`. Parameter kedua
+     * `false` di Carbon memang bikin hasilnya signed, TAPI arah tanda
+     * plus/minus-nya bergantung pada konvensi internal Carbon yang gak
+     * selalu terdokumentasi jelas dan bisa beda perilaku antar versi —
+     * persis kelas bug yang bisa bikin arah filter kebalik tanpa error
+     * apapun, cuma datanya salah diam-diam. Sekarang dihitung manual
+     * lewat selisih Unix timestamp (getTimestamp()), yang gak ambigu dan
+     * gampang diaudit siapa pun yang baca kodenya nanti (lihat
+     * README — Haram #7).
+     */
+    protected function validasiJamMasukFingerMalam(?string $kandidatMasukFinger, ?string $jamMasukProduksi): ?string
+    {
+        if (empty($kandidatMasukFinger) || $kandidatMasukFinger === '-') {
+            return $kandidatMasukFinger;
+        }
+
+        $acuanJamMasuk = (! empty($jamMasukProduksi) && $jamMasukProduksi !== '-')
+            ? $jamMasukProduksi
+            : self::JAM_MASUK_SHIFT_MALAM_DEFAULT;
+
+        try {
+            $tAcuan = Carbon::parse($acuanJamMasuk);
+            $tKandidat = Carbon::parse($kandidatMasukFinger);
+        } catch (\Throwable $e) {
+            // Gagal parse -> gak bisa divalidasi, pasang apa adanya
+            // (fail-safe ke perilaku lama, konsisten dengan try-catch
+            // di seluruh service ini).
+            return $kandidatMasukFinger;
+        }
+
+        // Positif = kandidat lebih CEPAT/awal dari acuan (dalam menit).
+        // Negatif atau 0 = kandidat sama/lebih TELAT dari acuan.
+        // Dihitung manual lewat Unix timestamp — TIDAK pakai
+        // diffInMinutes(..., false) (lihat Haram #7 di README).
+        $menitLebihCepat = ($tAcuan->getTimestamp() - $tKandidat->getTimestamp()) / 60;
+
+        return $menitLebihCepat > self::TOLERANSI_MASUK_LEBIH_CEPAT_MALAM_MENIT
+            ? null
+            : $kandidatMasukFinger;
+    }
+
+    /**
+     * NEW: Validasi khusus SISI PULANG shift malam. Simetris dengan
+     * validasiJamMasukFingerMalam() di atas, tapi arahnya kebalik.
+     *
+     * $kandidatPulangFinger = recordBesok?->jam_masuk (SUMBER-nya TETAP
+     * sama persis dengan Haram #1 — fungsi ini TIDAK mengganti sumber
+     * field, cuma menentukan apakah nilainya layak dipakai atau tidak).
+     *
+     * Logic: hitung selisih $kandidatPulangFinger dikurangi
+     * $jamPulangProduksi (acuan). Kalau kandidat LEBIH TELAT dari acuan
+     * (nilai positif) dan selisihnya >
+     * TOLERANSI_PULANG_LEBIH_LAMBAT_MALAM_MENIT, kandidat ini kemungkinan
+     * besar scan check-in shift BERIKUTNYA yang nyangkut jadi scan
+     * pertama besok, bukan scan checkout shift malam hari ini → null
+     * (jadi '-'). Kalau kandidat SAMA atau LEBIH CEPAT dari acuan
+     * (selisih <= 0), TETAP lolos apa adanya — tidak ada batas bawah
+     * untuk checkout yang lebih awal.
+     *
+     * Kalau jam_pulang produksi kosong/'-' (row hasil
+     * lengkapiSemuaPegawai(), atau source yang gak ngasih jam kerja),
+     * dipakai JAM_PULANG_SHIFT_MALAM_DEFAULT (06:00) sebagai acuan
+     * pengganti — pola sama seperti fallback di
+     * validasiJamMasukFingerMalam().
+     *
+     * ⚠️ FIX (whitebox review): sama seperti validasiJamMasukFingerMalam(),
+     * selisih SEKARANG dihitung manual lewat getTimestamp(), BUKAN
+     * `diffInMinutes(..., false) * -1` — lihat penjelasan lengkap di
+     * validasiJamMasukFingerMalam() dan README Haram #7.
+     */
+    protected function validasiJamPulangFingerMalam(?string $kandidatPulangFinger, ?string $jamPulangProduksi): ?string
+    {
+        if (empty($kandidatPulangFinger) || $kandidatPulangFinger === '-') {
+            return $kandidatPulangFinger;
+        }
+
+        $acuanJamPulang = (! empty($jamPulangProduksi) && $jamPulangProduksi !== '-')
+            ? $jamPulangProduksi
+            : self::JAM_PULANG_SHIFT_MALAM_DEFAULT;
+
+        try {
+            $tAcuan = Carbon::parse($acuanJamPulang);
+            $tKandidat = Carbon::parse($kandidatPulangFinger);
+        } catch (\Throwable $e) {
+            // Gagal parse -> gak bisa divalidasi, pasang apa adanya
+            // (fail-safe ke perilaku lama, konsisten dengan try-catch
+            // di seluruh service ini).
+            return $kandidatPulangFinger;
+        }
+
+        // Positif = kandidat lebih TELAT/lambat dari acuan (dalam menit).
+        // Negatif atau 0 = kandidat sama/lebih CEPAT dari acuan.
+        // Dihitung manual lewat Unix timestamp — TIDAK pakai
+        // diffInMinutes(..., false) (lihat Haram #7 di README).
+        $menitLebihLambat = ($tKandidat->getTimestamp() - $tAcuan->getTimestamp()) / 60;
+
+        return $menitLebihLambat > self::TOLERANSI_PULANG_LEBIH_LAMBAT_MALAM_MENIT
+            ? null
+            : $kandidatPulangFinger;
+    }
+
     /**
      * Pastikan SEMUA pegawai dari tabel `pegawais` muncul di rekap, bukan
      * cuma yang kebetulan ke-fetch dari source hari itu. Pegawai yang tidak
@@ -159,8 +389,10 @@ class NewRekapAbsensiPegawaiService
             'jam_pulang' => null,
             'sumber_label' => [],
         ]);
+
         return $rekap->concat($rowKosong)->values();
     }
+
     protected function enrichWithFinger(Collection $rekap, string $tanggal): Collection
     {
         if ($rekap->isEmpty()) {
@@ -185,13 +417,19 @@ class NewRekapAbsensiPegawaiService
             ->whereIn('kode_pegawai', $kodePegawaiList)
             ->get()
             ->keyBy('kode_pegawai');
+
         return $rekap->map(function ($row) use ($kodeByIdPegawai, $fingerHariIni, $fingerBesok) {
             $kode = $kodeByIdPegawai->get($row['id_pegawai']);
             $row['kode_pegawai'] = $kode;
             if (! $kode) {
                 $row['jam_masuk_finger'] = null;
                 $row['jam_pulang_finger'] = null;
+                // NEW: preview kosong buat row yang gak punya kode pegawai
+                // sama sekali, supaya key ini selalu konsisten ada di tiap
+                // row (blade tinggal cek null-nya, gak perlu isset()).
+                $row['_finger_preview'] = null;
                 unset($row['_total_durasi_menit']);
+
                 return $row;
             }
             // Total durasi kerja gabungan SEMUA lini produksi milik pegawai
@@ -208,9 +446,23 @@ class NewRekapAbsensiPegawaiService
             if ($totalDurasi !== null && $totalDurasi < self::BATAS_TOTAL_DURASI_MENIT) {
                 $row['jam_masuk_finger'] = null;
                 $row['jam_pulang_finger'] = null;
+                // NEW: kalau finger di-suppress karena durasi kurang dari
+                // batas, preview juga gak usah nampilin apa-apa (biar
+                // tombol expand di blade otomatis gak muncul untuk row ini).
+                $row['_finger_preview'] = null;
+
                 return $row;
             }
             $recordHariIni = $fingerHariIni->get($kode);
+            // NEW: $recordBesok DIPINDAH ke atas (sebelumnya cuma di-fetch
+            // di dalam blok `if ($shift === 'malam')`). Ini TIDAK mengubah
+            // hasil jam_masuk_finger/jam_pulang_finger sama sekali — untuk
+            // row non-malam nilainya tetap tidak dipakai untuk field itu
+            // (Haram #1 utuh). Satu-satunya alasan dipindah: dipakai buat
+            // isi _finger_preview di bawah, tanpa nambah query baru (cuma
+            // lookup ke collection $fingerBesok yang memang sudah di-fetch
+            // unconditional sesuai Haram #2).
+            $recordBesok = $fingerBesok->get($kode);
             // ⚠️ Shift SEKARANG ditentukan dari perbandingan jam produksi
             // (jam_pulang < jam_masuk => malam), BUKAN dari field 'shift'
             // mentah yang dikirim source. Lihat tentukanShiftDariJam().
@@ -228,9 +480,35 @@ class NewRekapAbsensiPegawaiService
                 // kerja) tercatat sebagai jam_masuk device di tanggal H+1
                 // (scan pertama hari itu). JANGAN disederhanakan jadi
                 // jam_masuk -> jam_masuk_finger.
-                $row['jam_masuk_finger'] = $recordHariIni?->jam_pulang;
-                $recordBesok = $fingerBesok->get($kode);
-                $row['jam_pulang_finger'] = $recordBesok?->jam_masuk;
+                //
+                // Hasil swap Haram #1 untuk SISI MASUK
+                // (recordHariIni?->jam_pulang) divalidasi dulu lewat
+                // validasiJamMasukFingerMalam() sebelum dipasang — kalau
+                // kandidat itu LEBIH CEPAT dari jadwal jam_masuk produksi
+                // dengan selisih > TOLERANSI_MASUK_LEBIH_CEPAT_MALAM_MENIT
+                // (5 jam), dianggap sisa scan pulang shift malam
+                // SEBELUMNYA yang nyangkut, bukan scan masuk beneran, jadi
+                // di-null-kan jadi '-'. SUMBER field-nya
+                // (recordHariIni?->jam_pulang) TETAP 100% sama dengan
+                // Haram #1 — ini cuma filter tambahan setelahnya.
+                //
+                // Sisi PULANG (recordBesok?->jam_masuk) SAMA-SAMA
+                // divalidasi lewat validasiJamPulangFingerMalam() — kalau
+                // kandidat itu LEBIH TELAT dari jadwal jam_pulang produksi
+                // dengan selisih > TOLERANSI_PULANG_LEBIH_LAMBAT_MALAM_MENIT
+                // (5 jam), dianggap scan check-in shift BERIKUTNYA yang
+                // nyangkut, bukan scan checkout beneran, jadi di-null-kan
+                // jadi '-'. SUMBER field-nya (recordBesok?->jam_masuk)
+                // TETAP 100% sama dengan Haram #1 — ini cuma filter
+                // tambahan setelahnya, simetris dengan sisi masuk di atas.
+                $row['jam_masuk_finger'] = $this->validasiJamMasukFingerMalam(
+                    $recordHariIni?->jam_pulang,
+                    $row['jam_masuk'] ?? null
+                );
+                $row['jam_pulang_finger'] = $this->validasiJamPulangFingerMalam(
+                    $recordBesok?->jam_masuk,
+                    $row['jam_pulang'] ?? null
+                );
             } else {
                 [$row['jam_masuk_finger'], $row['jam_pulang_finger']] = $this->resolveJamFingerNonMalam(
                     $recordHariIni?->jam_masuk,
@@ -239,9 +517,117 @@ class NewRekapAbsensiPegawaiService
                     $row['jam_pulang'] ?? null
                 );
             }
+            // NEW: preview data mentah finger untuk expandable row di UI —
+            // supaya user bisa lihat raw scan yang jadi dasar
+            // jam_masuk_finger / jam_pulang_finger tanpa perlu buka data
+            // finger terpisah. Field ini PURELY ADDITIVE — tidak dibaca
+            // oleh logic manapun di service ini, cuma dikonsumsi blade.
+            //
+            // UPDATE: 'besok' SEKARANG diisi kapanpun $recordBesok ada,
+            // TIDAK lagi digantung ke ($shift === 'malam'). Ini murni
+            // preview/simulasi tambahan supaya admin tetap bisa cross-
+            // check raw finger besok walau row-nya kedeteksi non-malam
+            // (mis. shift salah kedeteksi, atau memang cuma mau
+            // memastikan gak ada scan nyangkut). TIDAK mempengaruhi
+            // jam_masuk_finger/jam_pulang_finger yang beneran dipakai —
+            // itu tetap 100% ikut Haram #1 (cuma di-assign utk shift
+            // malam di atas).
+            $row['_finger_preview'] = [
+                'hari_ini' => $recordHariIni ? [
+                    'tanggal' => $recordHariIni->tanggal,
+                    'jam_masuk' => $recordHariIni->jam_masuk,
+                    'jam_pulang' => $recordHariIni->jam_pulang,
+                ] : null,
+                'besok' => $recordBesok ? [
+                    'tanggal' => $recordBesok->tanggal,
+                    'jam_masuk' => $recordBesok->jam_masuk,
+                    'jam_pulang' => $recordBesok->jam_pulang,
+                ] : null,
+                // NEW: simulasi HASIL HITUNGAN (bukan cuma raw) seandainya
+                // row ini diperlakukan lewat cabang shift malam (Haram
+                // #1): jam_masuk_finger diambil dari jam_pulang hari ini,
+                // jam_pulang_finger diambil dari jam_masuk besok. Dihitung
+                // SELALU, terlepas dari $shift row ini sebenarnya apa —
+                // supaya admin bisa cross-check "seandainya ini malam,
+                // hasilnya bakal begini". PURELY ADDITIVE untuk preview,
+                // TIDAK PERNAH dipakai untuk mengisi jam_masuk_finger /
+                // jam_pulang_finger yang asli (itu tetap murni ikut Haram
+                // #1 di percabangan if/else di atas).
+                //
+                // NEW: preview simulasi_malam SEKARANG memvalidasi sisi
+                // MASUK-nya juga lewat validasiJamMasukFingerMalam(),
+                // TAPI acuannya SELALU JAM_MASUK_SHIFT_MALAM_DEFAULT
+                // (16:00) tetap, BUKAN jadwal produksi asli row ini. Row
+                // non-malam (mis. shift pagi) punya $row['jam_masuk']
+                // berisi jadwal PAGI-nya (mis. 06:00), yang salah dipakai
+                // sebagai acuan "seandainya dia malam" — makanya di sini
+                // parameter acuan SENGAJA dikosongkan (null) supaya
+                // validasiJamMasukFingerMalam() otomatis fallback ke
+                // JAM_MASUK_SHIFT_MALAM_DEFAULT (lihat isi fungsinya).
+                // Sisi pulang tetap raw apa adanya (gak difilter), sama
+                // seperti branch REAL di atas. TIDAK menyentuh branch REAL
+                // shift malam sama sekali.
+                // Sisi pulang SEKARANG juga divalidasi lewat
+                // validasiJamPulangFingerMalam(), acuannya SELALU
+                // JAM_PULANG_SHIFT_MALAM_DEFAULT (06:00) dipaksa (parameter
+                // acuan produksi dikosongkan/null), simetris dengan sisi
+                // masuk di atas. TIDAK menyentuh branch REAL shift malam
+                // sama sekali.
+                'simulasi_malam' => [
+                    'jam_masuk_finger' => $this->validasiJamMasukFingerMalam(
+                        $recordHariIni?->jam_pulang,
+                        null
+                    ),
+                    'jam_pulang_finger' => $this->validasiJamPulangFingerMalam(
+                        $recordBesok?->jam_masuk,
+                        null
+                    ),
+                ],
+                // NEW: simulasi HASIL HITUNGAN seandainya row ini
+                // diperlakukan lewat cabang NON-malam (resolveJamFingerNonMalam()
+                // — Haram #6: toleransi 15 menit, dedupe arah per-pasangan,
+                // fallback jadwal default shift pagi). Dihitung
+                // dengan MEMANGGIL ULANG resolveJamFingerNonMalam() apa
+                // adanya (tidak ada logic baru / duplikat di luar fungsi
+                // itu), supaya 100% konsisten dengan hasil asli untuk row
+                // yang memang non-malam. Dihitung SELALU, terlepas dari
+                // $shift row ini sebenarnya apa — sama seperti
+                // 'simulasi_malam' di atas, PURELY ADDITIVE untuk preview.
+                // TIDAK PERNAH dipakai untuk mengisi jam_masuk_finger /
+                // jam_pulang_finger yang asli (itu tetap murni ikut
+                // percabangan if/else di atas, Haram #1 & #6 utuh tidak
+                // tersentuh).
+                // FIX: simulasi_pagi SEKARANG selalu dipaksa pakai jadwal
+                // default PAGI (JAM_MASUK_SHIFT_PAGI_DEFAULT /
+                // JAM_PULANG_SHIFT_PAGI_DEFAULT), BUKAN jadwal produksi
+                // asli row ($row['jam_masuk']/$row['jam_pulang']) —
+                // konsisten dengan simulasi_malam yang juga selalu paksa
+                // default malam. Sebelumnya row shift malam (mis. jadwal
+                // 17:00-06:00) ikut dipakai sebagai acuan "seandainya dia
+                // pagi", padahal itu jelas BUKAN jadwal pagi — cuma
+                // kebetulan hasilnya sering terlihat benar. Parameter
+                // acuan produksi SENGAJA dikosongkan (null) di sini
+                // supaya resolveJamFingerNonMalam() otomatis fallback ke
+                // JAM_MASUK_SHIFT_PAGI_DEFAULT / JAM_PULANG_SHIFT_PAGI_DEFAULT.
+                'simulasi_pagi' => (function () use ($recordHariIni) {
+                    [$simMasuk, $simPulang] = $this->resolveJamFingerNonMalam(
+                        $recordHariIni?->jam_masuk,
+                        $recordHariIni?->jam_pulang,
+                        null,
+                        null
+                    );
+
+                    return [
+                        'jam_masuk_finger' => $simMasuk,
+                        'jam_pulang_finger' => $simPulang,
+                    ];
+                })(),
+            ];
+
             return $row;
         });
     }
+
     /**
      * Khusus shift NON-malam. Kalau finger cuma di-upload untuk satu sesi
      * scan (mis. upload pagi doang), raw jam_masuk & jam_pulang dari mesin
@@ -330,6 +716,7 @@ class NewRekapAbsensiPegawaiService
         // Bandingkan tiap raw ke acuan PASANGANNYA SENDIRI.
         $diffKePulang = abs($tRawPulang->diffInMinutes($tJamPulangProduksi));
         $diffKeMasuk = abs($tRawMasuk->diffInMinutes($tJamMasukProduksi));
+
         // diffKePulang < diffKeMasuk -> scan ini lebih dekat ke pulang ->
         // jangan tampilkan jam_masuk_finger. Selain itu -> jangan tampilkan
         // jam_pulang_finger.
@@ -337,6 +724,7 @@ class NewRekapAbsensiPegawaiService
             ? [null, $rawPulang]
             : [$rawMasuk, null];
     }
+
     public function availableSources(): Collection
     {
         return collect($this->sources)->map(fn ($s) => [
@@ -344,6 +732,7 @@ class NewRekapAbsensiPegawaiService
             'label' => $s->label(),
         ]);
     }
+
     public function getAbsensiLainLain(string $tanggal): Collection
     {
         $rekap = $this->getRekap($tanggal);
@@ -372,8 +761,10 @@ class NewRekapAbsensiPegawaiService
             ->whereIn('kode_pegawai', $kodeList)
             ->get()
             ->keyBy('kode_pegawai');
+
         return $fingerTanpaProduksi->map(function ($item) use ($pegawaiByKode) {
             $pegawai = $pegawaiByKode->get($item->kode_pegawai);
+
             return [
                 'kode_pegawai' => $item->kode_pegawai,
                 'nama_pegawai' => $pegawai?->nama_pegawai ?? "Kode: {$item->kode_pegawai} (tidak ditemukan)",
@@ -383,6 +774,7 @@ class NewRekapAbsensiPegawaiService
             ];
         })->sortBy('nama_pegawai')->values();
     }
+
     /**
      * Gabung row milik pegawai yang sama dari >1 lini produksi (source)
      * jadi 1 row.
@@ -411,6 +803,7 @@ class NewRekapAbsensiPegawaiService
                         $row['jam_masuk'] ?? null,
                         $row['jam_pulang'] ?? null
                     );
+
                     return $row;
                 });
                 // Representasi utama = durasi kerja terpanjang. Kalau semua
@@ -426,10 +819,12 @@ class NewRekapAbsensiPegawaiService
                     ->all();
                 $utama['_total_durasi_menit'] = $rowsWithDurasi->sum('_durasi_menit');
                 unset($utama['_durasi_menit']);
+
                 return $utama;
             })
             ->values();
     }
+
     /**
      * Hitung durasi kerja dalam menit dari jam_masuk & jam_pulang (format
      * H:i:s, sudah dinormalisasi oleh normalisasiJam() sebelum method ini
@@ -463,8 +858,10 @@ class NewRekapAbsensiPegawaiService
         if ($pulang->lessThanOrEqualTo($masuk)) {
             $pulang->addDay();
         }
+
         return (int) $masuk->diffInMinutes($pulang);
     }
+
     /**
      * Urutkan hasil rekap. Untuk brand WAHANA, pakai grup prioritas kode:
      *   1. Kode 8000-8999
@@ -482,6 +879,7 @@ class NewRekapAbsensiPegawaiService
             return $rekap
                 ->sortBy(function ($row) {
                     $kode = $row['kode_pegawai'] ?? null;
+
                     return $kode && is_numeric($kode) ? (int) $kode : PHP_INT_MAX;
                 })
                 ->values();
@@ -503,29 +901,36 @@ class NewRekapAbsensiPegawaiService
             $row['_sort_kedua'] = ($kode && is_numeric($kode))
                 ? str_pad((string) (int) $kode, 10, '0', STR_PAD_LEFT)
                 : str_repeat('9', 10); // kode kosong/invalid ditaruh paling belakang dalam grupnya
+
             return $row;
         });
+
         return $rekap
             ->sortBy(['_grup_urutan', '_sort_kedua'])
             ->values()
             ->map(function ($row) {
                 // Field internal, gak perlu ikut ke view
                 unset($row['_grup_urutan'], $row['_sort_kedua']);
+
                 return $row;
             });
     }
+
     protected function isBrandWahana(): bool
     {
         $panel = Filament::getCurrentPanel()
             ?? Filament::getPanel('admin');
+
         return $panel?->getBrandName() === 'Wahana';
     }
+
     protected function grupKode(?string $kodePegawai): int
     {
         if (! $kodePegawai || ! is_numeric($kodePegawai)) {
             return 4; // kode kosong/tidak valid ditaruh paling belakang
         }
         $kode = (int) $kodePegawai;
+
         return match (true) {
             $kode >= 8000 && $kode <= 8999 => 0,
             $kode >= 9000 && $kode <= 9999 => 1,
@@ -533,6 +938,7 @@ class NewRekapAbsensiPegawaiService
             default => 3, // sisanya: 0-6999 dan kode di luar rentang manapun
         };
     }
+
     /**
      * Ambil semua kode_pegawai yang shift-nya 'malam' di tanggal tertentu.
      * Fetch langsung dari sources (bukan dari hasil getRekap() yang sudah
@@ -563,6 +969,7 @@ class NewRekapAbsensiPegawaiService
         if ($idPegawaiShiftMalam->isEmpty()) {
             return collect();
         }
+
         return Pegawai::query()
             ->whereIn('id', $idPegawaiShiftMalam)
             ->pluck('kode_pegawai');
