@@ -58,10 +58,10 @@ class HitungPotonganProduksiAction
      * lintas ukuran, baru tentukan potongan kolektif final & bagi (misal
      * pakai ProporsionalStrategy) sekali di akhir — bukan per ukuran.
      *
-     * @param string|null $grade  KW/grade barang (kolom `grade` di tabel targets).
-     *                            Wajib diisi kalau satu kombinasi ukuran+jenis kayu
-     *                            punya beberapa baris target yang cuma beda grade —
-     *                            tanpa ini, resolver bisa ambil baris grade yang salah.
+     * @param  string|null  $grade  KW/grade barang (kolom `grade` di tabel targets).
+     *                              Wajib diisi kalau satu kombinasi ukuran+jenis kayu
+     *                              punya beberapa baris target yang cuma beda grade —
+     *                              tanpa ini, resolver bisa ambil baris grade yang salah.
      * @return array{target: Target, ratePerOrgPerMenit: float}|null
      */
     public function resolveTargetDanRate(
@@ -99,13 +99,12 @@ class HitungPotonganProduksiAction
     ): ?Target {
         $resolver = TargetResolverFactory::make($mesin);
 
-        return $resolver->resolve($mesin->value, $idUkuran, $idJenisKayu);
         return $resolver->resolve($mesin->value, $idUkuran, $idJenisKayu, $grade);
     }
 
     /**
-     * @param UkuranHasilInput[] $ukuranList
-     * @param PekerjaKerjaInput[] $pekerja
+     * @param  UkuranHasilInput[]  $ukuranList
+     * @param  PekerjaKerjaInput[]  $pekerja
      */
     public function executeMultiUkuran(array $ukuranList, array $pekerja, float $gaji): TargetHitungResult
     {
