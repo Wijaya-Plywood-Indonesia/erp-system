@@ -3,7 +3,9 @@
 namespace App\Filament\Pages\LaporanHarian\Transformers;
 
 use App\Actions\HitungPotonganProduksiAction;
+use App\DataTransferObjects\PekerjaKerjaInput;
 use App\Enums\Mesin;
+use App\Enums\StrategiPembagian;
 use App\Models\Target;
 use App\Services\Target\TargetResolverFactory;
 use Carbon\Carbon;
@@ -47,12 +49,12 @@ class KediWorkerMap
                 }
             }
 
-            // --- B. HITUNG WORKER-HOURS AKTUAL (JAM EFEKTIF PER ORANG) ---
+            // --- B. HITUNG POTONGAN ---
             $jumlahPekerja = $produksi->detailPegawaiKedi ? $produksi->detailPegawaiKedi->count() : 0;
             $tanggalStr = Carbon::parse($produksi->tanggal_produksi)->format('Y-m-d');
 
-            $potonganPerOrang = 0;
-            $targetAdjusted = 0;
+            $potonganPerOrang = 0; // dipakai jalur lama (masuk) — sama untuk semua pegawai
+            $potonganPerPegawai = []; // dipakai jalur baru (bongkar) — keyed by id_pegawai
 
             if ($produksi->status === 'bongkar') {
                 // --- JALUR BARU: gunakan Action/Service terpusat (sesuai target_bongkar_analysis.md) ---
@@ -61,10 +63,15 @@ class KediWorkerMap
                 $resolver = TargetResolverFactory::make($mesinEnum);
                 $targetModel = $resolver->resolve($mesinEnum->value);
 
+                if (! $targetModel) {
+                    Log::warning("⚠️ [KEDI DEBUG] Target BONGKAR (id_mesin=7) TIDAK DITEMUKAN untuk ID Produksi {$produksi->id}");
+                }
+
                 $jamKerjaNormal = $targetModel->jam ?? 0;
                 $jamNormalMenit = $jamKerjaNormal * 60;
 
-                $totalPersonMenit = 0;
+                // Bangun input per pekerja (durasi kerja aktual dalam menit)
+                $pekerjaInputs = [];
 
                 if ($produksi->detailPegawaiKedi) {
                     foreach ($produksi->detailPegawaiKedi as $dp) {
@@ -81,28 +88,23 @@ class KediWorkerMap
                             $grossMenit = $masuk->diffInMinutes($pulang);
                         }
 
-                        $totalPersonMenit += max(0, $grossMenit);
+                        $pekerjaInputs[] = new PekerjaKerjaInput(
+                            idPegawai: (string) $dp->id_pegawai,
+                            menitKerja: (float) max(0, $grossMenit),
+                        );
                     }
                 }
 
-                $avgMenitPerOrang = $jumlahPekerja > 0 ? $totalPersonMenit / $jumlahPekerja : 0;
-                $jamAktual = (int) floor($avgMenitPerOrang / 60);
-                $menitAktual = $avgMenitPerOrang - ($jamAktual * 60);
+                if ($targetModel && count($pekerjaInputs) > 0) {
+                    $hitung = $action->execute(
+                        mesin: $mesinEnum,
+                        strategi: StrategiPembagian::Kolektif,
+                        pekerja: $pekerjaInputs,
+                        hasilAktual: (float) $totalHasil,
+                    );
 
-                if (! $targetModel) {
-                    Log::warning("⚠️ [KEDI DEBUG] Target BONGKAR (id_mesin=7) TIDAK DITEMUKAN untuk ID Produksi {$produksi->id}");
+                    $potonganPerPegawai = $hitung?->potonganPerPegawai ?? [];
                 }
-
-                $hitung = $action->execute(
-                    mesin: $mesinEnum,
-                    orgAktual: $jumlahPekerja,
-                    jamAktual: (float) $jamAktual,
-                    menitAktual: (float) $menitAktual,
-                    hasilAktual: (float) $totalHasil,
-                );
-
-                $targetAdjusted = $hitung?->targetAdjusted ?? 0;
-                $potonganPerOrang = $hitung?->potonganPerOrang ?? 0;
 
             } else {
                 // --- JALUR LAMA: MASUK / status lain ---
@@ -148,7 +150,12 @@ class KediWorkerMap
 
                     $jamMasuk = $dp->masuk ? Carbon::parse($dp->masuk)->format('H:i:s') : '';
                     $jamPulang = $dp->pulang ? Carbon::parse($dp->pulang)->format('H:i:s') : '';
-                    $potonganFinal = $dp->potongan ?? $potonganPerOrang;
+
+                    if ($produksi->status === 'bongkar') {
+                        $potonganFinal = $dp->potongan ?? ($potonganPerPegawai[(string) $dp->id_pegawai] ?? 0);
+                    } else {
+                        $potonganFinal = $dp->potongan ?? $potonganPerOrang;
+                    }
 
                     $results[] = [
                         'kodep' => $dp->pegawai->kode_pegawai ?? '-',
