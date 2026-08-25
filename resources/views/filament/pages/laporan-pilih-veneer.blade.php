@@ -1,104 +1,237 @@
 <x-filament-panels::page>
-    <div class="p-4 bg-white dark:bg-zinc-900 rounded-lg shadow">
+    {{-- Form Filter Tanggal --}}
+    <div class="p-4 bg-white dark:bg-zinc-900 rounded-lg shadow border border-zinc-200 dark:border-zinc-800">
         {{ $this->form }}
     </div>
 
-    <div wire:loading wire:target="loadAllData" class="w-full text-center py-4">
-        <x-filament::loading-indicator class="w-8 h-8 mx-auto text-primary-600 mb-2" />
-        <span class="text-zinc-500 italic">Memproses laporan Produksi Pilih Veneer...</span>
-    </div>
-
-    <div wire:loading.remove class="space-y-12 mt-6">
-        @if(!empty($reportData['detail']))
-        <div class="bg-white dark:bg-zinc-900 rounded-sm shadow-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
-            <div class="bg-zinc-800 p-4 text-white text-center">
-                <h2 class="text-lg font-bold uppercase tracking-widest">
-                    LAPORAN PRODUKSI PILIH VENEER - {{ \Carbon\Carbon::parse($this->tanggal)->format('d F Y') }}
-                </h2>
+    {{-- Loading Indicator --}}
+    @if ($isLoading ?? false)
+        <div
+            class="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-75 dark:bg-zinc-900 dark:bg-opacity-75">
+            <div class="flex items-center space-x-3">
+                <x-filament::loading-indicator class="w-8 h-8 text-primary-600" />
+                <span class="text-lg font-medium text-zinc-700 dark:text-zinc-300">Memuat data pilih veneer...</span>
             </div>
+        </div>
+    @endif
 
-            <div class="p-4 overflow-x-auto">
-                <div class="flex flex-col lg:flex-row gap-8 min-w-[1200px]">
-                    
-                    {{-- TABEL KIRI: DETAIL PRODUKSI --}}
-                    <div class="flex-[2]">
-                        <h3 class="text-sm font-bold mb-2 uppercase text-zinc-600 dark:text-zinc-400">Detail Produksi</h3>
-                        <table class="w-full text-[11px] border-collapse border border-zinc-300 dark:border-zinc-700">
-                            <thead>
-                                <tr class="bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 uppercase font-bold">
-                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700">Tanggal</th>
-                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700">P</th>
-                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700">L</th>
-                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700">T</th>
-                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-left">Jenis</th>
-                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-left">KW</th>
-                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-center">Byk</th>
-                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-right bg-blue-50 dark:bg-blue-900/20">m3</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-zinc-200 dark:divide-zinc-700">
-                                @foreach($reportData['detail'] as $d)
-                                <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center">{{ $d['tanggal'] }}</td>
-                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center">{{ $d['p'] }}</td>
-                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center">{{ $d['l'] }}</td>
-                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center">{{ $d['t'] }}</td>
-                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700">{{ $d['jenis'] }}</td>
-                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700">{{ $d['kw'] }}</td>
-                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center font-bold">{{ number_format($d['byk']) }}</td>
-                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-right font-mono bg-blue-50/50 dark:bg-blue-900/10"></td>
-                                </tr>
-                                @endforeach
-                            </tbody>
-                            <tfoot>
-                                @php
-                                    $totalByk = collect($reportData['detail'])->sum('byk');
-                                @endphp
-                                <tr class="bg-zinc-100 dark:bg-zinc-800 font-bold">
-                                    <td colspan="6" class="p-2 text-right border border-zinc-300 dark:border-zinc-700">TOTAL:</td>
-                                    <td class="p-2 text-center border border-zinc-300 dark:border-zinc-700">{{ number_format($totalByk) }}</td>
-                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700"></td>
-                                </tr>
-                            </tfoot>
-                        </table>
+    @php
+        $tables = collect($dataProduksi ?? [])->values();
+
+        // Flatten all workers
+        $semuaPekerja = $tables
+            ->flatMap(function ($table) {
+                return collect($table['rekap_pekerja'] ?? [])->map(function ($p) use ($table) {
+                    $p['tanggal'] = $table['tanggal'] ?? '-';
+                    $p['nomor_meja'] = $table['nomor_meja'] ?? '-';
+                    $p['detail_produksi'] = $table['detail_produksi'] ?? [];
+                    $p['pencapaian_global'] = $table['pencapaian_global'] ?? 0;
+                    return $p;
+                });
+            })
+            ->values();
+    @endphp
+
+    <div class="space-y-12 mt-6">
+        @forelse ($semuaPekerja as $p)
+            @php
+                $pencapaianGlobal = $p['pencapaian'] ?? 0;
+                $tercapai = $pencapaianGlobal >= 100;
+                $potongan = (int) ($p['pot_target'] ?? 0);
+                $detailProduksi = $p['detail_produksi'] ?? [];
+                $totalUkuran = count($detailProduksi);
+            @endphp
+
+            <div
+                class="bg-white dark:bg-zinc-900 rounded-sm shadow-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                {{-- Header Blok Produksi --}}
+                <div class="bg-zinc-800 p-4 text-white flex justify-between items-center">
+                    <h2 class="text-lg font-bold text-center">
+                        {{ $p['id'] }} - {{ strtoupper($p['nama']) }}
+                    </h2>
+                    <div class="flex gap-4 items-center">
+                        <span class="text-xs px-2 py-1 rounded bg-zinc-700 font-semibold uppercase">
+                            Meja: {{ $p['nomor_meja'] }}
+                        </span>
+                        <span class="text-xs px-2 py-1 rounded {{ $tercapai ? 'bg-green-700' : 'bg-red-700' }}">
+                            Capaian: {{ number_format($pencapaianGlobal, 1, ',', '.') }}%
+                        </span>
+                        @if ($potongan > 0)
+                            <span class="text-xs px-2 py-1 rounded bg-amber-600 font-bold">
+                                ⚠ Potongan: Rp {{ number_format($potongan) }}
+                            </span>
+                        @endif
+                        <span class="text-xs bg-zinc-700 px-2 py-1 rounded">
+                            {{ $tercapai ? '✔ Tercapai' : '✘ Belum' }}
+                        </span>
                     </div>
+                </div>
 
-                    {{-- TABEL KANAN: REKAP HARGA/ONGKOS (Preview Column) --}}
-                    <div class="flex-1">
-                        <h3 class="text-sm font-bold mb-2 uppercase text-zinc-600 dark:text-zinc-400">Rekap Ongkos (Preview)</h3>
-                        <table class="w-full text-[11px] border-collapse border border-zinc-300 dark:border-zinc-700">
-                            <thead>
-                                <tr class="bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 uppercase font-bold">
-                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700">Tanggal</th>
-                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-center">TTL PKJ</th>
-                                    <th class="p-2 border border-zinc-300 dark:border-zinc-700 text-right">Total m3</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-zinc-200 dark:divide-zinc-700">
-                                @foreach($reportData['summary'] as $s)
-                                <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center">{{ $s['tanggal'] }}</td>
-                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-center font-bold">{{ $s['ttl_pkj'] }}</td>
-                                    <td class="p-2 border border-zinc-300 dark:border-zinc-700 text-right font-mono"></td>
-                                </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                        <div class="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded text-[10px] text-yellow-800 dark:text-yellow-200 italic">
-                            * Kolom HARGA, Total m3, ONGKOS PER M3, dan ONGKOS PER LB akan tersedia sebagai kolom kosong di Excel untuk diisi oleh Manajemen.
+                <div class="p-4">
+                    <div class="w-full overflow-x-auto">
+                        <div class="min-w-[800px]">
+                            <table class="w-full text-sm border-collapse border border-zinc-300 dark:border-zinc-600">
+                                <thead>
+                                    <tr>
+                                        <th colspan="7"
+                                            class="p-4 text-xl font-bold text-center bg-zinc-700 text-white uppercase tracking-wider">
+                                            Detail Produksi Meja
+                                        </th>
+                                    </tr>
+                                    <tr
+                                        class="bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-300 border-t border-zinc-300 dark:border-zinc-600">
+                                        <th class="p-2 text-left text-xs font-semibold uppercase">Ukuran</th>
+                                        <th class="p-2 text-center text-xs font-semibold w-24 uppercase">Jenis Kayu</th>
+                                        <th class="p-2 text-center text-xs font-semibold w-16 uppercase">KW</th>
+                                        <th class="p-2 text-center text-xs font-semibold w-28 uppercase">No. Palet</th>
+                                        <th class="p-2 text-right text-xs font-semibold w-24 uppercase">Hasil</th>
+                                        <th class="p-2 text-right text-xs font-semibold w-24 uppercase">Target</th>
+                                        <th class="p-2 text-right text-xs font-semibold w-20 uppercase">Capaian</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse ($detailProduksi as $i => $prod)
+                                        @php
+                                            $isMencapaiTarget = ($prod['hasil'] ?? 0) >= ($prod['target'] ?? 0);
+                                            $warnaStatus = $isMencapaiTarget
+                                                ? 'text-green-500 font-bold'
+                                                : 'text-red-500 font-bold';
+                                            // NOTE: kode_ukuran === 'PILIH-VENEER-NOT-FOUND' berarti relasi
+                                            // Ukuran/JenisKayu (model ModalPilihVeneer) gagal di-resolve,
+                                            // BUKAN berarti Target tidak ditemukan. Jangan gabungkan dengan has_target.
+                                            $isUkuranNotFound =
+                                                ($prod['kode_ukuran'] ?? null) === 'PILIH-VENEER-NOT-FOUND';
+                                        @endphp
+                                        <tr
+                                            class="{{ $i % 2 === 1 ? 'bg-zinc-50 dark:bg-zinc-800/50' : 'bg-white dark:bg-zinc-900' }} border-t border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors">
+                                            <td
+                                                class="p-2 text-left text-xs border-r border-zinc-300 dark:border-zinc-700 font-medium">
+                                                {{ $prod['ukuran'] ?? '-' }}
+                                                @if ($isUkuranNotFound)
+                                                    <span class="text-red-400 font-semibold">(Ukuran/Jenis Kayu Tidak
+                                                        Ditemukan)</span>
+                                                @endif
+                                            </td>
+                                            <td
+                                                class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 uppercase">
+                                                {{ $prod['jenis_kayu'] ?? '-' }}
+                                            </td>
+                                            <td
+                                                class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 uppercase">
+                                                {{ $prod['kw'] ?? '-' }}
+                                            </td>
+                                            <td
+                                                class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-500">
+                                                {{ $prod['no_palet_list'] ?? '-' }}
+                                            </td>
+                                            <td
+                                                class="p-2 text-right text-xs border-r border-zinc-300 dark:border-zinc-700 font-bold text-green-600 dark:text-green-400">
+                                                {{ number_format($prod['hasil'] ?? 0) }}
+                                            </td>
+                                            <td
+                                                class="p-2 text-right text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-500">
+                                                {{ $prod['has_target'] ? number_format($prod['target'] ?? 0) : '-' }}
+                                            </td>
+                                            <td
+                                                class="p-2 text-right text-xs font-bold {{ !$prod['has_target'] ? 'text-red-500' : (($prod['capaian_persen'] ?? 0) >= 100 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') }}">
+                                                @if (!$prod['has_target'])
+                                                    Target ?
+                                                @else
+                                                    {{ number_format($prod['capaian_persen'] ?? 0, 1, ',', '.') }}%
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="7"
+                                                class="p-4 text-center text-zinc-500 dark:text-zinc-400 text-sm italic">
+                                                Tidak ada detail produksi untuk meja ini.
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                                <tfoot
+                                    class="bg-zinc-100 dark:bg-zinc-800 border-t-2 border-zinc-300 dark:border-zinc-600">
+                                    <tr>
+                                        <td colspan="7"
+                                            class="p-3 text-center text-xs text-zinc-600 dark:text-zinc-400 space-x-3">
+                                            <span class="font-medium">Ukuran Dikerjakan:</span>
+                                            <strong class="text-zinc-900 dark:text-white">{{ $totalUkuran }}</strong>
+
+                                            <span class="text-zinc-400">|</span>
+
+                                            <span class="font-medium">Masuk:</span>
+                                            <strong
+                                                class="font-mono text-zinc-900 dark:text-white">{{ $p['jam_masuk'] }}</strong>
+
+                                            <span class="text-zinc-400">|</span>
+
+                                            <span class="font-medium">Pulang:</span>
+                                            <strong
+                                                class="font-mono text-zinc-900 dark:text-white">{{ $p['jam_pulang'] }}</strong>
+
+                                            <span class="text-zinc-400">|</span>
+
+                                            <span class="font-medium">Ijin:</span>
+                                            <strong
+                                                class="text-yellow-600 dark:text-yellow-400">{{ $p['ijin'] }}</strong>
+
+                                            <span class="text-zinc-400">|</span>
+
+                                            <span class="font-medium">Jam Kerja:</span>
+                                            <strong
+                                                class="font-mono text-zinc-900 dark:text-white">{{ $p['jam_kerja'] }}</strong>
+
+                                            <span class="text-zinc-400">|</span>
+
+                                            <span class="text-xs">Tgl: {{ $p['tanggal'] }}</span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="7"
+                                            class="p-2 text-center text-[11px] text-zinc-500 dark:text-zinc-400 border-t border-zinc-300 dark:border-zinc-700">
+                                            Capaian GLOBAL (jumlah persen semua ukuran yang dikerjakan hari ini, basis:
+                                            target per ukuran, BUKAN rata-rata):
+                                            <strong
+                                                class="{{ $tercapai ? 'text-green-600 dark:text-green-400' : 'text-red-500' }}">
+                                                {{ number_format($pencapaianGlobal, 1, ',', '.') }}%
+                                            </strong>
+                                            @if (!empty($p['keterangan']) && $p['keterangan'] !== '-')
+                                                <span class="text-zinc-400">|</span>
+                                                <span class="italic">Ket: {{ $p['keterangan'] }}</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="7"
+                                            class="px-3 py-2 text-center border-t border-zinc-300 dark:border-zinc-700 {{ $potongan > 0 ? 'bg-red-50 dark:bg-red-950/30' : '' }}">
+                                            <span
+                                                class="text-xs font-bold uppercase tracking-wide {{ $potongan > 0 ? 'text-red-600 dark:text-red-400' : 'text-zinc-500 dark:text-zinc-400' }}">
+                                                Potongan Target:
+                                            </span>
+                                            <span
+                                                class="text-base font-black {{ $potongan > 0 ? 'text-red-600 dark:text-red-400' : 'text-zinc-500 dark:text-zinc-400' }}">
+                                                {{ $potongan > 0 ? 'Rp ' . number_format($potongan) : 'Rp 0' }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
                         </div>
                     </div>
-
                 </div>
             </div>
-        </div>
-        @else
-        <div class="p-16 text-center bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700">
-            <x-heroicon-o-document-magnifying-glass class="w-12 h-12 mx-auto text-zinc-400 mb-4"/>
-            <p class="text-zinc-500 italic text-lg">
-                Tidak ada data produksi Pilih Veneer untuk tanggal ini.
-            </p>
-        </div>
-        @endif
+        @empty
+            <div
+                class="text-center p-12 bg-white dark:bg-zinc-900 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700">
+                <x-heroicon-o-document-magnifying-glass class="w-12 h-12 mx-auto text-zinc-400 mb-4" />
+                <p class="text-lg text-zinc-500 dark:text-zinc-400 font-medium">
+                    Tidak ditemukan data produksi pilih veneer untuk tanggal ini.
+                </p>
+                <p class="text-sm text-zinc-400 mt-2">
+                    Silakan pilih tanggal lain atau pastikan input produksi pilih veneer sudah dilakukan.
+                </p>
+            </div>
+        @endforelse
     </div>
 </x-filament-panels::page>
