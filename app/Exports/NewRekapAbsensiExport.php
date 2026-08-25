@@ -25,8 +25,6 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
         protected Collection $rekap,
         protected string $tanggal,
     ) {
-        // Sama seperti AbsenExport: pakai presisi tinggi supaya konversi
-        // jam -> serial Excel tidak kena pembulatan float PHP default.
         $this->originalPrecision = (int) ini_get('precision');
         $this->originalSerializePrecision = (int) ini_get('serialize_precision');
 
@@ -47,11 +45,6 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
 
     public function headings(): array
     {
-        // Tanggal aktual buat label kolom J-M, menggantikan teks statis
-        // "Hari Ini" / "Besok". Dihitung dari $this->tanggal (tanggal yang
-        // dipilih user di halaman), BUKAN dari now() — supaya labelnya
-        // selalu match dengan tanggal rekap yang lagi di-export, bukan
-        // tanggal export dijalankan.
         $tanggalHariIni = Carbon::parse($this->tanggal)->format('d/m/Y');
         $tanggalBesok = Carbon::parse($this->tanggal)->addDay()->format('d/m/Y');
 
@@ -77,16 +70,6 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
      */
     public function map($row): array
     {
-        // Kolom J-M TIDAK lagi pakai raw finger mentah. Sekarang pakai hasil
-        // resolveJamFingerNonMalam() (toleransi 15 menit, dedupe arah
-        // per-pasangan) dengan jadwal SHIFT PAGI sebagai default acuan —
-        // persis logic yang sama dipakai untuk shift non-malam beneran,
-        // cuma dijalankan lagi terpisah untuk raw hari ini & raw besok.
-        // Sumbernya dari _finger_preview.simulasi_pagi (hari ini) dan
-        // _finger_preview.simulasi_pagi_besok (besok), yang dihitung di
-        // NewRekapAbsensiPegawaiService::enrichWithFinger().
-        // is_array() guard supaya aman kalau _finger_preview null (row
-        // tanpa kode_pegawai).
         $preview = $row['_finger_preview'] ?? null;
         $simPagiHariIni = is_array($preview) ? ($preview['simulasi_pagi'] ?? null) : null;
         $simPagiBesok = is_array($preview) ? ($preview['simulasi_pagi_besok'] ?? null) : null;
@@ -109,9 +92,9 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
     }
 
     /**
-     * Konversi string waktu (H:i:s) ke Serial Number Excel, identik dengan
-     * logika di AbsenExport supaya kolom waktu ke-render sebagai jam asli
-     * (bukan teks) dan format hh:mm:ss di styles() berlaku dengan benar.
+     * Konversi string waktu (H:i:s) ke Serial Number Excel.
+     * Dibulatkan 8 digit desimal (~0.86 detik) supaya bersih dari
+     * floating-point drift, tanpa perlu event/cell-type tambahan.
      */
     protected function convertTimeToExcel(?string $time): ?float
     {
@@ -119,29 +102,16 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
             return null;
         }
 
-        try {
-            $parts = explode(':', $time);
-            $h = (int) ($parts[0] ?? 0);
-            $m = (int) ($parts[1] ?? 0);
-            $s = (int) ($parts[2] ?? 0);
+        $parts = explode(':', $time);
+        $h = (int) ($parts[0] ?? 0);
+        $m = (int) ($parts[1] ?? 0);
+        $s = (int) ($parts[2] ?? 0);
 
-            $totalSeconds = ($h * 3600) + ($m * 60) + $s;
+        $totalSeconds = ($h * 3600) + ($m * 60) + $s;
 
-            return $totalSeconds / 86400;
-        } catch (\Exception $e) {
-            return null;
-        }
+        return round($totalSeconds / 86400, 8);
     }
 
-    /**
-     * Sama seperti pembersihan Divisi di AbsenExport: uppercase, dedup.
-     * Sumbernya array 'sumber_label' dari service, formatnya:
-     *   "Nama Sumber"            -> tanpa detail
-     *   "Nama Sumber: Detail"    -> dengan detail (mis. tugas Kedi, hasil Lain-lain)
-     *
-     * Semua sumber yang punya detail (setelah ':') akan ditampilkan
-     * detailnya dalam kurung, bukan cuma khusus LAIN-LAIN.
-     */
     protected function formatDivisi(array $row): string
     {
         $sumber = $row['sumber_label'] ?? [];
@@ -161,7 +131,6 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
                     return $detail !== '' ? "LAIN-LAIN ($detail)" : 'LAIN-LAIN';
                 }
 
-                // Ambil nama sumber (sebelum ':') dan detailnya (setelah ':')
                 if (str_contains($item, ':')) {
                     [$name, $detail] = array_map('trim', explode(':', $item, 2));
                     $name = strtoupper($name);
@@ -184,7 +153,6 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
     {
         $lastRow = $this->rekap->count() + 1;
 
-        // 1. Style Header
         $sheet->getStyle('A1:M1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '333333']],
@@ -194,17 +162,14 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
             ],
         ]);
 
-        // 2. Format Kolom Waktu (Finger dipakai + Sistem)
         $sheet->getStyle("C2:F{$lastRow}")
             ->getNumberFormat()
             ->setFormatCode('hh:mm:ss');
 
-        // 2b. Format Kolom Waktu Finger Hari Ini / Besok (dedup pagi)
         $sheet->getStyle("J2:M{$lastRow}")
             ->getNumberFormat()
             ->setFormatCode('hh:mm:ss');
 
-        // 3. Grid / Border
         $sheet->getStyle("A1:M{$lastRow}")->applyFromArray([
             'borders' => [
                 'allBorders' => [
@@ -215,17 +180,14 @@ class NewRekapAbsensiExport implements FromCollection, WithColumnWidths, WithHea
             'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
         ]);
 
-        // 4. Alignment
         $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("C2:F{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("H2:H{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("J2:M{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        // Wrap Text untuk kolom Divisi & Keterangan
         $sheet->getStyle("G2:G{$lastRow}")->getAlignment()->setWrapText(true);
         $sheet->getStyle("I2:I{$lastRow}")->getAlignment()->setWrapText(true);
 
-        // 5. Warna Kolom Divisi (G)
         for ($i = 2; $i <= $lastRow; $i++) {
             $divisi = $sheet->getCell("G{$i}")->getValue();
             if ($divisi && $divisi !== '-') {
