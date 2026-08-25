@@ -18,6 +18,7 @@ enum Mesin: int
     case DryerMalam = 18;
     case PotAfalanJoint = 12;
     case SandingJoint = 11;
+    case PilihVeneer = 14;
 
     public function satuan(): Satuan
     {

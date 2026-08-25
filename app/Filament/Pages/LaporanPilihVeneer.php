@@ -9,17 +9,21 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Components\DatePicker;
 use App\Exports\LaporanPilihVeneerExport;
+use App\Filament\Pages\LaporanPilihVeneer\Transformers\PilihVeneerDataMap;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Models\ProduksiPilihVeneer;
 use Carbon\Carbon;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
+use Exception;
+use Illuminate\Support\Facades\Log;
 
 class LaporanPilihVeneer extends Page implements HasForms
 {
     use InteractsWithForms;
     use HasPageShield;
+
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected string $view = 'filament.pages.laporan-pilih-veneer';
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
@@ -28,16 +32,15 @@ class LaporanPilihVeneer extends Page implements HasForms
     protected static ?int $navigationSort = 13;
     protected static bool $shouldRegisterNavigation = false;
 
-    public $reportData = [
-        'detail' => [],
-        'summary' => []
-    ];
     public $tanggal = null;
+    public array $laporan = [];
+    public array $dataProduksi = [];
+    public bool $isLoading = false;
 
     public function mount(): void
     {
-        $this->form->fill(['tanggal' => $this->tanggal]);
         $this->tanggal = now()->format('Y-m-d');
+        $this->form->fill(['tanggal' => $this->tanggal]);
         $this->loadAllData();
     }
 
@@ -55,21 +58,21 @@ class LaporanPilihVeneer extends Page implements HasForms
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
                 ->action(fn() => $this->exportExcel())
-                ->visible(fn() => !empty($this->reportData['detail'])),
+                ->visible(fn() => !empty($this->laporan)),
         ];
     }
 
     public function exportExcel()
     {
         try {
-            if (empty($this->reportData['detail'])) {
+            if (empty($this->laporan)) {
                 throw new \Exception('Tidak ada data untuk diunduh.');
             }
 
             $tglFile = Carbon::parse($this->tanggal)->format('d-m-Y');
 
             return Excel::download(
-                new LaporanPilihVeneerExport($this->reportData, $this->tanggal),
+                new LaporanPilihVeneerExport($this->laporan, $this->tanggal),
                 "laporan-produksi-pilih-veneer-{$tglFile}.xlsx"
             );
         } catch (\Exception $e) {
@@ -99,53 +102,85 @@ class LaporanPilihVeneer extends Page implements HasForms
 
     public function loadAllData()
     {
-        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+        try {
+            $this->isLoading = true;
+            $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+            $tanggal = Carbon::parse($tanggal)->format('Y-m-d');
 
-        $produksiList = ProduksiPilihVeneer::with([
-            'hasilPilihVeneer.modalPilihVeneer.ukuran',
-            'hasilPilihVeneer.modalPilihVeneer.jenisKayu',
-            'pegawaiPilihVeneer'
-        ])
-            ->whereDate('tanggal_produksi', $tanggal)
-            ->get();
+            $this->dataProduksi = [];
+            $this->laporan = [];
 
-        $detail = [];
-        $summary = [];
+            $produksiList = ProduksiPilihVeneer::with([
+                'hasilPilihVeneer.modalPilihVeneer.ukuran',
+                'hasilPilihVeneer.modalPilihVeneer.jenisKayu',
+                'hasilPilihVeneer.modalPilihVeneer.stokVeneerJadi.jenisKayu',
+                'pegawaiPilihVeneer.pegawai'
+            ])
+                ->whereDate('tanggal_produksi', $tanggal)
+                ->get();
 
-        foreach ($produksiList as $prod) {
-            $prodM3 = 0;
-            foreach ($prod->hasilPilihVeneer as $hasil) {
-                $m = $hasil->modalPilihVeneer;
-                $u = $m->ukuran;
-                $p = $u->panjang ?? 0;
-                $l = $u->lebar ?? 0;
-                $t = $u->tebal ?? 0;
-                $byk = $hasil->jumlah ?? 0;
-                $kodeKayu = strtolower($m->jenisKayu->kode_kayu ?? '');
-                $grade = strtolower($hasil->kw ?? '');
+            if ($produksiList->isNotEmpty()) {
+                $this->dataProduksi = PilihVeneerDataMap::make($produksiList);
+                $this->laporan = $this->dataProduksi;
+            } else {
+                Notification::make()
+                    ->warning()
+                    ->title('Tidak Ada Data Pilih Veneer')
+                    ->body('Tidak ditemukan data produksi pilih veneer untuk tanggal ' . Carbon::parse($tanggal)->format('d/m/Y'))
+                    ->send();
+            }
+        } catch (Exception $e) {
+            Log::error('Error loading pilih veneer data: ' . $e->getMessage());
+            Notification::make()
+                ->danger()
+                ->title('Error Memuat Data Pilih Veneer')
+                ->body('Terjadi kesalahan: ' . $e->getMessage())
+                ->send();
+        } finally {
+            $this->isLoading = false;
+        }
+    }
 
-                $detail[] = [
-                    'tanggal' => Carbon::parse($prod->tanggal_produksi)->format('d-M-y'),
-                    'p' => $p,
-                    'l' => $l,
-                    't' => $t,
-                    'jenis' => $kodeKayu ?: '-',
-                    'kw' => $grade ?: '-',
-                    'byk' => $byk,
-                    'm3' => '',
-                ];
+    public function getViewData(): array
+    {
+        return [
+            'laporan' => $this->laporan,
+            'dataProduksi' => $this->dataProduksi,
+            'isLoading' => $this->isLoading,
+            'summary' => $this->calculateSummary(),
+        ];
+    }
+
+    private function calculateSummary(): array
+    {
+        $totalAll = 0;
+        $uniquePegawai = [];
+        $globalUkuranKw = [];
+
+        foreach ($this->laporan as $table) {
+            foreach ($table['detail_produksi'] as $prod) {
+                $totalAll += $prod['hasil'];
+
+                $key = $prod['ukuran'] . '|' . $prod['kw'];
+                if (!isset($globalUkuranKw[$key])) {
+                    $globalUkuranKw[$key] = (object) [
+                        'ukuran' => $prod['ukuran'],
+                        'kw' => $prod['kw'],
+                        'total' => 0,
+                    ];
+                }
+                $globalUkuranKw[$key]->total += $prod['hasil'];
             }
 
-            $summary[] = [
-                'tanggal' => Carbon::parse($prod->tanggal_produksi)->format('d-M-y'),
-                'ttl_pkj' => $prod->pegawaiPilihVeneer->count(),
-                'm3_total' => '',
-            ];
+            foreach ($table['rekap_pekerja'] as $p) {
+                $uniquePegawai[$p['nama']] = true;
+            }
         }
 
-        $this->reportData = [
-            'detail' => $detail,
-            'summary' => $summary
+        return [
+            'totalAll' => $totalAll,
+            'totalPegawai' => count($uniquePegawai),
+            'globalUkuranKw' => array_values($globalUkuranKw),
         ];
     }
 }
