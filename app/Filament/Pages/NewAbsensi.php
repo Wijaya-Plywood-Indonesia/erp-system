@@ -16,6 +16,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Collection;
+use Livewire\Attributes\Url;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -32,6 +33,14 @@ class NewAbsensi extends Page implements HasForms
 
     protected string $view = 'filament.pages.new-absensi';
 
+    /**
+     * Disinkronkan ke query string URL (?tanggal=YYYY-MM-DD) supaya kalau
+     * halaman di-refresh atau link-nya dibagikan/dibuka ulang, tanggal yang
+     * lagi dipilih user tetap sama (tidak balik ke tanggal hari ini).
+     * `keep: true` supaya parameter tetap muncul di URL walau nilainya
+     * balik ke default.
+     */
+    #[Url(keep: true)]
     public ?string $tanggal = null;
 
     public string $activeTab = 'data';
@@ -62,7 +71,14 @@ class NewAbsensi extends Page implements HasForms
 
     public function mount(): void
     {
-        $this->tanggal = now()->format('Y-m-d');
+        // Pakai ??= (bukan langsung assign) supaya nilai yang sudah datang
+        // dari query string URL (?tanggal=...) lewat atribut #[Url] di atas
+        // tidak ketimpa balik ke tanggal hari ini. Livewire mengisi
+        // property dari query string SEBELUM mount() dipanggil, jadi kalau
+        // $this->tanggal sudah ada isinya, biarkan seperti itu — hanya
+        // fallback ke hari ini kalau memang belum ada tanggal sama sekali
+        // (misal pertama kali buka halaman tanpa query string).
+        $this->tanggal ??= now()->format('Y-m-d');
         $this->uploadForm->fill();
     }
 
