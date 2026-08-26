@@ -113,6 +113,9 @@ class LaporanStik extends Page
             $daftarHasil = [];
             $totalLembar = 0;
 
+            // Grouping data untuk Sheet 2 (Matriks Rekap KW)
+            $groupedMatrix = [];
+
             foreach ($produksi->detailHasilStik ?? [] as $index => $hasil) {
                 $ukuran = $hasil->ukuran;
                 $p = $ukuran?->panjang ?? '';
@@ -123,6 +126,7 @@ class LaporanStik extends Page
                 $lembar = (int) ($hasil->total_lembar ?? 0);
                 $totalLembar += $lembar;
 
+                // 1. Data untuk Sheet 1 (Rincian Palet)
                 $daftarHasil[] = [
                     'no_palet'     => $hasil->no_palet ?? ('ST-' . ($index + 1)),
                     'jenis_kayu'   => $hasil->jenisKayu?->nama_jenis_kayu ?? $hasil->jenis_kayu ?? 'Sengon',
@@ -130,11 +134,52 @@ class LaporanStik extends Page
                     'kualitas'     => $hasil->kualitas ?? ($hasil->kw ? 'KW ' . $hasil->kw : '-'),
                     'total_lembar' => $lembar,
                 ];
+
+                // 2. Logic Grouping untuk Sheet 2 (Berdasarkan Ukuran p, l, t & Jenis Kayu)
+                $jenisKayuNama = $hasil->jenisKayu?->nama_jenis_kayu ?? $hasil->jenis_kayu ?? 'Sengon';
+                $jenisSingkat  = strtolower(substr($jenisKayuNama, 0, 1));
+
+                $groupKey = "{$p}_{$l}_{$t}_{$jenisSingkat}";
+
+                if (!isset($groupedMatrix[$groupKey])) {
+                    $groupedMatrix[$groupKey] = [
+                        'panjang'    => $p ?: '-',
+                        'lebar'      => $l ?: '-',
+                        'tebal'      => $t ?: '-',
+                        'jenis_kayu' => $jenisSingkat,
+                        'kw1'        => 0,
+                        'kw2'        => 0,
+                        'kw3'        => 0,
+                        'kw4'        => 0,
+                        'af'         => 0,
+                        'total'      => 0,
+                    ];
+                }
+
+                // Identifikasi Kualitas KW
+                $kwRaw = strtolower((string) ($hasil->kualitas ?? $hasil->kw ?? ''));
+
+                if (str_contains($kwRaw, 'af') || str_contains($kwRaw, 'afval')) {
+                    $groupedMatrix[$groupKey]['af'] += $lembar;
+                } elseif (str_contains($kwRaw, '4') || str_contains($kwRaw, 'kw4')) {
+                    $groupedMatrix[$groupKey]['kw4'] += $lembar;
+                } elseif (str_contains($kwRaw, '3') || str_contains($kwRaw, 'kw3')) {
+                    $groupedMatrix[$groupKey]['kw3'] += $lembar;
+                } elseif (str_contains($kwRaw, '2') || str_contains($kwRaw, 'kw2')) {
+                    $groupedMatrix[$groupKey]['kw2'] += $lembar;
+                } elseif (str_contains($kwRaw, '1') || str_contains($kwRaw, 'kw1')) {
+                    $groupedMatrix[$groupKey]['kw1'] += $lembar;
+                } else {
+                    $groupedMatrix[$groupKey]['kw1'] += $lembar;
+                }
+
+                $groupedMatrix[$groupKey]['total'] += $lembar;
             }
 
+            $detailHasilMatrix = array_values($groupedMatrix);
             $hasilPalet = count($daftarHasil);
 
-            // Bentuk daftar durasi kerja per pegawai (Stik tidak pakai hasilIndividu, biarkan default 0)
+            // Pekerja Input
             $pekerjaInput = collect($produksi->detailPegawaiStik ?? [])->map(function ($detail) {
                 $masuk  = $detail->masuk  ? Carbon::parse($detail->masuk)  : null;
                 $pulang = $detail->pulang ? Carbon::parse($detail->pulang) : null;
@@ -149,7 +194,7 @@ class LaporanStik extends Page
 
             $result = app(\App\Actions\HitungPotonganProduksiAction::class)->execute(
                 mesin: \App\Enums\Mesin::Stik,
-                strategi: \App\Enums\StrategiPembagian::Kolektif,   // BARU: wajib dikirim eksplisit
+                strategi: \App\Enums\StrategiPembagian::Kolektif,
                 pekerja: $pekerjaInput,
                 hasilAktual: $hasilPalet,
             );
@@ -157,8 +202,6 @@ class LaporanStik extends Page
             $targetPalet        = $result?->targetAdjusted ?? 0;
             $selisihPalet       = $hasilPalet - $targetPalet;
             $potonganPerPegawai = $result?->potonganPerPegawai ?? [];
-
-            $jumlahPekerja = $produksi->detailPegawaiStik?->count() ?? 0;
 
             $pekerja = [];
             foreach ($produksi->detailPegawaiStik ?? [] as $detail) {
@@ -188,7 +231,8 @@ class LaporanStik extends Page
                 'id'                       => $produksi->id,
                 'mesin'                    => $namaMesin,
                 'tanggal'                  => $tanggalFormat,
-                'daftar_hasil'             => $daftarHasil,
+                'daftar_hasil'             => $daftarHasil,       // Sheet 1
+                'detail_hasil'             => $detailHasilMatrix, // Sheet 2
                 'pekerja'                  => $pekerja,
                 'hasil_palet'              => $hasilPalet,
                 'total_lembar'             => $totalLembar,
@@ -197,7 +241,7 @@ class LaporanStik extends Page
                 'jam_kerja'                => 9,
                 'total_kendala_menit'      => $totalKendalaMenit,
                 'total_downtime_formatted' => $totalDowntimeFormatted,
-                'kendala'                  => $produksi->kendala ?? '-',
+                'kendala'                  => $produksi->kendala ?? '-', // Dikirim ke Sheet 2
             ];
         }
 
