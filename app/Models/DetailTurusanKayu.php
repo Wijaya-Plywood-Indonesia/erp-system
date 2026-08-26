@@ -35,23 +35,21 @@ class DetailTurusanKayu extends Model
                 $model->created_by = Auth::id();
                 $model->updated_by = Auth::id();
             }
+            if (empty($model->harga)) {
+                $model->harga = self::cariHargaMaster($model);
+            }
         });
 
         static::updating(function ($model) {
             if (Auth::check()) {
                 $model->updated_by = Auth::id();
             }
-        });
+            $specChanged = $model->isDirty(['jenis_kayu_id', 'panjang', 'grade', 'diameter']);
+            $hargaIsManual = $model->isDirty('harga');
 
-
-        // Penyesuaian Harga Kayu secara otomatis
-        static::creating(function ($model) {
-            $model->harga = self::cariHargaMaster($model);
-        });
-
-        // Berjalan saat data diubah (Update)
-        static::updating(function ($model) {
-            $model->harga = self::cariHargaMaster($model);
+            if ($specChanged && ! $hargaIsManual) {
+                $model->harga = self::cariHargaMaster($model);
+            }
         });
     }
 
@@ -103,16 +101,13 @@ class DetailTurusanKayu extends Model
 
         return $kubikasi; // mis. 0.123456789
     }
+
     public function getHargaSatuanAttribute()
     {
-        $harga = HargaKayu::where('id_jenis_kayu', $this->id_jenis_kayu)
-            ->where('grade', $this->grade)
-            ->where('panjang', $this->panjang)
-            ->where('diameter_terkecil', '<=', $this->diameter)
-            ->where('diameter_terbesar', '>=', $this->diameter)
-            ->value('harga_beli');
-
-        return (float) ($harga ?? 0);
+        if (! empty($this->harga)) {
+            return (float) $this->harga;
+        }
+        return (float) self::cariHargaMaster($this);
     }
 
     public function getTotalHargaAttribute()
