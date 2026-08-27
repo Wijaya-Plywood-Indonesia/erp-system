@@ -96,10 +96,24 @@ class LaporanPotSikuDetailSheet implements FromCollection, WithHeadings, WithSty
     public function headings(): array
     {
         return [
-            'Tanggal', 'Kode', 'Nama Pegawai', 'Ukuran', 'Jenis Kayu', 'KW',
-            'No. Palet', 'Hasil (cm)', 'Target (cm)', 'Capaian (%)',
-            'Masuk', 'Pulang', 'Jam Aktual (jam)', 'Ijin',
-            'Total Hasil', 'Capaian Global (%)', 'Potongan (Rp)', 'Keterangan',
+            'Tanggal',
+            'Kode',
+            'Nama Pegawai',
+            'Ukuran',
+            'Jenis Kayu',
+            'KW',
+            'No. Palet',
+            'Hasil (cm)',
+            'Target (cm)',
+            'Capaian (%)',
+            'Masuk',
+            'Pulang',
+            'Jam Aktual (jam)',
+            'Ijin',
+            'Total Hasil',
+            'Capaian Global (%)',
+            'Potongan (Rp)',
+            'Keterangan',
         ];
     }
 
@@ -119,7 +133,13 @@ class LaporanPotSikuDetailSheet implements FromCollection, WithHeadings, WithSty
                         $tanggal,
                         $pekerja['kode_pegawai'] ?? '-',
                         $pekerja['nama'] ?? '-',
-                        '-', '-', '-', '-', 0, '-', '-',
+                        '-',
+                        '-',
+                        '-',
+                        '-',
+                        0,
+                        '-',
+                        '-',
                         $pekerja['jam_masuk'] ?? '-',
                         $pekerja['jam_pulang'] ?? '-',
                         $pekerja['jam_aktual_bersih'] ?? '-',
@@ -212,48 +232,107 @@ class LaporanPotSikuRekapSheet implements FromCollection, WithHeadings, WithStyl
         return 'Rekap Ukuran';
     }
 
+    public function headings(): array
+    {
+        return [
+            'Panjang (P)',
+            'Lebar (L)',
+            'Tebal (T)',
+            'Jenis Kayu',
+            'KW 1',
+            'KW 2',
+            'KW 3',
+            'KW 4',
+            'AF',
+            'Total (cm)',
+        ];
+    }
+
     public function collection()
     {
         $flatItems = collect();
 
+        // 1. Kumpulkan semua barang dari setiap pekerja & produksi
         foreach ($this->data as $produksi) {
             foreach ($produksi['pekerja'] ?? [] as $pekerja) {
                 foreach ($pekerja['items'] ?? [] as $item) {
-                    $flatItems->push($item);
+                    $flatItems->push([
+                        'ukuran' => $item['ukuran'] ?? '',
+                        'jenis_kayu' => $item['jenis_kayu'] ?? '-',
+                        'kw' => strtoupper(trim($item['kw'] ?? '')),
+                        'hasil' => (float)($item['hasil'] ?? 0),
+                    ]);
                 }
             }
         }
 
+        // 2. Grouping berdasarkan Kombinasi (Ukuran + Jenis Kayu)
         $grouped = $flatItems->groupBy(function ($item) {
-            return ($item['ukuran'] ?? '-') . '|' . ($item['jenis_kayu'] ?? '-') . '|' . ($item['kw'] ?? '-');
+            return trim($item['ukuran']) . '|' . trim($item['jenis_kayu']);
         });
 
         $rows = collect();
 
         foreach ($grouped as $key => $items) {
-            [$ukuran, $jenis, $kw] = array_pad(explode('|', $key), 3, '-');
+            $first = $items->first();
+            [$p, $l, $t] = $this->parseUkuran($first['ukuran']);
+
+            // Formalisasi penulisan Jenis Kayu (misal: "sengon" -> "Sengon")
+            $jenisKayu = ucfirst(strtolower($first['jenis_kayu']));
+
+            // Mapping Pivot per KW
+            $kw1 = $items->filter(fn($i) => in_array($i['kw'], ['KW 1', 'KW1', '1']))->sum('hasil');
+            $kw2 = $items->filter(fn($i) => in_array($i['kw'], ['KW 2', 'KW2', '2']))->sum('hasil');
+            $kw3 = $items->filter(fn($i) => in_array($i['kw'], ['KW 3', 'KW3', '3']))->sum('hasil');
+            $kw4 = $items->filter(fn($i) => in_array($i['kw'], ['KW 4', 'KW4', '4']))->sum('hasil');
+            $af  = $items->filter(fn($i) => in_array($i['kw'], ['AF', 'KW AF']))->sum('hasil');
+
+            $totalCm = $kw1 + $kw2 + $kw3 + $kw4 + $af;
+
+            // Jika ada KW yang tidak cocok dengan kriteria di atas, tambahkan ke total
+            if ($totalCm === 0.0) {
+                $totalCm = $items->sum('hasil');
+            }
 
             $rows->push([
-                'ukuran' => $ukuran,
-                'jenis_kayu' => $jenis,
-                'kw' => $kw,
-                'total_hasil' => $items->sum('hasil'),
-                'jumlah_pekerja' => $items->count(),
+                'p' => $p,
+                'l' => $l,
+                't' => $t,
+                'jenis_kayu' => $jenisKayu,
+                'kw_1' => $kw1 > 0 ? $kw1 : '',
+                'kw_2' => $kw2 > 0 ? $kw2 : '',
+                'kw_3' => $kw3 > 0 ? $kw3 : '',
+                'kw_4' => $kw4 > 0 ? $kw4 : '',
+                'af'   => $af > 0 ? $af : '',
+                'total' => $totalCm,
             ]);
         }
 
-        return $rows->sortBy('ukuran')->values();
+        return $rows;
     }
 
-    public function headings(): array
+    /**
+     * Helper untuk mengekstraksi P, L, T dari string ukuran (misal: "70x55x0.5" atau "70 x 55 x 0.5")
+     */
+    private function parseUkuran(string $ukuran): array
     {
-        return ['Ukuran', 'Jenis Kayu', 'KW', 'Total Hasil (cm)', 'Jumlah Entri'];
+        preg_match_all('/(?:\d+(?:[\.,]\d+)?)/', $ukuran, $matches);
+        $numbers = $matches[0] ?? [];
+
+        $p = isset($numbers[0]) ? str_replace('.', ',', $numbers[0]) : '-';
+        $l = isset($numbers[1]) ? str_replace('.', ',', $numbers[1]) : '-';
+        $t = isset($numbers[2]) ? str_replace('.', ',', $numbers[2]) : '-';
+
+        return [$p, $l, $t];
     }
 
     public function styles(Worksheet $sheet)
     {
-        $sheet->getStyle('A1:E1')->getFont()->setBold(true);
-        $sheet->getStyle('A1:E1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        // Styling Font Header Bold & Center
+        $sheet->getStyle('A1:J1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:J1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A1:J1')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+
         return [];
     }
 
@@ -264,16 +343,28 @@ class LaporanPotSikuRekapSheet implements FromCollection, WithHeadings, WithStyl
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = $sheet->getHighestRow();
 
-                $sheet->getStyle("A1:E{$lastRow}")->applyFromArray([
-                    'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
-                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                if ($lastRow < 2) return;
+
+                // Border Tipis untuk Seluruh Sel
+                $sheet->getStyle("A1:J{$lastRow}")->applyFromArray([
+                    'borders' => [
+                        'allBorders' => [
+                            'borderStyle' => Border::BORDER_THIN,
+                            'color' => ['argb' => 'FF000000'],
+                        ],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                    ]
                 ]);
 
-                foreach (range('A', 'E') as $col) {
+                // Auto Fit Lebar Kolom
+                foreach (range('A', 'J') as $col) {
                     $sheet->getColumnDimension($col)->setAutoSize(true);
                 }
 
-                $sheet->getRowDimension(1)->setRowHeight(22);
+                $sheet->getRowDimension(1)->setRowHeight(25);
             },
         ];
     }
