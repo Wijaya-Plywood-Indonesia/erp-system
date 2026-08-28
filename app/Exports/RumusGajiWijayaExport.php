@@ -26,9 +26,28 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  * (scan asli), shift, sumber_label (array divisi/mesin), izin,
  * keterangan.
  *
- * REVISI (dibandingkan langsung dengan sheet harian "sabtu/minggu/senin/
- * dst" di file RUMUS_GAJI_WIJAYA_*.xlsx asli) — dibuat lebih mirip di
- * sisi WARNA dan RUMUS/BEHAVIOR:
+ * REVISI TERBARU (dibanding revisi sebelumnya):
+ *   - FIX BUG "24 JAM KERJA UNTUK PEGAWAI TIDAK MASUK": sebelumnya kalau
+ *     Jam Hasil Masuk == Jam Hasil Pulang (mis. keduanya kosong/00:00:00
+ *     karena jadwal shift tidak valid untuk pegawai yang izin/alpha),
+ *     hitungJamKerja() menganggapnya lintas-tengah-malam dan menghasilkan
+ *     24 jam. Sekarang ditambahkan pengecekan: kalau total detik Jam
+ *     Hasil Masuk + Jam Hasil Pulang == 0 (mis. 00:00:00 & 00:00:00),
+ *     Jam Kerja langsung dianggap 0 — lihat hitungJamKerja() &
+ *     jamKeDetik().
+ *   - FIX BUG "NILAI 0 TIDAK TAMPIL DI EXCEL": sebelumnya kolom Lembur2
+ *     pakai `$lembur > 0 ? number_format(...) : ''` — artinya kalau
+ *     Lembur2 = 0, cell-nya jadi string kosong (bukan '0,00'), sehingga
+ *     terlihat seperti "hilang" di Excel. Sekarang SELALU
+ *     number_format() apa pun nilainya (termasuk 0), jadi kolom Lembur2
+ *     selalu tampil angka, misalnya '0,00'. Kolom Jam Kerja juga
+ *     dipastikan selalu mengirim nilai int (termasuk 0) ke map(), bukan
+ *     null/'' — supaya PhpSpreadsheet menulis 0 sebagai angka, bukan
+ *     cell kosong.
+ *
+ * REVISI SEBELUMNYA (dibandingkan langsung dengan sheet harian "sabtu/
+ * minggu/senin/dst" di file RUMUS_GAJI_WIJAYA_*.xlsx asli) — dibuat
+ * lebih mirip di sisi WARNA dan RUMUS/BEHAVIOR:
  *
  * WARNA
  *   - Header: fill biru muda "Blue, Accent 1, Lighter 40%" (#BDD7EE),
@@ -45,26 +64,31 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  *     berubah-ubah mengikuti panjang isi data terpanjang.
  *
  * RUMUS / BEHAVIOR
- *   - Format angka jam: "Jam Masuk/Pulang" (kolom C/D) dan "Jam Hasil
- *     Masuk" (kolom G) pakai format "h:mm:ss" (bukan jam elapsed).
- *     "Jam Bulat Masuk/Pulang" (E/F) pakai format elapsed "[h]:mm:ss"
- *     sesuai rumus CEILING/FLOOR di file asli. "Jam Hasil Pulang" (H)
- *     pakai "hh:mm:ss".
+ *   - JAM HASIL (G/H) = JADWAL SHIFT PRODUKSI, SELALU: Jam Hasil
+ *     Masuk/Pulang (kolom G/H) diambil LANGSUNG dari jadwal shift
+ *     produksi (jam_masuk/jam_pulang sistem — field yang sama dengan
+ *     kolom "Sistem Masuk/Pulang" di NewRekapAbsensiExport), TIDAK
+ *     PERNAH dari finger — lihat resolveJamHasil(). Ini berlaku selalu,
+ *     bukan cuma fallback saat finger kosong. Kolom "Jam Masuk"/"Jam
+ *     Pulang" (C/D, dari finger asli) dan "Jam Bulat Masuk/Pulang" (E/F,
+ *     hasil ceil/floor dari finger) TETAP murni dari
+ *     jam_masuk_finger/jam_pulang_finger seperti sebelumnya — tidak
+ *     terpengaruh perubahan ini.
+ *   - Format angka jam: "Jam Masuk/Pulang" (kolom C/D), "Jam Hasil
+ *     Masuk" (G), dan "Jam Hasil Pulang" (H) SAMA-SAMA pakai format
+ *     "h:mm:ss" (numFmtId 170). "Jam Bulat Masuk/Pulang" (E/F) pakai
+ *     format elapsed "[h]:mm:ss" (numFmtId 171).
  *   - "Jam Kerja" (kolom O) dihitung dari JAM HASIL Masuk/Pulang (bukan
  *     dari jam jadwal), dengan logika lintas-tengah-malam sama seperti
  *     rumus asli:
  *       IF(hasilMasuk < hasilPulang, selisih*24,
  *         IF(hasilMasuk<>0, (selisih+1)*24, 0))
+ *     DENGAN TAMBAHAN GUARD BARU: kalau total detik hasilMasuk +
+ *     hasilPulang == 0, langsung 0 (lihat catatan revisi terbaru di
+ *     atas).
  *   - "Perbandingan" (kolom P) di file asli membandingkan selisih jam
  *     BULAT (F-E) dengan selisih jam HASIL (H-G): sama -> "ya", beda ->
- *     "tidak". Karena service ini belum punya sumber "Jam Hasil" yang
- *     independen dari "Jam Bulat" (keduanya sama-sama diturunkan dari
- *     jam_masuk_finger/jam_pulang_finger), rumus tetap dipertahankan
- *     apa adanya (bukan diganti logika "jadwal vs finger" seperti versi
- *     lama) supaya begitu Jam Hasil punya sumber sendiri (mis. hasil
- *     koreksi manual admin), kolom ini otomatis benar tanpa ubah rumus
- *     lagi. Untuk saat ini nilainya akan "ya" kecuali salah satu jam
- *     finger kosong.
+ *     "tidak".
  *   - "Lembur2" (kolom K) di file asli TIDAK flat (jam kerja - 10),
  *     tapi tergantung jam masuk & jenis divisi (kolom Q di sheet
  *     Master, mis. "pabrik"/"jeruk"/"kantor"/"ruko"):
@@ -80,17 +104,8 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  *     bisa kirim kode divisi asli, ganti resolveDivisi() supaya baca
  *     field itu langsung.
  *
- * Field "Potongan" dan "Anak Baru(a)" MASIH PLACEHOLDER kosong. Sudah
- * ditelusuri ke file Excel asli:
- *   - "Potongan" kemungkinan berasal dari kolom "Potongan Target" di
- *     sheet Poin (AK), tapi kolom itu kosong di semua baris pada file
- *     contoh — kemungkinan diisi manual per periode.
- *   - "Anak Baru(a)" kemungkinan berasal dari kolom S ("tanggal merah"
- *     header-nya, tapi isinya keterangan status seperti "Anak baru") di
- *     sheet Master, di-lookup per kode_pegawai. Juga tidak datang dari
- *     getRekap().
- *   Kedua ini masih perlu dikonfirmasi & ditambahkan ke service kalau
- *   memang mau otomatis (saat ini tetap kosong, sama seperti sebelumnya).
+ * Field "Potongan" dan "Anak Baru(a)" MASIH PLACEHOLDER kosong (lihat
+ * docblock versi sebelumnya untuk detail penelusuran ke file asli).
  *
  * Soft transition: class ini TERPISAH dari NewRekapAbsensiExport, dipakai
  * berdampingan lewat tombol/route sendiri.
@@ -203,17 +218,25 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
      */
     public function map($row): array
     {
+        // Jam Masuk/Pulang (C/D) & Jam Bulat (E/F) TETAP murni dari finger asli
+        // (jam_masuk_finger/jam_pulang_finger) — TIDAK pakai fallback jadwal.
         $jamMasukFinger = $row['jam_masuk_finger'] ?? null;
         $jamPulangFinger = $row['jam_pulang_finger'] ?? null;
 
         $jamBulatMasuk = $this->bulatkanJamMasuk($jamMasukFinger);
         $jamBulatPulang = $this->bulatkanJamPulang($jamPulangFinger);
 
-        // "Jam Hasil" = jam bulat, sampai ada sumber koreksi manual yang
-        // independen (lihat catatan Perbandingan di docblock).
-        $jamHasilMasuk = $jamBulatMasuk;
-        $jamHasilPulang = $jamBulatPulang;
+        // Jam HASIL Masuk/Pulang (G/H) SELALU diambil dari jam shift/
+        // jadwal produksi (jam_masuk/jam_pulang sistem). Finger SAMA
+        // SEKALI TIDAK dipakai untuk G/H — beda dengan C/D & E/F yang
+        // tetap murni dari finger.
+        $jamHasilMasuk = $this->resolveJamHasil($row['jam_masuk'] ?? null);
+        $jamHasilPulang = $this->resolveJamHasil($row['jam_pulang'] ?? null);
 
+        // $jamKerja & $lembur SELALU int/float (termasuk 0), TIDAK PERNAH
+        // null atau string kosong di titik ini — supaya kolom Excel-nya
+        // tidak "hilang" saat nilainya 0. Formatting tampilan (mis. jadi
+        // string kosong) TIDAK dilakukan di sini lagi, lihat baris return.
         $jamKerja = $this->hitungJamKerja($jamHasilMasuk, $jamHasilPulang);
         $lembur = $this->hitungLembur2($jamKerja, $jamHasilMasuk, $row);
 
@@ -230,13 +253,35 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
             $this->convertTimeToExcel($jamHasilPulang),
             $this->formatDivisi($row),
             $row['izin'] ?? '',
-            $lembur > 0 ? number_format($lembur, 2, ',', '') : '',
+            // FIX: sebelumnya `$lembur > 0 ? number_format(...) : ''`
+            // yang membuat nilai 0 tidak tampil di Excel (jadi cell
+            // kosong). Sekarang SELALU di-number_format() apa pun
+            // nilainya, termasuk 0 -> '0,00'.
+            number_format($lembur, 2, ',', ''),
             '', // Potongan — belum ada sumber data, placeholder (lihat docblock)
             $row['keterangan'] ?? '',
             '', // Anak Baru(a) — belum ada sumber data, placeholder (lihat docblock)
-            $jamKerja,
+            // FIX: cast eksplisit ke int supaya sel selalu berisi angka
+            // (termasuk 0), tidak pernah null/''/float aneh.
+            (int) $jamKerja,
             $perbandingan,
         ];
+    }
+
+    /**
+     * Jam Hasil Masuk/Pulang SELALU diambil dari jadwal shift produksi
+     * (sistem) — field yang sama dengan kolom "Sistem Masuk/Pulang" di
+     * NewRekapAbsensiExport. Finger tidak dipakai sama sekali di sini.
+     * Jadwal sistem dipakai apa adanya (tidak dibulatkan), karena dia
+     * sudah berupa jam pasti, bukan hasil scan yang perlu dirapikan.
+     */
+    protected function resolveJamHasil(?string $jadwalSistem): ?string
+    {
+        if (! empty($jadwalSistem) && $jadwalSistem !== '-' && strlen($jadwalSistem) >= 5) {
+            return $jadwalSistem;
+        }
+
+        return null;
     }
 
     /**
@@ -295,11 +340,34 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
     }
 
     /**
+     * Konversi string "HH:MM:SS" ke total detik. Dipakai untuk cek
+     * apakah Jam Hasil Masuk + Jam Hasil Pulang totalnya 0
+     * (mis. 00:00:00 & 00:00:00) supaya tidak salah dihitung sebagai
+     * shift lintas-tengah-malam 24 jam.
+     */
+    protected function jamKeDetik(?string $time): int
+    {
+        if (empty($time) || $time === '-' || strlen($time) < 5) {
+            return 0;
+        }
+
+        [$h, $m, $s] = $this->pecahJam($time);
+
+        return ($h * 3600) + ($m * 60) + $s;
+    }
+
+    /**
      * Hitung jam kerja dari Jam Hasil Masuk & Pulang. Meniru rumus O di
      * sheet harian asli:
      *   =IF(G<H, (H-G)*24, IF(G<>0, (H-G+1)*24, 0))
      * yaitu: kalau pulang sebelum/sama dengan masuk dianggap lintas
      * tengah malam (tambah 1 hari), dan kalau masuk kosong -> 0.
+     *
+     * GUARD TAMBAHAN: kalau total detik Jam Hasil Masuk + Jam Hasil
+     * Pulang == 0 (mis. keduanya 00:00:00 karena jadwal tidak valid
+     * untuk pegawai yang tidak masuk/izin/alpha), langsung return 0.
+     * Ini mencegah kasus masuk == pulang == "00:00:00" ke-treat sebagai
+     * lintas tengah malam penuh (24 jam).
      */
     protected function hitungJamKerja(?string $jamHasilMasuk, ?string $jamHasilPulang): int
     {
@@ -308,6 +376,10 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
         }
 
         if (empty($jamHasilPulang)) {
+            return 0;
+        }
+
+        if ($this->jamKeDetik($jamHasilMasuk) + $this->jamKeDetik($jamHasilPulang) === 0) {
             return 0;
         }
 
@@ -369,9 +441,9 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
     /**
      * Meniru rumus Perbandingan (kolom P) di sheet harian asli:
      *   =IF(((F-E)*24)=((H-G)*24),"ya","tidak")
-     * yaitu membandingkan selisih Jam Bulat dengan selisih Jam Hasil,
-     * bukan membandingkan jadwal vs finger. Lihat catatan di docblock
-     * kelas ini.
+     * yaitu membandingkan selisih Jam Bulat (dari finger) dengan selisih
+     * Jam Hasil (dari jadwal shift produksi, lihat resolveJamHasil()).
+     * Efeknya sekarang jadi pembanding jadwal vs jam bulat aktual finger.
      */
     protected function tentukanPerbandingan(?string $bulatMasuk, ?string $bulatPulang, ?string $hasilMasuk, ?string $hasilPulang): string
     {
@@ -443,6 +515,19 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
     {
         $lastRow = $this->rekap->count() + 1;
 
+        // FIX: pastikan sel bernilai 0 (mis. Jam Kerja = 0 untuk pegawai
+        // yang tidak masuk) TETAP ditampilkan sebagai "0", bukan
+        // disembunyikan/kosong. Tanpa baris ini, PhpSpreadsheet/Excel
+        // bisa memakai default "jangan tampilkan nol" pada sheet view,
+        // sehingga kolom Jam Kerja terlihat kosong padahal isinya 0.
+        $sheet->getSheetView()->setShowZeros(true);
+
+        // Format angka eksplisit untuk kolom Jam Kerja (O) supaya
+        // konsisten "General"/angka biasa, bukan warisan format lain
+        // yang mungkin menyembunyikan nol (mis. custom format dengan
+        // section ke-3 kosong seperti "0;-0;;@").
+        $sheet->getStyle("O2:O{$lastRow}")->getNumberFormat()->setFormatCode('0');
+
         // Aktifkan dropdown filter Excel di baris header, range A1:P{lastRow}.
         $sheet->setAutoFilter("A1:P{$lastRow}");
 
@@ -469,12 +554,12 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
             }
         }
 
-        // Format jam: C/D/G elapsed pendek, E/F elapsed dengan jam > 24,
-        // H sedikit beda format — meniru persis file asli.
+        // Format jam: C/D/G/H semuanya "h:mm:ss;@" (numFmtId 170 di file
+        // asli — dicek langsung dari styles.xml, BUKAN "hh:mm:ss" seperti
+        // sebelumnya untuk H). E/F pakai elapsed "[h]:mm:ss;@" (numFmtId 171).
         $sheet->getStyle("C2:D{$lastRow}")->getNumberFormat()->setFormatCode('h:mm:ss;@');
         $sheet->getStyle("E2:F{$lastRow}")->getNumberFormat()->setFormatCode('[h]:mm:ss;@');
-        $sheet->getStyle("G2:G{$lastRow}")->getNumberFormat()->setFormatCode('h:mm:ss;@');
-        $sheet->getStyle("H2:H{$lastRow}")->getNumberFormat()->setFormatCode('hh:mm:ss');
+        $sheet->getStyle("G2:H{$lastRow}")->getNumberFormat()->setFormatCode('h:mm:ss;@');
 
         $sheet->getStyle("A1:P{$lastRow}")->applyFromArray([
             'borders' => [
