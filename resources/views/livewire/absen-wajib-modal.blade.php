@@ -1,15 +1,23 @@
 <div>
+    <div
+        x-data
+        x-on:absen-selesai.window="
+            document.body.style.overflow = '';
+            document.documentElement.style.overflow = '';
+        "
+    ></div>
+
     @if ($this->wajibAbsen)
         <div
             x-data
-            x-init="document.body.style.overflow = 'hidden'"
-            x-on:livewire:navigated.window="if (!@js($this->wajibAbsen)) { document.body.style.overflow = ''; }"
+            x-init="
+                document.body.style.overflow = 'hidden';
+                document.documentElement.style.overflow = 'hidden';
+            "
             class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm"
-            {{-- Tidak ada @click di backdrop -> tidak bisa ditutup dengan klik di luar modal --}}
         >
             <div
                 class="w-full max-w-lg mx-4 rounded-xl bg-gray-900 border border-gray-700 shadow-2xl p-6"
-                {{-- Stop propagation supaya klik di dalam modal tidak ikut ke backdrop --}}
                 x-on:click.stop
             >
                 <div class="mb-4">
