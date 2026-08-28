@@ -77,45 +77,44 @@ class AbsenWajibModal extends Component
     }
 
     public function submit(): void
-    {
-        $data = $this->validate([
-            'id_pegawai' => ['required', 'exists:pegawais,id'],
-            'masuk'      => ['required'],
-            'pulang'     => ['nullable'],
-            'ijin'       => ['nullable', 'string'],
-            'ket'        => ['nullable', 'string'],
-            'hasil'      => ['nullable', 'string'],
-        ]);
+{
+    $data = $this->validate([
+        'id_pegawai' => ['required', 'exists:pegawais,id'],
+        'masuk'      => ['required'],
+        'pulang'     => ['nullable'],
+        'ijin'       => ['nullable', 'string'],
+        'ket'        => ['nullable', 'string'],
+        'hasil'      => ['nullable', 'string'],
+    ]);
 
-        // Cari atau buat DetailLainLain untuk hari ini
-        $detail = DetailLainLain::firstOrCreate([
-            'tanggal' => today()->toDateString(),
-        ]);
+    $detail = DetailLainLain::firstOrCreate([
+        'tanggal' => today()->toDateString(),
+    ]);
 
-        LainLain::create([
-            'id_detail_lain_lain' => $detail->id,
-            'id_pegawai'          => $data['id_pegawai'],
-            'masuk'               => $data['masuk'],
-            'pulang'              => $data['pulang'] ?: null,
-            'ijin'                => $data['ijin'],
-            'ket'                 => $data['ket'],
-            'hasil'               => $data['hasil'],
-            'created_by'          => auth()->id(),
-        ]);
+    LainLain::create([
+        'id_detail_lain_lain' => $detail->id,
+        'id_pegawai'          => $data['id_pegawai'],
+        'masuk'               => $data['masuk'],
+        'pulang'              => $data['pulang'] ?: null,
+        'ijin'                => $data['ijin'],
+        'ket'                 => $data['ket'],
+        'hasil'               => $data['hasil'],
+        'created_by'          => auth()->id(),
+    ]);
 
-        Notification::make()
-            ->title('Absen berhasil dicatat')
-            ->success()
-            ->send();
+    Notification::make()
+        ->title('Absen berhasil dicatat')
+        ->success()
+        ->send();
 
-        // Refresh computed property supaya modal langsung tertutup
-        unset($this->wajibAbsen);
+    unset($this->wajibAbsen);
 
-        $this->reset(['id_pegawai', 'pulang', 'ijin', 'ket', 'hasil']);
-        $this->masuk = '08:00';
-        $this->pulang = '16:00';
-        $this->id_pegawai = auth()->user()?->id_pegawai;
-    }
+    $this->reset(['id_pegawai', 'pulang', 'ijin', 'ket', 'hasil']);
+    $this->masuk = '08:00';
+    $this->pulang = '16:00';
+    $this->id_pegawai = auth()->user()?->id_pegawai;
+    $this->dispatch('absen-selesai');
+}
 
     public function render()
     {
