@@ -60,6 +60,14 @@
                     <x-filament::button wire:click="exportExcel" color="success" icon="heroicon-o-table-cells">
                         Export Excel
                     </x-filament::button>
+
+                    {{-- Export format baru (Rumus Gaji Wijaya) — berdampingan dengan
+                         Export Excel di atas, tidak menggantikan. Soft transition:
+                         user bisa pilih pakai format lama atau format baru. --}}
+                    <x-filament::button wire:click="exportRumusGajiWijaya" color="warning"
+                        icon="heroicon-o-currency-dollar">
+                        Export Format Baru
+                    </x-filament::button>
                 </div>
 
                 {{-- Tabel Rekap Utama --}}

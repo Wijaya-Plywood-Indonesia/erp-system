@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Exports\NewRekapAbsensiExport;
+use App\Exports\RumusGajiWijayaExport;
 use App\Models\NewAbsensiUpload;
 use App\Services\DownloadAbsensiUploadService;
 use App\Services\NewRekapAbsensiPegawaiService;
@@ -176,6 +177,26 @@ class NewAbsensi extends Page implements HasForms
         return Excel::download(
             new NewRekapAbsensiExport($rekap, $tanggal),
             "Absen-{$tanggal}.xlsx"
+        );
+    }
+
+    /**
+     * Dipanggil dari tombol "Export Rumus Gaji Wijaya" di tab Data Absensi.
+     *
+     * Sengaja dibuat sebagai method & export class TERPISAH dari
+     * exportExcel()/NewRekapAbsensiExport di atas — supaya format rumus
+     * gaji ini bisa dipakai berdampingan (soft transition) tanpa
+     * mengganggu export lama yang sudah berjalan.
+     */
+    public function exportRumusGajiWijaya()
+    {
+        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+
+        $rekap = app(NewRekapAbsensiPegawaiService::class)->getRekap($tanggal);
+
+        return Excel::download(
+            new RumusGajiWijayaExport($rekap, $tanggal),
+            "Rumus-Gaji-Wijaya-{$tanggal}.xlsx"
         );
     }
 
