@@ -12,6 +12,7 @@ class ProduksiPalet extends Model
     use HasRouteUuid;
 
     protected $fillable = [
+        'uuid',
         'tanggal',
         'keterangan',
     ];
