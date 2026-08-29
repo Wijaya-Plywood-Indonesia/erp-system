@@ -33,6 +33,7 @@ use App\Services\AbsensiSources\LainLainAbsensiSource;
 use App\Services\AbsensiSources\NyusupAbsensiSource;
 use App\Services\AbsensiSources\PilihPlywoodAbsensiSource;
 use App\Services\AbsensiSources\PilihVeneerAbsensiSource;
+use App\Services\AbsensiSources\PegawaiPaletAbsensiSource;
 use App\Services\AbsensiSources\PotAfJointAbsensiSource;
 use App\Services\AbsensiSources\PotJelekAbsensiSource;
 use App\Services\AbsensiSources\PotSikuAbsensiSource;
@@ -139,6 +140,7 @@ class AppServiceProvider extends ServiceProvider
                 new TerimaGudangSatuAbsensiSource,
                 new LainLainAbsensiSource,
                 new TurunKayuAbsensiSource,
+                new PegawaiPaletAbsensiSource,
                 // nanti tambah sumber baru cukup di sini, misal:
                 // new FingerAbsensiSource(),
             ]);
