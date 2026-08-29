@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -92,10 +93,24 @@ class LaporanPotJelekDetailSheet implements FromCollection, WithHeadings, WithSt
     public function headings(): array
     {
         return [
-            'Tanggal', 'Kode', 'Nama Pegawai', 'Ukuran', 'Jenis Kayu', 'KW',
-            'No. Palet', 'Hasil', 'Target', 'Capaian (%)',
-            'Masuk', 'Pulang', 'Jam Aktual (jam)', 'Ijin',
-            'Total Hasil', 'Capaian Global (%)', 'Potongan (Rp)', 'Keterangan',
+            'Tanggal',
+            'Kode',
+            'Nama Pegawai',
+            'Ukuran',
+            'Jenis Kayu',
+            'KW',
+            'No. Palet',
+            'Hasil',
+            'Target',
+            'Capaian (%)',
+            'Masuk',
+            'Pulang',
+            'Jam Aktual (jam)',
+            'Ijin',
+            'Total Hasil',
+            'Capaian Global (%)',
+            'Potongan (Rp)',
+            'Keterangan',
         ];
     }
 
@@ -115,7 +130,13 @@ class LaporanPotJelekDetailSheet implements FromCollection, WithHeadings, WithSt
                         $tanggal,
                         $pekerja['kode_pegawai'] ?? '-',
                         $pekerja['nama'] ?? '-',
-                        '-', '-', '-', '-', 0, '-', '-',
+                        '-',
+                        '-',
+                        '-',
+                        '-',
+                        0,
+                        '-',
+                        '-',
                         $pekerja['jam_masuk'] ?? '-',
                         $pekerja['jam_pulang'] ?? '-',
                         $pekerja['jam_aktual_bersih'] ?? '-',
@@ -208,48 +229,125 @@ class LaporanPotJelekRekapSheet implements FromCollection, WithHeadings, WithSty
         return 'Rekap Ukuran';
     }
 
+    public function headings(): array
+    {
+        return ['Tanggal', 'p', 'l', 't', 'jenis', 'byk', 'TTL PKJ'];
+    }
+
     public function collection()
     {
         $flatItems = collect();
 
         foreach ($this->data as $produksi) {
-            foreach ($produksi['pekerja'] ?? [] as $pekerja) {
+            $tglRaw = $produksi['tanggal'] ?? null;
+            $tanggalFormatted = '-';
+
+            if ($tglRaw) {
+                try {
+                    if (str_contains($tglRaw, '/')) {
+                        $tanggalFormatted = Carbon::createFromFormat('d/m/Y', $tglRaw)->format('d-M');
+                    } else {
+                        $tanggalFormatted = Carbon::parse($tglRaw)->format('d-M');
+                    }
+                } catch (\Exception $e) {
+                    $tanggalFormatted = $tglRaw;
+                }
+            }
+
+            $pekerjaList = $produksi['pekerja'] ?? [];
+            $totalPekerjaHariIni = count($pekerjaList);
+
+            foreach ($pekerjaList as $pekerja) {
+                $kodePekerja = $pekerja['kode_pegawai'] ?? $pekerja['nama'] ?? null;
+
                 foreach ($pekerja['items'] ?? [] as $item) {
-                    $flatItems->push($item);
+                    $flatItems->push([
+                        'tanggal' => $tanggalFormatted,
+                        'ukuran' => $item['ukuran'] ?? '',
+                        'jenis_kayu' => $item['jenis_kayu'] ?? '',
+                        'kw' => $item['kw'] ?? '',
+                        'hasil' => (int)($item['hasil'] ?? 0),
+                        'pekerja_id' => $kodePekerja,
+                        'total_pekerja_hari_ini' => $totalPekerjaHariIni,
+                    ]);
                 }
             }
         }
 
+        // Grouping berdasarkan Tanggal + Ukuran + Jenis Kayu
         $grouped = $flatItems->groupBy(function ($item) {
-            return ($item['ukuran'] ?? '-') . '|' . ($item['jenis_kayu'] ?? '-') . '|' . ($item['kw'] ?? '-');
+            return $item['tanggal'] . '|' . trim($item['ukuran']) . '|' . trim($item['jenis_kayu']);
         });
 
         $rows = collect();
 
         foreach ($grouped as $key => $items) {
-            [$ukuran, $jenis, $kw] = array_pad(explode('|', $key), 3, '-');
+            $first = $items->first();
+            $tanggal = $first['tanggal'];
+            $ukuranRaw = $first['ukuran'];
+
+            // Ekstraksi P, L, T
+            [$p, $l, $t] = $this->parseUkuran($ukuranRaw);
+
+            // MAPPING JENIS KAYU:
+            // Mengambil nilai jenis_kayu sepenuhnya
+            $rawJenis = trim($first['jenis_kayu']);
+
+            // Jika jenis_kayu berupa kalimat (misal "SENGON AF" / "KAYU WR"), 
+            // kita ambil kata terakhirnya agar menjadi 'af', 'wr', 's', dll.
+            $partsJenis = explode(' ', $rawJenis);
+            $jenis = strtolower(end($partsJenis));
+
+            // Jika hasil pemotongan string kosong, gunakan fallback nilai aslinya
+            if (empty($jenis) || $jenis === '-') {
+                $jenis = strtolower($rawJenis);
+            }
+
+            $totalHasil = $items->sum('hasil');
+            $totalPekerjaItem = $items->pluck('pekerja_id')->unique()->filter()->count();
 
             $rows->push([
-                'ukuran' => $ukuran,
-                'jenis_kayu' => $jenis,
-                'kw' => $kw,
-                'total_hasil' => $items->sum('hasil'),
-                'jumlah_pekerja' => $items->count(),
+                'tanggal' => $tanggal,
+                'p' => $p,
+                'l' => $l,
+                't' => $t,
+                'jenis' => $jenis, // Menampilkan kode jenis kayu (af, wr, s, dll)
+                'byk' => $totalHasil,
+                'ttl_pkj' => $totalPekerjaItem > 0 ? $totalPekerjaItem : $first['total_pekerja_hari_ini'],
             ]);
         }
 
-        return $rows->sortBy('ukuran')->values();
+        return $rows;
     }
 
-    public function headings(): array
+    /**
+     * Helper untuk memecah string ukuran menjadi P, L, T
+     */
+    /**
+     * Helper untuk memecah string ukuran ("48mm x 48mm x 3.7mm" atau "48 x 48 x 3.7")
+     * menjadi nilai terpisah [P, L, T].
+     */
+    private function parseUkuran(string $ukuran): array
     {
-        return ['Ukuran', 'Jenis Kayu', 'KW', 'Total Hasil', 'Jumlah Entri'];
+        // Mengambil semua angka/desimal (termasuk titik/koma) dari string ukuran
+        preg_match_all('/(?:\d+(?:[\.,]\d+)?)/', $ukuran, $matches);
+
+        $numbers = $matches[0] ?? [];
+
+        $p = isset($numbers[0]) ? str_replace(',', '.', $numbers[0]) : '-';
+        $l = isset($numbers[1]) ? str_replace(',', '.', $numbers[1]) : '-';
+        $t = isset($numbers[2]) ? str_replace(',', '.', $numbers[2]) : '-';
+
+        return [$p, $l, $t];
     }
 
     public function styles(Worksheet $sheet)
     {
-        $sheet->getStyle('A1:E1')->getFont()->setBold(true);
-        $sheet->getStyle('A1:E1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        // Styling Header
+        $sheet->getStyle('A1:G1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:G1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A1:G1')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+
         return [];
     }
 
@@ -260,16 +358,32 @@ class LaporanPotJelekRekapSheet implements FromCollection, WithHeadings, WithSty
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = $sheet->getHighestRow();
 
-                $sheet->getStyle("A1:E{$lastRow}")->applyFromArray([
-                    'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
-                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                if ($lastRow < 2) return;
+
+                // Set Border Thin untuk seluruh tabel
+                $sheet->getStyle("A1:G{$lastRow}")->applyFromArray([
+                    'borders' => [
+                        'allBorders' => [
+                            'borderStyle' => Border::BORDER_THIN,
+                            'color' => ['argb' => 'FF000000'],
+                        ],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                    ]
                 ]);
 
-                foreach (range('A', 'E') as $col) {
+                // Merge Cells untuk Kolom Tanggal (A) & TTL PKJ (G) jika data berada dalam 1 grup tanggal
+                $sheet->mergeCells("A2:A{$lastRow}");
+                $sheet->mergeCells("G2:G{$lastRow}");
+
+                // Auto width kolom
+                foreach (range('A', 'G') as $col) {
                     $sheet->getColumnDimension($col)->setAutoSize(true);
                 }
 
-                $sheet->getRowDimension(1)->setRowHeight(22);
+                $sheet->getRowDimension(1)->setRowHeight(25);
             },
         ];
     }

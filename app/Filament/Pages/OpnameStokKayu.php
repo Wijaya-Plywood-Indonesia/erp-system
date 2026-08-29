@@ -6,6 +6,8 @@ use App\Models\HppAverageLog;
 use App\Models\HppAverageSummarie;
 use App\Models\JenisKayu;
 use App\Models\Lahan;
+use App\Models\LogLogCore;
+use App\Models\StokLogCore;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
@@ -16,7 +18,6 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
@@ -29,19 +30,25 @@ class OpnameStokKayu extends Page implements HasForms
 {
     use InteractsWithSchemas, HasPageShield;
 
-    // protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-list';
-    protected static ?string $navigationLabel = 'Opname Stok Kayu';
+    protected static ?string $navigationLabel = 'Opname Kayu & Log Core';
     protected static UnitEnum|string|null $navigationGroup = 'Opname';
-    protected static ?string $title = 'Opname Stok Kayu';
+    protected static ?string $title = 'Opname Stok Kayu & Log Core';
     protected static ?int $navigationSort = 14;
 
     protected string $view = 'filament.pages.opname-stok-kayu';
 
+    public string $activeTab = 'kayu'; // Options: 'kayu' | 'log_core'
     public ?array $data = [];
 
     public function mount(): void
     {
         $this->schema->fill();
+    }
+
+    public function setTab(string $tab): void
+    {
+        $this->activeTab = $tab;
+        $this->resetForm();
     }
 
     public function schema(Schema $schema): Schema
@@ -59,7 +66,8 @@ class OpnameStokKayu extends Page implements HasForms
                                 $l->id => "{$l->kode_lahan} - {$l->nama_lahan}"
                             ]))
                             ->searchable()
-                            ->required()
+                            ->required(fn() => $this->activeTab === 'kayu')
+                            ->visible(fn() => $this->activeTab === 'kayu')
                             ->live()
                             ->afterStateUpdated(fn(Get $get, Set $set) => $this->loadStokSaatIni($get, $set)),
 
@@ -83,7 +91,7 @@ class OpnameStokKayu extends Page implements HasForms
                         // STOK SAAT INI (READONLY)
                         // =========================================================
                         TextInput::make('stok_batang_sekarang')
-                            ->label('Stok Batang (Saat Ini)')
+                            ->label(fn() => $this->activeTab === 'kayu' ? 'Stok Batang (Saat Ini)' : 'Stok Qty (Saat Ini)')
                             ->numeric()
                             ->disabled()
                             ->dehydrated(false)
@@ -95,6 +103,7 @@ class OpnameStokKayu extends Page implements HasForms
                             ->numeric()
                             ->disabled()
                             ->dehydrated(false)
+                            ->visible(fn() => $this->activeTab === 'kayu')
                             ->default(0)
                             ->step(0.0001)
                             ->suffix(' m³'),
@@ -104,6 +113,7 @@ class OpnameStokKayu extends Page implements HasForms
                             ->numeric()
                             ->disabled()
                             ->dehydrated(false)
+                            ->visible(fn() => $this->activeTab === 'kayu')
                             ->default(0)
                             ->prefix('Rp '),
 
@@ -111,7 +121,7 @@ class OpnameStokKayu extends Page implements HasForms
                         // HASIL OPNAME (INPUT MANUAL)
                         // =========================================================
                         TextInput::make('stok_batang_baru')
-                            ->label('Stok Batang (Hasil Opname)')
+                            ->label(fn() => $this->activeTab === 'kayu' ? 'Stok Batang (Hasil Opname)' : 'Stok Qty (Hasil Opname)')
                             ->numeric()
                             ->required()
                             ->minValue(0)
@@ -121,33 +131,29 @@ class OpnameStokKayu extends Page implements HasForms
                         TextInput::make('stok_kubikasi_baru')
                             ->label('Stok Kubikasi (Hasil Opname)')
                             ->numeric()
-                            ->required()
+                            ->required(fn() => $this->activeTab === 'kayu')
+                            ->visible(fn() => $this->activeTab === 'kayu')
                             ->minValue(0)
                             ->step(0.0001)
                             ->default(0)
                             ->suffix(' m³'),
 
                         TextInput::make('nilai_stok_baru')
-                            ->label('Poin baru (Hasil Opname)')
+                            ->label('Poin Baru (Hasil Opname)')
                             ->numeric()
-                            ->required()
+                            ->required(fn() => $this->activeTab === 'kayu')
+                            ->visible(fn() => $this->activeTab === 'kayu')
                             ->minValue(0)
                             ->default(0)
                             ->prefix('Rp '),
                     ]),
 
-                // =========================================================
-                // KETERANGAN
-                // =========================================================
                 Textarea::make('keterangan')
                     ->label('Keterangan Opname')
-                    ->placeholder('Contoh: Opname bulan April 2026, Koreksi stok fisik, dll')
+                    ->placeholder('Contoh: Opname fisik berkala, penyesuaian selisih stok')
                     ->rows(2)
                     ->columnSpanFull(),
 
-                // =========================================================
-                // ACTION BUTTONS
-                // =========================================================
                 Actions::make([
                     Action::make('simpan')
                         ->label('Simpan Opname')
@@ -159,68 +165,76 @@ class OpnameStokKayu extends Page implements HasForms
                         ->label('Reset')
                         ->color('gray')
                         ->icon('heroicon-o-arrow-path')
-                        ->action(fn(Set $set) => $this->resetForm($set)),
+                        ->action(fn(Set $set) => $this->resetForm()),
                 ])->fullWidth(),
             ])
             ->statePath('data');
     }
 
-    /**
-     * Load stok saat ini dari database
-     */
     private function loadStokSaatIni(Get $get, Set $set): void
     {
-        $lahanId = $get('id_lahan');
         $jenisKayuId = $get('id_jenis_kayu');
         $panjang = $get('panjang');
 
-        if (!$lahanId || !$jenisKayuId || !$panjang) {
-            $set('stok_batang_sekarang', 0);
-            $set('stok_kubikasi_sekarang', 0);
-            $set('nilai_stok_sekarang', 0);
-            return;
-        }
+        if ($this->activeTab === 'kayu') {
+            $lahanId = $get('id_lahan');
+            if (!$lahanId || !$jenisKayuId || !$panjang) {
+                $this->clearStokFields($set);
+                return;
+            }
 
-        $summary = HppAverageSummarie::where('id_lahan', $lahanId)
-            ->where('id_jenis_kayu', $jenisKayuId)
-            ->where('panjang', $panjang)
-            ->whereNull('grade')
-            ->first();
+            $summary = HppAverageSummarie::where('id_lahan', $lahanId)
+                ->where('id_jenis_kayu', $jenisKayuId)
+                ->where('panjang', $panjang)
+                ->whereNull('grade')
+                ->first();
 
-        if ($summary) {
-            $set('stok_batang_sekarang', $summary->stok_batang);
-            $set('stok_kubikasi_sekarang', round($summary->stok_kubikasi, 4));
-            $set('nilai_stok_sekarang', round($summary->nilai_stok, 2));
+            if ($summary) {
+                $set('stok_batang_sekarang', $summary->stok_batang);
+                $set('stok_kubikasi_sekarang', round($summary->stok_kubikasi, 4));
+                $set('nilai_stok_sekarang', round($summary->nilai_stok, 2));
 
-            // Optional: set default nilai baru sama dengan yang lama
-            $set('stok_batang_baru', $summary->stok_batang);
-            $set('stok_kubikasi_baru', round($summary->stok_kubikasi, 4));
-            $set('nilai_stok_baru', round($summary->nilai_stok, 2));
+                $set('stok_batang_baru', $summary->stok_batang);
+                $set('stok_kubikasi_baru', round($summary->stok_kubikasi, 4));
+                $set('nilai_stok_baru', round($summary->nilai_stok, 2));
+            } else {
+                $this->clearStokFields($set);
+            }
         } else {
-            $set('stok_batang_sekarang', 0);
-            $set('stok_kubikasi_sekarang', 0);
-            $set('nilai_stok_sekarang', 0);
-            $set('stok_batang_baru', 0);
-            $set('stok_kubikasi_baru', 0);
-            $set('nilai_stok_baru', 0);
+            // TAB: LOG CORE
+            if (!$jenisKayuId || !$panjang) {
+                $set('stok_batang_sekarang', 0);
+                $set('stok_batang_baru', 0);
+                return;
+            }
+
+            $logCore = StokLogCore::where('id_jenis_kayu', $jenisKayuId)
+                ->where('panjang', $panjang)
+                ->first();
+
+            $qty = $logCore ? $logCore->stok_qty : 0;
+            $set('stok_batang_sekarang', $qty);
+            $set('stok_batang_baru', $qty);
         }
     }
 
-    /**
-     * Simpan hasil opname
-     */
     private function simpanOpname(Get $get): void
+    {
+        if ($this->activeTab === 'kayu') {
+            $this->simpanOpnameKayu($get);
+        } else {
+            $this->simpanOpnameLogCore($get);
+        }
+    }
+
+    private function simpanOpnameKayu(Get $get): void
     {
         $lahanId = $get('id_lahan');
         $jenisKayuId = $get('id_jenis_kayu');
         $panjang = $get('panjang');
 
         if (!$lahanId || !$jenisKayuId || !$panjang) {
-            Notification::make()
-                ->danger()
-                ->title('Data Tidak Lengkap')
-                ->body('Silakan pilih Lahan, Jenis Kayu, dan Panjang terlebih dahulu.')
-                ->send();
+            Notification::make()->danger()->title('Data Tidak Lengkap')->body('Pilih Lahan, Jenis Kayu, dan Panjang.')->send();
             return;
         }
 
@@ -236,50 +250,36 @@ class OpnameStokKayu extends Page implements HasForms
         $selisihNilai = $nilaiBaru - $nilaiSekarang;
 
         if ($selisihBatang == 0 && $selisihKubikasi == 0 && $selisihNilai == 0) {
-            Notification::make()
-                ->warning()
-                ->title('Tidak Ada Perubahan')
-                ->body('Stok tidak berubah, opname tidak perlu dicatat.')
-                ->send();
+            Notification::make()->warning()->title('Tidak Ada Perubahan')->body('Stok kayu tidak berubah.')->send();
             return;
         }
 
         DB::transaction(function () use ($get, $lahanId, $jenisKayuId, $panjang, $batangBaru, $kubikasiBaru, $nilaiBaru, $selisihBatang, $selisihKubikasi, $selisihNilai) {
-
-            $summary = HppAverageSummarie::where('id_lahan', $lahanId)
-                ->where('id_jenis_kayu', $jenisKayuId)
-                ->where('panjang', $panjang)
-                ->whereNull('grade')
-                ->first();
-
-            if (!$summary) {
-                $summary = new HppAverageSummarie();
-                $summary->id_lahan = $lahanId;
-                $summary->id_jenis_kayu = $jenisKayuId;
-                $summary->panjang = $panjang;
-                $summary->grade = null;
-            }
+            $summary = HppAverageSummarie::firstOrNew([
+                'id_lahan' => $lahanId,
+                'id_jenis_kayu' => $jenisKayuId,
+                'panjang' => $panjang,
+                'grade' => null,
+            ]);
 
             $beforeStok = $summary->stok_batang ?? 0;
             $beforeKubikasi = $summary->stok_kubikasi ?? 0;
             $beforeNilai = $summary->nilai_stok ?? 0;
 
-            // Update stok
             $summary->stok_batang = $batangBaru;
             $summary->stok_kubikasi = $kubikasiBaru;
             $summary->nilai_stok = $nilaiBaru;
             $summary->hpp_average = $kubikasiBaru > 0 ? round($nilaiBaru / $kubikasiBaru, 2) : 0;
             $summary->save();
 
-            // Buat log
             $keteranganLog = sprintf(
-                "STOK OPNAME | %s | Batang: %s%d (%s%.4f m³) | Poin: %s | %s",
+                "STOK OPNAME | %s | Batang: %s%d (%s%.4f m³) | Poin: Rp %s | User: %s",
                 $get('keterangan') ?: 'Opname berkala',
                 $selisihBatang > 0 ? '+' : '',
-                abs($selisihBatang),
+                $selisihBatang,
                 $selisihKubikasi > 0 ? '+' : '',
-                abs($selisihKubikasi),
-                'Rp ' . number_format($selisihNilai, 0, ',', '.'),
+                $selisihKubikasi,
+                number_format($selisihNilai, 0, ',', '.'),
                 Auth::user()->name
             );
 
@@ -289,14 +289,12 @@ class OpnameStokKayu extends Page implements HasForms
                 'grade' => null,
                 'panjang' => $panjang,
                 'tanggal' => now(),
-                'tipe_transaksi' => $selisihBatang > 0 ? 'masuk' : 'keluar',
+                'tipe_transaksi' => $selisihBatang >= 0 ? 'masuk' : 'keluar',
                 'keterangan' => $keteranganLog,
-                'referensi_type' => null,
-                'referensi_id' => null,
                 'total_batang' => abs($selisihBatang),
                 'total_kubikasi' => round(abs($selisihKubikasi), 4),
                 'harga' => $summary->hpp_average,
-                'nilai_stok' => abs(round($nilaiBaru - $beforeNilai, 2)),
+                'nilai_stok' => abs(round($selisihNilai, 2)),
                 'stok_batang_before' => $beforeStok,
                 'stok_kubikasi_before' => round($beforeKubikasi, 4),
                 'nilai_stok_before' => round($beforeNilai, 2),
@@ -309,29 +307,90 @@ class OpnameStokKayu extends Page implements HasForms
             $this->syncTempatKayu($lahanId);
         });
 
-        Notification::make()
-            ->success()
-            ->title('✅ Opname Berhasil')
-            ->body('Stok kayu telah diperbarui dan dicatat di Log HPP.')
-            ->send();
-
-        // Reset form setelah sukses
+        Notification::make()->success()->title('✅ Opname Kayu Berhasil')->send();
         $this->resetForm();
-        $this->schema->fill();
     }
 
-    /**
-     * Sync ke TempatKayu
-     */
+    private function simpanOpnameLogCore(Get $get): void
+    {
+        $jenisKayuId = $get('id_jenis_kayu');
+        $panjang = $get('panjang');
+
+        if (!$jenisKayuId || !$panjang) {
+            Notification::make()->danger()->title('Data Tidak Lengkap')->body('Pilih Jenis Kayu dan Panjang terlebih dahulu.')->send();
+            return;
+        }
+
+        $qtySekarang = (float) $get('stok_batang_sekarang');
+        $qtyBaru = (float) $get('stok_batang_baru');
+        $selisih = $qtyBaru - $qtySekarang;
+
+        if ($selisih == 0) {
+            Notification::make()->warning()->title('Tidak Ada Perubahan')->body('Stok log core tidak berubah, opname tidak disimpan.')->send();
+            return;
+        }
+
+        DB::transaction(function () use ($get, $jenisKayuId, $panjang, $qtySekarang, $qtyBaru, $selisih) {
+            // 1. Ambil/Buat record Stok Log Core
+            $logCore = StokLogCore::firstOrNew([
+                'id_jenis_kayu' => $jenisKayuId,
+                'panjang'       => $panjang,
+            ]);
+
+            $beforeQty = $logCore->stok_qty ?? 0;
+            $beforeNilai = $logCore->nilai_stok ?? 0; // Sesuaikan jika tabel StokLogCore memiliki nilai_stok
+
+            // Update Qty Stok Utama
+            $logCore->stok_qty = $qtyBaru;
+            $logCore->save();
+
+            // 2. Format Keterangan Log Opname
+            $keteranganLog = sprintf(
+                "STOK OPNAME LOG CORE | %s | Qty: %s%d Batang | Oleh: %s",
+                $get('keterangan') ?: 'Penyesuaian Stok Log Core',
+                $selisih > 0 ? '+' : '',
+                $selisih,
+                Auth::user()->name
+            );
+
+            LogLogCore::create([
+                'id_jenis_kayu'     => $jenisKayuId,
+                'panjang'           => $panjang,
+                'tanggal'           => now(),
+                'tipe_transaksi'    => $selisih >= 0 ? 'masuk' : 'keluar',
+                'keterangan'        => $keteranganLog,
+                'referensi_type'    => null,
+                'referensi_id'      => null,
+                'qty'               => abs($selisih),
+                'harga_satuan'      => 0, // Set 0 atau sesuaikan jika ada perhitungan harga/poin Log Core
+                'nilai'             => 0,
+                'stok_qty_before'   => $beforeQty,
+                'nilai_stok_before' => $beforeNilai,
+                'stok_qty_after'    => $qtyBaru,
+                'nilai_stok_after'  => $beforeNilai, // Sesuaikan jika ada perubahan nilai total
+                'id_validator'      => Auth::id(),
+                'tanggal_validasi'  => now(),
+            ]);
+        });
+
+        Notification::make()
+            ->success()
+            ->title('Opname Log Core Berhasil')
+            ->body('Stok log core berhasil diperbarui dan telah dicatat ke Log Log Core.')
+            ->send();
+
+        $this->resetForm();
+    }
+
     private function syncTempatKayu(int $lahanId): void
     {
         $totalBatang = HppAverageSummarie::where('id_lahan', $lahanId)
             ->whereNull('grade')
             ->sum('stok_batang');
 
-        $kayuMasuk = \App\Models\KayuMasuk::whereHas('detailTurusanKayus', function ($q) use ($lahanId) {
-            $q->where('lahan_id', $lahanId);
-        })->latest()->first();
+        $kayuMasuk = \App\Models\KayuMasuk::whereHas('detailTurusanKayus', fn($q) => $q->where('lahan_id', $lahanId))
+            ->latest()
+            ->first();
 
         if ($kayuMasuk) {
             \App\Models\TempatKayu::updateOrCreate(
@@ -341,12 +400,18 @@ class OpnameStokKayu extends Page implements HasForms
         }
     }
 
-    /**
-     * Reset form
-     */
+    private function clearStokFields(Set $set): void
+    {
+        $set('stok_batang_sekarang', 0);
+        $set('stok_kubikasi_sekarang', 0);
+        $set('nilai_stok_sekarang', 0);
+        $set('stok_batang_baru', 0);
+        $set('stok_kubikasi_baru', 0);
+        $set('nilai_stok_baru', 0);
+    }
+
     private function resetForm(): void
     {
-        // Gunakan $this->schema->getState() atau langsung set manual
         $this->schema->fill([
             'id_lahan' => null,
             'id_jenis_kayu' => null,
@@ -359,11 +424,5 @@ class OpnameStokKayu extends Page implements HasForms
             'nilai_stok_baru' => 0,
             'keterangan' => '',
         ]);
-
-        Notification::make()
-            ->info()
-            ->title('Form Direset')
-            ->body('Form telah dikosongkan, siap untuk opname baru.')
-            ->send();
     }
 }
