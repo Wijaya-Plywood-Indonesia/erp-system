@@ -14,6 +14,7 @@ return new class extends Migration
         // 1. TABEL UTAMA: Produksi Palet (Header)
         Schema::create('produksi_palets', function (Blueprint $table) {
             $table->id();
+            $table->uuid('uuid')->unique();
             $table->date('tanggal');
             $table->text('keterangan')->nullable();
             $table->timestamps();

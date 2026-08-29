@@ -2,11 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Validation\ValidationException;
 
 class ProduksiPalet extends Model
 {
+    use HasRouteUuid;
+
     protected $fillable = [
         'tanggal',
         'keterangan',
@@ -29,5 +33,19 @@ class ProduksiPalet extends Model
     public function validasiProduksiPalets(): HasMany
     {
         return $this->hasMany(ValidasiProduksiPalet::class, 'id_produksi_palet');
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function ($model) {
+            // Cek apakah laporan produksi palet untuk tanggal yang sama sudah dibuat
+            $exists = static::where('tanggal', $model->tanggal)->exists();
+
+            if ($exists) {
+                throw ValidationException::withMessages([
+                    'tanggal' => 'Laporan produksi palet untuk tanggal tersebut sudah ada.',
+                ]);
+            }
+        });
     }
 }

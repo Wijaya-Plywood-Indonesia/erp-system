@@ -37,6 +37,9 @@ class SyncEmptyUuidCommand extends Command
         'produksi_sanding_joint',
         'produksi_hp',
 
+        // Sektor Palet & Kayu Olahan (Baru Ditambahkan)
+        'produksi_palets',
+
         // Sektor Finishing & Gudang
         'produksi_graji_balken',
         'produksi_guellotine',

@@ -5,13 +5,10 @@ namespace App\Filament\Resources\ProduksiPalets\RelationManagers;
 use App\Models\PegawaiPalet;
 use App\Models\StokLogCore;
 use App\Services\ValidasiProduksiPaletService;
-use Filament\Actions\AssociateAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\DissociateAction;
-use Filament\Actions\DissociateBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -24,9 +21,14 @@ class HasilProduksiPaletsRelationManager extends RelationManager
 {
     protected static string $relationship = 'hasilProduksiPalets';
 
+    /**
+     * Menentukan apakah relation manager dikunci.
+     * Menggunakan Service::isLocked() agar Super Admin tetap bebas mengedit.
+     */
     public function isReadOnly(): bool
     {
         $owner = $this->getOwnerRecord();
+
         return $owner ? ValidasiProduksiPaletService::isLocked($owner) : false;
     }
 
@@ -41,7 +43,7 @@ class HasilProduksiPaletsRelationManager extends RelationManager
                     ->options(function ($livewire) {
                         $produksi = $livewire->getOwnerRecord();
 
-                        if (!$produksi) {
+                        if (! $produksi) {
                             return [];
                         }
 
@@ -56,6 +58,7 @@ class HasilProduksiPaletsRelationManager extends RelationManager
                                 return [$p->id => $nama];
                             });
                     }),
+
                 Select::make('id_stok_log_core')
                     ->label('Stok Log Core')
                     ->required()
@@ -71,6 +74,7 @@ class HasilProduksiPaletsRelationManager extends RelationManager
 
                         return $query->get()->mapWithKeys(function ($item) {
                             $namaKayu = $item->jenisKayu?->nama_kayu ?? 'Kayu';
+
                             return [
                                 $item->id => "{$namaKayu} | Panjang: {$item->panjang} cm | Sisa: {$item->stok_qty} Pcs",
                             ];
@@ -80,11 +84,13 @@ class HasilProduksiPaletsRelationManager extends RelationManager
                 TextInput::make('modal')
                     ->label('Modal Dipakai (Btg)')
                     ->numeric()
+                    ->minValue(1)
                     ->required(),
 
                 TextInput::make('hasil')
                     ->label('Hasil (Palet)')
                     ->numeric()
+                    ->minValue(1)
                     ->required(),
             ]);
     }
@@ -92,6 +98,7 @@ class HasilProduksiPaletsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         $owner = $this->getOwnerRecord();
+
         return $table
             ->recordTitleAttribute('HasilProduksiPalet')
             ->columns([
@@ -154,27 +161,28 @@ class HasilProduksiPaletsRelationManager extends RelationManager
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->filters([
-                //
-            ])
+            ->filters([])
             ->headerActions([
+                // Menggunakan ValidasiProduksiPaletService::isLocked($owner)
                 CreateAction::make()
-                    ->hidden(fn() => $owner && ValidasiProduksiPaletService::isStatusDivalidasi($owner))
-                    ->after(fn($record) => ValidasiProduksiPaletService::prosesValidasi($record)),
+                    ->hidden(fn() => $owner && ValidasiProduksiPaletService::isLocked($owner))
+                    ->after(fn() => $owner && ValidasiProduksiPaletService::prosesValidasiByProduksi($owner)),
             ])
             ->recordActions([
+                // Menggunakan ValidasiProduksiPaletService::isLocked($owner)
                 EditAction::make()
-                    ->hidden(fn() => $owner && ValidasiProduksiPaletService::isStatusDivalidasi($owner))
-                    ->after(fn($record) => ValidasiProduksiPaletService::prosesValidasi($record)),
+                    ->hidden(fn() => $owner && ValidasiProduksiPaletService::isLocked($owner))
+                    ->after(fn() => $owner && ValidasiProduksiPaletService::prosesValidasiByProduksi($owner)),
+
                 DeleteAction::make()
-                    ->hidden(fn() => $owner && ValidasiProduksiPaletService::isStatusDivalidasi($owner))
-                    ->after(fn($record) => ValidasiProduksiPaletService::prosesValidasi($record)),
+                    ->hidden(fn() => $owner && ValidasiProduksiPaletService::isLocked($owner))
+                    ->after(fn() => $owner && ValidasiProduksiPaletService::prosesValidasiByProduksi($owner)),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(fn() => $owner && ValidasiProduksiPaletService::isStatusDivalidasi($owner))
-                        ->after(fn($record) => ValidasiProduksiPaletService::prosesValidasi($record)),
+                        ->hidden(fn() => $owner && ValidasiProduksiPaletService::isLocked($owner))
+                        ->after(fn() => $owner && ValidasiProduksiPaletService::prosesValidasiByProduksi($owner)),
                 ]),
             ]);
     }

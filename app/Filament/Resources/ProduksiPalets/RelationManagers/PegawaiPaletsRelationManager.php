@@ -5,18 +5,13 @@ namespace App\Filament\Resources\ProduksiPalets\RelationManagers;
 use App\Models\Pegawai;
 use App\Services\ValidasiProduksiPaletService;
 use Carbon\CarbonPeriod;
-use Filament\Actions\AssociateAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\DissociateAction;
-use Filament\Actions\DissociateBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TimePicker;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -26,9 +21,14 @@ class PegawaiPaletsRelationManager extends RelationManager
 {
     protected static string $relationship = 'pegawaiPalets';
 
+    /**
+     * Tentukan apakah tabel relation bersifat Read Only.
+     * Menggunakan Service::isLocked agar Super Admin tetap memiliki akses edit.
+     */
     public function isReadOnly(): bool
     {
         $owner = $this->getOwnerRecord();
+
         return $owner ? ValidasiProduksiPaletService::isLocked($owner) : false;
     }
 
@@ -57,7 +57,6 @@ class PegawaiPaletsRelationManager extends RelationManager
                     ->searchable()
                     ->required(),
 
-                // 2. Select Jam Masuk (Sama seperti PegawaiRotaryForm)
                 Select::make('jam_masuk')
                     ->label('Jam Masuk')
                     ->options(self::timeOptions())
@@ -67,7 +66,6 @@ class PegawaiPaletsRelationManager extends RelationManager
                     ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
                     ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
-                // 3. Select Jam Pulang (Sama seperti PegawaiRotaryForm)
                 Select::make('jam_pulang')
                     ->label('Jam Pulang')
                     ->options(self::timeOptions())
@@ -77,7 +75,6 @@ class PegawaiPaletsRelationManager extends RelationManager
                     ->dehydrateStateUsing(fn($state) => $state ? $state . ':00' : null)
                     ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : null),
 
-                // 4. Status Izin & Keterangan
                 Select::make('izin')
                     ->label('Izin')
                     ->options([
@@ -99,6 +96,7 @@ class PegawaiPaletsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         $owner = $this->getOwnerRecord();
+
         return $table
             ->recordTitleAttribute('PegawaiPalet')
             ->columns([
@@ -145,27 +143,27 @@ class PegawaiPaletsRelationManager extends RelationManager
                     ->limit(30)
                     ->placeholder('-'),
             ])
-            ->filters([
-                //
-            ])
+            ->filters([])
             ->headerActions([
+                // Menggunakan isLocked agar Super Admin tetap bisa Create
                 CreateAction::make()
-                    ->hidden(fn() => $owner && ValidasiProduksiPaletService::isStatusDivalidasi($owner))
-                    ->after(fn($record) => ValidasiProduksiPaletService::prosesValidasi($record)),
+                    ->hidden(fn() => $owner && ValidasiProduksiPaletService::isLocked($owner))
+                    ->after(fn() => $owner && ValidasiProduksiPaletService::prosesValidasiByProduksi($owner)),
             ])
             ->recordActions([
+                // Menggunakan isLocked agar Super Admin tetap bisa Edit & Delete
                 EditAction::make()
-                    ->hidden(fn() => $owner && ValidasiProduksiPaletService::isStatusDivalidasi($owner))
-                    ->after(fn($record) => ValidasiProduksiPaletService::prosesValidasi($record)),
+                    ->hidden(fn() => $owner && ValidasiProduksiPaletService::isLocked($owner))
+                    ->after(fn() => $owner && ValidasiProduksiPaletService::prosesValidasiByProduksi($owner)),
                 DeleteAction::make()
-                    ->hidden(fn() => $owner && ValidasiProduksiPaletService::isStatusDivalidasi($owner))
-                    ->after(fn($record) => ValidasiProduksiPaletService::prosesValidasi($record)),
+                    ->hidden(fn() => $owner && ValidasiProduksiPaletService::isLocked($owner))
+                    ->after(fn() => $owner && ValidasiProduksiPaletService::prosesValidasiByProduksi($owner)),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(fn() => $owner && ValidasiProduksiPaletService::isStatusDivalidasi($owner))
-                        ->after(fn($record) => ValidasiProduksiPaletService::prosesValidasi($record)),
+                        ->hidden(fn() => $owner && ValidasiProduksiPaletService::isLocked($owner))
+                        ->after(fn() => $owner && ValidasiProduksiPaletService::prosesValidasiByProduksi($owner)),
                 ]),
             ]);
     }

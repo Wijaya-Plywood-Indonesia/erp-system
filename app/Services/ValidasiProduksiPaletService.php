@@ -163,7 +163,7 @@ class ValidasiProduksiPaletService
         DB::transaction(function () use ($produksi) {
             $hasilList = HasilProduksiPalet::where('id_produksi_palet', $produksi->id)->get();
             $userAktif = Auth::user();
-            $namaAdmin = $userAktif ? ($userAktif->name ?? $userAktif->nama_pegawai ?? 'SuperAdmin') : 'SuperAdmin';
+            $namaAdmin = $userAktif ? ($userAktif->name ?? $userAktif->nama_pegawai ?? 'super_admin') : 'super_admin';
 
             $tglProduksiObj = Carbon::parse($produksi->tanggal);
             $tglProduksiFormatted = $tglProduksiObj->translatedFormat('d F Y');
@@ -261,8 +261,11 @@ class ValidasiProduksiPaletService
     {
         $user = Auth::user();
 
-        if ($user && method_exists($user, 'hasRole') && $user->hasRole(['super_admin', 'Super Admin'])) {
-            return false;
+        if ($user && method_exists($user, 'hasAnyRole')) {
+            // Mendukung format slug ('super_admin') dan format nama ('Super Admin')
+            if ($user->hasAnyRole(['super_admin', 'Super Admin', 'super-admin'])) {
+                return false; // Super Admin TIDAK DILOCK
+            }
         }
 
         return self::isStatusDivalidasi($produksi);
