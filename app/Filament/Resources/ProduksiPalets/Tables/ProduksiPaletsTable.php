@@ -62,8 +62,7 @@ class ProduksiPaletsTable
                         Textarea::make('keterangan')
                             ->label('Kendala Produksi')
                             ->placeholder('Tuliskan kendala yang terjadi selama produksi...')
-                            ->rows(4)
-                            ->required(),
+                            ->rows(4),
                     ])
                     ->fillForm(fn($record): array => [
                         'keterangan' => $record->keterangan,
