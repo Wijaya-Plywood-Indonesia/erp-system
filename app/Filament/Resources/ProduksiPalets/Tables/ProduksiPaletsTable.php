@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiPalets\Tables;
 
+use App\Services\ProductionAccessService;
 use App\Services\ValidasiProduksiPaletService;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -19,6 +20,7 @@ class ProduksiPaletsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal', 3))
             ->defaultSort('tanggal', 'desc')
             ->columns([
                 TextColumn::make('tanggal')
@@ -60,8 +62,7 @@ class ProduksiPaletsTable
                         Textarea::make('keterangan')
                             ->label('Kendala Produksi')
                             ->placeholder('Tuliskan kendala yang terjadi selama produksi...')
-                            ->rows(4)
-                            ->required(),
+                            ->rows(4),
                     ])
                     ->fillForm(fn($record): array => [
                         'keterangan' => $record->keterangan,
