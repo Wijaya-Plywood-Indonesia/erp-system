@@ -21,6 +21,29 @@ class NotaBKController extends Controller
         ]);
     }
 
+    /**
+     * Cetak Nota Barang Keluar (Format Nota F4 / Plywood & BSJ HP).
+     */
+    public function printBarangKeluar(NotaBarangKeluar $record)
+    {
+        $record->load([
+            'pembuat',
+            'validator',
+            'plywoodMutasi.details.ukuran',
+            'plywoodMutasi.details.jenisKayu',
+            'detail',
+        ]);
+
+        $items = ($record->plywoodMutasi && $record->plywoodMutasi->details->isNotEmpty())
+            ? $record->plywoodMutasi->details
+            : $record->detail;
+
+        return view('nota.barang-keluar', [
+            'notaBarangKeluar' => $record,
+            'items' => $items,
+        ]);
+    }
+
     // ✅ REKAP NOTA MASUK
     public function rekap()
     {

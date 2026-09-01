@@ -36,4 +36,75 @@ class PlywoodMutasiDetail extends Model
     {
         return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu');
     }
+
+    /**
+     * Relasi ke BarangSetengahJadiHp berdasarkan dimensi ukuran, jenis kayu, dan kw_grade.
+     */
+    public function getBarangAttribute(): ?BarangSetengahJadiHp
+    {
+        $ukuran = $this->ukuran ?? ($this->id_ukuran ? Ukuran::find($this->id_ukuran) : null);
+        if (! $ukuran) {
+            return null;
+        }
+
+        // Pencarian ukuran dua arah (122x244 vs 244x122)
+        $matchedUkuranIds = Ukuran::where('tebal', $ukuran->tebal)
+            ->where(function ($q) use ($ukuran) {
+                $q->where(fn($s) => $s->where('panjang', $ukuran->panjang)->where('lebar', $ukuran->lebar))
+                    ->orWhere(fn($s) => $s->where('panjang', $ukuran->lebar)->where('lebar', $ukuran->panjang));
+            })->pluck('id');
+
+        $grade = Grade::whereRaw('LOWER(TRIM(nama_grade)) = ?', [strtolower(trim($this->kw_grade))])
+            ->whereHas('kategoriBarang', fn($q) => $q->where('nama_kategori', 'like', '%plywood%'))
+            ->first()
+            ?? Grade::whereRaw('LOWER(TRIM(nama_grade)) = ?', [strtolower(trim($this->kw_grade))])->first();
+
+        $jenisBarang = JenisBarang::where('nama_jenis_barang', 'like', $this->jenisKayu?->nama_kayu)->first()
+            ?? JenisBarang::find($this->id_jenis_kayu);
+
+        $bshp = BarangSetengahJadiHp::with(['ukuran', 'jenisBarang', 'grade.kategoriBarang'])
+            ->whereIn('id_ukuran', $matchedUkuranIds)
+            ->when($jenisBarang, fn($q) => $q->where('id_jenis_barang', $jenisBarang->id))
+            ->when($grade, fn($q) => $q->where('id_grade', $grade->id))
+            ->first();
+
+        if (! $bshp) {
+            $bshp = BarangSetengahJadiHp::with(['ukuran', 'jenisBarang', 'grade.kategoriBarang'])
+                ->whereIn('id_ukuran', $matchedUkuranIds)
+                ->when($grade, fn($q) => $q->where('id_grade', $grade->id))
+                ->first();
+        }
+
+        return $bshp;
+    }
+
+    public function getNamaBarangAttribute(): string
+    {
+        if ($this->barang && $this->barang->label) {
+            return $this->barang->label;
+        }
+
+        $parts = [
+            'Plywood',
+            $this->jenisKayu?->nama_kayu,
+            $this->ukuran?->nama_ukuran,
+            $this->kw_grade ? "KW {$this->kw_grade}" : null,
+        ];
+
+        return implode(' - ', array_filter($parts));
+    }
+
+    public function getHargaAttribute(): float
+    {
+        if ($this->barang && filled($this->barang->harga) && (float) $this->barang->harga > 0) {
+            return (float) $this->barang->harga;
+        }
+
+        return 200000;
+    }
+
+    public function getSatuanAttribute(): string
+    {
+        return 'Lembar';
+    }
 }

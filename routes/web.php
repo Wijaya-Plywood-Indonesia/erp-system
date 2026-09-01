@@ -62,6 +62,9 @@ Route::get('/nota-barang-masuk/rekap/export', [NotaBMController::class, 'exportE
 Route::get('/nota-barang-keluar/{record}/print', [NotaBKController::class, 'show'])
     ->name('nota-bk.print');
 
+Route::get('/nota-barang-keluar/{record}/barang-keluar', [NotaBKController::class, 'printBarangKeluar'])
+    ->name('nota-bk.barang-keluar');
+
 Route::get('/nota-barang-keluar/rekap', [NotaBKController::class, 'rekap'])
     ->name('nota-bk.rekap');
 
