@@ -67,6 +67,15 @@ class NotaBarangKeluarsTable
                     ->openUrlInNewTab()
                     ->visible(fn($record) => $record->divalidasi_oleh !== null),
 
+                // ✅ BARU: CETAK NOTA HARGA / PLYWOOD (barang-keluar.blade.php)
+                Action::make('cetakBarangKeluar')
+                    ->label('Cetak Nota Plywood')
+                    ->icon('heroicon-o-document-currency-dollar')
+                    ->color('success')
+                    ->url(fn($record) => route('nota-bk.barang-keluar', $record))
+                    ->openUrlInNewTab()
+                    ->visible(fn($record) => $record->divalidasi_oleh !== null),
+
                 ViewAction::make(),
                 EditAction::make()
                     ->visible(fn($record) => $record->divalidasi_oleh === null),

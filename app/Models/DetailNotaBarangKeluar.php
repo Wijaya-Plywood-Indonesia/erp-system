@@ -22,4 +22,14 @@ class DetailNotaBarangKeluar extends Model
     {
         return $this->belongsTo(NotaBarangKeluar::class, 'id_nota_bk');
     }
+
+    public function getQtyAttribute(): float
+    {
+        return (float) ($this->jumlah ?? 0);
+    }
+
+    public function getHargaAttribute(): float
+    {
+        return (float) ($this->attributes['harga'] ?? 200000);
+    }
 }
