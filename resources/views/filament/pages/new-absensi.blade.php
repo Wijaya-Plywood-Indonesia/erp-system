@@ -74,68 +74,98 @@
                         Export Format Baru
                     </x-filament::button>
 
-                    {{-- Tombol cek target TANPA export — buat user yang mau review
-                         dulu sebelum benar-benar mengunduh filenya. --}}
-                    <x-filament::button wire:click="cekTargetProduksi" color="gray" icon="heroicon-o-magnifying-glass"
-                        wire:loading.attr="disabled" wire:target="cekTargetProduksi">
-                        Cek Kelengkapan Target
-                    </x-filament::button>
+                    {{-- Tombol "Cek Ulang Kelengkapan Target" DIHILANGKAN — sudah
+                         tidak diperlukan karena pengecekan target sekarang otomatis
+                         jalan saat halaman dibuka (mount()) dan setiap kali tanggal
+                         diganti (updatedTanggal()). Method cekTargetProduksi() di
+                         komponen tetap ada, hanya sudah tidak dipanggil manual lewat
+                         tombol di UI. --}}
                 </div>
 
-                {{-- Tabel/peringatan hasil pengecekan target — hanya tampil kalau
-                     sudah pernah dicek (baik lewat tombol manual maupun otomatis
-                     saat export). TIDAK memblokir export sama sekali, murni
-                     informasional. --}}
+                {{-- Tabel/peringatan hasil pengecekan target — hasilnya otomatis
+                     ada begitu halaman dibuka (lihat mount()), TIDAK memblokir
+                     export sama sekali, murni informasional. Tombol
+                     show/hide panel (toggleTargetPanel()) HANYA ditampilkan untuk
+                     super admin — role lain selalu melihat panel ini kalau ada
+                     item yang belum punya target. --}}
                 @if ($sudahDicekTarget && count($missingTargetItems) > 0)
-                    <div
-                        class="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
-                        <div class="flex items-start gap-3">
-                            <x-heroicon-o-exclamation-triangle
-                                class="h-6 w-6 shrink-0 text-amber-600 dark:text-amber-400" />
-                            <div class="flex-1">
-                                <h4 class="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                                    {{ count($missingTargetItems) }} item produksi belum punya target di Master
-                                    Target
-                                </h4>
-                                <p class="text-sm text-amber-700 dark:text-amber-400 mt-1">
-                                    Kamu tetap bisa export "Format Baru" — potongan untuk item di bawah ini akan
-                                    otomatis dianggap <strong>Rp 0</strong> karena target-nya tidak ditemukan.
-                                    Segera lengkapi Master Target kalau ini memang seharusnya ada targetnya.
-                                </p>
+                    @if (auth()->user()?->hasRole('super_admin'))
+                        <div class="flex justify-end">
+                            <button type="button" wire:click="toggleTargetPanel"
+                                class="inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:underline dark:text-amber-400">
+                                @if ($showTargetPanel)
+                                    <x-heroicon-o-eye-slash class="h-3.5 w-3.5" />
+                                    Sembunyikan peringatan
+                                @else
+                                    <x-heroicon-o-eye class="h-3.5 w-3.5" />
+                                    Tampilkan peringatan ({{ count($missingTargetItems) }} item)
+                                @endif
+                            </button>
+                        </div>
+                    @endif
 
-                                <div
-                                    class="mt-3 overflow-x-auto rounded-lg border border-amber-200 dark:border-amber-800">
-                                    <table class="w-full text-sm text-left border-collapse">
-                                        <thead
-                                            class="bg-amber-100 dark:bg-amber-900/40 text-xs font-semibold uppercase text-amber-800 dark:text-amber-300">
-                                            <tr>
-                                                <th class="px-3 py-2">Divisi</th>
-                                                <th class="px-3 py-2">Mesin / Meja</th>
-                                                <th class="px-3 py-2">Ukuran</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody
-                                            class="divide-y divide-amber-200 dark:divide-amber-800 bg-white dark:bg-transparent">
-                                            @foreach ($missingTargetItems as $item)
+                    @if ($showTargetPanel)
+                        <div
+                            class="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+                            <div class="flex items-start gap-3">
+                                <x-heroicon-o-exclamation-triangle
+                                    class="h-6 w-6 shrink-0 text-amber-600 dark:text-amber-400" />
+                                <div class="flex-1">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <h4 class="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                                            {{ count($missingTargetItems) }} item produksi belum punya target di
+                                            Master
+                                            Target
+                                        </h4>
+                                        {{-- Tombol X kecil untuk menutup panel — sama seperti
+                                             toggle di atas, hanya untuk super admin. --}}
+                                        @if (auth()->user()?->hasRole('super_admin'))
+                                            <button type="button" wire:click="toggleTargetPanel" title="Sembunyikan"
+                                                class="shrink-0 rounded-full p-1 text-amber-500 hover:bg-amber-100 hover:text-amber-700 dark:hover:bg-amber-900/40">
+                                                <x-heroicon-o-x-mark class="h-4 w-4" />
+                                            </button>
+                                        @endif
+                                    </div>
+                                    <p class="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                                        Kamu tetap bisa export "Format Baru" — potongan untuk item di bawah ini akan
+                                        otomatis dianggap <strong>Rp 0</strong> karena target-nya tidak ditemukan.
+                                        Segera lengkapi Master Target kalau ini memang seharusnya ada targetnya.
+                                    </p>
+
+                                    <div
+                                        class="mt-3 overflow-x-auto rounded-lg border border-amber-200 dark:border-amber-800">
+                                        <table class="w-full text-sm text-left border-collapse">
+                                            <thead
+                                                class="bg-amber-100 dark:bg-amber-900/40 text-xs font-semibold uppercase text-amber-800 dark:text-amber-300">
                                                 <tr>
-                                                    <td
-                                                        class="px-3 py-2 text-amber-900 dark:text-amber-200 font-medium">
-                                                        {{ $item['divisi'] }}
-                                                    </td>
-                                                    <td class="px-3 py-2 text-amber-800 dark:text-amber-300">
-                                                        {{ $item['mesin'] }}
-                                                    </td>
-                                                    <td class="px-3 py-2 text-amber-800 dark:text-amber-300">
-                                                        {{ $item['ukuran'] }}
-                                                    </td>
+                                                    <th class="px-3 py-2">Divisi</th>
+                                                    <th class="px-3 py-2">Mesin / Meja</th>
+                                                    <th class="px-3 py-2">Ukuran</th>
                                                 </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody
+                                                class="divide-y divide-amber-200 dark:divide-amber-800 bg-white dark:bg-transparent">
+                                                @foreach ($missingTargetItems as $item)
+                                                    <tr>
+                                                        <td
+                                                            class="px-3 py-2 text-amber-900 dark:text-amber-200 font-medium">
+                                                            {{ $item['divisi'] }}
+                                                        </td>
+                                                        <td class="px-3 py-2 text-amber-800 dark:text-amber-300">
+                                                            {{ $item['mesin'] }}
+                                                        </td>
+                                                        <td class="px-3 py-2 text-amber-800 dark:text-amber-300">
+                                                            {{ $item['ukuran'] }}
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    @endif
                 @elseif ($sudahDicekTarget && count($missingTargetItems) === 0)
                     <div
                         class="rounded-xl border border-green-300 bg-green-50 p-3 text-sm text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-400">
@@ -163,6 +193,8 @@
                                 <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Jam Pulang (Finger)
                                 </th>
                                 <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Izin</th>
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 text-right">
+                                    Potongan</th>
                                 <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Keterangan</th>
                             </tr>
                         </thead>
@@ -327,6 +359,25 @@
                                             <span class="text-gray-400">-</span>
                                         @endif
                                     </td>
+                                    {{-- Potongan target produksi, digabung dari 11 divisi
+                                         (Rotary, Dryer, Stik, Kedi, Repair, Joint, Sanding
+                                         Joint, Pot Afalan, Pot Siku, Pot Jelek, Pilih Veneer)
+                                         lewat PotonganGajiService::getPotonganMap() — kalau
+                                         seorang pegawai kena potongan di lebih dari satu
+                                         divisi hari itu, yang dipakai adalah nilai TERKECIL
+                                         (bukan dijumlah), SAMA PERSIS dengan kolom "Potongan"
+                                         di file "Export Format Baru" karena keduanya
+                                         menghitung dari service yang sama. Murni
+                                         informasional, tidak mempengaruhi kolom lain. --}}
+                                    <td class="px-4 py-2.5 text-right">
+                                        @if (!empty($row['potongan']) && $row['potongan'] > 0)
+                                            <span class="font-medium text-red-600 dark:text-red-400">
+                                                Rp{{ number_format($row['potongan'], 0, ',', '.') }}
+                                            </span>
+                                        @else
+                                            <span class="text-gray-400">-</span>
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
                                         {{ $row['keterangan'] ?? '-' }}
                                     </td>
@@ -365,7 +416,7 @@
                                     @endphp
                                     <tr wire:key="row-preview-{{ $rowKey }}"
                                         class="bg-gray-50/70 dark:bg-gray-800/40">
-                                        <td colspan="11" class="px-6 py-3">
+                                        <td colspan="12" class="px-6 py-3">
                                             <div class="flex flex-col gap-3 text-sm">
 
                                                 {{-- Panel "Raw finger" — menampilkan hasil
@@ -422,7 +473,7 @@
                                 @endif
                             @empty
                                 <tr>
-                                    <td colspan="11"
+                                    <td colspan="12"
                                         class="px-4 py-10 text-center text-gray-400 dark:text-gray-500">
                                         <div class="flex flex-col items-center gap-2">
                                             <x-heroicon-o-inbox class="h-8 w-8 text-gray-300 dark:text-gray-600" />

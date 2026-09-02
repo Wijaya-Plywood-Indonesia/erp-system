@@ -7,6 +7,7 @@ use App\Exports\RumusGajiWijayaExport;
 use App\Models\NewAbsensiUpload;
 use App\Services\DownloadAbsensiUploadService;
 use App\Services\NewRekapAbsensiPegawaiService;
+use App\Services\PotonganGajiService;
 use App\Services\UploadFingerService;
 use App\Services\ValidasiTargetProduksiService;
 use BackedEnum;
@@ -73,11 +74,18 @@ class NewAbsensi extends Page implements HasForms
 
     /**
      * Hasil pengecekan terakhir dari ValidasiTargetProduksiService untuk
-     * tanggal yang sedang dipilih. Diisi oleh cekTargetProduksi() (tombol
-     * "Cek Kelengkapan Target") ATAU otomatis diisi ulang setiap kali
+     * tanggal yang sedang dipilih. Diisi otomatis oleh cekTargetProduksi()
+     * — dipanggil dari mount() (supaya user tidak perlu pencet tombol dulu
+     * saat pertama kali buka halaman), dari updatedTanggal() (setiap kali
+     * tanggal diganti), MAUPUN otomatis diisi ulang setiap kali
      * exportRumusGajiWijaya() dipanggil, supaya user selalu lihat status
      * paling baru di halaman (tabel peringatan), tanpa export itu sendiri
      * ikut terblokir kalau ada yang belum lengkap.
+     *
+     * CATATAN: tombol manual "Cek Ulang Kelengkapan Target" sudah
+     * dihilangkan dari UI karena pengecekan sekarang selalu otomatis
+     * (mount() & updatedTanggal()). Method cekTargetProduksi() sengaja
+     * TIDAK dihapus — masih dipanggil dari kedua tempat tersebut.
      *
      * @var array<int, array{divisi: string, mesin: string, ukuran: string, keterangan: string}>
      */
@@ -90,6 +98,19 @@ class NewAbsensi extends Page implements HasForms
      */
     public bool $sudahDicekTarget = false;
 
+    /**
+     * Menandai apakah panel peringatan "item belum punya target" sedang
+     * ditampilkan atau disembunyikan di UI. Panel tetap otomatis DIHITUNG
+     * setiap kali halaman dibuka / tanggal berubah (lihat mount() &
+     * updatedTanggal()) — property ini murni mengatur visibility-nya.
+     *
+     * CATATAN: tombol untuk toggle property ini (toggleTargetPanel) di
+     * blade sekarang HANYA ditampilkan untuk user dengan role
+     * `super_admin` — user lain selalu melihat panel ini terbuka kalau
+     * ada item yang belum punya target (tidak bisa menyembunyikannya).
+     */
+    public bool $showTargetPanel = true;
+
     public function mount(): void
     {
         // Pakai ??= (bukan langsung assign) supaya nilai yang sudah datang
@@ -101,6 +122,12 @@ class NewAbsensi extends Page implements HasForms
         // (misal pertama kali buka halaman tanpa query string).
         $this->tanggal ??= now()->format('Y-m-d');
         $this->uploadForm->fill();
+
+        // Langsung jalankan pengecekan target saat halaman pertama kali
+        // dibuka, supaya user tidak perlu pencet tombol manual dulu buat
+        // lihat status kelengkapan target tanggal yang sedang aktif —
+        // tabel peringatan (kalau ada) langsung tampil.
+        $this->cekTargetProduksi();
     }
 
     /**
@@ -171,11 +198,29 @@ class NewAbsensi extends Page implements HasForms
         }
     }
 
+    /**
+     * Rekap absensi untuk tabel Data Absensi. Setiap baris diperkaya
+     * dengan field 'potongan' (potongan target produksi, digabung dari
+     * 11 divisi produksi lewat PotonganGajiService) supaya kolom
+     * "Potongan" di blade angkanya SAMA PERSIS dengan kolom "Potongan"
+     * pada file "Export Format Baru" (RumusGajiWijayaExport) — sumber
+     * perhitungannya sengaja dipakai bareng (satu service), bukan
+     * dihitung ulang terpisah dengan logic sendiri.
+     */
     public function getRekap(): Collection
     {
         $tanggal = $this->tanggal ?? now()->format('Y-m-d');
 
-        return app(NewRekapAbsensiPegawaiService::class)->getRekap($tanggal);
+        $rekap = app(NewRekapAbsensiPegawaiService::class)->getRekap($tanggal);
+
+        $potonganService = app(PotonganGajiService::class);
+        $potonganMap = $potonganService->getPotonganMap($tanggal);
+
+        return $rekap->map(function ($row) use ($potonganService, $potonganMap) {
+            $row['potongan'] = $potonganService->resolvePotongan($potonganMap, $row['kode_pegawai'] ?? null);
+
+            return $row;
+        });
     }
 
     public function getAbsensiLainLain(): Collection
@@ -201,10 +246,15 @@ class NewAbsensi extends Page implements HasForms
     }
 
     /**
-     * Dipanggil dari tombol "Cek Kelengkapan Target" — HANYA mengecek &
-     * menampilkan hasilnya di halaman (tabel peringatan), TIDAK
-     * men-download apa pun. Berguna buat user yang mau review dulu
-     * sebelum export.
+     * Dipanggil dari mount() (otomatis saat halaman pertama kali dibuka)
+     * dan dari updatedTanggal() (otomatis setiap kali tanggal diganti) —
+     * HANYA mengecek & menampilkan hasilnya di halaman (tabel peringatan),
+     * TIDAK men-download apa pun.
+     *
+     * Tombol manual untuk memanggil method ini secara langsung sudah
+     * dihilangkan dari UI (lihat new-absensi.blade.php) karena
+     * pengecekan sekarang selalu otomatis jalan di kedua lifecycle hook
+     * di atas.
      */
     public function cekTargetProduksi(): void
     {
@@ -232,6 +282,18 @@ class NewAbsensi extends Page implements HasForms
     }
 
     /**
+     * Dipanggil dari tombol show/hide di panel peringatan target — di
+     * blade tombolnya sekarang HANYA ditampilkan untuk role
+     * `super_admin`. Tidak menghitung ulang apa pun — hanya toggle
+     * visibility panelnya, datanya sendiri (missingTargetItems) tetap
+     * tersimpan di property seperti biasa.
+     */
+    public function toggleTargetPanel(): void
+    {
+        $this->showTargetPanel = ! $this->showTargetPanel;
+    }
+
+    /**
      * Dipanggil dari tombol "Export Rumus Gaji Wijaya" di tab Data Absensi.
      *
      * Sengaja dibuat sebagai method & export class TERPISAH dari
@@ -255,6 +317,9 @@ class NewAbsensi extends Page implements HasForms
         $this->missingTargetItems = app(ValidasiTargetProduksiService::class)
             ->cekMissingTarget($tanggal);
         $this->sudahDicekTarget = true;
+        // Pastikan panelnya tampil lagi kalau sebelumnya di-hide user,
+        // supaya hasil pengecekan terbaru ini benar-benar terlihat.
+        $this->showTargetPanel = true;
 
         if (! empty($this->missingTargetItems)) {
             $bodyLines = collect($this->missingTargetItems)
@@ -355,14 +420,21 @@ class NewAbsensi extends Page implements HasForms
     }
 
     /**
-     * Reset hasil pengecekan target setiap kali tanggal yang dipilih
-     * berubah, supaya tabel peringatan tidak "nyampur" menampilkan hasil
-     * cek dari tanggal sebelumnya. Livewire otomatis memanggil method ini
-     * ketika property $tanggal berubah lewat wire:model.live di blade.
+     * Dipanggil otomatis oleh Livewire setiap kali property $tanggal
+     * berubah lewat wire:model.live di blade. Reset dulu hasil
+     * pengecekan lama (supaya tabel peringatan tidak "nyampur" dengan
+     * hasil cek tanggal sebelumnya) lalu langsung jalankan ulang
+     * cekTargetProduksi() untuk tanggal yang baru — jadi user tidak perlu
+     * pencet tombol manual lagi tiap kali ganti tanggal. Panel juga
+     * dipastikan tampil lagi (showTargetPanel = true) supaya hasil
+     * terbaru langsung kelihatan.
      */
     public function updatedTanggal(): void
     {
         $this->missingTargetItems = [];
         $this->sudahDicekTarget = false;
+        $this->showTargetPanel = true;
+
+        $this->cekTargetProduksi();
     }
 }
