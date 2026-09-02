@@ -36,6 +36,15 @@ use Illuminate\Support\Facades\Log;
  * transformer, yang memang skip perhitungan potongan kalau target
  * tidak ditemukan).
  *
+ * REVISI TERBARU: hasil di-MERGE (dedupe) per kombinasi divisi+ukuran.
+ * Sebelumnya satu ukuran yang sama bisa muncul berkali-kali di daftar
+ * kalau dikerjakan di beberapa meja/mesin berbeda pada tanggal yang
+ * sama (mis. "244mm x 122mm x 0.5mm (Sengon, KW3)" muncul di Meja 1,
+ * Meja 2, dst) — padahal yang perlu dilengkapi admin di Master Target
+ * itu SATU baris per ukuran/jenis kayu/KW, bukan per meja. Field
+ * 'mesin' dihapus sepenuhnya dari hasil karena sudah tidak relevan
+ * untuk tujuan ini.
+ *
  * CARA KERJA: dipakai generic recursive scanner (scanForMissingTarget)
  * yang mencari key 'has_target' === false di level manapun dalam array
  * hasil transformer, supaya tidak perlu tahu persis struktur nested
@@ -47,7 +56,7 @@ use Illuminate\Support\Facades\Log;
 class ValidasiTargetProduksiService
 {
     /**
-     * @return array<int, array{divisi: string, mesin: string, ukuran: string, keterangan: string}>
+     * @return array<int, array{divisi: string, ukuran: string, keterangan: string}>
      */
     public function cekMissingTarget(string $tanggal): array
     {
@@ -65,7 +74,14 @@ class ValidasiTargetProduksiService
         $missing = array_merge($missing, $this->cekPotJelek($tanggal));
         $missing = array_merge($missing, $this->cekPilihVeneer($tanggal));
 
-        return $missing;
+        // Merge/dedupe: satu ukuran (dengan jenis kayu & KW yang sama)
+        // yang belum punya target hanya perlu tampil SEKALI per divisi,
+        // meskipun dikerjakan di banyak meja/mesin pada tanggal yang
+        // sama. Urutan kemunculan pertama yang dipertahankan.
+        return collect($missing)
+            ->unique(fn (array $item) => $item['divisi'].'|'.$item['ukuran'])
+            ->values()
+            ->all();
     }
 
     // ------------------------------------------------------------------
@@ -283,7 +299,7 @@ class ValidasiTargetProduksiService
 
     /**
      * @param  array<int, array<string,mixed>>|array<string,mixed>  $data
-     * @return array<int, array{divisi: string, mesin: string, ukuran: string, keterangan: string}>
+     * @return array<int, array{divisi: string, ukuran: string, keterangan: string}>
      */
     protected function scanForMissingTarget($data, string $divisiLabel): array
     {
@@ -300,9 +316,9 @@ class ValidasiTargetProduksiService
 
     /**
      * @param  mixed  $node
-     * @param  array<int, array{divisi: string, mesin: string, ukuran: string, keterangan: string}>  $result
+     * @param  array<int, array{divisi: string, ukuran: string, keterangan: string}>  $result
      */
-    protected function recursiveScan($node, string $divisiLabel, array &$result, array $context = []): void
+    protected function recursiveScan($node, string $divisiLabel, array &$result): void
     {
         if (! is_array($node)) {
             return;
@@ -312,17 +328,15 @@ class ValidasiTargetProduksiService
         // bukan list numerik murni) yang secara eksplisit menandai
         // target-nya tidak ditemukan.
         if (array_key_exists('has_target', $node) && $node['has_target'] === false) {
-            $mesin = $context['mesin']
-                ?? $node['mesin']
-                ?? ($node['nomor_meja'] ?? null ? 'Meja '.$node['nomor_meja'] : null)
-                ?? '-';
-
             $ukuran = $node['ukuran']
                 ?? $node['kode_ukuran']
                 ?? $node['kode_ukuran_raw']
                 ?? '-';
 
-            // Kalau ada info jenis kayu / kw, tambahkan biar makin jelas.
+            // Kalau ada info jenis kayu / kw, tambahkan biar makin jelas
+            // — inilah yang dipakai admin buat mencari baris yang tepat
+            // di Master Target, jadi info ini WAJIB ikut meski meja-nya
+            // tidak ditampilkan lagi.
             $detailTambahan = [];
             if (! empty($node['jenis_kayu'])) {
                 $detailTambahan[] = $node['jenis_kayu'];
@@ -336,24 +350,14 @@ class ValidasiTargetProduksiService
 
             $result[] = [
                 'divisi' => $divisiLabel,
-                'mesin' => (string) $mesin,
                 'ukuran' => (string) $ukuran,
                 'keterangan' => 'Target untuk item ini tidak ditemukan di Master Target.',
             ];
         }
 
-        // Update context mesin/meja kalau node saat ini punya info itu,
-        // supaya diwariskan ke child yang mungkin tidak punya field itu
-        // sendiri (mis. child ada di 'detail_produksi').
-        if (isset($node['mesin'])) {
-            $context['mesin'] = $node['mesin'];
-        } elseif (isset($node['nomor_meja'])) {
-            $context['mesin'] = 'Meja '.$node['nomor_meja'];
-        }
-
         foreach ($node as $value) {
             if (is_array($value)) {
-                $this->recursiveScan($value, $divisiLabel, $result, $context);
+                $this->recursiveScan($value, $divisiLabel, $result);
             }
         }
     }

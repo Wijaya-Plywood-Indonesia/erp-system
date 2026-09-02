@@ -87,7 +87,7 @@ class NewAbsensi extends Page implements HasForms
      * (mount() & updatedTanggal()). Method cekTargetProduksi() sengaja
      * TIDAK dihapus — masih dipanggil dari kedua tempat tersebut.
      *
-     * @var array<int, array{divisi: string, mesin: string, ukuran: string, keterangan: string}>
+     * @var array<int, array{divisi: string, ukuran: string, keterangan: string}>
      */
     public array $missingTargetItems = [];
 
@@ -324,7 +324,7 @@ class NewAbsensi extends Page implements HasForms
         if (! empty($this->missingTargetItems)) {
             $bodyLines = collect($this->missingTargetItems)
                 ->take(10)
-                ->map(fn ($m) => "• [{$m['divisi']}] {$m['mesin']} — {$m['ukuran']}")
+                ->map(fn ($m) => "• [{$m['divisi']}] {$m['ukuran']}")
                 ->implode("\n");
 
             $sisa = count($this->missingTargetItems) - 10;
