@@ -139,7 +139,6 @@
                                                 class="bg-amber-100 dark:bg-amber-900/40 text-xs font-semibold uppercase text-amber-800 dark:text-amber-300">
                                                 <tr>
                                                     <th class="px-3 py-2">Divisi</th>
-                                                    <th class="px-3 py-2">Mesin / Meja</th>
                                                     <th class="px-3 py-2">Ukuran</th>
                                                 </tr>
                                             </thead>
@@ -150,9 +149,6 @@
                                                         <td
                                                             class="px-3 py-2 text-amber-900 dark:text-amber-200 font-medium">
                                                             {{ $item['divisi'] }}
-                                                        </td>
-                                                        <td class="px-3 py-2 text-amber-800 dark:text-amber-300">
-                                                            {{ $item['mesin'] }}
                                                         </td>
                                                         <td class="px-3 py-2 text-amber-800 dark:text-amber-300">
                                                             {{ $item['ukuran'] }}
