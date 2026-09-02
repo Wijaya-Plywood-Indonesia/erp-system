@@ -30,53 +30,43 @@ class StokVeneerKering extends Page
     public bool $showNilaiStok  = false;
 
     public function getLatestStokProperty()
-    {
-        // Ambil snapshot m3/hpp/nilai dari baris terakhir per kombinasi
-        $latest = ModelStok::with(['ukuran', 'jenisKayu'])
-            ->select('stok_veneer_kerings.*')
-            ->join(DB::raw('(SELECT MAX(id) as max_id FROM stok_veneer_kerings GROUP BY id_ukuran, id_jenis_kayu, kw) as latest'), function ($join) {
-                $join->on('stok_veneer_kerings.id', '=', 'latest.max_id');
-            })
-            ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
-            ->when(
-                $this->filterCoreType === 'long',
-                fn($q) =>
-                $q->whereHas(
-                    'ukuran',
-                    fn($u) =>
-                    $u->where('panjang', 244)->where('lebar', 122)->where('tebal', '>', 1)
-                )
-            )
-            ->when(
-                $this->filterCoreType === 'short',
-                fn($q) =>
-                $q->whereHas(
-                    'ukuran',
-                    fn($u) =>
-                    $u->where('panjang', 122)->where('lebar', 244)->where('tebal', '>', 1)
-                )
-            )
-            ->where('stok_m3_sesudah', '<>', 0)
-            ->get();
+{
+    $latest = ModelStok::with(['ukuran', 'jenisKayu'])
+        ->select('stok_veneer_kerings.*')
+        ->join(DB::raw('(SELECT MAX(id) as max_id FROM stok_veneer_kerings GROUP BY id_ukuran, id_jenis_kayu, kw) as latest'), function ($join) {
+            $join->on('stok_veneer_kerings.id', '=', 'latest.max_id');
+        })
+        ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
+        ->when(
+            $this->filterCoreType === 'long',
+            fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('panjang', 244)->where('lebar', 122)->where('tebal', '>', 1))
+        )
+        ->when(
+            $this->filterCoreType === 'short',
+            fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('panjang', 122)->where('lebar', 244)->where('tebal', '>', 1))
+        )
+        // removed the premature ->where('stok_m3_sesudah', '<>', 0) here
+        ->get();
 
-        // Hitung total lembar (masuk - keluar) per kombinasi lalu inject ke collection
-        return $latest->map(function ($row) {
-            $masuk = ModelStok::where('id_ukuran', $row->id_ukuran)
-                ->where('id_jenis_kayu', $row->id_jenis_kayu)
-                ->where('kw', $row->kw)
-                ->where('jenis_transaksi', 'masuk')
-                ->sum('qty');
+    return $latest->map(function ($row) {
+        $masuk = ModelStok::where('id_ukuran', $row->id_ukuran)
+            ->where('id_jenis_kayu', $row->id_jenis_kayu)
+            ->where('kw', $row->kw)
+            ->where('jenis_transaksi', 'masuk')
+            ->sum('qty');
 
-            $keluar = ModelStok::where('id_ukuran', $row->id_ukuran)
-                ->where('id_jenis_kayu', $row->id_jenis_kayu)
-                ->where('kw', $row->kw)
-                ->where('jenis_transaksi', 'keluar')
-                ->sum('qty');
+        $keluar = ModelStok::where('id_ukuran', $row->id_ukuran)
+            ->where('id_jenis_kayu', $row->id_jenis_kayu)
+            ->where('kw', $row->kw)
+            ->where('jenis_transaksi', 'keluar')
+            ->sum('qty');
 
-            $row->total_lembar = (int) ($masuk - $keluar);
-            return $row;
-        });
-    }
+        $row->total_lembar = (int) ($masuk - $keluar);
+        return $row;
+    })
+    // filter AFTER total_lembar is known, using both signals
+    ->filter(fn($row) => $row->total_lembar !== 0 || (float) $row->stok_m3_sesudah !== 0.0);
+}
 
     public function getGroupedStokProperty()
     {
