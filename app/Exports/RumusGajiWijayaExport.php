@@ -2,7 +2,7 @@
 
 namespace App\Exports;
 
-use Illuminate\Support\Carbon;
+use App\Services\PotonganGajiService;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
@@ -26,86 +26,59 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  * (scan asli), shift, sumber_label (array divisi/mesin), izin,
  * keterangan.
  *
- * REVISI TERBARU (dibanding revisi sebelumnya):
- *   - FIX BUG "24 JAM KERJA UNTUK PEGAWAI TIDAK MASUK": sebelumnya kalau
- *     Jam Hasil Masuk == Jam Hasil Pulang (mis. keduanya kosong/00:00:00
- *     karena jadwal shift tidak valid untuk pegawai yang izin/alpha),
- *     hitungJamKerja() menganggapnya lintas-tengah-malam dan menghasilkan
- *     24 jam. Sekarang ditambahkan pengecekan: kalau total detik Jam
- *     Hasil Masuk + Jam Hasil Pulang == 0 (mis. 00:00:00 & 00:00:00),
- *     Jam Kerja langsung dianggap 0 — lihat hitungJamKerja() &
- *     jamKeDetik().
- *   - FIX BUG "NILAI 0 TIDAK TAMPIL DI EXCEL": sebelumnya kolom Lembur2
- *     pakai `$lembur > 0 ? number_format(...) : ''` — artinya kalau
- *     Lembur2 = 0, cell-nya jadi string kosong (bukan '0,00'), sehingga
- *     terlihat seperti "hilang" di Excel. Sekarang SELALU
- *     number_format() apa pun nilainya (termasuk 0), jadi kolom Lembur2
- *     selalu tampil angka, misalnya '0,00'. Kolom Jam Kerja juga
- *     dipastikan selalu mengirim nilai int (termasuk 0) ke map(), bukan
- *     null/'' — supaya PhpSpreadsheet menulis 0 sebagai angka, bukan
- *     cell kosong.
+ * REVISI TERBARU:
+ *   - REFACTOR: seluruh logic penghitungan "Potongan" (loadPotonganMap()
+ *     dan 11 sub-method loadPotongan*() per divisi, addPotongan(),
+ *     roundToNearest500()) DIPINDAH ke App\Services\PotonganGajiService,
+ *     supaya bisa dipakai bareng dengan blade (kolom "Potongan" di tabel
+ *     Data Absensi pada App\Filament\Pages\NewAbsensi) tanpa duplikasi
+ *     logic. Tidak ada perubahan RUMUS/BEHAVIOR — murni pindah lokasi
+ *     kode. Class ini sekarang hanya memanggil
+ *     PotonganGajiService::getPotonganMap($tanggal) di constructor dan
+ *     PotonganGajiService::resolvePotongan() di map().
  *
- * REVISI SEBELUMNYA (dibandingkan langsung dengan sheet harian "sabtu/
- * minggu/senin/dst" di file RUMUS_GAJI_WIJAYA_*.xlsx asli) — dibuat
- * lebih mirip di sisi WARNA dan RUMUS/BEHAVIOR:
+ * REVISI SEBELUMNYA:
+ *   - FIX BUG "POTONGAN KEDI KEGEDEAN": loadPotonganKedi() (sekarang di
+ *     PotonganGajiService) difilter HANYA
+ *     whereDate('tanggal_actual_bongkar', $tanggal), disamakan dengan
+ *     LaporanKedi::loadAllData()/buildAggregatedPotongan().
+ *   - TOGGLE SEMENTARA POTONGAN_AMBIL_TERKECIL (sekarang di
+ *     PotonganGajiService): kalau seorang pegawai kena potongan target
+ *     produksi di lebih dari satu divisi/mesin dalam hari yang sama,
+ *     yang dipakai adalah nilai TERKECIL, bukan dijumlah.
+ *   - Divisi Produksi Rotary ikut dihitung ke potongan (lihat
+ *     PotonganGajiService::loadPotonganRotary()).
+ *   - FIX BUG "24 JAM KERJA UNTUK PEGAWAI TIDAK MASUK": kalau Jam Hasil
+ *     Masuk == Jam Hasil Pulang (mis. keduanya 00:00:00), Jam Kerja
+ *     langsung dianggap 0 — lihat hitungJamKerja() & jamKeDetik().
+ *   - FIX BUG "NILAI 0 TIDAK TAMPIL DI EXCEL": kolom Lembur2 & Jam Kerja
+ *     SELALU number_format()/cast int apa pun nilainya (termasuk 0).
+ *
+ * REVISI SEBELUMNYA LAGI (dibandingkan langsung dengan sheet harian
+ * "sabtu/minggu/senin/dst" di file RUMUS_GAJI_WIJAYA_*.xlsx asli):
  *
  * WARNA
  *   - Header: fill biru muda "Blue, Accent 1, Lighter 40%" (#BDD7EE),
- *     font hitam bold, rata tengah — bukan abu-abu gelap #333333 seperti
- *     sebelumnya.
+ *     font hitam bold, rata tengah.
  *   - Fill biru sangat muda "Blue, Accent 1, Lighter 80%" (#DDEBF7)
- *     TIDAK merata di semua kolom. Di file asli hanya kolom C, D, G, H,
- *     I, J, L, M, N yang kena fill biru; kolom A, B, E, F, K, O, P
- *     dibiarkan putih/kosong. Tidak ada highlight kuning khusus untuk
- *     baris "tidak" pada kolom Perbandingan, jadi highlight kuning yang
- *     lama dihapus supaya tidak menyesatkan.
- *   - Lebar kolom pakai nilai TETAP (WithColumnWidths), bukan auto-size
- *     lagi — supaya lebar kolom konsisten setiap export dan tidak
- *     berubah-ubah mengikuti panjang isi data terpanjang.
+ *     hanya di kolom C, D, G, H, I, J, L, M, N.
+ *   - Lebar kolom pakai nilai TETAP (WithColumnWidths), bukan auto-size.
  *
  * RUMUS / BEHAVIOR
- *   - JAM HASIL (G/H) = JADWAL SHIFT PRODUKSI, SELALU: Jam Hasil
- *     Masuk/Pulang (kolom G/H) diambil LANGSUNG dari jadwal shift
- *     produksi (jam_masuk/jam_pulang sistem — field yang sama dengan
- *     kolom "Sistem Masuk/Pulang" di NewRekapAbsensiExport), TIDAK
- *     PERNAH dari finger — lihat resolveJamHasil(). Ini berlaku selalu,
- *     bukan cuma fallback saat finger kosong. Kolom "Jam Masuk"/"Jam
- *     Pulang" (C/D, dari finger asli) dan "Jam Bulat Masuk/Pulang" (E/F,
- *     hasil ceil/floor dari finger) TETAP murni dari
- *     jam_masuk_finger/jam_pulang_finger seperti sebelumnya — tidak
- *     terpengaruh perubahan ini.
- *   - Format angka jam: "Jam Masuk/Pulang" (kolom C/D), "Jam Hasil
- *     Masuk" (G), dan "Jam Hasil Pulang" (H) SAMA-SAMA pakai format
- *     "h:mm:ss" (numFmtId 170). "Jam Bulat Masuk/Pulang" (E/F) pakai
- *     format elapsed "[h]:mm:ss" (numFmtId 171).
- *   - "Jam Kerja" (kolom O) dihitung dari JAM HASIL Masuk/Pulang (bukan
- *     dari jam jadwal), dengan logika lintas-tengah-malam sama seperti
- *     rumus asli:
- *       IF(hasilMasuk < hasilPulang, selisih*24,
- *         IF(hasilMasuk<>0, (selisih+1)*24, 0))
- *     DENGAN TAMBAHAN GUARD BARU: kalau total detik hasilMasuk +
- *     hasilPulang == 0, langsung 0 (lihat catatan revisi terbaru di
- *     atas).
- *   - "Perbandingan" (kolom P) di file asli membandingkan selisih jam
- *     BULAT (F-E) dengan selisih jam HASIL (H-G): sama -> "ya", beda ->
- *     "tidak".
- *   - "Lembur2" (kolom K) di file asli TIDAK flat (jam kerja - 10),
- *     tapi tergantung jam masuk & jenis divisi (kolom Q di sheet
- *     Master, mis. "pabrik"/"jeruk"/"kantor"/"ruko"):
- *       - jam masuk >= 16:00                                -> standar 13 jam
- *       - selain itu & bukan "jeruk"/"kantor"                -> standar 10 jam
- *       - selain itu & "jeruk"                               -> standar 9 jam
- *       - selain itu & "kantor"                              -> standar 8 jam
- *       - selain itu & "ruko"                                -> standar 9 jam
- *     Lembur2 = MAX(0, jam kerja - standar).
- *     ASUMSI: karena getRekap() belum mengirim kode divisi Master!Q,
- *     dipakai heuristik dari field 'shift'/'sumber_label' (lihat
- *     resolveDivisi()). Ini PERLU DIKONFIRMASI — kalau service sudah
- *     bisa kirim kode divisi asli, ganti resolveDivisi() supaya baca
- *     field itu langsung.
+ *   - JAM HASIL (G/H) = JADWAL SHIFT PRODUKSI, SELALU (lihat
+ *     resolveJamHasil()) — TIDAK PERNAH dari finger. Kolom "Jam
+ *     Masuk"/"Jam Pulang" (C/D) dan "Jam Bulat Masuk/Pulang" (E/F)
+ *     TETAP murni dari jam_masuk_finger/jam_pulang_finger.
+ *   - Format angka jam: C/D/G/H pakai "h:mm:ss" (numFmtId 170). E/F
+ *     pakai elapsed "[h]:mm:ss" (numFmtId 171).
+ *   - "Jam Kerja" (kolom O): lihat hitungJamKerja().
+ *   - "Perbandingan" (kolom P): membandingkan selisih jam BULAT (F-E)
+ *     dengan selisih jam HASIL (H-G): sama -> "ya", beda -> "tidak".
+ *   - "Lembur2" (kolom K): tergantung jam masuk & jenis divisi — lihat
+ *     hitungLembur2() & resolveDivisi(). ASUMSI SEMENTARA, PERLU
+ *     DIKONFIRMASI (lihat resolveDivisi()).
  *
- * Field "Potongan" dan "Anak Baru(a)" MASIH PLACEHOLDER kosong (lihat
- * docblock versi sebelumnya untuk detail penelusuran ke file asli).
+ * Field "Anak Baru(a)" MASIH PLACEHOLDER kosong.
  *
  * Soft transition: class ini TERPISAH dari NewRekapAbsensiExport, dipakai
  * berdampingan lewat tombol/route sendiri.
@@ -161,6 +134,11 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
 
     protected int $originalSerializePrecision;
 
+    /**
+     * @var array<string, int>
+     */
+    protected array $potonganMap = [];
+
     public function __construct(
         protected Collection $rekap,
         protected string $tanggal,
@@ -170,6 +148,17 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
 
         ini_set('precision', 16);
         ini_set('serialize_precision', -1);
+
+        // Semua logic penghitungan potongan (11 divisi produksi) ada
+        // di PotonganGajiService — dipakai juga oleh
+        // App\Filament\Pages\NewAbsensi untuk kolom "Potongan" di
+        // blade, supaya angkanya konsisten di export & di halaman.
+        $this->potonganMap = app(PotonganGajiService::class)->getPotonganMap($tanggal);
+    }
+
+    protected function getPotongan(?string $kodep): int
+    {
+        return app(PotonganGajiService::class)->resolvePotongan($this->potonganMap, $kodep);
     }
 
     public function __destruct()
@@ -242,6 +231,9 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
 
         $perbandingan = $this->tentukanPerbandingan($jamBulatMasuk, $jamBulatPulang, $jamHasilMasuk, $jamHasilPulang);
 
+        $kodep = $row['kode_pegawai'] ?? null;
+        $potongan = $this->getPotongan($kodep);
+
         return [
             $row['kode_pegawai'] ?? '-',
             $row['nama_pegawai'] ?? '-',
@@ -258,7 +250,10 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
             // kosong). Sekarang SELALU di-number_format() apa pun
             // nilainya, termasuk 0 -> '0,00'.
             number_format($lembur, 2, ',', ''),
-            '', // Potongan — belum ada sumber data, placeholder (lihat docblock)
+            // Potongan target produksi (11 divisi produksi) — dari
+            // PotonganGajiService, sama persis dengan yang tampil di
+            // kolom "Potongan" pada tabel Data Absensi di blade.
+            $potongan > 0 ? (int) $potongan : '',
             $row['keterangan'] ?? '',
             '', // Anak Baru(a) — belum ada sumber data, placeholder (lihat docblock)
             // FIX: cast eksplisit ke int supaya sel selalu berisi angka
@@ -575,6 +570,8 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
         $sheet->getStyle("C2:H{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("J2:J{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("K2:K{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("L2:L{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        $sheet->getStyle("L2:L{$lastRow}")->getNumberFormat()->setFormatCode('#,##0');
         $sheet->getStyle("N2:P{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         $sheet->getStyle("I2:I{$lastRow}")->getAlignment()->setWrapText(true);

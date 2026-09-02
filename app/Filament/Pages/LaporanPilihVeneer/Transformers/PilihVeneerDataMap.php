@@ -205,8 +205,8 @@ class PilihVeneerDataMap
                 }
 
                 $jamKerjaVal = round($menitKerja / 60, 1);
-                $kodep = ltrim($pj->pegawai->kode_pegawai, '0');
-                $potTargetVal = (int) ($potonganPerPegawai[$kodep] ?? 0);
+                $kodep = $pj->pegawai->kode_pegawai ?? '-';
+                $potTargetVal = (int) ($potonganPerPegawai[$kodep] ?? $potonganPerPegawai[ltrim($kodep, '0')] ?? 0);
 
                 $rekapPekerjaList[] = [
                     'id' => $kodep,

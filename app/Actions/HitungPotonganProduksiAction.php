@@ -30,9 +30,14 @@ class HitungPotonganProduksiAction
         float $hasilAktual,
         ?int $idUkuran = null,
         ?int $idJenisKayu = null,
-        ?string $grade = null,
+        string|Target|null $grade = null,
+        ?Target $customTarget = null,
     ): ?TargetHitungResult {
-        $target = $this->resolveTarget($mesin, $idUkuran, $idJenisKayu, $grade);
+        if ($grade instanceof Target) {
+            $target = $grade;
+        } else {
+            $target = $customTarget ?? $this->resolveTarget($mesin, $idUkuran, $idJenisKayu, $grade);
+        }
 
         if (! $target) {
             return null;
