@@ -8,6 +8,7 @@ use App\Models\NewAbsensiUpload;
 use App\Services\DownloadAbsensiUploadService;
 use App\Services\NewRekapAbsensiPegawaiService;
 use App\Services\UploadFingerService;
+use App\Services\ValidasiTargetProduksiService;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Forms\Components\FileUpload;
@@ -69,6 +70,25 @@ class NewAbsensi extends Page implements HasForms
      * @var array<string, bool>
      */
     public array $expandedRows = [];
+
+    /**
+     * Hasil pengecekan terakhir dari ValidasiTargetProduksiService untuk
+     * tanggal yang sedang dipilih. Diisi oleh cekTargetProduksi() (tombol
+     * "Cek Kelengkapan Target") ATAU otomatis diisi ulang setiap kali
+     * exportRumusGajiWijaya() dipanggil, supaya user selalu lihat status
+     * paling baru di halaman (tabel peringatan), tanpa export itu sendiri
+     * ikut terblokir kalau ada yang belum lengkap.
+     *
+     * @var array<int, array{divisi: string, mesin: string, ukuran: string, keterangan: string}>
+     */
+    public array $missingTargetItems = [];
+
+    /**
+     * Menandai apakah pengecekan target untuk tanggal yang sedang dipilih
+     * sudah pernah dijalankan (dipakai buat bedakan "belum pernah dicek"
+     * vs "sudah dicek dan hasilnya kosong/aman").
+     */
+    public bool $sudahDicekTarget = false;
 
     public function mount(): void
     {
@@ -181,16 +201,79 @@ class NewAbsensi extends Page implements HasForms
     }
 
     /**
+     * Dipanggil dari tombol "Cek Kelengkapan Target" — HANYA mengecek &
+     * menampilkan hasilnya di halaman (tabel peringatan), TIDAK
+     * men-download apa pun. Berguna buat user yang mau review dulu
+     * sebelum export.
+     */
+    public function cekTargetProduksi(): void
+    {
+        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+
+        $this->missingTargetItems = app(ValidasiTargetProduksiService::class)
+            ->cekMissingTarget($tanggal);
+        $this->sudahDicekTarget = true;
+
+        if (empty($this->missingTargetItems)) {
+            Notification::make()
+                ->title('Semua item sudah punya target')
+                ->body('Tidak ditemukan ukuran/produksi tanpa target untuk tanggal ini.')
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->warning()
+            ->title(count($this->missingTargetItems).' item belum punya target')
+            ->body('Lihat daftar lengkapnya di tabel bawah tombol export. Kamu tetap bisa export — potongan untuk item tersebut akan dianggap 0.')
+            ->send();
+    }
+
+    /**
      * Dipanggil dari tombol "Export Rumus Gaji Wijaya" di tab Data Absensi.
      *
      * Sengaja dibuat sebagai method & export class TERPISAH dari
      * exportExcel()/NewRekapAbsensiExport di atas — supaya format rumus
      * gaji ini bisa dipakai berdampingan (soft transition) tanpa
      * mengganggu export lama yang sudah berjalan.
+     *
+     * ALUR BARU: sebelum download dibuat, jalankan dulu
+     * ValidasiTargetProduksiService::cekMissingTarget() untuk tanggal
+     * yang sedang dipilih. Kalau ketemu ukuran/produksi tanpa target,
+     * tampilkan notifikasi peringatan DAN isi $missingTargetItems supaya
+     * tabelnya juga muncul di halaman — TAPI proses export tetap
+     * dilanjutkan seperti biasa (tidak diblokir). Konsekuensinya: item
+     * yang tidak punya target otomatis dihitung potongan = 0 (perilaku
+     * lama, tidak berubah), user cuma diberi tahu lebih dulu.
      */
     public function exportRumusGajiWijaya()
     {
         $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+
+        $this->missingTargetItems = app(ValidasiTargetProduksiService::class)
+            ->cekMissingTarget($tanggal);
+        $this->sudahDicekTarget = true;
+
+        if (! empty($this->missingTargetItems)) {
+            $bodyLines = collect($this->missingTargetItems)
+                ->take(10)
+                ->map(fn ($m) => "• [{$m['divisi']}] {$m['mesin']} — {$m['ukuran']}")
+                ->implode("\n");
+
+            $sisa = count($this->missingTargetItems) - 10;
+            if ($sisa > 0) {
+                $bodyLines .= "\n… dan {$sisa} item lainnya (lihat tabel di halaman).";
+            }
+
+            Notification::make()
+                ->warning()
+                ->title(count($this->missingTargetItems).' ukuran belum punya target — export tetap dilanjutkan')
+                ->body("Item berikut tidak punya target, potongannya akan dianggap 0:\n\n".$bodyLines)
+                ->persistent()
+                ->send();
+        }
 
         $rekap = app(NewRekapAbsensiPegawaiService::class)->getRekap($tanggal);
 
@@ -269,5 +352,17 @@ class NewAbsensi extends Page implements HasForms
     public function isRowExpanded(string $rowKey): bool
     {
         return ! empty($this->expandedRows[$rowKey]);
+    }
+
+    /**
+     * Reset hasil pengecekan target setiap kali tanggal yang dipilih
+     * berubah, supaya tabel peringatan tidak "nyampur" menampilkan hasil
+     * cek dari tanggal sebelumnya. Livewire otomatis memanggil method ini
+     * ketika property $tanggal berubah lewat wire:model.live di blade.
+     */
+    public function updatedTanggal(): void
+    {
+        $this->missingTargetItems = [];
+        $this->sudahDicekTarget = false;
     }
 }

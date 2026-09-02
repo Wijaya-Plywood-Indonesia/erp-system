@@ -63,12 +63,85 @@
 
                     {{-- Export format baru (Rumus Gaji Wijaya) — berdampingan dengan
                          Export Excel di atas, tidak menggantikan. Soft transition:
-                         user bisa pilih pakai format lama atau format baru. --}}
+                         user bisa pilih pakai format lama atau format baru. Sebelum
+                         file di-download, sistem otomatis cek kelengkapan target
+                         (lihat NewAbsensi::exportRumusGajiWijaya()) dan menampilkan
+                         peringatan kalau ada yang belum lengkap — export tetap
+                         jalan. --}}
                     <x-filament::button wire:click="exportRumusGajiWijaya" color="warning"
-                        icon="heroicon-o-currency-dollar">
+                        icon="heroicon-o-currency-dollar" wire:loading.attr="disabled"
+                        wire:target="exportRumusGajiWijaya">
                         Export Format Baru
                     </x-filament::button>
+
+                    {{-- Tombol cek target TANPA export — buat user yang mau review
+                         dulu sebelum benar-benar mengunduh filenya. --}}
+                    <x-filament::button wire:click="cekTargetProduksi" color="gray" icon="heroicon-o-magnifying-glass"
+                        wire:loading.attr="disabled" wire:target="cekTargetProduksi">
+                        Cek Kelengkapan Target
+                    </x-filament::button>
                 </div>
+
+                {{-- Tabel/peringatan hasil pengecekan target — hanya tampil kalau
+                     sudah pernah dicek (baik lewat tombol manual maupun otomatis
+                     saat export). TIDAK memblokir export sama sekali, murni
+                     informasional. --}}
+                @if ($sudahDicekTarget && count($missingTargetItems) > 0)
+                    <div
+                        class="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+                        <div class="flex items-start gap-3">
+                            <x-heroicon-o-exclamation-triangle
+                                class="h-6 w-6 shrink-0 text-amber-600 dark:text-amber-400" />
+                            <div class="flex-1">
+                                <h4 class="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                                    {{ count($missingTargetItems) }} item produksi belum punya target di Master
+                                    Target
+                                </h4>
+                                <p class="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                                    Kamu tetap bisa export "Format Baru" — potongan untuk item di bawah ini akan
+                                    otomatis dianggap <strong>Rp 0</strong> karena target-nya tidak ditemukan.
+                                    Segera lengkapi Master Target kalau ini memang seharusnya ada targetnya.
+                                </p>
+
+                                <div
+                                    class="mt-3 overflow-x-auto rounded-lg border border-amber-200 dark:border-amber-800">
+                                    <table class="w-full text-sm text-left border-collapse">
+                                        <thead
+                                            class="bg-amber-100 dark:bg-amber-900/40 text-xs font-semibold uppercase text-amber-800 dark:text-amber-300">
+                                            <tr>
+                                                <th class="px-3 py-2">Divisi</th>
+                                                <th class="px-3 py-2">Mesin / Meja</th>
+                                                <th class="px-3 py-2">Ukuran</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody
+                                            class="divide-y divide-amber-200 dark:divide-amber-800 bg-white dark:bg-transparent">
+                                            @foreach ($missingTargetItems as $item)
+                                                <tr>
+                                                    <td
+                                                        class="px-3 py-2 text-amber-900 dark:text-amber-200 font-medium">
+                                                        {{ $item['divisi'] }}
+                                                    </td>
+                                                    <td class="px-3 py-2 text-amber-800 dark:text-amber-300">
+                                                        {{ $item['mesin'] }}
+                                                    </td>
+                                                    <td class="px-3 py-2 text-amber-800 dark:text-amber-300">
+                                                        {{ $item['ukuran'] }}
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                @elseif ($sudahDicekTarget && count($missingTargetItems) === 0)
+                    <div
+                        class="rounded-xl border border-green-300 bg-green-50 p-3 text-sm text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-400">
+                        ✔ Semua item produksi tanggal ini sudah punya target.
+                    </div>
+                @endif
 
                 {{-- Tabel Rekap Utama --}}
                 <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm dark:border-gray-700">
