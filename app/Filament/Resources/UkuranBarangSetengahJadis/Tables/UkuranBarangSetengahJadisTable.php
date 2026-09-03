@@ -2,14 +2,14 @@
 
 namespace App\Filament\Resources\UkuranBarangSetengahJadis\Tables;
 
+use App\Models\Grade;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
-use App\Models\Grade;
+use Filament\Tables\Table;
 
 class UkuranBarangSetengahJadisTable
 {
@@ -34,7 +34,6 @@ class UkuranBarangSetengahJadisTable
                         });
                     }),
 
-
                 TextColumn::make('jenisBarang.kode_jenis_barang')
                     ->label('Jenis Barang')
                     ->sortable()
@@ -44,6 +43,11 @@ class UkuranBarangSetengahJadisTable
                     ->label('Grade')
                     ->sortable()
                     ->searchable(),
+
+                TextColumn::make('harga')
+                    ->label('Harga')
+                    ->money('IDR', locale: 'id')
+                    ->sortable(),
 
                 TextColumn::make('keterangan')
                     ->label('Keterangan')
@@ -62,9 +66,9 @@ class UkuranBarangSetengahJadisTable
             ])
 
             ->filters([
-                //Kategori Balang
+                // Filter by Kategori Barang
                 SelectFilter::make('kategori_barang')
-                    ->label('Jenis Barang')
+                    ->label('Kategori Barang') // ✅ dulu labelnya salah "Jenis Barang", sekarang dibetulkan
                     ->relationship('grade.kategoriBarang', 'nama_kategori'),
 
                 // Filter by Jenis Barang
@@ -80,15 +84,14 @@ class UkuranBarangSetengahJadisTable
                             ->get()
                             ->mapWithKeys(function ($grade) {
                                 return [
-                                    $grade->id => ($grade->kategoriBarang?->nama_kategori ?? '-') .
-                                        ' | ' .
+                                    $grade->id => ($grade->kategoriBarang?->nama_kategori ?? '-').
+                                        ' | '.
                                         $grade->nama_grade,
                                 ];
                             })
                     )
                     ->searchable()
                     ->preload(),
-
             ])
 
             ->recordActions([

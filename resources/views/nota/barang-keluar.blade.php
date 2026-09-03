@@ -160,16 +160,18 @@
             <tbody>
                 @php
                     $grandTotal = 0;
-                    $itemList = $items ?? (($notaBarangKeluar->plywoodMutasi && $notaBarangKeluar->plywoodMutasi->details->isNotEmpty())
-                        ? $notaBarangKeluar->plywoodMutasi->details
-                        : $notaBarangKeluar->detail);
+                    $itemList =
+                        $items ??
+                        ($notaBarangKeluar->plywoodMutasi && $notaBarangKeluar->plywoodMutasi->details->isNotEmpty()
+                            ? $notaBarangKeluar->plywoodMutasi->details
+                            : $notaBarangKeluar->detail);
                 @endphp
                 @foreach ($itemList as $i => $detail)
                     @php
-                        $namaBarang = $detail->barang?->label ?? $detail->nama_barang ?? '-';
+                        $namaBarang = $detail->barang?->label ?? ($detail->nama_barang ?? '-');
                         $satuan = $detail->satuan ?? 'Lembar';
-                        $qty = $detail->qty ?? $detail->jumlah ?? 0;
-                        $hargaSatuan = $detail->barang?->harga ?? $detail->harga ?? 200000;
+                        $qty = $detail->qty ?? ($detail->jumlah ?? 0);
+                        $hargaSatuan = $detail->harga ?? 0;
                         $subtotal = $hargaSatuan * $qty;
                         $grandTotal += $subtotal;
                     @endphp

@@ -30,6 +30,7 @@ class DetailNotaBarangKeluar extends Model
 
     public function getHargaAttribute(): float
     {
-        return (float) ($this->attributes['harga'] ?? 200000);
+
+        return (float) ($this->attributes['harga'] ?? 0);
     }
 }

@@ -324,19 +324,12 @@ class ValidasiTargetProduksiService
             return;
         }
 
-        // Node ini "kelihatan" seperti item produksi (associative array,
-        // bukan list numerik murni) yang secara eksplisit menandai
-        // target-nya tidak ditemukan.
         if (array_key_exists('has_target', $node) && $node['has_target'] === false) {
             $ukuran = $node['ukuran']
                 ?? $node['kode_ukuran']
                 ?? $node['kode_ukuran_raw']
                 ?? '-';
 
-            // Kalau ada info jenis kayu / kw, tambahkan biar makin jelas
-            // — inilah yang dipakai admin buat mencari baris yang tepat
-            // di Master Target, jadi info ini WAJIB ikut meski meja-nya
-            // tidak ditampilkan lagi.
             $detailTambahan = [];
             if (! empty($node['jenis_kayu'])) {
                 $detailTambahan[] = $node['jenis_kayu'];
@@ -346,6 +339,16 @@ class ValidasiTargetProduksiService
             }
             if (! empty($detailTambahan)) {
                 $ukuran .= ' ('.implode(', ', $detailTambahan).')';
+            }
+
+            // BARU: kalau node punya field 'mesin' (saat ini hanya diisi oleh
+            // ProduksiDataMap/Rotary, karena Target di divisi itu unik per
+            // id_mesin + id_ukuran — jadi item yang sama bisa "aman" di satu
+            // mesin tapi "belum ada target" di mesin lain), tampilkan nama
+            // mesinnya juga supaya admin tahu persis kombinasi mana yang
+            // perlu dilengkapi, bukan cuma ukurannya saja.
+            if (! empty($node['mesin'])) {
+                $ukuran = $node['mesin'].' — '.$ukuran;
             }
 
             $result[] = [

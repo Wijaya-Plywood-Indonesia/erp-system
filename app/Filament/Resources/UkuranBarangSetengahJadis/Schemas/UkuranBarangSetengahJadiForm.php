@@ -3,13 +3,12 @@
 namespace App\Filament\Resources\UkuranBarangSetengahJadis\Schemas;
 
 use App\Models\Grade;
-use App\Models\Ukuran;
 use App\Models\JenisBarang;
 use App\Models\KategoriBarang;
+use App\Models\Ukuran;
 use Filament\Forms\Components\Select;
-use Filament\Schemas\Schema;
 use Filament\Forms\Components\TextInput;
-use Symfony\Contracts\Service\Attribute\Required;
+use Filament\Schemas\Schema;
 
 class UkuranBarangSetengahJadiForm
 {
@@ -20,11 +19,10 @@ class UkuranBarangSetengahJadiForm
                 Select::make('id_ukuran')
                     ->label('Ukuran')
                     ->options(
-                        Ukuran::all()
-                            ->pluck('dimensi', 'id')
+                        Ukuran::all()->pluck('dimensi', 'id')
                     )
                     ->searchable()
-                    ->Required(),
+                    ->required(),
 
                 Select::make('id_jenis_barang')
                     ->label('Jenis Barang')
@@ -42,18 +40,26 @@ class UkuranBarangSetengahJadiForm
                             ->pluck('nama_kategori', 'id')
                     )
                     ->searchable()
-                    ->reactive()
-                    ->dehydrated(false)   // ✅ TIDAK DISIMPAN KE DATABASE
-                    ->afterStateUpdated(fn ($set) => $set('id_grade', null))
+                    ->live()
+                    ->dehydrated(false)
+                    ->afterStateUpdated(function (callable $set) {
+                        $set('id_grade', null);
+                        $set('harga', null);
+                    })
+                    ->afterStateHydrated(function (callable $set, $record) {
+                        if ($record) {
+                            $idKategori = $record->grade?->id_kategori_barang;
+                            $set('kategori_barang_filter', $idKategori);
+                        }
+                    })
                     ->required(),
 
                 Select::make('id_grade')
                     ->label('Grade')
                     ->options(function (callable $get) {
-
                         $idKategori = $get('kategori_barang_filter');
 
-                        if (!$idKategori) {
+                        if (! $idKategori) {
                             return [];
                         }
 
@@ -62,11 +68,24 @@ class UkuranBarangSetengahJadiForm
                             ->pluck('nama_grade', 'id');
                     })
                     ->searchable()
+                    ->live()
+                    ->afterStateUpdated(function (callable $set, $state) {
+                        $harga = Grade::find($state)?->harga;
+
+                        if ($harga) {
+                            $set('harga', $harga);
+                        }
+                    })
                     ->required(),
 
+                TextInput::make('harga')
+                    ->label('Harga')
+                    ->numeric()
+                    ->prefix('Rp')
+                    ->required(),
 
                 TextInput::make('keterangan')
-                    ->label('Keterangan')
+                    ->label('Keterangan'),
             ]);
     }
 }

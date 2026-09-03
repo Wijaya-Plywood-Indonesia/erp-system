@@ -2,11 +2,13 @@
 
 namespace App\Filament\Resources\DetailNotaBarangKeluars\Tables;
 
+use App\Models\BarangSetengahJadiHp;
 use App\Models\BarangUmum;
 use App\Models\DetailNotaBarangKeluar;
 use App\Models\DetailNotaBarangMasuk;
 use App\Models\Grade;
 use App\Models\HppVeneerBasahSummary;
+use App\Models\JenisBarang;
 use App\Models\JenisKayu;
 use App\Models\NotaBarangKeluar;
 use App\Models\PlywoodMutasi;
@@ -74,7 +76,7 @@ class DetailNotaBarangKeluarsTable
      */
     protected static function labelUkuran($panjang, $lebar, $tebal): string
     {
-        return ((float) $panjang) . ' cm x ' . ((float) $lebar) . ' cm x ' . ((float) $tebal) . ' mm';
+        return ((float) $panjang).' cm x '.((float) $lebar).' cm x '.((float) $tebal).' mm';
     }
 
     /**
@@ -97,7 +99,7 @@ class DetailNotaBarangKeluarsTable
         }
 
         $stok = static::stokTersedia()->first(
-            fn($s) => static::dimKey($s->panjang, $s->lebar, $s->tebal) === $ukuranKey
+            fn ($s) => static::dimKey($s->panjang, $s->lebar, $s->tebal) === $ukuranKey
                 && $s->id_jenis_kayu == $idJenisKayu
                 && $s->kw_grade === $kw
         );
@@ -123,6 +125,53 @@ class DetailNotaBarangKeluarsTable
     }
 
     /**
+     * Cari harga default dari master BarangSetengahJadiHp berdasarkan
+     * kombinasi ukuran (dari dimKey plywood, belum tentu punya id_ukuran),
+     * jenis kayu, dan kw/grade yang dipilih user di form Tambah/Edit Plywood.
+     * null = kombinasi belum lengkap atau tidak ada data master yang cocok.
+     */
+    protected static function cariHargaDefault(?string $ukuranKey, $idJenisKayu, ?string $kw): ?float
+    {
+        if (! $ukuranKey || ! $idJenisKayu || ! $kw) {
+            return null;
+        }
+
+        [$a, $b, $tebal] = array_map('floatval', explode('|', $ukuranKey));
+
+        $matchedUkuranIds = Ukuran::where('tebal', $tebal)
+            ->where(function ($q) use ($a, $b) {
+                $q->where(fn ($s) => $s->where('panjang', $a)->where('lebar', $b))
+                    ->orWhere(fn ($s) => $s->where('panjang', $b)->where('lebar', $a));
+            })
+            ->pluck('id');
+
+        if ($matchedUkuranIds->isEmpty()) {
+            return null;
+        }
+
+        $jenisKayu = JenisKayu::find($idJenisKayu);
+        $jenisBarang = JenisBarang::where('nama_jenis_barang', 'like', $jenisKayu?->nama_kayu)->first();
+
+        $grade = Grade::whereRaw('LOWER(TRIM(nama_grade)) = ?', [strtolower(trim($kw))])
+            ->whereHas('kategoriBarang', fn ($q) => $q->where('nama_kategori', 'like', '%plywood%'))
+            ->first()
+            ?? Grade::whereRaw('LOWER(TRIM(nama_grade)) = ?', [strtolower(trim($kw))])->first();
+
+        $bshp = BarangSetengahJadiHp::whereIn('id_ukuran', $matchedUkuranIds)
+            ->when($jenisBarang, fn ($q) => $q->where('id_jenis_barang', $jenisBarang->id))
+            ->when($grade, fn ($q) => $q->where('id_grade', $grade->id))
+            ->first();
+
+        if (! $bshp) {
+            $bshp = BarangSetengahJadiHp::whereIn('id_ukuran', $matchedUkuranIds)
+                ->when($grade, fn ($q) => $q->where('id_grade', $grade->id))
+                ->first();
+        }
+
+        return $bshp && filled($bshp->harga) ? (float) $bshp->harga : null;
+    }
+
+    /**
      * Terjemahkan pilihan dimensi (ukuran_key) ke baris master `ukurans`,
      * karena plywood_mutasi_details butuh id_ukuran. Dicari dua arah;
      * kalau belum ada, dibuatkan mengikuti konvensi master (sisi panjang dulu).
@@ -133,8 +182,8 @@ class DetailNotaBarangKeluarsTable
 
         $ukuran = Ukuran::where('tebal', $tebal)
             ->where(function ($q) use ($a, $b) {
-                $q->where(fn($s) => $s->where('panjang', $a)->where('lebar', $b))
-                    ->orWhere(fn($s) => $s->where('panjang', $b)->where('lebar', $a));
+                $q->where(fn ($s) => $s->where('panjang', $a)->where('lebar', $b))
+                    ->orWhere(fn ($s) => $s->where('panjang', $b)->where('lebar', $a));
             })
             ->first();
 
@@ -155,7 +204,9 @@ class DetailNotaBarangKeluarsTable
     /**
      * Form plywood untuk NOTA KELUAR — seluruh pilihan bersumber dari
      * stok_plywood_siap_jual, jadi hanya barang yang benar-benar ada
-     * yang bisa dipilih.
+     * yang bisa dipilih. Field harga muncul terakhir: default-nya diisi
+     * otomatis dari master BarangSetengahJadiHp begitu kombinasi lengkap,
+     * tapi tetap bisa diedit manual oleh user.
      */
     protected static function plywoodFormSchema(): array
     {
@@ -163,10 +214,9 @@ class DetailNotaBarangKeluarsTable
             Select::make('ukuran_key')
                 ->label('Ukuran')
                 ->options(
-                    fn() => static::stokTersedia()
-                        ->mapWithKeys(fn($s) => [
-                            static::dimKey($s->panjang, $s->lebar, $s->tebal)
-                            => static::labelUkuran($s->panjang, $s->lebar, $s->tebal),
+                    fn () => static::stokTersedia()
+                        ->mapWithKeys(fn ($s) => [
+                            static::dimKey($s->panjang, $s->lebar, $s->tebal) => static::labelUkuran($s->panjang, $s->lebar, $s->tebal),
                         ])
                         ->all()
                 )
@@ -177,6 +227,7 @@ class DetailNotaBarangKeluarsTable
                 ->afterStateUpdated(function (callable $set) {
                     $set('id_jenis_kayu', null);
                     $set('kw_grade', null);
+                    $set('harga', null);
                 }),
 
             Select::make('id_jenis_kayu')
@@ -188,7 +239,7 @@ class DetailNotaBarangKeluarsTable
                     }
 
                     $ids = static::stokTersedia()
-                        ->filter(fn($s) => static::dimKey($s->panjang, $s->lebar, $s->tebal) === $key)
+                        ->filter(fn ($s) => static::dimKey($s->panjang, $s->lebar, $s->tebal) === $key)
                         ->pluck('id_jenis_kayu')
                         ->unique();
 
@@ -198,7 +249,10 @@ class DetailNotaBarangKeluarsTable
                 ->searchable()
                 ->required()
                 ->live()
-                ->afterStateUpdated(fn(callable $set) => $set('kw_grade', null)),
+                ->afterStateUpdated(function (callable $set) {
+                    $set('kw_grade', null);
+                    $set('harga', null);
+                }),
 
             Select::make('kw_grade')
                 ->label('KW / Grade')
@@ -211,18 +265,27 @@ class DetailNotaBarangKeluarsTable
                     }
 
                     return static::stokTersedia()
-                        ->filter(fn($s) => static::dimKey($s->panjang, $s->lebar, $s->tebal) === $key
+                        ->filter(fn ($s) => static::dimKey($s->panjang, $s->lebar, $s->tebal) === $key
                             && $s->id_jenis_kayu == $idJenisKayu)
-                        ->mapWithKeys(fn($s) => [
+                        ->mapWithKeys(fn ($s) => [
                             $s->kw_grade => $s->kw_grade
-                                . ' (' . number_format((int) $s->stok_lembar) . ' lbr)',
+                                .' ('.number_format((int) $s->stok_lembar).' lbr)',
                         ])
                         ->all();
                 })
                 ->placeholder('Pilih jenis kayu dulu')
                 ->searchable()
                 ->required()
-                ->live(),
+                ->live()
+                ->afterStateUpdated(function (callable $set, callable $get, $state) {
+                    // ✅ isi harga otomatis dari master BarangSetengahJadiHp
+                    // begitu kombinasi ukuran+jenis kayu+kw lengkap.
+                    $harga = static::cariHargaDefault($get('ukuran_key'), $get('id_jenis_kayu'), $state);
+
+                    if ($harga !== null) {
+                        $set('harga', $harga);
+                    }
+                }),
 
             Placeholder::make('stok_saat_ini')
                 ->label('Stok Saat Ini')
@@ -237,20 +300,27 @@ class DetailNotaBarangKeluarsTable
                         return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 Lembar (Stok Habis)</strong>');
                     }
 
-                    return new HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">' . number_format($lembar) . ' Lembar</strong>');
+                    return new HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">'.number_format($lembar).' Lembar</strong>');
                 }),
 
             TextInput::make('jumlah')
                 ->label('Jumlah (Lembar)')
                 ->numeric()
                 ->minValue(1)
-                ->maxValue(fn(callable $get) => static::cariStok(
+                ->maxValue(fn (callable $get) => static::cariStok(
                     $get('ukuran_key'),
                     $get('id_jenis_kayu'),
                     $get('kw_grade')
                 ) ?: null)
                 ->helperText('Tidak boleh melebihi stok yang tersedia.')
                 ->required(),
+
+            TextInput::make('harga')
+                ->label('Harga')
+                ->numeric()
+                ->prefix('Rp')
+                ->required()
+                ->helperText('Otomatis terisi dari data master, bisa diubah manual jika perlu.'),
 
             Textarea::make('keterangan')
                 ->label('Keterangan')
@@ -270,12 +340,12 @@ class DetailNotaBarangKeluarsTable
             Select::make('id_barang_umum')
                 ->label('Barang Umum')
                 ->options(
-                    fn() => BarangUmum::with('stok')
+                    fn () => BarangUmum::with('stok')
                         ->get()
-                        ->filter(fn($b) => (float) ($b->stok?->stok_qty ?? 0) > 0)
+                        ->filter(fn ($b) => (float) ($b->stok?->stok_qty ?? 0) > 0)
                         ->sortBy('nama_barang')
-                        ->mapWithKeys(fn($b) => [
-                            $b->id => $b->nama_barang . ' (' . static::formatQty((float) $b->stok->stok_qty) . ' ' . $b->satuan . ')',
+                        ->mapWithKeys(fn ($b) => [
+                            $b->id => $b->nama_barang.' ('.static::formatQty((float) $b->stok->stok_qty).' '.$b->satuan.')',
                         ])
                 )
                 ->placeholder('Pilih barang yang ada stoknya')
@@ -299,12 +369,12 @@ class DetailNotaBarangKeluarsTable
                     $qty = (float) ($barang->stok?->stok_qty ?? 0);
 
                     if ($qty <= 0) {
-                        return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 ' . e($barang->satuan) . ' (Stok Habis)</strong>');
+                        return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 '.e($barang->satuan).' (Stok Habis)</strong>');
                     }
 
                     return new HtmlString(
                         '<strong class="text-success-600 dark:text-success-400 text-lg">'
-                            . static::formatQty($qty) . ' ' . e($barang->satuan) . '</strong>'
+                            .static::formatQty($qty).' '.e($barang->satuan).'</strong>'
                     );
                 }),
 
@@ -340,10 +410,10 @@ class DetailNotaBarangKeluarsTable
             Select::make('id_jenis_kayu')
                 ->label('Jenis Kayu')
                 ->options(
-                    fn() => StokLogCore::where('stok_qty', '>', 0)
+                    fn () => StokLogCore::where('stok_qty', '>', 0)
                         ->with('jenisKayu')
                         ->get()
-                        ->filter(fn($s) => $s->jenisKayu !== null)
+                        ->filter(fn ($s) => $s->jenisKayu !== null)
                         ->pluck('jenisKayu.nama_kayu', 'id_jenis_kayu')
                         ->unique()
                 )
@@ -351,7 +421,7 @@ class DetailNotaBarangKeluarsTable
                 ->searchable()
                 ->required()
                 ->live()
-                ->afterStateUpdated(fn(callable $set) => $set('panjang', null)),
+                ->afterStateUpdated(fn (callable $set) => $set('panjang', null)),
 
             Select::make('panjang')
                 ->label('Panjang')
@@ -364,9 +434,9 @@ class DetailNotaBarangKeluarsTable
                     return StokLogCore::where('id_jenis_kayu', $idJenisKayu)
                         ->where('stok_qty', '>', 0)
                         ->get()
-                        ->mapWithKeys(fn($s) => [
-                            (string) $s->panjang => $s->panjang . ' cm ('
-                                . static::formatQty($s->stok_qty) . ' batang)',
+                        ->mapWithKeys(fn ($s) => [
+                            (string) $s->panjang => $s->panjang.' cm ('
+                                .static::formatQty($s->stok_qty).' batang)',
                         ])
                         ->all();
                 })
@@ -388,14 +458,14 @@ class DetailNotaBarangKeluarsTable
                         return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 Batang (Stok Habis)</strong>');
                     }
 
-                    return new HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">' . static::formatQty($stok) . ' Batang</strong>');
+                    return new HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">'.static::formatQty($stok).' Batang</strong>');
                 }),
 
             TextInput::make('jumlah')
                 ->label('Jumlah (Batang)')
                 ->numeric()
                 ->minValue(1)
-                ->maxValue(fn(callable $get) => static::cariStokLogCore(
+                ->maxValue(fn (callable $get) => static::cariStokLogCore(
                     $get('id_jenis_kayu'),
                     $get('panjang')
                 ) ?: null)
@@ -430,9 +500,9 @@ class DetailNotaBarangKeluarsTable
                 continue;
             }
 
-            $expectedName = 'Plywood - ' . $ukuran->nama_ukuran
-                . ' - ' . $jenisKayu->nama_kayu
-                . ' - KW ' . $detail->kw_grade;
+            $expectedName = 'Plywood - '.$ukuran->nama_ukuran
+                .' - '.$jenisKayu->nama_kayu
+                .' - KW '.$detail->kw_grade;
 
             if ($expectedName === $record->nama_barang && (int) $detail->qty === (int) $record->jumlah) {
                 return $detail;
@@ -463,10 +533,10 @@ class DetailNotaBarangKeluarsTable
                 continue;
             }
 
-            $expectedName = 'Veneer ' . ucfirst($detail->tipe_veneer)
-                . ' - ' . $ukuran->nama_ukuran
-                . ' - ' . $jenisKayu->nama_kayu
-                . ' - KW ' . $detail->kw;
+            $expectedName = 'Veneer '.ucfirst($detail->tipe_veneer)
+                .' - '.$ukuran->nama_ukuran
+                .' - '.$jenisKayu->nama_kayu
+                .' - KW '.$detail->kw;
 
             if ($expectedName === $record->nama_barang && (int) $detail->qty === (int) $record->jumlah) {
                 return $detail;
@@ -547,10 +617,26 @@ class DetailNotaBarangKeluarsTable
                     ->label('Satuan')
                     ->sortable(),
 
+                // ✅ Harga cuma punya nilai untuk baris Plywood (satu-satunya
+                // kategori yang detail mutasinya menyimpan kolom harga).
+                // Baris lain (Veneer, Barang Umum, Log Core, manual) akan
+                // menampilkan sel kosong karena getStateUsing mengembalikan null.
+                TextColumn::make('harga')
+                    ->label('Harga')
+                    ->getStateUsing(function ($record) {
+                        if (! str_starts_with($record->nama_barang, 'Plywood ')) {
+                            return null;
+                        }
+
+                        return static::findPlywoodDetail($record)?->harga;
+                    })
+                    ->money('IDR', locale: 'id')
+                    ->toggleable(),
+
                 TextColumn::make('keterangan')
                     ->label('Keterangan')
                     ->limit(30)
-                    ->tooltip(fn($record) => $record->keterangan),
+                    ->tooltip(fn ($record) => $record->keterangan),
 
                 TextColumn::make('created_at')
                     ->label('Dibuat')
@@ -604,11 +690,12 @@ class DetailNotaBarangKeluarsTable
                                 'kw_grade' => $data['kw_grade'],
                                 'qty' => $qty,
                                 'm3' => PlywoodMutasiDetail::hitungM3($ukuran, $qty),
+                                'harga' => $data['harga'] ?? null,
                             ]);
 
-                            $namaBarang = 'Plywood - ' . $ukuran->nama_ukuran
-                                . ' - ' . $jenisKayu->nama_kayu
-                                . ' - KW ' . $data['kw_grade'];
+                            $namaBarang = 'Plywood - '.$ukuran->nama_ukuran
+                                .' - '.$jenisKayu->nama_kayu
+                                .' - KW '.$data['kw_grade'];
 
                             $payload = [
                                 'nama_barang' => $namaBarang,
@@ -746,7 +833,7 @@ class DetailNotaBarangKeluarsTable
                                             ->unique();
                                         $options = [];
                                         foreach ($availableKws as $kw) {
-                                            $options[$kw] = 'KW ' . $kw;
+                                            $options[$kw] = 'KW '.$kw;
                                         }
 
                                         return $options;
@@ -812,7 +899,7 @@ class DetailNotaBarangKeluarsTable
                                         return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 Lembar (Stok Habis)</strong>');
                                     }
 
-                                    return new HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">' . number_format($stok) . ' Lembar</strong>');
+                                    return new HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">'.number_format($stok).' Lembar</strong>');
                                 }),
 
                             TextInput::make('jumlah')
@@ -862,10 +949,10 @@ class DetailNotaBarangKeluarsTable
                                 'm3' => $m3,
                             ]);
 
-                            $namaBarang = 'Veneer ' . ucfirst($data['tipe_veneer'])
-                                . ' - ' . $ukuran->nama_ukuran
-                                . ' - ' . $jenisKayu->nama_kayu
-                                . ' - KW ' . $data['kw'];
+                            $namaBarang = 'Veneer '.ucfirst($data['tipe_veneer'])
+                                .' - '.$ukuran->nama_ukuran
+                                .' - '.$jenisKayu->nama_kayu
+                                .' - KW '.$data['kw'];
 
                             if ($isKeluar) {
                                 DetailNotaBarangKeluar::create([
@@ -914,7 +1001,7 @@ class DetailNotaBarangKeluarsTable
 
                             DetailNotaBarangKeluar::create([
                                 'id_nota_bk' => $nota->id,
-                                'nama_barang' => static::BARANG_UMUM_PREFIX . $barang->nama_barang,
+                                'nama_barang' => static::BARANG_UMUM_PREFIX.$barang->nama_barang,
                                 'jumlah' => $data['jumlah'],
                                 'satuan' => $barang->satuan,
                                 'keterangan' => $data['keterangan'] ?? 'Keluar dari BM Barang Umum',
@@ -946,7 +1033,7 @@ class DetailNotaBarangKeluarsTable
                             DetailNotaBarangKeluar::create([
                                 'id_nota_bk' => $nota->id,
                                 'nama_barang' => static::LOG_CORE_PREFIX
-                                    . $jenisKayu->nama_kayu . ' - ' . static::formatQty($panjang) . ' cm',
+                                    .$jenisKayu->nama_kayu.' - '.static::formatQty($panjang).' cm',
                                 'jumlah' => $qty,
                                 'satuan' => 'Batang',
                                 'keterangan' => $data['keterangan'] ?? 'Otomatis dari Mutasi Log Core',
@@ -1006,10 +1093,10 @@ class DetailNotaBarangKeluarsTable
                             $hasVeneer = VeneerMutasi::where('id_nota_bk', $nota->id)->exists();
                             $hasPlywood = PlywoodMutasi::where('id_nota_bk', $nota->id)->exists();
                             $hasBarangUmum = $nota->detail()
-                                ->where('nama_barang', 'like', static::BARANG_UMUM_PREFIX . '%')
+                                ->where('nama_barang', 'like', static::BARANG_UMUM_PREFIX.'%')
                                 ->exists();
                             $hasLogCore = $nota->detail()
-                                ->where('nama_barang', 'like', static::LOG_CORE_PREFIX . '%')
+                                ->where('nama_barang', 'like', static::LOG_CORE_PREFIX.'%')
                                 ->exists();
 
                             DB::transaction(function () use ($nota) {
@@ -1038,7 +1125,7 @@ class DetailNotaBarangKeluarsTable
                             ]);
 
                             $pesan = $kategoriAktif
-                                ? 'Stok ' . implode(', ', array_keys($kategoriAktif)) . ' telah dikurangi sesuai isi nota BK.'
+                                ? 'Stok '.implode(', ', array_keys($kategoriAktif)).' telah dikurangi sesuai isi nota BK.'
                                 : 'Status nota telah diperbarui.';
 
                             Notification::make()
@@ -1190,7 +1277,7 @@ class DetailNotaBarangKeluarsTable
                                                 ->unique();
                                             $options = [];
                                             foreach ($availableKws as $kw) {
-                                                $options[$kw] = 'KW ' . $kw;
+                                                $options[$kw] = 'KW '.$kw;
                                             }
 
                                             return $options;
@@ -1256,7 +1343,7 @@ class DetailNotaBarangKeluarsTable
                                             return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 Lembar (Stok Habis)</strong>');
                                         }
 
-                                        return new HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">' . number_format($stok) . ' Lembar</strong>');
+                                        return new HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">'.number_format($stok).' Lembar</strong>');
                                     }),
 
                                 TextInput::make('jumlah')
@@ -1329,6 +1416,9 @@ class DetailNotaBarangKeluarsTable
                                 $data['ukuran_key'] = static::dimKey($u->panjang, $u->lebar, $u->tebal);
                                 $data['id_jenis_kayu'] = $detail->id_jenis_kayu;
                                 $data['kw_grade'] = $detail->kw_grade;
+                                // ✅ ambil nilai harga MENTAH yang tersimpan di record,
+                                // bukan lewat accessor (yang bisa fallback ke barang master).
+                                $data['harga'] = $detail->getRawOriginal('harga');
                             }
 
                             return $data;
@@ -1352,7 +1442,7 @@ class DetailNotaBarangKeluarsTable
                             $barang = BarangUmum::findOrFail($data['id_barang_umum']);
 
                             $record->update([
-                                'nama_barang' => DetailNotaBarangKeluarsTable::BARANG_UMUM_PREFIX . $barang->nama_barang,
+                                'nama_barang' => DetailNotaBarangKeluarsTable::BARANG_UMUM_PREFIX.$barang->nama_barang,
                                 'jumlah' => $data['jumlah'],
                                 'satuan' => $barang->satuan,
                                 'keterangan' => $data['keterangan'] ?? $record->keterangan,
@@ -1371,7 +1461,7 @@ class DetailNotaBarangKeluarsTable
                             // ada sejak "Tambah Item"). Jadi cukup update baris nota-nya.
                             $record->update([
                                 'nama_barang' => DetailNotaBarangKeluarsTable::LOG_CORE_PREFIX
-                                    . $jenisKayu->nama_kayu . ' - ' . static::formatQty($panjang) . ' cm',
+                                    .$jenisKayu->nama_kayu.' - '.static::formatQty($panjang).' cm',
                                 'jumlah' => (int) $data['jumlah'],
                                 'keterangan' => $data['keterangan'] ?? $record->keterangan,
                             ]);
@@ -1393,13 +1483,14 @@ class DetailNotaBarangKeluarsTable
                                     'kw_grade' => $data['kw_grade'],
                                     'qty' => $qty,
                                     'm3' => PlywoodMutasiDetail::hitungM3($ukuran, $qty),
+                                    'harga' => $data['harga'] ?? null,
                                 ]);
                             }
 
                             $record->update([
-                                'nama_barang' => 'Plywood - ' . $ukuran->nama_ukuran
-                                    . ' - ' . $jenisKayu->nama_kayu
-                                    . ' - KW ' . $data['kw_grade'],
+                                'nama_barang' => 'Plywood - '.$ukuran->nama_ukuran
+                                    .' - '.$jenisKayu->nama_kayu
+                                    .' - KW '.$data['kw_grade'],
                                 'jumlah' => $qty,
                                 'keterangan' => $data['keterangan'] ?? $record->keterangan,
                             ]);
@@ -1428,10 +1519,10 @@ class DetailNotaBarangKeluarsTable
                             // Generate new nama_barang
                             $ukuran = Ukuran::findOrFail($data['id_ukuran']);
                             $jenisKayu = JenisKayu::findOrFail($data['id_jenis_kayu']);
-                            $newNamaBarang = 'Veneer ' . ucfirst($data['tipe_veneer'])
-                                . ' - ' . $ukuran->nama_ukuran
-                                . ' - ' . $jenisKayu->nama_kayu
-                                . ' - KW ' . $data['kw'];
+                            $newNamaBarang = 'Veneer '.ucfirst($data['tipe_veneer'])
+                                .' - '.$ukuran->nama_ukuran
+                                .' - '.$jenisKayu->nama_kayu
+                                .' - KW '.$data['kw'];
 
                             $record->update([
                                 'nama_barang' => $newNamaBarang,
