@@ -174,7 +174,37 @@ class ProduksiDataMap
                     $ukuranDisplay = preg_replace('/^(SPINDLESS|YUEQUN|MERANTI|SANJI|DRYER\s*PAGI)/i', '', $kodeUkuran);
                     $ukuranDisplay = trim($ukuranDisplay) ?: $kodeUkuran;
                 } else {
-                    $ukuranDisplay = 'UKURAN BELUM DISET (id: '.$ukuranId.')';
+                    $firstPalet = $item->detailPaletRotary->first();
+                    $ukuranId = $firstPalet?->id_ukuran;
+                    $ukuranModel = $firstPalet?->ukuran;   // ← BARU: ambil model Ukuran lewat relasi
+
+                    $totalHasil = $item->detailPaletRotary->sum('total_lembar') ?? 0;
+
+                    $targetModel = Target::where('id_mesin', $item->id_mesin)
+                        ->where('id_ukuran', $ukuranId)
+                        ->first();
+
+                    if (! $targetModel) {
+                        $targetModel = Target::where('id_mesin', $item->id_mesin)
+                            ->whereNull('id_ukuran')
+                            ->first();
+                    }
+
+                    $targetHarian = $targetModel?->target;
+                    $jamKerja = $targetModel?->jam;
+                    $potonganPerLembar = $targetModel?->potongan ?? 0;
+                    $kodeUkuran = $targetModel?->kode_ukuran;
+
+                    if ($kodeUkuran && trim($kodeUkuran) !== '') {
+                        $ukuranDisplay = preg_replace('/^(SPINDLESS|YUEQUN|MERANTI|SANJI|DRYER\s*PAGI)/i', '', $kodeUkuran);
+                        $ukuranDisplay = trim($ukuranDisplay) ?: $kodeUkuran;
+                    } elseif ($ukuranModel) {
+                        // BARU: kalau Target tidak ada tapi model Ukuran ketemu lewat
+                        // relasi langsung, tetap tampilkan nama ukurannya.
+                        $ukuranDisplay = $ukuranModel->nama_ukuran ?? $ukuranModel->dimensi ?? ('Ukuran ID '.$ukuranId);
+                    } else {
+                        $ukuranDisplay = 'Ukuran ID '.$ukuranId.' (target belum ada di Master Target, data ukuran tidak ditemukan)';
+                    }
                 }
             }
 
