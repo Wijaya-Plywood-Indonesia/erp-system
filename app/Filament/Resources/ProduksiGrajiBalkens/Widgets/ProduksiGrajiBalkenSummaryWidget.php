@@ -6,6 +6,7 @@ use Filament\Widgets\Widget;
 use App\Models\ProduksiGrajiBalken;
 use App\Models\HasilGrajiBalken;
 use App\Models\PegawaiGrajiBalken;
+use App\Services\StokKayuPecahService;
 
 class ProduksiGrajiBalkenSummaryWidget extends Widget
 {
@@ -95,12 +96,15 @@ class ProduksiGrajiBalkenSummaryWidget extends Widget
             ->orderBy('ukuran')
             ->get();
 
+        $stokPecahGrouped = app(StokKayuPecahService::class)->getStokGroupedWidget();
+
         $this->summary = [
             'totalAll'          => $totalAll,
             'totalPegawai'      => $totalPegawai,
             'globalUkuranJenis' => $globalUkuranJenis,
             'globalUkuranSemua' => $globalUkuranSemua,
             'globalJenisKayuUkuran' => $globalJenisKayuUkuran,
+            'stokPecahGrouped'       => $stokPecahGrouped,
         ];
     }
 }
