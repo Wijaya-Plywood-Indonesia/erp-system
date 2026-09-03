@@ -20,21 +20,6 @@ class BarangSetengahJadiHp extends Model
         'harga' => 'decimal:2',
     ];
 
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function (BarangSetengahJadiHp $barang) {
-            if (is_null($barang->harga)) {
-                $kategori = $barang->grade?->kategoriBarang?->nama_kategori;
-
-                if ($kategori === 'Plywood') {
-                    $barang->harga = 200000;
-                }
-            }
-        });
-    }
-
     public function ukuran()
     {
         return $this->belongsTo(Ukuran::class, 'id_ukuran');

@@ -11,16 +11,21 @@ class PlywoodMutasiDetail extends Model
 
     protected $fillable = [
         'id_plywood_mutasi', 'id_ukuran', 'id_jenis_kayu',
-        'kw_grade', 'qty', 'm3',
+        'kw_grade', 'qty', 'm3', 'harga',
     ];
 
-    protected $casts = ['qty' => 'integer', 'm3' => 'float'];
+    protected $casts = [
+        'qty' => 'integer',
+        'm3' => 'float',
+        'harga' => 'float',
+    ];
+
     public const M3_DIVISOR = 10_000_000;
 
     public static function hitungM3(Ukuran $u, int $qty): float
-{
-    return ($u->panjang * $u->lebar * $u->tebal * $qty) / self::M3_DIVISOR;
-}
+    {
+        return ($u->panjang * $u->lebar * $u->tebal * $qty) / self::M3_DIVISOR;
+    }
 
     public function mutasi(): BelongsTo
     {
@@ -47,15 +52,14 @@ class PlywoodMutasiDetail extends Model
             return null;
         }
 
-        // Pencarian ukuran dua arah (122x244 vs 244x122)
         $matchedUkuranIds = Ukuran::where('tebal', $ukuran->tebal)
             ->where(function ($q) use ($ukuran) {
-                $q->where(fn($s) => $s->where('panjang', $ukuran->panjang)->where('lebar', $ukuran->lebar))
-                    ->orWhere(fn($s) => $s->where('panjang', $ukuran->lebar)->where('lebar', $ukuran->panjang));
+                $q->where(fn ($s) => $s->where('panjang', $ukuran->panjang)->where('lebar', $ukuran->lebar))
+                    ->orWhere(fn ($s) => $s->where('panjang', $ukuran->lebar)->where('lebar', $ukuran->panjang));
             })->pluck('id');
 
         $grade = Grade::whereRaw('LOWER(TRIM(nama_grade)) = ?', [strtolower(trim($this->kw_grade))])
-            ->whereHas('kategoriBarang', fn($q) => $q->where('nama_kategori', 'like', '%plywood%'))
+            ->whereHas('kategoriBarang', fn ($q) => $q->where('nama_kategori', 'like', '%plywood%'))
             ->first()
             ?? Grade::whereRaw('LOWER(TRIM(nama_grade)) = ?', [strtolower(trim($this->kw_grade))])->first();
 
@@ -64,14 +68,14 @@ class PlywoodMutasiDetail extends Model
 
         $bshp = BarangSetengahJadiHp::with(['ukuran', 'jenisBarang', 'grade.kategoriBarang'])
             ->whereIn('id_ukuran', $matchedUkuranIds)
-            ->when($jenisBarang, fn($q) => $q->where('id_jenis_barang', $jenisBarang->id))
-            ->when($grade, fn($q) => $q->where('id_grade', $grade->id))
+            ->when($jenisBarang, fn ($q) => $q->where('id_jenis_barang', $jenisBarang->id))
+            ->when($grade, fn ($q) => $q->where('id_grade', $grade->id))
             ->first();
 
         if (! $bshp) {
             $bshp = BarangSetengahJadiHp::with(['ukuran', 'jenisBarang', 'grade.kategoriBarang'])
                 ->whereIn('id_ukuran', $matchedUkuranIds)
-                ->when($grade, fn($q) => $q->where('id_grade', $grade->id))
+                ->when($grade, fn ($q) => $q->where('id_grade', $grade->id))
                 ->first();
         }
 
@@ -94,13 +98,23 @@ class PlywoodMutasiDetail extends Model
         return implode(' - ', array_filter($parts));
     }
 
+    /**
+     * Harga: pakai nilai manual di record ini kalau ada,
+     * kalau tidak ambil dari data master BarangSetengahJadiHp.
+     * Tidak ada fallback hardcode — kalau keduanya kosong, berarti 0
+     * (data belum lengkap, bukan ditutupi angka default).
+     */
     public function getHargaAttribute(): float
     {
+        if (filled($this->attributes['harga'] ?? null) && (float) $this->attributes['harga'] > 0) {
+            return (float) $this->attributes['harga'];
+        }
+
         if ($this->barang && filled($this->barang->harga) && (float) $this->barang->harga > 0) {
             return (float) $this->barang->harga;
         }
 
-        return 200000;
+        return 0.0;
     }
 
     public function getSatuanAttribute(): string
