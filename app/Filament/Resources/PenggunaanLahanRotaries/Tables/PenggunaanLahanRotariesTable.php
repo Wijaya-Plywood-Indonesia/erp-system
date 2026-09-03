@@ -12,12 +12,15 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class PenggunaanLahanRotariesTable
 {
@@ -59,7 +62,7 @@ class PenggunaanLahanRotariesTable
                     ->formatStateUsing(
                         fn($state) => $state > 0
                             ? 'Rp ' . number_format($state, 0, ',', '.')
-                            : '-' // Tampilkan '-' jika belum ada data HPP
+                            : '-'
                     )
                     ->toggleable(isToggledHiddenByDefault: true),
 
@@ -75,22 +78,14 @@ class PenggunaanLahanRotariesTable
             ->headerActions([
                 CreateAction::make(),
             ])
-            ->filters([
-                //
-            ])
             ->recordActions([
-                /**
-                 * AKSI LAHAN SELESAI (RESET FISIK & STOK)
-                 */
                 Action::make('lahan_selesai')
                     ->label('Selesaikan Lahan')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->requiresConfirmation()
                     ->visible(function ($record) {
-                        // Cek apakah produksi rotary ini sudah locked
                         $idProduksi = $record->id_produksi ?? null;
-                        if (!$idProduksi) return true; // Jika tidak ada id_produksi, tampilkan saja
+                        if (!$idProduksi) return true;
 
                         $validated = \App\Models\ValidasiHasilRotary::where('id_produksi', $idProduksi)
                             ->where('status', 'disetujui')
@@ -105,107 +100,155 @@ class PenggunaanLahanRotariesTable
                             fn($role) => str_contains(strtolower($role), 'pengawas_rotary')
                         );
 
-                        $isLocked = $kepalaSudah && $pengawasSudah;
-
-                        return !$isLocked; // Tampilkan hanya jika BELUM locked
+                        return !($kepalaSudah && $pengawasSudah);
                     })
                     ->modalHeading('Konfirmasi Pengosongan Lahan & Stok')
+                    ->modalDescription('Periksa rincian stok dan isi penyesuaian hasil sebelum menyelesaikan penggunaan lahan ini.')
 
-                    // ── Modal Description ─────────────────────────────────────
-                    // Menampilkan ringkasan informasi sebelum user konfirmasi
-                    ->modalDescription(function ($record) {
-                        $namaKayu = $record->jenisKayu?->nama_kayu ?? 'N/A';
+                    ->form([
+                        Section::make('Informasi Lahan & Stok Saat Ini')
+                            ->schema([
+                                Grid::make(2)
+                                    ->schema([
+                                        TextInput::make('info_lahan')
+                                            ->label('Lahan')
+                                            ->disabled()
+                                            ->dehydrated(false)
+                                            ->default(fn(PenggunaanLahanRotary $record) => "{$record->lahan->kode_lahan} - {$record->lahan->nama_lahan}"),
 
-                        // Hitung total stok aktif yang akan di-reset
-                        $totalStok = HppAverageSummarie::where('id_lahan', $record->id_lahan)
-                            ->where('id_jenis_kayu', $record->id_jenis_kayu)
-                            ->sum('stok_batang');
+                                        TextInput::make('info_jenis_kayu')
+                                            ->label('Jenis Kayu')
+                                            ->disabled()
+                                            ->dehydrated(false)
+                                            ->default(fn(PenggunaanLahanRotary $record) => $record->jenisKayu?->nama_kayu ?? '-'),
 
-                        // Ambil HPP aktif saat ini dari summary (bukan dari log)
-                        // Ini yang akan menjadi hpp_average (hpp terakhir) setelah selesai
-                        $hppAktif = HppAverageSummarie::where('id_lahan', $record->id_lahan)
-                            ->where('id_jenis_kayu', $record->id_jenis_kayu)
-                            ->where('stok_batang', '>', 0)
-                            ->orderByDesc('id')
-                            ->value('hpp_average') ?? 0;
+                                        TextInput::make('stok_aktif')
+                                            ->label('Hasil Kupasan / Total Stok (Batang)')
+                                            ->disabled()
+                                            ->dehydrated(false)
+                                            ->default(function (PenggunaanLahanRotary $record) {
+                                                return HppAverageSummarie::where('id_lahan', $record->id_lahan)
+                                                    ->where('id_jenis_kayu', $record->id_jenis_kayu)
+                                                    ->sum('stok_batang');
+                                            }),
 
-                        $hppAktifFormatted = $hppAktif > 0
-                            ? 'Rp ' . number_format($hppAktif, 0, ',', '.')
-                            : 'Belum ada data';
+                                        TextInput::make('kayu_pecah')
+                                            ->label('Kayu Pecah Total (Batang)')
+                                            ->disabled()
+                                            ->dehydrated(false)
+                                            ->default(function (PenggunaanLahanRotary $record) {
+                                                return \App\Models\KayuPecahRotary::whereHas('penggunaanLahan', function ($q) use ($record) {
+                                                    $q->where('id_lahan', $record->id_lahan)
+                                                        ->where('hpp_average', 0);
+                                                })->count();
+                                            }),
 
-                        return "⚠️ **Konfirmasi Penyelesaian Lahan**\n\n" .
-                            "📌 **Informasi Lahan:**\n" .
-                            "• Lahan: **{$record->lahan->kode_lahan} - {$record->lahan->nama_lahan}**\n" .
-                            "• Jenis Kayu: **{$namaKayu}**\n" .
-                            "• Total Stok yang akan direset: **{$totalStok} batang**\n" .
-                            "• HPP yang akan dicatat: **{$hppAktifFormatted}**\n\n" .
-                            "Sistem akan:\n" .
-                            "1. ✅ Mereset stok ke 0\n" .
-                            "2. 📝 Mencatat Log HPP Keluar\n" .
-                            "3. 💰 Menyimpan HPP terakhir ke record lahan\n" .
-                            "4. 🔄 Mereset Tempat Kayu\n\n" .
-                            "Apakah Anda yakin lahan ini sudah selesai digunakan?";
-                    })
+                                        TextInput::make('akumulasi_total')
+                                            ->label('Hasil Real (Batang)')
+                                            ->disabled()
+                                            ->dehydrated(false)
+                                            ->default(function (PenggunaanLahanRotary $record) {
+                                                $stokTercatat = HppAverageSummarie::where('id_lahan', $record->id_lahan)
+                                                    ->where('id_jenis_kayu', $record->id_jenis_kayu)
+                                                    ->sum('stok_batang');
 
-                    ->action(function (PenggunaanLahanRotary $record) {
+                                                $totalKayuPecah = \App\Models\KayuPecahRotary::whereHas('penggunaanLahan', function ($q) use ($record) {
+                                                    $q->where('id_lahan', $record->id_lahan)
+                                                        ->where('hpp_average', 0);
+                                                })->count();
+
+                                                return max(0, $stokTercatat - $totalKayuPecah);
+                                            })
+                                            ->columnSpanFull(),
+                                    ]),
+                            ]),
+
+                        Section::make('Penyesuaian & Catatan Selesai')
+                            ->schema([
+                                TextInput::make('hasil_sebenarnya')
+                                    ->label('Hasil Real Fisik (Batang)')
+                                    ->numeric()
+                                    ->minValue(0)
+                                    ->placeholder('Masukkan hasil real fisik')
+                                    ->required()
+                                    ->default(function (PenggunaanLahanRotary $record) {
+                                        $stokTercatat = HppAverageSummarie::where('id_lahan', $record->id_lahan)
+                                            ->where('id_jenis_kayu', $record->id_jenis_kayu)
+                                            ->sum('stok_batang');
+
+                                        $totalKayuPecah = \App\Models\KayuPecahRotary::whereHas('penggunaanLahan', function ($q) use ($record) {
+                                            $q->where('id_lahan', $record->id_lahan)
+                                                ->where('hpp_average', 0);
+                                        })->count();
+
+                                        return max(0, $stokTercatat - $totalKayuPecah);
+                                    })
+                                    ->helperText('Hasil Real = Hasil Kupasan (Nilai Stok) - Kayu Pecah.'),
+
+                                Textarea::make('keterangan')
+                                    ->label('Keterangan')
+                                    ->rows(3)
+                                    ->placeholder('Masukkan catatan jika ada selisih stok atau penyesuaian lapangan...'),
+                            ]),
+                    ])
+
+                    ->action(function (array $data, PenggunaanLahanRotary $record) {
                         $idLahan     = $record->id_lahan;
                         $idJenisKayu = $record->id_jenis_kayu;
 
-                        // ── Validasi: jenis kayu harus ada ───────────────────
                         if (is_null($idJenisKayu)) {
                             Notification::make()
                                 ->title('Gagal: Jenis Kayu Tidak Ditemukan')
-                                ->body('Record ini tidak memiliki id_jenis_kayu. Periksa data penggunaan lahan.')
+                                ->body('Record ini tidak memiliki id_jenis_kayu.')
                                 ->danger()
                                 ->send();
                             return;
                         }
 
-                        DB::transaction(function () use ($record, $idLahan, $idJenisKayu) {
+                        DB::transaction(function () use ($data, $record, $idLahan, $idJenisKayu) {
                             $tglProduksi = $record->produksi_rotary?->tgl_produksi ?? now();
 
-                            // ══════════════════════════════════════════════════
-                            // LANGKAH 1: Ambil HPP terakhir dari summary AKTIF
-                            // ══════════════════════════════════════════════════
-                            // PENTING: Ambil SEBELUM loop reset dimulai
-                            // Karena setelah reset, hpp_average di summary = 0
-                            //
-                            // Mengambil dari summary yang masih berstok,
-                            // diurutkan dari id terbesar agar mendapat
-                            // hpp_average yang paling terkini
                             $hppTerakhir = HppAverageSummarie::where('id_lahan', $idLahan)
                                 ->where('id_jenis_kayu', $idJenisKayu)
                                 ->where('stok_batang', '>', 0)
                                 ->orderByDesc('id')
                                 ->value('hpp_average') ?? 0;
 
-                            Log::info('[Selesai Lahan] HPP terakhir diambil dari summary aktif', [
-                                'id_lahan'      => $idLahan,
-                                'id_jenis_kayu' => $idJenisKayu,
-                                'hpp_terakhir'  => $hppTerakhir,
-                            ]);
-
-                            // ══════════════════════════════════════════════════
-                            // LANGKAH 2: Siapkan informasi untuk keterangan log
-                            // ══════════════════════════════════════════════════
-                            $kodeLahan  = $record->lahan->kode_lahan ?? 'N/A';
-                            $namaLahan  = $record->lahan->nama_lahan ?? 'N/A';
-                            $namaKayu   = $record->jenisKayu->nama_kayu ?? 'N/A';
-
-                            // ══════════════════════════════════════════════════
-                            // LANGKAH 3: Loop semua summary yang masih berstok
-                            // Buat log keluar & reset stok ke 0
-                            // ══════════════════════════════════════════════════
-                            $summaries = HppAverageSummarie::where('id_lahan', $idLahan)
+                            // HASIL KUPASAN = Stok Asli (Misal 400)
+                            $hasilKupasanStok = (int) HppAverageSummarie::where('id_lahan', $idLahan)
                                 ->where('id_jenis_kayu', $idJenisKayu)
+                                ->sum('stok_batang');
+
+                            $kodeLahan = $record->lahan->kode_lahan ?? 'N/A';
+                            $namaLahan = $record->lahan->nama_lahan ?? 'N/A';
+
+                            $hasilReal   = (int) $data['hasil_sebenarnya'];
+                            $catatanUser = $data['keterangan'] ?? '-';
+                            $userLogin  = Auth::user()?->name ?? 'System';
+                            $tglProduksiFmt = \Carbon\Carbon::parse($tglProduksi)->translatedFormat('d F Y');
+
+                            $totalKayuPecah = \App\Models\KayuPecahRotary::whereHas('penggunaanLahan', function ($q) use ($record) {
+                                $q->where('id_lahan', $record->id_lahan)
+                                    ->where('hpp_average', 0);
+                            })->count();
+
+                            // ✅ Format Keterangan yang Diperbarui
+                            $keteranganLengkap = sprintf(
+                                'SELESAI LAHAN | LAHAN: %s - %s | TGL PROD: %s | HASIL KUPASAN: %d | KAYU PECAH: %d | HASIL REAL: %d | DISELESAIKAN OLEH: %s | CATATAN: %s',
+                                $kodeLahan,
+                                $namaLahan,
+                                $tglProduksiFmt,
+                                $hasilKupasanStok,
+                                $totalKayuPecah,
+                                $hasilReal,
+                                $userLogin,
+                                $catatanUser
+                            );
+
+                            $summariesBerstok = HppAverageSummarie::where('id_lahan', $idLahan)
+                                ->where('id_jenis_kayu', $idJenisKayu)
+                                ->where('stok_batang', '>', 0)
                                 ->get();
-
-                            // Hanya summary yang berstok yang diproses
-                            $summariesBerstok = $summaries->where('stok_batang', '>', 0);
-
-                            $grandTotalBatangKeluar   = 0;
-                            $grandTotalKubikasiKeluar = 0;
-                            $grandTotalNilaiKeluar    = 0;
 
                             foreach ($summariesBerstok as $item) {
                                 $batangKeluar   = (int)   $item->stok_batang;
@@ -213,48 +256,28 @@ class PenggunaanLahanRotariesTable
                                 $nilaiKeluar    = (float) $item->nilai_stok;
                                 $hppSaatIni     = (float) $item->hpp_average;
 
-                                // Keterangan log mencatat semua info penting
-                                // termasuk HPP terakhir agar mudah dilacak
-                                $keteranganLog = sprintf(
-                                    'SELESAI LAHAN | Lahan: %s - %s | Jenis Kayu: %s  | HPP Terakhir: Rp %s',
-                                    $kodeLahan,
-                                    $namaLahan,
-                                    $namaKayu,
-                                    number_format($hppTerakhir, 0, ',', '.')
-                                );
-
-                                // Buat log HPP keluar
-                                // hpp_average di log = HPP saat stok di-reset
-                                // (bukan 0), agar ada rekam jejak HPP terakhir
                                 $log = HppAverageLog::create([
                                     'id_lahan'             => $idLahan,
                                     'id_jenis_kayu'        => $idJenisKayu,
-                                    'grade'                => null,
                                     'panjang'              => $item->panjang,
                                     'tanggal'              => $tglProduksi,
                                     'tipe_transaksi'       => 'keluar',
-                                    'keterangan'           => $keteranganLog,
+                                    'keterangan'           => $keteranganLengkap,
                                     'referensi_type'       => PenggunaanLahanRotary::class,
                                     'referensi_id'         => $record->id,
                                     'total_batang'         => $batangKeluar,
                                     'total_kubikasi'       => round($kubikasiKeluar, 4),
                                     'harga'                => $hppSaatIni,
                                     'nilai_stok'           => $nilaiKeluar,
-                                    // Kondisi stok sebelum di-reset
                                     'stok_batang_before'   => $batangKeluar,
                                     'stok_kubikasi_before' => round($kubikasiKeluar, 4),
                                     'nilai_stok_before'    => $nilaiKeluar,
-                                    // Kondisi stok setelah di-reset (semua 0)
                                     'stok_batang_after'    => 0,
                                     'stok_kubikasi_after'  => 0,
                                     'nilai_stok_after'     => 0,
-                                    // HPP dicatat sebagai 0 karena stok sudah habis
-                                    // HPP terakhir yang valid sudah disimpan
-                                    // di $hppTerakhir dan akan masuk ke record
                                     'hpp_average'          => 0,
                                 ]);
 
-                                // Reset summary ke 0 setelah log dibuat
                                 $item->update([
                                     'stok_batang'   => 0,
                                     'stok_kubikasi' => 0,
@@ -270,49 +293,20 @@ class PenggunaanLahanRotariesTable
                                         qty: $batangKeluar,
                                         hargaSatuan: 0,
                                         referensi: $record,
-                                        keterangan: sprintf(
-                                            'SELESAI LAHAN | Lahan: %s - %s | Jenis Kayu: %s | Panjang: %s | Hasil LogCore',
-                                            $kodeLahan,
-                                            $namaLahan,
-                                            $namaKayu,
-                                            $item->panjang
-                                        ),
+                                        keterangan: $keteranganLengkap,
                                         tanggal: $tglProduksi,
                                     );
                                 }
-
-                                // Akumulasi grand total untuk disimpan ke record
-                                $grandTotalBatangKeluar   += $batangKeluar;
-                                $grandTotalKubikasiKeluar += $kubikasiKeluar;
-                                $grandTotalNilaiKeluar    += $nilaiKeluar;
                             }
 
-                            // ══════════════════════════════════════════════════
-                            // LANGKAH 4: Update record PenggunaanLahanRotary
-                            // ══════════════════════════════════════════════════
-                            // hpp_average di sini berfungsi sebagai hpp_terakhir
-                            // yaitu HPP moving average saat stok terakhir habis
-                            // Diambil dari LANGKAH 1 (sebelum summary di-reset)
                             $record->update([
-                                'jumlah_batang' => $grandTotalBatangKeluar,
-                                'hpp_average'   => $hppTerakhir, // ✅ HPP saat stok habis
+                                'jumlah_batang' => $hasilReal,
+                                'hpp_average'   => $hppTerakhir,
                             ]);
 
-                            Log::info('[Selesai Lahan] Record diperbarui', [
-                                'id_record'      => $record->id,
-                                'jumlah_batang'  => $grandTotalBatangKeluar,
-                                'hpp_average'    => $hppTerakhir,
-                            ]);
-
-                            // ══════════════════════════════════════════════════
-                            // LANGKAH 5: Reset Tempat Kayu
-                            // ══════════════════════════════════════════════════
-                            // Update jumlah_batang ke 0 dan kembalikan status
-                            // ke 'belum serah' agar lahan bisa digunakan lagi
-                            $updatedCount = DB::table('tempat_kayus')
+                            DB::table('tempat_kayus')
                                 ->where('id_lahan', $idLahan)
                                 ->update([
-                                    // 'id_kayu_masuk'   => null,
                                     'jumlah_batang'   => 0,
                                     'status'          => 'belum serah',
                                     'diserahkan_oleh' => null,
@@ -320,29 +314,6 @@ class PenggunaanLahanRotariesTable
                                     'updated_at'      => now(),
                                 ]);
 
-                            // Jika tempat kayu belum ada, buat baru
-                            // (fallback untuk data lama yang belum punya tempat kayu)
-                            if ($updatedCount === 0) {
-                                $kayuMasuk = \App\Models\KayuMasuk::whereHas('detailTurusanKayus', function ($q) use ($idLahan) {
-                                    $q->where('lahan_id', $idLahan);
-                                })->first();
-
-                                if ($kayuMasuk) {
-                                    DB::table('tempat_kayus')->insert([
-                                        'id_lahan'      => $idLahan,
-                                        'id_kayu_masuk' => $kayuMasuk->id,
-                                        'jumlah_batang' => 0,
-                                        'status'        => 'belum serah',
-                                        'created_at'    => now(),
-                                        'updated_at'    => now(),
-                                    ]);
-                                }
-                            }
-
-                            // ══════════════════════════════════════════════════
-                            // LANGKAH 6: Reset pivot serah terima
-                            // ══════════════════════════════════════════════════
-                            // Reset data pivot agar lahan siap untuk siklus baru
                             DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
                                 ->where('id_lahan', $idLahan)
                                 ->where('tipe', 'lahan_rotary')
@@ -358,13 +329,11 @@ class PenggunaanLahanRotariesTable
 
                         Notification::make()
                             ->title('✅ Lahan Berhasil Diselesaikan')
-                            ->body('Stok direset ke 0. HPP terakhir telah dicatat. Lahan siap digunakan kembali.')
+                            ->body('Stok direset ke 0. Catatan dan hasil riil telah tersimpan.')
                             ->success()
                             ->send();
                     }),
-                // =========================================================
-                // PERUBAHAN 6: EditAction - hanya untuk admin dan belum selesai
-                // =========================================================
+
                 EditAction::make()
                     ->visible(
                         fn($record) =>
@@ -372,9 +341,6 @@ class PenggunaanLahanRotariesTable
                             && !$record->isSelesai()
                     ),
 
-                // =========================================================
-                // PERUBAHAN 7: DeleteAction - hanya untuk admin dan belum selesai
-                // =========================================================
                 DeleteAction::make()
                     ->visible(
                         fn($record) =>
