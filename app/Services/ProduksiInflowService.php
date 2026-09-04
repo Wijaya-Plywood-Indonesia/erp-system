@@ -545,7 +545,10 @@ class ProduksiInflowService
             $bahanPorsi = $bahanRows->map(function ($b) use ($persentaseKubikasi) {
                 $master = $b->bahanPenolong;
 
-                $namaBahan = 'Solasi';
+                // FIX: dulu hardcode 'Solasi' karena cuma ada 1 jenis bahan penolong rotary.
+                // Sekarang ada >1 jenis (Reeling Tape Zhongxing, Reeling Tape Golden, dst),
+                // jadi nama_bahan WAJIB diambil dari master, bukan dipaksa satu nama.
+                $namaBahan = $master->nama_bahan_penolong ?? '-';
 
                 $satuan = $master->satuan ?? '';
                 $hargaSatuan = (float) ($master->harga ?? 0);
@@ -593,13 +596,20 @@ class ProduksiInflowService
                     ->flatten(1)
                     ->groupBy('nama_bahan')
                     ->map(function ($items, $nama) {
-                        // FIX: jumlah dibulatkan ke bilangan bulat NORMAL (bukan 2 desimal
-                        // lagi), dan subtotal WAJIB dihitung dari jumlah yang SUDAH
-                        // dibulatkan ini — bukan dari jumlah_porsi desimal asli. Ini supaya
-                        // subtotal (dan turunannya: total_bahan_penolong, harga_vopb, Harga
-                        // Total/m³) SELALU konsisten & bisa di-cross-check manual dengan
-                        // angka Solasi yang tampil di layar/export.
-                        $jumlah = round($items->sum('jumlah_porsi'));
+                        // FIX: sebelumnya jumlah dibulatkan ke bilangan bulat (round()) karena
+                        // asumsinya cuma 1 jenis bahan penolong ("Solasi") yang dianggap wajar
+                        // dibulatkan ke satuan roll terdekat. Sekarang bahan penolong rotary
+                        // bisa >1 jenis sekaligus dalam produksi yang sama (mis. Reeling Tape
+                        // Zhongxing + Reeling Tape Golden), dan alokasinya murni berdasarkan
+                        // PERSENTASE KUBIKASI baris terhadap total produksi hari itu — bukan
+                        // lagi jumlah fisik yang masuk akal dibulatkan ke satuan bulat per
+                        // jenis. Membulatkan tiap jenis secara terpisah bisa bikin subtotal
+                        // (dan total_bahan_penolong/harga_vopb turunannya) tidak konsisten
+                        // dengan proporsi kubikasi riil. Jadi sekarang jumlah_porsi dijumlah
+                        // apa adanya (desimal), dibulatkan hanya untuk tampilan (4 desimal),
+                        // dan subtotal dihitung dari nilai proporsional ini.
+                        $jumlahRaw = $items->sum('jumlah_porsi');
+                        $jumlah = round($jumlahRaw, 4);
                         $hargaSatuan = (float) ($items->first()['harga_satuan'] ?? 0);
                         $satuan = $items->first()['satuan'] ?? '';
 

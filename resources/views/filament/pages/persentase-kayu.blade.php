@@ -146,163 +146,180 @@
                 </div>
 
                 {{-- SECTION SUMMARY STATS --}}
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                <div class="space-y-4 mb-6">
 
-                    <div
-                        class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
-                        <div class="flex items-center gap-3">
-                            <div class="p-2 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">
-                                <x-heroicon-m-arrow-down-tray class="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                            </div>
-                            <span
-                                class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Input
-                                Kayu</span>
-                        </div>
-                        <div class="mt-3">
-                            <div class="flex items-baseline gap-2 flex-wrap">
-                                <span class="text-2xl font-black text-gray-900 dark:text-white">
-                                    {{ number_format($rekap['total_kayu_masuk'], 0, ',', '.') }} <span
-                                        class="text-xs font-medium text-gray-400">Btg</span>
-                                </span>
-                                <span class="text-lg font-bold text-gray-400">/</span>
-                                <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-                                    {{ number_format($rekap['total_kubikasi_kayu_masuk'], 4, ',', '.') }} <span
-                                        class="text-xs font-medium text-emerald-500/70">m³</span>
-                                </span>
-                            </div>
-                            <div class="flex items-center gap-1.5 mt-2">
-                                <div class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                    {{-- BARIS ATAS: 3 kolom (card putih - Input Kayu, Output Veneer, Total Nilai Poin) --}}
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                        <div
+                            class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">
+                                    <x-heroicon-m-arrow-down-tray
+                                        class="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                                </div>
                                 <span
-                                    class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase italic">Jumlah
-                                    Batang / Kubikasi Kayu Masuk</span>
+                                    class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Input
+                                    Kayu</span>
+                            </div>
+                            <div class="mt-3">
+                                <div class="flex items-baseline gap-2 flex-wrap">
+                                    <span class="text-2xl font-black text-gray-900 dark:text-white">
+                                        {{ number_format($rekap['total_kayu_masuk'], 0, ',', '.') }} <span
+                                            class="text-xs font-medium text-gray-400">Btg</span>
+                                    </span>
+                                    <span class="text-lg font-bold text-gray-400">/</span>
+                                    <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                                        {{ number_format($rekap['total_kubikasi_kayu_masuk'], 4, ',', '.') }} <span
+                                            class="text-xs font-medium text-emerald-500/70">m³</span>
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-1.5 mt-2">
+                                    <div class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    <span
+                                        class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase italic">Jumlah
+                                        Batang / Kubikasi Kayu Masuk</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div
-                        class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
-                        <div class="flex items-center gap-3">
-                            <div class="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg">
-                                <x-heroicon-m-arrow-up-tray class="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <span
-                                class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Output
-                                Veneer</span>
-                        </div>
-                        <div class="mt-3">
-                            <div class="flex items-baseline gap-2 flex-wrap">
-                                <span class="text-2xl font-black text-gray-900 dark:text-white">
-                                    {{ number_format($rekap['total_kubikasi_veneer'], 4, ',', '.') }} <span
-                                        class="text-xs font-medium text-gray-400">m³</span>
-                                </span>
-                                <span class="text-lg font-bold text-gray-400">/</span>
-                                <span class="text-2xl font-black text-blue-600 dark:text-blue-400">
-                                    {{ $rekap['rata_rata_rendemen'] }}
-                                </span>
-                            </div>
-                            <div class="flex items-center gap-1.5 mt-2">
-                                <div class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                        <div
+                            class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg">
+                                    <x-heroicon-m-arrow-up-tray class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                </div>
                                 <span
-                                    class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase italic">Kubikasi
-                                    Veneer / Rata-Rata Rendemen</span>
+                                    class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Output
+                                    Veneer</span>
+                            </div>
+                            <div class="mt-3">
+                                <div class="flex items-baseline gap-2 flex-wrap">
+                                    <span class="text-2xl font-black text-gray-900 dark:text-white">
+                                        {{ number_format($rekap['total_kubikasi_veneer'], 4, ',', '.') }} <span
+                                            class="text-xs font-medium text-gray-400">m³</span>
+                                    </span>
+                                    <span class="text-lg font-bold text-gray-400">/</span>
+                                    <span class="text-2xl font-black text-blue-600 dark:text-blue-400">
+                                        {{ $rekap['rata_rata_rendemen'] }}
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-1.5 mt-2">
+                                    <div class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                                    <span
+                                        class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase italic">Kubikasi
+                                        Veneer / Rata-Rata Rendemen</span>
+                                </div>
                             </div>
                         </div>
+
+                        <div
+                            class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 bg-amber-50 dark:bg-amber-500/10 rounded-lg">
+                                    <x-heroicon-m-banknotes class="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                </div>
+                                <span
+                                    class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total
+                                    Nilai Poin</span>
+                            </div>
+                            <div class="mt-3">
+                                <span class="text-2xl font-black text-gray-900 dark:text-white">
+                                    Rp {{ number_format($rekap['total_poin_masuk'], 0, ',', '.') }}
+                                </span>
+                                <p class="text-[10px] text-gray-400 mt-1 uppercase leading-tight font-medium">
+                                    Berdasarkan
+                                    akumulasi poin log masuk</p>
+                            </div>
+                        </div>
+
                     </div>
 
-                    <div
-                        class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
-                        <div class="flex items-center gap-3">
-                            <div class="p-2 bg-amber-50 dark:bg-amber-500/10 rounded-lg">
-                                <x-heroicon-m-banknotes class="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                            </div>
-                            <span
-                                class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total
-                                Nilai Poin</span>
-                        </div>
-                        <div class="mt-3">
-                            <span class="text-2xl font-black text-gray-900 dark:text-white">
-                                Rp {{ number_format($rekap['total_poin_masuk'], 0, ',', '.') }}
-                            </span>
-                            <p class="text-[10px] text-gray-400 mt-1 uppercase leading-tight font-medium">Berdasarkan
-                                akumulasi poin log masuk</p>
-                        </div>
-                    </div>
+                    {{-- BARIS BAWAH: 4 kolom (card primary - harga-harga rata-rata) --}}
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
-                    <div
-                        class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
-                        <div class="flex items-center p-2 gap-3 text-white ">
-                            <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
-                            <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer Rata Rata </span>
-                        </div>
-                        <div class="mt-3">
-                            <span class="text-2xl font-black text-white">
-                                Rp {{ number_format($rekap['total_harga_veneer'], 0, ',', '.') }}
-                            </span>
-                            <div class="flex items-center gap-1.5 mt-1">
-                                <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
-                                <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price /
-                                    m³</span>
+                        <div
+                            class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
+                            <div class="flex items-center p-2 gap-3 text-white ">
+                                <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
+                                <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer Rata Rata </span>
+                            </div>
+                            <div class="mt-3">
+                                <span class="text-2xl font-black text-white">
+                                    Rp {{ number_format($rekap['total_harga_veneer'], 0, ',', '.') }}
+                                </span>
+                                <div class="flex items-center gap-1.5 mt-1">
+                                    <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
+                                    <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price /
+                                        m³</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div
-                        class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
-                        <div class="flex items-center p-2 gap-3 text-white ">
-                            <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
-                            <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer + Ongkos Rata Rata
-                            </span>
-                        </div>
-                        <div class="mt-3">
-                            <span class="text-2xl font-black text-white">
-                                Rp {{ number_format($rekap['total_harga_v_ongkos'], 0, ',', '.') }}
-                            </span>
-                            <div class="flex items-center gap-1.5 mt-1">
-                                <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
-                                <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price / m³ +
-                                    Ongkos Pekerja</span>
+                        <div
+                            class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
+                            <div class="flex items-center p-2 gap-3 text-white ">
+                                <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
+                                <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer + Ongkos Rata
+                                    Rata
+                                </span>
+                            </div>
+                            <div class="mt-3">
+                                <span class="text-2xl font-black text-white">
+                                    Rp {{ number_format($rekap['total_harga_v_ongkos'], 0, ',', '.') }}
+                                </span>
+                                <div class="flex items-center gap-1.5 mt-1">
+                                    <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
+                                    <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price /
+                                        m³ +
+                                        Ongkos Pekerja</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div
-                        class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
-                        <div class="flex items-center p-2 gap-3 text-white ">
-                            <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
-                            <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer + Ongkos + Penyusutan
-                                Rata Rata </span>
-                        </div>
-                        <div class="mt-3">
-                            <span class="text-2xl font-black text-white">
-                                Rp {{ number_format($rekap['total_harga_vop'], 0, ',', '.') }}
-                            </span>
-                            <div class="flex items-center gap-1.5 mt-1">
-                                <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
-                                <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price / m³ +
-                                    Ongkos Pekerja + Biaya Penyusutan</span>
-                            </div>
-                        </div>
-                    </div>
-                    @if ($adaBahanPenolong)
                         <div
                             class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
                             <div class="flex items-center p-2 gap-3 text-white ">
                                 <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
                                 <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer + Ongkos +
                                     Penyusutan
-                                    + Bahan Penolong Rata Rata </span>
+                                    Rata Rata </span>
                             </div>
                             <div class="mt-3">
                                 <span class="text-2xl font-black text-white">
-                                    Rp {{ number_format($rekap['total_harga_vopb'], 0, ',', '.') }}
+                                    Rp {{ number_format($rekap['total_harga_vop'], 0, ',', '.') }}
                                 </span>
                                 <div class="flex items-center gap-1.5 mt-1">
                                     <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
                                     <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price /
                                         m³ +
-                                        Ongkos Pekerja + Penyusutan + Bahan Penolong</span>
+                                        Ongkos Pekerja + Biaya Penyusutan</span>
                                 </div>
                             </div>
                         </div>
-                    @endif
+                        @if ($adaBahanPenolong)
+                            <div
+                                class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
+                                <div class="flex items-center p-2 gap-3 text-white ">
+                                    <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
+                                    <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer + Ongkos +
+                                        Penyusutan
+                                        + Bahan Penolong Rata Rata </span>
+                                </div>
+                                <div class="mt-3">
+                                    <span class="text-2xl font-black text-white">
+                                        Rp {{ number_format($rekap['total_harga_vopb'], 0, ',', '.') }}
+                                    </span>
+                                    <div class="flex items-center gap-1.5 mt-1">
+                                        <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
+                                        <span class="text-[10px] text-white/90 font-medium uppercase italic">Final
+                                            Price /
+                                            m³ +
+                                            Ongkos Pekerja + Penyusutan + Bahan Penolong</span>
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
+
+                    </div>
 
                 </div>
 
@@ -512,8 +529,6 @@
                                                                     class="px-2 py-2 text-green-600 dark:text-green-400">
                                                                     Ongkos / Pekerja</th>
                                                                 <th class="px-2 py-2">Penyusutan</th>
-                                                                <th class="px-2 py-2 whitespace-nowrap">Solasi
-                                                                </th>
                                                                 <th
                                                                     class="px-2 py-2 whitespace-nowrap text-green-600 dark:text-green-400">
                                                                     Biaya Bahan
@@ -551,47 +566,21 @@
                                                                         class="px-2 py-2 {{ $kk['penyusutan'] == 0 && 'text-red-600 dark:text-red-400' }}">
                                                                         {{ $kk['penyusutan'] != 0 ? 'Rp ' . number_format($kk['penyusutan'] ?? 0) : '0 ( Belum Diatur )' }}
                                                                     </td>
-                                                                    {{-- Kolom Solasi: HANYA info jumlah roll, dibulatkan normal untuk keterbacaan.
-         Angka bulat ini TIDAK dipakai untuk hitung biaya di kolom sebelah. --}}
+                                                                    {{-- Kolom Biaya Bahan Penolong: SATU angka gabungan
+                                                                    dari semua jenis bahan penolong (jumlah desimal asli
+                                                                    x harga_satuan, di-sum di service) — nama tiap jenis
+                                                                    & subtotalnya ditampilkan lewat tooltip (title). --}}
                                                                     <td class="px-2 py-2 whitespace-nowrap">
-                                                                        @forelse ($kk['bahan_penolong'] ?? [] as $bp)
+                                                                        @if (($kk['total_bahan_penolong'] ?? 0) > 0)
                                                                             <span
-                                                                                class="text-gray-700 dark:text-gray-300">Rp
-                                                                                {{ number_format(round($bp['jumlah'] ?? 0) * ($bp['harga_satuan'] ?? 0), 0, ',', '.') }}</span>
-                                                                            @if (!$loop->last)
-                                                                                ,
-                                                                            @endif
-                                                                        @empty
+                                                                                class="text-gray-700 dark:text-gray-300"
+                                                                                title="{{ collect($kk['bahan_penolong'] ?? [])->map(fn($bp) => $bp['nama_bahan'] . ': Rp ' . number_format($bp['subtotal'], 0, ',', '.'))->implode(' | ') }}">
+                                                                                Rp
+                                                                                {{ number_format($kk['total_bahan_penolong'], 0, ',', '.') }}
+                                                                            </span>
+                                                                        @else
                                                                             <span
                                                                                 class="text-gray-400 dark:text-gray-500 text-[10px] italic">-</span>
-                                                                        @endforelse
-                                                                    </td>
-                                                                    {{-- Kolom Biaya Bahan Penolong: TOTAL HARGA sebenarnya, dihitung dari
-         $bp['subtotal'] (jumlah desimal asli x harga_satuan) yang sudah
-         di-generate di service — bukan dari angka Solasi yang dibulatkan. --}}
-                                                                    <td
-                                                                        class="px-2 py-2 whitespace-nowrap font-bold {{ collect($kk['bahan_penolong'] ?? [])->sum('subtotal') > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500' }}">
-                                                                        @php
-                                                                            $subtotalBahanBaris = collect(
-                                                                                $kk['bahan_penolong'] ?? [],
-                                                                            )->sum('subtotal');
-                                                                            $kubikasiBaris = (float) str_replace(
-                                                                                ',',
-                                                                                '',
-                                                                                $kk['total_kubikasi'] ?? 0,
-                                                                            );
-                                                                            $bahanPerM3Baris =
-                                                                                $kubikasiBaris > 0
-                                                                                    ? $subtotalBahanBaris /
-                                                                                        $kubikasiBaris
-                                                                                    : 0;
-                                                                        @endphp
-                                                                        @if ($subtotalBahanBaris > 0)
-                                                                            Rp
-                                                                            {{ number_format($bahanPerM3Baris, 2, ',', '.') }}
-                                                                            / m³
-                                                                        @else
-                                                                            -
                                                                         @endif
                                                                     </td>
                                                                 </tr>
@@ -599,19 +588,20 @@
                                                         </tbody>
                                                         <tfoot>
                                                             {{--
-                                                                FIX: total sekarang lengkap. Sebelumnya kolom Pekerja,
-                                                                Ongkos, Penyusutan, dan Bahan Penolong (teks) dilompati
-                                                                pakai colspan="4" (kosong). Sekarang:
+                                                                FIX: total sekarang lengkap & jumlah kolom SAMA PERSIS
+                                                                dengan thead/tbody (10 kolom: Tgl, Mesin, Jam Kerja,
+                                                                Ukuran, Banyak, Kubikasi, Pekerja, Ongkos, Penyusutan,
+                                                                Biaya Bahan Penolong).
                                                                 - Pekerja: sum angka dari string "7 Orang" (regex ambil
                                                                   digitnya, lalu digabung " Orang").
                                                                 - Ongkos: sum langsung (angka mentah di $kk['ongkos']).
                                                                   String "0 ( Belum Diatur )" otomatis dianggap 0 oleh
                                                                   PHP saat dijumlah, jadi aman.
                                                                 - Penyusutan: sum langsung, sama seperti Ongkos.
-                                                                - Kolom Bahan Penolong (daftar nama) dibiarkan kosong
-                                                                  karena isinya teks, bukan angka yang bisa dijumlah;
-                                                                  totalnya sudah terwakili di kolom Biaya Bahan
-                                                                  Penolong di sebelah kanan.
+                                                                - Biaya Bahan Penolong: dihitung ulang sebagai rupiah/m3
+                                                                  gabungan (total nominal dibagi total kubikasi grup),
+                                                                  TIDAK ada lagi kolom kosong terpisah untuk "Solasi"
+                                                                  (sudah digabung jadi satu kolom).
                                                             --}}
                                                             <tr
                                                                 class="bg-gray-100/50 dark:bg-gray-700/50 font-black border-t border-gray-300 dark:border-white/10 text-gray-900 dark:text-white">
@@ -639,7 +629,6 @@
                                                                     Rp
                                                                     {{ number_format(collect($row['outflow'] ?? [])->sum('penyusutan'), 0, ',', '.') }}
                                                                 </td>
-                                                                <td class="px-2 py-2"></td>
                                                                 <td
                                                                     class="px-2 py-2 text-green-600 dark:text-green-400">
                                                                     @php
@@ -674,126 +663,126 @@
                                         </div>
                                     </td>
                                 </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="{{ $adaBahanPenolong ? 10 : 9 }}"
-                                            class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                                            Data produksi belum tersedia.
-                                        </td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                        {{-- MANUAL PAGINATION UI (dinonaktifkan sementara untuk testing) --}}
-                        @if (false)
-                            <div
-                                class="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-xl dark:bg-gray-900/50 dark:border-white/10 dark:backdrop-blur-md shadow-sm">
+                            @empty
+                                <tr>
+                                    <td colspan="{{ $adaBahanPenolong ? 10 : 9 }}"
+                                        class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                                        Data produksi belum tersedia.
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                    {{-- MANUAL PAGINATION UI (dinonaktifkan sementara untuk testing) --}}
+                    @if (false)
+                        <div
+                            class="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-xl dark:bg-gray-900/50 dark:border-white/10 dark:backdrop-blur-md shadow-sm">
 
-                                {{-- Info Mobile --}}
-                                <div class="flex flex-1 justify-between sm:hidden">
-                                    <a href="{{ $laporan->previousPageUrl() }}"
-                                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg dark:bg-gray-800 dark:border-white/10 dark:text-gray-300 {{ $laporan->onFirstPage() ? 'opacity-50 pointer-events-none' : '' }}">
-                                        <x-heroicon-m-chevron-left class="w-5 h-5" />
-                                    </a>
-                                    <a href="{{ $laporan->nextPageUrl() }}"
-                                        class="ml-3 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg dark:bg-gray-800 dark:border-white/10 dark:text-gray-300 {{ !$laporan->hasMorePages() ? 'opacity-50 pointer-events-none' : '' }}">
-                                        <x-heroicon-m-chevron-right class="w-5 h-5" />
-                                    </a>
+                            {{-- Info Mobile --}}
+                            <div class="flex flex-1 justify-between sm:hidden">
+                                <a href="{{ $laporan->previousPageUrl() }}"
+                                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg dark:bg-gray-800 dark:border-white/10 dark:text-gray-300 {{ $laporan->onFirstPage() ? 'opacity-50 pointer-events-none' : '' }}">
+                                    <x-heroicon-m-chevron-left class="w-5 h-5" />
+                                </a>
+                                <a href="{{ $laporan->nextPageUrl() }}"
+                                    class="ml-3 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg dark:bg-gray-800 dark:border-white/10 dark:text-gray-300 {{ !$laporan->hasMorePages() ? 'opacity-50 pointer-events-none' : '' }}">
+                                    <x-heroicon-m-chevron-right class="w-5 h-5" />
+                                </a>
+                            </div>
+
+                            {{-- Desktop Pagination --}}
+                            <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+
+                                {{-- Sisi Kiri: Info Data --}}
+                                <div class="flex items-center gap-4">
+                                    <p class="text-xs font-medium text-gray-600 dark:text-gray-400 tracking-wide">
+                                        Menampilkan <span
+                                            class="font-black text-gray-900 dark:text-white">{{ $laporan->firstItem() }}</span>
+                                        <span class="text-gray-400 mx-0.5">-</span>
+                                        <span
+                                            class="font-black text-gray-900 dark:text-white">{{ $laporan->lastItem() }}</span>
+                                        <span class="lowercase">dari</span>
+                                        <span
+                                            class="font-black text-gray-900 dark:text-white">{{ $laporan->total() }}</span>
+                                        <span class="text-[10px] uppercase font-bold text-gray-400">Data</span>
+                                    </p>
                                 </div>
 
-                                {{-- Desktop Pagination --}}
-                                <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-
-                                    {{-- Sisi Kiri: Info Data --}}
-                                    <div class="flex items-center gap-4">
-                                        <p class="text-xs font-medium text-gray-600 dark:text-gray-400 tracking-wide">
-                                            Menampilkan <span
-                                                class="font-black text-gray-900 dark:text-white">{{ $laporan->firstItem() }}</span>
-                                            <span class="text-gray-400 mx-0.5">-</span>
-                                            <span
-                                                class="font-black text-gray-900 dark:text-white">{{ $laporan->lastItem() }}</span>
-                                            <span class="lowercase">dari</span>
-                                            <span
-                                                class="font-black text-gray-900 dark:text-white">{{ $laporan->total() }}</span>
-                                            <span class="text-[10px] uppercase font-bold text-gray-400">Data</span>
-                                        </p>
-                                    </div>
-
-                                    {{-- TENGAH: Per Page Selector (Sleek Dark Mode) --}}
-                                    <div class="flex items-center gap-2 group">
-                                        <label
-                                            class="text-[10px] font-black text-gray-400 uppercase tracking-widest dark:text-gray-500">Baris</label>
-                                        <div class="relative">
-                                            <select wire:model.live="perPage"
-                                                class="block w-full pl-3 pr-8 py-1.5 text-xs font-bold rounded-lg border-none ring-1 ring-gray-200 dark:ring-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 transition-all cursor-pointer appearance-none hover:ring-gray-300 dark:hover:ring-white/20">
-                                                <option value="10" class="dark:bg-gray-900">10</option>
-                                                <option value="25" class="dark:bg-gray-900">25</option>
-                                                <option value="50" class="dark:bg-gray-900">50</option>
-                                                <option value="100" class="dark:bg-gray-900">100</option>
-                                            </select>
-                                            <div
-                                                class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
-                                                <x-heroicon-m-chevron-down class="w-3 h-3" />
-                                            </div>
+                                {{-- TENGAH: Per Page Selector (Sleek Dark Mode) --}}
+                                <div class="flex items-center gap-2 group">
+                                    <label
+                                        class="text-[10px] font-black text-gray-400 uppercase tracking-widest dark:text-gray-500">Baris</label>
+                                    <div class="relative">
+                                        <select wire:model.live="perPage"
+                                            class="block w-full pl-3 pr-8 py-1.5 text-xs font-bold rounded-lg border-none ring-1 ring-gray-200 dark:ring-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 transition-all cursor-pointer appearance-none hover:ring-gray-300 dark:hover:ring-white/20">
+                                            <option value="10" class="dark:bg-gray-900">10</option>
+                                            <option value="25" class="dark:bg-gray-900">25</option>
+                                            <option value="50" class="dark:bg-gray-900">50</option>
+                                            <option value="100" class="dark:bg-gray-900">100</option>
+                                        </select>
+                                        <div
+                                            class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                                            <x-heroicon-m-chevron-down class="w-3 h-3" />
                                         </div>
                                     </div>
+                                </div>
 
-                                    {{-- Sisi Kanan: Navigation Buttons --}}
-                                    <div>
-                                        <nav class="flex items-center gap-1.5" aria-label="Pagination">
-                                            {{-- Previous --}}
-                                            <a href="{{ $laporan->previousPageUrl() }}"
-                                                class="p-2 transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400 {{ $laporan->onFirstPage() ? 'opacity-30 pointer-events-none' : 'hover:text-primary-600' }}">
-                                                <x-heroicon-m-chevron-left class="h-4 w-4" />
-                                            </a>
+                                {{-- Sisi Kanan: Navigation Buttons --}}
+                                <div>
+                                    <nav class="flex items-center gap-1.5" aria-label="Pagination">
+                                        {{-- Previous --}}
+                                        <a href="{{ $laporan->previousPageUrl() }}"
+                                            class="p-2 transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400 {{ $laporan->onFirstPage() ? 'opacity-30 pointer-events-none' : 'hover:text-primary-600' }}">
+                                            <x-heroicon-m-chevron-left class="h-4 w-4" />
+                                        </a>
 
-                                            {{-- Nomor Halaman --}}
-                                            @php
-                                                $start = max($laporan->currentPage() - 1, 1);
-                                                $end = min($start + 2, $laporan->lastPage());
-                                            @endphp
+                                        {{-- Nomor Halaman --}}
+                                        @php
+                                            $start = max($laporan->currentPage() - 1, 1);
+                                            $end = min($start + 2, $laporan->lastPage());
+                                        @endphp
 
-                                            @if ($start > 1)
-                                                <a href="{{ $laporan->url(1) }}"
-                                                    class="px-3 py-1.5 text-xs font-bold transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-white">1</a>
-                                                <span class="text-gray-300 dark:text-gray-600">...</span>
+                                        @if ($start > 1)
+                                            <a href="{{ $laporan->url(1) }}"
+                                                class="px-3 py-1.5 text-xs font-bold transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-white">1</a>
+                                            <span class="text-gray-300 dark:text-gray-600">...</span>
+                                        @endif
+
+                                        @foreach (range($start, $end) as $page)
+                                            @if ($page == $laporan->currentPage())
+                                                <span
+                                                    class="px-3 py-1.5 text-xs font-black text-white bg-primary-600 rounded-lg shadow-sm shadow-primary-500/20 ring-1 ring-primary-500">
+                                                    {{ $page }}
+                                                </span>
+                                            @else
+                                                <a href="{{ $laporan->url($page) }}"
+                                                    class="px-3 py-1.5 text-xs font-bold transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-gray-300">
+                                                    {{ $page }}
+                                                </a>
                                             @endif
+                                        @endforeach
 
-                                            @foreach (range($start, $end) as $page)
-                                                @if ($page == $laporan->currentPage())
-                                                    <span
-                                                        class="px-3 py-1.5 text-xs font-black text-white bg-primary-600 rounded-lg shadow-sm shadow-primary-500/20 ring-1 ring-primary-500">
-                                                        {{ $page }}
-                                                    </span>
-                                                @else
-                                                    <a href="{{ $laporan->url($page) }}"
-                                                        class="px-3 py-1.5 text-xs font-bold transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-gray-300">
-                                                        {{ $page }}
-                                                    </a>
-                                                @endif
-                                            @endforeach
+                                        @if ($end < $laporan->lastPage())
+                                            <span class="text-gray-300 dark:text-gray-600">...</span>
+                                            <a href="{{ $laporan->url($laporan->lastPage()) }}"
+                                                class="px-3 py-1.5 text-xs font-bold transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-white">{{ $laporan->lastPage() }}</a>
+                                        @endif
 
-                                            @if ($end < $laporan->lastPage())
-                                                <span class="text-gray-300 dark:text-gray-600">...</span>
-                                                <a href="{{ $laporan->url($laporan->lastPage()) }}"
-                                                    class="px-3 py-1.5 text-xs font-bold transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-white">{{ $laporan->lastPage() }}</a>
-                                            @endif
-
-                                            {{-- Next --}}
-                                            <a href="{{ $laporan->nextPageUrl() }}"
-                                                class="p-2 transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400 {{ !$laporan->hasMorePages() ? 'opacity-30 pointer-events-none' : 'hover:text-primary-600' }}">
-                                                <x-heroicon-m-chevron-right class="h-4 w-4" />
-                                            </a>
-                                        </nav>
-                                    </div>
+                                        {{-- Next --}}
+                                        <a href="{{ $laporan->nextPageUrl() }}"
+                                            class="p-2 transition-all rounded-lg ring-1 ring-gray-200 dark:ring-white/10 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400 {{ !$laporan->hasMorePages() ? 'opacity-30 pointer-events-none' : 'hover:text-primary-600' }}">
+                                            <x-heroicon-m-chevron-right class="h-4 w-4" />
+                                        </a>
+                                    </nav>
                                 </div>
                             </div>
-                        @endif
+                        </div>
+                    @endif
 
 
-                    </div>
-                @endif
-            </div>
+                </div>
+            @endif
         </div>
+    </div>
 
-    </x-filament::page>
+</x-filament::page>
