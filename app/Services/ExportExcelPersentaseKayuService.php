@@ -53,9 +53,19 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
         $rows = [];
 
         // Kolom "Harga Total / m³" SELALU ada di paling akhir, baik ada bahan
-        // penolong maupun tidak. Nilainya = (harga_vopb kalau batch punya bahan
-        // penolong, kalau tidak harga_vop) DIBAGI total kubikasi produksi (m³)
-        // batch tersebut — jadi murni rate per m³, bukan nominal total lagi.
+        // penolong maupun tidak.
+        //
+        // PENTING (FIX DOUBLE DIVISION):
+        // $item['summary']['harga_vop'] / harga_vopb SUDAH MERUPAKAN RATE PER
+        // M³ (bukan nominal total batch) — ini kelihatan dari kolom
+        // "harga veneer/m3" yang jadi basisnya, lalu ongkos/pkj & penyusutan
+        // ditambahkan di atas rate itu, bukan di atas nominal. Karena itu,
+        // kolom "Harga Total / m³" TIDAK BOLEH dibagi $totalM3Keluar lagi —
+        // sebelumnya kode lama melakukan itu dan menghasilkan rate yang
+        // dibagi kubikasi untuk KEDUA KALINYA (double division), sehingga
+        // angka yang tampil jauh lebih kecil dari yang seharusnya dan
+        // satuannya jadi tidak masuk akal (Rp/m³ dibagi m³ lagi).
+        //
         // Total kolom: 20 kolom dasar (A-T) + 2 kolom bahan penolong (U,V)
         // kalau adaBahanPenolong + 1 kolom "Harga Total/m3" (selalu ada).
         $jumlahKolom = $this->adaBahanPenolong ? 23 : 21;
@@ -88,9 +98,33 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
             // Kolom Solasi di baris Total dikosongkan (bukan daftar, cuma info per baris),
             // dan kolom "Biaya Bahan Penolong" diisi rata-rata biaya bahan penolong per m³
             // dari SELURUH batch (total biaya bahan penolong / total kubikasi keluar).
-            // Ini MEMANG rate per m³ (bukan nominal) — sudah dikonfirmasi benar.
-            $totalBahanSemua = collect($this->laporan)->sum(fn ($item) => $item['summary']['total_bahan_penolong'] ?? 0);
-            $totalKeluarM3Semua = collect($this->laporan)->sum(fn ($item) => (float) ($item['summary']['total_keluar_m3'] ?? 0));
+            // Ini MEMANG rate per m³ (bukan nominal) — sudah dikonfirmasi benar,
+            // karena total_bahan_penolong dan total_keluar_m3 sama-sama NOMINAL/UKURAN
+            // MENTAH per batch, bukan rate — jadi pembagian ini cuma terjadi sekali.
+            // FIX (lanjutan): pembagi sebelumnya masih salah karena memakai
+            // KUBIKASI SELURUH BATCH (total_keluar_m3) untuk batch yang MEMILIKI
+            // bahan penolong. Padahal dalam satu batch bisa ada beberapa baris
+            // produksi (outflow), dan biasanya HANYA SEBAGIAN baris yang benar-
+            // benar pakai bahan penolong — baris lain dalam batch yang sama bisa
+            // 0. Memakai kubikasi seluruh batch berarti kubikasi baris yang TIDAK
+            // punya bahan penolong ikut jadi pembagi, sehingga rata-rata tetap
+            // "diencerkan".
+            //
+            // FIX YANG BENAR: jumlahkan nominal & kubikasi HANYA dari baris
+            // produksi individual yang benar-benar punya bahan penolong
+            // (subtotal > 0), persis basis yang sama dengan kolom "Biaya Bahan
+            // Penolong" per baris (subtotalBahanBaris / kubikasiBaris).
+            $totalBahanSemua = 0.0;
+            $totalKeluarM3Semua = 0.0;
+            foreach ($this->laporan as $itemBahan) {
+                foreach ($itemBahan['outflow'] as $prodBahan) {
+                    $subtotalBarisIni = collect($prodBahan['bahan_penolong'] ?? [])->sum('subtotal');
+                    if ($subtotalBarisIni > 0) {
+                        $totalBahanSemua += $subtotalBarisIni;
+                        $totalKeluarM3Semua += (float) $prodBahan['total_kubikasi'];
+                    }
+                }
+            }
             $bahanPerM3Total = $totalKeluarM3Semua > 0 ? $totalBahanSemua / $totalKeluarM3Semua : 0;
 
             $totalRow[] = '';
@@ -99,15 +133,38 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
             // Kolom "Harga Veneer+Ongkos+Penyusutan+Bahan Penolong" DIHAPUS dari export ini.
         }
 
-        // Kolom "Harga Total / m³" di baris Total = (Harga VOPB atau VOP total) /
-        // total kubikasi veneer keseluruhan. Ini murni rate per m³.
-        $totalHargaVOPorBSemua = $this->adaBahanPenolong
-            ? (float) ($this->rekap['total_harga_vopb'] ?? 0)
-            : (float) ($this->rekap['total_harga_vop'] ?? 0);
-        $totalKubikasiVeneerSemua = (float) ($this->rekap['total_kubikasi_veneer'] ?? 0);
+        // Kolom "Harga Total / m³" di baris Total.
+        //
+        // FIX: dihitung sebagai RATA-RATA TERTIMBANG langsung dari nilai
+        // rate per batch (harga_vop / harga_vopb, yang sudah rate per m³),
+        // ditimbang dengan kubikasi keluar tiap batch:
+        //
+        //     sum(rate_batch * kubikasi_batch) / sum(kubikasi_batch)
+        //
+        // Ini BUKAN "total nominal dibagi total kubikasi" seperti kode lama
+        // ($rekap['total_harga_vop'] / $rekap['total_kubikasi_veneer']),
+        // karena kalau $rekap['total_harga_vop'] itu sendiri adalah HASIL
+        // SUM dari rate-rate per batch (bukan nominal), maka membaginya lagi
+        // dengan total kubikasi adalah double division yang sama seperti
+        // masalah di baris per-batch. Menghitung ulang langsung dari
+        // $this->laporan di sini menghindari ketergantungan pada makna
+        // $rekap['total_harga_vop'] yang ambigu.
+        $sumRateKaliKubikasi = 0.0;
+        $sumKubikasiSemuaBatch = 0.0;
 
-        $totalRow[] = $totalKubikasiVeneerSemua > 0
-            ? $totalHargaVOPorBSemua / $totalKubikasiVeneerSemua
+        foreach ($this->laporan as $itemForTotal) {
+            $adaBahanBatchIni = ($itemForTotal['summary']['total_bahan_penolong'] ?? 0) > 0;
+            $rateBatchIni = $adaBahanBatchIni
+                ? (float) ($itemForTotal['summary']['harga_vopb'] ?? 0)
+                : (float) ($itemForTotal['summary']['harga_vop'] ?? 0);
+            $kubikasiBatchIni = (float) ($itemForTotal['summary']['total_keluar_m3'] ?? 0);
+
+            $sumRateKaliKubikasi += $rateBatchIni * $kubikasiBatchIni;
+            $sumKubikasiSemuaBatch += $kubikasiBatchIni;
+        }
+
+        $totalRow[] = $sumKubikasiSemuaBatch > 0
+            ? $sumRateKaliKubikasi / $sumKubikasiSemuaBatch
             : 0;
 
         $rows[] = $totalRow;
@@ -165,9 +222,9 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
 
                     // Kolom Biaya Bahan Penolong: subtotal bahan penolong baris ini
                     // (dari jumlah DESIMAL ASLI, bukan dibulatkan) dibagi kubikasi
-                    // baris ini (Rp / m³) — SUDAH DIKONFIRMASI BENAR, ini memang
-                    // rate per m³, bukan nominal total, dan TIDAK ikut dibulatkan
-                    // seperti kolom Solasi di atas.
+                    // baris ini (Rp / m³) — ini rate per m³ dan cuma dibagi sekali,
+                    // karena subtotalBahanBaris adalah NOMINAL mentah per baris,
+                    // bukan rate yang sudah dibagi sebelumnya.
                     $subtotalBahanBaris = $bahanList->sum('subtotal');
                     $kubikasiBaris = (float) $prod['total_kubikasi'];
                     $bahanPerM3Baris = $kubikasiBaris > 0 ? $subtotalBahanBaris / $kubikasiBaris : 0;
@@ -180,18 +237,19 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
                 }
 
                 // Kolom "Harga Total / m³" SELALU ada, diisi hanya di baris pertama
-                // batch (akan di-merge sama seperti kolom harga lain). Nilainya =
-                // (harga_vopb kalau batch ini punya bahan penolong, kalau tidak
-                // harga_vop) DIBAGI total kubikasi produksi batch ini
-                // ($totalM3Keluar, sudah dihitung di atas dari
-                // $item['summary']['total_keluar_m3'], fallback 1 biar tidak div/0).
+                // batch (akan di-merge sama seperti kolom harga lain).
+                //
+                // FIX DOUBLE DIVISION: harga_vop / harga_vopb SUDAH RATE PER M³
+                // (lihat catatan di method array() bagian atas), jadi di sini
+                // TIDAK dibagi $totalM3Keluar lagi. Nilainya langsung dipakai
+                // apa adanya sebagai rate per m³ batch tersebut.
                 if ($isFirstInBatch) {
                     $adaBahanDiBatchIni = ($item['summary']['total_bahan_penolong'] ?? 0) > 0;
                     $hargaVOPorBBatch = $adaBahanDiBatchIni
                         ? (float) $item['summary']['harga_vopb']
                         : (float) $item['summary']['harga_vop'];
 
-                    $row[] = $totalM3Keluar > 0 ? $hargaVOPorBBatch / $totalM3Keluar : 0;
+                    $row[] = $hargaVOPorBBatch;
                 } else {
                     $row[] = '';
                 }
@@ -345,11 +403,11 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
 
         if ($this->adaBahanPenolong) {
             // Format "Rp .../m3" untuk kolom Biaya Bahan Penolong (per kubikasi, bukan total).
-            $sheet->getStyle('V4:V'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0.00_)"/m³";_("Rp"* (#,##0.00)"/m³";_("Rp"* "-"_);_(@_)');
+            $sheet->getStyle('V4:V'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_)"/m³";_("Rp"* (#,##0)"/m³";_("Rp"* "-"_);_(@_)');
         }
 
         // Format "Rp .../m3" untuk kolom "Harga Total / m³" (rate per m³).
-        $sheet->getStyle("{$totalPerM3Col}4:{$totalPerM3Col}{$lastRow}")->getNumberFormat()->setFormatCode('_("Rp"* #,##0.00_)"/m³";_("Rp"* (#,##0.00)"/m³";_("Rp"* "-"_);_(@_)');
+        $sheet->getStyle("{$totalPerM3Col}4:{$totalPerM3Col}{$lastRow}")->getNumberFormat()->setFormatCode('_("Rp"* #,##0_)"/m³";_("Rp"* (#,##0)"/m³";_("Rp"* "-"_);_(@_)');
 
         // Kolom yang di-merge per batch. 'A' (Tanggal) ditambahkan agar tanggal
         // ikut digabung menjadi satu sel per batch (menampilkan tanggal terakhir
