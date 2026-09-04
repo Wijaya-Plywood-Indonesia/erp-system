@@ -179,16 +179,44 @@
                         // Total/m³ (selalu ada).
                         $totalKolom = $adaBahanPenolong ? 23 : 21;
 
-                        // Nilai baris Total untuk kolom "Harga Total / m³", sama
-                        // persis rumusnya dengan ExportExcelPersentaseKayuService:
-                        // (Harga VOPB kalau ada bahan penolong, kalau tidak Harga
-                        // VOP) DIBAGI total kubikasi veneer keseluruhan.
-                        $totalHargaVOPorBSemua = $adaBahanPenolong
-                            ? (float) ($rekap['total_harga_vopb'] ?? 0)
-                            : (float) ($rekap['total_harga_vop'] ?? 0);
-                        $totalKubikasiVeneerSemua = (float) ($rekap['total_kubikasi_veneer'] ?? 0);
+                        // Nilai baris Total untuk kolom "Harga Total / m³".
+                        //
+                        // FIX DOUBLE DIVISION: $item['summary']['harga_vop'] /
+                        // harga_vopb SUDAH MERUPAKAN RATE PER M³ (dihitung di
+                        // PreviewPersentaseKayu::normalizeLaporanItem() sebagai
+                        // (poin + ongkos + penyusutan) / outflowM3), BUKAN
+                        // nominal total. Karena itu, baris Total TIDAK BOLEH
+                        // menghitung "total_harga_vop (dari $rekap) dibagi
+// total_kubikasi_veneer" lagi — itu akan membagi rate
+                        // dengan kubikasi untuk KEDUA KALINYA.
+                        //
+                        // Sebagai gantinya, "Harga Total / m³" pada baris Total
+                        // dihitung sebagai RATA-RATA TERTIMBANG langsung dari
+                        // rate per batch ($laporan), ditimbang dengan kubikasi
+                        // keluar tiap batch:
+                        //
+                        //     sum(rate_batch * kubikasi_batch) / sum(kubikasi_batch)
+                        //
+                        // Ini konsisten dengan fix yang sama di
+                        // ExportExcelPersentaseKayuService, dan tidak lagi
+                        // bergantung pada makna $rekap['total_harga_vop'] /
+                        // $rekap['total_harga_vopb'] yang ambigu.
+                        $sumRateKaliKubikasiSemua = 0.0;
+                        $sumKubikasiSemuaBatch = 0.0;
+
+                        foreach ($laporan as $itemUntukTotal) {
+                            $adaBahanBatchIniUntukTotal = ($itemUntukTotal['summary']['total_bahan_penolong'] ?? 0) > 0;
+                            $rateBatchIniUntukTotal = $adaBahanBatchIniUntukTotal
+                                ? (float) ($itemUntukTotal['summary']['harga_vopb'] ?? 0)
+                                : (float) ($itemUntukTotal['summary']['harga_vop'] ?? 0);
+                            $kubikasiBatchIniUntukTotal = (float) ($itemUntukTotal['summary']['total_keluar_m3'] ?? 0);
+
+                            $sumRateKaliKubikasiSemua += $rateBatchIniUntukTotal * $kubikasiBatchIniUntukTotal;
+                            $sumKubikasiSemuaBatch += $kubikasiBatchIniUntukTotal;
+                        }
+
                         $totalHargaPerM3Semua =
-                            $totalKubikasiVeneerSemua > 0 ? $totalHargaVOPorBSemua / $totalKubikasiVeneerSemua : 0;
+                            $sumKubikasiSemuaBatch > 0 ? $sumRateKaliKubikasiSemua / $sumKubikasiSemuaBatch : 0;
                     @endphp
                     <div data-sheets-empty="{{ $fragmentSheetsEmpty ? '1' : '0' }}"
                         data-export-query="{{ http_build_query(request()->query()) }}">
@@ -355,10 +383,12 @@
                                         <th colspan="2" class="border-r border-slate-900 px-3 py-1 "></th>
                                     @endif
                                     <th class="px-3 py-1 bg-yellow-300/60 font-black text-slate-900 whitespace-nowrap">
-                                        {{-- Kolom "Harga Total / m³" baris Total: (Harga VOPB atau VOP total)
-                                             dibagi total kubikasi veneer keseluruhan — rate per m³, sama
-                                             rumus dengan yang ada di export Excel. --}}
-                                        Rp {{ number_format($totalHargaPerM3Semua, 2, ',', '.') }}
+                                        {{-- Kolom "Harga Total / m³" baris Total: rata-rata tertimbang
+                                             langsung dari rate per batch (harga_vop / harga_vopb) x
+                                             kubikasi batch, dibagi total kubikasi — BUKAN total nominal
+                                             dari $rekap dibagi total kubikasi lagi (itu double division).
+                                             Lihat catatan lengkap di blok PHP atas. --}}
+                                        Rp {{ number_format($totalHargaPerM3Semua, 0, ',', '.') }}
                                     </th>
                                 </tr>
                             </thead>
@@ -406,17 +436,18 @@
                                             ? end($outflowList)['tgl'] ?? ''
                                             : $outflowList->last()['tgl'] ?? '';
 
-                                        // Nilai kolom "Harga Total / m³" per batch, rumus SAMA PERSIS
-                                        // dengan ExportExcelPersentaseKayuService: (Harga VOPB kalau batch
-                                        // ini punya bahan penolong, kalau tidak Harga VOP) DIBAGI total
-                                        // kubikasi produksi (outflow) batch ini.
-                                        $totalM3KeluarBatch = (float) ($item['summary']['total_keluar_m3'] ?: 1);
+                                        // Nilai kolom "Harga Total / m³" per batch.
+                                        //
+                                        // FIX DOUBLE DIVISION: $item['summary']['harga_vop'] / harga_vopb
+                                        // SUDAH RATE PER M³ (dihitung di
+                                        // PreviewPersentaseKayu::normalizeLaporanItem() sebagai
+                                        // (poin + ongkos + penyusutan) / outflowM3). Jadi di sini TIDAK
+                                        // dibagi $totalM3KeluarBatch lagi — dipakai langsung apa adanya.
                                         $adaBahanDiBatchIni = ($item['summary']['total_bahan_penolong'] ?? 0) > 0;
                                         $hargaVOPorBBatch = $adaBahanDiBatchIni
                                             ? (float) $item['summary']['harga_vopb']
                                             : (float) $item['summary']['harga_vop'];
-                                        $hargaTotalPerM3Batch =
-                                            $totalM3KeluarBatch > 0 ? $hargaVOPorBBatch / $totalM3KeluarBatch : 0;
+                                        $hargaTotalPerM3Batch = $hargaVOPorBBatch;
                                     @endphp
                                     <tr class="hover:bg-slate-50 transition-colors">
                                         <td class="border-r border-slate-900 p-0">
@@ -565,7 +596,7 @@
                                                         <div
                                                             class="px-2 py-1 text-right min-h-[32px] flex items-center justify-end w-32 pr-2 whitespace-nowrap font-bold">
                                                             @if ($subtotalBahanBaris > 0)
-                                                                Rp. {{ number_format($bahanPerM3Baris, 2, ',', '.') }}
+                                                                Rp. {{ number_format($bahanPerM3Baris, 0, ',', '.') }}
                                                             @else
                                                                 <span class="text-slate-400 font-normal">-</span>
                                                             @endif
@@ -575,11 +606,12 @@
                                             </td>
                                         @endif
 
-                                        {{-- Kolom "Harga Total / m³": SELALU ada, satu nilai per batch,
-                                             rate per m³ hasil bagi (bukan nominal total). --}}
+                                        {{-- Kolom "Harga Total / m³": SELALU ada, satu nilai per batch.
+                                             Sudah rate per m³ langsung dari harga_vop / harga_vopb,
+                                             TANPA dibagi kubikasi lagi (lihat catatan di blok PHP). --}}
                                         <td
                                             class="px-3 py-2 bg-yellow-300/40 text-right font-black text-slate-900 whitespace-nowrap">
-                                            Rp. {{ number_format($hargaTotalPerM3Batch, 2, ',', '.') }}</td>
+                                            Rp. {{ number_format($hargaTotalPerM3Batch, 0, ',', '.') }}</td>
                                     </tr>
 
                                     @if (!$loop->last)
