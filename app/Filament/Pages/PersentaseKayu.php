@@ -7,6 +7,7 @@ use App\Services\ProduksiInflowService;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use UnitEnum;
@@ -72,6 +73,22 @@ class PersentaseKayu extends Page implements HasTable
     public static function getNavigationGroup(): string|UnitEnum|null
     {
         return 'Laporan';
+    }
+
+    /**
+     * FIX: halaman ini secara default dibatasi Filament dengan container
+     * max-width (setara max-w-7xl) di sekitar $this->content, sehingga
+     * tabel laporan yang lebar (banyak kolom: Lahan, Batang, Kubikasi In/Out,
+     * Poin, Persentase, Veneer, Veneer+Ongkos, Veneer+Ongkos+Susut, dst)
+     * terasa sempit walau elemen di dalam Blade sudah w-full.
+     *
+     * Override ini menghilangkan batas tersebut supaya halaman memakai
+     * lebar penuh viewport, memberi lebih banyak ruang untuk tabel &
+     * kolom-kolom tambahan (mis. "Veneer+Ongkos+Susut+Bahan Penolong").
+     */
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
     }
 
     /**

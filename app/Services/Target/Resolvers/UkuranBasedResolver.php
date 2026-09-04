@@ -23,7 +23,8 @@ class UkuranBasedResolver implements TargetResolverInterface
             // Satu kombinasi ukuran + jenis kayu bisa punya beberapa baris target
             // yang cuma beda di `grade` (KW). Tanpa filter ini, orderByDesc('id')
             // bisa mengambil baris KW yang salah (asal paling baru diinput).
-            ->when($grade, fn ($q) => $q->where('grade', $grade))
+          // UkuranBasedResolver.php
+            ->when($grade, fn ($q) => $q->whereRaw('LOWER(grade) = ?', [strtolower($grade)]))
             ->orderByDesc('id')
             ->first();
 
@@ -38,7 +39,8 @@ class UkuranBasedResolver implements TargetResolverInterface
                     ->where('id_mesin', $idMesin)
                     ->where('id_ukuran', $ukuranNol->id)
                     ->when($idJenisKayu, fn ($q) => $q->where('id_jenis_kayu', $idJenisKayu))
-                    ->when($grade, fn ($q) => $q->where('grade', $grade))
+                 // UkuranBasedResolver.php
+                    ->when($grade, fn ($q) => $q->whereRaw('LOWER(grade) = ?', [strtolower($grade)]))
                     ->orderByDesc('id')
                     ->first();
             }

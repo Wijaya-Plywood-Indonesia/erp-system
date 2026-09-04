@@ -212,13 +212,14 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
                 ];
 
                 if ($this->adaBahanPenolong) {
-                    // Kolom Solasi: total NOMINAL per baris produksi ini (jumlah
-                    // roll dibulatkan normal, dikali harga_satuan) — Opsi B,
-                    // ditampilkan langsung sebagai Rupiah, bukan format "3 x Rp ...".
+                    // Kolom Solasi: TOTAL NOMINAL per baris produksi ini, dijumlahkan
+                    // dari SEMUA merek (tiap merek: jumlah roll dibulatkan normal,
+                    // dikali harga_satuan, baru dijumlahkan semuanya jadi satu angka
+                    // Rupiah) — bukan list per merek dipisah koma seperti sebelumnya.
                     $bahanList = collect($prod['bahan_penolong'] ?? []);
-                    $solasiText = $bahanList->isNotEmpty()
-                        ? $bahanList->map(fn ($b) => 'Rp '.number_format(round($b['jumlah'] ?? 0) * ($b['harga_satuan'] ?? 0), 0, ',', '.'))->implode(', ')
-                        : '-';
+                    $totalSolasiBaris = $bahanList->sum(
+                        fn ($b) => round($b['jumlah'] ?? 0) * ($b['harga_satuan'] ?? 0)
+                    );
 
                     // Kolom Biaya Bahan Penolong: subtotal bahan penolong baris ini
                     // (dari jumlah DESIMAL ASLI, bukan dibulatkan) dibagi kubikasi
@@ -229,7 +230,7 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
                     $kubikasiBaris = (float) $prod['total_kubikasi'];
                     $bahanPerM3Baris = $kubikasiBaris > 0 ? $subtotalBahanBaris / $kubikasiBaris : 0;
 
-                    $row[] = $solasiText;
+                    $row[] = $totalSolasiBaris > 0 ? (float) $totalSolasiBaris : '-';
                     $row[] = $subtotalBahanBaris > 0 ? (float) $bahanPerM3Baris : '-';
 
                     // Kolom "Harga Veneer+Ongkos+Penyusutan+Bahan Penolong" DIHAPUS
@@ -390,7 +391,10 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
         $sheet->getStyle('M5:N'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle('P5:P'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         if ($this->adaBahanPenolong) {
-            $sheet->getStyle('U5:V'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            // Kolom Solasi (U) sekarang berisi ANGKA (nominal Rupiah), jadi
+            // rata kanan seperti kolom-kolom Rupiah lain, bukan center lagi.
+            $sheet->getStyle('U5:U'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+            $sheet->getStyle('V5:V'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         }
 
         // FORMAT ANGKA
@@ -402,6 +406,11 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
         $sheet->getStyle('Q4:T'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
 
         if ($this->adaBahanPenolong) {
+            // Kolom Solasi (U) sekarang angka nominal langsung (TOTAL dari
+            // semua merek dalam baris ini), jadi diformat sebagai Rupiah
+            // biasa seperti kolom G/O/Q-T, bukan teks lagi.
+            $sheet->getStyle('U4:U'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"_);_(@_)');
+
             // Format "Rp .../m3" untuk kolom Biaya Bahan Penolong (per kubikasi, bukan total).
             $sheet->getStyle('V4:V'.$lastRow)->getNumberFormat()->setFormatCode('_("Rp"* #,##0_)"/m³";_("Rp"* (#,##0)"/m³";_("Rp"* "-"_);_(@_)');
         }
@@ -457,7 +466,7 @@ class ExportExcelPersentaseKayuService implements FromArray, WithColumnWidths, W
         ];
 
         if ($this->adaBahanPenolong) {
-            $widths['U'] = 22; // Solasi (nominal langsung, Opsi B)
+            $widths['U'] = 22; // Solasi (total nominal semua merek, angka)
             $widths['V'] = 20; // Biaya Bahan Penolong (Rp / m³)
             $widths['W'] = 20; // Harga Total / m³ (selalu ada, sekarang di posisi W)
         } else {

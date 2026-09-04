@@ -557,17 +557,25 @@
                                             <td class="border-r border-slate-900 p-0 bg-slate-50/60 text-[10px]">
                                                 <div class="flex flex-col divide-y divide-slate-900">
                                                     @foreach ($item['outflow'] as $produksi)
+                                                        @php
+                                                            // Total Solasi = jumlah nominal SEMUA merek bahan penolong
+                                                            // pada baris outflow ini, bukan list per merek.
+                                                            // Tiap merek dibulatkan dulu (jumlah) sebelum dikali
+                                                            // harga_satuan, baru dijumlahkan semuanya.
+                                                            $totalSolasiBaris = collect(
+                                                                $produksi['bahan_penolong'] ?? [],
+                                                            )->sum(
+                                                                fn($bp) => round($bp['jumlah'] ?? 0) *
+                                                                    ($bp['harga_satuan'] ?? 0),
+                                                            );
+                                                        @endphp
                                                         <div
                                                             class="px-2 py-1 text-center min-h-[32px] flex items-center justify-center w-32 font-bold">
-                                                            @forelse (($produksi['bahan_penolong'] ?? []) as $bp)
-                                                                Rp
-                                                                {{ number_format(round($bp['jumlah'] ?? 0) * ($bp['harga_satuan'] ?? 0), 0, ',', '.') }}
-                                                                @if (!$loop->last)
-                                                                    ,
-                                                                @endif
-                                                            @empty
+                                                            @if ($totalSolasiBaris > 0)
+                                                                Rp {{ number_format($totalSolasiBaris, 0, ',', '.') }}
+                                                            @else
                                                                 <span class="text-slate-400 font-normal">-</span>
-                                                            @endforelse
+                                                            @endif
                                                         </div>
                                                     @endforeach
                                                 </div>
