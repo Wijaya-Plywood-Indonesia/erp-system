@@ -236,7 +236,8 @@
                     </div>
 
                     {{-- BARIS BAWAH: 4 kolom (card primary - harga-harga rata-rata) --}}
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div
+                        class="grid grid-cols-1 sm:grid-cols-2 {{ $adaBahanPenolong ? 'lg:grid-cols-4' : 'lg:grid-cols-3' }} gap-4">
 
                         <div
                             class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
