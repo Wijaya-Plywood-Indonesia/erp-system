@@ -21,8 +21,15 @@ class SerahTerimaHp extends Model
         'id_produksi_sanding',
         'diserahkan_oleh',
         'diterima_oleh',
+        'ditolak_oleh',
+        'alasan_tolak',
+        'ditolak_at',
         'status',
         'tujuan',
+    ];
+
+    protected $casts = [
+        'ditolak_at' => 'datetime',
     ];
 
     // ─────────────────────────────────────────────
@@ -189,8 +196,20 @@ class SerahTerimaHp extends Model
         return $this->diterima_oleh === '-';
     }
 
+    /**
+     * Apakah record ini sudah ditolak.
+     */
+    public function isDitolak(): bool
+    {
+        return ! is_null($this->ditolak_oleh);
+    }
+
     public function getLabelStatusAttribute(): string
     {
+        if ($this->isDitolak()) {
+            return 'Ditolak';
+        }
+
         return $this->isMenunggu() ? 'Menunggu' : 'Diterima';
     }
 

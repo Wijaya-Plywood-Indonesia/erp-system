@@ -27,6 +27,9 @@ class RefreshDatabaseViews extends Command
             DB::statement("DROP VIEW IF EXISTS serah_terima_masuk_hp");
 
             // 2. Buat ulang Database View
+            //    🌟 Ditambahkan kolom ditolak_by, alasan_tolak, ditolak_at di
+            //    ketiga cabang UNION ALL, plus filter agar baris yang sudah
+            //    ditolak tidak lagi ikut tampil di VIEW ini sama sekali.
             DB::statement("
         CREATE VIEW serah_terima_masuk_hp AS
         
@@ -48,12 +51,16 @@ class RefreshDatabaseViews extends Command
             mk.dikeluarkan_by           AS operator_id,
             p.diterima_by               AS diterima_by,
             p.diterima_at               AS diterima_at,
+            p.ditolak_by                AS ditolak_by,
+            p.alasan_tolak              AS alasan_tolak,
+            p.ditolak_at                AS ditolak_at,
             mk.id_produksi_hp           AS id_produksi_hp,
             mk.keterangan               AS keterangan
         FROM veneer_jadi_mutasi_keluar_palets p
         JOIN veneer_jadi_mutasi_keluars mk ON mk.id = p.id_mutasi_keluar
         LEFT JOIN jenis_kayus jk ON jk.id = mk.id_jenis_kayu
         WHERE LOWER(mk.tujuan) = 'hotpress'
+          AND p.ditolak_by IS NULL
 
         UNION ALL
 
@@ -75,12 +82,16 @@ class RefreshDatabaseViews extends Command
             mk.dikeluarkan_by           AS operator_id,
             p.diterima_by               AS diterima_by,
             p.diterima_at               AS diterima_at,
+            p.ditolak_by                AS ditolak_by,
+            p.alasan_tolak              AS alasan_tolak,
+            p.ditolak_at                AS ditolak_at,
             mk.id_produksi_hp           AS id_produksi_hp,
             mk.keterangan               AS keterangan
         FROM platform_jadi_mutasi_keluar_palets p
         JOIN platform_jadi_mutasi_keluars mk ON mk.id = p.id_mutasi_keluar
         LEFT JOIN jenis_barang jb ON jb.id = mk.id_jenis_barang
         WHERE LOWER(mk.tujuan) = 'hotpress'
+          AND p.ditolak_by IS NULL
 
         UNION ALL
 
@@ -102,12 +113,16 @@ class RefreshDatabaseViews extends Command
             mk.dikeluarkan_by           AS operator_id,
             p.diterima_by               AS diterima_by,
             p.diterima_at               AS diterima_at,
+            p.ditolak_by                AS ditolak_by,
+            p.alasan_tolak              AS alasan_tolak,
+            p.ditolak_at                AS ditolak_at,
             mk.id_produksi_hp           AS id_produksi_hp,
             mk.keterangan               AS keterangan
         FROM triplek_jadi_mutasi_keluar_palets p
         JOIN triplek_jadi_mutasi_keluars mk ON mk.id = p.id_mutasi_keluar
         LEFT JOIN jenis_kayus jk ON jk.id = mk.id_jenis_kayu
         WHERE LOWER(mk.tujuan) = 'hotpress'
+          AND p.ditolak_by IS NULL
     ");
 
             $this->info('✓ Database View [serah_terima_masuk_hp] berhasil diperbarui!');
