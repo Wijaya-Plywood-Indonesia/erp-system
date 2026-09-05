@@ -14,6 +14,14 @@ class PlatformJadiMutasiKeluarPalet extends Model
         'jumlah_lembar',
         'diterima_by',
         'diterima_at',
+        'ditolak_by',
+        'alasan_tolak',
+        'ditolak_at',
+    ];
+
+    protected $casts = [
+        'diterima_at' => 'datetime',
+        'ditolak_at' => 'datetime',
     ];
 
     public function mutasiKeluar()
