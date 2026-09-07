@@ -27,7 +27,15 @@ class MesinForm
                     ->preload()
                     ->required(),
                 TextInput::make('nama_mesin')
-                    ->required(),
+                    ->required()
+                    ->unique(
+                        table: 'mesins',
+                        column: 'nama_mesin',
+                        ignoreRecord: true,
+                    )
+                    ->validationMessages([
+                        'unique' => 'Nama mesin ini sudah terdaftar, silakan gunakan nama lain.',
+                    ]),
                 Select::make('jenis_hasil')
                     ->label('Jenis Hasil')
                     ->options(self::getBahanOptions())
@@ -35,10 +43,18 @@ class MesinForm
                     ->searchable(),
                 TextInput::make('ongkos_mesin')
                     ->required()
-                    ->numeric(),
+                    ->numeric()
+                    ->minValue(0)
+                    ->validationMessages([
+                        'min' => 'Ongkos tidak boleh bernilai negatif.',
+                    ]),
                 TextInput::make('penyusutan')
                     ->required()
-                    ->numeric(),
+                    ->numeric()
+                    ->minValue(0)
+                    ->validationMessages([
+                        'min' => 'Penyusutan tidak boleh bernilai negatif.',
+                    ]),
                 TextInput::make('no_akun')
                     ->required(),
                 Textarea::make('detail_mesin')
