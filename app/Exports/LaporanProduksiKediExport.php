@@ -630,7 +630,7 @@ class LaporanKediPotonganSheet implements FromCollection, WithEvents, WithTitle
                     continue;
                 }
 
-                $tanggalStr = Carbon::parse($produksi->tanggal_actual_bongkar ?? $produksi->tanggal ?? now())->format('Y-m-d');
+                $tanggalStr = Carbon::parse($produksi->tanggal_actual_bongkar ?? $produksi->tanggal_bongkar ?? $produksi->tanggal ?? now())->format('Y-m-d');
 
                 foreach ($produksi->detailPegawaiKedi as $dp) {
                     if (! $dp->pegawai) {
