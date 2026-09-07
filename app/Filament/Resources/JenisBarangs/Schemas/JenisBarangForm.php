@@ -14,6 +14,14 @@ class JenisBarangForm
                 TextInput::make('kode_jenis_barang')
                     ->label('Kode Jenis barang')
                     ->required()
+                    ->unique( 
+                        table: 'jenis_barang',
+                        column: 'kode_jenis_barang',
+                        ignoreRecord: true, // supaya tidak dianggap duplikat saat edit record yang sama
+                    )
+                    ->validationMessages([
+                        'unique' => 'Kode barang ini sudah terdaftar, silakan gunakan kode lain.',
+                    ])
                     ->maxLength(255),
 
                 TextInput::make('nama_jenis_barang')

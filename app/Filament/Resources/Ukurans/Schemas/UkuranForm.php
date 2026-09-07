@@ -16,6 +16,7 @@ class UkuranForm
                     ->label('Panjang (cm)')
                     ->required()
                     ->numeric()
+                    ->minValue(0)
                     ->live(onBlur: true)
                     ->unique(
                         table: 'ukurans',
@@ -33,12 +34,14 @@ class UkuranForm
                     ->label('Lebar (cm)')
                     ->required()
                     ->numeric()
+                    ->minValue(0)
                     ->live(onBlur: true),
 
                 TextInput::make('tebal')
                     ->label('Tebal (cm)')
                     ->required()
                     ->numeric()
+                    ->minValue(0)
                     ->live(onBlur: true),
             ]);
     }

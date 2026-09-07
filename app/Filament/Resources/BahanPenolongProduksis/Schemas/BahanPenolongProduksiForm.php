@@ -5,6 +5,7 @@ namespace App\Filament\Resources\BahanPenolongProduksis\Schemas;
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Illuminate\Validation\Rules\Unique;
 
 class BahanPenolongProduksiForm
 {
@@ -32,6 +33,7 @@ class BahanPenolongProduksiForm
             'nyusup'=>'Nyusup',
         ];
     }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -39,21 +41,35 @@ class BahanPenolongProduksiForm
                 TextInput::make('nama_bahan_penolong')
                     ->label('Nama Bahan')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->live(onBlur: true)
+                    ->unique(
+                        table: 'bahan_penolong_produksi',
+                        column: 'nama_bahan_penolong',
+                        ignoreRecord: true,
+                        modifyRuleUsing: fn (Unique $rule, $get) => $rule
+                            ->where('kategori_produksi', $get('kategori_produksi')),
+                    )
+                    ->validationMessages([
+                        'unique' => 'Bahan dengan nama dan kategori produksi ini sudah ada.',
+                    ]),
+
                 TextInput::make('satuan')
                     ->label('Satuan')
                     ->required()
                     ->maxLength(255),
+
                 Select::make('kategori_produksi')
                     ->label('Kategori Produksi')
-                    // Menggunakan method static untuk options
                     ->options(self::getProduksiOptions())
                     ->required()
                     ->native(false)
-                    ->searchable(),
+                    ->searchable()
+                    ->live(), // 🔥 WAJIB: biar perubahan kategori ikut ke-trigger ulang validasi unique di atas
+
                 TextInput::make('harga')
                     ->label('Harga')
-                    ->integer()
+                    ->integer(),
             ]);
     }
 }
