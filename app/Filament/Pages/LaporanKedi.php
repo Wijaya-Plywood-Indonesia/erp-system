@@ -125,8 +125,14 @@ class LaporanKedi extends Page
             'detailMasukKedi.jenisKayu',
             'detailPegawaiKedi.pegawai',
         ])
-            ->whereDate('tanggal_actual_bongkar', $this->tanggal)
-            ->orderBy('tanggal_actual_bongkar')
+            ->where(function ($q) {
+                $q->whereDate('tanggal_actual_bongkar', $this->tanggal)
+                    ->orWhere(function ($sub) {
+                        $sub->whereNull('tanggal_actual_bongkar')
+                            ->whereDate('tanggal_bongkar', $this->tanggal);
+                    });
+            })
+            ->orderByRaw('COALESCE(tanggal_actual_bongkar, tanggal_bongkar)')
             ->get();
 
         $filename = 'Laporan-Produksi-Kedi-'.$this->tanggal.'.xlsx';
@@ -151,8 +157,14 @@ class LaporanKedi extends Page
             'validasiTerakhir',
             'kendalaKedis.mesin',
         ])
-            ->whereDate('tanggal_actual_bongkar', $this->tanggal)
-            ->orderBy('tanggal_actual_bongkar')
+            ->where(function ($q) {
+                $q->whereDate('tanggal_actual_bongkar', $this->tanggal)
+                    ->orWhere(function ($sub) {
+                        $sub->whereNull('tanggal_actual_bongkar')
+                            ->whereDate('tanggal_bongkar', $this->tanggal);
+                    });
+            })
+            ->orderByRaw('COALESCE(tanggal_actual_bongkar, tanggal_bongkar)')
             ->get();
 
         $this->dataKedi = [];
@@ -199,14 +211,16 @@ class LaporanKedi extends Page
                 ? $produksi->detailBongkarKedi->count()
                 : null;
 
+            $tglKeluar = $produksi->tanggal_actual_bongkar ?? $produksi->tanggal_bongkar;
+
             $this->dataKedi[] = [
                 'id' => $produksi->id,
                 'tanggal_masuk' => $produksi->tanggal ? Carbon::parse($produksi->tanggal)->format('d/m/Y') : '-',
-                'tanggal_keluar' => $produksi->tanggal_actual_bongkar
-                    ? Carbon::parse($produksi->tanggal_actual_bongkar)->format('d/m/Y')
+                'tanggal_keluar' => $tglKeluar
+                    ? Carbon::parse($tglKeluar)->format('d/m/Y')
                     : '-',
-                'tanggal_actual_bongkar' => $produksi->tanggal_actual_bongkar
-                    ? Carbon::parse($produksi->tanggal_actual_bongkar)->format('d/m/Y')
+                'tanggal_actual_bongkar' => $tglKeluar
+                    ? Carbon::parse($tglKeluar)->format('d/m/Y')
                     : null,
                 'status' => $produksi->status,
                 'detail_masuk' => $detailMasuk,
@@ -297,7 +311,7 @@ class LaporanKedi extends Page
                     continue;
                 }
 
-                $tanggalStr = Carbon::parse($produksi->tanggal_actual_bongkar ?? $produksi->tanggal ?? now())->format('Y-m-d');
+                $tanggalStr = Carbon::parse($produksi->tanggal_actual_bongkar ?? $produksi->tanggal_bongkar ?? $produksi->tanggal ?? now())->format('Y-m-d');
 
                 foreach ($produksi->detailPegawaiKedi as $dp) {
                     if (! $dp->pegawai) {
