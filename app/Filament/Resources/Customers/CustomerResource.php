@@ -26,8 +26,26 @@ class CustomerResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('nama')->required()->maxLength(255),
-            TextInput::make('telepon')->tel()->maxLength(50),
+            TextInput::make('nama')
+                ->required()
+                ->maxLength(255)
+                ->unique(
+                    table: 'customers',
+                    column: 'nama',
+                    ignoreRecord: true,
+                )
+                ->validationMessages([
+                    'unique' => 'Nama customer ini sudah terdaftar, silakan gunakan nama lain.',
+                ]),
+
+            TextInput::make('telepon')
+                ->tel()
+                ->maxLength(50)
+                ->rule('regex:/^[0-9]+$/')
+                ->validationMessages([
+                    'regex' => 'Nomor telepon hanya boleh berisi angka.',
+                ]),
+
             Textarea::make('alamat')->rows(3)->columnSpanFull(),
         ]);
     }
