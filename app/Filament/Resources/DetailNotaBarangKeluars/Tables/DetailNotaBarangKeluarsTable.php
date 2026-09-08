@@ -29,7 +29,6 @@ use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -316,8 +315,14 @@ class DetailNotaBarangKeluarsTable
                 ->helperText('Tidak boleh melebihi stok yang tersedia.')
                 ->required(),
 
-            // Disembunyikan sementara: tetap menyimpan nilai harga otomatis / lama di background
-            Hidden::make('harga'),
+            // Disembunyikan kecuali user punya role 'edmeros' / 'super_admin':
+            // tetap menyimpan nilai harga otomatis / lama di background
+            // untuk role lain.
+            TextInput::make('harga')
+                ->label('Harga')
+                ->numeric()
+                ->prefix('Rp')
+                ->hidden(fn () => ! auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin'])),
 
             Textarea::make('keterangan')
                 ->label('Keterangan')
@@ -629,7 +634,7 @@ class DetailNotaBarangKeluarsTable
                     })
                     ->money('IDR', locale: 'id')
                     ->toggleable()
-                    ->hidden(),
+                    ->hidden(fn () => ! auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin'])),
 
                 TextColumn::make('keterangan')
                     ->label('Keterangan')
