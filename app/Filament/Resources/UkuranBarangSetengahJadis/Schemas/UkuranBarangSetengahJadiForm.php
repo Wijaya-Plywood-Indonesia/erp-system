@@ -9,6 +9,7 @@ use App\Models\Ukuran;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Illuminate\Validation\Rules\Unique;
 
 class UkuranBarangSetengahJadiForm
 {
@@ -22,7 +23,8 @@ class UkuranBarangSetengahJadiForm
                         Ukuran::all()->pluck('dimensi', 'id')
                     )
                     ->searchable()
-                    ->required(),
+                    ->required()
+                    ->live(),
 
                 Select::make('id_jenis_barang')
                     ->label('Jenis Barang')
@@ -31,7 +33,8 @@ class UkuranBarangSetengahJadiForm
                             ->pluck('nama_jenis_barang', 'id')
                     )
                     ->searchable()
-                    ->required(),
+                    ->required()
+                    ->live(),
 
                 Select::make('kategori_barang_filter')
                     ->label('Kategori Barang')
@@ -76,11 +79,23 @@ class UkuranBarangSetengahJadiForm
                             $set('harga', $harga);
                         }
                     })
-                    ->required(),
+                    ->required()
+                    ->unique(
+                        table: 'barang_setengah_jadi_hp',
+                        column: 'id_grade',
+                        ignoreRecord: true,
+                        modifyRuleUsing: fn (Unique $rule, $get) => $rule
+                            ->where('id_ukuran', $get('id_ukuran'))
+                            ->where('id_jenis_barang', $get('id_jenis_barang')),
+                    )
+                    ->validationMessages([
+                        'unique' => 'Kombinasi ukuran, jenis barang, dan grade ini sudah ada.',
+                    ]),
 
                 TextInput::make('harga')
                     ->label('Harga')
                     ->numeric()
+                    ->minValue(0) 
                     ->prefix('Rp')
                     ->required(),
 
