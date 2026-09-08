@@ -12,7 +12,15 @@ class LahanForm
         return $schema
             ->components([
                 TextInput::make('kode_lahan')
-                    ->required(),
+                    ->required()
+                    ->unique( 
+                        table: 'lahans', 
+                        column: 'kode_lahan', 
+                        ignoreRecord: true, // supaya tidak dianggap duplikat saat edit record yang sama 
+                    )
+                    ->validationMessages([
+                        'unique' => 'Nama lahan ini sudah terdaftar, silakan gunakan nama lain.',
+                    ]),
                 TextInput::make('nama_lahan')
                     ->required(),
                 TextInput::make('detail'),
