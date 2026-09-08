@@ -29,6 +29,7 @@ use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -315,12 +316,8 @@ class DetailNotaBarangKeluarsTable
                 ->helperText('Tidak boleh melebihi stok yang tersedia.')
                 ->required(),
 
-            TextInput::make('harga')
-                ->label('Harga')
-                ->numeric()
-                ->prefix('Rp')
-                ->required()
-                ->helperText('Otomatis terisi dari data master, bisa diubah manual jika perlu.'),
+            // Disembunyikan sementara: tetap menyimpan nilai harga otomatis / lama di background
+            Hidden::make('harga'),
 
             Textarea::make('keterangan')
                 ->label('Keterangan')
@@ -631,7 +628,8 @@ class DetailNotaBarangKeluarsTable
                         return static::findPlywoodDetail($record)?->harga;
                     })
                     ->money('IDR', locale: 'id')
-                    ->toggleable(),
+                    ->toggleable()
+                    ->hidden(),
 
                 TextColumn::make('keterangan')
                     ->label('Keterangan')

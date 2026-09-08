@@ -74,7 +74,8 @@ class NotaBarangKeluarsTable
                     ->color('success')
                     ->url(fn($record) => route('nota-bk.barang-keluar', $record))
                     ->openUrlInNewTab()
-                    ->visible(fn($record) => $record->divalidasi_oleh !== null),
+                    ->visible(fn($record) => $record->divalidasi_oleh !== null)
+                    ->hidden(),
 
                 ViewAction::make(),
                 EditAction::make()
