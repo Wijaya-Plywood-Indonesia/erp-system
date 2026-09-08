@@ -4,9 +4,9 @@ namespace App\Filament\Resources\Komposisis\Schemas;
 
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\Select;
-use app\Models\BarangSetengahJadiHp;
-use app\Models\grade;
-use app\Models\JenisBarang;
+use App\Models\BarangSetengahJadiHp;
+use App\Models\Grade;
+use App\Models\JenisBarang;
 
 class KomposisiForm
 {
@@ -61,6 +61,14 @@ class KomposisiForm
                     ->label('Barang Setengah Jadi')
                     ->required()
                     ->searchable()
+                    ->unique(
+                        table: 'komposisi',
+                        column: 'id_barang_setengah_jadi_hp',
+                        ignoreRecord: true,
+                    )
+                    ->validationMessages([
+                        'unique' => 'Komposisi untuk barang setengah jadi ini sudah ada.',
+                    ])
                     ->options(function (callable $get) {
 
                         $query = BarangSetengahJadiHp::query()
