@@ -6,7 +6,7 @@
     <style>
         @page {
             size: A4 portrait;
-            margin: 10mm;
+            margin: 0; /* Remove browser headers/footers */
         }
 
         body {
@@ -25,7 +25,7 @@
                 box-shadow: 0 0 6px rgba(0, 0, 0, 0.3);
                 margin: 0 auto 20px auto;
                 width: 210mm;
-                min-height: 148mm;
+                min-height: 297mm; /* Full A4 */
                 padding: 15mm;
                 box-sizing: border-box;
             }
@@ -34,8 +34,8 @@
         @media print {
             .page {
                 width: 100%;
-                height: 50%;
-                padding: 5mm;
+                height: 100%;
+                padding: 15mm;
                 box-sizing: border-box;
             }
         }
@@ -98,11 +98,6 @@
         .sig-space {
             height: 70px;
         }
-        
-        .cut-line {
-            border-top: 1px dashed #000;
-            margin: 15px 0;
-        }
     </style>
 </head>
 <body onload="window.print()">
@@ -111,96 +106,90 @@
     @endphp
 
     <div>
-        @for ($c = 0; $c < 2; $c++)
-            <div class="page" style="{{ $isLong && $c == 0 ? 'page-break-after: always;' : '' }}">
-                <div class="title">Surat Jalan</div>
+        <div class="page">
+            <div class="title">Surat Jalan</div>
 
-                <table class="header-table">
-                    <tr>
-                        <td style="width: 12%; font-weight: bold;">No.</td>
-                        <td style="width: 48%; font-weight: bold;">{{ $nota->no_nota }}</td>
-                        <td style="width: 18%; font-weight: bold;">Pengiriman</td>
-                        <td style="width: 2%; font-weight: bold;">:</td>
-                        <td style="width: 20%;"></td>
-                    </tr>
-                    <tr>
-                        <td class="border-bottom" style="font-weight: bold;">Tanggal</td>
-                        <td class="border-bottom" style="font-weight: bold;">{{ $nota->tanggal?->format('d-M-y') }}</td>
-                        <td class="border-bottom" style="font-weight: bold;">Sopir</td>
-                        <td class="border-bottom" style="font-weight: bold;">:</td>
-                        <td class="border-bottom"></td>
-                    </tr>
-                    <tr>
-                        <td style="font-weight: bold;">Kepada</td>
-                        <td>
-                            <strong>{{ $nota->tujuan_nota }}</strong>
-                        </td>
-                        <td style="font-weight: bold;">Mobil</td>
-                        <td style="font-weight: bold;">:</td>
-                        <td></td>
-                    </tr>
-                    <tr>
-                        <td class="border-bottom"></td>
-                        <td class="border-bottom"></td>
-                        <td class="border-bottom" style="font-weight: bold;">No Plat</td>
-                        <td class="border-bottom" style="font-weight: bold;">:</td>
-                        <td class="border-bottom"></td>
-                    </tr>
-                </table>
+            <table class="header-table">
+                <tr>
+                    <td style="width: 12%; font-weight: bold;">No.</td>
+                    <td style="width: 48%; font-weight: bold;">{{ $nota->no_nota }}</td>
+                    <td style="width: 18%; font-weight: bold;">Pengiriman</td>
+                    <td style="width: 2%; font-weight: bold;">:</td>
+                    <td style="width: 20%;"></td>
+                </tr>
+                <tr>
+                    <td class="border-bottom" style="font-weight: bold;">Tanggal</td>
+                    <td class="border-bottom" style="font-weight: bold;">{{ $nota->tanggal?->format('d-M-y') }}</td>
+                    <td class="border-bottom" style="font-weight: bold;">Sopir</td>
+                    <td class="border-bottom" style="font-weight: bold;">:</td>
+                    <td class="border-bottom"></td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold;">Kepada</td>
+                    <td>
+                        <strong>{{ $nota->tujuan_nota }}</strong>
+                    </td>
+                    <td style="font-weight: bold;">Mobil</td>
+                    <td style="font-weight: bold;">:</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td class="border-bottom"></td>
+                    <td class="border-bottom"></td>
+                    <td class="border-bottom" style="font-weight: bold;">No Plat</td>
+                    <td class="border-bottom" style="font-weight: bold;">:</td>
+                    <td class="border-bottom"></td>
+                </tr>
+            </table>
 
-                <table class="items-table">
-                    <thead>
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th width="10%">No.</th>
+                        <th>Nama Barang</th>
+                        <th width="15%">Satuan</th>
+                        <th width="15%">Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($details as $i => $d)
                         <tr>
-                            <th width="10%">No.</th>
-                            <th>Nama Barang</th>
-                            <th width="15%">Satuan</th>
-                            <th width="15%">Qty</th>
+                            <td>{{ $i + 1 }}</td>
+                            <td class="text-left">{{ $d->nama_barang }}</td>
+                            <td>{{ $d->satuan }}</td>
+                            <td>{{ number_format($d->jumlah) }}</td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($details as $i => $d)
-                            <tr>
-                                <td>{{ $i + 1 }}</td>
-                                <td class="text-left">{{ $d->nama_barang }}</td>
-                                <td>{{ $d->satuan }}</td>
-                                <td>{{ number_format($d->jumlah) }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td colspan="3" style="text-align: right; font-weight: bold; padding-right: 15px;">Total</td>
-                            <td style="font-weight: bold;">{{ number_format($details->sum('jumlah')) }}</td>
-                        </tr>
-                    </tfoot>
-                </table>
+                    @endforeach
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="3" style="text-align: right; font-weight: bold; padding-right: 15px;">Total</td>
+                        <td style="font-weight: bold;">{{ number_format($details->sum('jumlah')) }}</td>
+                    </tr>
+                </tfoot>
+            </table>
 
-                <table class="signatures">
-                    <tr>
-                        <td>Penerima</td>
-                        <td>Sopir</td>
-                        <td>Cek</td>
-                        <td>Hormat Kami</td>
-                    </tr>
-                    <tr>
-                        <td class="sig-space"></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                    </tr>
-                    <tr>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                    </tr>
-                </table>
-            </div>
-
-            @if (!$isLong && $c == 0)
-                <div class="cut-line"></div>
-            @endif
-        @endfor
+            <table class="signatures">
+                <tr>
+                    <td>Penerima</td>
+                    <td>Sopir</td>
+                    <td>Cek</td>
+                    <td>Hormat Kami</td>
+                </tr>
+                <tr>
+                    <td class="sig-space"></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+            </table>
+        </div>
     </div>
 </body>
 </html>
