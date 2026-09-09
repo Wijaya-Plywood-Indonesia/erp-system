@@ -9,7 +9,7 @@ class SuratJalanController extends Controller
     /**
      * Cetak Surat Jalan untuk Nota Barang Keluar.
      */
-    public function printBk(NotaBarangKeluar $nota)
+    public function printBk(NotaBarangKeluar $nota, $jenis = 'kantor')
     {
         $nota->load(['detail', 'pembuat', 'plywoodMutasi.details.ukuran', 'plywoodMutasi.details.jenisKayu']);
 
@@ -61,7 +61,8 @@ class SuratJalanController extends Controller
             return $d;
         });
 
-        return view('surat-jalan.cetak', [
+        $view = $jenis === 'sales' ? 'surat-jalan.cetak-sales' : 'surat-jalan.cetak-kantor';
+        return view($view, [
             'nota'    => $nota,
             'details' => $details,
         ]);

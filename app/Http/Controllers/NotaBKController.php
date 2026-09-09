@@ -174,15 +174,13 @@ class NotaBKController extends Controller
         ]);
     }
 
-    /**
-     * Simpan metode pembayaran & rekening ke record nota_barang_keluar.
-     */
     public function savePayment(Request $request, NotaBarangKeluar $record)
     {
         $validated = $request->validate([
             'metode_pembayaran'      => 'required|string|in:Tunai,Transfer,Cek / Giro',
             'id_rekening_perusahaan' => 'nullable|integer|exists:rekening_perusahaan,id',
             'jenis'                  => 'required|string|in:kantor,sales',
+            'cetak_action'           => 'required|string|in:nota,sj,semua',
         ]);
 
         $record->update([
@@ -192,9 +190,76 @@ class NotaBKController extends Controller
                 : null,
         ]);
 
-        $targetRoute = $validated['jenis'] === 'sales' ? 'nota-bk.nota-sales' : 'nota-bk.nota-kantor';
+        if ($validated['cetak_action'] === 'nota') {
+            $targetRoute = $validated['jenis'] === 'sales' ? 'nota-bk.nota-sales' : 'nota-bk.nota-kantor';
+            return redirect()->route($targetRoute, $record);
+        } elseif ($validated['cetak_action'] === 'sj') {
+            return redirect()->route('surat-jalan.bk', ['nota' => $record->id, 'jenis' => $validated['jenis']]);
+        } else {
+            return redirect()->route('nota-bk.cetak-semua', ['record' => $record->id, 'jenis' => $validated['jenis']]);
+        }
+    }
 
-        return redirect()->route($targetRoute, $record);
+    public function cetakSemua(NotaBarangKeluar $record, $jenis)
+    {
+        [$items, $grandTotal] = $this->resolveNotaItems($record, $jenis);
+
+        $record->load(['detail', 'pembuat', 'plywoodMutasi.details.ukuran', 'plywoodMutasi.details.jenisKayu']);
+        $sjDetails = $record->detail->map(function ($d) use ($record) {
+            if (str_starts_with($d->nama_barang, 'Plywood ')) {
+                $matchedDetail = null;
+                if ($record->plywoodMutasi) {
+                    foreach ($record->plywoodMutasi->details as $mutasiDetail) {
+                        $ukuran = $mutasiDetail->ukuran;
+                        $jenisKayu = $mutasiDetail->jenisKayu;
+                        if (!$ukuran || !$jenisKayu) continue;
+
+                        $expectedName = 'Plywood - '.$ukuran->nama_ukuran
+                            .' - '.$jenisKayu->nama_kayu
+                            .' - KW '.$mutasiDetail->kw_grade;
+
+                        if ($expectedName === $d->nama_barang && (int) $mutasiDetail->qty === (int) $d->jumlah) {
+                            $matchedDetail = $mutasiDetail;
+                            break;
+                        }
+                    }
+                }
+
+                $tebalVal = null;
+                if ($matchedDetail && $matchedDetail->ukuran && filled($matchedDetail->ukuran->tebal)) {
+                    $tebalVal = $matchedDetail->ukuran->tebal;
+                } elseif (preg_match('/(\d+(?:[\.,]\d+)?)\s*(?:mm|m)?\b/i', $d->nama_barang, $matches)) {
+                    $tebalVal = str_replace(',', '.', $matches[1]);
+                }
+
+                $tebalStr = null;
+                if ($tebalVal !== null && $tebalVal !== '') {
+                    $tebalFormatted = (float) $tebalVal == (int) $tebalVal
+                        ? (int) $tebalVal
+                        : rtrim(rtrim((string) $tebalVal, '0'), '.');
+                    $tebalStr = "{$tebalFormatted} mm";
+                }
+
+                $rawMerek = $matchedDetail ? ($matchedDetail->barang?->merek ?? null) : null;
+                $merek = (! empty(trim($rawMerek ?? ''))) ? trim($rawMerek) : 'Plywood';
+
+                if ($tebalStr !== null) {
+                    $d->nama_barang = "{$tebalStr} {$merek}";
+                } else {
+                    $d->nama_barang = $merek;
+                }
+            }
+            return $d;
+        });
+
+        return view('nota.cetak-semua', [
+            'record'     => $record,
+            'nota'       => $record,
+            'jenis'      => $jenis,
+            'items'      => $items,
+            'grandTotal' => $grandTotal,
+            'details'    => $sjDetails,
+        ]);
     }
 
     /**
