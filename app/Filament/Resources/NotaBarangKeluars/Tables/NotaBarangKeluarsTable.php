@@ -79,7 +79,7 @@ class NotaBarangKeluarsTable
                 Action::make('notaKantor')
                     ->label('Nota Kantor')
                     ->icon('heroicon-o-building-office')
-                    ->color('primary')
+                    ->color('success')
                     ->url(fn ($record) => route('nota-bk.preview', ['record' => $record, 'jenis' => 'kantor']))
                     ->openUrlInNewTab()
                     ->visible(fn ($record) => auth()->user()?->hasAnyRole([
@@ -92,7 +92,7 @@ class NotaBarangKeluarsTable
                 Action::make('notaSales')
                     ->label('Nota Sales')
                     ->icon('heroicon-o-shopping-bag')
-                    ->color('warning')
+                    ->color('#8b5cf6')
                     ->url(fn ($record) => route('nota-bk.preview', ['record' => $record, 'jenis' => 'sales']))
                     ->openUrlInNewTab()
                     ->visible(fn ($record) => auth()->user()?->hasAnyRole([
