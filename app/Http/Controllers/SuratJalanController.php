@@ -13,7 +13,7 @@ class SuratJalanController extends Controller
     {
         $nota->load(['detail', 'pembuat', 'plywoodMutasi.details.ukuran', 'plywoodMutasi.details.jenisKayu']);
 
-        $details = $nota->detail->map(function ($d) use ($nota) {
+        $details = $nota->detail->map(function ($d) use ($nota, $jenis) {
             if (str_starts_with($d->nama_barang, 'Plywood ')) {
                 $matchedDetail = null;
                 if ($nota->plywoodMutasi) {
@@ -48,13 +48,28 @@ class SuratJalanController extends Controller
                     $tebalStr = "{$tebalFormatted} mm";
                 }
 
-                $rawMerek = $matchedDetail ? ($matchedDetail->barang?->merek ?? null) : null;
-                $merek = (! empty(trim($rawMerek ?? ''))) ? trim($rawMerek) : 'Plywood';
-
-                if ($tebalStr !== null) {
-                    $d->nama_barang = "{$tebalStr} {$merek}";
+                if ($jenis === 'sales') {
+                    $rawMerek = $matchedDetail ? ($matchedDetail->barang?->merek ?? null) : null;
+                    $merek = (! empty(trim($rawMerek ?? ''))) ? trim($rawMerek) : 'Plywood';
+                    $d->nama_barang = $tebalStr !== null ? "{$tebalStr} {$merek}" : $merek;
                 } else {
-                    $d->nama_barang = $merek;
+                    $bshp = $d->barang ?? null;
+                    $gradeModel = $bshp?->grade ?? ($bshp?->id_grade ? \App\Models\Grade::find($bshp->id_grade) : null);
+                    $gradeName = ! empty(trim($gradeModel?->nama_grade ?? '')) ? trim($gradeModel->nama_grade) : null;
+                    
+                    if (! $gradeName && $matchedDetail && ! empty(trim($matchedDetail->kw_grade ?? ''))) {
+                        $gradeName = trim($matchedDetail->kw_grade);
+                    }
+                    
+                    if ($tebalStr !== null && $gradeName !== null) {
+                        $d->nama_barang = "{$tebalStr} {$gradeName}";
+                    } elseif ($tebalStr !== null) {
+                        $d->nama_barang = $tebalStr;
+                    } elseif ($gradeName !== null) {
+                        $d->nama_barang = $gradeName;
+                    } else {
+                        $d->nama_barang = $bshp?->label ?? ($d->nama_barang ?? '-');
+                    }
                 }
             }
             
