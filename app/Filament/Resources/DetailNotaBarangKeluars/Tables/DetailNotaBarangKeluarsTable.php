@@ -84,9 +84,11 @@ class DetailNotaBarangKeluarsTable
      */
     protected static function stokTersedia()
     {
-        return StokPlywoodSiapJual::where('stok_lembar', '>', 0)
-            ->orderBy('tebal')
-            ->get();
+        // return StokPlywoodSiapJual::where('stok_lembar', '>', 0)
+        //     ->orderBy('tebal')
+        //     ->get();
+
+        return StokPlywoodSiapJual::orderBy('tebal')->get();
     }
 
     /**
@@ -297,7 +299,8 @@ class DetailNotaBarangKeluarsTable
                     }
 
                     if ($lembar <= 0) {
-                        return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 Lembar (Stok Habis)</strong>');
+                        // return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 Lembar (Stok Habis)</strong>');
+                        return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">'.number_format($lembar).' Lembar (Stok Habis/Minus)</strong>');
                     }
 
                     return new HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">'.number_format($lembar).' Lembar</strong>');
@@ -307,12 +310,12 @@ class DetailNotaBarangKeluarsTable
                 ->label('Jumlah (Lembar)')
                 ->numeric()
                 ->minValue(1)
-                ->maxValue(fn (callable $get) => static::cariStok(
-                    $get('ukuran_key'),
-                    $get('id_jenis_kayu'),
-                    $get('kw_grade')
-                ) ?: null)
-                ->helperText('Tidak boleh melebihi stok yang tersedia.')
+                // ->maxValue(fn (callable $get) => static::cariStok(
+                //     $get('ukuran_key'),
+                //     $get('id_jenis_kayu'),
+                //     $get('kw_grade')
+                // ) ?: null)
+                // ->helperText('Tidak boleh melebihi stok yang tersedia.')
                 ->required(),
 
             // Disembunyikan kecuali user punya role 'edmeros' / 'super_admin':
