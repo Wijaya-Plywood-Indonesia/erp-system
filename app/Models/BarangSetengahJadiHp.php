@@ -14,6 +14,7 @@ class BarangSetengahJadiHp extends Model
         'id_grade',
         'keterangan',
         'harga',
+        'merek',
     ];
 
     protected $casts = [
