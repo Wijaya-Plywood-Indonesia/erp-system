@@ -73,7 +73,33 @@ class NotaBarangKeluarsTable
                     ->color('success')
                     ->url(fn ($record) => route('nota-bk.barang-keluar', $record))
                     ->openUrlInNewTab()
-                    ->visible(fn ($record) => auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin'])),
+                    ->visible(fn ($record) => auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin']) && false),
+
+                // ✅ NOTA KANTOR (Gambar 1)
+                Action::make('notaKantor')
+                    ->label('Nota Kantor')
+                    ->icon('heroicon-o-building-office')
+                    ->color('success')
+                    ->url(fn ($record) => route('nota-bk.preview', ['record' => $record, 'jenis' => 'kantor']))
+                    ->openUrlInNewTab()
+                    ->visible(fn ($record) => auth()->user()?->hasAnyRole([
+                        'edmeros',
+                        'super_admin',
+                        'Super Admin',
+                    ])),
+
+                // ✅ NOTA SALES (Gambar 2)
+                Action::make('notaSales')
+                    ->label('Nota Sales')
+                    ->icon('heroicon-o-shopping-bag')
+                    ->color('#8b5cf6')
+                    ->url(fn ($record) => route('nota-bk.preview', ['record' => $record, 'jenis' => 'sales']))
+                    ->openUrlInNewTab()
+                    ->visible(fn ($record) => auth()->user()?->hasAnyRole([
+                        'edmeros',
+                        'super_admin',
+                        'Super Admin',
+                    ])),
                 ViewAction::make(),
                 EditAction::make()
                     ->visible(fn ($record) => $record->divalidasi_oleh === null),

@@ -84,6 +84,11 @@ class UkuranBarangSetengahJadiForm
                     ->prefix('Rp')
                     ->required(),
 
+                TextInput::make('merek')
+                    ->label('Merek')
+                    ->maxLength(255)
+                    ->nullable(),
+
                 TextInput::make('keterangan')
                     ->label('Keterangan'),
             ]);
