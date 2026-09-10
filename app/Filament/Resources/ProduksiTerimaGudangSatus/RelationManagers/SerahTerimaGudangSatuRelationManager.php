@@ -634,6 +634,43 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
                                 ->send();
                         }
                     }),
+
+                Action::make('tolak')
+                    ->label('Tolak')
+                    ->color('danger')
+                    ->icon('heroicon-o-x-circle')
+                    ->requiresConfirmation()
+                    ->modalHeading('Tolak barang ini?')
+                    ->modalDescription('Barang akan dihapus dari daftar Serah Terima. Penyerah dapat menyerahkan ulang barang ini.')
+                    ->visible(fn ($record) => $record?->diterima_oleh === '-')
+                    ->action(function ($record) {
+                        try {
+                            DB::transaction(function () use ($record) {
+                                $fresh = SerahTerimaGudangSatu::lockForUpdate()->find($record->id);
+
+                                if (! $fresh || $fresh->diterima_oleh !== '-') {
+                                    throw new \RuntimeException('Barang ini sudah diterima atau diproses.');
+                                }
+
+                                // Hapus record SerahTerimaGudangSatu
+                                // Tombol serah di penyerah otomatis akan muncul kembali karena bergantung pada eksistensi data ini
+                                $fresh->delete();
+                            });
+
+                            Notification::make()
+                                ->title('Barang Ditolak')
+                                ->body('Penyerahan dibatalkan. Item telah dikembalikan ke penyerah.')
+                                ->warning()
+                                ->send();
+
+                        } catch (\Throwable $e) {
+                            Notification::make()
+                                ->title('Gagal Menolak Barang')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
