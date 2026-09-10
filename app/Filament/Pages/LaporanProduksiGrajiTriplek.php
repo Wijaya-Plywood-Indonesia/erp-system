@@ -27,6 +27,7 @@ class LaporanProduksiGrajiTriplek extends Page implements HasForms
     protected static ?string $title = 'Laporan Produksi Graji Triplek';
     protected static ?string $navigationLabel = 'Laporan Produksi Graji Triplek';
     protected static ?int $navigationSort = 15;
+    protected static bool $shouldRegisterNavigation = false;
 
     public $reportData = [
         'detail' => [],

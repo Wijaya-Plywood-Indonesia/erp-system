@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ProduksiStik extends Model
 {
+    use HasRouteUuid;
+
     protected $table = 'produksi_stik';
 
     protected $fillable = [

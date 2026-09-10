@@ -30,7 +30,7 @@ Route::middleware(['auth', 'verified'])->prefix('admin')->group(function () {
 
 Route::middleware(['auth'])->group(function () {
     // Surat Jalan - Nota Barang Keluar
-    Route::get('/surat-jalan/bk/{nota}', [SuratJalanController::class, 'printBk'])
+    Route::get('/surat-jalan/bk/{nota}/{jenis?}', [SuratJalanController::class, 'printBk'])
         ->name('surat-jalan.bk');
 });
 
@@ -61,6 +61,24 @@ Route::get('/nota-barang-masuk/rekap/export', [NotaBMController::class, 'exportE
 
 Route::get('/nota-barang-keluar/{record}/print', [NotaBKController::class, 'show'])
     ->name('nota-bk.print');
+
+Route::get('/nota-barang-keluar/{record}/barang-keluar', [NotaBKController::class, 'printBarangKeluar'])
+    ->name('nota-bk.barang-keluar');
+
+Route::get('/nota-barang-keluar/{record}/preview/{jenis}', [NotaBKController::class, 'preview'])
+    ->name('nota-bk.preview');
+
+Route::post('/nota-barang-keluar/{record}/save-payment', [NotaBKController::class, 'savePayment'])
+    ->name('nota-bk.save-payment');
+
+Route::get('/nota-barang-keluar/{record}/nota-kantor', [NotaBKController::class, 'printNotaKantor'])
+    ->name('nota-bk.nota-kantor');
+
+Route::get('/nota-barang-keluar/{record}/nota-sales', [NotaBKController::class, 'printNotaSales'])
+    ->name('nota-bk.nota-sales');
+
+Route::get('/nota-barang-keluar/{record}/cetak-semua/{jenis}', [NotaBKController::class, 'cetakSemua'])
+    ->name('nota-bk.cetak-semua');
 
 Route::get('/nota-barang-keluar/rekap', [NotaBKController::class, 'rekap'])
     ->name('nota-bk.rekap');

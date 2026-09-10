@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 
 class ProduksiGrajitriplek extends Model
 {
+    use HasRouteUuid;
     protected $table = 'produksi_graji_triplek';
 
     protected $fillable = [

@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\BahanPenolongRotaries\Tables;
 
 use App\Filament\Resources\BahanPenolongRotaries\Schemas\BahanPenolongRotaryForm;
-use App\Models\BahanPenolongProduksi;
 use App\Models\BahanPenolongValidasi;
 use App\Services\BahanPenolongPotongStokService;
 use Filament\Actions\Action;
@@ -16,6 +15,7 @@ use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
 class BahanPenolongRotariesTable
@@ -24,7 +24,7 @@ class BahanPenolongRotariesTable
     {
         $owner = $livewire->ownerRecord;
 
-        if (!$owner) {
+        if (! $owner) {
             return false;
         }
 
@@ -34,14 +34,14 @@ class BahanPenolongRotariesTable
     public static function configure(Table $table): Table
     {
         $bahanOptions = BahanPenolongRotaryForm::getBahanOptions();
+
         return $table
             ->columns([
                 TextColumn::make('bahanPenolong.nama_bahan_penolong')
                     ->label('Nama Bahan')
                     ->formatStateUsing(
-                        fn($state, $record) =>
-                        $record->bahanPenolong ? 
-                        $record->bahanPenolong->nama_bahan_penolong . ' (' . $record->bahanPenolong->satuan . ')' : 
+                        fn ($state, $record) => $record->bahanPenolong ?
+                        $record->bahanPenolong->nama_bahan_penolong.' ('.$record->bahanPenolong->satuan.')' :
                         $state
                     ),
 
@@ -62,16 +62,13 @@ class BahanPenolongRotariesTable
                     ->modalHeading('Validasi Bahan Penolong?')
                     ->modalDescription('Setelah divalidasi, semua bahan yang tercatat di bawah akan memotong Stok Barang Umum secara otomatis dan tidak bisa diubah/dihapus lagi.')
                     ->modalSubmitActionLabel('Ya, Validasi & Potong Stok')
-                    ->hidden(fn($livewire) => static::sudahDivalidasi($livewire))
-                    // TODO: pastikan nama relasi 'bahanPenolongRotaries' di bawah ini sesuai
-                    // dengan method relasi hasMany yang sebenarnya ada di model produksi
-                    // (mis. ProduksiRotary). Ganti jika nama relasinya berbeda.
-                    ->disabled(fn($livewire) => $livewire->ownerRecord?->bahanPenolongRotaries()->count() === 0)
+                    ->hidden(fn ($livewire) => static::sudahDivalidasi($livewire))
+                    ->disabled(fn ($livewire) => $livewire->ownerRecord?->bahanPenolongRotary()->count() === 0)
                     ->action(function ($livewire) {
                         try {
                             app(BahanPenolongPotongStokService::class)->validasiDanPotongStok(
                                 produksi: $livewire->ownerRecord,
-                                relasiBahan: 'bahanPenolongRotaries', // TODO: sesuaikan nama relasi jika berbeda
+                                relasiBahan: 'bahanPenolongRotary',
                                 userId: Auth::id(),
                                 namaValidator: Auth::user()?->name,
                             );
@@ -90,8 +87,8 @@ class BahanPenolongRotariesTable
 
                 CreateAction::make()
                     // Hidden jika sudah divalidasi
-                    ->hidden(fn($livewire) => static::sudahDivalidasi($livewire))
-                    ->using(function (array $data, string $model, $livewire): \Illuminate\Database\Eloquent\Model {
+                    ->hidden(fn ($livewire) => static::sudahDivalidasi($livewire))
+                    ->using(function (array $data, string $model, $livewire): Model {
                         $ownerRecord = $livewire->ownerRecord;
 
                         $existing = $model::where('id_produksi', $ownerRecord->id)
@@ -100,6 +97,7 @@ class BahanPenolongRotariesTable
 
                         if ($existing) {
                             $existing->increment('jumlah', $data['jumlah']);
+
                             return $existing;
                         }
 
@@ -108,15 +106,15 @@ class BahanPenolongRotariesTable
             ])
             ->recordActions([
                 EditAction::make()
-                    ->hidden(fn($livewire) => static::sudahDivalidasi($livewire)),
+                    ->hidden(fn ($livewire) => static::sudahDivalidasi($livewire)),
 
                 DeleteAction::make()
-                    ->hidden(fn($livewire) => static::sudahDivalidasi($livewire)),
+                    ->hidden(fn ($livewire) => static::sudahDivalidasi($livewire)),
             ])
             ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(fn($livewire) => static::sudahDivalidasi($livewire)),
+                        ->hidden(fn ($livewire) => static::sudahDivalidasi($livewire)),
                 ]),
             ]);
     }

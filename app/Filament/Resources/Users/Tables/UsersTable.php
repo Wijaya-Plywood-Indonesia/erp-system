@@ -19,6 +19,24 @@ class UsersTable
                 TextColumn::make('email')
                     ->label('Email address')
                     ->searchable(),
+                TextColumn::make('pegawai.nama_pegawai')
+                    ->label('Pegawai')
+                    ->formatStateUsing(function ($record) {
+                        if (!$record->pegawai) {
+                            return '-';
+                        }
+                        $kode = $record->pegawai->kode_pegawai;
+                        $nama = $record->pegawai->nama_pegawai;
+
+                        return $kode && $nama ? "{$kode} - {$nama}" : ($nama ?: $kode ?: '-');
+                    })
+                    ->searchable(query: function ($query, $search) {
+                        $query->orWhereHas('pegawai', function ($q) use ($search) {
+                            $q->where('nama_pegawai', 'like', "%{$search}%")
+                                ->orWhere('kode_pegawai', 'like', "%{$search}%");
+                        });
+                    })
+                    ->toggleable(),
                 TextColumn::make('email_verified_at')
                     ->dateTime()
                     ->searchable()

@@ -9,6 +9,7 @@ use App\Models\NotaKayu;
 use App\Services\HppAverageService;
 use App\Services\JurnalSyncService;
 use App\Services\NotaKayuJurnalPayloadService;
+use App\Services\ProductionAccessService;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -29,6 +30,7 @@ class NotaKayusTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'created_at'))
             ->columns([
                 TextColumn::make('created_at')
                     ->dateTime('d-m-Y')

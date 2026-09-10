@@ -28,6 +28,7 @@ class LaporanGrajiTriplek extends Page implements HasForms
     protected static ?string $title = 'Laporan Graji Triplek';
     protected string $view = 'filament.pages.laporan-graji-triplek';
     protected static ?int $navigationSort = 9;
+    protected static bool $shouldRegisterNavigation = false;
 
     public array $data = ['tanggal' => null];
     public array $laporan = [];

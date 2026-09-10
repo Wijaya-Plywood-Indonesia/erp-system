@@ -154,7 +154,7 @@ class StokVeneerBasah extends Page
                 fn($q) =>
                 $q->where('panjang', 122)->where('lebar', 244)->where('tebal', '>', 1)
             )
-            ->where('stok_lembar', '>', 0)
+            ->where('stok_lembar', '<>', 0)
             ->get();
     }
 
@@ -165,24 +165,24 @@ class StokVeneerBasah extends Page
 
     public function getKwListProperty()
     {
-        return HppVeneerBasahSummary::where('stok_lembar', '>', 0)->distinct()->pluck('kw');
+        return HppVeneerBasahSummary::where('stok_lembar', '<>', 0)->distinct()->pluck('kw');
     }
 
     public function getTebalListProperty()
     {
-        return HppVeneerBasahSummary::where('stok_lembar', '>', 0)->distinct()->pluck('tebal');
+        return HppVeneerBasahSummary::where('stok_lembar', '<>', 0)->distinct()->pluck('tebal');
     }
 
     public function getTotalNilaiStokProperty(): float
     {
-        return (float) HppVeneerBasahSummary::where('stok_lembar', '>', 0)
+        return (float) HppVeneerBasahSummary::where('stok_lembar', '<>', 0)
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->sum('nilai_stok');
     }
 
     public function getTotalLembarProperty(): int
     {
-        return (int) HppVeneerBasahSummary::where('stok_lembar', '>', 0)
+        return (int) HppVeneerBasahSummary::where('stok_lembar', '<>', 0)
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->sum('stok_lembar');
     }

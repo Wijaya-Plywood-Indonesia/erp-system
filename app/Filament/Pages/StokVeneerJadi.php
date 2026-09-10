@@ -47,7 +47,7 @@ class StokVeneerJadi extends Page
                 fn($q) =>
                 $q->where('panjang', 122)->where('lebar', 244)->where('tebal', '>', 1)
             )
-            ->where('stok_lembar', '>', 0)
+            ->where('stok_lembar', '<>', 0)
             ->get();
     }
 
@@ -58,24 +58,24 @@ class StokVeneerJadi extends Page
 
     public function getKwListProperty()
     {
-        return StokVeneerJadiModel::where('stok_lembar', '>', 0)->distinct()->pluck('kw_grade');
+        return StokVeneerJadiModel::where('stok_lembar', '<>', 0)->distinct()->pluck('kw_grade');
     }
 
     public function getTebalListProperty()
     {
-        return StokVeneerJadiModel::where('stok_lembar', '>', 0)->distinct()->pluck('tebal');
+        return StokVeneerJadiModel::where('stok_lembar', '<>', 0)->distinct()->pluck('tebal');
     }
 
     public function getTotalNilaiStokProperty(): float
     {
-        return (float) StokVeneerJadiModel::where('stok_lembar', '>', 0)
+        return (float) StokVeneerJadiModel::where('stok_lembar', '<>', 0)
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->sum('nilai_stok');
     }
 
     public function getTotalLembarProperty(): int
     {
-        return (int) StokVeneerJadiModel::where('stok_lembar', '>', 0)
+        return (int) StokVeneerJadiModel::where('stok_lembar', '<>', 0)
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->sum('stok_lembar');
     }

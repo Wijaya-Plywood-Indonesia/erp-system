@@ -2,16 +2,19 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 
 class ProduksiHp extends Model
 {
+    use HasRouteUuid;
     protected $table = 'produksi_hp';
 
     protected $fillable = [
         'tanggal_produksi',
         'shift',
         'kendala',
+        'uuid',
     ];
 
     public function detailPegawaiHp()

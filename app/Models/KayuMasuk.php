@@ -2,16 +2,18 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Auth;
 
 class KayuMasuk extends Model
 {
-    //
+    use HasRouteUuid;
     protected $table = 'kayu_masuks';
 
     protected $fillable = [
+        'uuid',
         'jenis_dokumen_angkut',
         'upload_dokumen_angkut',
         'tgl_kayu_masuk',

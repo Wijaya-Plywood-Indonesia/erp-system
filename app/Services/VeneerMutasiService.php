@@ -2,19 +2,19 @@
 
 namespace App\Services;
 
-use App\Models\VeneerMutasi;
-use App\Models\VeneerMutasiDetail;
-use App\Models\Ukuran;
+use App\Models\DetailNotaBarangKeluar;
+use App\Models\DetailNotaBarangMasuk;
+use App\Models\HppVeneerBasahLog;
+use App\Models\HppVeneerBasahSummary;
+use App\Models\HppVeneerJadiLog;
 use App\Models\JenisKayu;
 use App\Models\NotaBarangKeluar;
-use App\Models\DetailNotaBarangKeluar;
 use App\Models\NotaBarangMasuk;
-use App\Models\DetailNotaBarangMasuk;
-use App\Models\HppVeneerBasahSummary;
-use App\Models\HppVeneerBasahLog;
-use App\Models\HppVeneerJadiLog;
 use App\Models\StokVeneerJadi;
 use App\Models\StokVeneerKering;
+use App\Models\Ukuran;
+use App\Models\VeneerMutasi;
+use App\Models\VeneerMutasiDetail;
 use Exception;
 use Illuminate\Support\Facades\DB;
 
@@ -33,7 +33,7 @@ class VeneerMutasiService
 
             $details = $mutasi->details;
             if ($mutasi->status === 'kirim' && $details->isEmpty()) {
-                throw new \Exception("Detail barang harus diisi minimal 1 item.");
+                throw new Exception('Detail barang harus diisi minimal 1 item.');
             }
 
             // Calculate m3 for each detail
@@ -88,10 +88,10 @@ class VeneerMutasiService
             foreach ($details as $detail) {
                 $ukuran = Ukuran::findOrFail($detail->id_ukuran);
                 $jenisKayu = JenisKayu::findOrFail($detail->id_jenis_kayu);
-                $namaBarang = "Veneer " . ucfirst($detail->tipe_veneer)
-                    . " - " . $ukuran->nama_ukuran
-                    . " - " . $jenisKayu->nama_kayu
-                    . " - KW " . $detail->kw;
+                $namaBarang = 'Veneer '.ucfirst($detail->tipe_veneer)
+                    .' - '.$ukuran->nama_ukuran
+                    .' - '.$jenisKayu->nama_kayu
+                    .' - KW '.$detail->kw;
 
                 if ($mutasi->tipe_transaksi === 'keluar') {
                     DetailNotaBarangKeluar::create([
@@ -121,20 +121,21 @@ class VeneerMutasiService
      * Actually updates the stock. Validator must be a different user from creator.
      *
      * @param  NotaBarangKeluar|NotaBarangMasuk  $nota
-     * @throws \Exception if validator is the same as creator, or stock is insufficient
+     *
+     * @throws Exception if validator is the same as creator, or stock is insufficient
      */
     public function processStockFromNota($nota): void
     {
         // Guard: cannot validate own nota (except Super Admin)
         $user = auth()->user();
         $isSuperAdmin = $user && $user->hasAnyRole(['super_admin', 'Super Admin']);
-        if (!$isSuperAdmin && (int) $nota->dibuat_oleh === (int) auth()->id()) {
-            throw new \Exception("Anda tidak dapat memvalidasi nota yang Anda buat sendiri.");
+        if (! $isSuperAdmin && (int) $nota->dibuat_oleh === (int) auth()->id()) {
+            throw new Exception('Anda tidak dapat memvalidasi nota yang Anda buat sendiri.');
         }
 
         // Guard: already validated
         if ($nota->divalidasi_oleh !== null) {
-            throw new \Exception("Nota ini sudah divalidasi sebelumnya.");
+            throw new Exception('Nota ini sudah divalidasi sebelumnya.');
         }
 
         // Determine tipe_transaksi from nota type
@@ -145,26 +146,27 @@ class VeneerMutasiService
             ? VeneerMutasi::where('id_nota_bk', $nota->id)->first()
             : VeneerMutasi::where('id_nota_bm', $nota->id)->first();
 
-        if (!$mutasi || $mutasi->details()->doesntExist()) {
+        if (! $mutasi || $mutasi->details()->doesntExist()) {
             // Nota is manual/general (not from Veneer Mutasi menu), e.g., for general items (karung, etc.)
             // We just validate the nota without changing veneer stock.
             $nota->update(['divalidasi_oleh' => auth()->id()]);
+
             return;
         }
 
         DB::transaction(function () use ($nota, $mutasi, $isKeluar) {
             $details = $mutasi->details;
             if ($details->isEmpty()) {
-                throw new \Exception("Tidak ada detail barang untuk diproses.");
+                throw new Exception('Tidak ada detail barang untuk diproses.');
             }
 
             foreach ($details as $detail) {
                 $ukuran = Ukuran::findOrFail($detail->id_ukuran);
                 $jenisKayu = JenisKayu::findOrFail($detail->id_jenis_kayu);
-                $namaBarang = "Veneer " . ucfirst($detail->tipe_veneer)
-                    . " - " . $ukuran->nama_ukuran
-                    . " - " . $jenisKayu->nama_kayu
-                    . " - KW " . $detail->kw;
+                $namaBarang = 'Veneer '.ucfirst($detail->tipe_veneer)
+                    .' - '.$ukuran->nama_ukuran
+                    .' - '.$jenisKayu->nama_kayu
+                    .' - KW '.$detail->kw;
 
                 if ($detail->tipe_veneer === 'basah') {
                     $this->updateStokBasah($mutasi, $detail, $ukuran, $namaBarang, $isKeluar);
@@ -197,7 +199,7 @@ class VeneerMutasiService
             'kw' => $detail->kw,
         ])->lockForUpdate()->first();
 
-        if (!$summary) {
+        if (! $summary) {
             $summary = HppVeneerBasahSummary::create([
                 'id_jenis_kayu' => $detail->id_jenis_kayu,
                 'panjang' => $ukuran->panjang,
@@ -217,7 +219,7 @@ class VeneerMutasiService
 
         if ($isKeluar) {
             if ($stokSistem < $detail->qty) {
-                throw new \Exception("Stok veneer basah tidak cukup untuk: {$namaBarang}. Tersedia: {$stokSistem} lembar.");
+                throw new Exception("Stok veneer basah tidak cukup untuk: {$namaBarang}. Tersedia: {$stokSistem} lembar.");
             }
             $stokFisik = $stokSistem - $detail->qty;
             $kubikasiFisik = max(0.0, round($kubikasiSistem - $detail->m3, 6));
@@ -244,8 +246,8 @@ class VeneerMutasiService
             'kw' => $detail->kw,
             'tanggal' => $mutasi->tanggal,
             'tipe_transaksi' => $mutasi->tipe_transaksi,
-            'keterangan' => strtoupper(($isKeluar ? "Veneer Keluar #" : "Veneer Masuk #") . $mutasi->no_nota)
-                . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
+            'keterangan' => strtoupper(($isKeluar ? 'Veneer Keluar #' : 'Veneer Masuk #').$mutasi->no_nota)
+                .($mutasi->keterangan ? ' - '.strtoupper($mutasi->keterangan) : ''),
             'referensi_type' => VeneerMutasiDetail::class,
             'referensi_id' => $detail->id,
             'total_lembar' => $detail->qty,
@@ -281,7 +283,7 @@ class VeneerMutasiService
             if ($stokTersedia < $detail->qty) {
                 $label = $namaBarang !== '' ? $namaBarang
                     : "Ukuran #{$detail->id_ukuran} / Kayu #{$detail->id_jenis_kayu} / KW {$detail->kw}";
-                throw new \Exception("Stok veneer kering tidak cukup untuk: {$label}. Tersedia: {$stokTersedia} lembar, diminta: {$detail->qty} lembar.");
+                throw new Exception("Stok veneer kering tidak cukup untuk: {$label}. Tersedia: {$stokTersedia} lembar, diminta: {$detail->qty} lembar.");
             }
         }
 
@@ -296,7 +298,7 @@ class VeneerMutasiService
                     ->where('nama_barang', $namaBarang)
                     ->where('jumlah', $detail->qty)
                     ->value('keterangan');
-            } elseif (!$isKeluar && $mutasi->id_nota_bm) {
+            } elseif (! $isKeluar && $mutasi->id_nota_bm) {
                 $ketDetail = DetailNotaBarangMasuk::where('id_nota_bm', $mutasi->id_nota_bm)
                     ->where('nama_barang', $namaBarang)
                     ->where('jumlah', $detail->qty)
@@ -309,9 +311,9 @@ class VeneerMutasiService
             : (trim((string) $mutasi->keterangan) !== '' ? trim((string) $mutasi->keterangan) : '-');
 
         $namaPenerima = auth()->user()?->name ?? 'System';
-        $keterangan = 'No Nota: ' . (trim((string) $mutasi->no_nota) !== '' ? $mutasi->no_nota : '-')
-            . ' | Diterima: ' . $namaPenerima
-            . ' | Ket: ' . $ket;
+        $keterangan = 'No Nota: '.(trim((string) $mutasi->no_nota) !== '' ? $mutasi->no_nota : '-')
+            .' | Diterima: '.$namaPenerima
+            .' | Ket: '.$ket;
 
         StokVeneerKering::create([
             'id_produksi_dryer' => null,
@@ -341,7 +343,6 @@ class VeneerMutasiService
         $this->recalculateStokKering($detail->id_ukuran, $detail->id_jenis_kayu, $detail->kw);
     }
 
-
     /* ──────────────────────────────────────────────────
      *  Private: jadi stock update — KELUAR SAJA.
      *
@@ -359,7 +360,7 @@ class VeneerMutasiService
             'kw_grade' => $detail->kw,
         ])->lockForUpdate()->first();
 
-        if (!$summary) {
+        if (! $summary) {
             if ($isKeluar) {
                 throw new Exception("Stok veneer jadi tidak ditemukan untuk: {$namaBarang}.");
             }
@@ -418,8 +419,8 @@ class VeneerMutasiService
             'kw_grade' => $detail->kw,
             'tanggal' => $mutasi->tanggal,
             'tipe_transaksi' => $mutasi->tipe_transaksi,
-            'keterangan' => strtoupper(($isKeluar ? "Veneer Keluar #" : "Veneer Masuk #") . $mutasi->no_nota)
-                . ($mutasi->keterangan ? " - " . strtoupper($mutasi->keterangan) : ""),
+            'keterangan' => strtoupper(($isKeluar ? 'Veneer Keluar #' : 'Veneer Masuk #').$mutasi->no_nota)
+                .($mutasi->keterangan ? ' - '.strtoupper($mutasi->keterangan) : ''),
             'referensi_type' => VeneerMutasiDetail::class,
             'referensi_id' => $detail->id,
             'total_lembar' => $detail->qty,
@@ -546,7 +547,6 @@ class VeneerMutasiService
         $stokM3 = 0.0;
         $nilaiStok = 0.0;
         $hppAverage = 0.0;
-        $adaSaldoMinus = false;
 
         foreach ($records as $record) {
             $stokLembarSebelum = $stokLembar;
@@ -558,12 +558,14 @@ class VeneerMutasiService
                 $stokM3 += (float) $record->m3;
 
                 $hppKering = (float) $record->hpp_kering_per_m3;
-                if ($hppKering <= 0)
+                if ($hppKering <= 0) {
                     $hppKering = $hppAverage;
+                }
 
                 $nilaiTx = (float) $record->nilai_transaksi;
-                if ($nilaiTx <= 0)
+                if ($nilaiTx <= 0) {
                     $nilaiTx = round($hppKering * (float) $record->m3, 4);
+                }
 
                 $nilaiStok += $nilaiTx;
                 $hppAverage = $stokM3 > 0 ? $nilaiStok / $stokM3 : $hppKering;
@@ -603,18 +605,19 @@ class VeneerMutasiService
                     'hpp_average' => round($hppAverage, 4),
                 ]);
             }
-
-            // Tandai jika saldo lembar menjadi negatif di titik mana pun sepanjang ledger.
-            if ($stokLembar < 0) {
-                $adaSaldoMinus = true;
-            }
         }
 
-        if ($adaSaldoMinus) {
-            throw new \Exception(
-                "Transaksi menyebabkan stok veneer kering menjadi negatif "
-                    . "(Ukuran #{$idUkuran} / Kayu #{$idJenisKayu} / KW {$kw}). "
-                    . "Kemungkinan ada transaksi keluar dengan tanggal lebih awal dari stok masuk."
+        // Hanya saldo akhir (setelah seluruh ledger direplay sesuai urutan
+        // tanggal) yang menjadi indikator masalah nyata. Saldo negatif yang
+        // sempat terjadi transien di tengah histori (misalnya karena
+        // transaksi baru disisipkan dengan tanggal lebih awal dari
+        // transaksi lain, lalu ledger diurutkan ulang) tidak lagi memicu
+        // exception, selama saldo di titik terakhir sudah aman (>= 0).
+        if ($stokLembar < 0) {
+            throw new Exception(
+                'Stok veneer kering menjadi negatif setelah rekalkulasi '
+                    ."(Ukuran #{$idUkuran} / Kayu #{$idJenisKayu} / KW {$kw}). "
+                    .'Kemungkinan ada transaksi keluar dengan tanggal lebih awal dari stok masuk.'
             );
         }
     }

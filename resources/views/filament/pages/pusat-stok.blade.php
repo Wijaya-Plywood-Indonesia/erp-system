@@ -14,6 +14,7 @@
         ['title' => 'Stok Triplek Jadi', 'url' => url('/admin/stok-triplek-jadi'), 'icon' => 'heroicon-o-squares-plus'],
         ['title' => 'Stok Gudang Satu', 'url' => \App\Filament\Pages\StokGudangSatu::getUrl(), 'icon' => 'heroicon-o-building-storefront'],
         ['title' => 'Stok Plywood Siap Jual', 'url' => url('/admin/stok-plywood-siap-jual'), 'icon' => 'heroicon-o-truck'],
+        ['title' => 'Stok Log Core', 'url' => url('/admin/stok-log-core'), 'icon' => 'heroicon-o-circle-stack'],
         ];
         @endphp
 
@@ -65,6 +66,7 @@
             ['title' => 'Log HPP Triplek Jadi', 'url' => url('/admin/hpp-triplek-jadi-page'), 'icon' => 'heroicon-o-calculator'],
             ['title' => 'Log Gudang Satu', 'url' => url('/admin/gudang-satu-log-page'), 'icon' => 'heroicon-o-archive-box'],
             ['title' => 'Log Plywood Siap Jual', 'url' => url('/admin/hpp-plywood-siap-jual-page'), 'icon' => 'heroicon-o-clipboard-document-check'],
+            ['title' => 'Log Stok Log Core', 'url' => url('/admin/log-log-core-page'), 'icon' => 'heroicon-o-calculator'],
             ];
             @endphp
 

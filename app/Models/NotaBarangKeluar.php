@@ -14,12 +14,15 @@ class NotaBarangKeluar extends Model
         'tanggal',
         'no_nota',
         'tujuan_nota',
+        'metode_pembayaran',
+        'id_rekening_perusahaan',
         'dibuat_oleh',
         'divalidasi_oleh',
     ];
 
-   protected $casts = [
+    protected $casts = [
         'tanggal' => 'date',
+        'id_rekening_perusahaan' => 'integer',
         'dibuat_oleh' => 'integer',
         'divalidasi_oleh' => 'integer',
     ];
@@ -48,7 +51,12 @@ class NotaBarangKeluar extends Model
     }
 
     public function plywoodMutasi(): HasOne
-{
-    return $this->hasOne(PlywoodMutasi::class, 'id_nota_bk');
-}
+    {
+        return $this->hasOne(PlywoodMutasi::class, 'id_nota_bk');
+    }
+
+    public function rekeningPerusahaan()
+    {
+        return $this->belongsTo(RekeningPerusahaan::class, 'id_rekening_perusahaan');
+    }
 }

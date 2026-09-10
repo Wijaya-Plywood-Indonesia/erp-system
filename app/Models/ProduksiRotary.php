@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Filament\Notifications\Notification;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
@@ -11,12 +11,7 @@ use Illuminate\Database\QueryException;
 
 class ProduksiRotary extends Model
 {
-    use HasUuids;
-
-    // Menandaskan bahwa Primary Key tetap ID (Auto Increment)
-    protected $primaryKey = 'id';
-    protected $keyType = 'int';
-    public $incrementing = true;
+    use HasRouteUuid;
 
     protected $fillable = [
         'uuid',

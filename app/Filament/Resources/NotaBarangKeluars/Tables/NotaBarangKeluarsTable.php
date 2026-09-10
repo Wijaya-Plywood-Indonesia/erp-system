@@ -10,7 +10,6 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
 
 class NotaBarangKeluarsTable
 {
@@ -33,7 +32,7 @@ class NotaBarangKeluarsTable
                     ->label('Divalidasi Oleh')
                     ->placeholder('Belum divalidasi')
                     ->badge()
-                    ->color(fn($state) => filled($state) ? 'success' : 'danger')
+                    ->color(fn ($state) => filled($state) ? 'success' : 'danger')
                     ->sortable()
                     ->searchable(),
                 TextColumn::make('created_at')
@@ -54,25 +53,59 @@ class NotaBarangKeluarsTable
                     ->label('Cetak Nota')
                     ->icon('heroicon-o-printer')
                     ->color('info')
-                    ->url(fn($record) => route('nota-bk.print', $record))
+                    ->url(fn ($record) => route('nota-bk.print', $record))
                     ->openUrlInNewTab()
-                    ->visible(fn($record) => $record->divalidasi_oleh !== null),
+                    ->visible(fn ($record) => $record->divalidasi_oleh !== null || auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin'])),
 
                 // ✅ BARU: CETAK SURAT JALAN
                 Action::make('suratJalan')
                     ->label('Cetak Surat Jalan')
                     ->icon('heroicon-o-truck')
                     ->color('warning')
-                    ->url(fn($record) => route('surat-jalan.bk', $record))
+                    ->url(fn ($record) => route('surat-jalan.bk', $record))
                     ->openUrlInNewTab()
-                    ->visible(fn($record) => $record->divalidasi_oleh !== null),
+                    ->visible(fn ($record) => $record->divalidasi_oleh !== null || auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin'])),
 
+                // ✅ BARU: CETAK NOTA HARGA / PLYWOOD (barang-keluar.blade.php)
+                Action::make('cetakBarangKeluar')
+                    ->label('Cetak Nota Plywood')
+                    ->icon('heroicon-o-document-currency-dollar')
+                    ->color('success')
+                    ->url(fn ($record) => route('nota-bk.barang-keluar', $record))
+                    ->openUrlInNewTab()
+                    ->visible(fn ($record) => auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin']) && false),
+
+                // ✅ NOTA KANTOR (Gambar 1)
+                Action::make('notaKantor')
+                    ->label('Nota Kantor')
+                    ->icon('heroicon-o-building-office')
+                    ->color('success')
+                    ->url(fn ($record) => route('nota-bk.preview', ['record' => $record, 'jenis' => 'kantor']))
+                    ->openUrlInNewTab()
+                    ->visible(fn ($record) => auth()->user()?->hasAnyRole([
+                        'edmeros',
+                        'super_admin',
+                        'Super Admin',
+                    ])),
+
+                // ✅ NOTA SALES (Gambar 2)
+                Action::make('notaSales')
+                    ->label('Nota Sales')
+                    ->icon('heroicon-o-shopping-bag')
+                    ->color('#8b5cf6')
+                    ->url(fn ($record) => route('nota-bk.preview', ['record' => $record, 'jenis' => 'sales']))
+                    ->openUrlInNewTab()
+                    ->visible(fn ($record) => auth()->user()?->hasAnyRole([
+                        'edmeros',
+                        'super_admin',
+                        'Super Admin',
+                    ])),
                 ViewAction::make(),
                 EditAction::make()
-                    ->visible(fn($record) => $record->divalidasi_oleh === null),
+                    ->visible(fn ($record) => $record->divalidasi_oleh === null),
 
                 DeleteAction::make()
-                    ->visible(fn($record) => $record->divalidasi_oleh === null)
+                    ->visible(fn ($record) => $record->divalidasi_oleh === null)
                     ->before(function ($record) {
                         if ($record->mutasi) {
                             $record->mutasi->details()->delete();

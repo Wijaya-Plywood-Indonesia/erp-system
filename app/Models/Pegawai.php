@@ -107,4 +107,14 @@ class Pegawai extends Model
             ->withPivot('status')
             ->withTimestamps();
     }
+
+    public function detailAbsensi()
+    {
+        return $this->hasMany(DetailAbsensi::class, 'id_pegawai');
+    }
+
+    public function users()
+    {
+        return $this->hasMany(User::class, 'id_pegawai');
+    }
 }

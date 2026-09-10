@@ -36,7 +36,7 @@ class LaporanRepairExport implements WithMultipleSheets
         $rawCollection = LoadLaporanRepairs::run($this->tanggal);
 
         return [
-            new LaporanRepairDetailSheet($this->detailData),
+            new LaporanRepairDetailSheet($this->detailData, $this->tanggal),
             new LaporanRepairSummarySheet($rawCollection),
             new JurnalSheet($rawCollection),
         ];
@@ -44,107 +44,367 @@ class LaporanRepairExport implements WithMultipleSheets
 }
 
 // ============================================================
-// SHEET 1: DETAIL PER MEJA
+// SHEET 1: DETAIL PER MEJA (ADAPTIF: SINGLE & MULTI-UKURAN)
 // ============================================================
-class LaporanRepairDetailSheet implements FromCollection, WithHeadings, WithTitle
+class LaporanRepairDetailSheet implements FromCollection, WithTitle, WithEvents
 {
-    protected Collection $data;
+    protected array $dataMeja;
+    protected string $tanggalLaporan;
+    protected array $blockStyles = [];
 
-    public function __construct(array $detailData)
+    public function __construct(array $detailData, string $tanggal = '')
     {
-        $this->data = collect($detailData)
-            ->groupBy(fn($item) => $item['nomor_meja'] . '|' . $item['kode_ukuran']);
-    }
-
-    public function collection()
-    {
-        $rows = collect();
-        foreach ($this->data as $groupKey => $items) {
-            $first        = $items->first();
-            $targetPerJam = $first['jam_kerja'] > 0
-                ? round($first['target'] / $first['jam_kerja'], 2)
-                : 0;
-            $pekerja      = $first['pekerja'] ?? [];
-
-            $rows->push(['MEJA',        $first['nomor_meja']]);
-            $rows->push(['UKURAN',      $first['ukuran']]);
-            $rows->push(['JENIS KAYU',  $first['jenis_kayu']]);
-            $rows->push(['KW',          $first['kw']]);
-            $rows->push(['TANGGAL',     $first['tanggal']]);
-            $rows->push([]);
-
-            $rows->push([
-                'ID',
-                'Nama',
-                'Masuk',
-                'Pulang',
-                'Ijin',
-                'Potongan Target',
-                'Keterangan Absen',
-                'Keterangan Hasil',
-                'Keterangan Kerja',
-                '',
-                'Target Harian',
-                'Jam Kerja',
-                'Target / Jam',
-                'Hasil',
-                'Selisih'
-            ]);
-
-            foreach ($pekerja as $p) {
-                $rows->push([
-                    $p['id'] ?? '-',
-                    $p['nama'] ?? '-',
-                    $p['jam_masuk'] ?? '-',
-                    $p['jam_pulang'] ?? '-',
-                    $p['ijin'] ?? '-',
-                    ($p['pot_target'] ?? 0) > 0 ? $p['pot_target'] : '-',
-                    $p['keterangan'] ?? '-',
-                    $p['keterangan_hasil'] ?? '—',
-                    $p['keterangan_kerja'] ?? '—',
-                    '',
-                    $first['target'],
-                    $first['jam_kerja'],
-                    $targetPerJam,
-                    $first['hasil'],
-                    $first['selisih'] >= 0 ? '+' . $first['selisih'] : $first['selisih'],
-                ]);
-            }
-
-            $totalPotongan = collect($pekerja)->sum('pot_target');
-            $rows->push([
-                'TOTAL',
-                '',
-                '',
-                '',
-                '',
-                $totalPotongan,
-                '',
-                '',
-                '',
-                '',
-                $first['target'],
-                $first['jam_kerja'],
-                $targetPerJam,
-                $first['hasil'],
-                $first['selisih'] >= 0 ? '+' . $first['selisih'] : $first['selisih'],
-            ]);
-
-            $rows->push([]);
-            $rows->push([]);
-        }
-
-        return $rows;
-    }
-
-    public function headings(): array
-    {
-        return [];
+        $this->dataMeja = $detailData;
+        $this->tanggalLaporan = $tanggal;
     }
 
     public function title(): string
     {
         return 'Detail Per Meja';
+    }
+
+    public function collection(): Collection
+    {
+        $rows = [];
+        $this->blockStyles = [];
+
+        if (empty($this->dataMeja)) {
+            return collect([['Tidak ada data produksi repair untuk tanggal ini.']]);
+        }
+
+        $tglDisplay = $this->tanggalLaporan
+            ? Carbon::parse($this->tanggalLaporan)->format('d/m/Y')
+            : ($this->dataMeja[0]['tanggal'] ?? date('d/m/Y'));
+
+        // 1. JUDUL SHEET
+        $rows[] = ['LAPORAN PRODUKSI REPAIR PER MEJA'];
+        $rows[] = ['TANGGAL: ' . $tglDisplay];
+        $rows[] = array_fill(0, 7, '');
+
+        // 2. ITERASI PER MEJA
+        foreach ($this->dataMeja as $meja) {
+            $nomorMeja     = $meja['nomor_meja'] ?? '-';
+            $items         = $meja['items'] ?? [];
+            $pekerja       = $meja['pekerja'] ?? [];
+            $isMultiUkuran = count($items) > 1;
+
+            if ($isMultiUkuran) {
+                // ========================================================
+                // SKENARIO A: MEJA MULTI-UKURAN
+                // ========================================================
+                $totalTarget   = (float) ($meja['total_target'] ?? 0);
+                $totalHasil    = (float) ($meja['total_hasil'] ?? 0);
+                $totalSelisih  = (float) ($meja['total_selisih'] ?? ($totalHasil - $totalTarget));
+                $capaianTotal  = $meja['capaian_total'] !== null ? number_format($meja['capaian_total'], 1, ',', '.') . '%' : '-';
+
+                // Header Meja Multi
+                $headerRow = count($rows) + 1;
+                $rows[] = ["MEJA {$nomorMeja} - PENGERJAAN MULTI-UKURAN (" . count($items) . " UKURAN) | Capaian Total Meja: {$capaianTotal}", '', '', '', '', '', ''];
+
+                // Sub-header Tabel 1 (Rincian Ukuran)
+                $subHeader1Row = count($rows) + 1;
+                $rows[] = ["1. Rincian Ukuran & Capaian di Meja {$nomorMeja}", '', '', '', '', '', ''];
+
+                $colHeader1Row = count($rows) + 1;
+                $rows[] = ['Kode Ukuran', 'Jenis Kayu', 'KW', 'Target (Lbr)', 'Hasil (Lbr)', 'Selisih (Lbr)', 'Capaian'];
+
+                $dataStart1 = count($rows) + 1;
+                foreach ($items as $item) {
+                    $tgt   = (float) ($item['target'] ?? 0);
+                    $hsl   = (float) ($item['hasil'] ?? 0);
+                    $sls   = (float) ($item['selisih'] ?? ($hsl - $tgt));
+                    $cap   = $item['capaian_persen'] !== null ? number_format($item['capaian_persen'], 1, ',', '.') . '%' : '-';
+                    $tanda = $sls >= 0 ? '+' : '';
+
+                    $rows[] = [
+                        $item['kode_ukuran'] ?? '-',
+                        $item['jenis_kayu'] ?? '-',
+                        'KW ' . ($item['kw'] ?? '1'),
+                        $tgt,
+                        $hsl,
+                        $tanda . number_format($sls, 0, ',', '.'),
+                        $cap
+                    ];
+                }
+                $dataEnd1 = count($rows);
+
+                // Subtotal Rincian Ukuran
+                $subtotalRow = count($rows) + 1;
+                $tandaTotal = $totalSelisih >= 0 ? '+' : '';
+                $rows[] = [
+                    "Subtotal Gabungan Meja {$nomorMeja}:",
+                    '',
+                    '',
+                    $totalTarget,
+                    $totalHasil,
+                    $tandaTotal . number_format($totalSelisih, 0, ',', '.'),
+                    $capaianTotal
+                ];
+
+                $rows[] = array_fill(0, 7, ''); // spacer
+
+                // Sub-header Tabel 2 (Data Pekerja)
+                $subHeader2Row = count($rows) + 1;
+                $rows[] = ["2. Data Pekerja Meja {$nomorMeja}", '', '', '', '', '', ''];
+
+                $colHeader2Row = count($rows) + 1;
+                $rows[] = ['ID', 'Nama Pekerja', 'Masuk', 'Pulang', 'Izin', 'Potongan Target', 'Keterangan'];
+
+                $dataStart2 = count($rows) + 1;
+                if (empty($pekerja)) {
+                    $rows[] = ['-', 'Tidak ada pekerja terdaftar untuk meja ini.', '-', '-', '-', 0, '-'];
+                } else {
+                    foreach ($pekerja as $p) {
+                        $potRaw = (float) ($p['pot_target'] ?? 0);
+                        $rows[] = [
+                            $p['id'] ?? '-',
+                            $p['nama'] ?? '-',
+                            $p['jam_masuk'] ?? '-',
+                            $p['jam_pulang'] ?? '-',
+                            $p['ijin'] ?? '-',
+                            $potRaw > 0 ? $potRaw : 0,
+                            $p['keterangan'] ?? '-'
+                        ];
+                    }
+                }
+                $dataEnd2 = count($rows);
+
+                // Footer Ringkasan Multi
+                $footerRow = count($rows) + 1;
+                $summaryText = "Pekerja: " . count($pekerja) . " | Total Target: " . number_format($totalTarget, 0, ',', '.') . " Lbr" .
+                    " | Total Hasil: " . number_format($totalHasil, 0, ',', '.') . " Lbr" .
+                    " | Total Selisih: {$tandaTotal}" . number_format($totalSelisih, 0, ',', '.') . " Lbr" .
+                    " | Tanggal: {$tglDisplay}";
+                $rows[] = [$summaryText, '', '', '', '', '', ''];
+
+                $this->blockStyles[] = [
+                    'type'          => 'multi',
+                    'header'        => $headerRow,
+                    'sub_header1'   => $subHeader1Row,
+                    'col_header1'   => $colHeader1Row,
+                    'data_start1'   => $dataStart1,
+                    'data_end1'     => $dataEnd1,
+                    'subtotal1'     => $subtotalRow,
+                    'sub_header2'   => $subHeader2Row,
+                    'col_header2'   => $colHeader2Row,
+                    'data_start2'   => $dataStart2,
+                    'data_end2'     => $dataEnd2,
+                    'footer'        => $footerRow,
+                ];
+            } else {
+                // ========================================================
+                // SKENARIO B: MEJA SINGLE UKURAN (FORMAT ASLI)
+                // ========================================================
+                $firstItem     = $items[0] ?? [];
+                $kodeUkuran    = $firstItem['kode_ukuran'] ?? ($meja['kode_ukuran'] ?? 'REPAIR');
+                $jenisKayu     = $firstItem['jenis_kayu'] ?? ($meja['jenis_kayu'] ?? '-');
+                $kw            = $firstItem['kw'] ?? ($meja['kw'] ?? '1');
+                $targetSingle  = (float) ($firstItem['target'] ?? ($meja['target'] ?? 0));
+                $hasilSingle   = (float) ($firstItem['hasil'] ?? ($meja['hasil'] ?? 0));
+                $selisihSingle = (float) ($firstItem['selisih'] ?? ($hasilSingle - $targetSingle));
+                $capaianSingle = $firstItem['capaian_persen'] ?? ($meja['capaian_persen'] ?? null);
+                $capaianStr    = $capaianSingle !== null ? number_format($capaianSingle, 1, ',', '.') . '%' : '-';
+
+                // Header Meja Single
+                $headerRow = count($rows) + 1;
+                $rows[] = ["MEJA {$nomorMeja} — " . strtoupper($kodeUkuran) . " ({$jenisKayu}, KW {$kw}) | Capaian: {$capaianStr}", '', '', '', '', '', ''];
+
+                $colHeaderRow = count($rows) + 1;
+                $rows[] = ['ID', 'Nama Pekerja', 'Masuk', 'Pulang', 'Izin', 'Potongan Target', 'Keterangan'];
+
+                $dataStart = count($rows) + 1;
+                if (empty($pekerja)) {
+                    $rows[] = ['-', 'Tidak ada pekerja terdaftar untuk meja ini.', '-', '-', '-', 0, '-'];
+                } else {
+                    foreach ($pekerja as $p) {
+                        $potRaw = (float) ($p['pot_target'] ?? 0);
+                        $rows[] = [
+                            $p['id'] ?? '-',
+                            $p['nama'] ?? '-',
+                            $p['jam_masuk'] ?? '-',
+                            $p['jam_pulang'] ?? '-',
+                            $p['ijin'] ?? '-',
+                            $potRaw > 0 ? $potRaw : 0,
+                            $p['keterangan'] ?? '-'
+                        ];
+                    }
+                }
+                $dataEnd = count($rows);
+
+                // Footer Ringkasan Single
+                $footerRow = count($rows) + 1;
+                $tandaS = $selisihSingle >= 0 ? '+' : '';
+                $summaryText = "Total Pekerja: " . count($pekerja) .
+                    " | Target Meja: " . number_format($targetSingle, 0, ',', '.') . " Lbr" .
+                    " | Hasil Produksi: " . number_format($hasilSingle, 0, ',', '.') . " Lbr" .
+                    " | Selisih: {$tandaS}" . number_format($selisihSingle, 0, ',', '.') . " Lbr" .
+                    " | Tanggal: {$tglDisplay}";
+                $rows[] = [$summaryText, '', '', '', '', '', ''];
+
+                $this->blockStyles[] = [
+                    'type'       => 'single',
+                    'header'     => $headerRow,
+                    'col_header' => $colHeaderRow,
+                    'data_start' => $dataStart,
+                    'data_end'   => $dataEnd,
+                    'footer'     => $footerRow,
+                ];
+            }
+
+            // Pemisah antar meja
+            $rows[] = array_fill(0, 7, '');
+            $rows[] = array_fill(0, 7, '');
+        }
+
+        return collect($rows);
+    }
+
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function (AfterSheet $event) {
+                $sheet = $event->sheet->getDelegate();
+
+                // Dimensi Lebar Kolom A-G
+                $sheet->getColumnDimension('A')->setWidth(26);
+                $sheet->getColumnDimension('B')->setWidth(26);
+                $sheet->getColumnDimension('C')->setWidth(14);
+                $sheet->getColumnDimension('D')->setWidth(16);
+                $sheet->getColumnDimension('E')->setWidth(14);
+                $sheet->getColumnDimension('F')->setWidth(20);
+                $sheet->getColumnDimension('G')->setWidth(35);
+
+                // Style Judul Sheet
+                $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(13);
+                $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(11);
+
+                // Styling blok per meja
+                foreach ($this->blockStyles as $b) {
+                    if ($b['type'] === 'multi') {
+                        // Header Meja Multi
+                        $h = $b['header'];
+                        $sheet->mergeCells("A{$h}:G{$h}");
+                        $sheet->getStyle("A{$h}:G{$h}")->applyFromArray([
+                            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
+                            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '312E81']], // Indigo 900
+                            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                        ]);
+                        $sheet->getRowDimension($h)->setRowHeight(24);
+
+                        // Sub Header 1 & 2
+                        foreach ([$b['sub_header1'], $b['sub_header2']] as $sh) {
+                            $sheet->mergeCells("A{$sh}:G{$sh}");
+                            $sheet->getStyle("A{$sh}:G{$sh}")->applyFromArray([
+                                'font' => ['bold' => true, 'color' => ['rgb' => '27272A'], 'size' => 10],
+                                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E4E4E7']], // Zinc 200
+                                'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
+                            ]);
+                            $sheet->getRowDimension($sh)->setRowHeight(20);
+                        }
+
+                        // Kolom Header 1 & 2
+                        foreach ([$b['col_header1'], $b['col_header2']] as $ch) {
+                            $sheet->getStyle("A{$ch}:G{$ch}")->applyFromArray([
+                                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 10],
+                                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '3F3F46']], // Zinc 700
+                                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                            ]);
+                            $sheet->getRowDimension($ch)->setRowHeight(20);
+                        }
+
+                        // Data Rincian Ukuran
+                        $ds1 = $b['data_start1'];
+                        $de1 = $b['data_end1'];
+                        $sheet->getStyle("A{$ds1}:G{$de1}")->applyFromArray([
+                            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'D4D4D8']]],
+                            'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+                        ]);
+                        $sheet->getStyle("B{$ds1}:C{$de1}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle("D{$ds1}:F{$de1}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("D{$ds1}:E{$de1}")->getNumberFormat()->setFormatCode('#,##0');
+                        $sheet->getStyle("G{$ds1}:G{$de1}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+                        // Subtotal Baris
+                        $st = $b['subtotal1'];
+                        $sheet->mergeCells("A{$st}:C{$st}");
+                        $sheet->getStyle("A{$st}:G{$st}")->applyFromArray([
+                            'font' => ['bold' => true],
+                            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F4F4F5']],
+                            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'A1A1AA']]],
+                            'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+                        ]);
+                        $sheet->getStyle("D{$st}:F{$st}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("D{$st}:E{$st}")->getNumberFormat()->setFormatCode('#,##0');
+                        $sheet->getStyle("G{$st}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+                        // Data Pekerja
+                        $ds2 = $b['data_start2'];
+                        $de2 = $b['data_end2'];
+                        $sheet->getStyle("A{$ds2}:G{$de2}")->applyFromArray([
+                            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'D4D4D8']]],
+                            'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+                        ]);
+                        $sheet->getStyle("A{$ds2}:A{$de2}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle("C{$ds2}:E{$de2}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle("F{$ds2}:F{$de2}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("F{$ds2}:F{$de2}")->getNumberFormat()->setFormatCode('"Rp "#,##0;("Rp "#,##0);"-"');
+
+                        // Footer Summary
+                        $f = $b['footer'];
+                        $sheet->mergeCells("A{$f}:G{$f}");
+                        $sheet->getStyle("A{$f}:G{$f}")->applyFromArray([
+                            'font' => ['bold' => true, 'color' => ['rgb' => '18181B']],
+                            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F4F4F5']],
+                            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'A1A1AA']]],
+                        ]);
+                        $sheet->getRowDimension($f)->setRowHeight(22);
+                    } else {
+                        // Header Meja Single
+                        $h = $b['header'];
+                        $sheet->mergeCells("A{$h}:G{$h}");
+                        $sheet->getStyle("A{$h}:G{$h}")->applyFromArray([
+                            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
+                            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '27272A']], // Zinc 800
+                            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                        ]);
+                        $sheet->getRowDimension($h)->setRowHeight(24);
+
+                        // Kolom Header Single
+                        $ch = $b['col_header'];
+                        $sheet->getStyle("A{$ch}:G{$ch}")->applyFromArray([
+                            'font' => ['bold' => true, 'color' => ['rgb' => '18181B'], 'size' => 10],
+                            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E4E4E7']], // Zinc 200
+                            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                        ]);
+                        $sheet->getRowDimension($ch)->setRowHeight(20);
+
+                        // Data Pekerja Single
+                        $ds = $b['data_start'];
+                        $de = $b['data_end'];
+                        $sheet->getStyle("A{$ds}:G{$de}")->applyFromArray([
+                            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'D4D4D8']]],
+                            'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+                        ]);
+                        $sheet->getStyle("A{$ds}:A{$de}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle("C{$ds}:E{$de}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle("F{$ds}:F{$de}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("F{$ds}:F{$de}")->getNumberFormat()->setFormatCode('"Rp "#,##0;("Rp "#,##0);"-"');
+
+                        // Footer Summary Single
+                        $f = $b['footer'];
+                        $sheet->mergeCells("A{$f}:G{$f}");
+                        $sheet->getStyle("A{$f}:G{$f}")->applyFromArray([
+                            'font' => ['bold' => true, 'color' => ['rgb' => '18181B']],
+                            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F4F4F5']],
+                            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'A1A1AA']]],
+                        ]);
+                        $sheet->getRowDimension($f)->setRowHeight(22);
+                    }
+                }
+            },
+        ];
     }
 }
 
@@ -540,31 +800,29 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             $hasilPerGroup = [];
 
             $groupedHasil = collect($produksi->detailHasilRepairs)->groupBy(function ($hasil) {
-                // Priority 1: Jika terikat ke modalRepair, pakai spesifikasi modalRepair
                 if ($hasil->modalRepair && $hasil->modalRepair->ukuran && $hasil->modalRepair->jenisKayu) {
-                    $modal   = $hasil->modalRepair;
-                    $jnsNorm = $this->normalizeJenis($modal->jenisKayu->nama_kayu ?? '');
-                    $kwStatus = strtolower((string) ($modal->kw ?? $hasil->kw));
-                    $isAf    = str_contains($kwStatus, 'af') ? 'af' : 'reguler';
-                    $tebal   = (float) $modal->ukuran->tebal;
-                    $panjang = (float) $modal->ukuran->panjang;
-                    $lebar   = (float) $modal->ukuran->lebar;
-                    $kwRaw   = (string)((int) filter_var($kwStatus, FILTER_SANITIZE_NUMBER_INT));
+                    $modal    = $hasil->modalRepair;
+                    $jnsNorm  = $this->normalizeJenis($modal->jenisKayu->nama_kayu ?? '');
+                    $statusKw = strtolower((string) ($modal->kw ?? $hasil->kw));
+                    $isAf     = str_contains($statusKw, 'af') ? 'af' : 'reguler';
+                    $tebal    = (float) $modal->ukuran->tebal;
+                    $panjang  = (float) $modal->ukuran->panjang;
+                    $lebar    = (float) $modal->ukuran->lebar;
+                    $kwRaw    = (string)((int) filter_var($statusKw, FILTER_SANITIZE_NUMBER_INT));
 
                     return "{$jnsNorm}|{$panjang}|{$lebar}|{$tebal}|{$isAf}|{$kwRaw}";
                 }
 
-                // Priority 2: Jika Ukuran Manual
                 if (!$hasil->ukuran) return 'invalid_data';
 
                 $jenisModel = $hasil->jenisKayu;
                 $jnsNorm  = $this->normalizeJenis($jenisModel?->nama_kayu ?? 'meranti');
-                $kwStatus = strtolower((string) $hasil->kw);
-                $isAf     = str_contains($kwStatus, 'af') ? 'af' : 'reguler';
+                $statusKw = strtolower((string) $hasil->kw);
+                $isAf     = str_contains($statusKw, 'af') ? 'af' : 'reguler';
                 $tebal    = (float) $hasil->ukuran->tebal;
                 $panjang  = (float) $hasil->ukuran->panjang;
                 $lebar    = (float) $hasil->ukuran->lebar;
-                $kwRaw    = (string)((int) filter_var($kwStatus, FILTER_SANITIZE_NUMBER_INT));
+                $kwRaw    = (string)((int) filter_var($statusKw, FILTER_SANITIZE_NUMBER_INT));
 
                 return "{$jnsNorm}|{$panjang}|{$lebar}|{$tebal}|{$isAf}|{$kwRaw}";
             });
@@ -603,12 +861,12 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                 if (!$modal->ukuran || !$modal->jenisKayu) return 'invalid_data';
 
                 $jnsNorm  = $this->normalizeJenis($modal->jenisKayu->nama_kayu ?? '');
-                $kwStatus = strtolower((string) $modal->kw);
-                $isAf     = str_contains($kwStatus, 'af') ? 'af' : 'reguler';
+                $statusKw = strtolower((string) $modal->kw);
+                $isAf     = str_contains($statusKw, 'af') ? 'af' : 'reguler';
                 $tebal    = (float) $modal->ukuran->tebal;
                 $panjang  = (float) $modal->ukuran->panjang;
                 $lebar    = (float) $modal->ukuran->lebar;
-                $kwRaw    = (string)((int) filter_var($kwStatus, FILTER_SANITIZE_NUMBER_INT));
+                $kwRaw    = (string)((int) filter_var($statusKw, FILTER_SANITIZE_NUMBER_INT));
 
                 return "{$jnsNorm}|{$panjang}|{$lebar}|{$tebal}|{$isAf}|{$kwRaw}";
             });
@@ -646,9 +904,6 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                 array_keys($modalPerGroup)
             ));
 
-            $selisihDebitRows  = [];
-            $selisihKreditRows = [];
-
             foreach ($allKeys as $key) {
                 $hasil = $hasilPerGroup[$key] ?? null;
                 $modal = $modalPerGroup[$key] ?? null;
@@ -667,23 +922,20 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                 $modalM3     = $modal['totalM3']     ?? 0.0;
                 $modalBanyak = $modal['totalBanyak'] ?? 0;
 
-                $diffM3     = round($hasilM3 - $modalM3, 4);
-                $diffBanyak = $hasilBanyak - $modalBanyak;
-
                 $refJadi   = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'jadi');
                 $refKering = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'kering');
 
                 [$namaAkunJadi,   $noAkunJadi,   $hargaJadi]   = $this->extractAkunVeneer($refJadi);
                 [$namaAkunKering, $noAkunKering, $hargaKering] = $this->extractAkunVeneer($refKering);
 
-                $keteranganNormal = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $kwStatus, $kwRaw);
+                $keteranganNormal = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw);
                 $keteranganJadi   = $keteranganNormal . (!$refJadi   ? ' [UNKNOWN]' : '');
                 $keteranganKering = $keteranganNormal . (!$refKering ? ' [UNKNOWN]' : '');
 
                 $diffBanyak = $modalBanyak - $hasilBanyak;
 
                 if ($diffBanyak > 0) {
-                    // KONDISI KEHILANGAN (Hanya jika ada hasil terhubung tetapi jumlahnya kurang dari modal)
+                    // KONDISI KEHILANGAN
                     $kehilanganBanyak = $diffBanyak;
                     $modalSebanding   = $hasilBanyak;
 
@@ -701,11 +953,11 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                         $totalKredit += ($m3Modal * $hargaKering);
                     }
 
-                    $keteranganKehilangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $kwStatus, $kwRaw, 'Kehilangan') . (!$refKering ? ' [UNKNOWN]' : '');
+                    $keteranganKehilangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw, 'Kehilangan') . (!$refKering ? ' [UNKNOWN]' : '');
                     $jurnalBlockKredit[]  = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKehilangan, 'k', $kehilanganBanyak, $m3Kehilangan, $hargaKering, 'm');
                     $totalKredit += ($m3Kehilangan * $hargaKering);
                 } elseif ($diffBanyak < 0) {
-                    // KONDISI KELEBIHAN (Hanya jika hasil terhubung melebihi modal)
+                    // KONDISI KELEBIHAN
                     $kelebihanBanyak = abs($diffBanyak);
                     $hasilSebanding  = $modalBanyak;
 
@@ -716,7 +968,7 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                     $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilSebanding, $m3HasilUtama, $hargaJadi, 'm');
                     $totalDebit += ($m3HasilUtama * $hargaJadi);
 
-                    $keteranganKelebihan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $kwStatus, $kwRaw, 'Kelebihan') . (!$refJadi ? ' [UNKNOWN]' : '');
+                    $keteranganKelebihan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw, 'Kelebihan') . (!$refJadi ? ' [UNKNOWN]' : '');
                     $jurnalBlockDebit[]  = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganKelebihan, 'd', $kelebihanBanyak, $m3Kelebihan, $hargaJadi, 'm');
                     $totalDebit += ($m3Kelebihan * $hargaJadi);
 
@@ -736,7 +988,7 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             }
 
             // ============================================================
-            // STEP 2: UKURAN MANUAL (CATAT BERSIH TANPA LABEL KEHILANGAN)
+            // STEP 2: UKURAN MANUAL
             // ============================================================
             $hasilManual = collect($produksi->detailHasilRepairs)->filter(function ($h) {
                 return !$h->modalRepair || !$h->modalRepair->ukuran || !$h->modalRepair->jenisKayu;
@@ -747,12 +999,12 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
 
                 $jenisModel = $hasil->jenisKayu;
                 $jnsNorm  = $this->normalizeJenis($jenisModel?->nama_kayu ?? 'meranti');
-                $kwStatus = strtolower((string) $hasil->kw);
-                $isAf     = str_contains($kwStatus, 'af');
+                $statusKw = strtolower((string) $hasil->kw);
+                $isAf     = str_contains($statusKw, 'af');
                 $tebal    = (float) $hasil->ukuran->tebal;
                 $panjang  = (float) $hasil->ukuran->panjang;
                 $lebar    = (float) $hasil->ukuran->lebar;
-                $kwRaw    = (string)((int) filter_var($kwStatus, FILTER_SANITIZE_NUMBER_INT));
+                $kwRaw    = (string)((int) filter_var($statusKw, FILTER_SANITIZE_NUMBER_INT));
 
                 $banyak = (int) $hasil->jumlah;
                 if ($banyak <= 0) continue;
@@ -762,9 +1014,8 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                 $refJadi = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'jadi');
                 [$namaAkun, $noAkun, $harga] = $this->extractAkunVeneer($refJadi);
 
-                $keterangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $kwStatus, $kwRaw) . (!$refJadi ? ' [UNKNOWN]' : '');
+                $keterangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw) . (!$refJadi ? ' [UNKNOWN]' : '');
 
-                // Push murni ke Debit (Veneer Jadi)
                 $jurnalBlockDebit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'd', $banyak, $m3, $harga, 'm');
                 $totalDebit += ($m3 * $harga);
             }
@@ -788,7 +1039,7 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             }
 
             // ============================================================
-            // 5. KREDIT: Gaji Pegawai
+            // STEP 4: Gaji Pegawai
             // ============================================================
             $jmlPekerja = (int) $produksi->rencanaPegawais->count();
             if ($jmlPekerja > 0) {
@@ -797,7 +1048,7 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             }
 
             // ============================================================
-            // 6. PENYEIMBANG: HPP Repair
+            // STEP 5: HPP Repair (Penyeimbang)
             // ============================================================
             $hppRow = [];
             $selisih = $totalDebit - $totalKredit;

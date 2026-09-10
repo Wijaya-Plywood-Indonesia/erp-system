@@ -2,13 +2,16 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 
 class NotaKayu extends Model
 {
-    //
+    use HasRouteUuid;
+
     protected $primaryKey = 'id';
     protected $fillable = [
+        'uuid',
         'id_kayu_masuk',
         'no_nota',
         'penanggung_jawab',

@@ -26,6 +26,7 @@ class LaporanSanding extends Page implements HasForms
     protected static ?string $title = 'Laporan Produksi Sanding';
     protected static ?string $navigationLabel = 'Laporan Produksi Sanding';
     protected static ?int $navigationSort = 18;
+    protected static bool $shouldRegisterNavigation = false;
 
     public $reportData = [
         'detail' => [],
@@ -43,6 +44,11 @@ class LaporanSanding extends Page implements HasForms
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('rekapSanding')
+                ->label('Rekap Per Tanggal')
+                ->icon('heroicon-o-table-cells')
+                ->color('primary')
+                ->url(fn () => \App\Filament\Pages\RekapSanding::getUrl()),
             Action::make('refresh')
                 ->label('Refresh Data')
                 ->icon('heroicon-o-arrow-path')

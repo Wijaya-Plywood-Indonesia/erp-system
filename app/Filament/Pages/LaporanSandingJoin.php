@@ -33,12 +33,14 @@ class LaporanSandingJoin extends Page
     protected static ?string $navigationLabel = 'Laporan Produksi Sanding Join';
     protected string $view = 'filament.pages.laporan-sanding-join';
     protected static ?int $navigationSort = 8; // Disesuaikan agar di bawah Joint
+    protected static bool $shouldRegisterNavigation = false;
 
     public array $data = [
         'tanggal' => null,
     ];
 
     public array $laporan = [];
+    public array $dataPekerja = [];
     public array $dataProduksi = [];
     public bool $isLoading = false;
 
@@ -128,8 +130,8 @@ class LaporanSandingJoin extends Page
 
             $this->dataProduksi = [];
             $this->laporan = [];
+            $this->dataPekerja = []; // BARU
 
-            // Memanggil Query Class Sanding Joint
             $raw = LoadLaporanSandingJoin::run($tanggal);
 
             Log::info('Sanding Join Query executed', [
@@ -138,9 +140,12 @@ class LaporanSandingJoin extends Page
             ]);
 
             if ($raw->isNotEmpty()) {
-                // Memanggil Transformer SandingJoinDataMap
-                $this->dataProduksi = SandingJoinDataMap::make($raw);
-                $this->laporan = $this->dataProduksi;
+                // Transformer sekarang return ['per_ukuran' => [...], 'pekerja' => [...]]
+                $hasilTransform = SandingJoinDataMap::make($raw);
+
+                $this->dataProduksi = $hasilTransform['per_ukuran'];
+                $this->laporan      = $hasilTransform['per_ukuran'];
+                $this->dataPekerja  = $hasilTransform['pekerja']; // BARU
             } else {
                 Notification::make()
                     ->warning()
@@ -175,8 +180,9 @@ class LaporanSandingJoin extends Page
 
             return Excel::download(
                 new LaporanSandingJoinExport(
-                    $this->laporan, // ← argument 1: detail data
-                    $tanggalQuery   // ← argument 2: tanggal untuk query Sheet 2
+                    $this->laporan,     // argumen 1: array data per ukuran
+                    $this->dataPekerja, // argumen 2: array daftar pekerja tim
+                    $tanggalQuery       // argumen 3: string tanggal laporan
                 ),
                 "laporan-sanding-joint-{$tanggalFile}.xlsx"
             );
@@ -194,6 +200,7 @@ class LaporanSandingJoin extends Page
         return [
             'laporan' => $this->laporan,
             'dataProduksi' => $this->dataProduksi,
+            'dataPekerja'  => $this->dataPekerja,
             'isLoading' => $this->isLoading,
             'summary' => $this->calculateSummary(),
         ];
@@ -208,10 +215,6 @@ class LaporanSandingJoin extends Page
         foreach ($this->laporan as $row) {
             $totalAll += $row['hasil'];
 
-            foreach ($row['pekerja'] as $p) {
-                $uniquePegawai[$p['nama']] = true;
-            }
-
             $key = $row['ukuran'] . '|' . $row['kw'];
             if (!isset($globalUkuranKw[$key])) {
                 $globalUkuranKw[$key] = (object)[
@@ -221,6 +224,11 @@ class LaporanSandingJoin extends Page
                 ];
             }
             $globalUkuranKw[$key]->total += $row['hasil'];
+        }
+
+        // BARU: unique pegawai dihitung dari dataPekerja, bukan dari dalam loop $laporan
+        foreach ($this->dataPekerja as $p) {
+            $uniquePegawai[$p['nama']] = true;
         }
 
         return [

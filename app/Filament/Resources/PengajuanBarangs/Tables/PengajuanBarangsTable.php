@@ -167,6 +167,11 @@ class PengajuanBarangsTable
                             && Auth::user()?->hasRole(['pengawas_produksi', 'super_admin'])) {
                             return 'Verifikasi Sekarang';
                         }
+
+                        if (in_array($state, ['disetujui', 'ditolak']) && $record->pengawasProduksi) {
+                            return ucfirst($state).' - '.$record->pengawasProduksi->name;
+                        }
+
                         return ucfirst($state);
                     })
                     ->action(
@@ -223,6 +228,11 @@ class PengajuanBarangsTable
                             && Auth::user()?->hasRole(['kepala_produksi_wijaya', 'super_admin'])) {
                             return 'Verifikasi Sekarang';
                         }
+
+                        if (in_array($state, ['disetujui', 'ditolak']) && $record->kepalaProduksi) {
+                            return ucfirst($state).' - '.$record->kepalaProduksi->name;
+                        }
+
                         return ucfirst($state);
                     })
                     ->action(
@@ -259,7 +269,7 @@ class PengajuanBarangsTable
                     ->badge()
                     ->color(function (string $state, $record) {
                         if ($state === 'menunggu'
-                            && Auth::user()?->hasRole(['admin_barang', 'super_admin'])) {
+                            && Auth::user()?->hasRole(['admin_barang_umum', 'super_admin'])) {
                             return 'primary';
                         }
                         return match ($state) {
@@ -270,22 +280,27 @@ class PengajuanBarangsTable
                     })
                     ->icon(function (string $state, $record) {
                         return ($state === 'menunggu'
-                            && Auth::user()?->hasRole(['admin_barang', 'super_admin']))
+                            && Auth::user()?->hasRole(['admin_barang_umum', 'super_admin']))
                             ? 'heroicon-o-pencil-square'
                             : null;
                     })
                     ->formatStateUsing(function (string $state, $record) {
                         if ($state === 'menunggu'
-                            && Auth::user()?->hasRole(['admin_barang', 'super_admin'])) {
+                            && Auth::user()?->hasRole(['admin_barang_umum', 'super_admin'])) {
                             return 'Verifikasi Sekarang';
                         }
+
+                        if (in_array($state, ['disetujui', 'ditolak']) && $record->adminBarang) {
+                            return ucfirst($state).' - '.$record->adminBarang->name;
+                        }
+
                         return ucfirst($state);
                     })
                     ->action(
                         Action::make('verifikasiAdmin')
                             ->label('Verifikasi (Admin Barang)')
                             ->modalHeading('Verifikasi - Admin Barang')
-                            ->visible(fn($record) => Auth::user()?->hasRole(['admin_barang', 'super_admin'])
+                            ->visible(fn($record) => Auth::user()?->hasRole(['admin_barang_umum', 'super_admin'])
                                 && $record->status_admin_barang === 'menunggu')
                             ->schema([
                                 Radio::make('keputusan')
@@ -305,7 +320,7 @@ class PengajuanBarangsTable
                                     ->requiredIf('keputusan', 'ditolak'),
                             ])
                             ->action(function ($record, array $data) {
-                                static::putuskan($record, 'admin_barang', $data['keputusan']);
+                                static::putuskan($record, 'admin_barang_umum', $data['keputusan']);
                             })
                     ),
 

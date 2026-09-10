@@ -16,6 +16,7 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Grid;
@@ -223,6 +224,9 @@ class SerahTerimaHpRelationManager extends RelationManager
                     $platformIds = PlatformHasilHp::where('id_produksi_hp', $ownerId)->pluck('id');
 
                     return $query
+                        // 🌟 Barang yang sudah ditolak (di tujuan manapun) tidak lagi
+                        // ditampilkan, termasuk di tab HP (sisi penyerah).
+                        ->whereNull('ditolak_oleh')
                         ->where(function ($q) use ($triplekIds, $platformIds) {
                             $q->whereIn('id_triplek_hasil_hp', $triplekIds)
                                 ->orWhereIn('id_platform_hasil_hp', $platformIds);
@@ -236,6 +240,8 @@ class SerahTerimaHpRelationManager extends RelationManager
                     // Sanding, ATAU dari Gudang Triplek Mentah).
                     return $query
                         ->where('tujuan', self::TIPE_TO_TUJUAN['graji'])
+                        // 🌟 Barang yang sudah ditolak tidak muncul lagi di sini.
+                        ->whereNull('ditolak_oleh')
                         ->where(function ($q) use ($ownerId) {
                             $q->where('diterima_oleh', '-')
                                 ->orWhere('id_produksi_graji_triplek', $ownerId);
@@ -251,6 +257,8 @@ class SerahTerimaHpRelationManager extends RelationManager
                     // tanpa syarat tambahan.
                     return $query
                         ->where('tujuan', self::TIPE_TO_TUJUAN['sanding'])
+                        // 🌟 Barang yang sudah ditolak tidak muncul lagi di sini.
+                        ->whereNull('ditolak_oleh')
                         ->where(function ($q) use ($ownerId) {
                             $q->where('diterima_oleh', '-')
                                 ->orWhere('id_produksi_sanding', $ownerId);
@@ -418,8 +426,14 @@ class SerahTerimaHpRelationManager extends RelationManager
                 TextColumn::make('diterima_oleh')
                     ->label('Diterima Oleh')
                     ->badge()
-                    ->color(fn ($state) => $state === '-' ? 'gray' : 'success')
-                    ->formatStateUsing(fn ($state) => $state === '-' ? 'Menunggu' : $state),
+                    ->color(fn ($record, $state) => $record->isDitolak() ? 'danger' : ($state === '-' ? 'gray' : 'success'))
+                    ->formatStateUsing(function ($record, $state) {
+                        if ($record->isDitolak()) {
+                            return 'Ditolak';
+                        }
+
+                        return $state === '-' ? 'Menunggu' : $state;
+                    }),
 
                 TextColumn::make('status')
                     ->badge()
@@ -428,6 +442,7 @@ class SerahTerimaHpRelationManager extends RelationManager
                         'Terima Triplek', 'Terima Platform', 'Terima dari Triplek Jadi',
                         'Terima dari Gudang Platform Mentah', 'Terima dari Gudang Triplek Mentah' => 'success',
                         'Serah Triplek', 'Serah Platform', 'Serah ke Sanding', 'Serah ke Graji' => 'warning',
+                        'Ditolak' => 'danger',
                         default => 'gray',
                     }),
 
@@ -485,9 +500,9 @@ class SerahTerimaHpRelationManager extends RelationManager
                                 ]),
                         ];
                     })
-                    // Muncul kalau tujuannya sesuai dengan tab yang sedang dibuka, dan belum diterima.
+                    // Muncul kalau tujuannya sesuai dengan tab yang sedang dibuka, dan belum diterima/ditolak.
                     ->visible(function ($record) use ($tipe) {
-                        if ($record->diterima_oleh !== '-') {
+                        if ($record->diterima_oleh !== '-' || $record->isDitolak()) {
                             return false;
                         }
 
@@ -501,8 +516,8 @@ class SerahTerimaHpRelationManager extends RelationManager
                             DB::transaction(function () use ($record, $ownerId, $tipe, $stokTriplekService, $stokPlatformService) {
                                 $fresh = SerahTerimaHp::lockForUpdate()->find($record->id);
 
-                                if (! $fresh || $fresh->diterima_oleh !== '-') {
-                                    throw new \RuntimeException('Barang ini sudah diambil produksi lain.');
+                                if (! $fresh || $fresh->diterima_oleh !== '-' || $fresh->ditolak_oleh) {
+                                    throw new \RuntimeException('Barang ini sudah diambil produksi lain atau sudah ditolak.');
                                 }
 
                                 if ($tipe === 'graji') {
@@ -589,6 +604,70 @@ class SerahTerimaHpRelationManager extends RelationManager
                             Notification::make()
                                 ->title('Barang Berhasil Diterima')
                                 ->success()
+                                ->send();
+
+                        } catch (\Throwable $e) {
+                            Notification::make()
+                                ->title('Gagal')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
+
+                // 🌟 Action baru: TOLAK
+                //
+                // Dipakai kalau barang yang di-serah ternyata salah kirim / salah
+                // catat dari gudang asal. Karena stok baru bertambah pada saat
+                // action `terima` dipanggil, dan `tolak` hanya boleh muncul saat
+                // barang BELUM diterima, maka `tolak` tidak pernah perlu menyentuh
+                // service stok apa pun — cukup menandai record supaya tidak lagi
+                // ikut ke query manapun (lihat `whereNull('ditolak_oleh')` di
+                // `modifyQueryUsing` atas).
+                Action::make('tolak')
+                    ->label('Tolak')
+                    ->color('danger')
+                    ->icon('heroicon-o-x-circle')
+                    ->requiresConfirmation()
+                    ->modalHeading('Tolak barang ini?')
+                    ->modalDescription('Barang akan hilang dari daftar Serah Terima dan TIDAK memotong / menambah stok apa pun di gudang manapun.')
+                    ->schema([
+                        Textarea::make('alasan_tolak')
+                            ->label('Alasan Penolakan')
+                            ->placeholder('Contoh: jumlah lembar tidak sesuai fisik / salah kirim dari gudang')
+                            ->required()
+                            ->rows(3),
+                    ])
+                    // Muncul di kondisi yang sama dengan 'terima': belum diterima,
+                    // belum ditolak, dan tujuannya sesuai tab yang sedang dibuka.
+                    ->visible(function ($record) use ($tipe) {
+                        if ($record->diterima_oleh !== '-' || $record->isDitolak()) {
+                            return false;
+                        }
+
+                        return $record->tujuan === (self::TIPE_TO_TUJUAN[$tipe] ?? null);
+                    })
+                    ->action(function ($record, array $data) {
+                        try {
+                            DB::transaction(function () use ($record, $data) {
+                                $fresh = SerahTerimaHp::lockForUpdate()->find($record->id);
+
+                                if (! $fresh || $fresh->diterima_oleh !== '-' || $fresh->ditolak_oleh) {
+                                    throw new \RuntimeException('Barang ini sudah diproses (diterima/ditolak) sebelumnya.');
+                                }
+
+                                $fresh->update([
+                                    'ditolak_oleh' => Auth::user()->name,
+                                    'alasan_tolak' => $data['alasan_tolak'],
+                                    'ditolak_at' => now(),
+                                    'status' => 'Ditolak',
+                                ]);
+                            });
+
+                            Notification::make()
+                                ->title('Barang Ditolak')
+                                ->body('Item tidak akan muncul lagi di daftar Serah Terima dan stok gudang asal tidak berubah.')
+                                ->warning()
                                 ->send();
 
                         } catch (\Throwable $e) {

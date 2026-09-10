@@ -42,6 +42,17 @@ class TargetForm
                     ->dehydrated()
                     ->reactive(),
 
+                Select::make('id_kategori_barang')
+                    ->label('Jenis Barang')
+                    ->relationship('kategoriBarang', 'nama_kategori')
+                    ->searchable()
+                    ->preload()
+                    ->nullable(),
+
+                TextInput::make('grade')
+                    ->label('KW')
+                    ->maxLength(50)
+                    ->nullable(),
 
                 TextInput::make('target')
                     ->label('Target')
@@ -59,14 +70,14 @@ class TargetForm
                     ->options(self::getHourOptions())
                     ->required()
                     ->reactive()
-                    ->afterStateUpdated(fn ($state, $get, $set) => self::updateJamKerja($get, $set)),
+                    ->afterStateUpdated(fn($state, $get, $set) => self::updateJamKerja($get, $set)),
 
                 Select::make('jam_selesai')
                     ->label('Jam Selesai')
                     ->options(self::getHourOptions())
                     ->required()
                     ->reactive()
-                    ->afterStateUpdated(fn ($state, $get, $set) => self::updateJamKerja($get, $set)),
+                    ->afterStateUpdated(fn($state, $get, $set) => self::updateJamKerja($get, $set)),
 
                 TextInput::make('jam')
                     ->label('Jam Kerja (Akumulasi)')
@@ -103,11 +114,11 @@ class TargetForm
             try {
                 $start = \Carbon\Carbon::createFromFormat('H:i:s', $mulai);
                 $end = \Carbon\Carbon::createFromFormat('H:i:s', $selesai);
-                
+
                 if ($end->lessThan($start)) {
                     $end->addDay();
                 }
-                
+
                 $diff = $start->diffInHours($end);
                 $set('jam', $diff);
             } catch (\Exception $e) {

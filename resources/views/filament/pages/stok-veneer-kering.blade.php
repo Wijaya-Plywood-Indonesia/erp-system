@@ -117,7 +117,13 @@
                     </thead>
                     <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
                         @foreach ($rows as $row)
-                        <tr class="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                        @php
+                            $stokMinus = (float) $row->total_lembar < 0 || (float) $row->stok_m3_sesudah < 0;
+                        @endphp
+                        <tr @class([
+                            'group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors',
+                            'bg-red-50/40 dark:bg-red-900/10' => $stokMinus,
+                        ])>
                             <td
                                 class="px-6 py-4 text-center text-gray-300 dark:text-gray-600 font-mono text-xs">
                                 {{ $loop->iteration }}
@@ -168,9 +174,16 @@
                             $row->kw,
                             );
                             @endphp
-                            <td
-                                class="px-6 py-4 text-center font-black text-gray-700 dark:text-gray-300 tabular-nums">
+                            <td @class([
+                                'px-6 py-4 text-center font-black tabular-nums',
+                                'text-red-600 dark:text-red-400' => $stokMinus,
+                                'text-gray-700 dark:text-gray-300' => !$stokMinus,
+                            ])>
                                 {{ number_format($row->total_lembar, 0) }}
+                                @if ($stokMinus)
+                                <div class="text-[8px] font-black uppercase tracking-tight text-red-500 mt-0.5">
+                                    ⚠ Stok Minus</div>
+                                @endif
 
                                 @if ($wipRow > 0)
                                 <div class="mt-1.5 flex flex-col items-center gap-1">
@@ -195,8 +208,11 @@
                                 @endif
                             </td>
                             @if ($showM3)
-                            <td
-                                class="px-6 py-4 text-right font-mono font-black text-blue-600 dark:text-blue-400 tabular-nums whitespace-nowrap">
+                            <td @class([
+                                'px-6 py-4 text-right font-mono font-black tabular-nums whitespace-nowrap',
+                                'text-red-600 dark:text-red-400' => $stokMinus,
+                                'text-blue-600 dark:text-blue-400' => !$stokMinus,
+                            ])>
                                 {{ number_format($row->stok_m3_sesudah, 4) }} <span
                                     class="text-[9px] font-normal uppercase">m³</span>
                             </td>
@@ -210,8 +226,11 @@
                             </td>
                             @endif
                             @if ($showNilaiStok)
-                            <td
-                                class="px-6 py-4 text-right font-black text-gray-800 dark:text-gray-200 tabular-nums whitespace-nowrap">
+                            <td @class([
+                                'px-6 py-4 text-right font-black tabular-nums whitespace-nowrap',
+                                'text-red-600 dark:text-red-400' => $stokMinus,
+                                'text-gray-800 dark:text-gray-200' => !$stokMinus,
+                            ])>
                                 Rp {{ number_format($row->nilai_stok_sesudah ?? 0, 0, ',', '.') }}
                             </td>
                             @endif

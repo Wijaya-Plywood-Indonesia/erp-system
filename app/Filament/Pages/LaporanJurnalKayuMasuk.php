@@ -22,6 +22,7 @@ class LaporanJurnalKayuMasuk extends Page implements HasForms
     use InteractsWithForms;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
+    protected static bool $shouldRegisterNavigation = false;
 
     protected string $view = 'filament.pages.laporan-jurnal-kayu-masuk';
 

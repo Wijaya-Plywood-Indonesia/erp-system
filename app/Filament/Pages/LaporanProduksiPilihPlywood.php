@@ -27,6 +27,7 @@ class LaporanProduksiPilihPlywood extends Page implements HasForms
     protected static ?string $title = 'Laporan Produksi Pilih Plywood';
     protected static ?string $navigationLabel = 'Laporan Produksi Pilih Plywood';
     protected static ?int $navigationSort = 17;
+    protected static bool $shouldRegisterNavigation = false;
 
     /**
      * Data laporan produksi Pilih Plywood (terdiri dari detail dan summary).

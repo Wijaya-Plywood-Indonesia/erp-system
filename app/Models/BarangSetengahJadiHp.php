@@ -13,6 +13,12 @@ class BarangSetengahJadiHp extends Model
         'id_ukuran',
         'id_grade',
         'keterangan',
+        'harga',
+        'merek',
+    ];
+
+    protected $casts = [
+        'harga' => 'decimal:2',
     ];
 
     public function ukuran()
@@ -41,21 +47,21 @@ class BarangSetengahJadiHp extends Model
     }
 
     public function scopeKategori($query, string $keyword)
-{
-    return $query->whereHas('grade.kategoriBarang', function ($q) use ($keyword) {
-        $q->where('nama_kategori', 'like', "%{$keyword}%");
-    });
-}
+    {
+        return $query->whereHas('grade.kategoriBarang', function ($q) use ($keyword) {
+            $q->where('nama_kategori', 'like', "%{$keyword}%");
+        });
+    }
 
-public function getLabelAttribute(): string
-{
-    $kategori = $this->grade?->kategoriBarang?->nama_kategori ?? '-';
-    $jenis = $this->jenisBarang?->nama_jenis_barang;   // kode spesies, mis. "S"
-    $ukuran = $this->ukuran?->nama_ukuran;
-    $grade = $this->grade?->nama_grade;
+    public function getLabelAttribute(): string
+    {
+        $kategori = $this->grade?->kategoriBarang?->nama_kategori ?? '-';
+        $jenis = $this->jenisBarang?->nama_jenis_barang;
+        $ukuran = $this->ukuran?->nama_ukuran;
+        $grade = $this->grade?->nama_grade;
 
-    $parts = array_filter([$kategori, $jenis, $ukuran, $grade ? "{$grade}" : null]);
+        $parts = array_filter([$kategori, $jenis, $ukuran, $grade ? "{$grade}" : null]);
 
-    return implode(' - ', $parts);
-}
+        return implode(' - ', $parts);
+    }
 }

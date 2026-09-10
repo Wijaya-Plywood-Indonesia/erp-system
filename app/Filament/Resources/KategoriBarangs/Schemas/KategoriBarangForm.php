@@ -15,6 +15,14 @@ class KategoriBarangForm
                     ->label('Nama Kategori')
                     ->required()
                     ->maxLength(255)
+                    ->unique(
+                        table: 'kategori_barang',
+                        column: 'nama_kategori',
+                        ignoreRecord: true, 
+                    )
+                    ->validationMessages([
+                        'unique' => 'Nama kategori ini sudah terdaftar, silakan gunakan nama lain.',
+                    ]),
             ]);
     }
 }

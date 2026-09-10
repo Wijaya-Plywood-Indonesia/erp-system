@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ProduksiDempuls\Tables;
 
 use App\Models\ProduksiDempul;
+use App\Services\ProductionAccessService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -21,8 +22,9 @@ class ProduksiDempulsTable
         $kolomTanggal = ProduksiDempul::kolomTanggalAktif();
 
         return $table
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_produksi', 7))
             ->columns([
-                TextColumn::make('tanggal_dempul')
+                TextColumn::make('tanggal_produksi')
                     ->label('Tanggal Dempul')
                     ->date('d/m/Y')
                     ->sortable(query: function ($query, string $direction) use ($kolomTanggal) {
@@ -45,9 +47,9 @@ class ProduksiDempulsTable
             ])
             ->recordActions([
                 Action::make('kendala')
-                    ->label(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
-                    ->icon(fn ($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
-                    ->color(fn ($record) => $record->kendala ? 'info' : 'warning')
+                    ->label(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->icon(fn($record) => $record->kendala ? 'heroicon-o-pencil-square' : 'heroicon-o-plus')
+                    ->color(fn($record) => $record->kendala ? 'info' : 'warning')
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Kendala')
@@ -69,7 +71,7 @@ class ProduksiDempulsTable
                             ->success()
                             ->send();
                     })
-                    ->modalHeading(fn ($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
+                    ->modalHeading(fn($record) => $record->kendala ? 'Perbarui Kendala' : 'Tambah Kendala')
                     ->modalSubmitActionLabel('Simpan'),
 
                 ViewAction::make(),

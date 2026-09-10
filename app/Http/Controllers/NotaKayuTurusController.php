@@ -168,85 +168,78 @@ class NotaKayuTurusController extends Controller
             ];
         }
 
-        $MAX_UNITS_PER_PAGE = 66; // Max units in 3 columns of 22 units each
+        // Setiap halaman selalu punya TEPAT 3 kolom. Setiap grup (atau potongannya)
+        // dicek muat/tidak terhadap kapasitas KOLOM saat ini (bukan kapasitas halaman),
+        // supaya tidak ada grup yang tembus melebihi tinggi kolom 125mm.
+        $MAX_UNITS_PER_COL = 22; // ~22 unit (baris + header + subtotal) muat di tinggi kolom 125mm
+
         $pages = [];
-        $currentPageGroups = [];
-        $currentUnits = 0;
+        $currentPage = [[], [], []]; // 3 kolom kosong
+        $colIndex = 0;
+        $colUnits = 0;
 
         foreach ($processedGroups as $group) {
-            $rows = $group['rows'];
-            $totalRows = count($rows);
-            $groupUnits = 5 + $totalRows;
+            $remainingRows = $group['rows'];
+            $isFirstPart = true;
 
-            if ($currentUnits + $groupUnits <= $MAX_UNITS_PER_PAGE) {
-                $currentPageGroups[] = [
-                    'kodeLahan' => $group['kodeLahan'],
-                    'grade' => $group['grade'],
-                    'panjang' => $group['panjang'],
-                    'jenis' => $group['jenis'],
-                    'rows' => $rows,
-                    'subBatang' => $group['subBatang'],
-                    'is_continued' => false,
-                ];
-                $currentUnits += $groupUnits;
-            } else {
-                $spaceLeft = $MAX_UNITS_PER_PAGE - $currentUnits;
-                if ($spaceLeft >= 8 && $totalRows > 3) {
-                    $rowsForCurrentPage = $spaceLeft - 5;
-                    $rowsForCurrentPage = max(2, min($rowsForCurrentPage, $totalRows - 2));
+            // Loop ini memastikan grup besar dipotong jadi beberapa bagian
+            // sampai semua baris grup tersebut habis ditempatkan.
+            do {
+                $headerUnits = 5;
+                $capacityLeft = $MAX_UNITS_PER_COL - $colUnits;
+                $rowsCapacity = $capacityLeft - $headerUnits;
 
-                    $part1Rows = array_slice($rows, 0, $rowsForCurrentPage);
-                    $part2Rows = array_slice($rows, $rowsForCurrentPage);
-
-                    $subBatang1 = collect($part1Rows)->sum('batang');
-                    $subBatang2 = collect($part2Rows)->sum('batang');
-
-                    $currentPageGroups[] = [
-                        'kodeLahan' => $group['kodeLahan'],
-                        'grade' => $group['grade'],
-                        'panjang' => $group['panjang'],
-                        'jenis' => $group['jenis'],
-                        'rows' => $part1Rows,
-                        'subBatang' => $subBatang1,
-                        'is_continued' => false,
-                        'show_subtotal' => false,
-                    ];
-
-                    $pages[] = $currentPageGroups;
-
-                    $currentPageGroups = [];
-                    $currentPageGroups[] = [
-                        'kodeLahan' => $group['kodeLahan'],
-                        'grade' => $group['grade'],
-                        'panjang' => $group['panjang'],
-                        'jenis' => $group['jenis'],
-                        'rows' => $part2Rows,
-                        'subBatang' => $subBatang2,
-                        'is_continued' => true,
-                        'show_subtotal' => true,
-                    ];
-                    $currentUnits = 5 + count($part2Rows);
-                } else {
-                    if (!empty($currentPageGroups)) {
-                        $pages[] = $currentPageGroups;
+                // Kolom saat ini tidak cukup bahkan untuk header -> pindah kolom/halaman
+                if ($rowsCapacity < 1) {
+                    $colIndex++;
+                    if ($colIndex > 2) {
+                        $pages[] = $currentPage;
+                        $currentPage = [[], [], []];
+                        $colIndex = 0;
                     }
-                    $currentPageGroups = [];
-                    $currentPageGroups[] = [
-                        'kodeLahan' => $group['kodeLahan'],
-                        'grade' => $group['grade'],
-                        'panjang' => $group['panjang'],
-                        'jenis' => $group['jenis'],
-                        'rows' => $rows,
-                        'subBatang' => $group['subBatang'],
-                        'is_continued' => false,
-                    ];
-                    $currentUnits = $groupUnits;
+                    $colUnits = 0;
+                    continue;
                 }
-            }
+
+                if (count($remainingRows) <= $rowsCapacity) {
+                    $partRows = $remainingRows;
+                    $remainingRows = [];
+                } else {
+                    $partRows = array_slice($remainingRows, 0, $rowsCapacity);
+                    $remainingRows = array_slice($remainingRows, $rowsCapacity);
+                }
+
+                $isLastPart = empty($remainingRows);
+
+                $currentPage[$colIndex][] = [
+                    'kodeLahan'      => $group['kodeLahan'],
+                    'grade'          => $group['grade'],
+                    'panjang'        => $group['panjang'],
+                    'jenis'          => $group['jenis'],
+                    'rows'           => $partRows,
+                    'subBatang'      => collect($partRows)->sum('batang'),
+                    'is_continued'   => !$isFirstPart,
+                    'show_subtotal'  => $isLastPart,
+                ];
+
+                $colUnits += $headerUnits + count($partRows);
+                $isFirstPart = false;
+
+                // Masih ada sisa baris grup ini -> kolom ini dianggap penuh, lanjut ke kolom berikutnya
+                if (!$isLastPart) {
+                    $colIndex++;
+                    if ($colIndex > 2) {
+                        $pages[] = $currentPage;
+                        $currentPage = [[], [], []];
+                        $colIndex = 0;
+                    }
+                    $colUnits = 0;
+                }
+            } while (!empty($remainingRows));
         }
 
-        if (!empty($currentPageGroups)) {
-            $pages[] = $currentPageGroups;
+        if (!empty($currentPage[0]) || !empty($currentPage[1]) || !empty($currentPage[2])) {
+            $pages[] = $currentPage;
         }
 
         return view('nota-kayu.turus2', [

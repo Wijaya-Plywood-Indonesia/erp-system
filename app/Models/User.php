@@ -23,6 +23,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'id_pegawai',
     ];
 
     /**
@@ -55,5 +56,10 @@ class User extends Authenticatable
     public function notaBarangKeluarDivalidasi()
     {
         return $this->hasMany(NotaBarangKeluar::class, 'divalidasi_oleh');
+    }
+
+    public function pegawai()
+    {
+        return $this->belongsTo(Pegawai::class, 'id_pegawai');
     }
 }

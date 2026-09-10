@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\KayuMasuks\Tables;
 
+use App\Services\ProductionAccessService;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -34,6 +35,7 @@ class KayuMasuksTable
             return $nota->status !== 'Belum Diperiksa';
         };
         return $table
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tgl_kayu_masuk'))
             ->columns([
                 TextColumn::make('jenis_dokumen_angkut')
                     ->searchable(),

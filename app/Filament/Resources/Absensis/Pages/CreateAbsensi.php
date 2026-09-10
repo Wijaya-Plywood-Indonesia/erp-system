@@ -49,90 +49,75 @@ class CreateAbsensi extends CreateRecord
 
             foreach ($lines as $line) {
                 $trimmedLine = trim($line);
-                // Abaikan baris kosong atau baris header tabel
                 if (empty($trimmedLine) || str_contains($trimmedLine, 'DateTime') || str_contains($trimmedLine, 'Kodep')) {
                     continue;
                 }
 
-                // Pecah berdasarkan TAB (\t) dahulu agar nama yang mengandung spasi tidak pecah.
-                // Jika tidak ada TAB, baru pecah berdasarkan spasi reguler.
-                if (str_contains($trimmedLine, "\t")) {
-                    $parts = explode("\t", $trimmedLine);
+                $parts = str_contains($trimmedLine, "\t")
+                    ? explode("\t", $trimmedLine)
+                    : preg_split('/\s+/', $trimmedLine);
+                $parts = array_values(array_filter(array_map('trim', $parts), fn($v) => $v !== ''));
+
+                if (count($parts) < 2) continue;
+
+                // Deteksi format lewat JUMLAH KOLOM, bukan nebak posisi tanggal.
+                if (count($parts) >= 7 && preg_match('/^\d+$/', $parts[2])) {
+                    // Format A (txt/GLogData): EnNo di index 2, selalu 9 digit
+                    $rawCode        = $parts[2];
+                    $dateTimeString = $parts[6];
+                } elseif (preg_match('/^\d{4}[-\/]\d{2}[-\/]\d{2}/', $parts[1] ?? '')) {
+                    // Format B (dat/kantor): kode di index 0, sudah bersih
+                    $rawCode        = $parts[0];
+                    $dateTimeString = $parts[1];
                 } else {
-                    $parts = preg_split('/\s+/', $trimmedLine);
+                    continue; // baris tak dikenali, lewati
                 }
 
-                // Bersihkan spasi sisa di setiap elemen dan rapikan kembali urutan indeks array-nya
-                $parts = array_values(array_filter(array_map('trim', $parts)));
+                if (!preg_match('/^\d+$/', $rawCode)) continue;
 
-                // CARI POSISI KOLOM TANGGAL SECARA DINAMIS
-                $dateIndex = null;
-                foreach ($parts as $i => $value) {
-                    if (preg_match('/\d{4}[\/\-]\d{2}[\/\-]\d{2}/', $value)) {
-                        $dateIndex = $i;
-                        break;
-                    }
-                }
+                // Kode 5 digit berawalan 99 = event sistem/perangkat, bukan pegawai
+                if (strlen($rawCode) === 5 && str_starts_with($rawCode, '99')) continue;
 
-                // Jika baris ini tidak mengandung format tanggal, skip
-                if ($dateIndex === null) continue;
+                // Normalisasi ke INTEGER murni — ini kunci penyambungan ke tabel Pegawai
+                $empCode = (count($parts) >= 7 && strlen($rawCode) > 4)
+                    ? (int) substr($rawCode, -4)   // format A: ambil 4 digit terakhir dari EnNo
+                    : (int) $rawCode;              // format B: sudah bersih
+
+                if ($empCode <= 0) continue;
 
                 try {
-                    // Ekstrak string Datetime (Mendukung tanggal & jam gabung maupun terpisah)
-                    $dateTimeString = $parts[$dateIndex];
-                    if (isset($parts[$dateIndex + 1]) && preg_match('/^\d{2}[\:\.]\d{2}/', $parts[$dateIndex + 1])) {
-                        $dateTimeString .= ' ' . $parts[$dateIndex + 1];
-                    }
-
                     $carbonLog = Carbon::parse(str_replace('/', '-', $dateTimeString), 'Asia/Jakarta');
-                    $dateStr   = $carbonLog->format('Y-m-d');
-                    $timeStr   = $carbonLog->format('H:i:s');
-
-                    // Filter Tanggal: Hanya proses data tanggal target dan keesokan harinya
-                    if (!in_array($dateStr, [$targetDate, $nextDate])) continue;
-
-                    // AMBIL KODE PEGAWAI (Ambil 4 Angka Terakhir secara absolut dari Kolom EnNo)
-                    $empCode = null;
-
-
-                    // Strategi Utama: Berdasarkan berkas GLogData, EnNo berada di indeks ke-2
-                    if (isset($parts[2]) && is_numeric($parts[2]) && strlen($parts[2]) >= 4) {
-                        $fourDigits = substr($parts[2], -4); // Potong ambil 4 angka terakhir
-                        $empCode    = ltrim($fourDigits, '0'); // Bersihkan nol di depan
-                    } else {
-                        // Fallback: Jika indeks bergeser, sisir elemen angka di awal baris sebelum kolom tanggal
-                        foreach ($parts as $k => $part) {
-                            if ($k >= $dateIndex) break;
-                            if (is_numeric($part) && strlen($part) >= 4) {
-                                $fourDigits = substr($part, -4);
-                                $empCode    = ltrim($fourDigits, '0');
-                            }
-                        }
-                    }
-
-                    $rawFirst = ltrim($parts[0] ?? '', '0');
-                    if (str_starts_with($rawFirst, '99') && strlen($rawFirst) === 5) continue;
-
-                    // Pastikan Kode Pegawai, Jam, dan format kodenya murni angka
-                    if (!$empCode || !$timeStr || !is_numeric($empCode)) continue;
-
-
-                    // Masukkan ke wadah merge gabungan multi-kantor berdasarkan kode pegawai yang sama
-                    $rawLogs[$empCode][] = [
-                        'date' => $dateStr,
-                        'time' => $timeStr,
-                        'full' => $carbonLog,
-                    ];
                 } catch (\Exception $e) {
                     continue;
                 }
+
+                $dateStr = $carbonLog->format('Y-m-d'); // format tanggal diseragamkan di sini
+                $timeStr = $carbonLog->format('H:i:s');
+
+                if (!in_array($dateStr, [$targetDate, $nextDate])) continue;
+
+                $rawLogs[$empCode][] = [
+                    'date' => $dateStr,
+                    'time' => $timeStr,
+                    'full' => $carbonLog,
+                ];
             }
         }
 
         // ===============================================
 
         $semuaPegawai = Pegawai::all()
-            ->keyBy(fn($p) => ltrim(trim($p->kode_pegawai), '0'));
+            ->keyBy(fn($p) => (int) $p->kode_pegawai);
+
+        $pegawaiTerdeteksi = $semuaPegawai->only(array_keys($rawLogs));       // Collection<Pegawai>
+        $kodeTidakDikenal  = array_diff(array_keys($rawLogs), $pegawaiTerdeteksi->keys()->all());
+
+        if (!empty($kodeTidakDikenal)) {
+            Log::warning("Kode pegawai tidak ditemukan di master data pada $targetDate", [
+                'kode' => $kodeTidakDikenal,
+            ]);
+        }
+
         // Pre-load shift produksi untuk targetDate sekaligus
         $shiftDryer   = ProduksiPressDryer::whereDate('tanggal_produksi', $targetDate)
             ->with('detailPegawais')
@@ -157,7 +142,6 @@ class CreateAbsensi extends CreateRecord
             $forcedShift = null;
 
             if ($pegawai) {
-                // Cek shift dari data produksi yang sudah di-preload
                 $shifts = array_filter([
                     $shiftDryer->first(
                         fn($r) => $r->detailPegawais->contains(fn($d) => (int) $d->id_pegawai === (int) $pegawai->id)
@@ -181,27 +165,17 @@ class CreateAbsensi extends CreateRecord
                     }
                 }
 
-                // Fallback ke jadwal master pegawai jika tidak ada di tabel produksi
                 if (!$forcedShift) {
                     $jamMasukSistem = $pegawai->jam_masuk_sistem ?? '07:00:00';
                     if (Carbon::parse($jamMasukSistem)->hour >= 14) {
                         $forcedShift = 'MALAM';
                     } else {
-                        // PENTING (perbaikan): sebelumnya cabang else ini tidak ada, jadi
-                        // kalau jam_masuk_sistem menunjukkan PAGI, $forcedShift tetap null
-                        // dan pairing terpaksa menebak lagi dari pola scan -- padahal kita
-                        // sudah tahu jawabannya dari data pegawai. Sekarang kita tegaskan
-                        // eksplisit jadi 'PAGI' juga, bukan cuma diam-diam MALAM saja yang
-                        // ditegaskan.
                         $forcedShift = 'PAGI';
                     }
                 }
             }
 
-            // FIX: $forcedShift sebelumnya dihitung di atas tapi TIDAK PERNAH dikirim ke
-            // service (parameter ini hilang dari pemanggilan). Akibatnya pairing selalu
-            // menebak shift dari pola jam scan sendiri, padahal kita sudah punya jawaban
-            // yang jauh lebih akurat dari data produksi / jadwal pegawai. Sekarang dikirim.
+            // INI YANG SEMPAT HILANG — wajib ada supaya pairing beneran jalan
             $result = $pairingService->pairEmployeeLogs(
                 entries: $entries,
                 targetDate: $targetDate,
@@ -213,16 +187,46 @@ class CreateAbsensi extends CreateRecord
                 DetailAbsensi::updateOrCreate(
                     ['kode_pegawai' => $empCode, 'tanggal' => $targetDate],
                     [
-                        'id_absensi' => $record->id,
-                        'jam_masuk'  => $result['jam_masuk'],
-                        'jam_pulang' => $result['jam_pulang'],
-                        'shift'      => $result['shift'],
-                        'status'     => $result['status'],
-                        'catatan'    => $result['catatan'],
+                        'id_absensi'   => $record->id,
+                        'id_pegawai'   => $pegawai->id,
+                        'nama_pegawai' => $pegawai->nama_pegawai,
+                        'jam_masuk'    => $result['jam_masuk'],
+                        'jam_pulang'   => $result['jam_pulang'],
+                        'shift'        => $result['shift'],
+                        'status'       => $result['status'],
+                        'catatan'      => $result['catatan'],
                     ]
                 );
                 $totalProcessed++;
             }
+        }
+
+        // ================================================
+        // STEP 4: MATERIALIZE — di LUAR loop, jalan SEKALI setelah semua
+        // pegawai yang scan selesai diproses
+        // ================================================
+        $pegawaiSudahDiproses = DetailAbsensi::where('id_absensi', $record->id)
+            ->pluck('id_pegawai')
+            ->all();
+
+        $pegawaiBelumAbsen = $semuaPegawai->reject(
+            fn($p) => in_array($p->id, $pegawaiSudahDiproses)
+        );
+
+        foreach ($pegawaiBelumAbsen as $pegawai) {
+            DetailAbsensi::updateOrCreate(
+                ['kode_pegawai' => (int) $pegawai->kode_pegawai, 'tanggal' => $targetDate],
+                [
+                    'id_absensi'   => $record->id,
+                    'id_pegawai'   => $pegawai->id,
+                    'nama_pegawai' => $pegawai->nama_pegawai,
+                    'jam_masuk'    => null,
+                    'jam_pulang'   => null,
+                    'shift'        => null,
+                    'status'       => 'Tidak Absen',
+                    'catatan'      => 'Tidak ada data scan pada tanggal ini',
+                ]
+            );
         }
 
         // Kirimkan notifikasi keberhasilan di Filament v4

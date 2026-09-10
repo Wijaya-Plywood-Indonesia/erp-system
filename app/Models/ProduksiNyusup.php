@@ -2,16 +2,19 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
 
 class ProduksiNyusup extends Model
 {
+    use HasRouteUuid;
     protected $table = 'produksi_nyusup';
 
     protected $fillable = [
         'tanggal_produksi',
         'kendala',
+        'uuid'
     ];
 
     public function pegawaiNyusup()

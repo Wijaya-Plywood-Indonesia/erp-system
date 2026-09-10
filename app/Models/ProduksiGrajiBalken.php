@@ -2,15 +2,18 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 
 class ProduksiGrajiBalken extends Model
 {
+    use HasRouteUuid;
     protected $table = 'produksi_graji_balken';
 
     protected $fillable = [
         'tanggal_produksi',
         'kendala',
+        'uuid'
     ];
 
     public function pegawaiGrajiBalken()

@@ -6,6 +6,7 @@ use App\Models\JenisKayu;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Illuminate\Validation\Rules\Unique;
 
 class HargaVeneerForm
 {
@@ -25,7 +26,18 @@ class HargaVeneerForm
                     ])
                     ->native(false)
                     ->required()
-                    ->placeholder('Pilih Ukuran/Posisi Veneer'),
+                    ->live()
+                    ->placeholder('Pilih Ukuran/Posisi Veneer')
+                    ->unique(
+                        table: 'harga_veneers',
+                        column: 'ukuran',
+                        ignoreRecord: true,
+                        modifyRuleUsing: fn (Unique $rule, $get) => $rule
+                            ->where('id_jenis_kayu', $get('id_jenis_kayu')),
+                    )
+                    ->validationMessages([
+                        'unique' => 'Harga untuk ukuran dan jenis kayu ini sudah ada.',
+                    ]),
 
                 Select::make('id_jenis_kayu')
                     ->label('Jenis Kayu')
@@ -42,6 +54,7 @@ class HargaVeneerForm
                     ->preload()
                     ->native(false)
                     ->required()
+                    ->live() // 🔥 WAJIB juga: biar dua arah saling ke-trigger
                     ->placeholder('Pilih Jenis Kayu'),
 
                 TextInput::make('harga_basah')

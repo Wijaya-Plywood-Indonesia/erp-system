@@ -14,6 +14,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Grouping\Group;
@@ -90,7 +91,7 @@ class DetailTurusanKayusTable
                     ->searchable(query: function ($query, string $search) {
                         $query->where('panjang', 'like', "%{$search}%")
                             ->orWhere('grade', 'like', "%{$search}%")
-                            ->orWhereHas('jenisKayu', fn ($q) => $q->where('nama_kayu', 'like', "%{$search}%"));
+                            ->orWhereHas('jenisKayu', fn($q) => $q->where('nama_kayu', 'like', "%{$search}%"));
                     }),
 
                 TextColumn::make('diameter')
@@ -106,7 +107,7 @@ class DetailTurusanKayusTable
                     ->alignRight()
                     ->color('primary')
                     ->weight('bold')
-                    ->formatStateUsing(fn ($state) => $state > 0 ? number_format($state, 0, ',', '.') : '-')
+                    ->formatStateUsing(fn($state) => $state > 0 ? number_format($state, 0, ',', '.') : '-')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 // ✅ DIUBAH: tidak lagi hitung manual, mengikuti pola NotaKayuController
@@ -115,7 +116,7 @@ class DetailTurusanKayusTable
                 // dipakai/ditampilkan di Nota Kayu, karena sumbernya satu (model accessor).
                 TextColumn::make('kubikasi')
                     ->label('Kubikasi')
-                    ->state(fn ($record) => $record->kubikasi)
+                    ->state(fn($record) => $record->kubikasi)
                     ->numeric(decimalPlaces: 6)
                     ->suffix(' m³')
                     ->alignRight()
@@ -144,18 +145,18 @@ class DetailTurusanKayusTable
                         // bukan dihitung ulang manual, agar konsisten dengan Nota Kayu.
                         if ($records instanceof Collection && $records->isNotEmpty()) {
                             $totalBatang = $records->count();
-                            $totalKubikasi = $records->sum(fn ($r) => $r->kubikasi);        // ← round() dihapus
+                            $totalKubikasi = $records->sum(fn($r) => $r->kubikasi);        // ← round() dihapus
                         } else {
                             $parentId = $record->id_kayu_masuk ?? $record->kayu_masuk_id;
                             $query = DetailTurusanKayu::where('id_kayu_masuk', $parentId)
                                 ->where('lahan_id', $record->lahan_id)
                                 ->get();
                             $totalBatang = $query->count();
-                            $totalKubikasi = $query->sum(fn ($r) => $r->kubikasi);          // ← round() dihapus
+                            $totalKubikasi = $query->sum(fn($r) => $r->kubikasi);          // ← round() dihapus
                         }
 
-                        return "{$kode} {$nama} {$jenis_kayu} - {$totalBatang} batang (".
-                            number_format($totalKubikasi, 4, ',', '.').' m³)';
+                        return "{$kode} {$nama} {$jenis_kayu} - {$totalBatang} batang (" .
+                            number_format($totalKubikasi, 4, ',', '.') . ' m³)';
                     }),
             ])
             ->defaultGroup('lahan.kode_lahan')
@@ -180,10 +181,10 @@ class DetailTurusanKayusTable
                     ->visible($canPerformAction)
                     ->modalHeading('Input Turusan (Tanpa Sinyal)')
                     ->modalWidth('2xl')
-                    ->modalContent(fn () => view('filament.components.offline-turusan-modal', [
+                    ->modalContent(fn() => view('filament.components.offline-turusan-modal', [
                         'parentId' => $ownerRecord?->id,
-                        'optionsLahan' => Lahan::get()->mapWithKeys(fn ($l) => [$l->id => "{$l->kode_lahan} - {$l->nama_lahan}"]),
-                        'optionsJenis' => JenisKayu::get()->mapWithKeys(fn ($j) => [$j->id => "{$j->kode_kayu} - {$j->nama_kayu}"]),
+                        'optionsLahan' => Lahan::get()->mapWithKeys(fn($l) => [$l->id => "{$l->kode_lahan} - {$l->nama_lahan}"]),
+                        'optionsJenis' => JenisKayu::get()->mapWithKeys(fn($j) => [$j->id => "{$j->kode_kayu} - {$j->nama_kayu}"]),
                     ]))
                     ->modalSubmitAction(false)
                     ->modalCancelAction(false),
@@ -246,7 +247,7 @@ class DetailTurusanKayusTable
                                 ->title("Sinkronisasi Selesai: {$berhasil} batang diperbarui")
                                 ->body(
                                     $gagal > 0
-                                        ? "{$gagal} tidak ditemukan harganya: ".implode(', ', array_slice($tidakAda, 0, 5)).($gagal > 5 ? '...' : '')
+                                        ? "{$gagal} tidak ditemukan harganya: " . implode(', ', array_slice($tidakAda, 0, 5)) . ($gagal > 5 ? '...' : '')
                                         : 'Semua harga berhasil diperbarui dari master.'
                                 )
                                 ->success()
@@ -262,7 +263,70 @@ class DetailTurusanKayusTable
 
             ])
             ->recordActions([
-                EditAction::make()->visible($canPerformAction),
+                EditAction::make()
+                    ->visible($canPerformAction)
+                    ->form(fn($form) => $form->schema([
+                        Select::make('lahan_id')
+                            ->relationship('lahan', 'kode_lahan')
+                            ->required(),
+                        Select::make('jenis_kayu_id')
+                            ->relationship('jenisKayu', 'nama_kayu')
+                            ->required(),
+                        TextInput::make('panjang')
+                            ->numeric()
+                            ->required(),
+                        TextInput::make('diameter')
+                            ->numeric()
+                            ->required(),
+
+                        // FIELD HARGA SAAT INI (Read-only)
+                        TextInput::make('harga')
+                            ->label('Harga Saat Ini (Rp)')
+                            ->numeric()
+                            ->prefix('Rp')
+                            ->disabled()
+                            ->visible($isAdmin),
+
+                        // PENYESUAIAN HARGA (Khusus Super Admin)
+                        Select::make('operasi_harga')
+                            ->label('Penyesuaian Harga')
+                            ->options([
+                                'tetap' => '-- Jangan Ubah Harga --',
+                                'tambah' => 'Tambah Harga (+)',
+                                'kurang' => 'Kurangi Harga (-)',
+                            ])
+                            ->default('tetap')
+                            ->dehydrated(false)
+                            ->visible($isAdmin),
+
+                        TextInput::make('nominal_harga')
+                            ->label('Nominal Penyesuaian (Rp)')
+                            ->numeric()
+                            ->prefix('Rp')
+                            ->placeholder('Masukkan nominal...')
+                            ->dehydrated(false)
+                            ->visible(fn($get) => $isAdmin && $get('operasi_harga') !== 'tetap'),
+                    ]))
+                    // GUNAKAN USING() UNTUK PENGOLAHAN DATA EDITACTION
+                    ->using(function (DetailTurusanKayu $record, array $data) use ($isAdmin): DetailTurusanKayu {
+                        if ($isAdmin && isset($data['operasi_harga']) && $data['operasi_harga'] !== 'tetap') {
+                            $nominal = (float) ($data['nominal_harga'] ?? 0);
+                            $hargaLama = (float) ($record->harga ?? 0);
+
+                            if ($data['operasi_harga'] === 'tambah') {
+                                $data['harga'] = $hargaLama + $nominal;
+                            } elseif ($data['operasi_harga'] === 'kurang') {
+                                $data['harga'] = max(0, $hargaLama - $nominal);
+                            }
+                        }
+
+                        // Hapus field temporary sebelum disave
+                        unset($data['operasi_harga'], $data['nominal_harga']);
+
+                        $record->update($data);
+
+                        return $record;
+                    }),
                 DeleteAction::make()->visible($canPerformAction),
             ])
             ->toolbarActions([
@@ -274,7 +338,7 @@ class DetailTurusanKayusTable
                         ->schema([
                             Select::make('lahan_id')->options(Lahan::pluck('kode_lahan', 'id'))->required(),
                         ])
-                        ->action(fn (array $data, Collection $records) => $records->each->update(['lahan_id' => $data['lahan_id']]))
+                        ->action(fn(array $data, Collection $records) => $records->each->update(['lahan_id' => $data['lahan_id']]))
                         ->deselectRecordsAfterCompletion(),
 
                     BulkAction::make('update_panjang')
@@ -283,7 +347,7 @@ class DetailTurusanKayusTable
                         ->schema([
                             Select::make('panjang')->label('Panjang Baru')->options([130 => '130', 260 => '260'])->required(),
                         ])
-                        ->action(fn (array $data, Collection $records) => $records->each->update(['panjang' => $data['panjang']]))
+                        ->action(fn(array $data, Collection $records) => $records->each->update(['panjang' => $data['panjang']]))
                         ->deselectRecordsAfterCompletion(),
 
                     BulkAction::make('update_jenis_kayu')
@@ -302,6 +366,49 @@ class DetailTurusanKayusTable
                             ]);
                         })
                         ->deselectRecordsAfterCompletion(),
+                    BulkAction::make('update_harga')
+                        ->label('Penyesuaian Harga (+ / -)')
+                        ->icon('heroicon-o-currency-dollar')
+                        ->color('success')
+                        ->schema([
+                            Select::make('operasi')
+                                ->label('Tipe Penyesuaian')
+                                ->options([
+                                    'tambah' => 'Tambah Harga (+)',
+                                    'kurang' => 'Kurangi Harga (-)',
+                                ])
+                                ->default('tambah')
+                                ->required(),
+
+                            TextInput::make('nominal')
+                                ->label('Nominal (Rp)')
+                                ->numeric()
+                                ->prefix('Rp')
+                                ->placeholder('Misal: 5000')
+                                ->required(),
+                        ])
+                        ->action(function (array $data, Collection $records) {
+                            $nominal = (float) $data['nominal'];
+                            $isTambah = $data['operasi'] === 'tambah';
+
+                            $records->each(function ($record) use ($nominal, $isTambah) {
+                                $hargaLama = (float) ($record->harga ?? 0);
+
+                                $hargaBaru = $isTambah
+                                    ? $hargaLama + $nominal
+                                    : max(0, $hargaLama - $nominal);
+
+                                $record->update(['harga' => $hargaBaru]);
+                            });
+
+                            Notification::make()
+                                ->title('Harga Berhasil Disesuaikan')
+                                ->body(count($records) . ' data kayu telah diperbarui harganya.')
+                                ->success()
+                                ->send();
+                        })
+                        ->deselectRecordsAfterCompletion()
+                        ->visible($isAdmin),
                 ])->visible($canPerformAction),
             ]);
     }

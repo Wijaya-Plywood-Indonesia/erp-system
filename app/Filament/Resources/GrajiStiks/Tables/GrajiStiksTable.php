@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\GrajiStiks\Tables;
 
+use App\Services\ProductionAccessService;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Actions\EditAction;
@@ -21,6 +22,7 @@ class GrajiStiksTable
     {
         return $table
             ->defaultSort('tanggal', 'desc')
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal'))
             ->columns([
                 TextColumn::make('tanggal')
                     ->label('Tanggal Produksi')

@@ -2,18 +2,22 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
 
 class ProduksiDempul extends Model
 {
+    use HasRouteUuid;
+
     protected $table = 'produksi_dempuls';
 
     protected $fillable = [
         'tanggal',
         'tanggal_produksi',
         'kendala',
+        'uuid'
     ];
 
     public function rencanaPegawaiDempuls()
@@ -45,7 +49,7 @@ class ProduksiDempul extends Model
     protected function tanggalDempul(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->{static::kolomTanggalAktif()},
+            get: fn() => $this->{static::kolomTanggalAktif()},
         );
     }
 

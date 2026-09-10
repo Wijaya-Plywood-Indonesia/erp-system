@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\Log;
 class LaporanJoinExport implements WithMultipleSheets
 {
     public function __construct(
-        protected array  $detailData, // flat array dari JoinDataMap (Sheet 1)
+        protected array  $detailData, // hasil JoinDataMap::make() -> 1 elemen per meja (pekerja[] + items[])
         protected string $tanggal     // format 'Y-m-d' (untuk query Sheet 2 & 3)
     ) {}
 
@@ -44,7 +44,11 @@ class LaporanJoinExport implements WithMultipleSheets
 }
 
 // ============================================================
-// SHEET 1: DETAIL PER MEJA (Logika bawaan Anda)
+// SHEET 1: DETAIL PER MEJA
+// ------------------------------------------------------------
+// Struktur $detailData SEKARANG (dari JoinDataMap::make()): 1 elemen per
+// meja/kru, masing-masing punya 'pekerja' (tabel atas) dan 'items' (tabel
+// bawah, tiap ukuran yang dikerjakan kru itu beserta target/hasil/capaian).
 // ============================================================
 class LaporanJoinDetailSheet implements FromCollection, WithHeadings, WithTitle
 {
@@ -52,73 +56,69 @@ class LaporanJoinDetailSheet implements FromCollection, WithHeadings, WithTitle
 
     public function __construct(array $detailData)
     {
-        $this->data = collect($detailData)
-            ->groupBy(fn($item) => $item['nomor_meja'] . '|' . $item['kode_ukuran']);
+        $this->data = collect($detailData);
     }
 
     public function collection()
     {
         $rows = collect();
 
-        foreach ($this->data as $groupKey => $items) {
-            $first   = $items->first();
-            $pekerja = $first['pekerja'] ?? [];
-            $target  = (int) $first['target'];
-            $hasil   = (int) $first['hasil'];
-            $selisih = (int) $first['selisih'];
+        foreach ($this->data as $meja) {
+            $pekerja = $meja['pekerja'] ?? [];
+            $items   = $meja['items'] ?? [];
 
-            $rows->push(['MEJA / AREA',       $first['nomor_meja']]);
-            $rows->push(['UKURAN',             $first['ukuran']]);
-            $rows->push(['JENIS BARANG',       $first['jenis_kayu'] ?? '-']);
-            $rows->push(['GRADE / KW',         $first['kw']]);
-            $rows->push(['TANGGAL PRODUKSI',   $first['tanggal']]);
+            $rows->push(['MEJA / AREA',           $meja['nomor_meja'] ?? '-']);
+            $rows->push(['TANGGAL PRODUKSI',       $meja['tanggal'] ?? '-']);
+            $rows->push(['CAPAIAN GLOBAL TIM (%)', number_format($meja['capaian_global_persen'] ?? 0, 1, ',', '.')]);
+            $rows->push(['POTONGAN TOTAL TIM',      'Rp ' . number_format($meja['potongan_total_tim'] ?? 0)]);
             $rows->push([]);
 
+            // --- Blok Pekerja ---
+            $rows->push(['DATA PEKERJA']);
             $rows->push([
-                'ID PEGAWAI',
-                'Nama Lengkap',
-                'Jam Masuk',
-                'Jam Pulang',
-                'Ijin',
-                'Potongan Target',
-                'Keterangan',
-                '',
-                'Target Harian',
-                'Hasil Produksi',
-                'Selisih',
+                'ID Pegawai', 'Nama Lengkap', 'Jam Masuk', 'Jam Pulang',
+                'Jam Aktual (jam)', 'Ijin', 'Potongan Target', 'Keterangan',
             ]);
 
             foreach ($pekerja as $p) {
                 $potongan = (int) ($p['pot_target'] ?? 0);
                 $rows->push([
-                    $p['id']         ?? '-',
-                    $p['nama']       ?? '-',
-                    $p['jam_masuk']  ?? '-',
-                    $p['jam_pulang'] ?? '-',
-                    $p['ijin']       ?? '-',
+                    $p['id']                ?? '-',
+                    $p['nama']               ?? '-',
+                    $p['jam_masuk']          ?? '-',
+                    $p['jam_pulang']         ?? '-',
+                    isset($p['jam_aktual_bersih']) ? number_format($p['jam_aktual_bersih'], 2, ',', '.') : '-',
+                    $p['ijin']               ?? '-',
                     $potongan > 0 ? $potongan : '-',
-                    $p['keterangan'] ?? '-',
-                    '',
-                    $target,
-                    $hasil,
-                    $selisih >= 0 ? '+' . $selisih : $selisih,
+                    $p['keterangan']         ?? '-',
                 ]);
             }
 
             $totalPotongan = collect($pekerja)->sum('pot_target');
             $rows->push([
-                'TOTAL',
-                count($pekerja) . ' Orang',
-                '',
-                '',
-                '',
-                $totalPotongan > 0 ? $totalPotongan : '-',
-                '',
-                '',
-                $target,
-                $hasil,
-                $selisih >= 0 ? '+' . $selisih : $selisih,
+                'TOTAL', count($pekerja) . ' Orang', '', '', '', '',
+                $totalPotongan > 0 ? $totalPotongan : '-', '',
             ]);
+
+            $rows->push([]);
+
+            // --- Blok Barang Dikerjakan ---
+            $rows->push(['DATA BARANG DIKERJAKAN']);
+            $rows->push([
+                'Ukuran', 'Jenis Kayu', 'KW', 'Hasil', 'Target', 'Selisih', 'Capaian (%)',
+            ]);
+
+            foreach ($items as $item) {
+                $rows->push([
+                    $item['ukuran']      ?? '-',
+                    $item['jenis_kayu']  ?? '-',
+                    $item['kw']          ?? '-',
+                    $item['hasil']       ?? 0,
+                    ($item['has_target'] ?? false) ? number_format($item['target'], 2, ',', '.') : '-',
+                    ($item['has_target'] ?? false) ? (($item['selisih'] >= 0 ? '+' : '') . number_format($item['selisih'], 2, ',', '.')) : '-',
+                    ($item['has_target'] ?? false) ? number_format($item['capaian_persen'], 1, ',', '.') : 'Target ?',
+                ]);
+            }
 
             $rows->push([]);
             $rows->push([]);
@@ -138,7 +138,7 @@ class LaporanJoinDetailSheet implements FromCollection, WithHeadings, WithTitle
 }
 
 // ============================================================
-// SHEET 2: SUMMARY (Logika bawaan Anda)
+// SHEET 2: SUMMARY (tidak berubah — masih query rawCollection langsung)
 // ============================================================
 class LaporanJoinSummarySheet implements FromCollection, WithHeadings, WithTitle, WithEvents
 {
@@ -368,7 +368,7 @@ class LaporanJoinSummarySheet implements FromCollection, WithHeadings, WithTitle
 }
 
 // ============================================================
-// SHEET 3: JURNAL — KODIFIKASI KOMA KUSTOM & LOCK DESIMAL
+// SHEET 3: JURNAL — KODIFIKASI KOMA KUSTOM & LOCK DESIMAL (tidak berubah)
 // ============================================================
 class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles, WithColumnFormatting
 {

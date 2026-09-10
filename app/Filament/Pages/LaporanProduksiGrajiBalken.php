@@ -26,6 +26,7 @@ class LaporanProduksiGrajiBalken extends Page implements HasForms
     protected static ?string $title = 'Laporan Produksi Gergaji Balken';
     protected static ?string $navigationLabel = 'Laporan Produksi Graji Balken';
     protected static ?int $navigationSort = 12;
+    protected static bool $shouldRegisterNavigation = false;
 
     public $dataBalken = [];
     public $tanggal = null;

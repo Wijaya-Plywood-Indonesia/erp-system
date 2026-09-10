@@ -3,93 +3,200 @@
         {{ $this->form }}
     </div>
 
-    @if($isLoading)
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-white/50 dark:bg-zinc-900/50">
-        <x-filament::loading-indicator class="w-10 h-10 text-primary-600" />
+    @if($isLoading ?? false)
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-75 dark:bg-zinc-900 dark:bg-opacity-75">
+        <div class="flex items-center space-x-3">
+            <x-filament::loading-indicator class="w-8 h-8 text-primary-600" />
+            <span class="text-lg font-medium text-zinc-700 dark:text-zinc-300">Memuat data pot jelek...</span>
+        </div>
     </div>
     @endif
 
+    @php
+    $dataProduksi = $dataProduksi ?? [];
+
+    $semuaPekerja = collect($dataProduksi)
+    ->flatMap(function ($produksi) {
+    return collect($produksi['pekerja'] ?? [])->map(function ($p) use ($produksi) {
+    $p['tanggal'] = $produksi['tanggal'] ?? '-';
+    return $p;
+    });
+    })
+    ->values();
+    @endphp
+
     <div class="space-y-12 mt-6">
-        @forelse ($laporan as $data)
+
+        {{-- Kendala hari ini (dikumpulkan dari semua produksi) --}}
+        @foreach ($dataProduksi as $produksi)
+        @if(!empty($produksi['kendala']) && $produksi['kendala'] !== '-')
+        <div class="p-3 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-lg text-xs">
+            <span class="font-bold text-red-600 dark:text-red-400">KENDALA ({{ $produksi['tanggal'] }}):</span>
+            <p class="mt-1 text-red-800 dark:text-red-200 font-medium whitespace-pre-line">{{ $produksi['kendala'] }}</p>
+        </div>
+        @endif
+        @endforeach
+
+        @forelse ($semuaPekerja as $p)
         @php
-        $isMencapaiTarget = $data['hasil'] >= $data['target'];
-        $warnaStatus = $isMencapaiTarget ? 'text-green-400 font-bold' : 'text-red-400 font-bold';
-        $tanda = $data['selisih'] >= 0 ? '+' : '';
+        $capaianGlobal = $p['capaian_global_persen'] ?? 0;
+        $tercapai      = $capaianGlobal >= 100;
+        $potongan      = (int) ($p['potongan'] ?? 0);
+        $totalBarang   = count($p['items'] ?? []);
+        $jamAktual     = $p['jam_aktual_bersih'] ?? null;
         @endphp
 
         <div class="bg-white dark:bg-zinc-900 rounded-sm shadow-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
-            <div class="bg-zinc-800 p-3 text-white text-center font-bold uppercase tracking-widest text-sm">
-                {{ $data['kode_nama'] }}
+            {{-- Header --}}
+            <div class="bg-zinc-800 p-4 text-white flex justify-between items-center">
+                <h2 class="text-lg font-bold text-center">
+                    {{ $p['kode_pegawai'] }} - {{ strtoupper($p['nama']) }}
+                </h2>
+                <div class="flex gap-4 items-center">
+                    <span class="text-xs px-2 py-1 rounded {{ $tercapai ? 'bg-green-700' : 'bg-red-700' }}">
+                        Capaian: {{ number_format($capaianGlobal, 1, ',', '.') }}%
+                    </span>
+                    @if($potongan > 0)
+                    <span class="text-xs px-2 py-1 rounded bg-amber-600 font-bold">
+                        ⚠ Potongan: Rp {{ number_format($potongan) }}
+                    </span>
+                    @endif
+                    <span class="text-xs bg-zinc-700 px-2 py-1 rounded">
+                        {{ $tercapai ? '✔ Tercapai' : '✘ Belum' }}
+                    </span>
+                </div>
             </div>
 
             <div class="p-4">
                 <div class="w-full overflow-x-auto">
-                    <table class="w-full text-sm border-collapse border border-zinc-300 dark:border-zinc-600">
-                        <thead>
-                            <tr class="bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-300 text-xs tracking-tighter font-bold">
-                                <th class="p-2 text-left border-r border-zinc-300 dark:border-zinc-700 w-1/3">Kode Ukuran</th>
-                                <th class="p-2 text-center border-r border-zinc-300 dark:border-zinc-700 w-20">Hasil</th>
-                                <th class="p-2 text-center border-r border-zinc-300 dark:border-zinc-700 w-20">Masuk</th>
-                                <th class="p-2 text-center border-r border-zinc-300 dark:border-zinc-700 w-20">Pulang</th>
-                                <th class="p-2 text-right border-r border-zinc-300 dark:border-zinc-700 w-28">Potongan</th>
-                                <th class="p-2 text-center border-r border-zinc-300 dark:border-zinc-700 w-16">Ijin</th>
-                                <th class="p-2 text-left px-4">Keterangan</th>
-                            </tr>
-                        </thead>
+                    <div class="min-w-[900px]">
+                        <table class="w-full text-sm border-collapse border border-zinc-300 dark:border-zinc-600">
+                            <thead>
+                                <tr>
+                                    <th colspan="7" class="p-4 text-xl font-bold text-center bg-zinc-700 text-white">
+                                        DATA BARANG DIKERJAKAN
+                                    </th>
+                                </tr>
+                                <tr class="bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-300 border-t border-zinc-300 dark:border-zinc-600">
+                                    <th class="p-2 text-left text-xs font-medium">Ukuran</th>
+                                    <th class="p-2 text-center text-xs font-medium w-24">Jenis Kayu</th>
+                                    <th class="p-2 text-center text-xs font-medium w-16">KW</th>
+                                    <th class="p-2 text-center text-xs font-medium w-24">No. Palet</th>
+                                    <th class="p-2 text-right text-xs font-medium w-24">Hasil (cm)</th>
+                                    <th class="p-2 text-right text-xs font-medium w-24">Target (cm)</th>
+                                    <th class="p-2 text-right text-xs font-medium w-20">Capaian</th>
+                                </tr>
+                            </thead>
 
-                        <tbody>
-                            @foreach ($data['rincian'] as $index => $item)
-                            <tr class="border-t border-zinc-300 dark:border-zinc-700">
-                                <td class="p-2 text-left text-xs border-r border-zinc-300 dark:border-zinc-700 font-medium ">
-                                    {{ $item['ukuran_lengkap'] }}
-                                </td>
-                                <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 font-mono">
-                                    {{ number_format($item['jumlah']) }}
-                                </td>
-                                <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700">
-                                    {{ $index === 0 ? $data['jam_masuk'] : '' }}
-                                </td>
-                                <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700">
-                                    {{ $index === 0 ? $data['jam_pulang'] : '' }}
-                                </td>
-                                <td class="p-2 text-right text-xs border-r border-zinc-300 dark:border-zinc-700 font-bold text-red-400 font-mono">
-                                    @if($index === 0 && $data['pot_target'] > 0)
-                                    Rp {{ number_format($data['pot_target']) }}
-                                    @elseif($index === 0)
-                                    -
-                                    @endif
-                                </td>
-                                <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-yellow-600 font-bold">
-                                    {{ $index === 0 ? $data['ijin'] : '' }}
-                                </td>
-                                <td class="p-2 text-left text-xs italic text-zinc-500 px-4">
-                                    {{ $index === 0 ? $data['keterangan'] : '' }}
-                                </td>
-                            </tr>
-                            @endforeach
-                        </tbody>
+                            <tbody>
+                                @forelse ($p['items'] as $i => $item)
+                                <tr class="{{ $i % 2 === 1 ? 'bg-zinc-50 dark:bg-zinc-800/50' : 'bg-white dark:bg-zinc-900' }} border-t border-zinc-300 dark:border-zinc-700">
+                                    <td class="p-2 text-left text-xs border-r border-zinc-300 dark:border-zinc-700 font-medium">
+                                        {{ !$item['has_target'] ? $item['ukuran'] . ' ⚠' : $item['ukuran'] }}
+                                    </td>
+                                    <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 uppercase">
+                                        {{ $item['jenis_kayu'] }}
+                                    </td>
+                                    <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 uppercase">
+                                        {{ $item['kw'] }}
+                                    </td>
+                                    <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-500">
+                                        {{ $item['no_palet_list'] ?? '-' }}
+                                    </td>
+                                    <td class="p-2 text-right text-xs border-r border-zinc-300 dark:border-zinc-700 font-bold text-green-600 dark:text-green-400">
+                                        {{ number_format($item['hasil']) }}
+                                    </td>
+                                    <td class="p-2 text-right text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-500">
+                                        {{ $item['has_target'] ? number_format($item['target']) : '-' }}
+                                    </td>
+                                    <td class="p-2 text-right text-xs font-bold {{ !$item['has_target'] ? 'text-red-500' : (($item['capaian_persen'] ?? 0) >= 100 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') }}">
+                                        @if(!$item['has_target'])
+                                        Target ?
+                                        @else
+                                        {{ number_format($item['capaian_persen'], 1, ',', '.') }}%
+                                        @endif
+                                    </td>
+                                </tr>
+                                @empty
+                                <tr>
+                                    <td colspan="7" class="p-4 text-center text-zinc-500 dark:text-zinc-400 text-sm italic">
+                                        Tidak ada barang dikerjakan.
+                                    </td>
+                                </tr>
+                                @endforelse
+                            </tbody>
 
-                        <tfoot class="bg-zinc-100 dark:bg-zinc-800 border-t-2 border-zinc-400">
-                            <tr>
-                                <td colspan="7" class="p-3 text-center text-xs space-x-6 font-bold">
-                                    <span class="text-zinc-500">Target:</span> <strong>{{ number_format($data['target']) }}</strong>
-                                    <span class="text-zinc-400">|</span>
-                                    <span class="text-zinc-500">Total Hasil:</span> <strong class="{{ $warnaStatus }}">{{ number_format($data['hasil']) }}</strong>
-                                    <span class="text-zinc-400">|</span>
-                                    <span class="text-zinc-500">Selisih:</span> <strong class="{{ $warnaStatus }}">{{ $tanda }}{{ number_format(abs($data['selisih'])) }}</strong>
-                                    <span class="text-zinc-400">|</span>
-                                    <span class="text-zinc-500">Tanggal:</span> <strong class="text-zinc-400">{{ $data['tanggal'] }}</strong>
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
+                            <tfoot class="bg-zinc-100 dark:bg-zinc-800 border-t-2 border-zinc-300 dark:border-zinc-600">
+                                <tr>
+                                    <td colspan="7" class="p-3 text-center text-xs text-zinc-600 dark:text-zinc-400 space-x-3">
+                                        <span class="font-medium">Barang Dikerjakan:</span>
+                                        <strong class="text-zinc-900 dark:text-white">{{ $totalBarang }}</strong>
+
+                                        <span class="text-zinc-400">|</span>
+
+                                        <span class="font-medium">Masuk:</span>
+                                        <strong class="font-mono text-zinc-900 dark:text-white">{{ $p['jam_masuk'] }}</strong>
+
+                                        <span class="text-zinc-400">|</span>
+
+                                        <span class="font-medium">Pulang:</span>
+                                        <strong class="font-mono text-zinc-900 dark:text-white">{{ $p['jam_pulang'] }}</strong>
+
+                                        <span class="text-zinc-400">|</span>
+
+                                        <span class="font-medium">Jam Aktual (bersih, sudah dikurangi istirahat):</span>
+                                        <strong class="font-mono text-zinc-900 dark:text-white">
+                                            {{ $jamAktual !== null ? number_format($jamAktual, 2, ',', '.') . ' jam' : '-' }}
+                                        </strong>
+
+                                        <span class="text-zinc-400">|</span>
+
+                                        <span class="font-medium">Ijin:</span>
+                                        <strong class="text-yellow-600 dark:text-yellow-400">{{ $p['ijin'] }}</strong>
+
+                                        <span class="text-zinc-400">|</span>
+
+                                        <span class="font-medium">Total Hasil:</span>
+                                        <strong class="font-mono text-green-600 dark:text-green-400">{{ number_format($p['total_hasil']) }}</strong>
+
+                                        <span class="text-zinc-400">|</span>
+
+                                        <span class="text-xs">Tgl: {{ $p['tanggal'] }}</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colspan="7" class="p-2 text-center text-[11px] text-zinc-500 dark:text-zinc-400 border-t border-zinc-300 dark:border-zinc-700">
+                                        Capaian GLOBAL pegawai (jumlah persen semua ukuran yang dikerjakan hari ini, basis: target per ukuran, BUKAN rata-rata):
+                                        <strong class="{{ $tercapai ? 'text-green-600 dark:text-green-400' : 'text-red-500' }}">
+                                            {{ number_format($capaianGlobal, 1, ',', '.') }}%
+                                        </strong>
+                                        @if(!empty($p['keterangan']) && $p['keterangan'] !== '-')
+                                        <span class="text-zinc-400">|</span>
+                                        <span class="italic">Ket: {{ $p['keterangan'] }}</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colspan="7" class="px-3 py-2 text-center border-t border-zinc-300 dark:border-zinc-700 {{ $potongan > 0 ? 'bg-red-50 dark:bg-red-950/30' : '' }}">
+                                        <span class="text-xs font-bold uppercase tracking-wide {{ $potongan > 0 ? 'text-red-600 dark:text-red-400' : 'text-zinc-500 dark:text-zinc-400' }}">
+                                            Potongan Target:
+                                        </span>
+                                        <span class="text-base font-black {{ $potongan > 0 ? 'text-red-600 dark:text-red-400' : 'text-zinc-500 dark:text-zinc-400' }}">
+                                            {{ $potongan > 0 ? 'Rp ' . number_format($potongan) : 'Rp 0' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
+
         @empty
         <div class="text-center p-12 bg-white dark:bg-zinc-900 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700">
             <x-heroicon-o-document-magnifying-glass class="w-12 h-12 mx-auto text-zinc-400 mb-4" />
-            <p class="text-lg text-zinc-500 dark:text-zinc-400 font-medium">
+            <p class="text-lg text-zinc-500 dark:text-zinc-400">
                 Tidak ditemukan data produksi potong jelek untuk tanggal ini.
             </p>
             <p class="text-sm text-zinc-400 mt-2">

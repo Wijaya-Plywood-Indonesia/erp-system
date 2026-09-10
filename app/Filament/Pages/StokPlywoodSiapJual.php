@@ -32,7 +32,7 @@ class StokPlywoodSiapJual extends Page
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->when($this->filterTebal,     fn($q) => $q->where('tebal',     $this->filterTebal))
             ->when($this->filterKw,        fn($q) => $q->where('kw_grade', $this->filterKw))
-            ->where('stok_lembar', '>', 0)
+            ->where('stok_lembar', '<>', 0)
             ->get();
     }
 
@@ -43,24 +43,24 @@ class StokPlywoodSiapJual extends Page
 
     public function getKwListProperty()
     {
-        return StokPlywoodSiapJualModel::where('stok_lembar', '>', 0)->distinct()->pluck('kw_grade');
+        return StokPlywoodSiapJualModel::where('stok_lembar', '<>', 0)->distinct()->pluck('kw_grade');
     }
 
     public function getTebalListProperty()
     {
-        return StokPlywoodSiapJualModel::where('stok_lembar', '>', 0)->distinct()->pluck('tebal');
+        return StokPlywoodSiapJualModel::where('stok_lembar', '<>', 0)->distinct()->pluck('tebal');
     }
 
     public function getTotalLembarProperty(): int
     {
-        return (int) StokPlywoodSiapJualModel::where('stok_lembar', '>', 0)
+        return (int) StokPlywoodSiapJualModel::where('stok_lembar', '<>', 0)
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->sum('stok_lembar');
     }
 
     public function getTotalKubikasiProperty(): float
     {
-        return (float) StokPlywoodSiapJualModel::where('stok_lembar', '>', 0)
+        return (float) StokPlywoodSiapJualModel::where('stok_lembar', '<>', 0)
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->sum('stok_kubikasi');
     }

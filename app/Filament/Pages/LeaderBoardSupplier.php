@@ -5,11 +5,13 @@ namespace App\Filament\Pages;
 use App\Models\NotaKayu;
 use App\Models\SupplierKayu;
 use Carbon\Carbon;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 use Illuminate\Support\Collection;
 
 class LeaderBoardSupplier extends Page
 {
+    use HasPageShield;
     protected static ?string $navigationLabel = 'Leaderboard Supplier';
     protected static ?string $title = 'Leaderboard Supplier Kayu';
     protected static ?int $navigationSort = 99;

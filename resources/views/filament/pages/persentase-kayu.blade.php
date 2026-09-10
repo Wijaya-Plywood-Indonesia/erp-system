@@ -102,6 +102,20 @@
                 {{-- Fallback: sebelum wire:init selesai dan browser belum sempat trigger wire:loading,
                  pastikan tidak menampilkan tabel kosong / error karena $laporan masih null --}}
             @else
+                @php
+                    // Kolom "Veneer+Ongkos+Susut+Bahan Penolong" hanya ditampilkan
+                    // kalau MINIMAL SATU baris di laporan ini punya bahan penolong.
+                    // Kalau semua baris kosong (mis. semua batch KAYU 130), kolom ini
+                    // disembunyikan total (header + sel), bukan cuma diisi "-".
+                    //
+                    // PENTING: $laporan adalah LengthAwarePaginator, BUKAN Collection biasa.
+                    // collect($laporan) akan membungkus meta paginator (current_page, data,
+                    // total, dst) alih-alih baris aslinya, sehingga contains() selalu false.
+                    // Karena itu harus pakai $laporan->items() untuk ambil baris aktualnya.
+                    $adaBahanPenolong = collect($laporan->items())->contains(
+                        fn($r) => ($r['summary']['total_bahan_penolong'] ?? 0) > 0,
+                    );
+                @endphp
                 <div class="flex sm:flex-row flex-col justify-between gap-2 mb-4 font-sans">
                     <div class="flex gap-2">
                         <button @click="openAll({{ count($laporan->items()) }})" type="button"
@@ -132,173 +146,227 @@
                 </div>
 
                 {{-- SECTION SUMMARY STATS --}}
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                <div class="space-y-4 mb-6">
 
-                    <div
-                        class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
-                        <div class="flex items-center gap-3">
-                            <div class="p-2 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">
-                                <x-heroicon-m-arrow-down-tray class="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                            </div>
-                            <span
-                                class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Input
-                                Kayu</span>
-                        </div>
-                        <div class="mt-3">
-                            <div class="flex items-baseline gap-2 flex-wrap">
-                                <span class="text-2xl font-black text-gray-900 dark:text-white">
-                                    {{ number_format($rekap['total_kayu_masuk'], 0, ',', '.') }} <span
-                                        class="text-xs font-medium text-gray-400">Btg</span>
-                                </span>
-                                <span class="text-lg font-bold text-gray-400">/</span>
-                                <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-                                    {{ number_format($rekap['total_kubikasi_kayu_masuk'], 4, ',', '.') }} <span
-                                        class="text-xs font-medium text-emerald-500/70">m³</span>
-                                </span>
-                            </div>
-                            <div class="flex items-center gap-1.5 mt-2">
-                                <div class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                    {{-- BARIS ATAS: 3 kolom (card putih - Input Kayu, Output Veneer, Total Nilai Poin) --}}
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                        <div
+                            class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">
+                                    <x-heroicon-m-arrow-down-tray
+                                        class="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                                </div>
                                 <span
-                                    class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase italic">Jumlah
-                                    Batang / Kubikasi Kayu Masuk</span>
+                                    class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Input
+                                    Kayu</span>
+                            </div>
+                            <div class="mt-3">
+                                <div class="flex items-baseline gap-2 flex-wrap">
+                                    <span class="text-2xl font-black text-gray-900 dark:text-white">
+                                        {{ number_format($rekap['total_kayu_masuk'], 0, ',', '.') }} <span
+                                            class="text-xs font-medium text-gray-400">Btg</span>
+                                    </span>
+                                    <span class="text-lg font-bold text-gray-400">/</span>
+                                    <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                                        {{ number_format($rekap['total_kubikasi_kayu_masuk'], 4, ',', '.') }} <span
+                                            class="text-xs font-medium text-emerald-500/70">m³</span>
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-1.5 mt-2">
+                                    <div class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    <span
+                                        class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase italic">Jumlah
+                                        Batang / Kubikasi Kayu Masuk</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div
-                        class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
-                        <div class="flex items-center gap-3">
-                            <div class="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg">
-                                <x-heroicon-m-arrow-up-tray class="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <span
-                                class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Output
-                                Veneer</span>
-                        </div>
-                        <div class="mt-3">
-                            <div class="flex items-baseline gap-2 flex-wrap">
-                                <span class="text-2xl font-black text-gray-900 dark:text-white">
-                                    {{ number_format($rekap['total_kubikasi_veneer'], 4, ',', '.') }} <span
-                                        class="text-xs font-medium text-gray-400">m³</span>
-                                </span>
-                                <span class="text-lg font-bold text-gray-400">/</span>
-                                <span class="text-2xl font-black text-blue-600 dark:text-blue-400">
-                                    {{ $rekap['rata_rata_rendemen'] }}
-                                </span>
-                            </div>
-                            <div class="flex items-center gap-1.5 mt-2">
-                                <div class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                        <div
+                            class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg">
+                                    <x-heroicon-m-arrow-up-tray class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                </div>
                                 <span
-                                    class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase italic">Kubikasi
-                                    Veneer / Rata-Rata Rendemen</span>
+                                    class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Output
+                                    Veneer</span>
+                            </div>
+                            <div class="mt-3">
+                                <div class="flex items-baseline gap-2 flex-wrap">
+                                    <span class="text-2xl font-black text-gray-900 dark:text-white">
+                                        {{ number_format($rekap['total_kubikasi_veneer'], 4, ',', '.') }} <span
+                                            class="text-xs font-medium text-gray-400">m³</span>
+                                    </span>
+                                    <span class="text-lg font-bold text-gray-400">/</span>
+                                    <span class="text-2xl font-black text-blue-600 dark:text-blue-400">
+                                        {{ $rekap['rata_rata_rendemen'] }}
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-1.5 mt-2">
+                                    <div class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                                    <span
+                                        class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase italic">Kubikasi
+                                        Veneer / Rata-Rata Rendemen</span>
+                                </div>
                             </div>
                         </div>
+
+                        <div
+                            class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 bg-amber-50 dark:bg-amber-500/10 rounded-lg">
+                                    <x-heroicon-m-banknotes class="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                </div>
+                                <span
+                                    class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total
+                                    Nilai Poin</span>
+                            </div>
+                            <div class="mt-3">
+                                <span class="text-2xl font-black text-gray-900 dark:text-white">
+                                    Rp {{ number_format($rekap['total_poin_masuk'], 0, ',', '.') }}
+                                </span>
+                                <p class="text-[10px] text-gray-400 mt-1 uppercase leading-tight font-medium">
+                                    Berdasarkan
+                                    akumulasi poin log masuk</p>
+                            </div>
+                        </div>
+
                     </div>
 
+                    {{-- BARIS BAWAH: 4 kolom (card primary - harga-harga rata-rata) --}}
                     <div
-                        class="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-sm transition hover:ring-1 hover:ring-primary-500">
-                        <div class="flex items-center gap-3">
-                            <div class="p-2 bg-amber-50 dark:bg-amber-500/10 rounded-lg">
-                                <x-heroicon-m-banknotes class="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                            </div>
-                            <span
-                                class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total
-                                Nilai Poin</span>
-                        </div>
-                        <div class="mt-3">
-                            <span class="text-2xl font-black text-gray-900 dark:text-white">
-                                Rp {{ number_format($rekap['total_poin_masuk'], 0, ',', '.') }}
-                            </span>
-                            <p class="text-[10px] text-gray-400 mt-1 uppercase leading-tight font-medium">Berdasarkan
-                                akumulasi poin log masuk</p>
-                        </div>
-                    </div>
+                        class="grid grid-cols-1 sm:grid-cols-2 {{ $adaBahanPenolong ? 'lg:grid-cols-4' : 'lg:grid-cols-3' }} gap-4">
 
-                    <div
-                        class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
-                        <div class="flex items-center p-2 gap-3 text-white ">
-                            <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
-                            <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer Rata Rata </span>
-                        </div>
-                        <div class="mt-3">
-                            <span class="text-2xl font-black text-white">
-                                Rp {{ number_format($rekap['total_harga_veneer'], 0, ',', '.') }}
-                            </span>
-                            <div class="flex items-center gap-1.5 mt-1">
-                                <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
-                                <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price /
-                                    m³</span>
+                        <div
+                            class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
+                            <div class="flex items-center p-2 gap-3 text-white ">
+                                <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
+                                <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer Rata Rata </span>
+                            </div>
+                            <div class="mt-3">
+                                <span class="text-2xl font-black text-white">
+                                    Rp {{ number_format($rekap['total_harga_veneer'], 0, ',', '.') }}
+                                </span>
+                                <div class="flex items-center gap-1.5 mt-1">
+                                    <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
+                                    <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price /
+                                        m³</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div
-                        class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
-                        <div class="flex items-center p-2 gap-3 text-white ">
-                            <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
-                            <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer + Ongkos Rata Rata
-                            </span>
-                        </div>
-                        <div class="mt-3">
-                            <span class="text-2xl font-black text-white">
-                                Rp {{ number_format($rekap['total_harga_v_ongkos'], 0, ',', '.') }}
-                            </span>
-                            <div class="flex items-center gap-1.5 mt-1">
-                                <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
-                                <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price / m³ +
-                                    Ongkos Pekerja</span>
+                        <div
+                            class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
+                            <div class="flex items-center p-2 gap-3 text-white ">
+                                <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
+                                <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer + Ongkos Rata
+                                    Rata
+                                </span>
+                            </div>
+                            <div class="mt-3">
+                                <span class="text-2xl font-black text-white">
+                                    Rp {{ number_format($rekap['total_harga_v_ongkos'], 0, ',', '.') }}
+                                </span>
+                                <div class="flex items-center gap-1.5 mt-1">
+                                    <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
+                                    <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price /
+                                        m³ +
+                                        Ongkos Pekerja</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div
-                        class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
-                        <div class="flex items-center p-2 gap-3 text-white ">
-                            <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
-                            <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer + Ongkos + Penyusutan
-                                Rata Rata </span>
-                        </div>
-                        <div class="mt-3">
-                            <span class="text-2xl font-black text-white">
-                                Rp {{ number_format($rekap['total_harga_vop'], 0, ',', '.') }}
-                            </span>
-                            <div class="flex items-center gap-1.5 mt-1">
-                                <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
-                                <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price / m³ +
-                                    Ongkos Pekerja + Biaya Penyusutan</span>
+                        <div
+                            class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
+                            <div class="flex items-center p-2 gap-3 text-white ">
+                                <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
+                                <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer + Ongkos +
+                                    Penyusutan
+                                    Rata Rata </span>
+                            </div>
+                            <div class="mt-3">
+                                <span class="text-2xl font-black text-white">
+                                    Rp {{ number_format($rekap['total_harga_vop'], 0, ',', '.') }}
+                                </span>
+                                <div class="flex items-center gap-1.5 mt-1">
+                                    <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
+                                    <span class="text-[10px] text-white/90 font-medium uppercase italic">Final Price /
+                                        m³ +
+                                        Ongkos Pekerja + Biaya Penyusutan</span>
+                                </div>
                             </div>
                         </div>
+                        @if ($adaBahanPenolong)
+                            <div
+                                class="p-4 bg-primary-600 dark:bg-primary-600 border border-transparent rounded-xl shadow-md transition transform hover:scale-[1.02]">
+                                <div class="flex items-center p-2 gap-3 text-white ">
+                                    <x-heroicon-m-presentation-chart-line class=" w-5 h-5" />
+                                    <span class="text-xs font-bold uppercase tracking-wider">Harga Veneer + Ongkos +
+                                        Penyusutan
+                                        + Bahan Penolong Rata Rata </span>
+                                </div>
+                                <div class="mt-3">
+                                    <span class="text-2xl font-black text-white">
+                                        Rp {{ number_format($rekap['total_harga_vopb'], 0, ',', '.') }}
+                                    </span>
+                                    <div class="flex items-center gap-1.5 mt-1">
+                                        <div class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></div>
+                                        <span class="text-[10px] text-white/90 font-medium uppercase italic">Final
+                                            Price /
+                                            m³ +
+                                            Ongkos Pekerja + Penyusutan + Bahan Penolong</span>
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
+
                     </div>
 
                 </div>
 
 
                 <div
-                    class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-gray-900">
+                    class="max-h-[600px] overflow-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-gray-900 relative">
                     <table class="w-full text-left text-sm table-auto border-separate border-spacing-0">
                         <thead>
-                            <tr class="bg-gray-50 border-b border-gray-900 dark:bg-white/5 dark:border-white/10">
-                                <th class="px-4 py-3 font-semibold whitespace-nowrap ">Lahan</th>
-                                <th class="px-4 py-3 font-semibold whitespace-nowrap  text-center">Batang</th>
-                                <th class="px-4 py-3 font-semibold whitespace-nowrap ">Kubikasi (In)</th>
+                            <tr>
+                                {{-- Setiap elemen <th> wajib diberi 'sticky top-0 z-20', background solid, serta border-b --}}
                                 <th
-                                    class="px-4 py-3 font-semibold whitespace-nowrap  text-green-600 dark:text-green-400">
+                                    class="sticky top-0 z-20 bg-gray-100 dark:bg-gray-800 px-4 py-3 font-semibold whitespace-nowrap border-b border-gray-200 dark:border-white/10 shadow-sm">
+                                    Lahan</th>
+                                <th
+                                    class="sticky top-0 z-20 bg-gray-100 dark:bg-gray-800 px-4 py-3 font-semibold whitespace-nowrap text-center border-b border-gray-200 dark:border-white/10 shadow-sm">
+                                    Batang</th>
+                                <th
+                                    class="sticky top-0 z-20 bg-gray-100 dark:bg-gray-800 px-4 py-3 font-semibold whitespace-nowrap border-b border-gray-200 dark:border-white/10 shadow-sm">
+                                    Kubikasi (In)</th>
+                                <th
+                                    class="sticky top-0 z-20 bg-gray-100 dark:bg-gray-800 px-4 py-3 font-semibold whitespace-nowrap text-green-600 dark:text-green-400 border-b border-gray-200 dark:border-white/10 shadow-sm">
                                     Poin</th>
                                 <th
-                                    class="px-4 py-3 font-semibold whitespace-nowrap  text-blue-600 dark:text-blue-400">
+                                    class="sticky top-0 z-20 bg-gray-100 dark:bg-gray-800 px-4 py-3 font-semibold whitespace-nowrap text-blue-600 dark:text-blue-400 border-b border-gray-200 dark:border-white/10 shadow-sm">
                                     Kubikasi (Out)</th>
-                                <th class="px-4 py-3 font-semibold whitespace-nowrap ">Persentase</th>
                                 <th
-                                    class="px-4 py-3 font-semibold whitespace-nowrap  text-green-600 dark:text-green-400">
+                                    class="sticky top-0 z-20 bg-gray-100 dark:bg-gray-800 px-4 py-3 font-semibold whitespace-nowrap border-b border-gray-200 dark:border-white/10 shadow-sm">
+                                    Persentase</th>
+                                <th
+                                    class="sticky top-0 z-20 bg-gray-100 dark:bg-gray-800 px-4 py-3 font-semibold whitespace-nowrap text-green-600 dark:text-green-400 border-b border-gray-200 dark:border-white/10 shadow-sm">
                                     Veneer</th>
                                 <th
-                                    class="px-4 py-3 font-semibold whitespace-nowrap  text-green-600 dark:text-green-400">
+                                    class="sticky top-0 z-20 bg-gray-100 dark:bg-gray-800 px-4 py-3 font-semibold whitespace-nowrap text-green-600 dark:text-green-400 border-b border-gray-200 dark:border-white/10 shadow-sm">
                                     Veneer+Ongkos</th>
                                 <th
-                                    class="px-4 py-3 font-semibold whitespace-nowrap  text-green-600 dark:text-green-400">
+                                    class="sticky top-0 z-20 bg-gray-100 dark:bg-gray-800 px-4 py-3 font-semibold whitespace-nowrap text-green-600 dark:text-green-400 border-b border-gray-200 dark:border-white/10 shadow-sm">
                                     Veneer+Ongkos+Susut</th>
+                                @if ($adaBahanPenolong)
+                                    <th
+                                        class="sticky top-0 z-20 bg-gray-100 dark:bg-gray-800 px-4 py-3 font-semibold whitespace-nowrap text-green-600 dark:text-green-400 border-b border-gray-200 dark:border-white/10 shadow-sm">
+                                        Veneer+Ongkos+Susut+Bahan Penolong</th>
+                                @endif
                             </tr>
                         </thead>
 
-                        <tbody>
+                        <tbody class="divide-y divide-gray-100 dark:divide-white/5">
                             @forelse($laporan as $index => $row)
                                 <tr @click="toggleRow({{ $index }})"
                                     class="cursor-pointer border-b border-gray-100 hover:bg-gray-400 dark:border-white/5 dark:hover:bg-white/5 transition-colors"
@@ -313,13 +381,17 @@
 
                                     </td>
                                     <td class="px-4 py-4 whitespace-nowrap text-center">
-                                        {{ $row['summary']['total_kayu_masuk'] ?? 0 }}</td>
+                                        {{ $row['summary']['total_kayu_masuk'] ?? 0 }}
+                                    </td>
                                     <td class="px-4 py-4 whitespace-nowrap">
-                                        {{ number_format($row['summary']['total_masuk_m3'] ?? 0, 4) }} m³</td>
+                                        {{ number_format($row['summary']['total_masuk_m3'] ?? 0, 4) }} m³
+                                    </td>
                                     <td class="px-4 py-4 whitespace-nowrap text-right font-bold text-green-600">Rp
-                                        {{ $row['summary']['total_poin'] }}</td>
+                                        {{ $row['summary']['total_poin'] }}
+                                    </td>
                                     <td class="px-4 py-4 whitespace-nowrap text-right font-bold text-blue-600">
-                                        {{ number_format($row['summary']['total_keluar_m3'], 4) }} m³</td>
+                                        {{ number_format($row['summary']['total_keluar_m3'], 4) }} m³
+                                    </td>
                                     <td class="px-4 py-4 whitespace-nowrap text-center">
                                         <span
                                             class="px-2 py-1 rounded bg-green-100 text-green-700 dark:text-green-300 dark:bg-green-900/40 font-bold text-xs">
@@ -337,6 +409,17 @@
                                         class="px-4 py-4 whitespace-nowrap font-bold text-green-600 dark:text-green-400">
                                         {{ $row['summary']['harga_vop'] ? 'Rp ' . number_format($row['summary']['harga_vop'] ?? 0, 2, ',', '.') : 'Belum Tersedia' }}
                                     </td>
+                                    @if ($adaBahanPenolong)
+                                        <td
+                                            class="px-4 py-4 whitespace-nowrap font-bold text-green-600 dark:text-green-400">
+                                            @if (($row['summary']['total_bahan_penolong'] ?? 0) > 0)
+                                                {{ $row['summary']['harga_vopb'] ? 'Rp ' . number_format($row['summary']['harga_vopb'] ?? 0, 2, ',', '.') : 'Belum Tersedia' }}
+                                            @else
+                                                <span
+                                                    class="text-gray-400 dark:text-gray-500 font-normal text-xs italic">-</span>
+                                            @endif
+                                        </td>
+                                    @endif
                                 </tr>
 
                                 <tr x-show="selected.includes({{ $index }})" x-cloak x-transition>
@@ -376,9 +459,11 @@
                                                             @foreach ($row['inflow'] ?? [1] as $km)
                                                                 <tr class="border-b dark:border-white/5">
                                                                     <td class="px-2 py-2">
-                                                                        {{ $km['tanggal'] ?? '2026-02-19' }}</td>
+                                                                        {{ $km['tanggal'] ?? '2026-02-19' }}
+                                                                    </td>
                                                                     <td class="px-2 py-2">
-                                                                        {{ $km['seri'] ?? 'SR-001' }}</td>
+                                                                        {{ $km['seri'] ?? 'SR-001' }}
+                                                                    </td>
                                                                     <td class="px-2 py-2">{{ $km['banyak'] ?? 10 }}
                                                                     </td>
                                                                     <td class="px-2 py-2">
@@ -400,7 +485,8 @@
                                                                 </td>
                                                                 <td class="px-2 py-2">
                                                                     {{ number_format(collect($row['inflow'] ?? [])->sum('kubikasi'), 4) }}
-                                                                    m³</td>
+                                                                    m³
+                                                                </td>
                                                                 <td
                                                                     class="px-2 py-2 text-green-600 dark:text-green-400">
                                                                     Rp.
@@ -444,24 +530,33 @@
                                                                     class="px-2 py-2 text-green-600 dark:text-green-400">
                                                                     Ongkos / Pekerja</th>
                                                                 <th class="px-2 py-2">Penyusutan</th>
+                                                                <th
+                                                                    class="px-2 py-2 whitespace-nowrap text-green-600 dark:text-green-400">
+                                                                    Biaya Bahan
+                                                                    Penolong</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
                                                             @foreach ($row['outflow'] ?? [1] as $kk)
                                                                 <tr class="border-b dark:border-white/5">
                                                                     <td class="px-2 py-2 whitespace-nowrap">
-                                                                        {{ $kk['tgl'] ?? '-' }}</td>
+                                                                        {{ $kk['tgl'] ?? '-' }}
+                                                                    </td>
                                                                     <td class="px-2 py-2">{{ $kk['mesin'] ?? '-' }}
                                                                     </td>
                                                                     <td class="px-2 py-2">
-                                                                        {{ $kk['jam_kerja'] ?? '-' }}</td>
+                                                                        {{ $kk['jam_kerja'] ?? '-' }}
+                                                                    </td>
                                                                     <td class="px-2 py-2 whitespace-nowrap">
-                                                                        {{ $kk['ukuran'] ?? '-' }}</td>
+                                                                        {{ $kk['ukuran'] ?? '-' }}
+                                                                    </td>
                                                                     <td class="px-2 py-2">
-                                                                        {{ $kk['total_banyak'] ?? 0 }}</td>
+                                                                        {{ $kk['total_banyak'] ?? 0 }}
+                                                                    </td>
                                                                     <td class="px-2 py-2">
                                                                         {{ number_format($kk['total_kubikasi'] ?? 0, 4) }}
-                                                                        m³</td>
+                                                                        m³
+                                                                    </td>
                                                                     <td class="px-2 py-2">{{ $kk['pekerja'] ?? '-' }}
                                                                     </td>
                                                                     <td
@@ -472,10 +567,43 @@
                                                                         class="px-2 py-2 {{ $kk['penyusutan'] == 0 && 'text-red-600 dark:text-red-400' }}">
                                                                         {{ $kk['penyusutan'] != 0 ? 'Rp ' . number_format($kk['penyusutan'] ?? 0) : '0 ( Belum Diatur )' }}
                                                                     </td>
+                                                                    {{-- Kolom Biaya Bahan Penolong: SATU angka gabungan
+                                                                    dari semua jenis bahan penolong (jumlah desimal asli
+                                                                    x harga_satuan, di-sum di service) — nama tiap jenis
+                                                                    & subtotalnya ditampilkan lewat tooltip (title). --}}
+                                                                    <td class="px-2 py-2 whitespace-nowrap">
+                                                                        @if (($kk['total_bahan_penolong'] ?? 0) > 0)
+                                                                            <span
+                                                                                class="text-gray-700 dark:text-gray-300"
+                                                                                title="{{ collect($kk['bahan_penolong'] ?? [])->map(fn($bp) => $bp['nama_bahan'] . ': Rp ' . number_format($bp['subtotal'], 0, ',', '.'))->implode(' | ') }}">
+                                                                                Rp
+                                                                                {{ number_format($kk['total_bahan_penolong'], 0, ',', '.') }}
+                                                                            </span>
+                                                                        @else
+                                                                            <span
+                                                                                class="text-gray-400 dark:text-gray-500 text-[10px] italic">-</span>
+                                                                        @endif
+                                                                    </td>
                                                                 </tr>
                                                             @endforeach
                                                         </tbody>
                                                         <tfoot>
+                                                            {{--
+                                                                FIX: total sekarang lengkap & jumlah kolom SAMA PERSIS
+                                                                dengan thead/tbody (10 kolom: Tgl, Mesin, Jam Kerja,
+                                                                Ukuran, Banyak, Kubikasi, Pekerja, Ongkos, Penyusutan,
+                                                                Biaya Bahan Penolong).
+                                                                - Pekerja: sum angka dari string "7 Orang" (regex ambil
+                                                                  digitnya, lalu digabung " Orang").
+                                                                - Ongkos: sum langsung (angka mentah di $kk['ongkos']).
+                                                                  String "0 ( Belum Diatur )" otomatis dianggap 0 oleh
+                                                                  PHP saat dijumlah, jadi aman.
+                                                                - Penyusutan: sum langsung, sama seperti Ongkos.
+                                                                - Biaya Bahan Penolong: dihitung ulang sebagai rupiah/m3
+                                                                  gabungan (total nominal dibagi total kubikasi grup),
+                                                                  TIDAK ada lagi kolom kosong terpisah untuk "Solasi"
+                                                                  (sudah digabung jadi satu kolom).
+                                                            --}}
                                                             <tr
                                                                 class="bg-gray-100/50 dark:bg-gray-700/50 font-black border-t border-gray-300 dark:border-white/10 text-gray-900 dark:text-white">
                                                                 <td class="px-2 py-2" colspan="4">Total</td>
@@ -484,8 +612,49 @@
                                                                 </td>
                                                                 <td class="px-2 py-2">
                                                                     {{ number_format(collect($row['outflow'] ?? [])->sum('total_kubikasi'), 4) }}
-                                                                    m³</td>
-                                                                <td class="px-2 py-2" colspan="3"></td>
+                                                                    m³
+                                                                </td>
+                                                                <td class="px-2 py-2">
+                                                                    {{ collect($row['outflow'] ?? [])->sum(function ($o) {
+                                                                        preg_match('/\d+/', $o['pekerja'] ?? '', $m);
+                                                                        return isset($m[0]) ? (int) $m[0] : 0;
+                                                                    }) }}
+                                                                    Orang
+                                                                </td>
+                                                                <td
+                                                                    class="px-2 py-2 text-green-600 dark:text-green-400">
+                                                                    Rp
+                                                                    {{ number_format(collect($row['outflow'] ?? [])->sum('ongkos'), 0, ',', '.') }}
+                                                                </td>
+                                                                <td class="px-2 py-2">
+                                                                    Rp
+                                                                    {{ number_format(collect($row['outflow'] ?? [])->sum('penyusutan'), 0, ',', '.') }}
+                                                                </td>
+                                                                <td
+                                                                    class="px-2 py-2 text-green-600 dark:text-green-400">
+                                                                    @php
+                                                                        $totalBahanPenolongGrup = collect(
+                                                                            $row['outflow'] ?? [],
+                                                                        )->sum('total_bahan_penolong');
+                                                                        $totalKubikasiGrup = collect(
+                                                                            $row['outflow'] ?? [],
+                                                                        )->sum(
+                                                                            fn($o) => (float) str_replace(
+                                                                                ',',
+                                                                                '',
+                                                                                $o['total_kubikasi'],
+                                                                            ),
+                                                                        );
+                                                                        $bahanPenolongPerM3 =
+                                                                            $totalKubikasiGrup > 0
+                                                                                ? $totalBahanPenolongGrup /
+                                                                                    $totalKubikasiGrup
+                                                                                : 0;
+                                                                    @endphp
+                                                                    Rp
+                                                                    {{ number_format($bahanPenolongPerM3, 2, ',', '.') }}
+                                                                    / m³
+                                                                </td>
                                                             </tr>
                                                         </tfoot>
                                                     </table>
@@ -497,7 +666,8 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="10" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                                    <td colspan="{{ $adaBahanPenolong ? 10 : 9 }}"
+                                        class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                                         Data produksi belum tersedia.
                                     </td>
                                 </tr>

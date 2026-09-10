@@ -22,6 +22,37 @@
                 </div>
             </div>
 
+            <div class="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800 space-y-3">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-gray-700 dark:text-gray-300">
+                        Kayu Pecah
+                    </h3>
+                </div>
+
+                {{-- Grid 3 Kolom Ringkas --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    @forelse ($summary['stokPecahGrouped'] ?? [] as $stok)
+                    <div class="flex justify-between items-center bg-amber-500/10 dark:bg-amber-500/15 px-3.5 py-2.5 rounded-xl border border-amber-200/60 dark:border-amber-500/25">
+                        {{-- Kiri: Panjang - Jenis Kayu --}}
+                        <div class="text-xs font-bold text-gray-800 dark:text-gray-200">
+                            <span class="text-amber-600 dark:text-amber-400 font-extrabold">{{ $stok->panjang }}</span>
+                            <span class="mx-1.5 text-gray-300 dark:text-gray-600">•</span>
+                            <span class="uppercase">{{ $stok->jenis_kayu }}</span>
+                        </div>
+
+                        {{-- Kanan: Jumlah Batang --}}
+                        <div class="text-xs font-black text-amber-600 dark:text-amber-400">
+                            {{ number_format($stok->total_batang) }} <span class="text-[10px] font-normal text-gray-500 dark:text-gray-400">Batang</span>
+                        </div>
+                    </div>
+                    @empty
+                    <div class="col-span-full py-3 px-4 bg-gray-50 dark:bg-gray-800/40 rounded-xl text-center border border-dashed border-gray-200 dark:border-gray-700">
+                        <p class="text-xs text-gray-400 italic">Tidak ada data kayu pecah</p>
+                    </div>
+                    @endforelse
+                </div>
+            </div>
+
             <div class="mt-8 space-y-6">
                 {{-- 1. GLOBAL UKURAN + JENIS KAYU --}}
                 <div>

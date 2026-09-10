@@ -53,12 +53,14 @@ class LainLainsTable
                     ->default('-')
                     ->color('primary')
                     ->limit(30)
+                    ->tooltip(fn($state) => $state ?: '-')
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 TextColumn::make('hasil')
                     ->label('Hasil')
                     ->default('-')
                     ->limit(30)
+                    ->tooltip(fn($state) => $state ?: '-')
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 TextColumn::make('creator.name')

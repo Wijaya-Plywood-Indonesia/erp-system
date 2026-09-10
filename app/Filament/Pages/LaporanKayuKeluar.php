@@ -25,7 +25,8 @@ class LaporanKayuKeluar extends Page implements HasForms
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static ?string $navigationLabel = 'Laporan Kayu Keluar';
     protected static ?string $title = 'Laporan Kayu Keluar';
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 2;
+    protected static bool $shouldRegisterNavigation = false;
 
     protected string $view = 'filament.pages.laporan-kayu-keluar';
 

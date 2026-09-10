@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 
 class ProduksiPotAfJoint extends Model
 {
+    use HasRouteUuid;
+
     protected $table = 'produksi_pot_af_joint';
 
     protected $fillable = [

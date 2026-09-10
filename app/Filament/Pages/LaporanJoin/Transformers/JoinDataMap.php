@@ -3,24 +3,110 @@
 namespace App\Filament\Pages\LaporanJoin\Transformers;
 
 use Carbon\Carbon;
-use App\Models\Target;
+use App\Enums\Mesin;
+use App\Actions\HitungPotonganProduksiAction;
+use App\DataTransferObjects\PekerjaKerjaInput;
+use App\Services\Target\Strategies\ProporsionalStrategy;
 use Illuminate\Support\Facades\Log;
 
 class JoinDataMap
 {
+    /**
+     * Jam istirahat pabrik (tetap): 12:00 - 13:00.
+     * Dipotong dari jam kerja HANYA jika rentang masuk-pulang pegawai
+     * benar-benar beririsan dengan jam istirahat ini.
+     */
+    private const ISTIRAHAT_MULAI   = '12:00';
+    private const ISTIRAHAT_SELESAI = '13:00';
+
+    /**
+     * Struktur hasil: 1 elemen per MEJA/KRU (bukan per meja+ukuran).
+     * Tiap elemen berisi 'pekerja' (tabel atas) dan 'items' (tabel bawah).
+     */
     public static function make($collection): array
     {
         $result = [];
+        $action = new HitungPotonganProduksiAction();
 
         foreach ($collection as $produksi) {
             $tanggal = Carbon::parse($produksi->tanggal_produksi)->format('d/m/Y');
 
-            foreach ($produksi->modalJoint as $modal) {
-                $ukuranModel = $modal->ukuran;
-                $jenisKayuModel = $modal->jenisKayu;
-                $kw = $modal->kw ?? '1';
+            /* ============================================================
+             * 1. JAM AKTUAL & ORG AKTUAL — SEKALI PER PRODUKSI (SATU KRU)
+             * ============================================================ */
 
-                // 1. Build Kode Ukuran
+            $totalPersonMenit = 0;
+            $jumlahPekerja    = $produksi->pegawaiJoint->count();
+            $pekerjaInput     = [];
+            $totalGajiTim     = 0;
+            $jamAktualPerOrang = [];
+
+            foreach ($produksi->pegawaiJoint as $pj) {
+                if (!$pj->pegawai) {
+                    continue;
+                }
+
+                $totalGajiTim += (float) ($pj->pegawai->gaji ?? 0);
+
+                if (!$pj->masuk || !$pj->pulang) {
+                    continue;
+                }
+
+                $netMenit = self::hitungMenitKerjaBersih(
+                    Carbon::parse($pj->masuk),
+                    Carbon::parse($pj->pulang)
+                );
+
+                $totalPersonMenit += $netMenit;
+
+                $idPegawai = (string) ($pj->id_pegawai ?? $pj->pegawai->id);
+                $pekerjaInput[] = new PekerjaKerjaInput(
+                    idPegawai: $idPegawai,
+                    menitKerja: (float) $netMenit,
+                );
+                $jamAktualPerOrang[$idPegawai] = round($netMenit / 60, 2);
+            }
+
+            $avgMenitPerOrang = $jumlahPekerja > 0 ? $totalPersonMenit / $jumlahPekerja : 0;
+            $jamAktualRata    = $avgMenitPerOrang / 60;
+
+            /* ============================================================
+             * 2. HITUNG TARGET-ADJUSTED & CAPAIAN (%) PER UKURAN
+             * ------------------------------------------------------------
+             * PENTING (INI YANG SEMPAT SALAH): target tiap ukuran memang
+             * dirancang basis "1 kru kerja 1 hari PENUH cuma buat 1 ukuran
+             * itu" (org & jam normal sama semua). Tapi itu BUKAN alasan
+             * untuk buang penyesuaian jam aktual sama sekali — yang salah
+             * itu kalau jam aktual dipakai PENUH untuk SETIAP ukuran
+             * (double count kalau kru kerja >1 ukuran).
+             *
+             * Yang BENAR: target tiap ukuran tetap di-ADJUST pakai TOTAL
+             * TENAGA KERJA TIM HARI ITU (jumlahPekerja x rata-rata jam
+             * aktual mereka) — dipakai SEKALI per ukuran (bukan diulang
+             * penuh tiap ukuran), jadi tidak dobel-hitung. Kalau ada
+             * pekerja pulang cepat, rata-rata jam tim turun, target
+             * adjusted tiap ukuran ikut turun proporsional.
+             *
+             * Capaian tiap ukuran (hasil/targetAdjusted) tetap DIJUMLAH
+             * (bukan dirata-rata) lintas ukuran, karena kru cuma punya 1
+             * "jatah hari kerja" yang dibagi ke semua ukuran itu.
+             * ============================================================ */
+
+            $hasilGrouped = $produksi->hasilJoint->groupBy(function ($h) {
+                return $h->id_ukuran . '|' . $h->id_jenis_kayu . '|' . $h->kw;
+            });
+
+            $itemsMeja        = [];
+            $sumCapaianPersen = 0;
+            $sumNilaiTarget   = 0;
+            $jumlahUkuranAda  = 0;
+
+            foreach ($hasilGrouped as $hasilRows) {
+                $firstHasil     = $hasilRows->first();
+                $ukuranModel    = $firstHasil->ukuran;
+                $jenisKayuModel = $firstHasil->jenisKayu;
+                $kw             = $firstHasil->kw ?? '1';
+
                 if ($ukuranModel && $jenisKayuModel) {
                     $kodeUkuran = 'JOINT' . $ukuranModel->panjang . $ukuranModel->lebar .
                         str_replace('.', ',', $ukuranModel->tebal) . $kw .
@@ -29,98 +115,147 @@ class JoinDataMap
                     $kodeUkuran = 'JOINT-NOT-FOUND';
                 }
 
-                // 2. Ambil Target & Nilai Potongan Per Lembar
-                $targetModel = Target::where('kode_ukuran', $kodeUkuran)->first();
-                if (!$targetModel && $ukuranModel) {
-                    $targetModel = Target::where(['id_ukuran' => $ukuranModel->id])->first();
+                $idUkuran    = $firstHasil->id_ukuran;
+                $idJenisKayu = $firstHasil->id_jenis_kayu;
+                $hasilGrup   = (float) $hasilRows->sum('jumlah');
+
+                $rateInfo = ($idUkuran && $idJenisKayu)
+                    ? $action->resolveTargetDanRate(Mesin::Joint, $idUkuran, $idJenisKayu)
+                    : null;
+
+                if (!$rateInfo) {
+                    Log::warning('Target Join tidak ditemukan / data ukuran-jenis kayu tidak lengkap', [
+                        'id_produksi'   => $produksi->id,
+                        'kode_ukuran'   => $kodeUkuran,
+                        'id_ukuran'     => $idUkuran,
+                        'id_jenis_kayu' => $idJenisKayu,
+                    ]);
+
+                    $itemsMeja[] = [
+                        'kode_ukuran'    => $kodeUkuran,
+                        'ukuran'         => $ukuranModel->nama_ukuran ?? '-',
+                        'jenis_kayu'     => $jenisKayuModel->nama_kayu ?? '-',
+                        'kw'             => $kw,
+                        'hasil'          => $hasilGrup,
+                        'target'         => 0,
+                        'selisih'        => $hasilGrup,
+                        'capaian_persen' => null,
+                        'has_target'     => false,
+                    ];
+                    continue;
                 }
 
-                $targetHarian = (int) ($targetModel->target ?? 0);
-                $nilaiPotonganPerLembar = (float) ($targetModel->potongan ?? 0);
+                $target             = $rateInfo['target'];
+                $ratePerOrgPerMenit = $rateInfo['ratePerOrgPerMenit'];
+                $biayaPerUnit       = (float) $target->potongan;
 
-                // Hitung total pegawai dalam satu produksi ini untuk pembagi beban
-                $jumlahPekerja = $produksi->pegawaiJoint->count();
+                // ADJUSTED ke total tenaga kerja tim hari itu — dipakai
+                // SEKALI per ukuran (bukan penuh per ukuran), jadi tidak
+                // dobel hitung meski kru kerja banyak ukuran sekaligus.
+                // Dibulatkan ke bilangan bulat karena satuannya lembar utuh
+                // (gak mungkin ada "433,33 lembar").
+                $targetAdjusted = round($ratePerOrgPerMenit * $jumlahPekerja * $avgMenitPerOrang);
 
-                foreach ($produksi->pegawaiJoint as $pj) {
-                    if (!$pj->pegawai) continue;
+                $capaian     = $targetAdjusted > 0 ? ($hasilGrup / $targetAdjusted) * 100 : 100.0;
+                $nilaiTarget = $targetAdjusted * $biayaPerUnit;
 
-                    $nomorMeja = $pj->tugas ?? $pj->nomor_meja ?? '-';
-                    $key = $nomorMeja . '|' . $kodeUkuran;
+                $sumCapaianPersen += $capaian;
+                $sumNilaiTarget   += $nilaiTarget;
+                $jumlahUkuranAda  += 1;
 
-                    if (!isset($result[$key])) {
-                        $result[$key] = [
-                            'nomor_meja' => $nomorMeja,
-                            'kode_ukuran' => $kodeUkuran,
-                            'ukuran' => $ukuranModel->nama_ukuran ?? '-',
-                            'jenis_kayu' => $jenisKayuModel->nama_kayu ?? '-',
-                            'kw' => $kw,
-                            'pekerja' => [],
-                            'hasil' => 0,
-                            'target' => $targetHarian,
-                            'selisih' => 0,
-                            'tanggal' => $tanggal,
-                        ];
+                $itemsMeja[] = [
+                    'kode_ukuran'    => $kodeUkuran,
+                    'ukuran'         => $ukuranModel->nama_ukuran ?? '-',
+                    'jenis_kayu'     => $jenisKayuModel->nama_kayu ?? '-',
+                    'kw'             => $kw,
+                    'hasil'          => $hasilGrup,
+                    'target'         => $targetAdjusted,
+                    'target_normal'  => (float) $target->target,
+                    'selisih'        => $hasilGrup - $targetAdjusted,
+                    'capaian_persen' => $capaian,
+                    'has_target'     => true,
+                ];
+            }
+
+            /* ============================================================
+             * 3. CAPAIAN GLOBAL (JUMLAH PERSEN) → POTONGAN KOLEKTIF
+             * ============================================================ */
+
+            $capaianGlobal      = $sumCapaianPersen;
+            $nilaiSatuHariPenuh = $jumlahUkuranAda > 0 ? ($sumNilaiTarget / $jumlahUkuranAda) : 0;
+            $kekuranganPersen   = max(0, 100 - $capaianGlobal) / 100;
+            $potonganTotalTim   = $kekuranganPersen * $nilaiSatuHariPenuh;
+
+            $proporsional       = new ProporsionalStrategy();
+            $potonganPerPegawai = $proporsional->bagikan($pekerjaInput, $potonganTotalTim);
+
+            $potonganMelebihiGaji = $totalGajiTim > 0 && $potonganTotalTim > $totalGajiTim;
+
+            /* ============================================================
+             * 4. SUSUN OUTPUT PER MEJA
+             * ============================================================ */
+
+            $nomorMejaGroups = $produksi->pegawaiJoint->groupBy(fn ($pj) => $pj->tugas ?? $pj->nomor_meja ?? '-');
+
+            foreach ($nomorMejaGroups as $nomorMeja => $pjRows) {
+                $pekerjaOutput = [];
+
+                foreach ($pjRows as $pj) {
+                    if (!$pj->pegawai) {
+                        continue;
                     }
 
-                    // 3. Hitung Hasil Grup
-                    $hasilGrup = $produksi->hasilJoint->where('id_ukuran', $modal->id_ukuran)->sum('jumlah');
-                    $result[$key]['hasil'] = $hasilGrup;
+                    $idPegawai = (string) ($pj->id_pegawai ?? $pj->pegawai->id);
 
-                    $kekurangan = $targetHarian - $hasilGrup;
-                    $potTargetIndividu = 0;
-
-                    // 4. LOGIKA BARU: Potongan dibagi jumlah pekerja sebelum dibulatkan
-                    if ($kekurangan > 0 && $targetHarian > 0 && $nilaiPotonganPerLembar > 0) {
-
-                        // Total denda satu meja/grup
-                        $totalDendaMeja = $kekurangan * $nilaiPotonganPerLembar;
-
-                        if ($jumlahPekerja > 0) {
-                            // Denda dibagi rata ke tiap orang
-                            $potPerOrangRaw = $totalDendaMeja / $jumlahPekerja;
-
-                            // Gunakan pembulatan 3 tingkat (0-299, 300-799, 800-999)
-                            $potTargetIndividu = self::roundToNearest500($potPerOrangRaw);
-                        }
-
-                        Log::info("🧩 [JOIN MAP] Meja: {$nomorMeja} | Kurang: {$kekurangan} | Total Denda Meja: {$totalDendaMeja} | Pekerja: {$jumlahPekerja} | Final Pot: {$potTargetIndividu}");
-                    }
-
-                    $result[$key]['pekerja'][] = [
-                        'id' => $pj->pegawai->kode_pegawai ?? '-',
-                        'nama' => $pj->pegawai->nama_pegawai ?? '-',
-                        'jam_masuk' => $pj->masuk ? Carbon::parse($pj->masuk)->format('H:i') : '-',
-                        'jam_pulang' => $pj->pulang ? Carbon::parse($pj->pulang)->format('H:i') : '-',
-                        'ijin' => $pj->ijin ?? '-',
-                        'keterangan' => $pj->ket ?? '-',
-                        'hasil' => $hasilGrup,
-                        'pot_target' => $potTargetIndividu,
+                    $pekerjaOutput[] = [
+                        'id'                => $pj->pegawai->kode_pegawai ?? '-',
+                        'nama'              => $pj->pegawai->nama_pegawai ?? '-',
+                        'jam_masuk'         => $pj->masuk ? Carbon::parse($pj->masuk)->format('H:i') : '-',
+                        'jam_pulang'        => $pj->pulang ? Carbon::parse($pj->pulang)->format('H:i') : '-',
+                        'jam_aktual_bersih' => $jamAktualPerOrang[$idPegawai] ?? null,
+                        'ijin'              => $pj->ijin ?? '-',
+                        'keterangan'        => $pj->ket ?? '-',
+                        'pot_target'        => $potonganPerPegawai[$idPegawai] ?? 0,
                     ];
                 }
+
+                $result[] = [
+                    'nomor_meja'             => $nomorMeja,
+                    'tanggal'                => $tanggal,
+                    'jam_aktual'             => $jamAktualRata,
+                    'jumlah_pekerja'         => count($pekerjaOutput),
+                    'capaian_global_persen'  => $capaianGlobal,
+                    'potongan_total_tim'     => $potonganTotalTim,
+                    'potongan_melebihi_gaji' => $potonganMelebihiGaji,
+                    'total_gaji_tim'         => $totalGajiTim,
+                    'pekerja'                => $pekerjaOutput,
+                    'items'                  => $itemsMeja,
+                ];
             }
         }
 
-        foreach ($result as &$row) {
-            $row['selisih'] = $row['hasil'] - $row['target'];
-        }
-
-        return array_values($result);
+        return $result;
     }
 
-    /**
-     * Logic Pembulatan 3 Tingkat sesuai standar payroll Anda
-     */
-    private static function roundToNearest500(float $value): int
+    private static function hitungMenitKerjaBersih(Carbon $masuk, Carbon $pulang): int
     {
-        $ribuan = floor($value / 1000);
-        $ratusan = $value % 1000;
-
-        if ($ratusan < 300) {
-            return (int) ($ribuan * 1000);
-        } elseif ($ratusan >= 300 && $ratusan < 800) {
-            return (int) (($ribuan * 1000) + 500);
-        } else {
-            return (int) (($ribuan + 1) * 1000);
+        if ($pulang->lessThan($masuk)) {
+            $pulang = $pulang->copy()->addDay();
         }
+
+        $totalMenit = $masuk->diffInMinutes($pulang);
+
+        $istirahatMulai = Carbon::parse($masuk->format('Y-m-d') . ' ' . self::ISTIRAHAT_MULAI);
+        $istirahatSelesai = Carbon::parse($masuk->format('Y-m-d') . ' ' . self::ISTIRAHAT_SELESAI);
+
+        $overlapMulai   = $masuk->greaterThan($istirahatMulai) ? $masuk : $istirahatMulai;
+        $overlapSelesai = $pulang->lessThan($istirahatSelesai) ? $pulang : $istirahatSelesai;
+
+        $menitIstirahatTerpotong = 0;
+        if ($overlapSelesai->greaterThan($overlapMulai)) {
+            $menitIstirahatTerpotong = $overlapMulai->diffInMinutes($overlapSelesai);
+        }
+
+        return max(0, $totalMenit - $menitIstirahatTerpotong);
     }
 }

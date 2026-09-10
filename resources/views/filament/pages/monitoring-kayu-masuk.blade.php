@@ -113,7 +113,7 @@
                             class="w-full pl-9 pr-3 py-1.5 text-xs font-sans bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-amber-600 cursor-pointer transition">
                     </div>
 
-                    <!-- 3. FILTER BULAN (SEJAJAR BARIS UTAMA TOOLBAR) -->
+                    <!-- 3. FILTER BULAN -->
                     <select wire:model.live="bulan"
                         class="px-3 py-1.5 text-xs font-sans bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-amber-600 font-semibold cursor-pointer">
                         <option value="ALL">Semua Bulan</option>
@@ -125,8 +125,8 @@
                     <!-- 4. Tombol Toggle Filter Opsi Lainnya -->
                     <button @click="showAdvancedFilters = !showAdvancedFilters" type="button"
                         :class="showAdvancedFilters || {{ $this->hasActiveAdvancedFilters ? 'true' : 'false' }}
-        ? 'bg-amber-700 text-white border-amber-700 shadow-xs'
-        : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700'"
+                            ? 'bg-amber-700 text-white border-amber-700 shadow-xs'
+                            : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700'"
                         class="px-3 py-1.5 text-xs font-sans font-semibold border flex items-center gap-2 transition">
                         <x-heroicon-m-funnel class="w-3.5 h-3.5" />
                         <span>Filter Opsi</span>
@@ -173,7 +173,7 @@
                     @endforeach
                 </select>
 
-                <!-- TOMBOL RESET FILTER (WARNA NETRAL ZINC/SLATE) -->
+                <!-- TOMBOL RESET FILTER -->
                 @if($search !== '' || $statusLogistik !== 'ALL' || $supplierId !== 'ALL' || $dariTanggal || $sampaiTanggal || $bulan !== 'ALL')
                 <button wire:click="resetFilters" type="button"
                     class="text-xs font-sans text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-semibold px-2.5 py-1 flex items-center gap-1.5 border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition ml-auto">
@@ -184,15 +184,14 @@
             </div>
         </div>
 
-        <!-- TABEL UTAMA MONITORING (DENGAN CENTERED LOADING OVERLAY) -->
-        <div class="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs overflow-hidden font-sans min-h-[300px]">
+        <!-- CONTAINER UTAMA TABEL DENGAN SCROLL VERTICAL & HORIZONTAL -->
+        <div class="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs font-sans flex flex-col">
 
-            <!-- INDIKATOR LOADING CIRCLE DI TENGAH TABEL (LIGHT & DARK MODE SUPPORT) -->
+            <!-- LOADING OVERLAY -->
             <div wire:loading.delay.default
-                wire:target="search, statusLogistik, supplierId, dariTanggal, sampaiTanggal, bulan, tahun, resetFilters"
-                class="absolute inset-0 z-30 flex items-center justify-center bg-white/80 dark:bg-zinc-900/80 backdrop-blur-[2px] transition-all">
+                wire:target="search, statusLogistik, supplierId, dariTanggal, sampaiTanggal, bulan, tahun, resetFilters, toggleRow"
+                class="absolute inset-0 z-40 flex items-center justify-center bg-white/80 dark:bg-zinc-900/80 backdrop-blur-[2px] transition-all">
                 <div class="loading-card-enter flex items-center gap-3 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-5 py-3 shadow-xl">
-                    <!-- Dual-Tone Modern Loading Spinner SVG -->
                     <svg class="animate-spin h-6 w-6 text-amber-600 dark:text-amber-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3.5"></circle>
                         <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
@@ -203,20 +202,22 @@
                 </div>
             </div>
 
-            <div class="overflow-x-auto">
+            <!-- AREA SCROLLABLE TABEL -->
+            <div class="overflow-x-auto overflow-y-auto" style="max-height: calc(100vh - 290px);">
                 <table class="w-full text-left text-xs border-collapse font-sans">
-                    <thead>
-                        <tr class="bg-zinc-100 dark:bg-zinc-800/90 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider">
-                            <th class="py-3 px-3 text-center w-8">#</th>
-                            <th class="py-3 px-4">Seri & Tanggal</th>
-                            <th class="py-3 px-4">Kendaraan & Supplier</th>
+                    <!-- STICKY HEADER -->
+                    <thead class="sticky top-0 z-20 bg-zinc-100 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 font-bold uppercase tracking-wider shadow-xs">
+                        <tr>
+                            <th class="py-3 px-3 text-center w-8 bg-zinc-100 dark:bg-zinc-800">#</th>
+                            <th class="py-3 px-4 bg-zinc-100 dark:bg-zinc-800">Seri & Tanggal</th>
+                            <th class="py-3 px-4 bg-zinc-100 dark:bg-zinc-800">Kendaraan & Supplier</th>
                             @if($showDokumenCol)
-                            <th class="py-3 px-4">Dokumen Transport</th>
+                            <th class="py-3 px-4 bg-zinc-100 dark:bg-zinc-800">Dokumen Transport</th>
                             @endif
-                            <th class="py-3 px-4">Status Turun Kayu</th>
-                            <th class="py-3 px-4">Status Turus Kayu</th>
-                            <th class="py-3 px-4">Nota Kayu & Status Pelunasan</th>
-                            <th class="py-3 px-4 text-center">Cek Nota</th>
+                            <th class="py-3 px-4 bg-zinc-100 dark:bg-zinc-800">Status Turun Kayu</th>
+                            <th class="py-3 px-4 bg-zinc-100 dark:bg-zinc-800">Status Turus Kayu</th>
+                            <th class="py-3 px-4 bg-zinc-100 dark:bg-zinc-800">Nota Kayu & Status Pelunasan</th>
+                            <th class="py-3 px-4 text-center bg-zinc-100 dark:bg-zinc-800">Cek Nota</th>
                         </tr>
                     </thead>
 
@@ -227,7 +228,7 @@
                         $isTurunSelesai = (bool)$item->has_turun;
                         $hasTurus = (bool)$item->has_turus;
                         $nota = $item->notaKayu;
-                        $isExpanded = in_array($item->id, $expandedRows, true);
+                        $isExpanded = $expandedRow === $item->id;
                         @endphp
 
                         <!-- BARIS UTAMA -->
@@ -462,7 +463,8 @@
                 </table>
             </div>
 
-            <div class="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
+            <!-- STICKY FOOTER / PAGINATION -->
+            <div class="sticky bottom-0 z-20 p-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/95 dark:bg-zinc-900/95 backdrop-blur-xs shadow-md">
                 {{ $this->monitoringData->links() }}
             </div>
         </div>

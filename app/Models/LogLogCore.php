@@ -21,6 +21,8 @@ class LogLogCore extends Model
         'nilai_stok_before',
         'stok_qty_after',
         'nilai_stok_after',
+        'id_validator',
+        'tanggal_validasi',
     ];
     protected $casts = [
         'tanggal' => 'date',
@@ -32,6 +34,7 @@ class LogLogCore extends Model
         'nilai_stok_before' => 'float',
         'stok_qty_after' => 'float',
         'nilai_stok_after' => 'float',
+        'tanggal_validasi' => 'date',
     ];
 
     public function jenisKayu()
@@ -42,5 +45,10 @@ class LogLogCore extends Model
     public function referensi()
     {
         return $this->morphTo();
+    }
+
+    public function validator()
+    {
+        return $this->belongsTo(User::class, 'id_validator');
     }
 }

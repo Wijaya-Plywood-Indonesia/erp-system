@@ -5,27 +5,25 @@ namespace App\Http\Controllers;
 use App\Exports\LaporanKayu;
 use App\Models\HargaKayu;
 use App\Models\NotaKayu;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Facades\Excel;
-use Carbon\Carbon;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Pagination\Paginator;
 
 class LaporanKayuMasukController extends Controller
 {
     private const STATUS_LUNAS_PREFIX = 'Lunas%';
 
     /**
-     * Ekspresi SQL untuk parse tanggal lunas dari string status_pelunasan.
-     * Format string: "Lunas - 30/06/2026 15:48 (nia)"
-     */
-    private const SQL_TGL_LUNAS = "STR_TO_DATE(SUBSTRING_INDEX(SUBSTRING_INDEX(status_pelunasan, ' - ', -1), ' (', 1), '%d/%m/%Y %H:%i')";
-
-    /**
      * Menyimpan seluruh data master harga kayu agar tidak query berulang di dalam looping.
      */
     private Collection $masterHarga;
+
+    /**
+     * Cache hasil grouping master harga per (jenis|grade|panjang), dibangun sekali
+     * saat pertama dibutuhkan lewat masterHargaGrouped().
+     */
+    private ?Collection $masterHargaGroupedCache = null;
 
     public function __construct()
     {
@@ -35,42 +33,36 @@ class LaporanKayuMasukController extends Controller
 
     /**
      * Ambil semua NotaKayu berstatus lunas, difilter & diurutkan
-     * berdasarkan TANGGAL LUNAS (diparse dari string status_pelunasan).
+     * berdasarkan kolom `tanggal_lunas` (generated column, lihat migration
+     * add_tanggal_lunas_generated_column_to_nota_kayu_table).
      */
     private function ambilNota(Request $request): Collection
     {
-        // OPTIMASI: Set default tanggal ke bulan berjalan jika filter kosong
         $dari = $request->dari ?? Carbon::now()->startOfMonth()->format('Y-m-d');
         $sampai = $request->sampai ?? Carbon::now()->endOfMonth()->format('Y-m-d');
 
         return NotaKayu::query()
             ->where('status_pelunasan', 'LIKE', self::STATUS_LUNAS_PREFIX)
-            ->whereRaw('DATE('.self::SQL_TGL_LUNAS.') >= ?', [$dari])
-            ->whereRaw('DATE('.self::SQL_TGL_LUNAS.') <= ?', [$sampai])
+            ->whereBetween('tanggal_lunas', [$dari, $sampai])
             ->with([
                 'kayuMasuk.detailTurusanKayus.jenisKayu',
                 'kayuMasuk.detailTurusanKayus.lahan',
-                'kayuMasuk.penggunaanSupplier', 
+                'kayuMasuk.penggunaanSupplier',
             ])
-            ->orderByRaw(self::SQL_TGL_LUNAS.' ASC')
+            ->orderBy('tanggal_lunas')
             ->get();
     }
 
     /**
-     * Ambil tanggal lunas (format Y-m-d) dari string status_pelunasan,
-     * contoh: "Lunas - 30/06/2026 15:48 (nia)" -> "2026-06-30".
+     * Grouping master harga per (id_jenis_kayu|grade|panjang), dihitung sekali
+     * dan di-cache di $masterHargaGroupedCache — menghindari filter berulang
+     * (where->where->where->sortBy) untuk setiap kombinasi yang sama.
      */
-    private function tglLunas(?string $statusPelunasan): ?string
+    private function masterHargaGrouped(): Collection
     {
-        if (! $statusPelunasan) {
-            return null;
-        }
-
-        if (preg_match('#(\d{2})/(\d{2})/(\d{4})#', $statusPelunasan, $m)) {
-            return "{$m[3]}-{$m[2]}-{$m[1]}"; // Y-m-d
-        }
-
-        return null;
+        return $this->masterHargaGroupedCache ??= $this->masterHarga
+            ->groupBy(fn ($h) => "{$h->id_jenis_kayu}|{$h->grade}|{$h->panjang}")
+            ->map(fn ($group) => $group->sortBy('diameter_terkecil')->values());
     }
 
     /**
@@ -78,13 +70,7 @@ class LaporanKayuMasukController extends Controller
      */
     private function groupByRentangDiameter($details, $idJenisKayu, $grade, $panjang)
     {
-        // OPTIMASI: Menggunakan collection di memori ($this->masterHarga)
-        $rentangList = $this->masterHarga
-            ->where('id_jenis_kayu', $idJenisKayu)
-            ->where('grade', $grade)
-            ->where('panjang', $panjang)
-            ->sortBy('diameter_terkecil')
-            ->values();
+        $rentangList = $this->masterHargaGrouped()->get("{$idJenisKayu}|{$grade}|{$panjang}", collect());
 
         $hasil = collect();
         $terpakaiIds = collect();
@@ -125,45 +111,39 @@ class LaporanKayuMasukController extends Controller
     }
 
     /**
-     * Bangun baris laporan: SATU BARIS per (nota + lahan + jenis + panjang).
+     * Transformasi Collection NotaKayu menjadi baris-baris laporan.
+     * Dipisah dari fetch data agar bisa dipakai untuk data ter-paginate (index)
+     * maupun data penuh (export) tanpa duplikasi logika.
      */
-    private function buildLaporanData(Request $request): Collection
+    private function transformNotasToRows(Collection $notas): Collection
     {
-        $notas = $this->ambilNota($request);
         $hasil = collect();
 
         foreach ($notas as $nota) {
             $kayuMasuk = $nota->kayuMasuk;
-            
-            if (!$kayuMasuk) {
+            if (! $kayuMasuk) {
                 continue;
             }
 
             $details = $kayuMasuk->detailTurusanKayus ?? collect();
-
             if ($details->isEmpty()) {
                 continue;
             }
 
-            $tanggalLunas = $this->tglLunas($nota->status_pelunasan);
+            $tanggalLunas = $nota->tanggal_lunas;
 
-            // Grup PENYAJIAN: per lahan + jenis + panjang (tanpa grade)
-            $grupLahan = $details->groupBy(function ($item) {
-                return implode('|', [
-                    $item->lahan_id,
-                    $item->jenis_kayu_id,
-                    $item->panjang,
-                ]);
-            });
+            $grupLahan = $details->groupBy(fn ($item) => implode('|', [
+                $item->lahan_id,
+                $item->jenis_kayu_id,
+                $item->panjang,
+            ]));
 
             foreach ($grupLahan as $itemsLahan) {
                 $first = $itemsLahan->first();
-
                 $totalBatang = 0;
                 $totalM3 = 0;
                 $totalPoin = 0;
 
-                // Grup PERHITUNGAN: tetap per grade, karena master harga per grade
                 foreach ($itemsLahan->groupBy('grade') as $grade => $itemsGrade) {
                     $rentangRows = $this->groupByRentangDiameter(
                         $itemsGrade,
@@ -171,14 +151,18 @@ class LaporanKayuMasukController extends Controller
                         $grade,
                         $first->panjang
                     );
-
                     $totalBatang += $rentangRows->sum('batang');
                     $totalM3 += $rentangRows->sum('kubikasi');
                     $totalPoin += $rentangRows->sum('total_harga');
                 }
 
                 $hasil->push((object) [
-                    'tanggal' => $tanggalLunas,
+                    'tgl_kayu_masuk' => $kayuMasuk->tgl_kayu_masuk
+                        ? Carbon::parse($kayuMasuk->tgl_kayu_masuk)->format('d/m/Y')
+                        : '-',
+                    'tanggal' => $tanggalLunas
+                        ? Carbon::parse($tanggalLunas)->format('d/m/Y')
+                        : '-',
                     'nama' => trim($kayuMasuk->penggunaanSupplier->nama_supplier ?? '-'),
                     'seri' => $kayuMasuk->seri,
                     'panjang' => $first->panjang,
@@ -194,34 +178,49 @@ class LaporanKayuMasukController extends Controller
         return $hasil->values();
     }
 
+    /**
+     * Ambil SELURUH data laporan untuk rentang tanggal (dipakai export, bukan index).
+     */
+    private function buildLaporanData(Request $request): Collection
+    {
+        $notas = $this->ambilNota($request);
+
+        return $this->transformNotasToRows($notas);
+    }
+
     public function index(Request $request)
     {
-        // 1. Ambil seluruh data hasil perhitungan (Masih berupa Collection mentah)
-        $allData = $this->buildLaporanData($request);
+        $dari = $request->dari ?? Carbon::now()->startOfMonth()->format('Y-m-d');
+        $sampai = $request->sampai ?? Carbon::now()->endOfMonth()->format('Y-m-d');
 
-        // 2. Konfigurasi Pagination (misal: 50 data per halaman)
-        $perPage = 50; 
-        $page = \Illuminate\Pagination\Paginator::resolveCurrentPage('page') ?: 1;
+        // Paginate di level SQL — hanya 50 nota yang benar-benar diambil & diproses
+        $notas = NotaKayu::query()
+            ->where('status_pelunasan', 'LIKE', self::STATUS_LUNAS_PREFIX)
+            ->whereBetween('tanggal_lunas', [$dari, $sampai])
+            ->with([
+                'kayuMasuk.detailTurusanKayus.jenisKayu',
+                'kayuMasuk.detailTurusanKayus.lahan',
+                'kayuMasuk.penggunaanSupplier',
+            ])
+            ->orderBy('tanggal_lunas')
+            ->paginate(50)
+            ->withQueryString();
 
-        // 3. Potong collection dan ubah menjadi Paginator agar fungsi ->links() bisa bekerja
-        $data = new \Illuminate\Pagination\LengthAwarePaginator(
-            $allData->forPage($page, $perPage),
-            $allData->count(),
-            $perPage,
-            $page,
-            [
-                'path' => \Illuminate\Pagination\Paginator::resolveCurrentPath(),
-                'query' => $request->query() 
-            ]
-        );
+        // Agregasi HANYA untuk 50 nota di halaman ini, bukan seluruh rentang tanggal.
+        // Catatan: karena 1 nota bisa menghasilkan >1 atau 0 baris laporan (grouping
+        // lahan/jenis/panjang), jumlah baris yang tampil per halaman mendekati-50,
+        // bukan pasti 50, dan total()/links() mengacu ke jumlah NOTA bukan baris laporan.
+        $data = $this->transformNotasToRows($notas->getCollection());
 
-        // 4. Kirim data yang sudah di-paginate ke view
-        return view('nota-kayu.laporan-kayu', compact('data'));
+        return view('nota-kayu.laporan-kayu', [
+            'data' => $notas->setCollection($data),
+        ]);
     }
 
     public function export(Request $request)
     {
         $columns = [
+            ['label' => 'Tgl Kayu Masuk', 'field' => 'tgl_kayu_masuk'],
             ['label' => 'Tanggal', 'field' => 'tanggal'],
             ['label' => 'Nama Supplier', 'field' => 'nama'],
             ['label' => 'Seri', 'field' => 'seri'],
@@ -244,7 +243,7 @@ class LaporanKayuMasukController extends Controller
         }
 
         $fileName = 'laporan_kayu_'.$labelTanggal.'.xlsx';
-        
+
         // Export menggunakan semua data (bukan yang dipotong pagination)
         $data = $this->buildLaporanData($request);
 

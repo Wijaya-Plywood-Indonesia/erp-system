@@ -1,8 +1,23 @@
-{{-- resources/views/filament/pages/opname-stok-kayu.blade.php --}}
-
 <x-filament-panels::page>
     <div class="space-y-6">
-        {{-- Info Banner --}}
+        {{-- Navigation Tabs --}}
+        <x-filament::tabs>
+            <x-filament::tabs.item
+                :active="$activeTab === 'kayu'"
+                wire:click="setTab('kayu')"
+                icon="heroicon-o-document-text">
+                Opname Stok Kayu
+            </x-filament::tabs.item>
+
+            <x-filament::tabs.item
+                :active="$activeTab === 'log_core'"
+                wire:click="setTab('log_core')"
+                icon="heroicon-o-cube">
+                Opname Log Core
+            </x-filament::tabs.item>
+        </x-filament::tabs>
+
+        {{-- Info Banner (Berubah sesuai Tab Aktif) --}}
         <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <div class="flex items-start gap-3">
                 <div class="flex-shrink-0">
@@ -11,19 +26,27 @@
                     </svg>
                 </div>
                 <div>
-                    <h3 class="text-sm font-semibold text-blue-800 dark:text-blue-300">Panduan Stok Opname Kayu</h3>
+                    <h3 class="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                        Panduan Stok Opname {{ $activeTab === 'kayu' ? 'Kayu' : 'Log Core' }}
+                    </h3>
                     <ul class="text-sm text-blue-700 dark:text-blue-400 mt-1 list-disc list-inside space-y-0.5">
+                        @if ($activeTab === 'kayu')
                         <li>Pilih Lahan, Jenis Kayu, dan Panjang yang akan diopname</li>
                         <li>Sistem akan menampilkan stok saat ini di sistem</li>
-                        <li>Masukkan hasil pengecekan stok fisik di lapangan</li>
-                        <li>Sistem akan menghitung selisih secara otomatis</li>
-                        <li>Setiap perubahan akan dicatat di Log HPP</li>
+                        <li>Masukkan hasil pengecekan stok fisik (Batang, m³, Poin) di lapangan</li>
+                        <li>Setiap penyesuaian akan memperbarui HPP dan dicatat di Log HPP</li>
+                        @else
+                        <li>Pilih Jenis Kayu dan Panjang Log Core</li>
+                        <li>Sistem akan menampilkan jumlah stok Qty saat ini</li>
+                        <li>Masukkan jumlah Qty hasil pengecekan fisik di lapangan</li>
+                        <li>Sistem akan memperbarui stok berjalan Log Core secara langsung</li>
+                        @endif
                     </ul>
                 </div>
             </div>
         </div>
 
-        {{-- Form --}}
+        {{-- Render Form Schema --}}
         {{ $this->schema }}
     </div>
 </x-filament-panels::page>

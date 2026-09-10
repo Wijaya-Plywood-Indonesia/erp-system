@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiGrajiTripleks\Tables;
 
+use App\Services\ProductionAccessService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -25,6 +26,7 @@ class ProduksiGrajiTripleksTable
     {
         return $table
             ->defaultSort('tanggal_produksi', 'desc')
+            ->modifyQueryUsing(fn($query) => ProductionAccessService::applyDateRestriction($query, 'tanggal_produksi', 7))
             ->columns([
                 TextColumn::make('tanggal_produksi')
                     ->label('Tanggal Produksi')

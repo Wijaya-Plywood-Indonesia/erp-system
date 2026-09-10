@@ -17,18 +17,18 @@ class TargetsTable
             /* PENTING: Kita paksa defaultSort ke 'id_mesin' atau 'created_at' 
                agar Filament tidak mencari 'id_target' yang tidak ditemukan di database.
             */
-            ->defaultSort('created_at', 'desc') 
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 // Kolom Status menggunakan TextColumn dengan badge()
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'diajukan' => 'danger',
                         'disetujui' => 'success',
                         default => 'gray',
                     })
-                    ->icon(fn (string $state): string => match ($state) {
+                    ->icon(fn(string $state): string => match ($state) {
                         'diajukan' => 'heroicon-o-x-circle',
                         'disetujui' => 'heroicon-o-check-circle',
                         default => 'heroicon-o-minus-circle',
@@ -38,9 +38,28 @@ class TargetsTable
                     ->label('Mesin')
                     ->searchable(),
 
+                TextColumn::make('ukuranModel.dimensi')
+                    ->label('Ukuran')
+                    ->numeric()
+                    ->sortable(),
+
+                TextColumn::make('grade')
+                    ->label('KW')
+                    ->badge()
+                    ->color('info')
+                    ->placeholder('-')
+                    ->searchable()
+                    ->sortable(),
+
                 TextColumn::make('jenisKayu.nama_kayu')
                     ->label('Jenis Kayu')
                     ->searchable(),
+
+                TextColumn::make('kategoriBarang.nama_kategori')
+                    ->label('Jenis Barang')
+                    ->placeholder('-')
+                    ->searchable()
+                    ->sortable(),
 
                 TextColumn::make('target')
                     ->numeric(decimalPlaces: 4)

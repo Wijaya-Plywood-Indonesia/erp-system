@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\HasRouteUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Validation\ValidationException;
 
 class ProduksiRepair extends Model
 {
+    use HasRouteUuid;
+
     protected $table = 'produksi_repairs';
 
     protected $fillable = [
