@@ -16,6 +16,13 @@ class VeneerMutasiDetail extends Model
         'kw',
         'qty',
         'm3',
+        'harga',
+    ];
+
+    protected $casts = [
+        'qty' => 'integer',
+        'm3' => 'float',
+        'harga' => 'float',
     ];
 
     public function mutasi()

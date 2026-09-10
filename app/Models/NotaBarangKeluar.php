@@ -14,6 +14,7 @@ class NotaBarangKeluar extends Model
         'tanggal',
         'no_nota',
         'tujuan_nota',
+        'alamat',
         'metode_pembayaran',
         'id_rekening_perusahaan',
         'dibuat_oleh',

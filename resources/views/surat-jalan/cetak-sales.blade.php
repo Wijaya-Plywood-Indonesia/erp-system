@@ -127,46 +127,68 @@
                     <td class="border-bottom"></td>
                 </tr>
                 <tr>
-                    <td style="font-weight: bold;">Kepada</td>
-                    <td style="font-weight: bold;">
+                    <td rowspan="2" class="border-bottom" style="font-weight: bold; vertical-align: top; padding-top: 8px;">Kepada</td>
+                    <td rowspan="2" class="border-bottom" style="font-weight: bold; vertical-align: top; padding-top: 8px;">
                         {{ $nota->tujuan_nota }}
+                        @if($nota->alamat)
+                            <br>
+                            <span style="font-weight: normal;">{!! nl2br(e($nota->alamat)) !!}</span>
+                        @endif
                     </td>
                     <td style="font-weight: bold;">Mobil</td>
                     <td style="font-weight: bold;">:</td>
                     <td></td>
                 </tr>
                 <tr>
-                    <td class="border-bottom"></td>
-                    <td class="border-bottom"></td>
                     <td class="border-bottom" style="font-weight: bold;">No Plat</td>
                     <td class="border-bottom" style="font-weight: bold;">:</td>
                     <td class="border-bottom"></td>
                 </tr>
             </table>
 
-            <table class="items-table">
-                <thead>
+        @php
+            $hasM3 = collect($details)->contains(function($d) {
+                return (str_starts_with($d->nama_barang, 'Veneer ') && App\Filament\Resources\DetailNotaBarangKeluars\Tables\DetailNotaBarangKeluarsTable::findVeneerDetail($d)?->m3 !== null);
+            });
+        @endphp
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th width="8%">No.</th>
+                    <th>Nama Barang</th>
+                    <th width="12%">Satuan</th>
+                    <th width="12%">Jumlah</th>
+                    @if($hasM3)
+                    <th width="16%" style="white-space: nowrap;">m3</th>
+                    @endif
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($details as $i => $d)
                     <tr>
-                        <th width="10%">No.</th>
-                        <th>Nama Barang</th>
-                        <th width="15%">Satuan</th>
-                        <th width="15%">Jumlah</th>
+                        <td>{{ $i + 1 }}</td>
+                        <td class="text-left">{{ $d->nama_barang }}</td>
+                        <td>{{ $d->satuan }}</td>
+                        <td>{{ number_format($d->jumlah) }}</td>
+                        @if($hasM3)
+                        @php
+                            $m3 = null;
+                            if (str_starts_with($d->nama_barang, 'Veneer ')) {
+                                $m3 = App\Filament\Resources\DetailNotaBarangKeluars\Tables\DetailNotaBarangKeluarsTable::findVeneerDetail($d)?->m3;
+                            }
+                        @endphp
+                        <td style="white-space: nowrap;">{{ $m3 !== null ? number_format($m3, 4, ',', '.') : '-' }}</td>
+                        @endif
                     </tr>
-                </thead>
-                <tbody>
-                    @foreach ($details as $i => $d)
-                        <tr>
-                            <td>{{ $i + 1 }}</td>
-                            <td class="text-left">{{ $d->nama_barang }}</td>
-                            <td>{{ $d->satuan }}</td>
-                            <td>{{ number_format($d->jumlah) }}</td>
-                        </tr>
                     @endforeach
                 </tbody>
                 <tfoot>
                     <tr>
                         <td colspan="3" style="text-align: right; font-weight: bold; padding-right: 15px;">Total</td>
                         <td style="font-weight: bold;">{{ number_format($details->sum('jumlah')) }}</td>
+                        @if($hasM3)
+                        <td></td>
+                        @endif
                     </tr>
                 </tfoot>
             </table>

@@ -51,7 +51,22 @@ class NotaBarangKeluarForm
 
                 TextInput::make('tujuan_nota')
                     ->label('Kepada')
-                    ->required(),
+                    ->required()
+                    ->datalist(fn () => \App\Models\Customer::pluck('nama')->toArray())
+                    ->live(onBlur: true)
+                    ->afterStateUpdated(function ($state, Set $set) {
+                        if ($state) {
+                            $customer = \App\Models\Customer::where('nama', $state)->first();
+                            if ($customer && $customer->alamat) {
+                                $set('alamat', $customer->alamat);
+                            }
+                        }
+                    }),
+
+                TextInput::make('alamat')
+                    ->label('Alamat')
+                    ->maxLength(255)
+                    ->nullable(),
 
                 Hidden::make('dibuat_oleh')
                     ->default(fn() => auth()->id()),

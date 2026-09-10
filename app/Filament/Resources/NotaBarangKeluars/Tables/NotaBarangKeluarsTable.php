@@ -25,6 +25,10 @@ class NotaBarangKeluarsTable
                 TextColumn::make('tujuan_nota')
                     ->label('kepada')
                     ->searchable(),
+                TextColumn::make('alamat')
+                    ->searchable()
+                    ->limit(50)
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('pembuat.name')
                     ->numeric()
                     ->sortable(),

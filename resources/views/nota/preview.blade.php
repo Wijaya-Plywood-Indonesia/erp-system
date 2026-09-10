@@ -84,6 +84,9 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 class="text-lg font-bold text-gray-900 mb-4 pb-2 border-b border-gray-100">Daftar Barang (Item Nota)</h2>
             <div class="overflow-x-auto">
+                @php
+                    $hasM3 = collect($items)->contains(fn($item) => $item->m3 !== null);
+                @endphp
                 <table class="w-full text-left border-collapse text-sm">
                     <thead>
                         <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold text-xs uppercase tracking-wider">
@@ -91,6 +94,9 @@
                             <th class="py-3 px-3">Nama Barang</th>
                             <th class="py-3 px-3 text-center w-20">Satuan</th>
                             <th class="py-3 px-3 text-right w-20">Qty</th>
+                            @if($hasM3)
+                            <th class="py-3 px-3 text-right w-28 whitespace-nowrap">m3</th>
+                            @endif
                             <th class="py-3 px-3 text-right w-32">Harga</th>
                             @if($jenis === 'sales')
                             <th class="py-3 px-3 text-right w-24">Pot/pcs</th>
@@ -106,6 +112,9 @@
                                 <td class="py-2.5 px-3 font-medium text-gray-900">{{ $item->nama_barang }}</td>
                                 <td class="py-2.5 px-3 text-center text-gray-600">{{ $item->satuan }}</td>
                                 <td class="py-2.5 px-3 text-right text-gray-900">{{ number_format($item->qty) }}</td>
+                                @if($hasM3)
+                                <td class="py-2.5 px-3 text-right text-gray-900 whitespace-nowrap">{{ $item->m3 !== null ? number_format($item->m3, 4, ',', '.') : '-' }}</td>
+                                @endif
                                 <td class="py-2.5 px-3 text-right text-gray-900">{{ number_format($item->harga, 0, ',', '.') }}</td>
                                 @if($jenis === 'sales')
                                 <td class="py-2.5 px-3 text-right text-gray-500">0</td>
@@ -115,7 +124,10 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="{{ $jenis === 'sales' ? '8' : '6' }}" class="py-6 text-center text-gray-400">
+                                @php
+                                    $colCount = $jenis === 'sales' ? ($hasM3 ? 9 : 8) : ($hasM3 ? 7 : 6);
+                                @endphp
+                                <td colspan="{{ $colCount }}" class="py-6 text-center text-gray-400">
                                     Tidak ada item barang pada nota ini.
                                 </td>
                             </tr>
@@ -123,7 +135,10 @@
                     </tbody>
                     <tfoot>
                         <tr class="bg-gray-50 font-bold text-gray-900 border-t-2 border-gray-200">
-                            <td colspan="{{ $jenis === 'sales' ? '7' : '5' }}" class="py-3 px-3 text-right uppercase">Total:</td>
+                            @php
+                                $footColCount = $jenis === 'sales' ? ($hasM3 ? 8 : 7) : ($hasM3 ? 6 : 5);
+                            @endphp
+                            <td colspan="{{ $footColCount }}" class="py-3 px-3 text-right uppercase">Total:</td>
                             <td class="py-3 px-3 text-right text-indigo-700 text-base">{{ number_format($grandTotal, 0, ',', '.') }}</td>
                         </tr>
                     </tfoot>

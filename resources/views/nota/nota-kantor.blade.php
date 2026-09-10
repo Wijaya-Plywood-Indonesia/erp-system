@@ -217,17 +217,24 @@
             </tr>
         </table>
 
+        @php
+            $hasM3 = collect($items)->contains(fn($item) => $item->m3 !== null);
+        @endphp
+
         <!-- Table Barang -->
         <table class="items-table">
             <thead>
                 <tr>
-                    <th style="width: 6%;">No.</th>
-                    <th style="width: 37%;">Nama Barang</th>
+                    <th style="width: 5%;">No.</th>
+                    <th style="width: {{ $hasM3 ? '32%' : '40%' }};">Nama Barang</th>
                     <th style="width: 9%;">ketr</th>
-                    <th style="width: 11%;">Satuan</th>
+                    <th style="width: 8%; white-space: nowrap;">Satuan</th>
                     <th style="width: 8%;">Qty</th>
-                    <th style="width: 14%;">Harga</th>
-                    <th style="width: 15%;">Subtotal</th>
+                    @if($hasM3)
+                    <th style="width: 11%; white-space: nowrap;">m3</th>
+                    @endif
+                    <th style="width: 13%;">Harga</th>
+                    <th style="width: 14%;">Subtotal</th>
                 </tr>
             </thead>
             <tbody>
@@ -235,9 +242,12 @@
                     <tr>
                         <td class="text-center">{{ $idx + 1 }}</td>
                         <td class="text-left">{{ $item->nama_barang }}</td>
-                        <td class="text-center">{{ $item->keterangan ?? '' }}</td>
-                        <td class="text-center">{{ $item->satuan }}</td>
+                        <td class="text-center"></td>
+                        <td class="text-center" style="white-space: nowrap;">{{ $item->satuan }}</td>
                         <td class="text-center">{{ number_format($item->qty) }}</td>
+                        @if($hasM3)
+                        <td class="text-center" style="white-space: nowrap;">{{ $item->m3 !== null ? number_format($item->m3, 4, ',', '.') : '-' }}</td>
+                        @endif
                         <td class="text-right">{{ number_format($item->harga, 0, ',', '.') }}</td>
                         <td class="text-right">{{ number_format($item->subtotal, 0, ',', '.') }}</td>
                     </tr>
@@ -245,7 +255,7 @@
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="6" class="total-label">Total</td>
+                    <td colspan="{{ $hasM3 ? 7 : 6 }}" class="total-label">Total</td>
                     <td class="total-value">{{ number_format($grandTotal, 0, ',', '.') }}</td>
                 </tr>
             </tfoot>

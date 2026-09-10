@@ -82,7 +82,8 @@ class UkuranBarangSetengahJadiForm
                     ->label('Harga')
                     ->numeric()
                     ->prefix('Rp')
-                    ->required(),
+                    ->helperText('Veneer mengunakan harga /m3 dan Plywood mengunakan harga /pcs')
+                    ->nullable(),
 
                 TextInput::make('merek')
                     ->label('Merek')
