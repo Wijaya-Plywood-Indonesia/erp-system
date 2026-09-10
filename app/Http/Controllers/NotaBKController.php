@@ -58,12 +58,33 @@ class NotaBKController extends Controller
             'rekeningPerusahaan',
             'plywoodMutasi.details.ukuran',
             'plywoodMutasi.details.jenisKayu',
+            'mutasi.details',
             'detail',
         ]);
 
-        $rawItems = ($record->plywoodMutasi && $record->plywoodMutasi->details->isNotEmpty())
-            ? $record->plywoodMutasi->details
-            : $record->detail;
+        $rawItems = collect();
+        foreach ($record->detail as $d) {
+            if (str_starts_with($d->nama_barang, 'Plywood ') && $record->plywoodMutasi) {
+                $matched = null;
+                foreach ($record->plywoodMutasi->details as $mutasiDetail) {
+                    $ukuran = $mutasiDetail->ukuran;
+                    $jenisKayu = $mutasiDetail->jenisKayu;
+                    if (!$ukuran || !$jenisKayu) continue;
+
+                    $expectedName = 'Plywood - '.$ukuran->nama_ukuran
+                        .' - '.$jenisKayu->nama_kayu
+                        .' - KW '.$mutasiDetail->kw_grade;
+
+                    if ($expectedName === $d->nama_barang && (int) $mutasiDetail->qty === (int) $d->jumlah) {
+                        $matched = $mutasiDetail;
+                        break;
+                    }
+                }
+                $rawItems->push($matched ?? $d);
+            } else {
+                $rawItems->push($d);
+            }
+        }
 
         $items = [];
         $grandTotal = 0;
@@ -140,12 +161,83 @@ class NotaBKController extends Controller
                 }
             }
 
+            $m3 = null;
+
+            if (str_starts_with($detail->nama_barang, 'Veneer ')) {
+                $matchedMutasiDetail = null;
+                if ($record->mutasi) {
+                    foreach ($record->mutasi->details as $mutasiDetail) {
+                        if ((float) $mutasiDetail->qty === (float) $qty) {
+                            $matchedMutasiDetail = $mutasiDetail;
+                            break;
+                        }
+                    }
+                }
+                
+                if ($matchedMutasiDetail) {
+                    $m3 = (float) $matchedMutasiDetail->m3;
+                    if ($matchedMutasiDetail->harga) {
+                        $newHarga = (float) $matchedMutasiDetail->harga;
+                        $grandTotal -= $subtotal;
+                        $harga = $newHarga;
+                        $subtotal = $m3 * $harga;
+                        $grandTotal += $subtotal;
+                    }
+                }
+
+                $kw = null;
+                $merek = null;
+                
+                if ($matchedMutasiDetail) {
+                    $kw = $matchedMutasiDetail->kw;
+                    $ukuranId = $matchedMutasiDetail->id_ukuran;
+                    if ($ukuranId) {
+                        $ukuranObjForVeneer = \App\Models\Ukuran::find($ukuranId);
+                        if ($ukuranObjForVeneer && filled($ukuranObjForVeneer->tebal)) {
+                            $tebalVal = $ukuranObjForVeneer->tebal;
+                        }
+                        
+                        $grade = \App\Models\Grade::whereRaw('LOWER(TRIM(nama_grade)) = ?', [strtolower(trim($kw))])->first();
+                        $bshp = \App\Models\BarangSetengahJadiHp::where('id_ukuran', $ukuranId)
+                            ->when($grade, fn($q) => $q->where('id_grade', $grade->id))
+                            ->first();
+                        $merek = $bshp?->merek;
+                    }
+                } else {
+                    if (preg_match('/KW\s+(.*)$/i', $detail->nama_barang, $m)) {
+                        $kw = trim($m[1]);
+                    }
+                    // Jika mutasi detail tidak ketemu, coba ambil angka terakhir yang berdekatan dengan 'mm' (biasanya ketebalan di posisi belakang)
+                    if (preg_match('/x\s*(\d+(?:[\.,]\d+)?)\s*(?:mm|m)?\b/i', $detail->nama_barang, $m)) {
+                        $tebalVal = str_replace(',', '.', $m[1]);
+                    } elseif (preg_match_all('/(\d+(?:[\.,]\d+)?)\s*(?:mm|m)?\b/i', $detail->nama_barang, $m)) {
+                        // Ambil angka terakhir dari semua deretan angka (misal: 244, 122, 0.5 -> ambil 0.5)
+                        $tebalVal = str_replace(',', '.', end($m[1]));
+                    }
+                }
+
+                $tebalForVeneerStr = '';
+                if ($tebalVal !== null && $tebalVal !== '') {
+                    $tebalForVeneerStr = (float) $tebalVal == (int) $tebalVal
+                        ? (int) $tebalVal
+                        : rtrim(rtrim((string) $tebalVal, '0'), '.');
+                }
+
+                if (! empty(trim($merek ?? ''))) {
+                    $namaBarang = trim("{$tebalForVeneerStr} {$merek}");
+                } else {
+                    $kwStr = $kw ? "kw {$kw}" : '';
+                    $namaBarang = trim("{$tebalForVeneerStr} {$kwStr}");
+                }
+            }
+
             $keterangan = $detail->keterangan ?? '';
 
             $items[] = (object) [
                 'nama_barang' => $namaBarang,
                 'satuan'      => $satuan,
                 'qty'         => $qty,
+                'm3'          => $m3,
                 'harga'       => $harga,
                 'potongan'    => 0,
                 'subtotal'    => $subtotal,
