@@ -38,84 +38,76 @@ class DetailBarangDikerjakanForm
                     })
                     ->columnSpanFull(),
 
-                /*
-                |--------------------------------------------------------------------------
-                | FILTER GRADE (DENGAN KATEGORI)
-                |--------------------------------------------------------------------------
-                */
-                Select::make('grade_id')
-                    ->label('Filter Grade')
-                    ->options(
-                        Grade::whereHas('kategoriBarang', function ($q) {
-                            $q->where('nama_kategori', 'PLYWOOD');
-                        })
-                            ->orderBy('nama_grade')
-                            ->get()
-                            ->mapWithKeys(fn($g) => [
-                                $g->id => $g->nama_grade
-                            ])
-                    )
-                    ->reactive()
-                    ->searchable()
-                    ->placeholder('Semua Grade')
-                    ->dehydrated(false),
+                \Filament\Forms\Components\Hidden::make('id_barang_setengah_jadi_hp'),
 
-                Select::make('jenis_barang_id_filter')
-                    ->label('Filter Jenis Barang')
-                    ->options(
-                        JenisBarang::orderBy('nama_jenis_barang')
-                            ->pluck('nama_jenis_barang', 'id')
-                    )
-                    ->reactive()
-                    ->searchable()
-                    ->placeholder('Semua Jenis Barang')
-                    ->dehydrated(false),
-
-                Select::make('id_barang_setengah_jadi_hp')
-                    ->label('Barang Setengah Jadi (Plywood)')
+                Select::make('id_serah_terima_gudang_satu')
+                    ->label('Pilih Palet Modal (Dari Serah Terima)')
                     ->required()
                     ->searchable()
-                    ->options(function (callable $get) {
+                    ->live()
+                    ->afterStateUpdated(function ($state, callable $set) {
+                        if (!$state) {
+                            $set('id_barang_setengah_jadi_hp', null);
+                            $set('modal', null);
+                            $set('hasil', null);
+                            return;
+                        }
 
-                        $query = BarangSetengahJadiHp::query()
+                        $serahTerima = \App\Models\SerahTerimaGudangSatu::find($state);
+                        if ($serahTerima) {
+                            $set('id_barang_setengah_jadi_hp', $serahTerima->barangSetengahJadi?->id);
+                            
+                            $noPalet = $serahTerima->hasilNyusup?->no_palet;
+                            
+                            if ($noPalet) {
+                                $set('no_palet', $noPalet);
+                            }
+                            
+                            $sisa = $serahTerima->sisa;
+                            if ($sisa > 0) {
+                                $set('modal', $sisa);
+                                $set('hasil', $sisa);
+                            }
+                        }
+                    })
+                    ->options(function (callable $get, ?\App\Models\DetailBarangDikerjakan $record) {
+                        $currentId = $record?->id_serah_terima_gudang_satu;
+                        $currentModal = (float) ($record?->modal ?? 0);
+
+                        return \App\Models\SerahTerimaGudangSatu::query()
+                            ->where('diterima_oleh', '!=', '-')
+                            ->where('tujuan', 'nyusup')
                             ->with([
-                                'ukuran',
-                                'jenisBarang',
-                                'grade.kategoriBarang',
+                                'hasilPilihPlywood.barangSetengahJadiHp',
+                                'hasilTerimaGudangSatu',
+                                'hasilNyusup',
+                                'triplekMutasiKeluar'
                             ])
-                            // 🔒 WAJIB PLYWOOD
-                            ->whereHas('grade.kategoriBarang', function ($q) {
-                                $q->where('nama_kategori', 'PLYWOOD');
+                            ->get()
+                            ->map(function ($item) use ($currentId, $currentModal) {
+                                $sisa = $item->sisa + ($item->id === $currentId ? $currentModal : 0);
+                                return [$item, $sisa];
                             })
-                            ->joinRelationship('jenisBarang')
-                            ->joinRelationship('ukuran');
+                            ->filter(fn ($pair) => $pair[1] > 0)
+                            ->mapWithKeys(function ($pair) {
+                                [$item, $sisa] = $pair;
+                                $sisaLabel = rtrim(rtrim(number_format($sisa, 2, '.', ''), '0'), '.');
+                                
+                                $b = $item->barangSetengahJadi;
+                                $ukuran = $b?->ukuran?->nama_ukuran ?? ($b?->tebal ? $b->panjang . 'x' . $b->lebar . 'x' . $b->tebal : '-');
+                                $grade = $b?->grade?->nama_grade ?? ($b?->kw_grade ?? '-');
+                                $jenis = $b?->jenisBarang?->nama_jenis_barang ?? ($b?->jenisKayu?->nama_kayu ?? '-');
+                                $kategori = $b?->grade?->kategoriBarang?->nama_kategori ?? 'Plywood';
+                                
+                                // Ambil no_palet HANYA dari relasi sumber yang terbukti memiliki kolom no_palet
+                                $noPalet = $item->hasilNyusup?->no_palet;
+                                $paletPrefix = $noPalet ? "Palet {$noPalet} - " : "";
 
-                        // ✅ FILTER GRADE
-                        if ($get('grade_id')) {
-                            $query->where('barang_setengah_jadi_hp.id_grade', $get('grade_id'));
-                        }
+                                $label = "{$paletPrefix}{$kategori} | {$ukuran} | {$grade} | {$jenis} — Sisa: {$sisaLabel} lbr";
 
-                        // ✅ FILTER JENIS BARANG (INI YANG KURANG!)
-                        if ($get('jenis_barang_id_filter')) {
-                            $query->where(
-                                'barang_setengah_jadi_hp.id_jenis_barang',
-                                $get('jenis_barang_id_filter')
-                            );
-                        }
-
-                        $query
-                            ->orderBy('ukurans.tebal', 'asc')
-                            ->orderBy('barang_setengah_jadi_hp.id', 'asc');
-
-                        return $query->get()->mapWithKeys(function ($b) {
-                            return [
-                                $b->id =>
-                                    ($b->ukuran?->tebal ?? '-') . ' | ' .
-                                    ($b->grade?->nama_grade ?? '-') . ' | ' .
-                                    ($b->jenisBarang?->nama_jenis_barang ?? '-')
-                            ];
-                        });
-
+                                return [$item->id => $label];
+                            })
+                            ->toArray();
                     })
                     ->columnSpanFull(),
 
@@ -123,7 +115,26 @@ class DetailBarangDikerjakanForm
                     ->label('Modal Nyusup')
                     ->numeric()
                     ->minValue(1)
-                    ->required(),
+                    ->required()
+                    ->rules([
+                        fn (callable $get, ?\App\Models\DetailBarangDikerjakan $record) => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                            $idSerahTerima = $get('id_serah_terima_gudang_satu');
+                            if (!$idSerahTerima) return;
+
+                            $serahTerima = \App\Models\SerahTerimaGudangSatu::find($idSerahTerima);
+                            if (!$serahTerima) return;
+
+                            $sisa = $serahTerima->sisa;
+
+                            if ($record && $record->id_serah_terima_gudang_satu === (int) $idSerahTerima) {
+                                $sisa += (float) $record->modal;
+                            }
+
+                            if ($value > $sisa) {
+                                $fail("Jumlah modal melebihi sisa yang tersedia dari palet ({$sisa} lbr).");
+                            }
+                        },
+                    ]),
 
                 TextInput::make('hasil')
                     ->label('Hasil Nyusup')
