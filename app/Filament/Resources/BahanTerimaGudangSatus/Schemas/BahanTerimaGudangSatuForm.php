@@ -21,11 +21,14 @@ class BahanTerimaGudangSatuForm
     protected static function labelOpsi(SerahTerimaGudangSatu $s): string
     {
         $sisa = rtrim(rtrim(number_format($s->sisa, 2, ',', '.'), '0'), ',');
+        
+        $noPalet = $s->hasilNyusup?->no_palet;
+        $paletPrefix = $noPalet ? "Palet {$noPalet} - " : "";
 
         if ($s->id_triplek_mutasi_keluar !== null) {
             $m = $s->triplekMutasiKeluar;
 
-            return 'TRIPLEK JADI | '.
+            return $paletPrefix . 'TRIPLEK JADI | '.
                 ($m ? ($m->panjang + 0).'×'.($m->lebar + 0).'×'.($m->tebal + 0) : '-').' | '.
                 ($m?->kw_grade ?? '-').' | '.
                 ($m?->jenisKayu?->nama_kayu ?? '-').
@@ -34,7 +37,7 @@ class BahanTerimaGudangSatuForm
 
         $b = $s->barangSetengahJadi;
 
-        return ($b?->grade?->kategoriBarang?->nama_kategori ?? '-').' | '.
+        return $paletPrefix . ($b?->grade?->kategoriBarang?->nama_kategori ?? '-').' | '.
             ($b?->ukuran?->nama_ukuran ?? '-').' | '.
             ($b?->grade?->nama_grade ?? '-').' | '.
             ($b?->jenisBarang?->nama_jenis_barang ?? '-').
@@ -57,6 +60,7 @@ class BahanTerimaGudangSatuForm
                                 'hasilPilihPlywood.barangSetengahJadiHp.jenisBarang',
                                 'hasilPilihPlywood.barangSetengahJadiHp.grade.kategoriBarang',
                                 'triplekMutasiKeluar.jenisKayu',
+                                'hasilNyusup',
                             ])
                             ->where('diterima_oleh', '!=', '-')
                             // 🌟 Dua asal bahan yang sah:
@@ -66,6 +70,7 @@ class BahanTerimaGudangSatuForm
                             //      habis baris triplek karena hasilPilihPlywood-nya NULL.
                             ->where(function ($q) {
                                 $q->whereNotNull('id_triplek_mutasi_keluar')
+                                    ->orWhereNotNull('id_hasil_nyusup')
                                     ->orWhereHas('hasilPilihPlywood.barangSetengahJadiHp.grade.kategoriBarang', function ($sub) {
                                         $sub->where('nama_kategori', 'PLYWOOD');
                                     });
@@ -107,6 +112,17 @@ class BahanTerimaGudangSatuForm
 
                         $s = $state ? SerahTerimaGudangSatu::find($state) : null;
                         $set('sisa_info', $s ? number_format($s->sisa, 2, ',', '.') : '-');
+                        
+                        if ($s) {
+                            $noPalet = $s->hasilNyusup?->no_palet;
+                            if ($noPalet) {
+                                $set('no_palet', $noPalet);
+                            }
+                            
+                            if ($s->sisa > 0) {
+                                $set('jumlah', $s->sisa);
+                            }
+                        }
                     }),
 
                 TextInput::make('sisa_info')
@@ -131,15 +147,25 @@ class BahanTerimaGudangSatuForm
                     ->numeric()
                     ->required()
                     ->minValue(0.01)
-                    ->maxValue(function (callable $get) {
-                        $id = $get('id_serah_terima_gudang_satu');
-                        if (! $id) {
-                            return null;
-                        }
-                        $s = SerahTerimaGudangSatu::find($id);
+                    ->rules([
+                        fn (callable $get, ?\App\Models\BahanTerimaGudangSatu $record) => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                            $idSerahTerima = $get('id_serah_terima_gudang_satu');
+                            if (!$idSerahTerima) return;
 
-                        return $s?->sisa;
-                    }),
+                            $serahTerima = \App\Models\SerahTerimaGudangSatu::find($idSerahTerima);
+                            if (!$serahTerima) return;
+
+                            $sisa = $serahTerima->sisa;
+
+                            if ($record && $record->id_serah_terima_gudang_satu === (int) $idSerahTerima) {
+                                $sisa += (float) $record->jumlah;
+                            }
+
+                            if ($value > $sisa) {
+                                $fail("Jumlah melebihi sisa yang tersedia dari palet ({$sisa} lbr).");
+                            }
+                        },
+                    ]),
             ]);
     }
 }

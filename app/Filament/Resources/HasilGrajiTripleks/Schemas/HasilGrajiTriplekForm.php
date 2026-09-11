@@ -15,40 +15,40 @@ class HasilGrajiTriplekForm
     {
         return $schema
             ->components([
-                Select::make('grade_id')
-                    ->label('Filter Grade')
-                    ->options(
-                        Grade::whereHas('kategoriBarang', function ($q) {
-                            $q->where('nama_kategori', 'PLYWOOD');
-                        })
-                            ->orderBy('nama_grade')
-                            ->get()
-                            ->mapWithKeys(fn($g) => [
-                                $g->id => ($g->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
-                                    . ' | ' . $g->nama_grade
-                            ])
-                    )
-                    ->reactive()
-                    ->searchable()
-                    ->placeholder('Semua Grade')
-                    ->dehydrated(false),
-
-                Select::make('jenis_barang_id_filter')
-                    ->label('Filter Jenis Barang')
-                    ->options(
-                        JenisBarang::orderBy('nama_jenis_barang')
-                            ->pluck('nama_jenis_barang', 'id')
-                    )
-                    ->reactive()
-                    ->searchable()
-                    ->placeholder('Semua Jenis Barang')
-                    ->dehydrated(false),
 
                 Select::make('id_barang_setengah_jadi_hp')
-                    ->label('Barang Setengah Jadi (Plywood)')
+                    ->label('Modal')
                     ->required()
                     ->searchable()
-                    ->options(function (callable $get) {
+                    ->live()
+                    ->afterStateUpdated(function ($state, callable $set, $livewire, ?\App\Models\HasilGrajiTriplek $record) {
+                        if (!$state) {
+                            $set('isi', null);
+                            return;
+                        }
+
+                        $ownerRecord = method_exists($livewire, 'getOwnerRecord') ? $livewire->getOwnerRecord() : null;
+                        if ($ownerRecord && $ownerRecord instanceof \App\Models\ProduksiGrajitriplek) {
+                            $modalTotal = \App\Models\MasukGrajiTriplek::where('id_produksi_graji_triplek', $ownerRecord->id)
+                                ->where('id_barang_setengah_jadi_hp', $state)
+                                ->sum('isi');
+
+                            $hasilTotalQuery = \App\Models\HasilGrajiTriplek::where('id_produksi_graji_triplek', $ownerRecord->id)
+                                ->where('id_barang_setengah_jadi_hp', $state);
+                            
+                            if ($record) {
+                                $hasilTotalQuery->where('id', '!=', $record->id);
+                            }
+
+                            $hasilTotal = $hasilTotalQuery->sum('isi');
+
+                            $sisa = $modalTotal - $hasilTotal;
+                            if ($sisa > 0) {
+                                $set('isi', max(0, $sisa));
+                            }
+                        }
+                    })
+                    ->options(function (callable $get, $livewire, ?\App\Models\HasilGrajiTriplek $record) {
 
                         $query = BarangSetengahJadiHp::query()
                             ->with([
@@ -56,36 +56,84 @@ class HasilGrajiTriplekForm
                                 'jenisBarang',
                                 'grade.kategoriBarang',
                             ])
-                            // 🔒 WAJIB PLYWOOD
+                            // ✅ WAJIB PLYWOOD
                             ->whereHas('grade.kategoriBarang', function ($q) {
                                 $q->where('nama_kategori', 'PLYWOOD');
                             })
                             ->joinRelationship('jenisBarang')
                             ->joinRelationship('ukuran');
 
-                        // ✅ FILTER GRADE
-                        if ($get('grade_id')) {
-                            $query->where('barang_setengah_jadi_hp.id_grade', $get('grade_id'));
-                        }
+                        $ownerRecord = method_exists($livewire, 'getOwnerRecord') ? $livewire->getOwnerRecord() : null;
+                        
+                        $sisaPerBarang = [];
+                        $hasNullModal = false;
 
-                        // ✅ FILTER JENIS BARANG (INI YANG KURANG!)
-                        if ($get('jenis_barang_id_filter')) {
-                            $query->where(
-                                'barang_setengah_jadi_hp.id_jenis_barang',
-                                $get('jenis_barang_id_filter')
-                            );
+                        if ($ownerRecord && $ownerRecord instanceof \App\Models\ProduksiGrajitriplek) {
+                            $modalBarang = \App\Models\MasukGrajiTriplek::where('id_produksi_graji_triplek', $ownerRecord->id)
+                                ->selectRaw('id_barang_setengah_jadi_hp, sum(isi) as total_modal')
+                                ->groupBy('id_barang_setengah_jadi_hp')
+                                ->get();
+                                
+                            foreach($modalBarang as $mb) {
+                                if ($mb->id_barang_setengah_jadi_hp === null) {
+                                    $hasNullModal = true;
+                                }
+                            }
+
+                            $hasilBarangQuery = \App\Models\HasilGrajiTriplek::where('id_produksi_graji_triplek', $ownerRecord->id)
+                                ->whereNotNull('id_barang_setengah_jadi_hp');
+                            
+                            if ($record) {
+                                $hasilBarangQuery->where('id', '!=', $record->id);
+                            }
+                            
+                            $hasilBarang = $hasilBarangQuery
+                                ->selectRaw('id_barang_setengah_jadi_hp, sum(isi) as total_hasil')
+                                ->groupBy('id_barang_setengah_jadi_hp')
+                                ->pluck('total_hasil', 'id_barang_setengah_jadi_hp');
+
+                            $availableIds = [];
+                            foreach ($modalBarang as $mb) {
+                                if ($mb->id_barang_setengah_jadi_hp !== null) {
+                                    $totalHasil = $hasilBarang[$mb->id_barang_setengah_jadi_hp] ?? 0;
+                                    $sisa = $mb->total_modal - $totalHasil;
+                                    if ($sisa > 0) {
+                                        $availableIds[] = $mb->id_barang_setengah_jadi_hp;
+                                        $sisaPerBarang[$mb->id_barang_setengah_jadi_hp] = $sisa;
+                                    }
+                                }
+                            }
+                            
+                            if ($record && $record->id_barang_setengah_jadi_hp && !in_array($record->id_barang_setengah_jadi_hp, $availableIds)) {
+                                $availableIds[] = $record->id_barang_setengah_jadi_hp;
+                                $totalModalEdit = \App\Models\MasukGrajiTriplek::where('id_produksi_graji_triplek', $ownerRecord->id)
+                                    ->where('id_barang_setengah_jadi_hp', $record->id_barang_setengah_jadi_hp)
+                                    ->sum('isi');
+                                $totalHasilEdit = $hasilBarang[$record->id_barang_setengah_jadi_hp] ?? 0;
+                                $sisaPerBarang[$record->id_barang_setengah_jadi_hp] = max(0, $totalModalEdit - $totalHasilEdit);
+                            }
+
+                            // Jika ada modal dari Gudang Triplek Mentah, jangan batasi pilihannya
+                            // karena Gudang Triplek Mentah tidak punya id_barang_setengah_jadi_hp
+                            if (!$hasNullModal) {
+                                $query->whereIn('barang_setengah_jadi_hp.id', $availableIds);
+                            }
                         }
 
                         $query
                             ->orderBy('ukurans.tebal', 'asc')
                             ->orderBy('barang_setengah_jadi_hp.id', 'asc');
 
-                        return $query->get()->mapWithKeys(function ($b) {
+                        return $query->get()->mapWithKeys(function ($b) use ($sisaPerBarang) {
+                            $kategori = $b->grade?->kategoriBarang?->nama_kategori ?? '-';
+                            $ukuran   = $b->ukuran?->nama_ukuran ?? '-';
+                            $grade    = $b->grade?->nama_grade ?? '-';
+                            $jenis    = $b->jenisBarang?->nama_jenis_barang ?? '-';
+                            
+                            $sisaInfo = isset($sisaPerBarang[$b->id]) ? " · {$sisaPerBarang[$b->id]} lbr" : '';
+
                             return [
-                                $b->id => ($b->grade?->kategoriBarang?->nama_kategori ?? '-') . ' | ' .
-                                    ($b->ukuran?->nama_ukuran ?? '-') . ' | ' .
-                                    ($b->grade?->nama_grade ?? '-') . ' | ' .
-                                    ($b->jenisBarang?->nama_jenis_barang ?? '-')
+                                $b->id => "{$kategori} | {$ukuran} | {$grade} | {$jenis}{$sisaInfo}"
                             ];
                         });
                     })
@@ -96,11 +144,45 @@ class HasilGrajiTriplekForm
                     ->numeric()
                     ->required(),
 
-
                 TextInput::make('isi')
                     ->label('Isi')
                     ->numeric()
-                    ->required(),
+                    ->required()
+                    ->rules([
+                        fn (callable $get, $livewire, ?\App\Models\HasilGrajiTriplek $record) => function (string $attribute, $value, \Closure $fail) use ($get, $livewire, $record) {
+                            $idBarang = $get('id_barang_setengah_jadi_hp');
+                            if (!$idBarang) return;
+
+                            $ownerRecord = method_exists($livewire, 'getOwnerRecord') ? $livewire->getOwnerRecord() : null;
+                            if ($ownerRecord && $ownerRecord instanceof \App\Models\ProduksiGrajitriplek) {
+                                // Cek apakah ada modal dari Gudang Triplek Mentah
+                                $hasNullModal = \App\Models\MasukGrajiTriplek::where('id_produksi_graji_triplek', $ownerRecord->id)
+                                    ->whereNull('id_barang_setengah_jadi_hp')
+                                    ->exists();
+                                    
+                                // Jika ada, maka validasi kuantitas tidak diketatkan (bebas)
+                                if ($hasNullModal) return;
+
+                                $modalTotal = \App\Models\MasukGrajiTriplek::where('id_produksi_graji_triplek', $ownerRecord->id)
+                                    ->where('id_barang_setengah_jadi_hp', $idBarang)
+                                    ->sum('isi');
+
+                                $hasilTotalQuery = \App\Models\HasilGrajiTriplek::where('id_produksi_graji_triplek', $ownerRecord->id)
+                                    ->where('id_barang_setengah_jadi_hp', $idBarang);
+                                
+                                if ($record) {
+                                    $hasilTotalQuery->where('id', '!=', $record->id);
+                                }
+
+                                $hasilTotal = $hasilTotalQuery->sum('isi');
+                                $sisa = $modalTotal - $hasilTotal;
+
+                                if ($value > $sisa) {
+                                    $fail("Jumlah isi melebihi sisa yang tersedia dari Modal ({$sisa}).");
+                                }
+                            }
+                        },
+                    ]),
 
                 
             ]);

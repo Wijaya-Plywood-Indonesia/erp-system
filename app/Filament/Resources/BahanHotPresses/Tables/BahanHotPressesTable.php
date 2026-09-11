@@ -21,6 +21,7 @@ class BahanHotPressesTable
             ->modifyQueryUsing(fn($query) => $query->with([
                 'mutasiKeluarPalet.mutasiKeluar.jenisKayu',
                 'mutasiKeluarPlatform.mutasiKeluar.jenisBarang',
+                'mutasiKeluarTriplek.mutasiKeluar.jenisKayu',
             ]))
             ->columns([
                 TextColumn::make('no_palet')
@@ -32,7 +33,7 @@ class BahanHotPressesTable
                     ->label('Tipe')
                     ->state(function ($record) {
                         $sumber = $record->sumber
-                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : null));
+                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : ($record->id_mutasi_keluar_triplek ? 'triplek' : null)));
 
                         if ($sumber === 'veneer' && $record->mutasiKeluarPalet?->mutasiKeluar) {
                             return 'Veneer';
@@ -42,12 +43,17 @@ class BahanHotPressesTable
                             return 'Platform';
                         }
 
+                        if ($sumber === 'triplek' && $record->mutasiKeluarTriplek?->mutasiKeluar) {
+                            return 'Triplek';
+                        }
+
                         return '-';
                     })
                     ->badge()
                     ->color(fn($state) => match ($state) {
                         'Veneer'   => 'success',
                         'Platform' => 'info',
+                        'Triplek'  => 'warning',
                         default    => 'gray',
                     }),
 
@@ -55,7 +61,7 @@ class BahanHotPressesTable
                     ->label('Jenis Barang')
                     ->state(function ($record) {
                         $sumber = $record->sumber
-                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : null));
+                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : ($record->id_mutasi_keluar_triplek ? 'triplek' : null)));
 
                         if ($sumber === 'veneer') {
                             return $record->mutasiKeluarPalet?->mutasiKeluar?->jenisKayu?->nama_kayu ?? '-';
@@ -65,6 +71,10 @@ class BahanHotPressesTable
                             return $record->mutasiKeluarPlatform?->mutasiKeluar?->jenisBarang?->nama_jenis_barang ?? '-';
                         }
 
+                        if ($sumber === 'triplek') {
+                            return $record->mutasiKeluarTriplek?->mutasiKeluar?->jenisKayu?->nama_kayu ?? '-';
+                        }
+
                         return '-';
                     }),
 
@@ -72,7 +82,7 @@ class BahanHotPressesTable
                     ->label('Grade')
                     ->state(function ($record) {
                         $sumber = $record->sumber
-                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : null));
+                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : ($record->id_mutasi_keluar_triplek ? 'triplek' : null)));
 
                         if ($sumber === 'veneer') {
                             return $record->mutasiKeluarPalet?->mutasiKeluar?->kw_grade ?? '-';
@@ -82,6 +92,10 @@ class BahanHotPressesTable
                             return $record->mutasiKeluarPlatform?->mutasiKeluar?->kw_grade ?? '-';
                         }
 
+                        if ($sumber === 'triplek') {
+                            return $record->mutasiKeluarTriplek?->mutasiKeluar?->kw_grade ?? '-';
+                        }
+
                         return '-';
                     }),
 
@@ -89,11 +103,11 @@ class BahanHotPressesTable
                     ->label('Ukuran')
                     ->state(function ($record) {
                         $sumber = $record->sumber
-                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : null));
+                            ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : ($record->id_mutasi_keluar_triplek ? 'triplek' : null)));
 
                         $mk = $sumber === 'veneer'
                             ? $record->mutasiKeluarPalet?->mutasiKeluar
-                            : ($sumber === 'platform' ? $record->mutasiKeluarPlatform?->mutasiKeluar : null);
+                            : ($sumber === 'platform' ? $record->mutasiKeluarPlatform?->mutasiKeluar : ($sumber === 'triplek' ? $record->mutasiKeluarTriplek?->mutasiKeluar : null));
 
                         if (! $mk) {
                             return '-';
