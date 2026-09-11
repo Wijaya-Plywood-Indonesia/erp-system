@@ -331,7 +331,7 @@ class ModalSandingForm
                             }
                             $sisa = $hasilSanding->kuantitas;
                             if ($value > $sisa) {
-                                $fail("Jumlah melebihi sisa yang tersedia dari Hasil Sanding ({$sisa}).");
+                                // $fail("Jumlah melebihi sisa yang tersedia dari Hasil Sanding ({$sisa})."); // Dibuka sementara agar bisa over qty
                             }
                             return;
                         }
@@ -349,7 +349,7 @@ class ModalSandingForm
                         }
 
                         if ($value > $sisa) {
-                            $fail("Jumlah melebihi sisa yang tersedia ({$sisa}).");
+                            // $fail("Jumlah melebihi sisa yang tersedia ({$sisa})."); // Dibuka sementara agar bisa over qty
                         }
                     },
                 ]),
