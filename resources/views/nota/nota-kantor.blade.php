@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <title>Nota Kantor - {{ $record->no_nota }}</title>
@@ -9,7 +10,9 @@
             margin: 0;
         }
 
-        *, *::before, *::after {
+        *,
+        *::before,
+        *::after {
             box-sizing: border-box;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
@@ -29,6 +32,7 @@
                 background: #e2e8f0;
                 padding: 20px;
             }
+
             .page {
                 background: #fff;
                 width: 210mm;
@@ -37,6 +41,7 @@
                 margin: 0 auto;
                 box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
             }
+
             .no-print {
                 display: block;
                 max-width: 210mm;
@@ -51,9 +56,11 @@
                 padding: 0;
                 background: #fff;
             }
+
             .no-print {
                 display: none !important;
             }
+
             .page {
                 width: 100%;
                 min-height: auto;
@@ -104,7 +111,7 @@
             margin-bottom: 0;
         }
 
-        .items-table th, 
+        .items-table th,
         .items-table td {
             border: 1px solid #000;
             padding: 7px 6px;
@@ -120,9 +127,17 @@
             background-color: #fff;
         }
 
-        .text-center { text-align: center; }
-        .text-right { text-align: right; }
-        .text-left { text-align: left; }
+        .text-center {
+            text-align: center;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-left {
+            text-align: left;
+        }
 
         .items-table tfoot td {
             border: none;
@@ -184,14 +199,18 @@
             text-decoration: none;
             display: inline-block;
         }
+
         .btn-print:hover {
             background-color: #1d4ed8;
         }
     </style>
 </head>
+
 <body onload="window.print()">
     <div class="no-print">
-        <a href="{{ route('nota-bk.preview', ['record' => $record, 'jenis' => 'kantor']) }}" style="margin-right: 10px; font-size: 13px; color: #4b5563; text-decoration: none;">&larr; Ubah Pembayaran</a>
+        <a href="{{ route('nota-bk.preview', ['record' => $record, 'jenis' => 'kantor']) }}"
+            style="margin-right: 10px; font-size: 13px; color: #4b5563; text-decoration: none;">&larr; Ubah
+            Pembayaran</a>
         <button class="btn-print" onclick="window.print()">Cetak Dokumen</button>
     </div>
 
@@ -207,13 +226,15 @@
                 <td colspan="2" style="text-align: right;">
                     <div style="display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 24px;">
                         <span style="font-weight: bold; font-size: 14px;">kepada</span>
-                        <span style="font-weight: bold; font-size: 14px; text-align: right;">{{ $record->tujuan_nota }}</span>
+                        <span
+                            style="font-weight: bold; font-size: 14px; text-align: right;">{{ $record->tujuan_nota }}</span>
                     </div>
                 </td>
             </tr>
             <tr>
                 <td class="header-label">Tanggal</td>
-                <td class="header-val" colspan="3">{{ $record->tanggal ? $record->tanggal->format('d-M-y') : '-' }}</td>
+                <td class="header-val" colspan="3">{{ $record->tanggal ? $record->tanggal->format('d-M-y') : '-' }}
+                </td>
             </tr>
         </table>
 
@@ -230,8 +251,8 @@
                     <th style="width: 9%;">ketr</th>
                     <th style="width: 8%; white-space: nowrap;">Satuan</th>
                     <th style="width: 8%;">Qty</th>
-                    @if($hasM3)
-                    <th style="width: 11%; white-space: nowrap;">m3</th>
+                    @if ($hasM3)
+                        <th style="width: 11%; white-space: nowrap;">m3</th>
                     @endif
                     <th style="width: 13%;">Harga</th>
                     <th style="width: 14%;">Subtotal</th>
@@ -245,8 +266,9 @@
                         <td class="text-center"></td>
                         <td class="text-center" style="white-space: nowrap;">{{ $item->satuan }}</td>
                         <td class="text-center">{{ number_format($item->qty) }}</td>
-                        @if($hasM3)
-                        <td class="text-center" style="white-space: nowrap;">{{ $item->m3 !== null ? number_format($item->m3, 4, ',', '.') : '-' }}</td>
+                        @if ($hasM3)
+                            <td class="text-center" style="white-space: nowrap;">
+                                {{ $item->m3 !== null ? number_format($item->m3, 4, ',', '.') : '-' }}</td>
                         @endif
                         <td class="text-right">{{ number_format($item->harga, 0, ',', '.') }}</td>
                         <td class="text-right">{{ number_format($item->subtotal, 0, ',', '.') }}</td>
@@ -283,11 +305,12 @@
                     <td style="width: 30%; vertical-align: top; text-align: center; font-size: 14px;">
                         Hormat Kami
                         <div style="height: 55px;"></div>
-                        <strong>{{ $record->pembuat?->name ?? 'Safira' }}</strong>
+                        {{-- <strong>{{ $record->pembuat?->name ?? 'Safira' }}</strong> --}}
                     </td>
                 </tr>
             </table>
         </div>
     </div>
 </body>
+
 </html>
