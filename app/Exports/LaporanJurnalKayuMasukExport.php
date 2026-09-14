@@ -21,6 +21,7 @@ class LaporanJurnalKayuMasukExport implements WithMultipleSheets
         return [
             new LaporanJurnalKayuMasukSheet2($this->jurnalTables),
             new LaporanJurnalKayuMasukSheet1($this->jurnalTables),
+            new LaporanJurnalKayuMasukSheet2New($this->jurnalTables),
         ];
     }
 }
