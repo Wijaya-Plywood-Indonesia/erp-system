@@ -483,58 +483,76 @@
                 </div>
 
                 {{-- Absensi Lain-lain --}}
+                {{-- Absensi Lain-lain — default HIDDEN, tampil kalau tombol diklik --}}
                 <div>
-                    <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                        Absensi Lain-lain (Checklog tanpa Data Produksi)
-                    </h3>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                        Pegawai yang tercatat absen fingerprint pada tanggal ini, tetapi tidak memiliki data pekerjaan
-                        di
-                        Press
-                        Dryer maupun Rotary.
-                    </p>
+                    <div class="flex items-start justify-between gap-3 mb-1">
+                        <div>
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                                Absensi Lain-lain (Checklog tanpa Data Produksi)
+                            </h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                Pegawai yang tercatat absen fingerprint pada tanggal ini, tetapi tidak memiliki data
+                                pekerjaan di Press Dryer maupun Rotary.
+                            </p>
+                        </div>
 
-                    <div class="overflow-x-auto rounded-xl border border-amber-200 shadow-sm dark:border-amber-800">
-                        <table class="w-full text-sm text-left border-collapse">
-                            <thead
-                                class="bg-amber-50 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-                                <tr>
-                                    <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Kode Pegawai
-                                    </th>
-                                    <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Nama Pegawai
-                                    </th>
-                                    <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Jam Masuk
-                                    </th>
-                                    <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Jam Pulang
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                                @forelse ($this->getAbsensiLainLain() as $row)
-                                    <tr class="transition-colors hover:bg-amber-50/50 dark:hover:bg-amber-900/10">
-                                        <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
-                                            {{ $row['kode_pegawai'] }}
-                                        </td>
-                                        <td class="px-4 py-2.5 font-medium text-gray-900 dark:text-gray-100">
-                                            {{ $row['nama_pegawai'] }}</td>
-                                        <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
-                                            {{ $row['jam_masuk'] ?? '-' }}
-                                        </td>
-                                        <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
-                                            {{ $row['jam_pulang'] ?? '-' }}
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="4"
-                                            class="px-4 py-8 text-center text-gray-400 dark:text-gray-500">
-                                            Tidak ada checklog tanpa data produksi pada tanggal ini.
-                                        </td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
+                        <x-filament::button wire:click="toggleAbsensiLainLain" color="primary" :icon="$showAbsensiLainLain ? 'heroicon-o-eye-slash' : 'heroicon-o-eye'"
+                            class="shrink-0">
+                            @if ($showAbsensiLainLain)
+                                Sembunyikan
+                            @else
+                                Tampilkan ({{ $this->getAbsensiLainLain()->count() }} pegawai)
+                            @endif
+                        </x-filament::button>
                     </div>
+
+                    @if ($showAbsensiLainLain)
+                        <div
+                            class="overflow-x-auto rounded-xl border border-amber-200 shadow-sm dark:border-amber-800 mt-4">
+                            <table class="w-full text-sm text-left border-collapse">
+                                <thead
+                                    class="bg-amber-50 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Kode
+                                            Pegawai
+                                        </th>
+                                        <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Nama
+                                            Pegawai
+                                        </th>
+                                        <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Jam Masuk
+                                        </th>
+                                        <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Jam
+                                            Pulang
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                    @forelse ($this->getAbsensiLainLain() as $row)
+                                        <tr class="transition-colors hover:bg-amber-50/50 dark:hover:bg-amber-900/10">
+                                            <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
+                                                {{ $row['kode_pegawai'] }}
+                                            </td>
+                                            <td class="px-4 py-2.5 font-medium text-gray-900 dark:text-gray-100">
+                                                {{ $row['nama_pegawai'] }}</td>
+                                            <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
+                                                {{ $row['jam_masuk'] ?? '-' }}
+                                            </td>
+                                            <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
+                                                {{ $row['jam_pulang'] ?? '-' }}
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="4"
+                                                class="px-4 py-8 text-center text-gray-400 dark:text-gray-500">
+                                                Tidak ada checklog tanpa data produksi pada tanggal ini.
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
                 </div>
 
             </div>

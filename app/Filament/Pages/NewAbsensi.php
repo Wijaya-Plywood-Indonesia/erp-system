@@ -36,6 +36,13 @@ class NewAbsensi extends Page implements HasForms
 
     protected string $view = 'filament.pages.new-absensi';
 
+    public bool $showAbsensiLainLain = false;
+
+    public function toggleAbsensiLainLain(): void
+    {
+        $this->showAbsensiLainLain = ! $this->showAbsensiLainLain;
+    }
+
     /**
      * Disinkronkan ke query string URL (?tanggal=YYYY-MM-DD) supaya kalau
      * halaman di-refresh atau link-nya dibagikan/dibuka ulang, tanggal yang
