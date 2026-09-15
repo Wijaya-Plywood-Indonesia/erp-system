@@ -2,29 +2,37 @@
 
 namespace App\Exports;
 
-use App\Models\ProduksiRotary;
+use App\Filament\Pages\LaporanProduksi\Queries\LoadProduksi;
+use App\Filament\Pages\LaporanProduksi\Transformers\ProduksiDataMap;
 use App\Models\DetailHasilPaletRotary;
+use App\Models\JenisKayu;
+use App\Models\KategoriBarang;
+use App\Models\Mesin;
+use App\Models\ProduksiRotary;
+use App\Models\ReferensiHargaProduksi;
+use App\Services\Akuntansi\RotaryJurnalService;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 use Maatwebsite\Excel\Concerns\WithStyles;
-use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Cell\Cell;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Cell\Cell;
-use PhpOffice\PhpSpreadsheet\Cell\DataType;
-use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
-use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
-use App\Models\DetailTurusanKayu;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class LaporanProduksiExport implements WithMultipleSheets
 {
     protected $dataProduksi;
+
     protected $tanggal;
 
     public function __construct($dataProduksi, $tanggal = null)
@@ -37,21 +45,25 @@ class LaporanProduksiExport implements WithMultipleSheets
     {
         $data = $this->dataProduksi;
         if (empty($data) && $this->tanggal) {
-            $raw = \App\Filament\Pages\LaporanProduksi\Queries\LoadProduksi::run($this->tanggal);
-            $data = \App\Filament\Pages\LaporanProduksi\Transformers\ProduksiDataMap::make($raw);
+            $raw = LoadProduksi::run($this->tanggal);
+            $data = ProduksiDataMap::make($raw);
         }
+
         return [
             new LaporanProduksiDetailSheet($data),
             new LaporanProduksiRekapSheet($this->tanggal),
             new LaporanProduksiJurnalSheet($this->tanggal),
+            new LaporanProduksiJurnalSheetV2($this->tanggal),
         ];
     }
 }
 
-class LaporanProduksiDetailSheet implements FromCollection, WithHeadings, WithTitle, WithEvents
+class LaporanProduksiDetailSheet implements FromCollection, WithEvents, WithHeadings, WithTitle
 {
     protected $dataProduksi;
+
     protected $mergeRanges = [];
+
     protected $tableRanges = [];
 
     public function __construct($dataProduksi)
@@ -77,10 +89,10 @@ class LaporanProduksiDetailSheet implements FromCollection, WithHeadings, WithTi
             $selisih = $first['selisih'] ?? 0;
             $totalDowntimeMenit = $first['total_downtime_menit'] ?? 0;
 
-            $allRows[] = ['MESIN: ' . strtoupper($mesinNama)];
-            $allRows[] = ['TANGGAL: ' . $tanggal];
+            $allRows[] = ['MESIN: '.strtoupper($mesinNama)];
+            $allRows[] = ['TANGGAL: '.$tanggal];
             $allRows[] = array_fill(0, 11, '');
-            
+
             $headerRow = count($allRows) + 1;
             $allRows[] = ['ID', 'Nama', 'Potongan Gaji', 'Keterangan', '', 'Target Harian', 'Jam Kerja', 'Target/Jam', 'Hasil', 'Selisih', 'Kendala'];
 
@@ -100,7 +112,7 @@ class LaporanProduksiDetailSheet implements FromCollection, WithHeadings, WithTi
                     }
                 } else {
                     $M = count($daftarKendala);
-                    
+
                     if ($N < $M) {
                         // Jika jumlah pekerja lebih sedikit dari kendala, gabungkan semua kendala dengan newline
                         $text = implode("\n", array_column($daftarKendala, 'text'));
@@ -133,24 +145,24 @@ class LaporanProduksiDetailSheet implements FromCollection, WithHeadings, WithTi
             foreach ($pekerja as $idx => $p) {
                 $potTargetRaw = (float) str_replace('.', '', $p['pot_target'] ?? '0');
                 $allRows[] = [
-                    $p['id'] ?? '-', $p['nama'] ?? '-', $potTargetRaw > 0 ? (int) $potTargetRaw : 0, $p['keterangan'] ?? '-', '', 
+                    $p['id'] ?? '-', $p['nama'] ?? '-', $potTargetRaw > 0 ? (int) $potTargetRaw : 0, $p['keterangan'] ?? '-', '',
                     (int) $target, (int) $jamKerja, round((float) $targetPerJam, 2), (int) $hasil, (int) $selisih,
-                    $kendalaCellValues[$idx]
+                    $kendalaCellValues[$idx],
                 ];
             }
 
             $allRows[] = [
-                'TOTAL', 
-                $N . ' pekerja', 
-                $N > 0 ? "=SUM(C{$workerStartRow}:C{$workerEndRow})" : 0, 
-                '', 
-                '', 
-                $N > 0 ? "=SUM(F{$workerStartRow}:F{$workerEndRow})" : 0, 
-                (int) $jamKerja, 
-                $N > 0 ? "=SUM(H{$workerStartRow}:H{$workerEndRow})" : 0, 
-                $N > 0 ? "=SUM(I{$workerStartRow}:I{$workerEndRow})" : 0, 
-                $N > 0 ? "=SUM(J{$workerStartRow}:J{$workerEndRow})" : 0, 
-                $totalDowntimeMenit > 0 ? $totalDowntimeMenit . ' menit' : ''
+                'TOTAL',
+                $N.' pekerja',
+                $N > 0 ? "=SUM(C{$workerStartRow}:C{$workerEndRow})" : 0,
+                '',
+                '',
+                $N > 0 ? "=SUM(F{$workerStartRow}:F{$workerEndRow})" : 0,
+                (int) $jamKerja,
+                $N > 0 ? "=SUM(H{$workerStartRow}:H{$workerEndRow})" : 0,
+                $N > 0 ? "=SUM(I{$workerStartRow}:I{$workerEndRow})" : 0,
+                $N > 0 ? "=SUM(J{$workerStartRow}:J{$workerEndRow})" : 0,
+                $totalDowntimeMenit > 0 ? $totalDowntimeMenit.' menit' : '',
             ];
             $allRows[] = array_fill(0, 11, '');
             $allRows[] = array_fill(0, 11, '');
@@ -158,23 +170,31 @@ class LaporanProduksiDetailSheet implements FromCollection, WithHeadings, WithTi
             // Record the table range for borders and styling
             $this->tableRanges[] = [
                 'header' => $headerRow,
-                'start'  => $workerStartRow,
-                'end'    => $workerEndRow,
-                'total'  => $totalRow
+                'start' => $workerStartRow,
+                'end' => $workerEndRow,
+                'total' => $totalRow,
             ];
         }
+
         return collect($allRows);
     }
 
-    public function headings(): array { return []; }
-    public function title(): string { return 'Detail Per Mesin'; }
+    public function headings(): array
+    {
+        return [];
+    }
+
+    public function title(): string
+    {
+        return 'Detail Per Mesin';
+    }
 
     public function registerEvents(): array
     {
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-                
+
                 // Set explicit column widths
                 $sheet->getColumnDimension('A')->setWidth(10);
                 $sheet->getColumnDimension('B')->setWidth(25);
@@ -204,48 +224,48 @@ class LaporanProduksiDetailSheet implements FromCollection, WithHeadings, WithTi
                     $sheet->getStyle("A{$headerRow}:K{$totalRow}")->applyFromArray([
                         'borders' => [
                             'allBorders' => [
-                                'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                                'borderStyle' => Border::BORDER_THIN,
                                 'color' => ['argb' => 'FFCBD5E1'],
-                            ]
-                        ]
+                            ],
+                        ],
                     ]);
 
                     // 2. Header row style
                     $sheet->getStyle("A{$headerRow}:K{$headerRow}")->applyFromArray([
                         'font' => ['bold' => true, 'color' => ['argb' => 'FF1E293B']],
                         'fill' => [
-                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFE2E8F0']
+                            'fillType' => Fill::FILL_SOLID,
+                            'startColor' => ['argb' => 'FFE2E8F0'],
                         ],
                         'alignment' => [
-                            'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-                            'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
-                        ]
+                            'horizontal' => Alignment::HORIZONTAL_CENTER,
+                            'vertical' => Alignment::VERTICAL_CENTER,
+                        ],
                     ]);
 
                     // 3. Total row style
                     $sheet->getStyle("A{$totalRow}:K{$totalRow}")->applyFromArray([
                         'font' => ['bold' => true, 'color' => ['argb' => 'FF1E293B']],
                         'fill' => [
-                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFF1F5F9']
-                        ]
+                            'fillType' => Fill::FILL_SOLID,
+                            'startColor' => ['argb' => 'FFF1F5F9'],
+                        ],
                     ]);
 
                     // 4. Alignments for worker data cells (A{start} to K{end})
                     if ($startRow <= $endRow) {
-                        $sheet->getStyle("A{$startRow}:A{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle("B{$startRow}:B{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
-                        $sheet->getStyle("C{$startRow}:C{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
-                        $sheet->getStyle("D{$startRow}:D{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
-                        
-                        $sheet->getStyle("F{$startRow}:F{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
-                        $sheet->getStyle("G{$startRow}:G{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle("H{$startRow}:H{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
-                        $sheet->getStyle("I{$startRow}:I{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
-                        $sheet->getStyle("J{$startRow}:J{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
-                        $sheet->getStyle("K{$startRow}:K{$endRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
-                        
+                        $sheet->getStyle("A{$startRow}:A{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle("B{$startRow}:B{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                        $sheet->getStyle("C{$startRow}:C{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("D{$startRow}:D{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+
+                        $sheet->getStyle("F{$startRow}:F{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("G{$startRow}:G{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle("H{$startRow}:H{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("I{$startRow}:I{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("J{$startRow}:J{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getStyle("K{$startRow}:K{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+
                         // Number formats
                         $sheet->getStyle("C{$startRow}:C{$totalRow}")->getNumberFormat()->setFormatCode('#,##0;(#,##0);"-"');
                         $sheet->getStyle("F{$startRow}:F{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
@@ -258,16 +278,18 @@ class LaporanProduksiDetailSheet implements FromCollection, WithHeadings, WithTi
                 $sheet->getStyle("K1:K{$highestRow}")
                     ->getAlignment()
                     ->setWrapText(true)
-                    ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP);
-            }
+                    ->setVertical(Alignment::VERTICAL_TOP);
+            },
         ];
     }
 }
 
-class LaporanProduksiRekapSheet implements FromCollection, WithHeadings, WithStyles, WithEvents, WithTitle
+class LaporanProduksiRekapSheet implements FromCollection, WithEvents, WithHeadings, WithStyles, WithTitle
 {
     protected $tanggal;
+
     protected $mergeData = [];
+
     protected $uniqueKws = ['1', '2', '3', '4'];
 
     public function __construct($tanggal)
@@ -278,57 +300,86 @@ class LaporanProduksiRekapSheet implements FromCollection, WithHeadings, WithSty
 
     private function determineKws()
     {
-        $kws = DetailHasilPaletRotary::whereHas('produksi', function($q) { $q->whereDate('tgl_produksi', $this->tanggal); })->distinct()->pluck('kw')->toArray();
-        foreach ($kws as $kw) { $kwStr = (string)$kw; if ($kwStr !== '' && !in_array($kwStr, $this->uniqueKws)) $this->uniqueKws[] = $kwStr; }
+        $kws = DetailHasilPaletRotary::whereHas('produksi', function ($q) {
+            $q->whereDate('tgl_produksi', $this->tanggal);
+        })->distinct()->pluck('kw')->toArray();
+        foreach ($kws as $kw) {
+            $kwStr = (string) $kw;
+            if ($kwStr !== '' && ! in_array($kwStr, $this->uniqueKws)) {
+                $this->uniqueKws[] = $kwStr;
+            }
+        }
         sort($this->uniqueKws);
     }
 
     public function collection()
     {
         $produksis = ProduksiRotary::with(['mesin', 'detailPaletRotary.ukuran', 'detailPaletRotary.penggunaanLahan.jenisKayu', 'detailPegawaiRotary'])->whereDate('tgl_produksi', $this->tanggal)->get();
-        $rows = collect(); $currentRow = 2; $this->mergeData = [];
+        $rows = collect();
+        $currentRow = 2;
+        $this->mergeData = [];
         foreach ($produksis as $index => $produksi) {
             $namaMesin = strtoupper($produksi->mesin->nama_mesin ?? '-');
             $tgl = Carbon::parse($produksi->tgl_produksi)->format('d/m/Y');
-            $details = $produksi->detailPaletRotary->groupBy(function($item) {
-                $u = $item->ukuran; $j = $item->penggunaanLahan->jenisKayu->kode_kayu ?? '-';
-                return ($u->panjang ?? 0) . '|' . ($u->lebar ?? 0) . '|' . ($u->tebal ?? 0) . '|' . $j;
+            $details = $produksi->detailPaletRotary->groupBy(function ($item) {
+                $u = $item->ukuran;
+                $j = $item->penggunaanLahan->jenisKayu->kode_kayu ?? '-';
+
+                return ($u->panjang ?? 0).'|'.($u->lebar ?? 0).'|'.($u->tebal ?? 0).'|'.$j;
             });
             if ($details->count() > 0) {
                 $this->mergeData[] = ['start' => $currentRow, 'end' => $currentRow + $details->count() - 1];
                 foreach ($details as $key => $items) {
                     [$p, $l, $t, $jenis] = explode('|', $key);
-                    $rowData = ['mesin' => $namaMesin, 'tanggal' => $tgl, 'p' => str_replace('.', ',', (string)(float)$p), 'l' => str_replace('.', ',', (string)(float)$l), 't' => str_replace('.', ',', (string)(float)$t), 'jenis' => $jenis];
-                    foreach ($this->uniqueKws as $kwLabel) { $rowData['kw_' . $kwLabel] = $items->filter(fn($i) => (string)$i->kw === (string)$kwLabel)->sum('total_lembar') ?: ''; }
+                    $rowData = ['mesin' => $namaMesin, 'tanggal' => $tgl, 'p' => str_replace('.', ',', (string) (float) $p), 'l' => str_replace('.', ',', (string) (float) $l), 't' => str_replace('.', ',', (string) (float) $t), 'jenis' => $jenis];
+                    foreach ($this->uniqueKws as $kwLabel) {
+                        $rowData['kw_'.$kwLabel] = $items->filter(fn ($i) => (string) $i->kw === (string) $kwLabel)->sum('total_lembar') ?: '';
+                    }
                     $rowData['ttl_pkj'] = $produksi->detailPegawaiRotary->count();
-                    $rows->push($rowData); $currentRow++;
+                    $rows->push($rowData);
+                    $currentRow++;
                 }
-                if ($index < $produksis->count() - 1) { $rows->push(array_fill(0, count($this->headings()), '')); $currentRow++; }
+                if ($index < $produksis->count() - 1) {
+                    $rows->push(array_fill(0, count($this->headings()), ''));
+                    $currentRow++;
+                }
             }
         }
+
         return $rows;
     }
 
     public function headings(): array
     {
         $headers = ['Mesin', 'Tanggal', 'p', 'l', 't', 'jenis'];
-        foreach ($this->uniqueKws as $kwLabel) $headers[] = 'kw' . $kwLabel;
+        foreach ($this->uniqueKws as $kwLabel) {
+            $headers[] = 'kw'.$kwLabel;
+        }
         $headers[] = 'TTL PKJ';
+
         return $headers;
     }
 
-    public function styles(Worksheet $sheet) { return [1 => ['font' => ['bold' => true], 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]]]; }
+    public function styles(Worksheet $sheet)
+    {
+        return [1 => ['font' => ['bold' => true], 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]]];
+    }
 
     public function registerEvents(): array
     {
         return [
             AfterSheet::class => function (AfterSheet $event) {
-                $sheet = $event->sheet->getDelegate(); $peachColor = 'F9CB9C';
-                $lastCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($this->headings()));
+                $sheet = $event->sheet->getDelegate();
+                $peachColor = 'F9CB9C';
+                $lastCol = Coordinate::stringFromColumnIndex(count($this->headings()));
                 $sheet->getStyle("A1:{$lastCol}1")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]], 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER], 'font' => ['bold' => true]]);
                 foreach ($this->mergeData as $range) {
-                    $start = $range['start']; $end = $range['end'];
-                    if ($start < $end) { $sheet->mergeCells("A{$start}:A{$end}"); $sheet->mergeCells("{$lastCol}{$start}:{$lastCol}{$end}"); }
+                    $start = $range['start'];
+                    $end = $range['end'];
+                    if ($start < $end) {
+                        $sheet->mergeCells("A{$start}:A{$end}");
+                        $sheet->mergeCells("{$lastCol}{$start}:{$lastCol}{$end}");
+                    }
                     $sheet->getStyle("A{$start}:{$lastCol}{$end}")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]], 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER]]);
                     $sheet->getStyle("A{$start}:B{$end}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($peachColor);
                     $sheet->getStyle("F{$start}:{$lastCol}{$end}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($peachColor);
@@ -336,49 +387,67 @@ class LaporanProduksiRekapSheet implements FromCollection, WithHeadings, WithSty
                     $sheet->getStyle("{$lastCol}{$start}:{$lastCol}{$end}")->getFont()->setBold(true);
                 }
                 $sheet->getRowDimension(1)->setRowHeight(30);
-                $sheet->getColumnDimension('A')->setWidth(18); $sheet->getColumnDimension('B')->setWidth(15); $sheet->getColumnDimension('C')->setWidth(8); $sheet->getColumnDimension('D')->setWidth(8); $sheet->getColumnDimension('E')->setWidth(8);
-                for ($i = 6; $i < count($this->headings()); $i++) { $col = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i); $sheet->getColumnDimension($col)->setWidth(10); }
+                $sheet->getColumnDimension('A')->setWidth(18);
+                $sheet->getColumnDimension('B')->setWidth(15);
+                $sheet->getColumnDimension('C')->setWidth(8);
+                $sheet->getColumnDimension('D')->setWidth(8);
+                $sheet->getColumnDimension('E')->setWidth(8);
+                for ($i = 6; $i < count($this->headings()); $i++) {
+                    $col = Coordinate::stringFromColumnIndex($i);
+                    $sheet->getColumnDimension($col)->setWidth(10);
+                }
                 $sheet->getColumnDimension($lastCol)->setWidth(12);
             },
         ];
     }
-    public function title(): string { return 'Rekap Produksi Custom'; }
+
+    public function title(): string
+    {
+        return 'Rekap Produksi Custom';
+    }
 }
 
-class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromCollection, WithTitle, WithStyles, WithEvents, WithCustomValueBinder
+class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromCollection, WithCustomValueBinder, WithEvents, WithStyles, WithTitle
 {
     protected $tanggal;
+
     protected $titleRows = [];
+
     protected $headerRows = [];
+
     protected $dataRanges = [];
- 
+
     // Cache agar tidak query DB berulang
-    private array $kayuCache     = [];
+    private array $kayuCache = [];
+
     private array $kategoriCache = [];
- 
+
     public function bindValue(Cell $cell, $value)
     {
         if ($cell->getColumn() === 'D') {
             if (is_numeric($value)) {
-                $cell->setValueExplicit((float)$value, DataType::TYPE_NUMERIC);
+                $cell->setValueExplicit((float) $value, DataType::TYPE_NUMERIC);
                 $cell->getWorksheet()->getStyle($cell->getCoordinate())->getNumberFormat()->setFormatCode('0.00');
+
                 return true;
             }
             $cell->setValueExplicit($value, DataType::TYPE_STRING);
+
             return true;
         }
+
         return parent::bindValue($cell, $value);
     }
- 
+
     public function __construct($tanggal)
     {
         $this->tanggal = $tanggal;
     }
- 
+
     // =========================================================================
     // DATABASE REFERENCE HELPERS (revisi mengikuti struktur tabel baru)
     // =========================================================================
- 
+
     /**
      * Ambil id jenis kayu berdasarkan nama persis (dengan cache).
      * Beda dari LIKE karena di rotary nama kayu sudah pasti exact dari tabel jenis kayu.
@@ -386,13 +455,14 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
     private function getIdKayuByNama(string $namaKayu): ?int
     {
         $key = strtolower(trim($namaKayu));
-        if (!array_key_exists($key, $this->kayuCache)) {
-            $kayu = \App\Models\JenisKayu::where('nama_kayu', $namaKayu)->first();
+        if (! array_key_exists($key, $this->kayuCache)) {
+            $kayu = JenisKayu::where('nama_kayu', $namaKayu)->first();
             $this->kayuCache[$key] = $kayu?->id;
         }
+
         return $this->kayuCache[$key];
     }
- 
+
     /**
      * Ambil id kategori barang berdasarkan nama (dengan cache).
      * PENTING: kolom di tabel kategori_barang adalah `nama_kategori`, bukan `nama`.
@@ -400,17 +470,18 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
     private function getIdKategoriBarang(string $namaKategori): ?int
     {
         $key = strtolower(trim($namaKategori));
-        if (!array_key_exists($key, $this->kategoriCache)) {
+        if (! array_key_exists($key, $this->kategoriCache)) {
             try {
-                $kategori = \App\Models\KategoriBarang::whereRaw("LOWER(nama_kategori) LIKE ?", ["%{$key}%"])->first();
+                $kategori = KategoriBarang::whereRaw('LOWER(nama_kategori) LIKE ?', ["%{$key}%"])->first();
                 $this->kategoriCache[$key] = $kategori?->id;
             } catch (\Throwable $e) {
                 $this->kategoriCache[$key] = null;
             }
         }
+
         return $this->kategoriCache[$key];
     }
- 
+
     /**
      * Ambil harga veneer basah dari DB menggunakan findReferensi().
      *
@@ -426,64 +497,65 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
      */
     private function getHargaVeneerBasahDb(string $jenisKayu, bool $isCore): float
     {
-        $idJenisKayu      = $this->getIdKayuByNama($jenisKayu);
+        $idJenisKayu = $this->getIdKayuByNama($jenisKayu);
         $idKategoriBarang = $this->getIdKategoriBarang('veneer basah');
- 
-        if (!$idJenisKayu || !$idKategoriBarang) {
+
+        if (! $idJenisKayu || ! $idKategoriBarang) {
             return 0.0;
         }
- 
+
         // Tebal representatif: cukup untuk masuk range t_min/t_max yang sesuai,
         // karena rotary tidak mengirim tebal aktual per item.
         $tebalRepresentatif = $isCore ? 1.5 : 0.5;
- 
-        $ref = \App\Models\ReferensiHargaProduksi::findReferensi(
+
+        $ref = ReferensiHargaProduksi::findReferensi(
             idJenisKayu      : $idJenisKayu,
             idKategoriBarang : $idKategoriBarang,
             kw               : null, // veneer basah: kw_min/kw_max null di tabel
             tebal            : $tebalRepresentatif,
         );
- 
+
         return (float) ($ref->harga ?? 0.0);
     }
- 
+
     public function collection()
     {
         $rows = collect();
-        $service = new \App\Services\Akuntansi\RotaryJurnalService();
+        $service = new RotaryJurnalService;
         $payload = $service->buildJurnalPayloadPreview($this->tanggal);
- 
-        if (!$payload || empty($payload['jurnal_items'])) {
+
+        if (! $payload || empty($payload['jurnal_items'])) {
             $rows->push(['Tidak ada data jurnal produksi untuk tanggal ini.']);
+
             return $rows;
         }
- 
+
         $rawRows = [];
- 
+
         // Preload mesin dan jenis kayu untuk pencarian dinamis
-        $mesins = \App\Models\Mesin::all()->keyBy(fn($m) => strtoupper(trim($m->nama_mesin)));
-        $jenisKayus = \App\Models\JenisKayu::all()->keyBy(fn($jk) => strtoupper(trim($jk->nama_kayu)));
- 
+        $mesins = Mesin::all()->keyBy(fn ($m) => strtoupper(trim($m->nama_mesin)));
+        $jenisKayus = JenisKayu::all()->keyBy(fn ($jk) => strtoupper(trim($jk->nama_kayu)));
+
         foreach ($payload['jurnal_items'] as $item) {
             $namaAkun = $item['nama_akun'];
-            $noAkun   = $item['no_akun'];
-            $mapDK    = $item['map'];
- 
+            $noAkun = $item['no_akun'];
+            $mapDK = $item['map'];
+
             // Skip Upah Tenaga Kerja (510-01) — struktur baru tidak memunculkan sisi debit upah
             if ($noAkun === '510-01') {
                 continue;
             }
- 
+
             foreach ($item['items'] as $subItem) {
                 $bagian = '-';
                 $keteranganSpesifikasi = $subItem['keterangan'] ?? '-';
- 
+
                 if (($subItem['jenis_pihak'] ?? '') === 'produksi') {
                     $bagian = $subItem['nama_pihak'] ?? '-';
                     if (($subItem['nama_barang'] ?? '') !== 'Mesin' && ($subItem['nama_barang'] ?? '') !== '-') {
                         $keteranganSpesifikasi = $subItem['nama_barang'] ?? '-';
                     } else {
-                        $keteranganSpesifikasi = ($subItem['keterangan'] ?? '') . ' (' . ($subItem['ukuran'] ?? '') . ')';
+                        $keteranganSpesifikasi = ($subItem['keterangan'] ?? '').' ('.($subItem['ukuran'] ?? '').')';
                     }
                 } elseif (($subItem['jenis_pihak'] ?? '') === 'karyawan') {
                     $parts = explode(' - ', $subItem['keterangan'] ?? '');
@@ -496,55 +568,55 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $bagian = '-';
                     $keteranganSpesifikasi = $subItem['keterangan'] ?? '-';
                 }
- 
+
                 $tipe = 'b';
                 if (($subItem['jenis_pihak'] ?? '') === 'produksi') {
                     $tipe = 'm';
                 }
- 
+
                 $banyak = $subItem['banyak'];
                 if (($subItem['jenis_pihak'] ?? '') === 'karyawan') {
                     $banyak = 1; // set to 1 so we can sum the total workers
                 }
- 
+
                 $volume = $subItem['m3'];
-                $harga  = $subItem['harga'];
+                $harga = $subItem['harga'];
                 $jumlah = $subItem['jumlah'];
- 
+
                 // Khusus export Excel: harga veneer (ongkos mesin) sekarang
                 // mengambil dari kategori 'veneer basah' di tabel referensi.
                 if (($subItem['jenis_pihak'] ?? '') === 'produksi') {
                     $namaM = strtoupper(trim($bagian));
                     $jenisHasil = isset($mesins[$namaM]) ? $mesins[$namaM]->jenis_hasil : 'core';
- 
+
                     // Parse jenis kayu dari keterangan
                     $keterangan = $subItem['keterangan'] ?? '';
                     $parts = explode(' - ', $keterangan);
                     $namaKayu = count($parts) > 2 ? trim($parts[2]) : '';
- 
+
                     $isCore = strtolower($jenisHasil) !== 'f/b';
                     $ongkos = $this->getHargaVeneerBasahDb($namaKayu, $isCore);
- 
+
                     // Fallback ke harga ongkos mesin legacy jika tidak ditemukan di referensi
                     if ($ongkos === 0.0) {
-                        $ongkos = isset($mesins[$namaM]) ? (float)($mesins[$namaM]->ongkos_mesin ?? 0) : 0;
+                        $ongkos = isset($mesins[$namaM]) ? (float) ($mesins[$namaM]->ongkos_mesin ?? 0) : 0;
                     }
- 
-                    $harga  = $ongkos;
-                    $jumlah = $volume !== null ? round((float)$volume * $ongkos, 4) : null;
+
+                    $harga = $ongkos;
+                    $jumlah = $volume !== null ? round((float) $volume * $ongkos, 4) : null;
                 }
- 
+
                 // Khusus export Excel: harga pekerja di-hardcode 150.000
                 // (tidak ambil dari database HargaPegawai)
                 if (($subItem['jenis_pihak'] ?? '') === 'karyawan') {
-                    $harga  = 150_000;
+                    $harga = 150_000;
                     $jumlah = 150_000; // 1 orang × 150.000
                 }
- 
+
                 // Map original accounts (115-07, 115-08, 210-02) based on wood type (Sengon vs Meranti)
                 $mappedNoAkun = $noAkun;
                 $mappedNamaAkun = $namaAkun;
- 
+
                 if ($noAkun === '115-07' || $noAkun === '115-08') {
                     $isWHN = false;
                     if (request()) {
@@ -553,7 +625,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                             $isWHN = true;
                         }
                     }
- 
+
                     $isSengon = (stripos($subItem['keterangan'] ?? '', 'sengon') !== false);
                     if ($noAkun === '115-07') {
                         // Veneer Basah F/B
@@ -579,22 +651,22 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $mappedNoAkun = '2231.00';
                     $mappedNamaAkun = 'Hutang Gaji';
                 }
- 
+
                 $rawRows[] = [
-                    'nama_akun'  => $mappedNamaAkun,
-                    'no_akun'    => $mappedNoAkun,
-                    'bagian'     => $bagian,
+                    'nama_akun' => $mappedNamaAkun,
+                    'no_akun' => $mappedNoAkun,
+                    'bagian' => $bagian,
                     'keterangan' => $keteranganSpesifikasi,
-                    'dk'         => $mapDK,
-                    'tipe'       => $tipe,
-                    'banyak'     => $banyak !== null ? (float)$banyak : null,
-                    'volume'     => $volume !== null ? (float)$volume : null,
-                    'harga'      => $harga !== null ? (float)$harga : null,
-                    'jumlah'     => $jumlah !== null ? (float)$jumlah : null,
+                    'dk' => $mapDK,
+                    'tipe' => $tipe,
+                    'banyak' => $banyak !== null ? (float) $banyak : null,
+                    'volume' => $volume !== null ? (float) $volume : null,
+                    'harga' => $harga !== null ? (float) $harga : null,
+                    'jumlah' => $jumlah !== null ? (float) $jumlah : null,
                 ];
             }
         }
- 
+
         // Group raw rows by machine (bagian)
         $rawRowsByMachine = [];
         foreach ($rawRows as $row) {
@@ -604,39 +676,39 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
             }
             $rawRowsByMachine[$machine][] = $row;
         }
- 
+
         $machineTables = [];
         foreach ($rawRowsByMachine as $machine => $rowsOfMachine) {
             $grouped = [];
             $totalDebit = 0.0;
             $totalKredit = 0.0;
- 
+
             foreach ($rowsOfMachine as $row) {
                 $key = implode('|', [
                     $row['no_akun'],
                     $row['keterangan'],
                     $row['dk'],
                     $row['tipe'],
-                    $row['nama_akun']
+                    $row['nama_akun'],
                 ]);
- 
-                if (!isset($grouped[$key])) {
+
+                if (! isset($grouped[$key])) {
                     $grouped[$key] = [
-                        'nama_akun'  => $row['nama_akun'],
-                        'no_akun'    => $row['no_akun'],
-                        'bagian'     => $machine,
+                        'nama_akun' => $row['nama_akun'],
+                        'no_akun' => $row['no_akun'],
+                        'bagian' => $machine,
                         'keterangan' => $row['keterangan'],
-                        'dk'         => $row['dk'],
-                        'tipe'       => $row['tipe'],
-                        'banyak'     => 0.0,
-                        'volume'     => 0.0,
-                        'harga'      => $row['harga'],
-                        'jumlah'     => 0.0,
-                        'has_qty'    => $row['banyak'] !== null,
-                        'has_vol'    => $row['volume'] !== null,
+                        'dk' => $row['dk'],
+                        'tipe' => $row['tipe'],
+                        'banyak' => 0.0,
+                        'volume' => 0.0,
+                        'harga' => $row['harga'],
+                        'jumlah' => 0.0,
+                        'has_qty' => $row['banyak'] !== null,
+                        'has_vol' => $row['volume'] !== null,
                     ];
                 }
- 
+
                 if ($row['banyak'] !== null) {
                     $grouped[$key]['banyak'] += $row['banyak'];
                     $grouped[$key]['has_qty'] = true;
@@ -649,16 +721,16 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $grouped[$key]['jumlah'] += $row['jumlah'];
                 }
             }
- 
+
             foreach ($grouped as $g) {
                 $isVeneer = in_array($g['no_akun'], ['115-07', '115-08', '1421.00', '1421.01', '1422.00', '1422.01', '1426.00', '1426.01', '1427.00', '1427.01']);
                 $isHutangGaji = in_array($g['no_akun'], ['210-02', '2231.00']);
                 $isWood = in_array($g['no_akun'], [
-                    '115-01', '115-02', 
+                    '115-01', '115-02',
                     '1411.01', '1411.02', '1411.03', '1411.04', '1411.05', '1411.06', '1411.07', '1411.08',
-                    '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00'
+                    '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00',
                 ]);
- 
+
                 $rowHarga = 0.0;
                 if ($isVeneer) {
                     $noAkunVal = $g['no_akun'] ?? '';
@@ -666,7 +738,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $isCoreVal = str_contains($namaAkunVal, 'core');
                     $isSengonVal = str_contains($namaAkunVal, 'sengon');
                     $namaKayuVal = $isSengonVal ? 'Sengon' : 'Meranti';
- 
+
                     $dbHarga = $this->getHargaVeneerBasahDb($namaKayuVal, $isCoreVal);
                     if ($dbHarga > 0) {
                         $rowHarga = $dbHarga;
@@ -691,59 +763,59 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                 } elseif ($isHutangGaji) {
                     $rowHarga = 150000.0;
                 } elseif ($isWood) {
-                    $rowHarga = (float)($g['harga'] ?? 0.0);
+                    $rowHarga = (float) ($g['harga'] ?? 0.0);
                 } else {
-                    $rowHarga = (float)($g['jumlah'] ?? 0.0);
+                    $rowHarga = (float) ($g['jumlah'] ?? 0.0);
                 }
- 
+
                 $rowTotal = 0.0;
                 if ($g['has_vol'] && $g['volume'] !== null && $g['volume'] > 0) {
-                    $rowTotal = round((float)$g['volume'], 4) * $rowHarga;
+                    $rowTotal = round((float) $g['volume'], 4) * $rowHarga;
                 } elseif ($g['has_qty'] && $g['banyak'] !== null && $g['banyak'] > 0) {
-                    $rowTotal = (float)$g['banyak'] * $rowHarga;
+                    $rowTotal = (float) $g['banyak'] * $rowHarga;
                 } else {
                     $rowTotal = $rowHarga;
                 }
- 
+
                 if ($g['dk'] === 'd') {
                     $totalDebit += $rowTotal;
                 } else {
                     $totalKredit += $rowTotal;
                 }
             }
- 
+
             // Selisih → selalu masuk ke 'hpp triplek' (6111.00) sebagai KREDIT
             $selisih = round($totalDebit - $totalKredit, 2);
             $grouped[] = [
-                'nama_akun'  => 'hpp triplek',
-                'no_akun'    => '6111.00',
-                'bagian'     => $machine,
+                'nama_akun' => 'hpp triplek',
+                'no_akun' => '6111.00',
+                'bagian' => $machine,
                 'keterangan' => '',
-                'dk'         => 'k',
-                'tipe'       => 'b',
-                'banyak'     => null,
-                'volume'     => null,
-                'harga'      => null,
-                'jumlah'     => $selisih > 0 ? abs($selisih) : 0,
-                'has_qty'    => false,
-                'has_vol'    => false,
+                'dk' => 'k',
+                'tipe' => 'b',
+                'banyak' => null,
+                'volume' => null,
+                'harga' => null,
+                'jumlah' => $selisih > 0 ? abs($selisih) : 0,
+                'has_qty' => false,
+                'has_vol' => false,
             ];
- 
+
             $machineTables[$machine] = $grouped;
         }
- 
-        $dateStr = \Carbon\Carbon::parse($this->tanggal)->format('Ymd');
+
+        $dateStr = Carbon::parse($this->tanggal)->format('Ymd');
         $currentRow = 1;
- 
+
         foreach ($machineTables as $machine => $groupedRows) {
             // Title Row
-            $noJurnal = 'ROT/' . $dateStr . '/' . strtoupper(str_replace(' ', '', $machine));
+            $noJurnal = 'ROT/'.$dateStr.'/'.strtoupper(str_replace(' ', '', $machine));
             $rows->push([
-                'No. Jurnal: ' . $noJurnal, '', '', '', '', '', '', '', '', '', '', '', '', ''
+                'No. Jurnal: '.$noJurnal, '', '', '', '', '', '', '', '', '', '', '', '', '',
             ]);
             $this->titleRows[] = $currentRow;
             $currentRow++;
- 
+
             // Header Row
             $rows->push([
                 'Nama Akun',
@@ -759,31 +831,31 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                 'Banyak',
                 'M3',
                 'Harga',
-                'Total'
+                'Total',
             ]);
             $this->headerRows[] = $currentRow;
             $currentRow++;
- 
+
             // Data Rows
             $dataStart = $currentRow;
-            $tglVal = \Carbon\Carbon::parse($this->tanggal)->format('d-m-Y');
+            $tglVal = Carbon::parse($this->tanggal)->format('d-m-Y');
             foreach ($groupedRows as $g) {
                 // Whitelist mapped accounts for formatting logic
                 $isVeneer = in_array($g['no_akun'], ['115-07', '115-08', '1421.00', '1421.01', '1422.00', '1422.01', '1426.00', '1426.01', '1427.00', '1427.01']);
                 $isHutangGaji = in_array($g['no_akun'], ['210-02', '2231.00']);
                 $isWood = in_array($g['no_akun'], [
-                    '115-01', '115-02', 
+                    '115-01', '115-02',
                     '1411.01', '1411.02', '1411.03', '1411.04', '1411.05', '1411.06', '1411.07', '1411.08',
-                    '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00'
+                    '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00',
                 ]);
- 
+
                 // Format `Nama` (Col 7 / G)
                 if ($isVeneer) {
-                    $namaVal = 'kupasan (m - ' . strtolower($g['bagian']) . ')';
+                    $namaVal = 'kupasan (m - '.strtolower($g['bagian']).')';
                 } else {
                     $namaVal = 'kupasan';
                 }
- 
+
                 // Format `hit kbk` (Col 10 / J)
                 $hitKbkVal = '';
                 if ($isVeneer || $isWood) {
@@ -791,7 +863,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                 } elseif ($isHutangGaji) {
                     $hitKbkVal = 'b';
                 }
- 
+
                 // Format `Harga` (Col 13 / M)
                 $hargaVal = null;
                 if ($isVeneer) {
@@ -800,7 +872,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $isCoreVal = str_contains($namaAkunVal, 'core');
                     $isSengonVal = str_contains($namaAkunVal, 'sengon');
                     $namaKayuVal = $isSengonVal ? 'Sengon' : 'Meranti';
- 
+
                     $dbHarga = $this->getHargaVeneerBasahDb($namaKayuVal, $isCoreVal);
                     if ($dbHarga > 0) {
                         $hargaVal = $dbHarga;
@@ -829,10 +901,10 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                 } else {
                     $hargaVal = $g['jumlah'];
                 }
- 
+
                 // Calculate Total as an Excel formula referencing 'hit kbk' (Col J), Harga (Col M), M3 (Col L), and Banyak (Col K)
                 $totalVal = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
- 
+
                 $rows->push([
                     $g['nama_akun'],                                    // 1. Nama Akun
                     $tglVal,                                            // 2. tgl
@@ -847,38 +919,38 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $g['has_qty'] ? $g['banyak'] : null,                // 11. Banyak
                     $g['has_vol'] ? round($g['volume'], 4) : null,      // 12. M3
                     $hargaVal,                                          // 13. Harga
-                    $totalVal                                           // 14. Total
+                    $totalVal,                                           // 14. Total
                 ]);
                 $currentRow++;
             }
             $dataEnd = $currentRow - 1;
             $this->dataRanges[] = ['start' => $dataStart, 'end' => $dataEnd];
- 
+
             // 2 Blank separating rows
             $rows->push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
             $rows->push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
             $currentRow += 2;
         }
- 
+
         return $rows;
     }
- 
+
     public function title(): string
     {
         return 'jurnal produksi';
     }
- 
+
     public function styles(Worksheet $sheet)
     {
         return [];
     }
- 
+
     public function registerEvents(): array
     {
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
- 
+
                 // Style Title Rows
                 foreach ($this->titleRows as $row) {
                     $sheet->mergeCells("A{$row}:N{$row}");
@@ -886,13 +958,13 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                         'font' => ['bold' => true, 'size' => 11, 'color' => ['argb' => 'FF1D2939']],
                         'fill' => [
                             'fillType' => Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFD2E4F0']
+                            'startColor' => ['argb' => 'FFD2E4F0'],
                         ],
-                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
+                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                     ]);
                     $sheet->getRowDimension($row)->setRowHeight(25);
                 }
- 
+
                 // Style Header Rows
                 foreach ($this->headerRows as $row) {
                     $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
@@ -903,35 +975,37 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                         ],
                         'fill' => [
                             'fillType' => Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFE5E8EB']
+                            'startColor' => ['argb' => 'FFE5E8EB'],
                         ],
-                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
+                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                     ]);
                     $sheet->getRowDimension($row)->setRowHeight(25);
                 }
- 
+
                 // Style Data Rows
                 foreach ($this->dataRanges as $range) {
                     $start = $range['start'];
                     $end = $range['end'];
-                    if ($start > $end) continue;
- 
+                    if ($start > $end) {
+                        continue;
+                    }
+
                     $sheet->getStyle("A{$start}:N{$end}")->applyFromArray([
-                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
+                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                     ]);
- 
+
                     $sheet->getStyle("A{$start}:A{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("B{$start}:F{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     $sheet->getStyle("G{$start}:H{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("I{$start}:J{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     $sheet->getStyle("K{$start}:N{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
- 
+
                     $sheet->getStyle("K{$start}:K{$end}")->getNumberFormat()->setFormatCode('#,##0');
                     $sheet->getStyle("L{$start}:L{$end}")->getNumberFormat()->setFormatCode('#,##0.0000');
                     $sheet->getStyle("M{$start}:M{$end}")->getNumberFormat()->setFormatCode('#,##0');
                     $sheet->getStyle("N{$start}:N{$end}")->getNumberFormat()->setFormatCode('#,##0');
                 }
- 
+
                 // Column Widths
                 $sheet->getColumnDimension('A')->setWidth(25); // Nama Akun
                 $sheet->getColumnDimension('B')->setWidth(15); // tgl
@@ -944,7 +1018,7 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                 $sheet->getColumnDimension('I')->setWidth(10); // map
                 $sheet->getColumnDimension('J')->setWidth(10); // hit kbk
                 $sheet->getColumnDimension('N')->setWidth(18); // Total
-            }
+            },
         ];
     }
 }
