@@ -2,23 +2,27 @@
 
 namespace App\Exports;
 
+use App\Exports\Sheets\JurnalRepairSheetV2;
+use App\Filament\Pages\LaporanRepairs\Queries\LoadLaporanRepairs;
+use App\Models\JenisKayu;
+use App\Models\KategoriBarang;
+use App\Models\ReferensiHargaProduksi;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
-use Maatwebsite\Excel\Concerns\WithMultipleSheets;
+use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithTitle;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
+use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use App\Filament\Pages\LaporanRepairs\Queries\LoadLaporanRepairs;
-use Maatwebsite\Excel\Concerns\FromArray;
-use Maatwebsite\Excel\Concerns\WithColumnFormatting;
-use Maatwebsite\Excel\Concerns\WithColumnWidths;
-use Maatwebsite\Excel\Concerns\WithStyles;
-use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 // ============================================================
@@ -27,7 +31,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 class LaporanRepairExport implements WithMultipleSheets
 {
     public function __construct(
-        protected array  $detailData, // Array hasil RepairDataMap (untuk Sheet 1)
+        protected array $detailData, // Array hasil RepairDataMap (untuk Sheet 1)
         protected string $tanggal     // String tanggal format 'Y-m-d' (untuk Sheet 2 & 3)
     ) {}
 
@@ -39,6 +43,7 @@ class LaporanRepairExport implements WithMultipleSheets
             new LaporanRepairDetailSheet($this->detailData, $this->tanggal),
             new LaporanRepairSummarySheet($rawCollection),
             new JurnalSheet($rawCollection),
+            new JurnalRepairSheetV2($rawCollection),
         ];
     }
 }
@@ -46,10 +51,12 @@ class LaporanRepairExport implements WithMultipleSheets
 // ============================================================
 // SHEET 1: DETAIL PER MEJA (ADAPTIF: SINGLE & MULTI-UKURAN)
 // ============================================================
-class LaporanRepairDetailSheet implements FromCollection, WithTitle, WithEvents
+class LaporanRepairDetailSheet implements FromCollection, WithEvents, WithTitle
 {
     protected array $dataMeja;
+
     protected string $tanggalLaporan;
+
     protected array $blockStyles = [];
 
     public function __construct(array $detailData, string $tanggal = '')
@@ -78,28 +85,28 @@ class LaporanRepairDetailSheet implements FromCollection, WithTitle, WithEvents
 
         // 1. JUDUL SHEET
         $rows[] = ['LAPORAN PRODUKSI REPAIR PER MEJA'];
-        $rows[] = ['TANGGAL: ' . $tglDisplay];
+        $rows[] = ['TANGGAL: '.$tglDisplay];
         $rows[] = array_fill(0, 7, '');
 
         // 2. ITERASI PER MEJA
         foreach ($this->dataMeja as $meja) {
-            $nomorMeja     = $meja['nomor_meja'] ?? '-';
-            $items         = $meja['items'] ?? [];
-            $pekerja       = $meja['pekerja'] ?? [];
+            $nomorMeja = $meja['nomor_meja'] ?? '-';
+            $items = $meja['items'] ?? [];
+            $pekerja = $meja['pekerja'] ?? [];
             $isMultiUkuran = count($items) > 1;
 
             if ($isMultiUkuran) {
                 // ========================================================
                 // SKENARIO A: MEJA MULTI-UKURAN
                 // ========================================================
-                $totalTarget   = (float) ($meja['total_target'] ?? 0);
-                $totalHasil    = (float) ($meja['total_hasil'] ?? 0);
-                $totalSelisih  = (float) ($meja['total_selisih'] ?? ($totalHasil - $totalTarget));
-                $capaianTotal  = $meja['capaian_total'] !== null ? number_format($meja['capaian_total'], 1, ',', '.') . '%' : '-';
+                $totalTarget = (float) ($meja['total_target'] ?? 0);
+                $totalHasil = (float) ($meja['total_hasil'] ?? 0);
+                $totalSelisih = (float) ($meja['total_selisih'] ?? ($totalHasil - $totalTarget));
+                $capaianTotal = $meja['capaian_total'] !== null ? number_format($meja['capaian_total'], 1, ',', '.').'%' : '-';
 
                 // Header Meja Multi
                 $headerRow = count($rows) + 1;
-                $rows[] = ["MEJA {$nomorMeja} - PENGERJAAN MULTI-UKURAN (" . count($items) . " UKURAN) | Capaian Total Meja: {$capaianTotal}", '', '', '', '', '', ''];
+                $rows[] = ["MEJA {$nomorMeja} - PENGERJAAN MULTI-UKURAN (".count($items)." UKURAN) | Capaian Total Meja: {$capaianTotal}", '', '', '', '', '', ''];
 
                 // Sub-header Tabel 1 (Rincian Ukuran)
                 $subHeader1Row = count($rows) + 1;
@@ -110,20 +117,20 @@ class LaporanRepairDetailSheet implements FromCollection, WithTitle, WithEvents
 
                 $dataStart1 = count($rows) + 1;
                 foreach ($items as $item) {
-                    $tgt   = (float) ($item['target'] ?? 0);
-                    $hsl   = (float) ($item['hasil'] ?? 0);
-                    $sls   = (float) ($item['selisih'] ?? ($hsl - $tgt));
-                    $cap   = $item['capaian_persen'] !== null ? number_format($item['capaian_persen'], 1, ',', '.') . '%' : '-';
+                    $tgt = (float) ($item['target'] ?? 0);
+                    $hsl = (float) ($item['hasil'] ?? 0);
+                    $sls = (float) ($item['selisih'] ?? ($hsl - $tgt));
+                    $cap = $item['capaian_persen'] !== null ? number_format($item['capaian_persen'], 1, ',', '.').'%' : '-';
                     $tanda = $sls >= 0 ? '+' : '';
 
                     $rows[] = [
                         $item['kode_ukuran'] ?? '-',
                         $item['jenis_kayu'] ?? '-',
-                        'KW ' . ($item['kw'] ?? '1'),
+                        'KW '.($item['kw'] ?? '1'),
                         $tgt,
                         $hsl,
-                        $tanda . number_format($sls, 0, ',', '.'),
-                        $cap
+                        $tanda.number_format($sls, 0, ',', '.'),
+                        $cap,
                     ];
                 }
                 $dataEnd1 = count($rows);
@@ -137,8 +144,8 @@ class LaporanRepairDetailSheet implements FromCollection, WithTitle, WithEvents
                     '',
                     $totalTarget,
                     $totalHasil,
-                    $tandaTotal . number_format($totalSelisih, 0, ',', '.'),
-                    $capaianTotal
+                    $tandaTotal.number_format($totalSelisih, 0, ',', '.'),
+                    $capaianTotal,
                 ];
 
                 $rows[] = array_fill(0, 7, ''); // spacer
@@ -163,7 +170,7 @@ class LaporanRepairDetailSheet implements FromCollection, WithTitle, WithEvents
                             $p['jam_pulang'] ?? '-',
                             $p['ijin'] ?? '-',
                             $potRaw > 0 ? $potRaw : 0,
-                            $p['keterangan'] ?? '-'
+                            $p['keterangan'] ?? '-',
                         ];
                     }
                 }
@@ -171,43 +178,43 @@ class LaporanRepairDetailSheet implements FromCollection, WithTitle, WithEvents
 
                 // Footer Ringkasan Multi
                 $footerRow = count($rows) + 1;
-                $summaryText = "Pekerja: " . count($pekerja) . " | Total Target: " . number_format($totalTarget, 0, ',', '.') . " Lbr" .
-                    " | Total Hasil: " . number_format($totalHasil, 0, ',', '.') . " Lbr" .
-                    " | Total Selisih: {$tandaTotal}" . number_format($totalSelisih, 0, ',', '.') . " Lbr" .
+                $summaryText = 'Pekerja: '.count($pekerja).' | Total Target: '.number_format($totalTarget, 0, ',', '.').' Lbr'.
+                    ' | Total Hasil: '.number_format($totalHasil, 0, ',', '.').' Lbr'.
+                    " | Total Selisih: {$tandaTotal}".number_format($totalSelisih, 0, ',', '.').' Lbr'.
                     " | Tanggal: {$tglDisplay}";
                 $rows[] = [$summaryText, '', '', '', '', '', ''];
 
                 $this->blockStyles[] = [
-                    'type'          => 'multi',
-                    'header'        => $headerRow,
-                    'sub_header1'   => $subHeader1Row,
-                    'col_header1'   => $colHeader1Row,
-                    'data_start1'   => $dataStart1,
-                    'data_end1'     => $dataEnd1,
-                    'subtotal1'     => $subtotalRow,
-                    'sub_header2'   => $subHeader2Row,
-                    'col_header2'   => $colHeader2Row,
-                    'data_start2'   => $dataStart2,
-                    'data_end2'     => $dataEnd2,
-                    'footer'        => $footerRow,
+                    'type' => 'multi',
+                    'header' => $headerRow,
+                    'sub_header1' => $subHeader1Row,
+                    'col_header1' => $colHeader1Row,
+                    'data_start1' => $dataStart1,
+                    'data_end1' => $dataEnd1,
+                    'subtotal1' => $subtotalRow,
+                    'sub_header2' => $subHeader2Row,
+                    'col_header2' => $colHeader2Row,
+                    'data_start2' => $dataStart2,
+                    'data_end2' => $dataEnd2,
+                    'footer' => $footerRow,
                 ];
             } else {
                 // ========================================================
                 // SKENARIO B: MEJA SINGLE UKURAN (FORMAT ASLI)
                 // ========================================================
-                $firstItem     = $items[0] ?? [];
-                $kodeUkuran    = $firstItem['kode_ukuran'] ?? ($meja['kode_ukuran'] ?? 'REPAIR');
-                $jenisKayu     = $firstItem['jenis_kayu'] ?? ($meja['jenis_kayu'] ?? '-');
-                $kw            = $firstItem['kw'] ?? ($meja['kw'] ?? '1');
-                $targetSingle  = (float) ($firstItem['target'] ?? ($meja['target'] ?? 0));
-                $hasilSingle   = (float) ($firstItem['hasil'] ?? ($meja['hasil'] ?? 0));
+                $firstItem = $items[0] ?? [];
+                $kodeUkuran = $firstItem['kode_ukuran'] ?? ($meja['kode_ukuran'] ?? 'REPAIR');
+                $jenisKayu = $firstItem['jenis_kayu'] ?? ($meja['jenis_kayu'] ?? '-');
+                $kw = $firstItem['kw'] ?? ($meja['kw'] ?? '1');
+                $targetSingle = (float) ($firstItem['target'] ?? ($meja['target'] ?? 0));
+                $hasilSingle = (float) ($firstItem['hasil'] ?? ($meja['hasil'] ?? 0));
                 $selisihSingle = (float) ($firstItem['selisih'] ?? ($hasilSingle - $targetSingle));
                 $capaianSingle = $firstItem['capaian_persen'] ?? ($meja['capaian_persen'] ?? null);
-                $capaianStr    = $capaianSingle !== null ? number_format($capaianSingle, 1, ',', '.') . '%' : '-';
+                $capaianStr = $capaianSingle !== null ? number_format($capaianSingle, 1, ',', '.').'%' : '-';
 
                 // Header Meja Single
                 $headerRow = count($rows) + 1;
-                $rows[] = ["MEJA {$nomorMeja} — " . strtoupper($kodeUkuran) . " ({$jenisKayu}, KW {$kw}) | Capaian: {$capaianStr}", '', '', '', '', '', ''];
+                $rows[] = ["MEJA {$nomorMeja} — ".strtoupper($kodeUkuran)." ({$jenisKayu}, KW {$kw}) | Capaian: {$capaianStr}", '', '', '', '', '', ''];
 
                 $colHeaderRow = count($rows) + 1;
                 $rows[] = ['ID', 'Nama Pekerja', 'Masuk', 'Pulang', 'Izin', 'Potongan Target', 'Keterangan'];
@@ -225,7 +232,7 @@ class LaporanRepairDetailSheet implements FromCollection, WithTitle, WithEvents
                             $p['jam_pulang'] ?? '-',
                             $p['ijin'] ?? '-',
                             $potRaw > 0 ? $potRaw : 0,
-                            $p['keterangan'] ?? '-'
+                            $p['keterangan'] ?? '-',
                         ];
                     }
                 }
@@ -234,20 +241,20 @@ class LaporanRepairDetailSheet implements FromCollection, WithTitle, WithEvents
                 // Footer Ringkasan Single
                 $footerRow = count($rows) + 1;
                 $tandaS = $selisihSingle >= 0 ? '+' : '';
-                $summaryText = "Total Pekerja: " . count($pekerja) .
-                    " | Target Meja: " . number_format($targetSingle, 0, ',', '.') . " Lbr" .
-                    " | Hasil Produksi: " . number_format($hasilSingle, 0, ',', '.') . " Lbr" .
-                    " | Selisih: {$tandaS}" . number_format($selisihSingle, 0, ',', '.') . " Lbr" .
+                $summaryText = 'Total Pekerja: '.count($pekerja).
+                    ' | Target Meja: '.number_format($targetSingle, 0, ',', '.').' Lbr'.
+                    ' | Hasil Produksi: '.number_format($hasilSingle, 0, ',', '.').' Lbr'.
+                    " | Selisih: {$tandaS}".number_format($selisihSingle, 0, ',', '.').' Lbr'.
                     " | Tanggal: {$tglDisplay}";
                 $rows[] = [$summaryText, '', '', '', '', '', ''];
 
                 $this->blockStyles[] = [
-                    'type'       => 'single',
-                    'header'     => $headerRow,
+                    'type' => 'single',
+                    'header' => $headerRow,
                     'col_header' => $colHeaderRow,
                     'data_start' => $dataStart,
-                    'data_end'   => $dataEnd,
-                    'footer'     => $footerRow,
+                    'data_end' => $dataEnd,
+                    'footer' => $footerRow,
                 ];
             }
 
@@ -411,7 +418,7 @@ class LaporanRepairDetailSheet implements FromCollection, WithTitle, WithEvents
 // ============================================================
 // SHEET 2: SUMMARY PRODUKSI
 // ============================================================
-class LaporanRepairSummarySheet implements FromCollection, WithHeadings, WithTitle, WithEvents
+class LaporanRepairSummarySheet implements FromCollection, WithEvents, WithHeadings, WithTitle
 {
     private array $summary = [];
 
@@ -429,8 +436,8 @@ class LaporanRepairSummarySheet implements FromCollection, WithHeadings, WithTit
 
             foreach ($produksi->detailHasilRepairs as $detail) {
                 $p = (float) ($detail->ukuran->panjang ?? 0);
-                $l = (float) ($detail->ukuran->lebar   ?? 0);
-                $t = (float) ($detail->ukuran->tebal   ?? 0);
+                $l = (float) ($detail->ukuran->lebar ?? 0);
+                $t = (float) ($detail->ukuran->tebal ?? 0);
 
                 $jenisModel = $detail->modalRepair?->jenisKayu ?? $detail->jenisKayu;
                 $jenis = strtoupper($jenisModel->kode_kayu ?? substr($jenisModel->nama_kayu ?? '-', 0, 1));
@@ -438,19 +445,19 @@ class LaporanRepairSummarySheet implements FromCollection, WithHeadings, WithTit
 
                 $key = "{$jenis}|{$tanggal}|{$p}|{$l}|{$t}|{$kwData}";
 
-                if (!isset($this->summary[$key])) {
+                if (! isset($this->summary[$key])) {
                     $this->summary[$key] = [
-                        'tanggal'     => $tanggal,
-                        'p'           => $p,
-                        'l'           => $l,
-                        't'           => $t,
-                        'jenis'       => $jenis,
-                        'current_kw'  => $kwData,
+                        'tanggal' => $tanggal,
+                        'p' => $p,
+                        'l' => $l,
+                        't' => $t,
+                        'jenis' => $jenis,
+                        'current_kw' => $kwData,
                         'pekerja_ids' => [],
                     ];
 
                     foreach (self::MASTER_KW as $mKw) {
-                        $this->summary[$key]['kw_' . $mKw] = 0;
+                        $this->summary[$key]['kw_'.$mKw] = 0;
                     }
                 }
 
@@ -464,7 +471,7 @@ class LaporanRepairSummarySheet implements FromCollection, WithHeadings, WithTit
                     }
 
                     if ($kwData !== '' && in_array($kwData, self::MASTER_KW)) {
-                        $this->summary[$key]['kw_' . $kwData] += $jumlahHasil;
+                        $this->summary[$key]['kw_'.$kwData] += $jumlahHasil;
                     }
                 }
             }
@@ -497,7 +504,7 @@ class LaporanRepairSummarySheet implements FromCollection, WithHeadings, WithTit
             $row = [$s['tanggal'], $s['p'], $s['l'], $s['t'], $s['jenis']];
 
             foreach (self::MASTER_KW as $mKw) {
-                $val = $s['kw_' . $mKw] ?? 0;
+                $val = $s['kw_'.$mKw] ?? 0;
                 $row[] = $val > 0 ? $val : '';
             }
 
@@ -513,9 +520,10 @@ class LaporanRepairSummarySheet implements FromCollection, WithHeadings, WithTit
     {
         $heads = ['Tanggal', 'p', 'l', 't', 'jenis'];
         foreach (self::MASTER_KW as $mKw) {
-            $heads[] = 'KW ' . strtoupper($mKw);
+            $heads[] = 'KW '.strtoupper($mKw);
         }
         $heads[] = 'TTL PKJ';
+
         return $heads;
     }
 
@@ -560,12 +568,14 @@ class LaporanRepairSummarySheet implements FromCollection, WithHeadings, WithTit
 // ============================================================
 // SHEET 3: JURNAL PRODUKSI
 // ============================================================
-class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles, WithColumnFormatting
+class JurnalSheet implements FromArray, WithColumnFormatting, WithColumnWidths, WithStyles, WithTitle
 {
     public function __construct(protected $rawCollection) {}
 
-    private array $kayuCache     = [];
+    private array $kayuCache = [];
+
     private array $kategoriCache = [];
+
     private array $bahanRefCache = [];
 
     public function title(): string
@@ -609,10 +619,10 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
         $lastRow = $sheet->getHighestRow();
 
         $sheet->getStyle('A1:N1')->applyFromArray([
-            'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'name' => 'Calibri', 'size' => 11],
-            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '9999FF']],
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'name' => 'Calibri', 'size' => 11],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '9999FF']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'FFFFFF']]],
+            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'FFFFFF']]],
         ]);
 
         if ($lastRow > 1) {
@@ -641,9 +651,9 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
     }
 
     private function buildKeterangan(
-        float  $panjang,
-        float  $lebar,
-        float  $tebal,
+        float $panjang,
+        float $lebar,
+        float $tebal,
         string $jenis,
         string $statusKw,
         string $kwRaw = '',
@@ -651,17 +661,18 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
     ): string {
         $fmt = function (float $val): string {
             if ($val == (int) $val) {
-                return (string)(int) $val;
+                return (string) (int) $val;
             }
+
             return str_replace('.', ',', rtrim(number_format($val, 4, '.', ''), '0'));
         };
 
-        $p   = $fmt($panjang);
-        $l   = $fmt($lebar);
-        $t   = $fmt($tebal);
+        $p = $fmt($panjang);
+        $l = $fmt($lebar);
+        $t = $fmt($tebal);
         $jns = ucfirst(strtolower($this->normalizeJenis($jenis)));
-        $kw  = $kwRaw !== '' ? " KW{$kwRaw}" : '';
-        $af  = $statusKw === 'af' ? ' AF' : '';
+        $kw = $kwRaw !== '' ? " KW{$kwRaw}" : '';
+        $af = $statusKw === 'af' ? ' AF' : '';
         $pfx = $prefix !== '' ? "{$prefix} " : '';
 
         return "{$pfx}{$p}x{$l}x{$t} {$jns}{$kw}{$af}";
@@ -671,28 +682,30 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
     {
         $jns = $this->normalizeJenis($jenis) === 'sengon' ? 'Sengon' : 'Meranti';
         $key = strtolower($jns);
-        if (!array_key_exists($key, $this->kayuCache)) {
-            $kayu = \App\Models\JenisKayu::where('nama_kayu', $jns)->first();
+        if (! array_key_exists($key, $this->kayuCache)) {
+            $kayu = JenisKayu::where('nama_kayu', $jns)->first();
             $this->kayuCache[$key] = $kayu?->id;
         }
+
         return $this->kayuCache[$key];
     }
 
     private function getIdKategoriBarang(string $namaKategori): ?int
     {
         $key = strtolower(trim($namaKategori));
-        if (!array_key_exists($key, $this->kategoriCache)) {
+        if (! array_key_exists($key, $this->kategoriCache)) {
             try {
-                $kategori = \App\Models\KategoriBarang::whereRaw("LOWER(nama_kategori) LIKE ?", ["%{$key}%"])->first();
+                $kategori = KategoriBarang::whereRaw('LOWER(nama_kategori) LIKE ?', ["%{$key}%"])->first();
                 $this->kategoriCache[$key] = $kategori?->id;
             } catch (\Throwable $e) {
                 $this->kategoriCache[$key] = null;
             }
         }
+
         return $this->kategoriCache[$key];
     }
 
-    private function fetchReferensiVeneer(string $jenis, float $tebal, bool $isAf, string $status): ?\App\Models\ReferensiHargaProduksi
+    private function fetchReferensiVeneer(string $jenis, float $tebal, bool $isAf, string $status): ?ReferensiHargaProduksi
     {
         $idJenisKayu = $this->getIdKayuByNama($jenis);
 
@@ -707,11 +720,11 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             $kw = 3;
         }
 
-        if (!$idJenisKayu || !$idKategoriBarang) {
+        if (! $idJenisKayu || ! $idKategoriBarang) {
             return null;
         }
 
-        return \App\Models\ReferensiHargaProduksi::findReferensi(
+        return ReferensiHargaProduksi::findReferensi(
             idJenisKayu: $idJenisKayu,
             idKategoriBarang: $idKategoriBarang,
             kw: $kw,
@@ -719,25 +732,25 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
         );
     }
 
-    private function extractAkunVeneer(?\App\Models\ReferensiHargaProduksi $ref): array
+    private function extractAkunVeneer(?ReferensiHargaProduksi $ref): array
     {
-        if (!$ref) {
+        if (! $ref) {
             return ['UNKNOWN', 'UNKNOWN', 0.0];
         }
-        if (!$ref->relationLoaded('subAnakAkun')) {
+        if (! $ref->relationLoaded('subAnakAkun')) {
             $ref->load('subAnakAkun');
         }
         $sub = $ref->subAnakAkun;
-        if (!$sub) {
+        if (! $sub) {
             return ['UNKNOWN', 'UNKNOWN', (float) $ref->harga];
         }
-        $nama   = trim($sub->nama_sub_anak_akun ?? '') ?: 'UNKNOWN';
+        $nama = trim($sub->nama_sub_anak_akun ?? '') ?: 'UNKNOWN';
         $noAkun = trim($sub->kode_sub_anak_akun ?? '') ?: 'UNKNOWN';
 
         return [$nama, $noAkun, (float) $ref->harga];
     }
 
-    private function fetchReferensiBahan(string $namaBahan): ?\App\Models\ReferensiHargaProduksi
+    private function fetchReferensiBahan(string $namaBahan): ?ReferensiHargaProduksi
     {
         $key = strtolower(trim($namaBahan));
         if (array_key_exists($key, $this->bahanRefCache)) {
@@ -745,11 +758,11 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
         }
 
         $idKategoriBarang = $this->getIdKategoriBarang('barang');
-        if (!$idKategoriBarang) {
+        if (! $idKategoriBarang) {
             return $this->bahanRefCache[$key] = null;
         }
 
-        $ref = \App\Models\ReferensiHargaProduksi::with('subAnakAkun')
+        $ref = ReferensiHargaProduksi::with('subAnakAkun')
             ->where('id_kategori_barang', $idKategoriBarang)
             ->where(function ($q) use ($key) {
                 $q->whereRaw('LOWER(nama) LIKE ?', ["%{$key}%"])
@@ -776,22 +789,22 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             strtolower($map),
             ($hitKbk !== '' && $hitKbk !== null) ? strtolower($hitKbk) : '',
             ($banyak === '' || $banyak === null) ? '' : (float) $banyak,
-            ($m3     === '' || $m3     === null) ? '' : (float) $m3,
-            ($harga  === '' || $harga  === null) ? '' : (float) $harga,
+            ($m3 === '' || $m3 === null) ? '' : (float) $m3,
+            ($harga === '' || $harga === null) ? '' : (float) $harga,
             '',
         ];
     }
 
     public function array(): array
     {
-        $rows   = [];
+        $rows = [];
         $rows[] = ['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total'];
 
         foreach ($this->rawCollection as $produksi) {
-            $tglFormat         = Carbon::parse($produksi->tanggal)->format('d-m-Y');
-            $totalDebit        = 0.0;
-            $totalKredit       = 0.0;
-            $jurnalBlockDebit  = [];
+            $tglFormat = Carbon::parse($produksi->tanggal)->format('d-m-Y');
+            $totalDebit = 0.0;
+            $totalKredit = 0.0;
+            $jurnalBlockDebit = [];
             $jurnalBlockKredit = [];
 
             // ============================================================
@@ -801,54 +814,58 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
 
             $groupedHasil = collect($produksi->detailHasilRepairs)->groupBy(function ($hasil) {
                 if ($hasil->modalRepair && $hasil->modalRepair->ukuran && $hasil->modalRepair->jenisKayu) {
-                    $modal    = $hasil->modalRepair;
-                    $jnsNorm  = $this->normalizeJenis($modal->jenisKayu->nama_kayu ?? '');
+                    $modal = $hasil->modalRepair;
+                    $jnsNorm = $this->normalizeJenis($modal->jenisKayu->nama_kayu ?? '');
                     $statusKw = strtolower((string) ($modal->kw ?? $hasil->kw));
-                    $isAf     = str_contains($statusKw, 'af') ? 'af' : 'reguler';
-                    $tebal    = (float) $modal->ukuran->tebal;
-                    $panjang  = (float) $modal->ukuran->panjang;
-                    $lebar    = (float) $modal->ukuran->lebar;
-                    $kwRaw    = (string)((int) filter_var($statusKw, FILTER_SANITIZE_NUMBER_INT));
+                    $isAf = str_contains($statusKw, 'af') ? 'af' : 'reguler';
+                    $tebal = (float) $modal->ukuran->tebal;
+                    $panjang = (float) $modal->ukuran->panjang;
+                    $lebar = (float) $modal->ukuran->lebar;
+                    $kwRaw = (string) ((int) filter_var($statusKw, FILTER_SANITIZE_NUMBER_INT));
 
                     return "{$jnsNorm}|{$panjang}|{$lebar}|{$tebal}|{$isAf}|{$kwRaw}";
                 }
 
-                if (!$hasil->ukuran) return 'invalid_data';
+                if (! $hasil->ukuran) {
+                    return 'invalid_data';
+                }
 
                 $jenisModel = $hasil->jenisKayu;
-                $jnsNorm  = $this->normalizeJenis($jenisModel?->nama_kayu ?? 'meranti');
+                $jnsNorm = $this->normalizeJenis($jenisModel?->nama_kayu ?? 'meranti');
                 $statusKw = strtolower((string) $hasil->kw);
-                $isAf     = str_contains($statusKw, 'af') ? 'af' : 'reguler';
-                $tebal    = (float) $hasil->ukuran->tebal;
-                $panjang  = (float) $hasil->ukuran->panjang;
-                $lebar    = (float) $hasil->ukuran->lebar;
-                $kwRaw    = (string)((int) filter_var($statusKw, FILTER_SANITIZE_NUMBER_INT));
+                $isAf = str_contains($statusKw, 'af') ? 'af' : 'reguler';
+                $tebal = (float) $hasil->ukuran->tebal;
+                $panjang = (float) $hasil->ukuran->panjang;
+                $lebar = (float) $hasil->ukuran->lebar;
+                $kwRaw = (string) ((int) filter_var($statusKw, FILTER_SANITIZE_NUMBER_INT));
 
                 return "{$jnsNorm}|{$panjang}|{$lebar}|{$tebal}|{$isAf}|{$kwRaw}";
             });
 
             foreach ($groupedHasil as $key => $items) {
-                if ($key === 'invalid_data') continue;
+                if ($key === 'invalid_data') {
+                    continue;
+                }
 
                 [$jnsNorm, $panjang, $lebar, $tebal, $statusKw, $kwRaw] = explode('|', $key);
                 $panjang = (float) $panjang;
-                $lebar   = (float) $lebar;
-                $tebal   = (float) $tebal;
-                $isAf    = ($statusKw === 'af');
+                $lebar = (float) $lebar;
+                $tebal = (float) $tebal;
+                $isAf = ($statusKw === 'af');
 
                 $totalBanyak = $items->sum('jumlah');
-                $totalM3     = ($panjang * $lebar * $tebal * $totalBanyak) / 10000000;
+                $totalM3 = ($panjang * $lebar * $tebal * $totalBanyak) / 10000000;
 
                 $hasilPerGroup[$key] = [
-                    'jnsNorm'     => $jnsNorm,
-                    'panjang'     => $panjang,
-                    'lebar'       => $lebar,
-                    'tebal'       => $tebal,
-                    'statusKw'    => $statusKw,
-                    'kwRaw'       => $kwRaw,
-                    'isAf'        => $isAf,
+                    'jnsNorm' => $jnsNorm,
+                    'panjang' => $panjang,
+                    'lebar' => $lebar,
+                    'tebal' => $tebal,
+                    'statusKw' => $statusKw,
+                    'kwRaw' => $kwRaw,
+                    'isAf' => $isAf,
                     'totalBanyak' => $totalBanyak,
-                    'totalM3'     => $totalM3,
+                    'totalM3' => $totalM3,
                 ];
             }
 
@@ -858,41 +875,45 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             $modalPerGroup = [];
 
             $groupedModal = collect($produksi->modalRepairs)->groupBy(function ($modal) {
-                if (!$modal->ukuran || !$modal->jenisKayu) return 'invalid_data';
+                if (! $modal->ukuran || ! $modal->jenisKayu) {
+                    return 'invalid_data';
+                }
 
-                $jnsNorm  = $this->normalizeJenis($modal->jenisKayu->nama_kayu ?? '');
+                $jnsNorm = $this->normalizeJenis($modal->jenisKayu->nama_kayu ?? '');
                 $statusKw = strtolower((string) $modal->kw);
-                $isAf     = str_contains($statusKw, 'af') ? 'af' : 'reguler';
-                $tebal    = (float) $modal->ukuran->tebal;
-                $panjang  = (float) $modal->ukuran->panjang;
-                $lebar    = (float) $modal->ukuran->lebar;
-                $kwRaw    = (string)((int) filter_var($statusKw, FILTER_SANITIZE_NUMBER_INT));
+                $isAf = str_contains($statusKw, 'af') ? 'af' : 'reguler';
+                $tebal = (float) $modal->ukuran->tebal;
+                $panjang = (float) $modal->ukuran->panjang;
+                $lebar = (float) $modal->ukuran->lebar;
+                $kwRaw = (string) ((int) filter_var($statusKw, FILTER_SANITIZE_NUMBER_INT));
 
                 return "{$jnsNorm}|{$panjang}|{$lebar}|{$tebal}|{$isAf}|{$kwRaw}";
             });
 
             foreach ($groupedModal as $key => $items) {
-                if ($key === 'invalid_data') continue;
+                if ($key === 'invalid_data') {
+                    continue;
+                }
 
                 [$jnsNorm, $panjang, $lebar, $tebal, $statusKw, $kwRaw] = explode('|', $key);
                 $panjang = (float) $panjang;
-                $lebar   = (float) $lebar;
-                $tebal   = (float) $tebal;
-                $isAf    = ($statusKw === 'af');
+                $lebar = (float) $lebar;
+                $tebal = (float) $tebal;
+                $isAf = ($statusKw === 'af');
 
                 $totalBanyak = $items->sum('jumlah');
-                $totalM3     = ($panjang * $lebar * $tebal * $totalBanyak) / 10000000;
+                $totalM3 = ($panjang * $lebar * $tebal * $totalBanyak) / 10000000;
 
                 $modalPerGroup[$key] = [
-                    'jnsNorm'     => $jnsNorm,
-                    'panjang'     => $panjang,
-                    'lebar'       => $lebar,
-                    'tebal'       => $tebal,
-                    'statusKw'    => $statusKw,
-                    'kwRaw'       => $kwRaw,
-                    'isAf'        => $isAf,
+                    'jnsNorm' => $jnsNorm,
+                    'panjang' => $panjang,
+                    'lebar' => $lebar,
+                    'tebal' => $tebal,
+                    'statusKw' => $statusKw,
+                    'kwRaw' => $kwRaw,
+                    'isAf' => $isAf,
                     'totalBanyak' => $totalBanyak,
-                    'totalM3'     => $totalM3,
+                    'totalM3' => $totalM3,
                 ];
             }
 
@@ -908,39 +929,39 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                 $hasil = $hasilPerGroup[$key] ?? null;
                 $modal = $modalPerGroup[$key] ?? null;
 
-                $meta     = $hasil ?? $modal;
-                $jnsNorm  = $meta['jnsNorm'];
-                $panjang  = $meta['panjang'];
-                $lebar    = $meta['lebar'];
-                $tebal    = $meta['tebal'];
+                $meta = $hasil ?? $modal;
+                $jnsNorm = $meta['jnsNorm'];
+                $panjang = $meta['panjang'];
+                $lebar = $meta['lebar'];
+                $tebal = $meta['tebal'];
                 $statusKw = $meta['statusKw'];
-                $kwRaw    = $meta['kwRaw'];
-                $isAf     = $meta['isAf'];
+                $kwRaw = $meta['kwRaw'];
+                $isAf = $meta['isAf'];
 
-                $hasilM3     = $hasil['totalM3']     ?? 0.0;
+                $hasilM3 = $hasil['totalM3'] ?? 0.0;
                 $hasilBanyak = $hasil['totalBanyak'] ?? 0;
-                $modalM3     = $modal['totalM3']     ?? 0.0;
+                $modalM3 = $modal['totalM3'] ?? 0.0;
                 $modalBanyak = $modal['totalBanyak'] ?? 0;
 
-                $refJadi   = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'jadi');
+                $refJadi = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'jadi');
                 $refKering = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'kering');
 
-                [$namaAkunJadi,   $noAkunJadi,   $hargaJadi]   = $this->extractAkunVeneer($refJadi);
+                [$namaAkunJadi,   $noAkunJadi,   $hargaJadi] = $this->extractAkunVeneer($refJadi);
                 [$namaAkunKering, $noAkunKering, $hargaKering] = $this->extractAkunVeneer($refKering);
 
                 $keteranganNormal = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw);
-                $keteranganJadi   = $keteranganNormal . (!$refJadi   ? ' [UNKNOWN]' : '');
-                $keteranganKering = $keteranganNormal . (!$refKering ? ' [UNKNOWN]' : '');
+                $keteranganJadi = $keteranganNormal.(! $refJadi ? ' [UNKNOWN]' : '');
+                $keteranganKering = $keteranganNormal.(! $refKering ? ' [UNKNOWN]' : '');
 
                 $diffBanyak = $modalBanyak - $hasilBanyak;
 
                 if ($diffBanyak > 0) {
                     // KONDISI KEHILANGAN
                     $kehilanganBanyak = $diffBanyak;
-                    $modalSebanding   = $hasilBanyak;
+                    $modalSebanding = $hasilBanyak;
 
-                    $m3Hasil      = ($panjang * $lebar * $tebal * $hasilBanyak) / 10000000;
-                    $m3Modal      = ($panjang * $lebar * $tebal * $modalSebanding) / 10000000;
+                    $m3Hasil = ($panjang * $lebar * $tebal * $hasilBanyak) / 10000000;
+                    $m3Modal = ($panjang * $lebar * $tebal * $modalSebanding) / 10000000;
                     $m3Kehilangan = ($panjang * $lebar * $tebal * $kehilanganBanyak) / 10000000;
 
                     if ($hasilBanyak > 0) {
@@ -953,23 +974,23 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                         $totalKredit += ($m3Modal * $hargaKering);
                     }
 
-                    $keteranganKehilangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw, 'Kehilangan') . (!$refKering ? ' [UNKNOWN]' : '');
-                    $jurnalBlockKredit[]  = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKehilangan, 'k', $kehilanganBanyak, $m3Kehilangan, $hargaKering, 'm');
+                    $keteranganKehilangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw, 'Kehilangan').(! $refKering ? ' [UNKNOWN]' : '');
+                    $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKehilangan, 'k', $kehilanganBanyak, $m3Kehilangan, $hargaKering, 'm');
                     $totalKredit += ($m3Kehilangan * $hargaKering);
                 } elseif ($diffBanyak < 0) {
                     // KONDISI KELEBIHAN
                     $kelebihanBanyak = abs($diffBanyak);
-                    $hasilSebanding  = $modalBanyak;
+                    $hasilSebanding = $modalBanyak;
 
                     $m3HasilUtama = ($panjang * $lebar * $tebal * $hasilSebanding) / 10000000;
-                    $m3Kelebihan  = ($panjang * $lebar * $tebal * $kelebihanBanyak) / 10000000;
+                    $m3Kelebihan = ($panjang * $lebar * $tebal * $kelebihanBanyak) / 10000000;
                     $m3ModalUtama = ($panjang * $lebar * $tebal * $modalBanyak) / 10000000;
 
                     $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilSebanding, $m3HasilUtama, $hargaJadi, 'm');
                     $totalDebit += ($m3HasilUtama * $hargaJadi);
 
-                    $keteranganKelebihan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw, 'Kelebihan') . (!$refJadi ? ' [UNKNOWN]' : '');
-                    $jurnalBlockDebit[]  = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganKelebihan, 'd', $kelebihanBanyak, $m3Kelebihan, $hargaJadi, 'm');
+                    $keteranganKelebihan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw, 'Kelebihan').(! $refJadi ? ' [UNKNOWN]' : '');
+                    $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganKelebihan, 'd', $kelebihanBanyak, $m3Kelebihan, $hargaJadi, 'm');
                     $totalDebit += ($m3Kelebihan * $hargaJadi);
 
                     $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKering, 'k', $modalBanyak, $m3ModalUtama, $hargaKering, 'm');
@@ -979,7 +1000,7 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                     $m3Hasil = ($panjang * $lebar * $tebal * $hasilBanyak) / 10000000;
                     $m3Modal = ($panjang * $lebar * $tebal * $modalBanyak) / 10000000;
 
-                    $jurnalBlockDebit[]  = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilBanyak, $m3Hasil, $hargaJadi, 'm');
+                    $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilBanyak, $m3Hasil, $hargaJadi, 'm');
                     $totalDebit += ($m3Hasil * $hargaJadi);
 
                     $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKering, 'k', $modalBanyak, $m3Modal, $hargaKering, 'm');
@@ -991,30 +1012,34 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             // STEP 2: UKURAN MANUAL
             // ============================================================
             $hasilManual = collect($produksi->detailHasilRepairs)->filter(function ($h) {
-                return !$h->modalRepair || !$h->modalRepair->ukuran || !$h->modalRepair->jenisKayu;
+                return ! $h->modalRepair || ! $h->modalRepair->ukuran || ! $h->modalRepair->jenisKayu;
             });
 
             foreach ($hasilManual as $hasil) {
-                if (!$hasil->ukuran) continue;
+                if (! $hasil->ukuran) {
+                    continue;
+                }
 
                 $jenisModel = $hasil->jenisKayu;
-                $jnsNorm  = $this->normalizeJenis($jenisModel?->nama_kayu ?? 'meranti');
+                $jnsNorm = $this->normalizeJenis($jenisModel?->nama_kayu ?? 'meranti');
                 $statusKw = strtolower((string) $hasil->kw);
-                $isAf     = str_contains($statusKw, 'af');
-                $tebal    = (float) $hasil->ukuran->tebal;
-                $panjang  = (float) $hasil->ukuran->panjang;
-                $lebar    = (float) $hasil->ukuran->lebar;
-                $kwRaw    = (string)((int) filter_var($statusKw, FILTER_SANITIZE_NUMBER_INT));
+                $isAf = str_contains($statusKw, 'af');
+                $tebal = (float) $hasil->ukuran->tebal;
+                $panjang = (float) $hasil->ukuran->panjang;
+                $lebar = (float) $hasil->ukuran->lebar;
+                $kwRaw = (string) ((int) filter_var($statusKw, FILTER_SANITIZE_NUMBER_INT));
 
                 $banyak = (int) $hasil->jumlah;
-                if ($banyak <= 0) continue;
+                if ($banyak <= 0) {
+                    continue;
+                }
 
                 $m3 = ($panjang * $lebar * $tebal * $banyak) / 10000000;
 
                 $refJadi = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'jadi');
                 [$namaAkun, $noAkun, $harga] = $this->extractAkunVeneer($refJadi);
 
-                $keterangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw) . (!$refJadi ? ' [UNKNOWN]' : '');
+                $keterangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw).(! $refJadi ? ' [UNKNOWN]' : '');
 
                 $jurnalBlockDebit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'd', $banyak, $m3, $harga, 'm');
                 $totalDebit += ($m3 * $harga);
@@ -1023,16 +1048,18 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
             // ============================================================
             // STEP 3: KREDIT BAHAN PENOLONG
             // ============================================================
-            if (!empty($produksi->bahanPenolongRepair)) {
+            if (! empty($produksi->bahanPenolongRepair)) {
                 foreach ($produksi->bahanPenolongRepair as $bahan) {
                     $jumlah = (float) ($bahan->jumlah ?? 0);
-                    if ($jumlah <= 0) continue;
+                    if ($jumlah <= 0) {
+                        continue;
+                    }
 
                     $namaBahanRaw = $bahan->bahanPenolong->nama_bahan_penolong ?? 'Bahan';
                     $refBahan = $this->fetchReferensiBahan($namaBahanRaw);
                     [$namaAkun, $noAkun, $harga] = $this->extractAkunVeneer($refBahan);
 
-                    $keteranganBahan = !$refBahan ? "{$namaBahanRaw} [UNKNOWN]" : '';
+                    $keteranganBahan = ! $refBahan ? "{$namaBahanRaw} [UNKNOWN]" : '';
                     $jurnalBlockKredit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keteranganBahan, 'k', $jumlah, '', $harga, 'b');
                     $totalKredit += ($jumlah * $harga);
                 }
@@ -1060,7 +1087,7 @@ class JurnalSheet implements FromArray, WithTitle, WithColumnWidths, WithStyles,
                 }
             }
 
-            $rows   = array_merge($rows, $jurnalBlockDebit, $jurnalBlockKredit, $hppRow);
+            $rows = array_merge($rows, $jurnalBlockDebit, $jurnalBlockKredit, $hppRow);
             $rows[] = array_fill(0, 14, '');
         }
 

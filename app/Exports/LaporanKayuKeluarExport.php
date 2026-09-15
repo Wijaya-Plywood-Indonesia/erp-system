@@ -2,25 +2,29 @@
 
 namespace App\Exports;
 
-use App\Models\HppAverageLog;
-use App\Models\ProduksiRotary;
 use App\Models\DetailTurusanKayu;
+use App\Models\HppAverageLog;
+use App\Models\JenisKayu;
+use App\Models\Mesin;
+use App\Models\ProduksiRotary;
+use App\Models\ReferensiHargaProduksi;
+use App\Services\Akuntansi\RotaryJurnalService;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Maatwebsite\Excel\Concerns\WithStyles;
-use Maatwebsite\Excel\Concerns\WithMultipleSheets;
+use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
 use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
-use PhpOffice\PhpSpreadsheet\Style\Alignment;
-use PhpOffice\PhpSpreadsheet\Style\Border;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Cell\Cell;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
-use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class LaporanKayuKeluarExport implements WithMultipleSheets
 {
@@ -33,8 +37,11 @@ class LaporanKayuKeluarExport implements WithMultipleSheets
 
     public function sheets(): array
     {
+        require_once __DIR__.'/LaporanKayuKeluarExportV2.php';
+
         return [
             new LaporanProduksiKayuHabisSheet($this->tanggal),
+            new LaporanProduksiKayuHabisSheetV2($this->tanggal),
         ];
     }
 
@@ -68,6 +75,7 @@ class LaporanKayuKeluarExport implements WithMultipleSheets
                 if ($panjang === 130) {
                     return ['no_akun' => '1414.00', 'nama_akun' => 'log core 130 WHN'];
                 }
+
                 return ['no_akun' => '1413.13', 'nama_akun' => 'log core 260 WHN'];
             }
             if ($isBaloan) {
@@ -85,6 +93,7 @@ class LaporanKayuKeluarExport implements WithMultipleSheets
                 if ($panjang === 100) {
                     return ['no_akun' => '1413.12', 'nama_akun' => 'kayu Lunak 100 WHN'];
                 }
+
                 return ['no_akun' => '1413.01', 'nama_akun' => 'kayu Lunak 260 WHN'];
             }
 
@@ -92,6 +101,7 @@ class LaporanKayuKeluarExport implements WithMultipleSheets
             if ($panjang === 130) {
                 return ['no_akun' => '1413.08', 'nama_akun' => 'Kayu Keras 130 WHN'];
             }
+
             return ['no_akun' => '1413.06', 'nama_akun' => 'Kayu Keras 260 WHN'];
         } else {
             // WJY
@@ -105,6 +115,7 @@ class LaporanKayuKeluarExport implements WithMultipleSheets
                 if ($panjang === 130) {
                     return ['no_akun' => '1413.04', 'nama_akun' => 'log core 130 WJY'];
                 }
+
                 return ['no_akun' => '1413.03', 'nama_akun' => 'log core 260 WJY'];
             }
             if ($isBaloan) {
@@ -122,6 +133,7 @@ class LaporanKayuKeluarExport implements WithMultipleSheets
                 if ($panjang === 100) {
                     return ['no_akun' => '1411.08', 'nama_akun' => 'kayu Lunak 100 WJY'];
                 }
+
                 return ['no_akun' => '1411.01', 'nama_akun' => 'kayu Lunak 260 WJY'];
             }
 
@@ -129,12 +141,13 @@ class LaporanKayuKeluarExport implements WithMultipleSheets
             if ($panjang === 130) {
                 return ['no_akun' => '1411.04', 'nama_akun' => 'Kayu Keras 130 WJY'];
             }
+
             return ['no_akun' => '1411.02', 'nama_akun' => 'Kayu Keras 260 WJY'];
         }
     }
 }
 
-class LaporanKayuKeluarDetailSheet implements FromCollection, WithTitle, ShouldAutoSize, WithStyles
+class LaporanKayuKeluarDetailSheet implements FromCollection, ShouldAutoSize, WithStyles, WithTitle
 {
     protected string $tanggal;
 
@@ -154,22 +167,23 @@ class LaporanKayuKeluarDetailSheet implements FromCollection, WithTitle, ShouldA
             ->orderBy('id', 'asc')
             ->get();
 
-        $grouped = $records->groupBy(fn($item) => $item->id_lahan ?? 0);
+        $grouped = $records->groupBy(fn ($item) => $item->id_lahan ?? 0);
 
         $rows = [];
 
         // Main Title Block
-        $rows[] = ['LAPORAN KAYU KELUAR PER LAHAN - ' . Carbon::parse($this->tanggal)->format('d/m/Y')];
+        $rows[] = ['LAPORAN KAYU KELUAR PER LAHAN - '.Carbon::parse($this->tanggal)->format('d/m/Y')];
         $rows[] = []; // Spacer row
 
         if ($grouped->isEmpty()) {
             $rows[] = ['Tidak ada data transaksi kayu keluar untuk tanggal ini.'];
+
             return collect($rows);
         }
 
         foreach ($grouped as $lahanId => $logs) {
             $lahanModel = $logs->first()?->lahan;
-            $lahanLabel = $lahanModel ? ($lahanModel->kode_lahan . ' - ' . $lahanModel->nama_lahan) : 'Tanpa Lahan';
+            $lahanLabel = $lahanModel ? ($lahanModel->kode_lahan.' - '.$lahanModel->nama_lahan) : 'Tanpa Lahan';
 
             // Ambil semua seri kayu masuk untuk id_lahan ini dari HppAverageLog
             $seriLogs = HppAverageLog::where('id_lahan', $lahanId)
@@ -185,7 +199,7 @@ class LaporanKayuKeluarDetailSheet implements FromCollection, WithTitle, ShouldA
                         $seri = $ref->kayuMasuk->seri ?? null;
                     }
                 }
-                if (!$seri && preg_match('/SERI:\s*(\d+)/i', $sLog->keterangan, $matches)) {
+                if (! $seri && preg_match('/SERI:\s*(\d+)/i', $sLog->keterangan, $matches)) {
                     $seri = $matches[1];
                 }
                 if ($seri) {
@@ -194,11 +208,11 @@ class LaporanKayuKeluarDetailSheet implements FromCollection, WithTitle, ShouldA
             }
             $uniqueSeri = array_unique($seriList);
             asort($uniqueSeri);
-            $seriLabel = !empty($uniqueSeri) ? implode(', ', $uniqueSeri) : '-';
+            $seriLabel = ! empty($uniqueSeri) ? implode(', ', $uniqueSeri) : '-';
 
             // Lahan Title Header row
-            $rows[] = ['LAHAN: ' . $lahanLabel . ' (Seri Kayu: ' . $seriLabel . ')'];
-            
+            $rows[] = ['LAHAN: '.$lahanLabel.' (Seri Kayu: '.$seriLabel.')'];
+
             // Table Column Headers
             $rows[] = [
                 'No',
@@ -209,7 +223,7 @@ class LaporanKayuKeluarDetailSheet implements FromCollection, WithTitle, ShouldA
                 'Sisa Batang',
                 'Sisa Volume (M3)',
                 'Status',
-                'Keterangan'
+                'Keterangan',
             ];
 
             $no = 1;
@@ -251,28 +265,28 @@ class LaporanKayuKeluarDetailSheet implements FromCollection, WithTitle, ShouldA
             $cellValue = $sheet->getCell("A{$row}")->getValue();
 
             // Style Lahan title row
-            if (str_starts_with((string)$cellValue, 'LAHAN:')) {
+            if (str_starts_with((string) $cellValue, 'LAHAN:')) {
                 $sheet->getStyle("A{$row}")->getFont()->setBold(true)->setSize(11);
                 $sheet->mergeCells("A{$row}:I{$row}");
                 $sheet->getStyle("A{$row}:I{$row}")->getFill()->setFillType(Fill::FILL_SOLID);
                 $sheet->getStyle("A{$row}:I{$row}")->getFill()->getStartColor()->setARGB('F4F4F5'); // Zinc 100
-            } 
+            }
             // Style table columns header row
             elseif ($cellValue === 'No') {
                 $sheet->getStyle("A{$row}:I{$row}")->getFont()->setBold(true);
                 $sheet->getStyle("A{$row}:I{$row}")->getFill()->setFillType(Fill::FILL_SOLID);
                 $sheet->getStyle("A{$row}:I{$row}")->getFill()->getStartColor()->setARGB('E4E4E7'); // Zinc 200
                 $sheet->getStyle("A{$row}:I{$row}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-            } 
+            }
             // Style actual log rows
             elseif (is_numeric($cellValue)) {
                 $sheet->getStyle("A{$row}:I{$row}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-                
+
                 // Alignments
                 $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle("C{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle("H{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                
+
                 // Formatting for numbers / volumes
                 $sheet->getStyle("D{$row}")->getNumberFormat()->setFormatCode('#,##0');
                 $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('#,##0.0000');
@@ -295,24 +309,30 @@ class LaporanKayuKeluarDetailSheet implements FromCollection, WithTitle, ShouldA
     }
 }
 
-class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements FromCollection, WithTitle, WithStyles, WithEvents, WithCustomValueBinder
+class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements FromCollection, WithCustomValueBinder, WithEvents, WithStyles, WithTitle
 {
     protected $tanggal;
+
     protected $titleRows = [];
+
     protected $headerRows = [];
+
     protected $dataRanges = [];
 
     public function bindValue(Cell $cell, $value)
     {
         if ($cell->getColumn() === 'D') {
             if (is_numeric($value)) {
-                $cell->setValueExplicit((float)$value, DataType::TYPE_NUMERIC);
+                $cell->setValueExplicit((float) $value, DataType::TYPE_NUMERIC);
                 $cell->getWorksheet()->getStyle($cell->getCoordinate())->getNumberFormat()->setFormatCode('0.00');
+
                 return true;
             }
             $cell->setValueExplicit($value, DataType::TYPE_STRING);
+
             return true;
         }
+
         return parent::bindValue($cell, $value);
     }
 
@@ -324,23 +344,24 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
     public function collection()
     {
         $rows = collect();
-        $service = new \App\Services\Akuntansi\RotaryJurnalService();
+        $service = new RotaryJurnalService;
         $payload = $service->buildJurnalPayloadPreview($this->tanggal);
 
-        if (!$payload || empty($payload['jurnal_items'])) {
+        if (! $payload || empty($payload['jurnal_items'])) {
             $rows->push(['Tidak ada data jurnal produksi untuk tanggal ini.']);
+
             return $rows;
         }
 
         $rawRows = [];
 
         // Preload mesin dan jenis kayu untuk pencarian dinamis
-        $mesins = \App\Models\Mesin::all()->keyBy(fn($m) => strtoupper(trim($m->nama_mesin)));
-        $jenisKayus = \App\Models\JenisKayu::all()->keyBy(fn($jk) => strtoupper(trim($jk->nama_kayu)));
+        $mesins = Mesin::all()->keyBy(fn ($m) => strtoupper(trim($m->nama_mesin)));
+        $jenisKayus = JenisKayu::all()->keyBy(fn ($jk) => strtoupper(trim($jk->nama_kayu)));
 
         // Preload harga veneer kering
         $hargaVeneerMap = [];
-        $referensiHargaKering = \App\Models\ReferensiHargaProduksi::where('jenis_barang', 'Veneer Kering')->get();
+        $referensiHargaKering = ReferensiHargaProduksi::where('jenis_barang', 'Veneer Kering')->get();
         foreach ($referensiHargaKering as $rhp) {
             $ukKey = strtolower(trim($rhp->kw ?? ''));
             if (str_starts_with($ukKey, 'kw 1 - ')) {
@@ -352,8 +373,8 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
 
         foreach ($payload['jurnal_items'] as $item) {
             $namaAkun = $item['nama_akun'];
-            $noAkun   = $item['no_akun'];
-            $mapDK    = $item['map'];
+            $noAkun = $item['no_akun'];
+            $mapDK = $item['map'];
 
             // Skip Upah Tenaga Kerja (510-01) — struktur baru tidak memunculkan sisi debit upah
             if ($noAkun === '510-01') {
@@ -369,7 +390,7 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                     if (($subItem['nama_barang'] ?? '') !== 'Mesin' && ($subItem['nama_barang'] ?? '') !== '-') {
                         $keteranganSpesifikasi = $subItem['nama_barang'] ?? '-';
                     } else {
-                        $keteranganSpesifikasi = ($subItem['keterangan'] ?? '') . ' (' . ($subItem['ukuran'] ?? '') . ')';
+                        $keteranganSpesifikasi = ($subItem['keterangan'] ?? '').' ('.($subItem['ukuran'] ?? '').')';
                     }
                 } elseif (($subItem['jenis_pihak'] ?? '') === 'karyawan') {
                     $parts = explode(' - ', $subItem['keterangan'] ?? '');
@@ -386,9 +407,9 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
 
                     $lahanName = $subItem['nama_pihak'] ?? '';
                     if (stripos($lahanName, 'Lahan ') === 0) {
-                        $keteranganSpesifikasi = 'lahan ' . substr($lahanName, 6);
+                        $keteranganSpesifikasi = 'lahan '.substr($lahanName, 6);
                     } else {
-                        $keteranganSpesifikasi = 'lahan ' . $lahanName;
+                        $keteranganSpesifikasi = 'lahan '.$lahanName;
                     }
                 } else {
                     $bagian = '-';
@@ -406,7 +427,7 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 }
 
                 $volume = $subItem['m3'];
-                $harga  = $subItem['harga'];
+                $harga = $subItem['harga'];
                 $jumlah = $subItem['jumlah'];
 
                 // Khusus export Excel: harga veneer mengikuti harga veneer kering dari tabel harga_veneers
@@ -435,16 +456,16 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
 
                     // Fallback to legacy if no match found
                     if ($ongkos === 0) {
-                        $ongkos = isset($mesins[$namaM]) ? (float)($mesins[$namaM]->ongkos_mesin ?? 0) : 0;
+                        $ongkos = isset($mesins[$namaM]) ? (float) ($mesins[$namaM]->ongkos_mesin ?? 0) : 0;
                     }
 
-                    $harga  = $ongkos;
-                    $jumlah = $volume !== null ? round((float)$volume * $ongkos, 4) : null;
+                    $harga = $ongkos;
+                    $jumlah = $volume !== null ? round((float) $volume * $ongkos, 4) : null;
                 }
 
                 // Khusus export Excel: harga pekerja di-hardcode 150.000
                 if (($subItem['jenis_pihak'] ?? '') === 'karyawan') {
-                    $harga  = 150_000;
+                    $harga = 150_000;
                     $jumlah = 150_000; // 1 orang × 150.000
                 }
 
@@ -495,16 +516,16 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 }
 
                 $rawRows[] = [
-                    'nama_akun'  => $mappedNamaAkun,
-                    'no_akun'    => $mappedNoAkun,
-                    'bagian'     => $bagian,
+                    'nama_akun' => $mappedNamaAkun,
+                    'no_akun' => $mappedNoAkun,
+                    'bagian' => $bagian,
                     'keterangan' => $keteranganSpesifikasi,
-                    'dk'         => (($subItem['jenis_pihak'] ?? '') === 'pemasok') ? 'k' : $mapDK,
-                    'tipe'       => $tipe,
-                    'banyak'     => $banyak !== null ? (float)$banyak : null,
-                    'volume'     => $volume !== null ? (float)$volume : null,
-                    'harga'      => $harga !== null ? (float)$harga : null,
-                    'jumlah'     => $jumlah !== null ? (float)$jumlah : null,
+                    'dk' => (($subItem['jenis_pihak'] ?? '') === 'pemasok') ? 'k' : $mapDK,
+                    'tipe' => $tipe,
+                    'banyak' => $banyak !== null ? (float) $banyak : null,
+                    'volume' => $volume !== null ? (float) $volume : null,
+                    'harga' => $harga !== null ? (float) $harga : null,
+                    'jumlah' => $jumlah !== null ? (float) $jumlah : null,
                 ];
             }
         }
@@ -531,23 +552,23 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                     $row['keterangan'],
                     $row['dk'],
                     $row['tipe'],
-                    $row['nama_akun']
+                    $row['nama_akun'],
                 ]);
 
-                if (!isset($grouped[$key])) {
+                if (! isset($grouped[$key])) {
                     $grouped[$key] = [
-                        'nama_akun'  => $row['nama_akun'],
-                        'no_akun'    => $row['no_akun'],
-                        'bagian'     => $machine,
+                        'nama_akun' => $row['nama_akun'],
+                        'no_akun' => $row['no_akun'],
+                        'bagian' => $machine,
                         'keterangan' => $row['keterangan'],
-                        'dk'         => $row['dk'],
-                        'tipe'       => $row['tipe'],
-                        'banyak'     => 0.0,
-                        'volume'     => 0.0,
-                        'harga'      => $row['harga'],
-                        'jumlah'     => 0.0,
-                        'has_qty'    => $row['banyak'] !== null,
-                        'has_vol'    => $row['volume'] !== null,
+                        'dk' => $row['dk'],
+                        'tipe' => $row['tipe'],
+                        'banyak' => 0.0,
+                        'volume' => 0.0,
+                        'harga' => $row['harga'],
+                        'jumlah' => 0.0,
+                        'has_qty' => $row['banyak'] !== null,
+                        'has_vol' => $row['volume'] !== null,
                     ];
                 }
 
@@ -568,20 +589,20 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 $isVeneer = in_array($g['no_akun'], ['115-07', '115-08', '1421.00', '1421.01', '1422.00', '1422.01', '1426.00', '1426.01', '1427.00', '1427.01']);
                 $isHutangGaji = in_array($g['no_akun'], ['210-02', '2231.00']);
                 $isWood = in_array($g['no_akun'], [
-                    '115-01', '115-02', 
+                    '115-01', '115-02',
                     '1411.01', '1411.02', '1411.03', '1411.04', '1411.05', '1411.06', '1411.07', '1411.08',
-                    '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00'
+                    '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00',
                 ]);
                 $isKayuKeluar = in_array($g['no_akun'], [
                     '1411.01', '1411.02', '1411.03', '1411.04', '1411.05', '1411.06', '1411.07', '1411.08',
-                    '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00'
+                    '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00',
                 ]);
 
                 $rowHarga = 0.0;
                 if ($isVeneer) {
                     $noAkunVal = $g['no_akun'] ?? '';
                     $namaAkunVal = strtolower($g['nama_akun'] ?? '');
-                    
+
                     $dbHarga = $this->getHargaVeneerBasahDb($noAkunVal, $namaAkunVal);
                     if ($dbHarga > 0) {
                         $rowHarga = $dbHarga;
@@ -605,18 +626,18 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 } elseif ($isHutangGaji) {
                     $rowHarga = 150000.0;
                 } elseif ($isWood) {
-                    $rowHarga = (float)($g['harga'] ?? 0.0);
+                    $rowHarga = (float) ($g['harga'] ?? 0.0);
                 } else {
-                    $rowHarga = (float)($g['jumlah'] ?? 0.0);
+                    $rowHarga = (float) ($g['jumlah'] ?? 0.0);
                 }
 
                 $rowTotal = 0.0;
                 if ($isKayuKeluar) {
-                    $rowTotal = (float)$g['jumlah'];
+                    $rowTotal = (float) $g['jumlah'];
                 } elseif ($g['has_vol'] && $g['volume'] !== null && $g['volume'] > 0) {
-                    $rowTotal = round((float)$g['volume'], 4) * $rowHarga;
+                    $rowTotal = round((float) $g['volume'], 4) * $rowHarga;
                 } elseif ($g['has_qty'] && $g['banyak'] !== null && $g['banyak'] > 0) {
-                    $rowTotal = (float)$g['banyak'] * $rowHarga;
+                    $rowTotal = (float) $g['banyak'] * $rowHarga;
                 } else {
                     $rowTotal = $rowHarga;
                 }
@@ -631,18 +652,18 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
             // Selisih → selalu masuk ke 'hpp triplek' (6111.00) sebagai KREDIT
             $selisih = round($totalDebit - $totalKredit, 2);
             $grouped[] = [
-                'nama_akun'  => 'hpp triplek',
-                'no_akun'    => '6111.00',
-                'bagian'     => $machine,
+                'nama_akun' => 'hpp triplek',
+                'no_akun' => '6111.00',
+                'bagian' => $machine,
                 'keterangan' => '',
-                'dk'         => 'k',
-                'tipe'       => 'b',
-                'banyak'     => null,
-                'volume'     => null,
-                'harga'      => null,
-                'jumlah'     => $selisih > 0 ? abs($selisih) : 0,
-                'has_qty'    => false,
-                'has_vol'    => false,
+                'dk' => 'k',
+                'tipe' => 'b',
+                'banyak' => null,
+                'volume' => null,
+                'harga' => null,
+                'jumlah' => $selisih > 0 ? abs($selisih) : 0,
+                'has_qty' => false,
+                'has_vol' => false,
             ];
 
             $machineTables[$machine] = $grouped;
@@ -653,9 +674,9 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
 
         foreach ($machineTables as $machine => $groupedRows) {
             // Title Row
-            $noJurnal = 'ROT/' . $dateStr . '/' . strtoupper(str_replace(' ', '', $machine));
+            $noJurnal = 'ROT/'.$dateStr.'/'.strtoupper(str_replace(' ', '', $machine));
             $rows->push([
-                'No. Jurnal: ' . $noJurnal, '', '', '', '', '', '', '', '', '', '', '', '', ''
+                'No. Jurnal: '.$noJurnal, '', '', '', '', '', '', '', '', '', '', '', '', '',
             ]);
             $this->titleRows[] = $currentRow;
             $currentRow++;
@@ -675,7 +696,7 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 'Banyak',
                 'M3',
                 'Harga',
-                'Total'
+                'Total',
             ]);
             $this->headerRows[] = $currentRow;
             $currentRow++;
@@ -688,12 +709,12 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 $isHutangGaji = in_array($g['no_akun'], ['210-02', '2231.00']);
                 $isKayuKeluar = in_array($g['no_akun'], [
                     '1411.01', '1411.02', '1411.03', '1411.04', '1411.05', '1411.06', '1411.07', '1411.08',
-                    '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00'
+                    '1413.01', '1413.03', '1413.04', '1413.05', '1413.06', '1413.07', '1413.08', '1413.09', '1413.10', '1413.11', '1413.12', '1413.13', '1414.00',
                 ]);
 
                 // Format `Nama` (Col 7 / G)
                 if ($isVeneer) {
-                    $namaVal = 'kupasan (m - ' . strtolower($g['bagian']) . ')';
+                    $namaVal = 'kupasan (m - '.strtolower($g['bagian']).')';
                 } elseif ($isKayuKeluar) {
                     $namaVal = 'kayu keluar';
                 } else {
@@ -712,7 +733,7 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 if ($isVeneer) {
                     $noAkunVal = $g['no_akun'] ?? '';
                     $namaAkunVal = strtolower($g['nama_akun'] ?? '');
-                    
+
                     $dbHarga = $this->getHargaVeneerBasahDb($noAkunVal, $namaAkunVal);
                     if ($dbHarga > 0) {
                         $hargaVal = $dbHarga;
@@ -758,7 +779,7 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                     $g['has_qty'] ? $g['banyak'] : null,                // 11. Banyak
                     $g['has_vol'] ? round($g['volume'], 4) : null,      // 12. M3
                     $hargaVal,                                          // 13. Harga
-                    $totalVal                                           // 14. Total
+                    $totalVal,                                           // 14. Total
                 ]);
                 $currentRow++;
             }
@@ -797,9 +818,9 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                         'font' => ['bold' => true, 'size' => 11, 'color' => ['argb' => 'FF1D2939']],
                         'fill' => [
                             'fillType' => Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFD2E4F0']
+                            'startColor' => ['argb' => 'FFD2E4F0'],
                         ],
-                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
+                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                     ]);
                     $sheet->getRowDimension($row)->setRowHeight(25);
                 }
@@ -814,9 +835,9 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                         ],
                         'fill' => [
                             'fillType' => Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFE5E8EB']
+                            'startColor' => ['argb' => 'FFE5E8EB'],
                         ],
-                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
+                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                     ]);
                     $sheet->getRowDimension($row)->setRowHeight(25);
                 }
@@ -825,10 +846,12 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 foreach ($this->dataRanges as $range) {
                     $start = $range['start'];
                     $end = $range['end'];
-                    if ($start > $end) continue;
+                    if ($start > $end) {
+                        continue;
+                    }
 
                     $sheet->getStyle("A{$start}:N{$end}")->applyFromArray([
-                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
+                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                     ]);
 
                     $sheet->getStyle("A{$start}:A{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
@@ -858,7 +881,7 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
                 $sheet->getColumnDimension('L')->setWidth(15); // M3
                 $sheet->getColumnDimension('M')->setWidth(18); // Harga
                 $sheet->getColumnDimension('N')->setWidth(18); // Total
-            }
+            },
         ];
     }
 
@@ -868,31 +891,31 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
         $namaAkunVal = strtolower(trim($namaAkun));
 
         $isSengon = str_contains($namaAkunVal, 'sengon');
-        $isMeranti = str_contains($namaAkunVal, 'meranti') || (!str_contains($namaAkunVal, 'sengon') && !str_contains($namaAkunVal, 'jabon') && !str_contains($namaAkunVal, 'mahoni'));
-        
+        $isMeranti = str_contains($namaAkunVal, 'meranti') || (! str_contains($namaAkunVal, 'sengon') && ! str_contains($namaAkunVal, 'jabon') && ! str_contains($namaAkunVal, 'mahoni'));
+
         $jns = $isSengon ? 'Sengon' : 'Meranti';
-        $jenisKayu = \App\Models\JenisKayu::where('nama_kayu', $jns)->first();
-        if (!$jenisKayu) {
+        $jenisKayu = JenisKayu::where('nama_kayu', $jns)->first();
+        if (! $jenisKayu) {
             return 0.0;
         }
 
         // Determine if it's faceback or core
-        $isCore = str_contains($namaAkunVal, 'core') 
-            || $noAkunVal === '1426.00' 
-            || $noAkunVal === '1426.01' 
-            || $noAkunVal === '1427.00' 
-            || $noAkunVal === '1427.01' 
+        $isCore = str_contains($namaAkunVal, 'core')
+            || $noAkunVal === '1426.00'
+            || $noAkunVal === '1426.01'
+            || $noAkunVal === '1427.00'
+            || $noAkunVal === '1427.01'
             || ($noAkunVal === '115-08');
 
-        $ukuranOptions = !$isCore
+        $ukuranOptions = ! $isCore
             ? ($jns === 'Sengon' ? ['faceback'] : ['face', 'back'])
             : ['core'];
 
-        $kwOptions = array_map(function($opt) {
-            return 'KW 1 - ' . ucfirst(str_replace('_', ' ', $opt));
+        $kwOptions = array_map(function ($opt) {
+            return 'KW 1 - '.ucfirst(str_replace('_', ' ', $opt));
         }, $ukuranOptions);
 
-        $hargaVeneer = \App\Models\ReferensiHargaProduksi::where('id_jenis_kayu', $jenisKayu->id)
+        $hargaVeneer = ReferensiHargaProduksi::where('id_jenis_kayu', $jenisKayu->id)
             ->where('jenis_barang', 'Veneer Basah')
             ->whereIn('kw', $kwOptions)
             ->first();
@@ -901,24 +924,30 @@ class LaporanProduksiJurnalGabungSheet extends DefaultValueBinder implements Fro
     }
 }
 
-class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements FromCollection, WithTitle, WithStyles, WithEvents, WithCustomValueBinder
+class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements FromCollection, WithCustomValueBinder, WithEvents, WithStyles, WithTitle
 {
     protected $tanggal;
+
     protected $titleRows = [];
+
     protected $headerRows = [];
+
     protected $dataRanges = [];
 
     public function bindValue(Cell $cell, $value)
     {
         if ($cell->getColumn() === 'D') {
             if (is_numeric($value)) {
-                $cell->setValueExplicit((float)$value, DataType::TYPE_NUMERIC);
+                $cell->setValueExplicit((float) $value, DataType::TYPE_NUMERIC);
                 $cell->getWorksheet()->getStyle($cell->getCoordinate())->getNumberFormat()->setFormatCode('0.00');
+
                 return true;
             }
             $cell->setValueExplicit($value, DataType::TYPE_STRING);
+
             return true;
         }
+
         return parent::bindValue($cell, $value);
     }
 
@@ -930,18 +959,19 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
     public function collection()
     {
         $rows = collect();
-        $service = new \App\Services\Akuntansi\RotaryJurnalService();
+        $service = new RotaryJurnalService;
         $payload = $service->buildJurnalPayloadPreview($this->tanggal);
 
-        if (!$payload || empty($payload['jurnal_items'])) {
+        if (! $payload || empty($payload['jurnal_items'])) {
             $rows->push(['Tidak ada data penggunaan kayu untuk tanggal ini.']);
+
             return $rows;
         }
 
         $rawRows = [];
 
         foreach ($payload['jurnal_items'] as $item) {
-            $noAkun   = $item['no_akun'];
+            $noAkun = $item['no_akun'];
 
             // We only look at Persediaan Kayu (115-01 / 115-02)
             if ($noAkun !== '115-01' && $noAkun !== '115-02') {
@@ -959,28 +989,29 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
 
                 $lahanName = $subItem['nama_pihak'] ?? '';
                 if (stripos($lahanName, 'Lahan ') === 0) {
-                    $keteranganSpesifikasi = 'lahan ' . substr($lahanName, 6);
+                    $keteranganSpesifikasi = 'lahan '.substr($lahanName, 6);
                 } else {
-                    $keteranganSpesifikasi = 'lahan ' . $lahanName;
+                    $keteranganSpesifikasi = 'lahan '.$lahanName;
                 }
 
                 $rawRows[] = [
-                    'nama_akun'  => $mappedNamaAkun,
-                    'no_akun'    => $mappedNoAkun,
-                    'bagian'     => $bagian,
+                    'nama_akun' => $mappedNamaAkun,
+                    'no_akun' => $mappedNoAkun,
+                    'bagian' => $bagian,
                     'keterangan' => $keteranganSpesifikasi,
-                    'dk'         => 'k',
-                    'tipe'       => 'b',
-                    'banyak'     => $subItem['banyak'] !== null ? (float)$subItem['banyak'] : null,
-                    'volume'     => $subItem['m3'] !== null ? (float)$subItem['m3'] : null,
-                    'harga'      => $subItem['harga'] !== null ? (float)$subItem['harga'] : null,
-                    'jumlah'     => $subItem['jumlah'] !== null ? (float)$subItem['jumlah'] : null,
+                    'dk' => 'k',
+                    'tipe' => 'b',
+                    'banyak' => $subItem['banyak'] !== null ? (float) $subItem['banyak'] : null,
+                    'volume' => $subItem['m3'] !== null ? (float) $subItem['m3'] : null,
+                    'harga' => $subItem['harga'] !== null ? (float) $subItem['harga'] : null,
+                    'jumlah' => $subItem['jumlah'] !== null ? (float) $subItem['jumlah'] : null,
                 ];
             }
         }
 
         if (empty($rawRows)) {
             $rows->push(['Tidak ada data penggunaan kayu untuk tanggal ini.']);
+
             return $rows;
         }
 
@@ -988,23 +1019,23 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
         foreach ($rawRows as $row) {
             $key = implode('|', [
                 $row['no_akun'],
-                $row['keterangan']
+                $row['keterangan'],
             ]);
 
-            if (!isset($grouped[$key])) {
+            if (! isset($grouped[$key])) {
                 $grouped[$key] = [
-                    'nama_akun'  => $row['nama_akun'],
-                    'no_akun'    => $row['no_akun'],
-                    'bagian'     => $row['bagian'],
+                    'nama_akun' => $row['nama_akun'],
+                    'no_akun' => $row['no_akun'],
+                    'bagian' => $row['bagian'],
                     'keterangan' => $row['keterangan'],
-                    'dk'         => $row['dk'],
-                    'tipe'       => $row['tipe'],
-                    'banyak'     => 0.0,
-                    'volume'     => 0.0,
-                    'harga'      => $row['harga'],
-                    'jumlah'     => 0.0,
-                    'has_qty'    => $row['banyak'] !== null,
-                    'has_vol'    => $row['volume'] !== null,
+                    'dk' => $row['dk'],
+                    'tipe' => $row['tipe'],
+                    'banyak' => 0.0,
+                    'volume' => 0.0,
+                    'harga' => $row['harga'],
+                    'jumlah' => 0.0,
+                    'has_qty' => $row['banyak'] !== null,
+                    'has_vol' => $row['volume'] !== null,
                 ];
             }
 
@@ -1025,9 +1056,9 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
         $currentRow = 1;
 
         // Title Row
-        $noJurnal = 'ROT/' . $dateStr . '/KAYU_KELUAR';
+        $noJurnal = 'ROT/'.$dateStr.'/KAYU_KELUAR';
         $rows->push([
-            'No. Jurnal: ' . $noJurnal, '', '', '', '', '', '', '', '', '', '', '', '', ''
+            'No. Jurnal: '.$noJurnal, '', '', '', '', '', '', '', '', '', '', '', '', '',
         ]);
         $this->titleRows[] = $currentRow;
         $currentRow++;
@@ -1047,7 +1078,7 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
             'Banyak',
             'M3',
             'Harga',
-            'Total'
+            'Total',
         ]);
         $this->headerRows[] = $currentRow;
         $currentRow++;
@@ -1072,7 +1103,7 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
                 $g['has_qty'] ? $g['banyak'] : null,                // 11. Banyak
                 $g['has_vol'] ? round($g['volume'], 4) : null,      // 12. M3
                 $g['harga'],                                        // 13. Harga
-                $totalVal                                           // 14. Total
+                $totalVal,                                           // 14. Total
             ]);
             $currentRow++;
         }
@@ -1105,9 +1136,9 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
                         'font' => ['bold' => true, 'size' => 11, 'color' => ['argb' => 'FF1D2939']],
                         'fill' => [
                             'fillType' => Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFD2E4F0']
+                            'startColor' => ['argb' => 'FFD2E4F0'],
                         ],
-                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
+                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                     ]);
                     $sheet->getRowDimension($row)->setRowHeight(25);
                 }
@@ -1122,9 +1153,9 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
                         ],
                         'fill' => [
                             'fillType' => Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFE5E8EB']
+                            'startColor' => ['argb' => 'FFE5E8EB'],
                         ],
-                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
+                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                     ]);
                     $sheet->getRowDimension($row)->setRowHeight(25);
                 }
@@ -1133,10 +1164,12 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
                 foreach ($this->dataRanges as $range) {
                     $start = $range['start'];
                     $end = $range['end'];
-                    if ($start > $end) continue;
+                    if ($start > $end) {
+                        continue;
+                    }
 
                     $sheet->getStyle("A{$start}:N{$end}")->applyFromArray([
-                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
+                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                     ]);
 
                     $sheet->getStyle("A{$start}:A{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
@@ -1166,29 +1199,35 @@ class LaporanProduksiJurnalPenggunaanSheet extends DefaultValueBinder implements
                 $sheet->getColumnDimension('L')->setWidth(15); // M3
                 $sheet->getColumnDimension('M')->setWidth(18); // Harga
                 $sheet->getColumnDimension('N')->setWidth(18); // Total
-            }
+            },
         ];
     }
 }
 
-class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements FromCollection, WithTitle, WithStyles, WithEvents, WithCustomValueBinder
+class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements FromCollection, WithCustomValueBinder, WithEvents, WithStyles, WithTitle
 {
     protected $tanggal;
+
     protected $titleRows = [];
+
     protected $headerRows = [];
+
     protected $dataRanges = [];
 
     public function bindValue(Cell $cell, $value)
     {
         if ($cell->getColumn() === 'D') {
             if (is_numeric($value)) {
-                $cell->setValueExplicit((float)$value, DataType::TYPE_NUMERIC);
+                $cell->setValueExplicit((float) $value, DataType::TYPE_NUMERIC);
                 $cell->getWorksheet()->getStyle($cell->getCoordinate())->getNumberFormat()->setFormatCode('0.00');
+
                 return true;
             }
             $cell->setValueExplicit($value, DataType::TYPE_STRING);
+
             return true;
         }
+
         return parent::bindValue($cell, $value);
     }
 
@@ -1206,11 +1245,12 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
         // 1. PRODUKSI HARI INI
         // =========================================================
         $produksiList = ProduksiRotary::with([
-            'detailLahanRotary.lahan'
+            'detailLahanRotary.lahan',
         ])->whereDate('tgl_produksi', $tgl)->get();
 
         if ($produksiList->isEmpty()) {
             $rows->push(['Tidak ada data penggunaan kayu untuk tanggal ini.']);
+
             return $rows;
         }
 
@@ -1231,6 +1271,7 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
 
         if (empty($lahanIds)) {
             $rows->push(['Tidak ada data penggunaan kayu untuk tanggal ini.']);
+
             return $rows;
         }
 
@@ -1241,12 +1282,13 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
             ->with([
                 'jenisKayu',
                 'kayuMasuk',
-                'lahan'
+                'lahan',
             ])
             ->get();
 
         if ($details->isEmpty()) {
             $rows->push(['Tidak ada data penggunaan kayu untuk tanggal ini.']);
+
             return $rows;
         }
 
@@ -1276,21 +1318,21 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
                 $d->jenis_kayu_id,
             ]);
 
-            if (!isset($grouped[$key])) {
+            if (! isset($grouped[$key])) {
 
                 $grouped[$key] = [
-                    'lahan_id'      => $d->lahan_id,
+                    'lahan_id' => $d->lahan_id,
                     'jenis_kayu_id' => $d->jenis_kayu_id,
 
-                    'lahan_code'    => $lahanCode,
-                    'lahan_name'    => $lahanName,
-                    'jenis_nama'    => $jenisNama,
+                    'lahan_code' => $lahanCode,
+                    'lahan_name' => $lahanName,
+                    'jenis_nama' => $jenisNama,
 
-                    'panjang'       => $d->panjang,
+                    'panjang' => $d->panjang,
 
-                    'banyak'        => 0,
-                    'volume'        => 0,
-                    'total_harga'   => 0,
+                    'banyak' => 0,
+                    'volume' => 0,
+                    'total_harga' => 0,
                 ];
             }
 
@@ -1308,10 +1350,10 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
         $dateStr = Carbon::parse($this->tanggal)->format('Ymd');
         $currentRow = 1;
 
-        $noJurnal = 'ROT/' . $dateStr . '/KAYU_KELUAR_HARGA_ASLI';
+        $noJurnal = 'ROT/'.$dateStr.'/KAYU_KELUAR_HARGA_ASLI';
 
         $rows->push([
-            'No. Jurnal: ' . $noJurnal,
+            'No. Jurnal: '.$noJurnal,
             '',
             '',
             '',
@@ -1324,7 +1366,7 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
             '',
             '',
             '',
-            ''
+            '',
         ]);
 
         $this->titleRows[] = $currentRow;
@@ -1347,7 +1389,7 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
             'Banyak',
             'M3',
             'Harga',
-            'Total'
+            'Total',
         ]);
 
         $this->headerRows[] = $currentRow;
@@ -1379,7 +1421,7 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
             // KETERANGAN
             // =====================================================
             $keteranganSpec = sprintf(
-                "Lahan %s - %s",
+                'Lahan %s - %s',
                 $g['lahan_code'],
                 $g['jenis_nama']
             );
@@ -1403,7 +1445,7 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
                 $g['banyak'] > 0 ? $g['banyak'] : null,            // K
                 $roundedVol > 0 ? $roundedVol : null,              // L
                 $hargaPerM3,                                       // M
-                $totalVal                                          // N
+                $totalVal,                                          // N
             ]);
 
             $currentRow++;
@@ -1413,7 +1455,7 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
 
         $this->dataRanges[] = [
             'start' => $dataStart,
-            'end' => $dataEnd
+            'end' => $dataEnd,
         ];
 
         return $rows;
@@ -1451,22 +1493,22 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
                                 'bold' => true,
                                 'size' => 11,
                                 'color' => [
-                                    'argb' => 'FF1D2939'
-                                ]
+                                    'argb' => 'FF1D2939',
+                                ],
                             ],
 
                             'fill' => [
                                 'fillType' => Fill::FILL_SOLID,
                                 'startColor' => [
-                                    'argb' => 'FFD2E4F0'
-                                ]
+                                    'argb' => 'FFD2E4F0',
+                                ],
                             ],
 
                             'borders' => [
                                 'allBorders' => [
-                                    'borderStyle' => Border::BORDER_THIN
-                                ]
-                            ]
+                                    'borderStyle' => Border::BORDER_THIN,
+                                ],
+                            ],
                         ]);
 
                     $sheet->getRowDimension($row)
@@ -1483,7 +1525,7 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
 
                             'font' => [
                                 'bold' => true,
-                                'size' => 10
+                                'size' => 10,
                             ],
 
                             'alignment' => [
@@ -1494,15 +1536,15 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
                             'fill' => [
                                 'fillType' => Fill::FILL_SOLID,
                                 'startColor' => [
-                                    'argb' => 'FFE5E8EB'
-                                ]
+                                    'argb' => 'FFE5E8EB',
+                                ],
                             ],
 
                             'borders' => [
                                 'allBorders' => [
-                                    'borderStyle' => Border::BORDER_THIN
-                                ]
-                            ]
+                                    'borderStyle' => Border::BORDER_THIN,
+                                ],
+                            ],
                         ]);
 
                     $sheet->getRowDimension($row)
@@ -1526,9 +1568,9 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
 
                             'borders' => [
                                 'allBorders' => [
-                                    'borderStyle' => Border::BORDER_THIN
-                                ]
-                            ]
+                                    'borderStyle' => Border::BORDER_THIN,
+                                ],
+                            ],
                         ]);
 
                     $sheet->getStyle("A{$start}:A{$end}")
@@ -1586,29 +1628,35 @@ class LaporanProduksiJurnalHargaAsliSheet extends DefaultValueBinder implements 
                 $sheet->getColumnDimension('L')->setWidth(15);
                 $sheet->getColumnDimension('M')->setWidth(18);
                 $sheet->getColumnDimension('N')->setWidth(18);
-            }
+            },
         ];
     }
 }
 
-class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCollection, WithTitle, WithStyles, WithEvents, WithCustomValueBinder
+class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCollection, WithCustomValueBinder, WithEvents, WithStyles, WithTitle
 {
     protected $tanggal;
+
     protected $titleRows = [];
+
     protected $headerRows = [];
+
     protected $dataRanges = [];
 
     public function bindValue(Cell $cell, $value)
     {
         if ($cell->getColumn() === 'D') {
             if (is_numeric($value)) {
-                $cell->setValueExplicit((float)$value, DataType::TYPE_NUMERIC);
+                $cell->setValueExplicit((float) $value, DataType::TYPE_NUMERIC);
                 $cell->getWorksheet()->getStyle($cell->getCoordinate())->getNumberFormat()->setFormatCode('0.00');
+
                 return true;
             }
             $cell->setValueExplicit($value, DataType::TYPE_STRING);
+
             return true;
         }
+
         return parent::bindValue($cell, $value);
     }
 
@@ -1632,16 +1680,17 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
 
         if ($records->isEmpty()) {
             $rows->push(['Tidak ada data penggunaan kayu habis untuk tanggal ini.']);
+
             return $rows;
         }
 
         // 2. Title Row
         $dateStr = Carbon::parse($this->tanggal)->format('Ymd');
         $currentRow = 1;
-        $noJurnal = 'ROT/' . $dateStr . '/KAYU_KELUAR';
+        $noJurnal = 'ROT/'.$dateStr.'/KAYU_KELUAR';
 
         $rows->push([
-            'No. Jurnal: ' . $noJurnal, '', '', '', '', '', '', '', '', '', '', '', '', ''
+            'No. Jurnal: '.$noJurnal, '', '', '', '', '', '', '', '', '', '', '', '', '',
         ]);
         $this->titleRows[] = $currentRow;
         $currentRow++;
@@ -1661,7 +1710,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
             'Banyak',
             'M3',
             'Harga',
-            'Total'
+            'Total',
         ]);
         $this->headerRows[] = $currentRow;
         $currentRow++;
@@ -1683,7 +1732,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
         $totalM3 = round($totalM3, 4);
 
         // 1. Add Debit row first: HPP Triplek
-        if (!$records->isEmpty()) {
+        if (! $records->isEmpty()) {
             $totalValHpp = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
 
             $rows->push([
@@ -1700,7 +1749,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
                 $totalBanyak > 0 ? $totalBanyak : null,                       // 11. Banyak
                 $totalM3 > 0 ? $totalM3 : null,                               // 12. M3
                 $totalHarga,                                                  // 13. Harga
-                $totalValHpp                                                  // 14. Total
+                $totalValHpp,                                                  // 14. Total
             ]);
             $currentRow++;
         }
@@ -1712,7 +1761,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
             $noAkun = $acc['no_akun'];
             $namaAkun = $acc['nama_akun'];
 
-            $keteranganSpec = "lahan " . ($record->lahan->kode_lahan ?? '-');
+            $keteranganSpec = 'lahan '.($record->lahan->kode_lahan ?? '-');
 
             $banyak = $record->total_batang > 0 ? $record->total_batang : 0;
             $m3 = $record->total_kubikasi > 0 ? round($record->total_kubikasi, 4) : 0;
@@ -1734,7 +1783,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
                 $banyak > 0 ? $banyak : null,                                 // 11. Banyak
                 $m3 > 0 ? $m3 : null,                                         // 12. M3
                 $totalStokValue,                                              // 13. Harga
-                $totalVal                                                     // 14. Total
+                $totalVal,                                                     // 14. Total
             ]);
 
             $currentRow++;
@@ -1743,7 +1792,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
         $dataEnd = $currentRow - 1;
         $this->dataRanges[] = [
             'start' => $dataStart,
-            'end' => $dataEnd
+            'end' => $dataEnd,
         ];
 
         return $rows;
@@ -1772,15 +1821,15 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
                         'font' => [
                             'bold' => true,
                             'size' => 11,
-                            'color' => ['argb' => 'FF1D2939']
+                            'color' => ['argb' => 'FF1D2939'],
                         ],
                         'fill' => [
                             'fillType' => Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFD2E4F0']
+                            'startColor' => ['argb' => 'FFD2E4F0'],
                         ],
                         'borders' => [
-                            'allBorders' => ['borderStyle' => Border::BORDER_THIN]
-                        ]
+                            'allBorders' => ['borderStyle' => Border::BORDER_THIN],
+                        ],
                     ]);
                     $sheet->getRowDimension($row)->setRowHeight(25);
                 }
@@ -1790,7 +1839,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
                     $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
                         'font' => [
                             'bold' => true,
-                            'size' => 10
+                            'size' => 10,
                         ],
                         'alignment' => [
                             'horizontal' => Alignment::HORIZONTAL_CENTER,
@@ -1798,11 +1847,11 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
                         ],
                         'fill' => [
                             'fillType' => Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFE5E8EB']
+                            'startColor' => ['argb' => 'FFE5E8EB'],
                         ],
                         'borders' => [
-                            'allBorders' => ['borderStyle' => Border::BORDER_THIN]
-                        ]
+                            'allBorders' => ['borderStyle' => Border::BORDER_THIN],
+                        ],
                     ]);
                     $sheet->getRowDimension($row)->setRowHeight(25);
                 }
@@ -1811,12 +1860,14 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
                 foreach ($this->dataRanges as $range) {
                     $start = $range['start'];
                     $end = $range['end'];
-                    if ($start > $end) continue;
+                    if ($start > $end) {
+                        continue;
+                    }
 
                     $sheet->getStyle("A{$start}:N{$end}")->applyFromArray([
                         'borders' => [
-                            'allBorders' => ['borderStyle' => Border::BORDER_THIN]
-                        ]
+                            'allBorders' => ['borderStyle' => Border::BORDER_THIN],
+                        ],
                     ]);
 
                     $sheet->getStyle("A{$start}:A{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
@@ -1846,7 +1897,7 @@ class LaporanProduksiKayuHabisSheet extends DefaultValueBinder implements FromCo
                 $sheet->getColumnDimension('L')->setWidth(15); // M3
                 $sheet->getColumnDimension('M')->setWidth(18); // Harga
                 $sheet->getColumnDimension('N')->setWidth(18); // Total
-            }
+            },
         ];
     }
 }

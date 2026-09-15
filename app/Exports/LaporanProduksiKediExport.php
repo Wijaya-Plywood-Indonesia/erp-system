@@ -6,6 +6,7 @@ use App\Actions\HitungPotonganProduksiAction;
 use App\DataTransferObjects\PekerjaKerjaInput;
 use App\Enums\Mesin;
 use App\Exports\Sheets\JurnalKediSheet;
+use App\Exports\Sheets\JurnalKediSheetV2;
 use App\Models\Target;
 use App\Services\Target\TargetResolverFactory;
 use Carbon\Carbon;
@@ -429,7 +430,8 @@ class LaporanProduksiKediExport implements FromCollection, ShouldAutoSize, WithE
         return [
             new LaporanKediPotonganSheet($this->produksiKediCollection), // Sheet 1: Potongan (BARU)
             $this,                                                        // Sheet 2: Laporan Kedi Asli
-            new JurnalKediSheet($this->data->toArray()),                  // Sheet 3: Jurnal Kedi
+            new JurnalKediSheet($this->data->toArray()),
+            new JurnalKediSheetV2($this->data->toArray()),                // Sheet 3: Jurnal Kedi
         ];
     }
 }
