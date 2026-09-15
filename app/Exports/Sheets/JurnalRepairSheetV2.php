@@ -5,6 +5,7 @@ namespace App\Exports\Sheets;
 use App\Models\JenisKayu;
 use App\Models\KategoriBarang;
 use App\Models\ReferensiHargaProduksi;
+use App\Services\CoaAliasService;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
@@ -28,10 +29,12 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 // - Akun Hutang Gaji: 2231.00 -> 2195.1
 // - Akun hpp/selisih: 6111.00 "hpp triplek" -> 5069.2 "Selisih harga patok produksi"
 // - Akun veneer (jadi/kering, face-back/core, ppc) di-alias dinamis ke
-//   COA baru lewat aliasAkunBaru(), berdasarkan nama_sub_anak_akun dari DB
-//   (bukan hardcode statis tanpa hubungan ke data referensi).
-// - Akun bahan penolong TIDAK diubah (tetap ambil langsung dari DB),
-//   karena tidak ada pola jadi/kering/basah/core/face-back untuk itu.
+//   COA baru lewat CoaAliasService::aliasAkunBaru(), berdasarkan
+//   nama_sub_anak_akun dari DB (bukan hardcode statis tanpa hubungan ke
+//   data referensi).
+// - Akun bahan penolong SEKARANG DI-ALIAS ke COA baru lewat
+//   CoaAliasService::extractAkunPenolong() (dicocokkan dari nama bahan
+//   asli), sama seperti LaporanProduksiHotPressJurnalSheetV2.
 // - Kolom "No Akun" (D) TIDAK diformat numerik. Kalau diformat numerik
 //   (mis. '0.00'), Excel akan memaksa semua kode akun tampil 2 digit di
 //   belakang titik dan pakai koma sebagai pemisah desimal (locale ID),
@@ -39,6 +42,13 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 //   dan nilainya dipaksa jadi string eksplisit lewat registerEvents()
 //   supaya titik tetap titik dan jumlah digit di belakang titik apa
 //   adanya (1 digit / 2 digit, tidak dipaksa seragam).
+//
+// NOTE REFACTOR: Logic ALIAS AKUN COA BARU (aliasAkunBaru,
+// extractAkunVeneer, extractAkunPenolong, getAkunHpp, getAkunGaji) sudah
+// DIPINDAH ke App\Services\CoaAliasService supaya bisa dipakai bersama
+// oleh LaporanProduksiHotPressJurnalSheetV2 (hotpress) & JurnalSheetV2
+// (dryer). Sheet ini sekarang hanya memanggil service tsb lewat
+// $this->coaAlias.
 //
 // Cara pakai: daftarkan class ini di sheets() milik LaporanRepairExport
 // TANPA menghapus sheet lama, misalnya:
@@ -55,7 +65,12 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 // ============================================================
 class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths, WithEvents, WithStyles, WithTitle
 {
-    public function __construct(protected $rawCollection) {}
+    protected CoaAliasService $coaAlias;
+
+    public function __construct(protected $rawCollection, ?CoaAliasService $coaAlias = null)
+    {
+        $this->coaAlias = $coaAlias ?? app(CoaAliasService::class);
+    }
 
     private array $kayuCache = [];
 
@@ -256,87 +271,6 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
         );
     }
 
-    /**
-     * Sama seperti extractAkunVeneer di JurnalSheet lama, tapi nomor & nama
-     * akun hasilnya di-alias ke COA baru lewat aliasAkunBaru() — harga
-     * tetap dari DB (findReferensi), tidak diubah.
-     */
-    private function extractAkunVeneer(?ReferensiHargaProduksi $ref): array
-    {
-        if (! $ref) {
-            return ['UNKNOWN', 'UNKNOWN', 0.0];
-        }
-        if (! $ref->relationLoaded('subAnakAkun')) {
-            $ref->load('subAnakAkun');
-        }
-        $sub = $ref->subAnakAkun;
-        if (! $sub) {
-            return ['UNKNOWN', 'UNKNOWN', (float) $ref->harga];
-        }
-        $namaAkunLama = trim($sub->nama_sub_anak_akun ?? '') ?: 'UNKNOWN';
-        $noAkunLama = trim($sub->kode_sub_anak_akun ?? '') ?: 'UNKNOWN';
-
-        [$namaAkunBaru, $noAkunBaru] = $this->aliasAkunBaru($namaAkunLama);
-
-        return [$namaAkunBaru, $noAkunBaru, (float) $ref->harga];
-    }
-
-    /**
-     * Alias nama & nomor akun lama (dari sub_anak_akun) ke COA baru.
-     * Identik dengan aliasAkunBaru() di JurnalSheetV2 (dryer export),
-     * supaya kode akun veneer konsisten di semua sheet jurnal v2.
-     *
-     * Nomor akun boleh 1 digit (mis. 1402.5) ATAU 2 digit (mis. 1402.16)
-     * di belakang titik — tidak dipaksa seragam, karena kolom D
-     * disimpan sebagai TEKS (lihat styles() & registerEvents()).
-     *
-     * Kalau nama akun lama tidak mengandung pola yang dikenali,
-     * kembalikan UNKNOWN apa adanya (tidak dipaksa nebak).
-     */
-    private function aliasAkunBaru(string $namaAkunLama): array
-    {
-        if ($namaAkunLama === 'UNKNOWN') {
-            return ['UNKNOWN', 'UNKNOWN'];
-        }
-
-        $n = strtolower($namaAkunLama);
-        $isCore = str_contains($n, 'core');
-        $isAf = str_contains($n, 'af') || str_contains($n, 'afalan') || str_contains($n, 'ppc');
-
-        if (str_contains($n, 'basah')) {
-            if ($isAf) {
-                return ['Persediaan Veneer Basah PPC', '1402.16'];
-            }
-
-            return $isCore
-                ? ['Persediaan Veneer Basah Core', '1402.4']
-                : ['Persediaan Veneer Basah Face Back', '1402.3'];
-        }
-
-        if (str_contains($n, 'kering')) {
-            if ($isAf) {
-                return ['Persediaan Veneer Kering PPC', '1402.17'];
-            }
-
-            return $isCore
-                ? ['Persediaan Veneer Kering Core', '1402.6']
-                : ['Persediaan Veneer Kering Face Back', '1402.5'];
-        }
-
-        if (str_contains($n, 'jadi') || $isAf) {
-            if ($isAf) {
-                return ['Persediaan Veneer Jadi PPC', '1402.18'];
-            }
-
-            return $isCore
-                ? ['Persediaan Veneer Jadi Core', '1402.8']
-                : ['Persediaan Veneer Jadi Face Back', '1402.7'];
-        }
-
-        // Pola tidak dikenali -> jangan dipaksa nebak
-        return ['UNKNOWN', 'UNKNOWN'];
-    }
-
     private function fetchReferensiBahan(string $namaBahan): ?ReferensiHargaProduksi
     {
         $key = strtolower(trim($namaBahan));
@@ -360,29 +294,6 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
             ->first();
 
         return $this->bahanRefCache[$key] = $ref;
-    }
-
-    /**
-     * Akun bahan penolong TIDAK di-alias — dipakai apa adanya dari DB,
-     * karena kategori ini (lem, hardner, dll: 1402.9–1402.15) tidak punya
-     * pola jadi/kering/basah/core/face-back untuk dipetakan.
-     */
-    private function extractAkunBahan(?ReferensiHargaProduksi $ref): array
-    {
-        if (! $ref) {
-            return ['UNKNOWN', 'UNKNOWN', 0.0];
-        }
-        if (! $ref->relationLoaded('subAnakAkun')) {
-            $ref->load('subAnakAkun');
-        }
-        $sub = $ref->subAnakAkun;
-        if (! $sub) {
-            return ['UNKNOWN', 'UNKNOWN', (float) $ref->harga];
-        }
-        $nama = trim($sub->nama_sub_anak_akun ?? '') ?: 'UNKNOWN';
-        $noAkun = trim($sub->kode_sub_anak_akun ?? '') ?: 'UNKNOWN';
-
-        return [$nama, $noAkun, (float) $ref->harga];
     }
 
     private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $hitKbk = 'm'): array
@@ -556,8 +467,8 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                 $refJadi = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'jadi');
                 $refKering = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'kering');
 
-                [$namaAkunJadi,   $noAkunJadi,   $hargaJadi] = $this->extractAkunVeneer($refJadi);
-                [$namaAkunKering, $noAkunKering, $hargaKering] = $this->extractAkunVeneer($refKering);
+                [$namaAkunJadi,   $noAkunJadi,   $hargaJadi] = $this->coaAlias->extractAkunVeneer($refJadi);
+                [$namaAkunKering, $noAkunKering, $hargaKering] = $this->coaAlias->extractAkunVeneer($refKering);
 
                 $keteranganNormal = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw);
                 $keteranganJadi = $keteranganNormal.(! $refJadi ? ' [UNKNOWN]' : '');
@@ -647,7 +558,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                 $m3 = ($panjang * $lebar * $tebal * $banyak) / 10000000;
 
                 $refJadi = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'jadi');
-                [$namaAkun, $noAkun, $harga] = $this->extractAkunVeneer($refJadi);
+                [$namaAkun, $noAkun, $harga] = $this->coaAlias->extractAkunVeneer($refJadi);
 
                 $keterangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw).(! $refJadi ? ' [UNKNOWN]' : '');
 
@@ -656,7 +567,10 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
             }
 
             // ============================================================
-            // STEP 3: KREDIT BAHAN PENOLONG (akun TIDAK di-alias)
+            // STEP 3: KREDIT BAHAN PENOLONG — SEKARANG DI-ALIAS ke COA
+            // baru lewat CoaAliasService::extractAkunPenolong() (dicocokkan
+            // dari nama bahan asli: lem/hardner/staples/pewarna/tepung/
+            // solasi coklat/solasi putih).
             // ============================================================
             if (! empty($produksi->bahanPenolongRepair)) {
                 foreach ($produksi->bahanPenolongRepair as $bahan) {
@@ -667,7 +581,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
 
                     $namaBahanRaw = $bahan->bahanPenolong->nama_bahan_penolong ?? 'Bahan';
                     $refBahan = $this->fetchReferensiBahan($namaBahanRaw);
-                    [$namaAkun, $noAkun, $harga] = $this->extractAkunBahan($refBahan);
+                    [$namaAkun, $noAkun, $harga] = $this->coaAlias->extractAkunPenolong($refBahan, $namaBahanRaw);
 
                     $keteranganBahan = ! $refBahan ? "{$namaBahanRaw} [UNKNOWN]" : '';
                     $jurnalBlockKredit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keteranganBahan, 'k', $jumlah, '', $harga, 'b');
@@ -680,7 +594,8 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
             // ============================================================
             $jmlPekerja = (int) $produksi->rencanaPegawais->count();
             if ($jmlPekerja > 0) {
-                $jurnalBlockKredit[] = $this->makeRow('Hutang Gaji', $tglFormat, '2195.1', '', 'k', $jmlPekerja, '', 150000, 'b');
+                $akunGaji = $this->coaAlias->getAkunGaji(false);
+                $jurnalBlockKredit[] = $this->makeRow($akunGaji['hutang']['nama'], $tglFormat, $akunGaji['hutang']['no'], '', 'k', $jmlPekerja, '', 150000, 'b');
                 $totalKredit += ($jmlPekerja * 150000);
             }
 
@@ -691,10 +606,11 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
             $hppRow = [];
             $selisih = $totalDebit - $totalKredit;
             if (round($selisih, 2) != 0) {
+                $hpp = $this->coaAlias->getAkunHpp();
                 if ($selisih > 0) {
-                    $hppRow[] = $this->makeRow('Selisih harga patok produksi', $tglFormat, '5069.2', '', 'k', '', '', abs($selisih), '');
+                    $hppRow[] = $this->makeRow($hpp['nama'], $tglFormat, $hpp['no'], '', 'k', '', '', abs($selisih), '');
                 } else {
-                    $hppRow[] = $this->makeRow('Selisih harga patok produksi', $tglFormat, '5069.2', '', 'd', '', '', abs($selisih), '');
+                    $hppRow[] = $this->makeRow($hpp['nama'], $tglFormat, $hpp['no'], '', 'd', '', '', abs($selisih), '');
                 }
             }
 

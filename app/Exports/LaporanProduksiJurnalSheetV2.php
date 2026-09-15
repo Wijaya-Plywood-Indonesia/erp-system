@@ -7,6 +7,7 @@ use App\Models\KategoriBarang;
 use App\Models\Mesin;
 use App\Models\ReferensiHargaProduksi;
 use App\Services\Akuntansi\RotaryJurnalService;
+use App\Services\CoaAliasService;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
@@ -21,33 +22,22 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use Throwable;
 
 // ============================================================
-// TAMBAHKAN class ini ke file LaporanProduksiExport.php (Rotary)
-// dan daftarkan di LaporanProduksiExport::sheets():
+// SHEET: JURNAL PRODUKSI ROTARY — COA GENERAL (V2)
 //
-//     return [
-//         new LaporanProduksiDetailSheet($data),
-//         new LaporanProduksiRekapSheet($this->tanggal),
-//         new LaporanProduksiJurnalSheet($this->tanggal),
-//         new LaporanProduksiJurnalSheetV2($this->tanggal), // <-- baru
-//     ];
+// Perubahan dari versi sebelumnya:
+// - Semua nomor & nama akun diambil dari App\Services\CoaAliasService
+//   (getAkunVeneerBasah / getAkunGaji / getAkunHpp / getAkunKayuMasuk /
+//   mapAkunLama). Tidak ada lagi '1402.3', '2195.1', '5069.2' hardcode.
+// - Item pemasok (kayu) tidak lagi di-skip: dipetakan lewat
+//   getAkunKayuMasuk(), sesuai TODO lama.
+// - Nomor akun lama yang tidak dikenali dilewatkan ke mapAkunLama()
+//   sebagai jaring pengaman.
 //
-// ============================================================
-// SHEET: JURNAL BARU — COA GENERAL (mengikuti pola JurnalSheetV2
-// pada LaporanJoinExport):
-// - Veneer Basah digabung (tanpa split sengon/meranti/WHN), hanya
-//   dibedakan Face/Back vs Core.
-// - Nomor & nama akun mengikuti COA baru (1402.x, 2195.x, 5069.x).
-// - Selisih debit-kredit -> 5069.2 Selisih harga patok produksi
-//   (akun ini DE di COA baru, jadi ditaruh di sisi debit, sama
-//   seperti pola di JurnalSheetV2 milik LaporanJoinExport).
-// - Akun kayu/logcore (115-01/02, 1411.xx, 1413.xx, 1414.00) BELUM
-//   dipetakan karena item pemasok sudah di-skip lebih awal di
-//   collection() -> kemungkinan besar tidak pernah muncul di sini.
-//   Kalau ternyata masih kepakai, tinggal tambahkan case di
-//   getAkunKayu() (lihat TODO di bawah) lalu panggil dari titik
-//   yang sama seperti isWood pada versi lama.
+// Daftarkan di LaporanProduksiExport::sheets():
+//     new LaporanProduksiJurnalSheetV2($this->tanggal),
 // ============================================================
 class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCollection, WithCustomValueBinder, WithEvents, WithStyles, WithTitle
 {
@@ -58,6 +48,8 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
     protected $headerRows = [];
 
     protected $dataRanges = [];
+
+    protected CoaAliasService $coaAlias;
 
     // Cache agar tidak query DB berulang
     private array $kayuCache = [];
@@ -76,13 +68,14 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
         return parent::bindValue($cell, $value);
     }
 
-    public function __construct($tanggal)
+    public function __construct($tanggal, ?CoaAliasService $coaAlias = null)
     {
         $this->tanggal = $tanggal;
+        $this->coaAlias = $coaAlias ?? app(CoaAliasService::class);
     }
 
     // =========================================================================
-    // DATABASE REFERENCE HELPERS (identik dengan LaporanProduksiJurnalSheet)
+    // DATABASE REFERENCE HELPERS
     // =========================================================================
 
     private function getIdKayuByNama(string $namaKayu): ?int
@@ -123,36 +116,49 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
         $tebalRepresentatif = $isCore ? 1.5 : 0.5;
 
         $ref = ReferensiHargaProduksi::findReferensi(
-            idJenisKayu      : $idJenisKayu,
-            idKategoriBarang : $idKategoriBarang,
-            kw               : null,
-            tebal            : $tebalRepresentatif,
+            idJenisKayu: $idJenisKayu,
+            idKategoriBarang: $idKategoriBarang,
+            kw: null,
+            tebal: $tebalRepresentatif,
         );
 
         return (float) ($ref->harga ?? 0.0);
     }
 
-    /**
-     * Akun Persediaan Veneer Basah sesuai COA baru.
-     * Sengon & meranti DIGABUNG -> hanya dibedakan Face/Back vs Core.
-     */
-    private function getAkunVeneerBasah(bool $isCore): array
+    private function hargaVeneerBasah(bool $isCore): float
     {
-        return $isCore
-            ? ['1402.4', 'Persediaan Veneer Basah Core']
-            : ['1402.3', 'Persediaan Veneer Basah Face Back'];
+        // Sengon/meranti sudah digabung di COA baru -> pakai "Meranti"
+        // sebagai jenis representatif untuk cari referensi harga.
+        $dbHarga = $this->getHargaVeneerBasahDb('Meranti', $isCore);
+
+        return $dbHarga > 0 ? $dbHarga : ($isCore ? 2100000.0 : 8000000.0);
     }
 
-    // TODO: jika akun kayu (115-01/02, 1411.xx, 1413.xx, 1414.00) ternyata
-    // masih muncul di data, tambahkan mapping ke COA baru di sini, misalnya:
-    // private function getAkunKayu(string $noAkunLama): array
-    // {
-    //     return match ($noAkunLama) {
-    //         '115-01', '1411.01' => ['1402.1', 'Persediaan kayu 130'],
-    //         '115-02', '1411.02' => ['1402.2', 'Persediaan kayu 260'],
-    //         default => [$noAkunLama, $noAkunLama],
-    //     };
-    // }
+    // =========================================================================
+    // HELPER KLASIFIKASI AKUN (semua lewat CoaAliasService)
+    // =========================================================================
+
+    private function isVeneerBasah(string $noAkun): bool
+    {
+        return in_array($noAkun, $this->coaAlias->nomorAkunVeneerBasah(), true);
+    }
+
+    private function isVeneerCore(string $noAkun): bool
+    {
+        [$noCore] = $this->coaAlias->getAkunVeneerBasah(true);
+
+        return $noAkun === $noCore;
+    }
+
+    private function isHutangGaji(string $noAkun): bool
+    {
+        return in_array($noAkun, $this->coaAlias->nomorAkunHutangGaji(), true);
+    }
+
+    private function isKayu(string $noAkun): bool
+    {
+        return in_array($noAkun, $this->coaAlias->nomorAkunKayu(), true);
+    }
 
     public function collection()
     {
@@ -166,6 +172,7 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
             return $rows;
         }
 
+        $akunHppNo = $this->coaAlias->getAkunHpp()['no'];
         $rawRows = [];
         $mesins = Mesin::all()->keyBy(fn ($m) => strtoupper(trim($m->nama_mesin)));
 
@@ -174,6 +181,7 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
             $noAkun = $item['no_akun'];
             $mapDK = $item['map'];
 
+            // 510-01 (HPP lama) tetap di-skip: selisih dihitung ulang di bawah
             if ($noAkun === '510-01') {
                 continue;
             }
@@ -181,29 +189,49 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
             foreach ($item['items'] as $subItem) {
                 $bagian = '-';
                 $keteranganSpesifikasi = $subItem['keterangan'] ?? '-';
+                $jenisPihak = $subItem['jenis_pihak'] ?? '';
+                $dkOverride = null;
 
-                if (($subItem['jenis_pihak'] ?? '') === 'produksi') {
+                // ---- Mapping akun default: lewat alias service ----
+                $mapped = $this->coaAlias->mapAkunLama($noAkun, $namaAkun);
+                $mappedNoAkun = $mapped['no'];
+                $mappedNamaAkun = $mapped['nama'];
+
+                if ($jenisPihak === 'produksi') {
                     $bagian = $subItem['nama_pihak'] ?? '-';
                     if (($subItem['nama_barang'] ?? '') !== 'Mesin' && ($subItem['nama_barang'] ?? '') !== '-') {
                         $keteranganSpesifikasi = $subItem['nama_barang'] ?? '-';
                     } else {
                         $keteranganSpesifikasi = ($subItem['keterangan'] ?? '').' ('.($subItem['ukuran'] ?? '').')';
                     }
-                } elseif (($subItem['jenis_pihak'] ?? '') === 'karyawan') {
+                } elseif ($jenisPihak === 'karyawan') {
                     $parts = explode(' - ', $subItem['keterangan'] ?? '');
                     $bagian = count($parts) > 1 ? trim($parts[1]) : '-';
                     $keteranganSpesifikasi = '';
-                } elseif (($subItem['jenis_pihak'] ?? '') === 'pemasok') {
-                    continue;
+                } elseif ($jenisPihak === 'pemasok') {
+                    // Dulu di-skip. Sekarang dipetakan ke akun kayu COA baru.
+                    $parts = explode(' - ', $subItem['keterangan'] ?? '');
+                    $bagian = count($parts) > 1 ? trim($parts[1]) : '-';
+
+                    $panjang = ($noAkun === '115-01') ? 130 : 260;
+                    $akunKayu = $this->coaAlias->getAkunKayuMasuk($parts[0] ?? '', $panjang);
+                    $mappedNoAkun = $akunKayu['no'];
+                    $mappedNamaAkun = $akunKayu['nama'];
+
+                    $lahanName = $subItem['nama_pihak'] ?? '';
+                    $lahanLabel = stripos($lahanName, 'Lahan ') === 0 ? substr($lahanName, 6) : $lahanName;
+                    // Nama jenis kayu asli tetap ditulis di Keterangan
+                    $keteranganSpesifikasi = 'lahan '.$lahanLabel.' - '.($parts[0] ?? '-');
+                    $dkOverride = 'k';
                 } else {
                     $bagian = '-';
                     $keteranganSpesifikasi = $subItem['keterangan'] ?? '-';
                 }
 
-                $tipe = ($subItem['jenis_pihak'] ?? '') === 'produksi' ? 'm' : 'b';
+                $tipe = $jenisPihak === 'produksi' ? 'm' : 'b';
 
                 $banyak = $subItem['banyak'];
-                if (($subItem['jenis_pihak'] ?? '') === 'karyawan') {
+                if ($jenisPihak === 'karyawan') {
                     $banyak = 1;
                 }
 
@@ -211,51 +239,46 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                 $harga = $subItem['harga'];
                 $jumlah = $subItem['jumlah'];
 
-                if (($subItem['jenis_pihak'] ?? '') === 'produksi') {
+                if ($jenisPihak === 'produksi') {
                     $namaM = strtoupper(trim($bagian));
                     $jenisHasil = isset($mesins[$namaM]) ? $mesins[$namaM]->jenis_hasil : 'core';
+                    $isCore = strtolower($jenisHasil) !== 'f/b';
 
                     $keterangan = $subItem['keterangan'] ?? '';
-                    $parts = explode(' - ', $keterangan);
-                    $namaKayu = count($parts) > 2 ? trim($parts[2]) : '';
+                    $partsK = explode(' - ', $keterangan);
+                    $namaKayu = count($partsK) > 2 ? trim($partsK[2]) : '';
 
-                    $isCore = strtolower($jenisHasil) !== 'f/b';
-                    $ongkos = $this->getHargaVeneerBasahDb($namaKayu, $isCore);
+                    $ongkos = $namaKayu !== ''
+                        ? $this->getHargaVeneerBasahDb($namaKayu, $isCore)
+                        : 0.0;
 
+                    if ($ongkos === 0.0) {
+                        $ongkos = $this->getHargaVeneerBasahDb('Meranti', $isCore);
+                    }
                     if ($ongkos === 0.0) {
                         $ongkos = isset($mesins[$namaM]) ? (float) ($mesins[$namaM]->ongkos_mesin ?? 0) : 0;
                     }
 
                     $harga = $ongkos;
                     $jumlah = $volume !== null ? round((float) $volume * $ongkos, 4) : null;
+
+                    [$mappedNoAkun, $mappedNamaAkun] = $this->coaAlias->getAkunVeneerBasah($isCore);
                 }
 
-                if (($subItem['jenis_pihak'] ?? '') === 'karyawan') {
+                if ($jenisPihak === 'karyawan') {
+                    $akunGaji = $this->coaAlias->getAkunGaji(false);
                     $harga = 150_000;
                     $jumlah = 150_000;
+                    $mappedNoAkun = $akunGaji['hutang']['no'];
+                    $mappedNamaAkun = $akunGaji['hutang']['nama'];
                 }
-
-                // --- Mapping akun ke COA baru (menggantikan blok isWHN lama) ---
-                $mappedNoAkun = $noAkun;
-                $mappedNamaAkun = $namaAkun;
-
-                if (in_array($noAkun, ['115-07', '1421.00', '1421.01', '1422.00', '1422.01'], true)) {
-                    [$mappedNoAkun, $mappedNamaAkun] = $this->getAkunVeneerBasah(false);
-                } elseif (in_array($noAkun, ['115-08', '1426.00', '1426.01', '1427.00', '1427.01'], true)) {
-                    [$mappedNoAkun, $mappedNamaAkun] = $this->getAkunVeneerBasah(true);
-                } elseif (in_array($noAkun, ['210-02', '2231.00'], true)) {
-                    $mappedNoAkun = '2195.1';
-                    $mappedNamaAkun = 'Hutang Gaji';
-                }
-                // TODO: tambahkan branch untuk akun kayu/logcore di sini bila diperlukan
-                // (lihat getAkunKayu() di atas).
 
                 $rawRows[] = [
                     'nama_akun' => $mappedNamaAkun,
                     'no_akun' => $mappedNoAkun,
                     'bagian' => $bagian,
                     'keterangan' => $keteranganSpesifikasi,
-                    'dk' => $mapDK,
+                    'dk' => $dkOverride ?? $mapDK,
                     'tipe' => $tipe,
                     'banyak' => $banyak !== null ? (float) $banyak : null,
                     'volume' => $volume !== null ? (float) $volume : null,
@@ -316,27 +339,24 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
             }
 
             foreach ($grouped as $g) {
-                $isVeneer = in_array($g['no_akun'], ['1402.3', '1402.4'], true);
-                $isHutangGaji = $g['no_akun'] === '2195.1';
+                $noAkunG = (string) $g['no_akun'];
+                $isVeneer = $this->isVeneerBasah($noAkunG);
+                $isHutangGaji = $this->isHutangGaji($noAkunG);
+                $isKayu = $this->isKayu($noAkunG);
 
-                $rowHarga = 0.0;
                 if ($isVeneer) {
-                    $isCoreVal = $g['no_akun'] === '1402.4';
-                    $namaAkunVal = strtolower($g['nama_akun'] ?? '');
-                    // Sengon/meranti sudah digabung -> pakai default harga
-                    // referensi dengan jenis kayu "Meranti" sbg representatif
-                    // jika DB tidak menemukan by jenis spesifik. Sesuaikan bila
-                    // referensi hargamu memang membedakan per jenis kayu.
-                    $dbHarga = $this->getHargaVeneerBasahDb('Meranti', $isCoreVal);
-                    $rowHarga = $dbHarga > 0 ? $dbHarga : ($isCoreVal ? 2100000.0 : 8000000.0);
+                    $rowHarga = $this->hargaVeneerBasah($this->isVeneerCore($noAkunG));
                 } elseif ($isHutangGaji) {
                     $rowHarga = 150000.0;
+                } elseif ($isKayu) {
+                    $rowHarga = (float) ($g['harga'] ?? 0.0);
                 } else {
                     $rowHarga = (float) ($g['harga'] ?? 0.0);
                 }
 
-                $rowTotal = 0.0;
-                if ($g['has_vol'] && $g['volume'] !== null && $g['volume'] > 0) {
+                if ($isKayu) {
+                    $rowTotal = (float) $g['jumlah'];
+                } elseif ($g['has_vol'] && $g['volume'] !== null && $g['volume'] > 0) {
                     $rowTotal = round((float) $g['volume'], 4) * $rowHarga;
                 } elseif ($g['has_qty'] && $g['banyak'] !== null && $g['banyak'] > 0) {
                     $rowTotal = (float) $g['banyak'] * $rowHarga;
@@ -351,12 +371,13 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                 }
             }
 
-            // Selisih -> 5069.2 Selisih harga patok produksi (akun DE -> debit)
+            // Selisih -> akun HPP dari alias (akun DE -> sisi debit)
             $selisih = round($totalDebit - $totalKredit, 2);
             if ($selisih != 0) {
+                $akunHpp = $this->coaAlias->getAkunHpp();
                 $grouped[] = [
-                    'nama_akun' => 'Selisih harga patok produksi',
-                    'no_akun' => '5069.2',
+                    'nama_akun' => $akunHpp['nama'],
+                    'no_akun' => $akunHpp['no'],
                     'bagian' => $machine,
                     'keterangan' => '',
                     'dk' => 'd',
@@ -390,25 +411,35 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
             $tglVal = Carbon::parse($this->tanggal)->format('d-m-Y');
 
             foreach ($groupedRows as $g) {
-                $isVeneer = in_array($g['no_akun'], ['1402.3', '1402.4'], true);
-                $isHutangGaji = $g['no_akun'] === '2195.1';
+                $noAkunG = (string) $g['no_akun'];
+                $isVeneer = $this->isVeneerBasah($noAkunG);
+                $isHutangGaji = $this->isHutangGaji($noAkunG);
+                $isKayu = $this->isKayu($noAkunG);
+                $isHpp = $noAkunG === $akunHppNo;
 
-                $namaVal = $isVeneer ? 'kupasan (m - '.strtolower($g['bagian']).')' : 'kupasan';
+                if ($isVeneer) {
+                    $namaVal = 'kupasan (m - '.strtolower($g['bagian']).')';
+                } elseif ($isKayu) {
+                    $namaVal = 'kayu keluar';
+                } else {
+                    $namaVal = 'kupasan';
+                }
 
                 $hitKbkVal = '';
-                if ($isVeneer) {
+                if ($isVeneer || $isKayu) {
                     $hitKbkVal = 'm';
                 } elseif ($isHutangGaji) {
                     $hitKbkVal = 'b';
                 }
 
-                $hargaVal = null;
                 if ($isVeneer) {
-                    $isCoreVal = $g['no_akun'] === '1402.4';
-                    $dbHarga = $this->getHargaVeneerBasahDb('Meranti', $isCoreVal);
-                    $hargaVal = $dbHarga > 0 ? $dbHarga : ($isCoreVal ? 2100000 : 8000000);
+                    $hargaVal = $this->hargaVeneerBasah($this->isVeneerCore($noAkunG));
                 } elseif ($isHutangGaji) {
                     $hargaVal = 150000;
+                } elseif ($isKayu) {
+                    $hargaVal = $g['harga'];
+                } elseif ($isHpp) {
+                    $hargaVal = $g['jumlah'];
                 } else {
                     $hargaVal = $g['jumlah'];
                 }
@@ -514,6 +545,9 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                 $sheet->getColumnDimension('H')->setWidth(40);
                 $sheet->getColumnDimension('I')->setWidth(10);
                 $sheet->getColumnDimension('J')->setWidth(10);
+                $sheet->getColumnDimension('K')->setWidth(12);
+                $sheet->getColumnDimension('L')->setWidth(15);
+                $sheet->getColumnDimension('M')->setWidth(18);
                 $sheet->getColumnDimension('N')->setWidth(18);
             },
         ];
