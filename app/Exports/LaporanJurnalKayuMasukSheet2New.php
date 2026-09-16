@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use App\Services\CoaAliasService;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
@@ -26,9 +27,17 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  * - Logcore tetap akun sendiri: 1402.21 (130) / 1402.22 (selain 130).
  * - Hutang ongkos turun kayu -> 2195.2 (sesuai COA baru), bukan 2400.01.
  * - Kolom No Akun dipaksa jadi teks supaya titik tidak berubah jadi koma.
+ *
+ * NOTE REFACTOR: Semua nomor & nama akun (kayu masuk, hutang ongkos,
+ * pendapatan, kas mut) sekarang diambil dari App\Services\CoaAliasService
+ * supaya satu sumber kebenaran bersama sheet v2 lain (dryer/hotpress/
+ * repair/kedi). Tidak ada perubahan logic penentuan kelompok akun
+ * (log core vs bukan, 130 vs selain 130) — hanya dipindah ke service.
  */
 class LaporanJurnalKayuMasukSheet2New extends DefaultValueBinder implements FromCollection, WithCustomValueBinder, WithStyles, WithTitle
 {
+    protected CoaAliasService $coaAlias;
+
     public function bindValue(Cell $cell, $value)
     {
         // Kolom D (No Akun) HARUS selalu jadi teks, apapun isinya.
@@ -46,40 +55,33 @@ class LaporanJurnalKayuMasukSheet2New extends DefaultValueBinder implements From
 
     protected array $jurnalTables;
 
-    public function __construct(array $jurnalTables)
+    public function __construct(array $jurnalTables, ?CoaAliasService $coaAlias = null)
     {
         $this->jurnalTables = $jurnalTables;
+        $this->coaAlias = $coaAlias ?? app(CoaAliasService::class);
     }
 
     /**
-     * COA baru (general).
+     * @deprecated Logic sudah dipindah ke CoaAliasService::getAkunKayuMasuk().
+     * Method ini dipertahankan sebagai thin-wrapper supaya kalau ada
+     * pemanggil eksternal lain (mis. test lama) tidak langsung patah,
+     * tapi implementasinya sekarang cuma mendelegasikan ke service.
      */
     public function getAccountDetails(string $jenisKayuNama, $panjang): array
     {
-        $jenis = strtolower(trim($jenisKayuNama));
-        $panjang = (int) $panjang;
+        $akun = $this->coaAlias->getAkunKayuMasuk($jenisKayuNama, (int) $panjang);
 
-        $isLogCore = str_contains($jenis, 'log core') || str_contains($jenis, 'core');
-
-        if ($isLogCore) {
-            if ($panjang === 130) {
-                return ['no_akun' => '1402.21', 'nama_akun' => 'Persediaan Logcore 130'];
-            }
-
-            return ['no_akun' => '1402.22', 'nama_akun' => 'Persediaan Logcore 260'];
-        }
-
-        if ($panjang === 130) {
-            return ['no_akun' => '1402.1', 'nama_akun' => 'Persediaan kayu 130'];
-        }
-
-        return ['no_akun' => '1402.2', 'nama_akun' => 'Persediaan kayu 260'];
+        return ['no_akun' => $akun['no'], 'nama_akun' => $akun['nama']];
     }
 
     public function collection()
     {
         $flatRows = [];
         $currentRow = 1;
+
+        $akunHutangOngkos = $this->coaAlias->getAkunHutangOngkosKayu();
+        $akunPendapatan = $this->coaAlias->getAkunPendapatan();
+        $akunKasMut = $this->coaAlias->getAkunKasMut();
 
         foreach ($this->jurnalTables as $table) {
             $noJurnal = 'MASUK/'.Carbon::parse($table['tgl_kayu_masuk'])->format('Ymd').'/'.$table['no_nota'];
@@ -123,16 +125,16 @@ class LaporanJurnalKayuMasukSheet2New extends DefaultValueBinder implements From
                     }
                 }
 
-                $acc = $this->getAccountDetails($jenisKayuNama, $panjang);
+                $akun = $this->coaAlias->getAkunKayuMasuk($jenisKayuNama, (int) $panjang);
 
                 $hargaVal = $group['total_harga'];
                 $totalVal = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
 
                 $flatRows[] = [
-                    $acc['nama_akun'],
+                    $akun['nama'],
                     $tglVal,
                     '',
-                    $acc['no_akun'],
+                    $akun['no'],
                     $table['seri'],
                     '',
                     $table['nama_supplier'],
@@ -150,16 +152,16 @@ class LaporanJurnalKayuMasukSheet2New extends DefaultValueBinder implements From
             // 2. Add Credit Row 1: hutang ongkos turun kayu -> 2195.2 (COA baru)
             $totalValRow1 = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
             $flatRows[] = [
-                'Hutang ongkos turun kayu',
-                $tglVal, '', '2195.2', $table['seri'], '', $table['nama_supplier'], '',
+                $akunHutangOngkos['nama'],
+                $tglVal, '', $akunHutangOngkos['no'], $table['seri'], '', $table['nama_supplier'], '',
                 'k', '', '', '', $table['selisih'], $totalValRow1,
             ];
             $currentRow++;
 
             // 3. Add Credit Row 2: pendapatan
             $flatRows[] = [
-                'pendapatan',
-                $tglVal, '', '4000.00', $table['seri'], '', $table['nama_supplier'], '',
+                $akunPendapatan['nama'],
+                $tglVal, '', $akunPendapatan['no'], $table['seri'], '', $table['nama_supplier'], '',
                 'k', '', '', '', '', '',
             ];
             $currentRow++;
@@ -167,8 +169,8 @@ class LaporanJurnalKayuMasukSheet2New extends DefaultValueBinder implements From
             // 4. Add Credit Row 3: Kas Mut
             $totalValKasMut = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
             $flatRows[] = [
-                'Kas Mut',
-                $tglVal, '', '1111.00', $table['seri'], '', $table['nama_supplier'], '',
+                $akunKasMut['nama'],
+                $tglVal, '', $akunKasMut['no'], $table['seri'], '', $table['nama_supplier'], '',
                 'k', '', $table['totalBatang'], $table['totalKubikasi'], $table['hargaFinal'], $totalValKasMut,
             ];
             $currentRow++;
