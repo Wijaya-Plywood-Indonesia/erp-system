@@ -94,7 +94,7 @@ class LaporanJurnalKayuMasukSheet2New extends DefaultValueBinder implements From
             // Column Headers
             $flatRows[] = [
                 'Nama Akun', 'tgl', 'jur', 'No Akun', 'No', 'mm',
-                'Nama Suplier', 'Lahan', 'm', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total',
+                'Nama Suplier', 'Lahan', 'm', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total', 'ID Barang',
             ];
             $currentRow++;
 
@@ -144,7 +144,7 @@ class LaporanJurnalKayuMasukSheet2New extends DefaultValueBinder implements From
                     $group['total_batang'],
                     $group['total_kubikasi'],
                     $hargaVal,
-                    $totalVal,
+                    $totalVal, null,
                 ];
                 $currentRow++;
             }
@@ -154,7 +154,7 @@ class LaporanJurnalKayuMasukSheet2New extends DefaultValueBinder implements From
             $flatRows[] = [
                 $akunHutangOngkos['nama'],
                 $tglVal, '', $akunHutangOngkos['no'], $table['seri'], '', $table['nama_supplier'], '',
-                'k', '', '', '', $table['selisih'], $totalValRow1,
+                'k', '', '', '', $table['selisih'], $totalValRow1, null,
             ];
             $currentRow++;
 
@@ -171,14 +171,14 @@ class LaporanJurnalKayuMasukSheet2New extends DefaultValueBinder implements From
             $flatRows[] = [
                 $akunKasMut['nama'],
                 $tglVal, '', $akunKasMut['no'], $table['seri'], '', $table['nama_supplier'], '',
-                'k', '', $table['totalBatang'], $table['totalKubikasi'], $table['hargaFinal'], $totalValKasMut,
+                'k', '', $table['totalBatang'], $table['totalKubikasi'], $table['hargaFinal'], $totalValKasMut, null,
             ];
             $currentRow++;
 
             // Spacer Rows between multiple tables
-            $flatRows[] = ['', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+            $flatRows[] = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
             $currentRow++;
-            $flatRows[] = ['', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+            $flatRows[] = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
             $currentRow++;
         }
 
@@ -198,32 +198,32 @@ class LaporanJurnalKayuMasukSheet2New extends DefaultValueBinder implements From
             $cellValue = $sheet->getCell("A{$row}")->getValue();
 
             if (str_starts_with((string) $cellValue, 'No. Jurnal:')) {
-                $sheet->mergeCells("A{$row}:N{$row}");
-                $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
+                $sheet->mergeCells("A{$row}:O{$row}");
+                $sheet->getStyle("A{$row}:O{$row}")->applyFromArray([
                     'font' => ['bold' => true, 'size' => 11, 'color' => ['argb' => 'FF1D2939']],
                     'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFD2E4F0']],
                     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                 ]);
             } elseif ($cellValue === 'Nama Akun') {
-                $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
+                $sheet->getStyle("A{$row}:O{$row}")->applyFromArray([
                     'font' => ['bold' => true, 'size' => 10],
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
                     'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFE5E8EB']],
                     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                 ]);
             } elseif (! empty($cellValue)) {
-                $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
+                $sheet->getStyle("A{$row}:O{$row}")->applyFromArray([
                     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                 ]);
 
                 $sheet->getStyle("B{$row}:F{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle("G{$row}:H{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                 $sheet->getStyle("I{$row}:J{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("K{$row}:N{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle("K{$row}:O{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
                 $sheet->getStyle("K{$row}")->getNumberFormat()->setFormatCode('#,##0');
                 $sheet->getStyle("L{$row}")->getNumberFormat()->setFormatCode('#,##0.0000');
-                $sheet->getStyle("M{$row}:N{$row}")->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle("M{$row}:O{$row}")->getNumberFormat()->setFormatCode('#,##0');
             }
         }
 
@@ -241,6 +241,8 @@ class LaporanJurnalKayuMasukSheet2New extends DefaultValueBinder implements From
         $sheet->getColumnDimension('L')->setWidth(15);
         $sheet->getColumnDimension('M')->setWidth(18);
         $sheet->getColumnDimension('N')->setWidth(18);
+                $sheet->getColumnDimension('O')->setWidth(15);
+                $sheet->getColumnDimension('O')->setVisible(false);
 
         return [];
     }

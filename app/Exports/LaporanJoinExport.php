@@ -470,11 +470,11 @@ class JurnalSheet implements FromArray, WithColumnFormatting, WithColumnWidths, 
         return (int) $hargaVeneer->harga;
     }
 
-    private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $total, $hitKbk = 'm'): array
+    private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $total, $hitKbk = 'm', $idBarang = null): array
     {
         return [
             $namaAkun, (string) $tgl, '', (string) $noAkun, '', '', 'nyambung', $keterangan,
-            strtolower($map), strtolower($hitKbk), (float) $banyak, (float) $m3, (float) $harga, (float) $total,
+            strtolower($map), strtolower($hitKbk), (float) $banyak, (float) $m3, (float) $harga, (float) $total, $idBarang
         ];
     }
 
@@ -602,7 +602,7 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
     {
         return [
             'A' => 45, 'B' => 15, 'C' => 12, 'D' => 12, 'E' => 8, 'F' => 8,
-            'G' => 15, 'H' => 45, 'I' => 8, 'J' => 8, 'K' => 14, 'L' => 16, 'M' => 16, 'N' => 22,
+            'G' => 15, 'H' => 45, 'I' => 8, 'J' => 8, 'K' => 14, 'L' => 16, 'M' => 16, 'N' => 22, 'O' => 12,
         ];
     }
 
@@ -620,7 +620,7 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
     public function styles(Worksheet $sheet)
     {
         $lastRow = $sheet->getHighestRow();
-        $sheet->getStyle('A1:N1')->applyFromArray([
+        $sheet->getStyle('A1:O1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'name' => 'Calibri', 'size' => 11],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '99CC99']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
@@ -628,9 +628,10 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
         ]);
 
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:N{$lastRow}")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]]);
+            $sheet->getStyle("A2:O{$lastRow}")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]]);
             $sheet->getStyle("D2:D{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle("K2:N{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+            $sheet->getStyle("O2:O{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
             for ($row = 2; $row <= $lastRow; $row++) {
                 // Paksa No Akun (kolom D) sebagai string eksplisit, supaya Excel
@@ -643,7 +644,7 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
                 $namaAkunVal = $sheet->getCell("A{$row}")->getValue();
                 if ($namaAkunVal !== '' && $namaAkunVal !== null) {
                     $sheet->getCell("N{$row}")->setValue(
-                        "=IF(J{$row}=\"m\",M{$row}*L{$row},IF(J{$row}=\"b\",M{$row}*K{$row},M{$row}))"
+                        "=ROUND(IF(J{$row}=\"m\",M{$row}*L{$row},IF(J{$row}=\"b\",M{$row}*K{$row},M{$row})), 0)"
                     );
                 }
             }
@@ -779,18 +780,20 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
         return 15000;
     }
 
-    private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $total, $hitKbk = 'm'): array
+    private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $total, $hitKbk = 'm', $idBarang = null): array
     {
         return [
             $namaAkun, (string) $tgl, '', (string) $noAkun, '', '', 'nyambung', $keterangan,
-            strtolower($map), strtolower($hitKbk), (float) $banyak, (float) $m3, (float) $harga, (float) $total,
+            strtolower($map), strtolower($hitKbk), (float) $banyak, (float) $m3, (float) $harga, (float) $total, $idBarang
         ];
     }
 
     public function array(): array
     {
         $rows = [];
-        $rows[] = ['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total'];
+        $rows[] = ['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total', 'ID Barang'];
+
+        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/') . '/api/barang/resolve-veneer';
 
         foreach ($this->rawCollection as $produksi) {
             $tglFormat = Carbon::parse($produksi->tanggal_produksi)->format('d-m-Y');
@@ -803,15 +806,26 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
                 $ukuran = $hasil->ukuran;
                 $jnsNorm = $this->normalizeJenis($hasil->jenisKayu->nama_kayu ?? '');
                 $isAf = str_contains(strtolower($hasil->kw ?? ''), 'af');
+                
+                $bagianParam = $isAf ? 'PPC' : ((float)$ukuran->tebal < 1 ? 'Face Back' : 'Core');
+                $responseApi = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(10)->get($urlApi, [
+                    'jenis_veneer' => 'Veneer Jadi',
+                    'bagian' => $bagianParam,
+                    'jenis_kayu' => $hasil->jenisKayu->nama_kayu ?? '',
+                    'ketebalan' => $ukuran->tebal,
+                    'ukuran' => $ukuran->panjang . 'x' . $ukuran->lebar,
+                    'kw' => $hasil->kw,
+                ]);
+                $idBarang = $responseApi->json('id_barang');
 
                 [$noAkun, $namaAkun] = $this->getAkunVeneerJadi((float) $ukuran->tebal, $isAf);
                 $keterangan = ($isAf ? 'af ' : '130 ').strtolower($hasil->jenisKayu->nama_kayu ?? '').' uk '.$ukuran->panjang.' x '.$ukuran->lebar.' x '.$ukuran->tebal;
 
                 $m3 = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $hasil->jumlah) / 10000000;
                 $hargaPatok = $this->getHargaPatok($jnsNorm, (float) $ukuran->tebal, $isAf);
-                $totalValue = $m3 * $hargaPatok;
+                $totalValue = round($m3 * $hargaPatok, 0);
 
-                $jurnalBlock[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'd', $hasil->jumlah, $m3, $hargaPatok, $totalValue, 'm');
+                $jurnalBlock[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'd', $hasil->jumlah, $m3, $hargaPatok, $totalValue, 'm', $idBarang);
                 $totalDebit += $totalValue;
             }
 
@@ -821,14 +835,25 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
                 $jnsNorm = $this->normalizeJenis($modal->jenisKayu->nama_kayu ?? '');
                 $isAf = str_contains(strtolower($modal->kw ?? ''), 'af');
 
+                $bagianParam = $isAf ? 'PPC' : ((float)$ukuran->tebal < 1 ? 'Face Back' : 'Core');
+                $responseApi = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(10)->get($urlApi, [
+                    'jenis_veneer' => 'Veneer Jadi',
+                    'bagian' => $bagianParam,
+                    'jenis_kayu' => $modal->jenisKayu->nama_kayu ?? '',
+                    'ketebalan' => $ukuran->tebal,
+                    'ukuran' => $ukuran->panjang . 'x' . $ukuran->lebar,
+                    'kw' => $modal->kw,
+                ]);
+                $idBarang = $responseApi->json('id_barang');
+
                 [$noAkun, $namaAkun] = $this->getAkunVeneerJadi((float) $ukuran->tebal, $isAf);
                 $keterangan = ($isAf ? 'af ' : '130 ').strtolower($modal->jenisKayu->nama_kayu ?? '').' uk '.$ukuran->panjang.' x '.$ukuran->lebar.' x '.$ukuran->tebal;
 
                 $m3 = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $modal->jumlah) / 10000000;
                 $hargaPatok = $this->getHargaPatok($jnsNorm, (float) $ukuran->tebal, $isAf);
-                $totalValue = $m3 * $hargaPatok;
+                $totalValue = round($m3 * $hargaPatok, 0);
 
-                $jurnalBlock[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'k', $modal->jumlah, $m3, $hargaPatok, $totalValue, 'm');
+                $jurnalBlock[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'k', $modal->jumlah, $m3, $hargaPatok, $totalValue, 'm', $idBarang);
                 $totalKredit += $totalValue;
             }
 
@@ -840,7 +865,7 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
 
                     [$akun, $namaAkun] = $this->getAkunBahan($namaBahanRaw);
                     $hargaH = $this->getHargaBahan($namaBahanRaw);
-                    $total = $hargaH * $jumlah;
+                    $total = round($hargaH * $jumlah, 0);
 
                     // Nama akun persis sama dengan COA; nama bahan asli ditaruh di Keterangan
                     $keterangan = ucfirst(strtolower(trim($namaBahanRaw)));
@@ -859,14 +884,15 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
 
             // 5. Selisih debit-kredit -> 5069.2 Selisih harga patok produksi
             $selisih = $totalDebit - $totalKredit;
-            if (round($selisih, 2) != 0) {
-                $jurnalBlock[] = $this->makeRow('Selisih harga patok produksi', $tglFormat, '5069.2', '', 'd', 0, 0, abs($selisih), abs($selisih), '');
+            if ($selisih != 0) {
+                $dkSelisih = $selisih > 0 ? 'k' : 'd';
+                $jurnalBlock[] = $this->makeRow('Selisih harga patok produksi', $tglFormat, '5069.2', '', $dkSelisih, 0, 0, abs($selisih), abs($selisih), '');
             }
 
             foreach ($jurnalBlock as $row) {
                 $rows[] = $row;
             }
-            $rows[] = array_fill(0, 14, '');
+            $rows[] = array_fill(0, 15, '');
         }
 
         return $rows;

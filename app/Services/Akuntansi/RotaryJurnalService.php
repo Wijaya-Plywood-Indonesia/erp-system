@@ -1277,19 +1277,6 @@ class RotaryJurnalService
             );
         }
 
-        // ── DEBIT: Beban Kerugian (selisih negatif) ───────────────────────────
-        if ($c['akunSelisih'] && $c['akunSelisih']['map'] === 'd') {
-            $rows[] = $this->makeRow(
-                $urut++,
-                'd',
-                $c['akunSelisih']['kode'],
-                $c['akunSelisih']['nama'],
-                $c['akunSelisih']['nilai'],
-                $keterangan,
-                $this->itemsSelisih($c['akunSelisih']['nilai'], $keterangan)
-            );
-        }
-
         // ── KREDIT: Persediaan Kayu 260 ───────────────────────────────────────
         if ($c['poinKayu260'] > 0) {
             $rows[] = $this->makeRow(
@@ -1342,22 +1329,39 @@ class RotaryJurnalService
             );
         }
 
-        // ── KREDIT: Keuntungan Produksi (selisih positif) ─────────────────────
-        if ($c['akunSelisih'] && $c['akunSelisih']['map'] === 'k') {
+        // Hitung Total Sebenarnya setelah dibulatkan ke integer
+        $totalD = 0;
+        $totalK = 0;
+        foreach ($rows as $r) {
+            if ($r['map'] === 'd') $totalD += $r['jumlah'];
+            if ($r['map'] === 'k') $totalK += $r['jumlah'];
+        }
+
+        // Selisih (Keuntungan/Kerugian)
+        $selisih = $totalD - $totalK;
+        if (abs($selisih) > 0) {
+            $mapSelisih = $selisih > 0 ? 'k' : 'd';
+            $kodeSelisih = $selisih > 0 ? '520-09' : '520-08';
+            $namaSelisih = $selisih > 0 ? 'Keuntungan hasil produksi' : 'Beban kerugian produksi';
+            $nilaiSelisih = abs($selisih);
+
             $rows[] = $this->makeRow(
                 $urut++,
-                'k',
-                $c['akunSelisih']['kode'],
-                $c['akunSelisih']['nama'],
-                $c['akunSelisih']['nilai'],
+                $mapSelisih,
+                $kodeSelisih,
+                $namaSelisih,
+                $nilaiSelisih,
                 $keterangan,
-                $this->itemsSelisih($c['akunSelisih']['nilai'], $keterangan)
+                $this->itemsSelisih($nilaiSelisih, $keterangan)
             );
+
+            if ($mapSelisih === 'd') $totalD += $nilaiSelisih;
+            if ($mapSelisih === 'k') $totalK += $nilaiSelisih;
         }
 
         // ── Final debit & kredit ──────────────────────────────────────────────
-        $finalDebit = $c['totalDebit'] + (($c['akunSelisih']['map'] ?? '') === 'd' ? ($c['akunSelisih']['nilai'] ?? 0) : 0);
-        $finalKredit = $c['totalKredit'] + (($c['akunSelisih']['map'] ?? '') === 'k' ? ($c['akunSelisih']['nilai'] ?? 0) : 0);
+        $finalDebit = $totalD;
+        $finalKredit = $totalK;
 
         return [
             'jurnal_header' => [
@@ -1366,9 +1370,9 @@ class RotaryJurnalService
                 'jenis_transaksi' => 'produksi',
                 'modul_asal' => 'rotary',
                 'keterangan' => $keterangan,
-                'total_debit' => round($finalDebit, 4),
-                'total_kredit' => round($finalKredit, 4),
-                'is_balance' => round($finalDebit, 2) === round($finalKredit, 2),
+                'total_debit' => $finalDebit,
+                'total_kredit' => $finalKredit,
+                'is_balance' => $finalDebit === $finalKredit,
                 'status' => 'draft',
             ],
             'jurnal_items' => $rows,
@@ -1394,14 +1398,23 @@ class RotaryJurnalService
 
     private function makeRow(int $urut, string $map, string $kode, string $nama, float $nilai, string $keterangan, array $items = []): array
     {
+        $sum = 0;
+        foreach ($items as &$item) {
+            $item['jumlah'] = round($item['jumlah'], 0);
+            $item['harga'] = round($item['harga'], 0);
+            $sum += $item['jumlah'];
+        }
+
+        $finalNilai = count($items) > 0 ? $sum : round($nilai, 0);
+
         return [
             'urut' => $urut,
             'map' => $map,
             'no_akun' => $kode,
             'nama_akun' => $nama,
-            'jumlah' => round($nilai, 4),
+            'jumlah' => $finalNilai,
             'keterangan' => $keterangan,
-            'items' => $items,   // → jurnal_pembantu_items
+            'items' => $items,   // -> jurnal_pembantu_items
         ];
     }
 
@@ -1442,6 +1455,24 @@ class RotaryJurnalService
                 // Ambil nama kayu dari lahan yang dipakai mesin ini
                 $namaKayu = $palet->penggunaanLahan->jenisKayu->nama_kayu ?? '-';
 
+                $idBarang = null;
+                try {
+                    $urlApi = rtrim(config('services.akuntansi.url'), '/') . '/api/barang/resolve-veneer';
+                    $responseApi = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(10)->get($urlApi, [
+                        'jenis_veneer' => 'Veneer Kering',
+                        'bagian' => strtoupper($jenisTarget) === 'F/B' ? 'Face Back' : 'Core',
+                        'jenis_kayu' => $namaKayu,
+                        'ketebalan' => $ukuran->tebal ?? 0,
+                        'ukuran' => ($ukuran->panjang ?? 0) . 'x' . ($ukuran->lebar ?? 0),
+                        'kw' => $palet->kw ?? 1,
+                    ]);
+                    if ($responseApi->successful()) {
+                        $idBarang = $responseApi->json('id_barang');
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning("Gagal resolve id_barang: " . $e->getMessage());
+                }
+
                 $items[] = [
                     'urut' => $urut++,
                     'jenis_pihak' => 'produksi',
@@ -1454,6 +1485,7 @@ class RotaryJurnalService
                     'harga' => round($hargaVeneer, 4),
                     'hit_kbk' => 'k',
                     'jumlah' => round($vol * $hargaVeneer, 4),
+                    'id_barang' => $idBarang,
                 ];
             }
         }

@@ -318,7 +318,7 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
             $this->titleRows[] = $currentRow;
             $currentRow++;
 
-            $rows->push(['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total']);
+            $rows->push(['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total', 'ID Barang']);
             $this->headerRows[] = $currentRow;
             $currentRow++;
 
@@ -364,7 +364,7 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                 $rows->push([
                     $g['nama_akun'], $tglVal, '', $g['no_akun'], '', '', $namaVal, $g['keterangan'],
                     $g['dk'], $hitKbkVal, $g['has_qty'] ? $g['banyak'] : null, $g['has_vol'] ? round($g['volume'], 4) : null,
-                    $hargaVal, $totalVal,
+                    $hargaVal, $totalVal, null,
                 ]);
                 $currentRow++;
             }
@@ -372,8 +372,8 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
             $dataEnd = $currentRow - 1;
             $this->dataRanges[] = ['start' => $dataStart, 'end' => $dataEnd];
 
-            $rows->push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-            $rows->push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+            $rows->push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+            $rows->push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
             $currentRow += 2;
         }
 
@@ -417,8 +417,8 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                 $sheet = $event->sheet->getDelegate();
 
                 foreach ($this->titleRows as $row) {
-                    $sheet->mergeCells("A{$row}:N{$row}");
-                    $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
+                    $sheet->mergeCells("A{$row}:O{$row}");
+                    $sheet->getStyle("A{$row}:O{$row}")->applyFromArray([
                         'font' => ['bold' => true, 'size' => 11, 'color' => ['argb' => 'FF1D2939']],
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFD2F0DA']],
                         'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
@@ -427,7 +427,7 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                 }
 
                 foreach ($this->headerRows as $row) {
-                    $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
+                    $sheet->getStyle("A{$row}:O{$row}")->applyFromArray([
                         'font' => ['bold' => true, 'size' => 10],
                         'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFE5E8EB']],
@@ -443,12 +443,12 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                         continue;
                     }
 
-                    $sheet->getStyle("A{$start}:N{$end}")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]]);
+                    $sheet->getStyle("A{$start}:O{$end}")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]]);
                     $sheet->getStyle("A{$start}:A{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("B{$start}:F{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     $sheet->getStyle("G{$start}:H{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("I{$start}:J{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                    $sheet->getStyle("K{$start}:N{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    $sheet->getStyle("K{$start}:O{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
                     $sheet->getStyle("K{$start}:K{$end}")->getNumberFormat()->setFormatCode('#,##0');
                     $sheet->getStyle("L{$start}:L{$end}")->getNumberFormat()->setFormatCode('#,##0.0000');
@@ -470,6 +470,8 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                 $sheet->getColumnDimension('L')->setWidth(15);
                 $sheet->getColumnDimension('M')->setWidth(18);
                 $sheet->getColumnDimension('N')->setWidth(18);
+                $sheet->getColumnDimension('O')->setWidth(15);
+                $sheet->getColumnDimension('O')->setVisible(false);
             },
         ];
     }
@@ -603,7 +605,7 @@ class LaporanProduksiJurnalPenggunaanSheetV2 extends DefaultValueBinder implemen
         $this->titleRows[] = $currentRow;
         $currentRow++;
 
-        $rows->push(['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total']);
+        $rows->push(['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total', 'ID Barang']);
         $this->headerRows[] = $currentRow;
         $currentRow++;
 
@@ -615,7 +617,7 @@ class LaporanProduksiJurnalPenggunaanSheetV2 extends DefaultValueBinder implemen
             $rows->push([
                 $g['nama_akun'], $tglVal, '', $g['no_akun'], '', '', 'kayu keluar', $g['keterangan'],
                 'k', 'm', $g['has_qty'] ? $g['banyak'] : null, $g['has_vol'] ? round($g['volume'], 4) : null,
-                $g['harga'], $totalVal,
+                $g['harga'], $totalVal, null,
             ]);
             $currentRow++;
         }
@@ -642,8 +644,8 @@ class LaporanProduksiJurnalPenggunaanSheetV2 extends DefaultValueBinder implemen
                 $sheet = $event->sheet->getDelegate();
 
                 foreach ($this->titleRows as $row) {
-                    $sheet->mergeCells("A{$row}:N{$row}");
-                    $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
+                    $sheet->mergeCells("A{$row}:O{$row}");
+                    $sheet->getStyle("A{$row}:O{$row}")->applyFromArray([
                         'font' => ['bold' => true, 'size' => 11, 'color' => ['argb' => 'FF1D2939']],
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFD2F0DA']],
                         'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
@@ -652,7 +654,7 @@ class LaporanProduksiJurnalPenggunaanSheetV2 extends DefaultValueBinder implemen
                 }
 
                 foreach ($this->headerRows as $row) {
-                    $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
+                    $sheet->getStyle("A{$row}:O{$row}")->applyFromArray([
                         'font' => ['bold' => true, 'size' => 10],
                         'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFE5E8EB']],
@@ -668,12 +670,12 @@ class LaporanProduksiJurnalPenggunaanSheetV2 extends DefaultValueBinder implemen
                         continue;
                     }
 
-                    $sheet->getStyle("A{$start}:N{$end}")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]]);
+                    $sheet->getStyle("A{$start}:O{$end}")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]]);
                     $sheet->getStyle("A{$start}:A{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("B{$start}:F{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     $sheet->getStyle("G{$start}:H{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("I{$start}:J{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                    $sheet->getStyle("K{$start}:N{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    $sheet->getStyle("K{$start}:O{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
                     $sheet->getStyle("K{$start}:K{$end}")->getNumberFormat()->setFormatCode('#,##0');
                     $sheet->getStyle("L{$start}:L{$end}")->getNumberFormat()->setFormatCode('#,##0.0000');
@@ -695,6 +697,8 @@ class LaporanProduksiJurnalPenggunaanSheetV2 extends DefaultValueBinder implemen
                 $sheet->getColumnDimension('L')->setWidth(15);
                 $sheet->getColumnDimension('M')->setWidth(18);
                 $sheet->getColumnDimension('N')->setWidth(18);
+                $sheet->getColumnDimension('O')->setWidth(15);
+                $sheet->getColumnDimension('O')->setVisible(false);
             },
         ];
     }
@@ -807,7 +811,7 @@ class LaporanProduksiJurnalHargaAsliSheetV2 extends DefaultValueBinder implement
         $this->titleRows[] = $currentRow;
         $currentRow++;
 
-        $rows->push(['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total']);
+        $rows->push(['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total', 'ID Barang']);
         $this->headerRows[] = $currentRow;
         $currentRow++;
 
@@ -829,7 +833,7 @@ class LaporanProduksiJurnalHargaAsliSheetV2 extends DefaultValueBinder implement
             $rows->push([
                 $namaAkun, $tglVal, '', $noAkun, '', '', 'kayu keluar', $keteranganSpec,
                 'k', 'm', $g['banyak'] > 0 ? $g['banyak'] : null, $roundedVol > 0 ? $roundedVol : null,
-                $hargaPerM3, $totalVal,
+                $hargaPerM3, $totalVal, null,
             ]);
             $currentRow++;
         }
@@ -857,8 +861,8 @@ class LaporanProduksiJurnalHargaAsliSheetV2 extends DefaultValueBinder implement
                 $sheet = $event->sheet->getDelegate();
 
                 foreach ($this->titleRows as $row) {
-                    $sheet->mergeCells("A{$row}:N{$row}");
-                    $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
+                    $sheet->mergeCells("A{$row}:O{$row}");
+                    $sheet->getStyle("A{$row}:O{$row}")->applyFromArray([
                         'font' => ['bold' => true, 'size' => 11, 'color' => ['argb' => 'FF1D2939']],
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFD2F0DA']],
                         'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
@@ -867,7 +871,7 @@ class LaporanProduksiJurnalHargaAsliSheetV2 extends DefaultValueBinder implement
                 }
 
                 foreach ($this->headerRows as $row) {
-                    $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
+                    $sheet->getStyle("A{$row}:O{$row}")->applyFromArray([
                         'font' => ['bold' => true, 'size' => 10],
                         'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFE5E8EB']],
@@ -883,12 +887,12 @@ class LaporanProduksiJurnalHargaAsliSheetV2 extends DefaultValueBinder implement
                         continue;
                     }
 
-                    $sheet->getStyle("A{$start}:N{$end}")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]]);
+                    $sheet->getStyle("A{$start}:O{$end}")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]]);
                     $sheet->getStyle("A{$start}:A{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("B{$start}:F{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     $sheet->getStyle("G{$start}:H{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("I{$start}:J{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                    $sheet->getStyle("K{$start}:N{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    $sheet->getStyle("K{$start}:O{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
                     $sheet->getStyle("K{$start}:K{$end}")->getNumberFormat()->setFormatCode('#,##0');
                     $sheet->getStyle("L{$start}:L{$end}")->getNumberFormat()->setFormatCode('#,##0.0000');
@@ -910,6 +914,8 @@ class LaporanProduksiJurnalHargaAsliSheetV2 extends DefaultValueBinder implement
                 $sheet->getColumnDimension('L')->setWidth(15);
                 $sheet->getColumnDimension('M')->setWidth(18);
                 $sheet->getColumnDimension('N')->setWidth(18);
+                $sheet->getColumnDimension('O')->setWidth(15);
+                $sheet->getColumnDimension('O')->setVisible(false);
             },
         ];
     }
@@ -973,7 +979,7 @@ class LaporanProduksiKayuHabisSheetV2 extends DefaultValueBinder implements From
         $this->titleRows[] = $currentRow;
         $currentRow++;
 
-        $rows->push(['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total']);
+        $rows->push(['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total', 'ID Barang']);
         $this->headerRows[] = $currentRow;
         $currentRow++;
 
@@ -999,7 +1005,7 @@ class LaporanProduksiKayuHabisSheetV2 extends DefaultValueBinder implements From
             $rows->push([
                 $akunHpp['nama'], $tglVal, '', $akunHpp['no'], '', '', 'kayu habis', '',
                 'd', '', $totalBanyak > 0 ? $totalBanyak : null, $totalM3 > 0 ? $totalM3 : null,
-                $totalHarga, $totalValHpp,
+                $totalHarga, $totalValHpp, null,
             ]);
             $currentRow++;
         }
@@ -1021,7 +1027,7 @@ class LaporanProduksiKayuHabisSheetV2 extends DefaultValueBinder implements From
 
             $rows->push([
                 $namaAkun, $tglVal, '', $noAkun, '', '', 'kayu keluar', $keteranganSpec,
-                'k', '', $banyak > 0 ? $banyak : null, $m3 > 0 ? $m3 : null, $totalStokValue, $totalVal,
+                'k', '', $banyak > 0 ? $banyak : null, $m3 > 0 ? $m3 : null, $totalStokValue, $totalVal, null,
             ]);
 
             $currentRow++;
@@ -1050,8 +1056,8 @@ class LaporanProduksiKayuHabisSheetV2 extends DefaultValueBinder implements From
                 $sheet = $event->sheet->getDelegate();
 
                 foreach ($this->titleRows as $row) {
-                    $sheet->mergeCells("A{$row}:N{$row}");
-                    $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
+                    $sheet->mergeCells("A{$row}:O{$row}");
+                    $sheet->getStyle("A{$row}:O{$row}")->applyFromArray([
                         'font' => ['bold' => true, 'size' => 11, 'color' => ['argb' => 'FF1D2939']],
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFD2F0DA']],
                         'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
@@ -1060,7 +1066,7 @@ class LaporanProduksiKayuHabisSheetV2 extends DefaultValueBinder implements From
                 }
 
                 foreach ($this->headerRows as $row) {
-                    $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
+                    $sheet->getStyle("A{$row}:O{$row}")->applyFromArray([
                         'font' => ['bold' => true, 'size' => 10],
                         'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFE5E8EB']],
@@ -1076,16 +1082,16 @@ class LaporanProduksiKayuHabisSheetV2 extends DefaultValueBinder implements From
                         continue;
                     }
 
-                    $sheet->getStyle("A{$start}:N{$end}")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]]);
+                    $sheet->getStyle("A{$start}:O{$end}")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]]);
                     $sheet->getStyle("A{$start}:A{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("B{$start}:F{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     $sheet->getStyle("G{$start}:H{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("I{$start}:J{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                    $sheet->getStyle("K{$start}:N{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    $sheet->getStyle("K{$start}:O{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
                     $sheet->getStyle("K{$start}:K{$end}")->getNumberFormat()->setFormatCode('#,##0');
                     $sheet->getStyle("L{$start}:L{$end}")->getNumberFormat()->setFormatCode('#,##0.0000');
-                    $sheet->getStyle("M{$start}:N{$end}")->getNumberFormat()->setFormatCode('#,##0');
+                    $sheet->getStyle("M{$start}:O{$end}")->getNumberFormat()->setFormatCode('#,##0');
                 }
 
                 $sheet->getColumnDimension('A')->setWidth(28);
@@ -1102,6 +1108,8 @@ class LaporanProduksiKayuHabisSheetV2 extends DefaultValueBinder implements From
                 $sheet->getColumnDimension('L')->setWidth(15);
                 $sheet->getColumnDimension('M')->setWidth(18);
                 $sheet->getColumnDimension('N')->setWidth(18);
+                $sheet->getColumnDimension('O')->setWidth(15);
+                $sheet->getColumnDimension('O')->setVisible(false);
             },
         ];
     }
