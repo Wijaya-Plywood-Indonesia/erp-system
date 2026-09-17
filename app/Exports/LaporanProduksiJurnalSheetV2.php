@@ -214,15 +214,31 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                     $bagian = count($parts) > 1 ? trim($parts[1]) : '-';
 
                     $panjang = ($noAkun === '115-01') ? 130 : 260;
-                    $akunKayu = $this->coaAlias->getAkunKayuMasuk($parts[0] ?? '', $panjang);
+                    $jenisKayu = $parts[0] ?? '';
+                    $akunKayu = $this->coaAlias->getAkunKayuMasuk($jenisKayu, $panjang);
                     $mappedNoAkun = $akunKayu['no'];
                     $mappedNamaAkun = $akunKayu['nama'];
 
                     $lahanName = $subItem['nama_pihak'] ?? '';
                     $lahanLabel = stripos($lahanName, 'Lahan ') === 0 ? substr($lahanName, 6) : $lahanName;
                     // Nama jenis kayu asli tetap ditulis di Keterangan
-                    $keteranganSpesifikasi = 'lahan '.$lahanLabel.' - '.($parts[0] ?? '-');
+                    $keteranganSpesifikasi = 'lahan '.$lahanLabel.' - '.($jenisKayu !== '' ? $jenisKayu : '-');
                     $dkOverride = 'k';
+
+                    if (empty($subItem['id_barang'])) {
+                        try {
+                            $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/') . '/api/barang/resolve-kayu';
+                            $responseApi = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(5)->get($urlApi, [
+                                'ukuran' => $panjang,
+                                'jenis_kayu' => $jenisKayu,
+                            ]);
+                            if ($responseApi->successful()) {
+                                $subItem['id_barang'] = $responseApi->json('id_barang');
+                            }
+                        } catch (\Throwable $e) {
+                            \Illuminate\Support\Facades\Log::warning("Gagal resolve id_barang kayu: " . $e->getMessage());
+                        }
+                    }
                 } else {
                     $bagian = '-';
                     $keteranganSpesifikasi = $subItem['keterangan'] ?? '-';

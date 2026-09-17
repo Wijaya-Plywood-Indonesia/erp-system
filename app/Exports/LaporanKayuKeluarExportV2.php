@@ -11,6 +11,8 @@ use App\Models\ReferensiHargaProduksi;
 use App\Services\Akuntansi\RotaryJurnalService;
 use App\Services\CoaAliasService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -67,9 +69,15 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
 
     protected CoaAliasService $coaAlias;
 
+    // Cache agar tidak query DB berulang
+    private array $kayuCache = [];
+
+    private array $kategoriCache = [];
+
     public function bindValue(Cell $cell, $value)
     {
         if ($cell->getColumn() === 'D') {
+            // No Akun sebagai TEKS -> "1402.3" tidak dikonversi jadi angka/koma
             $cell->setValueExplicit((string) $value, DataType::TYPE_STRING);
 
             return true;
@@ -84,6 +92,96 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
         $this->coaAlias = $coaAlias ?? app(CoaAliasService::class);
     }
 
+    // =========================================================================
+    // DATABASE REFERENCE HELPERS (sama seperti SheetV2)
+    // =========================================================================
+
+    private function getIdKayuByNama(string $namaKayu): ?int
+    {
+        $key = strtolower(trim($namaKayu));
+        if (! array_key_exists($key, $this->kayuCache)) {
+            $kayu = JenisKayu::where('nama_kayu', $namaKayu)->first();
+            $this->kayuCache[$key] = $kayu?->id;
+        }
+
+        return $this->kayuCache[$key];
+    }
+
+    private function getIdKategoriBarang(string $namaKategori): ?int
+    {
+        $key = strtolower(trim($namaKategori));
+        if (! array_key_exists($key, $this->kategoriCache)) {
+            try {
+                $kategori = KategoriBarang::whereRaw('LOWER(nama_kategori) LIKE ?', ["%{$key}%"])->first();
+                $this->kategoriCache[$key] = $kategori?->id;
+            } catch (Throwable $e) {
+                $this->kategoriCache[$key] = null;
+            }
+        }
+
+        return $this->kategoriCache[$key];
+    }
+
+    private function getHargaVeneerBasahDb(string $jenisKayu, bool $isCore): float
+    {
+        $idJenisKayu = $this->getIdKayuByNama($jenisKayu);
+        $idKategoriBarang = $this->getIdKategoriBarang('veneer basah');
+
+        if (! $idJenisKayu || ! $idKategoriBarang) {
+            return 0.0;
+        }
+
+        $tebalRepresentatif = $isCore ? 1.5 : 0.5;
+
+        $ref = ReferensiHargaProduksi::findReferensi(
+            idJenisKayu: $idJenisKayu,
+            idKategoriBarang: $idKategoriBarang,
+            kw: null,
+            tebal: $tebalRepresentatif,
+        );
+
+        return (float) ($ref->harga ?? 0.0);
+    }
+
+    private function hargaVeneerBasah(bool $isCore): float
+    {
+        // Sengon/meranti sudah digabung di COA baru -> pakai "Meranti"
+        // sebagai jenis representatif untuk cari referensi harga.
+        $dbHarga = $this->getHargaVeneerBasahDb('Meranti', $isCore);
+
+        return $dbHarga > 0 ? $dbHarga : ($isCore ? 2100000.0 : 8000000.0);
+    }
+
+    // =========================================================================
+    // HELPER KLASIFIKASI AKUN (semua lewat CoaAliasService)
+    // =========================================================================
+
+    private function isVeneerBasah(string $noAkun): bool
+    {
+        return in_array($noAkun, $this->coaAlias->nomorAkunVeneerBasah(), true);
+    }
+
+    private function isVeneerCore(string $noAkun): bool
+    {
+        [$noCore] = $this->coaAlias->getAkunVeneerBasah(true);
+
+        return $noAkun === $noCore;
+    }
+
+    private function isHutangGaji(string $noAkun): bool
+    {
+        return in_array($noAkun, $this->coaAlias->nomorAkunHutangGaji(), true);
+    }
+
+    private function isKayu(string $noAkun): bool
+    {
+        return in_array($noAkun, $this->coaAlias->nomorAkunKayu(), true);
+    }
+
+    // =========================================================================
+    // COLLECTION
+    // =========================================================================
+
     public function collection()
     {
         $rows = collect();
@@ -96,6 +194,7 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
             return $rows;
         }
 
+        $akunHppNo = $this->coaAlias->getAkunHpp()['no'];
         $rawRows = [];
         $mesins = Mesin::all()->keyBy(fn ($m) => strtoupper(trim($m->nama_mesin)));
 
@@ -104,6 +203,7 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
             $noAkun = $item['no_akun'];
             $mapDK = $item['map'];
 
+            // 510-01 (HPP lama) tetap di-skip: selisih dihitung ulang di bawah
             if ($noAkun === '510-01') {
                 continue;
             }
@@ -111,44 +211,65 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
             foreach ($item['items'] as $subItem) {
                 $bagian = '-';
                 $keteranganSpesifikasi = $subItem['keterangan'] ?? '-';
-                $mappedNoAkun = $noAkun;
-                $mappedNamaAkun = $namaAkun;
+                $jenisPihak = $subItem['jenis_pihak'] ?? '';
                 $dkOverride = null;
 
-                if (($subItem['jenis_pihak'] ?? '') === 'produksi') {
+                // ---- Mapping akun default: lewat alias service ----
+                $mapped = $this->coaAlias->mapAkunLama($noAkun, $namaAkun);
+                $mappedNoAkun = $mapped['no'];
+                $mappedNamaAkun = $mapped['nama'];
+
+                if ($jenisPihak === 'produksi') {
                     $bagian = $subItem['nama_pihak'] ?? '-';
                     if (($subItem['nama_barang'] ?? '') !== 'Mesin' && ($subItem['nama_barang'] ?? '') !== '-') {
                         $keteranganSpesifikasi = $subItem['nama_barang'] ?? '-';
                     } else {
                         $keteranganSpesifikasi = ($subItem['keterangan'] ?? '').' ('.($subItem['ukuran'] ?? '').')';
                     }
-                } elseif (($subItem['jenis_pihak'] ?? '') === 'karyawan') {
+                } elseif ($jenisPihak === 'karyawan') {
                     $parts = explode(' - ', $subItem['keterangan'] ?? '');
                     $bagian = count($parts) > 1 ? trim($parts[1]) : '-';
                     $keteranganSpesifikasi = '';
-                } elseif (($subItem['jenis_pihak'] ?? '') === 'pemasok') {
+                } elseif ($jenisPihak === 'pemasok') {
+                    // Dulu di-skip. Sekarang dipetakan ke akun kayu COA baru.
                     $parts = explode(' - ', $subItem['keterangan'] ?? '');
                     $bagian = count($parts) > 1 ? trim($parts[1]) : '-';
 
-                    $is130 = ($noAkun === '115-01');
-                    $akunKayu = $this->coaAlias->getAkunKayuMasuk($parts[0] ?? '', $is130 ? 130 : 260);
+                    $panjang = ($noAkun === '115-01') ? 130 : 260;
+                    $jenisKayu = $parts[0] ?? '';
+                    $akunKayu = $this->coaAlias->getAkunKayuMasuk($jenisKayu, $panjang);
                     $mappedNoAkun = $akunKayu['no'];
                     $mappedNamaAkun = $akunKayu['nama'];
 
                     $lahanName = $subItem['nama_pihak'] ?? '';
                     $lahanLabel = stripos($lahanName, 'Lahan ') === 0 ? substr($lahanName, 6) : $lahanName;
                     // Nama jenis kayu asli tetap ditulis di Keterangan
-                    $keteranganSpesifikasi = 'lahan '.$lahanLabel.' - '.($parts[0] ?? '-');
+                    $keteranganSpesifikasi = 'lahan '.$lahanLabel.' - '.($jenisKayu !== '' ? $jenisKayu : '-');
                     $dkOverride = 'k';
+
+                    if (empty($subItem['id_barang'])) {
+                        try {
+                            $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-kayu';
+                            $responseApi = Http::withoutVerifying()->timeout(5)->get($urlApi, [
+                                'ukuran' => $panjang,
+                                'jenis_kayu' => $jenisKayu,
+                            ]);
+                            if ($responseApi->successful()) {
+                                $subItem['id_barang'] = $responseApi->json('id_barang');
+                            }
+                        } catch (\Throwable $e) {
+                            Log::warning('Gagal resolve id_barang kayu: '.$e->getMessage());
+                        }
+                    }
                 } else {
                     $bagian = '-';
                     $keteranganSpesifikasi = $subItem['keterangan'] ?? '-';
                 }
 
-                $tipe = ($subItem['jenis_pihak'] ?? '') === 'produksi' ? 'm' : 'b';
+                $tipe = $jenisPihak === 'produksi' ? 'm' : 'b';
 
                 $banyak = $subItem['banyak'];
-                if (($subItem['jenis_pihak'] ?? '') === 'karyawan') {
+                if ($jenisPihak === 'karyawan') {
                     $banyak = 1;
                 }
 
@@ -156,16 +277,22 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                 $harga = $subItem['harga'];
                 $jumlah = $subItem['jumlah'];
 
-                if (($subItem['jenis_pihak'] ?? '') === 'produksi') {
+                if ($jenisPihak === 'produksi') {
                     $namaM = strtoupper(trim($bagian));
                     $jenisHasil = isset($mesins[$namaM]) ? $mesins[$namaM]->jenis_hasil : 'core';
                     $isCore = strtolower($jenisHasil) !== 'f/b';
 
                     $keterangan = $subItem['keterangan'] ?? '';
-                    $parts = explode(' - ', $keterangan);
-                    $namaKayu = count($parts) > 2 ? trim($parts[2]) : '';
+                    $partsK = explode(' - ', $keterangan);
+                    $namaKayu = count($partsK) > 2 ? trim($partsK[2]) : '';
 
-                    $ongkos = $this->getHargaVeneerBasahDbV2($isCore);
+                    $ongkos = $namaKayu !== ''
+                        ? $this->getHargaVeneerBasahDb($namaKayu, $isCore)
+                        : 0.0;
+
+                    if ($ongkos === 0.0) {
+                        $ongkos = $this->getHargaVeneerBasahDb('Meranti', $isCore);
+                    }
                     if ($ongkos === 0.0) {
                         $ongkos = isset($mesins[$namaM]) ? (float) ($mesins[$namaM]->ongkos_mesin ?? 0) : 0;
                     }
@@ -174,11 +301,9 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                     $jumlah = $volume !== null ? round((float) $volume * $ongkos, 4) : null;
 
                     [$mappedNoAkun, $mappedNamaAkun] = $this->coaAlias->getAkunVeneerBasah($isCore);
-                    // Simpan info jenis kayu ke keterangan supaya tidak hilang
-                    $keteranganSpesifikasi = trim($keteranganSpesifikasi.' ('.$namaKayu.')');
                 }
 
-                if (($subItem['jenis_pihak'] ?? '') === 'karyawan') {
+                if ($jenisPihak === 'karyawan') {
                     $akunGaji = $this->coaAlias->getAkunGaji(false);
                     $harga = 150_000;
                     $jumlah = 150_000;
@@ -197,6 +322,7 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                     'volume' => $volume !== null ? (float) $volume : null,
                     'harga' => $harga !== null ? (float) $harga : null,
                     'jumlah' => $jumlah !== null ? (float) $jumlah : null,
+                    'id_barang' => $subItem['id_barang'] ?? null,
                 ];
             }
         }
@@ -217,7 +343,9 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
             $totalKredit = 0.0;
 
             foreach ($rowsOfMachine as $row) {
-                $key = implode('|', [$row['no_akun'], $row['keterangan'], $row['dk'], $row['tipe'], $row['nama_akun']]);
+                $key = implode('|', [
+                    $row['no_akun'], $row['keterangan'], $row['dk'], $row['tipe'], $row['nama_akun'], $row['id_barang'] ?? '',
+                ]);
 
                 if (! isset($grouped[$key])) {
                     $grouped[$key] = [
@@ -233,6 +361,7 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                         'jumlah' => 0.0,
                         'has_qty' => $row['banyak'] !== null,
                         'has_vol' => $row['volume'] !== null,
+                        'id_barang' => $row['id_barang'],
                     ];
                 }
 
@@ -250,33 +379,29 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
             }
 
             foreach ($grouped as $g) {
-                $isVeneer = in_array($g['no_akun'], ['1402.3', '1402.4'], true);
-                $isHutangGaji = $g['no_akun'] === '2195.1';
-                $isKayuKeluar = in_array($g['no_akun'], ['1402.1', '1402.2', '1402.21', '1402.22'], true);
+                $noAkunG = (string) $g['no_akun'];
+                $isVeneer = $this->isVeneerBasah($noAkunG);
+                $isHutangGaji = $this->isHutangGaji($noAkunG);
+                $isKayu = $this->isKayu($noAkunG);
 
-                $rowHarga = 0.0;
                 if ($isVeneer) {
-                    $rowHarga = $this->getHargaVeneerBasahDbV2($g['no_akun'] === '1402.4');
-                    if ($rowHarga <= 0) {
-                        $rowHarga = $g['no_akun'] === '1402.4' ? 2100000.0 : 8000000.0;
-                    }
+                    $rowHarga = $this->hargaVeneerBasah($this->isVeneerCore($noAkunG));
                 } elseif ($isHutangGaji) {
                     $rowHarga = 150000.0;
-                } elseif ($isKayuKeluar) {
+                } elseif ($isKayu) {
                     $rowHarga = (float) ($g['harga'] ?? 0.0);
                 } else {
-                    $rowHarga = (float) ($g['jumlah'] ?? 0.0);
+                    $rowHarga = (float) ($g['harga'] ?? 0.0);
                 }
 
-                $rowTotal = 0.0;
-                if ($isKayuKeluar) {
-                    $rowTotal = (float) $g['jumlah'];
+                if ($isKayu) {
+                    $rowTotal = round((float) $g['jumlah'], 0);
                 } elseif ($g['has_vol'] && $g['volume'] !== null && $g['volume'] > 0) {
-                    $rowTotal = round((float) $g['volume'], 4) * $rowHarga;
+                    $rowTotal = round(round((float) $g['volume'], 4) * $rowHarga, 0);
                 } elseif ($g['has_qty'] && $g['banyak'] !== null && $g['banyak'] > 0) {
-                    $rowTotal = (float) $g['banyak'] * $rowHarga;
+                    $rowTotal = round((float) $g['banyak'] * $rowHarga, 0);
                 } else {
-                    $rowTotal = $rowHarga;
+                    $rowTotal = round($rowHarga, 0);
                 }
 
                 if ($g['dk'] === 'd') {
@@ -286,8 +411,8 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                 }
             }
 
-            // Selisih -> 5069.2 Selisih harga patok produksi (akun DE -> debit)
-            $selisih = round($totalDebit - $totalKredit, 2);
+            // Selisih untuk menyeimbangkan (D/K dinamis)
+            $selisih = $totalDebit - $totalKredit;
             if ($selisih != 0) {
                 $akunHpp = $this->coaAlias->getAkunHpp();
                 $grouped[] = [
@@ -295,7 +420,7 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                     'no_akun' => $akunHpp['no'],
                     'bagian' => $machine,
                     'keterangan' => '',
-                    'dk' => 'd',
+                    'dk' => $selisih > 0 ? 'k' : 'd',
                     'tipe' => 'b',
                     'banyak' => null,
                     'volume' => null,
@@ -303,6 +428,7 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                     'jumlah' => abs($selisih),
                     'has_qty' => false,
                     'has_vol' => false,
+                    'id_barang' => null,
                 ];
             }
 
@@ -326,45 +452,57 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
             $tglVal = Carbon::parse($this->tanggal)->format('d-m-Y');
 
             foreach ($groupedRows as $g) {
-                $isVeneer = in_array($g['no_akun'], ['1402.3', '1402.4'], true);
-                $isHutangGaji = $g['no_akun'] === '2195.1';
-                $isKayuKeluar = in_array($g['no_akun'], ['1402.1', '1402.2', '1402.21', '1402.22'], true);
+                $noAkunG = (string) $g['no_akun'];
+                $isVeneer = $this->isVeneerBasah($noAkunG);
+                $isHutangGaji = $this->isHutangGaji($noAkunG);
+                $isKayu = $this->isKayu($noAkunG);
+                $isHpp = $noAkunG === $akunHppNo;
 
                 if ($isVeneer) {
                     $namaVal = 'kupasan (m - '.strtolower($g['bagian']).')';
-                } elseif ($isKayuKeluar) {
+                } elseif ($isKayu) {
                     $namaVal = 'kayu keluar';
                 } else {
                     $namaVal = 'kupasan';
                 }
 
                 $hitKbkVal = '';
-                if ($isVeneer || $isKayuKeluar) {
+                if ($isVeneer || $isKayu) {
                     $hitKbkVal = 'm';
                 } elseif ($isHutangGaji) {
                     $hitKbkVal = 'b';
                 }
 
-                $hargaVal = null;
                 if ($isVeneer) {
-                    $hargaVal = $this->getHargaVeneerBasahDbV2($g['no_akun'] === '1402.4');
-                    if ($hargaVal <= 0) {
-                        $hargaVal = $g['no_akun'] === '1402.4' ? 2100000 : 8000000;
-                    }
+                    $hargaVal = $this->hargaVeneerBasah($this->isVeneerCore($noAkunG));
                 } elseif ($isHutangGaji) {
                     $hargaVal = 150000;
-                } elseif ($isKayuKeluar) {
+                } elseif ($isKayu) {
                     $hargaVal = $g['harga'];
+                } elseif ($isHpp) {
+                    $hargaVal = $g['jumlah'];
                 } else {
                     $hargaVal = $g['jumlah'];
                 }
 
-                $totalVal = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
+                $totalVal = "=ROUND(IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow})), 0)";
 
                 $rows->push([
-                    $g['nama_akun'], $tglVal, '', $g['no_akun'], '', '', $namaVal, $g['keterangan'],
-                    $g['dk'], $hitKbkVal, $g['has_qty'] ? $g['banyak'] : null, $g['has_vol'] ? round($g['volume'], 4) : null,
-                    $hargaVal, $totalVal, null,
+                    $g['nama_akun'],
+                    $tglVal,
+                    '',
+                    $g['no_akun'],
+                    '',
+                    '',
+                    $namaVal,
+                    $g['keterangan'],
+                    $g['dk'],
+                    $hitKbkVal,
+                    $g['has_qty'] ? $g['banyak'] : null,
+                    $g['has_vol'] ? round($g['volume'], 4) : null,
+                    $hargaVal,
+                    $totalVal,
+                    $g['id_barang'] ?? null,
                 ]);
                 $currentRow++;
             }
@@ -380,29 +518,9 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
         return $rows;
     }
 
-    private function getHargaVeneerBasahDbV2(bool $isCore): float
-    {
-        // Sengon/meranti digabung -> pakai Meranti sbg representatif referensi harga.
-        // Sesuaikan kalau ternyata perlu tetap bedakan per jenis kayu untuk hitung harga.
-        $jenisKayu = JenisKayu::where('nama_kayu', 'Meranti')->first();
-        if (! $jenisKayu) {
-            return 0.0;
-        }
-
-        $ukuranOptions = $isCore ? ['core'] : ['face', 'back'];
-        $kwOptions = array_map(fn ($opt) => 'KW 1 - '.ucfirst($opt), $ukuranOptions);
-
-        $hargaVeneer = ReferensiHargaProduksi::where('id_jenis_kayu', $jenisKayu->id)
-            ->where('jenis_barang', 'Veneer Basah')
-            ->whereIn('kw', $kwOptions)
-            ->first();
-
-        return (float) ($hargaVeneer->harga ?? 0.0);
-    }
-
     public function title(): string
     {
-        return 'jurnal produksi v2';
+        return 'jurnal produksi gabung v2';
     }
 
     public function styles(Worksheet $sheet)
@@ -443,7 +561,10 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                         continue;
                     }
 
-                    $sheet->getStyle("A{$start}:O{$end}")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]]);
+                    $sheet->getStyle("A{$start}:O{$end}")->applyFromArray([
+                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+                    ]);
+
                     $sheet->getStyle("A{$start}:A{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("B{$start}:F{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     $sheet->getStyle("G{$start}:H{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
@@ -456,13 +577,13 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                     $sheet->getStyle("N{$start}:N{$end}")->getNumberFormat()->setFormatCode('#,##0');
                 }
 
-                $sheet->getColumnDimension('A')->setWidth(28);
+                $sheet->getColumnDimension('A')->setWidth(30);
                 $sheet->getColumnDimension('B')->setWidth(15);
                 $sheet->getColumnDimension('C')->setWidth(12);
                 $sheet->getColumnDimension('D')->setWidth(12);
                 $sheet->getColumnDimension('E')->setWidth(10);
                 $sheet->getColumnDimension('F')->setWidth(10);
-                $sheet->getColumnDimension('G')->setWidth(25);
+                $sheet->getColumnDimension('G')->setWidth(30);
                 $sheet->getColumnDimension('H')->setWidth(40);
                 $sheet->getColumnDimension('I')->setWidth(10);
                 $sheet->getColumnDimension('J')->setWidth(10);
@@ -535,12 +656,29 @@ class LaporanProduksiJurnalPenggunaanSheetV2 extends DefaultValueBinder implemen
                 $bagian = count($parts) > 1 ? trim($parts[1]) : '-';
 
                 $is130 = ($noAkun === '115-01');
-                $akunKayu = $this->coaAlias->getAkunKayuMasuk($parts[0] ?? '', $is130 ? 130 : 260);
+                $panjang = $is130 ? 130 : 260;
+                $jenisKayu = $parts[0] ?? '';
+                $akunKayu = $this->coaAlias->getAkunKayuMasuk($jenisKayu, $panjang);
 
                 $lahanName = $subItem['nama_pihak'] ?? '';
                 $lahanLabel = stripos($lahanName, 'Lahan ') === 0 ? substr($lahanName, 6) : $lahanName;
                 // nama jenis kayu tetap disimpan di Keterangan walau akun sudah digabung
-                $keteranganSpesifikasi = 'lahan '.$lahanLabel.' - '.($parts[0] ?? '-');
+                $keteranganSpesifikasi = 'lahan '.$lahanLabel.' - '.($jenisKayu !== '' ? $jenisKayu : '-');
+
+                if (empty($subItem['id_barang'])) {
+                    try {
+                        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-kayu';
+                        $responseApi = Http::withoutVerifying()->timeout(5)->get($urlApi, [
+                            'ukuran' => $panjang,
+                            'jenis_kayu' => $jenisKayu,
+                        ]);
+                        if ($responseApi->successful()) {
+                            $subItem['id_barang'] = $responseApi->json('id_barang');
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('Gagal resolve id_barang kayu: '.$e->getMessage());
+                    }
+                }
 
                 $rawRows[] = [
                     'nama_akun' => $akunKayu['nama'],
@@ -553,6 +691,7 @@ class LaporanProduksiJurnalPenggunaanSheetV2 extends DefaultValueBinder implemen
                     'volume' => $subItem['m3'] !== null ? (float) $subItem['m3'] : null,
                     'harga' => $subItem['harga'] !== null ? (float) $subItem['harga'] : null,
                     'jumlah' => $subItem['jumlah'] !== null ? (float) $subItem['jumlah'] : null,
+                    'id_barang' => $subItem['id_barang'] ?? null,
                 ];
             }
         }
@@ -565,7 +704,7 @@ class LaporanProduksiJurnalPenggunaanSheetV2 extends DefaultValueBinder implemen
 
         $grouped = [];
         foreach ($rawRows as $row) {
-            $key = implode('|', [$row['no_akun'], $row['keterangan']]);
+            $key = implode('|', [$row['no_akun'], $row['keterangan'], $row['id_barang'] ?? '']);
 
             if (! isset($grouped[$key])) {
                 $grouped[$key] = [
@@ -581,6 +720,7 @@ class LaporanProduksiJurnalPenggunaanSheetV2 extends DefaultValueBinder implemen
                     'jumlah' => 0.0,
                     'has_qty' => $row['banyak'] !== null,
                     'has_vol' => $row['volume'] !== null,
+                    'id_barang' => $row['id_barang'] ?? null,
                 ];
             }
 
@@ -617,7 +757,7 @@ class LaporanProduksiJurnalPenggunaanSheetV2 extends DefaultValueBinder implemen
             $rows->push([
                 $g['nama_akun'], $tglVal, '', $g['no_akun'], '', '', 'kayu keluar', $g['keterangan'],
                 'k', 'm', $g['has_qty'] ? $g['banyak'] : null, $g['has_vol'] ? round($g['volume'], 4) : null,
-                $g['harga'], $totalVal, null,
+                $g['harga'], $totalVal, $g['id_barang'] ?? null,
             ]);
             $currentRow++;
         }
