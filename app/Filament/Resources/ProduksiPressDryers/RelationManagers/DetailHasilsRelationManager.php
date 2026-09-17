@@ -23,6 +23,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
+use App\Concerns\LocksWhenValidated;
 
 class DetailHasilsRelationManager extends RelationManager
 {
@@ -30,10 +31,9 @@ class DetailHasilsRelationManager extends RelationManager
 
     protected static string $relationship = 'detailHasils';
 
-    public function isReadOnly(): bool
-    {
-        return false;
-    }
+    use LocksWhenValidated;
+
+    protected string $validasiRelasi = 'validasiPressDryers';
 
     public function form(Schema $schema): Schema
     {
@@ -184,9 +184,7 @@ class DetailHasilsRelationManager extends RelationManager
             ->filters([])
             ->headerActions([
                 CreateAction::make()
-                    ->hidden(
-                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    ->hidden(fn () => $this->terkunci()),
             ])
             ->recordActions([
                 Action::make('serah')
@@ -270,26 +268,23 @@ HTML);
                     }),
 
                 EditAction::make()
-                    ->hidden(function ($livewire, DetailHasil $record) {
+                    ->hidden(function ($record) {
                         $serahTerima = $record->serahTerimaVeneerKering;
                         $sudahDiterima = $serahTerima && $serahTerima->diterima_oleh !== '-';
 
-                        return $sudahDiterima
-                            || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi';
+                        return $sudahDiterima || $this->terkunci();
                     }),
 
                 DeleteAction::make()
                     ->hidden(
-                        fn ($livewire, DetailHasil $record) => $record->serahTerimaVeneerKering
-                            || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        fn ($record) => $record->serahTerimaVeneerKering
+                            || $this->terkunci()
                     ),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(
-                            fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                        ),
+                        ->hidden(fn () => $this->terkunci()),
                 ]),
             ]);
     }

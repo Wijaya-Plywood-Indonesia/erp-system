@@ -19,6 +19,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Validation\ValidationException;
+use App\Concerns\LocksWhenValidated;
 
 class DetailPegawaiStikRelationManager extends RelationManager
 {
@@ -34,10 +35,9 @@ class DetailPegawaiStikRelationManager extends RelationManager
             ->toArray();
     }
 
-    public function isReadOnly(): bool
-    {
-        return false;
-    }
+    use LocksWhenValidated;
+
+    protected string $validasiRelasi = 'validasiStik';
 
     public function form(Schema $schema): Schema
     {
@@ -141,14 +141,14 @@ class DetailPegawaiStikRelationManager extends RelationManager
             ])
             ->headerActions([
                 CreateAction::make()
-                    ->hidden(fn() => $this->getOwnerRecord()->validasiTerakhir?->status === 'divalidasi'),
+                    ->hidden(fn() => $this->terkunci()),
             ])
             ->recordActions([
                 EditAction::make()
-                    ->hidden(fn() => $this->getOwnerRecord()->validasiTerakhir?->status === 'divalidasi'),
+                    ->hidden(fn() => $this->terkunci()),
 
                 DeleteAction::make()
-                    ->hidden(fn() => $this->getOwnerRecord()->validasiTerakhir?->status === 'divalidasi'),
+                    ->hidden(fn() => $this->terkunci()),
 
                 Action::make('aturIjin')
                     ->label(fn($record) => $record->ijin ? 'Edit Ijin' : 'Tambah Ijin')
@@ -163,12 +163,12 @@ class DetailPegawaiStikRelationManager extends RelationManager
                             'ket'  => $data['ket'],
                         ]);
                     })
-                    ->hidden(fn() => $this->getOwnerRecord()->validasiTerakhir?->status === 'divalidasi'),
+                    ->hidden(fn() => $this->terkunci()),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(fn() => $this->getOwnerRecord()->validasiTerakhir?->status === 'divalidasi'),
+                        ->hidden(fn() => $this->terkunci()),
                 ]),
             ]);
     }

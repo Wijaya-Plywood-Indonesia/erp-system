@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ValidasiStiks\Tables;
 
+use App\Services\ProduksiLockService;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -31,26 +32,28 @@ class ValidasiStiksTable
                 //
             ])
             ->headerActions([
-                // Create Action — HILANG jika status sudah divalidasi
+                // Create Action — HILANG jika sudah divalidasi, KECUALI Super Admin
                 CreateAction::make()
                     ->hidden(
                         fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        ProduksiLockService::isLocked($livewire->ownerRecord, 'validasiStik')
                     ),
             ])
             ->recordActions([
-                // Edit Action — HILANG jika status sudah divalidasi
+                // Edit Action — HILANG jika sudah divalidasi, KECUALI Super Admin.
+                // Ini penting: baris "divalidasi" tetap BISA diedit/dihapus oleh
+                // Super Admin, sehingga Super Admin bisa membuka kembali produksi
+                // dengan menghapus baris validasinya.
                 EditAction::make()
                     ->hidden(
                         fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        ProduksiLockService::isLocked($livewire->ownerRecord, 'validasiStik')
                     ),
 
-                // Delete Action — HILANG jika status sudah divalidasi
                 DeleteAction::make()
                     ->hidden(
                         fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        ProduksiLockService::isLocked($livewire->ownerRecord, 'validasiStik')
                     ),
             ])
             ->toolbarActions([
@@ -58,7 +61,7 @@ class ValidasiStiksTable
                     DeleteBulkAction::make()
                         ->hidden(
                             fn($livewire) =>
-                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                            ProduksiLockService::isLocked($livewire->ownerRecord, 'validasiStik')
                         ),
                 ]),
             ]);

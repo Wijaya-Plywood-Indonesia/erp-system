@@ -20,16 +20,16 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
+use App\Concerns\LocksWhenValidated;
 
 class KendalaPressDryerRelationManager extends RelationManager
 {
     protected static string $relationship = 'kendalaPressDryers';
     protected static ?string $title = 'Kendala';
 
-    public function isReadOnly(): bool
-    {
-        return false;
-    }
+    use LocksWhenValidated;
+
+    protected string $validasiRelasi = 'validasiPressDryers';
 
     public function form(Schema $schema): Schema
     {
@@ -132,6 +132,7 @@ class KendalaPressDryerRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make()
                     ->label('Tambah Kendala')
+                    ->hidden(fn () => $this->terkunci())
                     ->mutateFormDataUsing(function (array $data): array {
                         $data['status'] = 'pending';
                         
@@ -148,6 +149,7 @@ class KendalaPressDryerRelationManager extends RelationManager
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
                     ->visible(fn($record) => $record->status === 'pending')
+                    ->hidden(fn () => $this->terkunci())
                     ->form([
                         DateTimePicker::make('waktu_selesai')
                             ->label('Waktu Mesin Selesai Diperbaiki')
@@ -185,12 +187,15 @@ class KendalaPressDryerRelationManager extends RelationManager
                     ->modalHeading('Tandai Kendala Selesai'),
 
                 ViewAction::make(),
-                EditAction::make(),
-                DeleteAction::make(),
+                EditAction::make()
+                    ->hidden(fn () => $this->terkunci()),
+                DeleteAction::make()
+                    ->hidden(fn () => $this->terkunci()),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->hidden(fn () => $this->terkunci()),
                 ]),
             ]);
     }
