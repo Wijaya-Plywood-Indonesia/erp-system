@@ -5,84 +5,26 @@ namespace App\Filament\Resources\DetailMasukStiks\Schemas;
 use Filament\Schemas\Schema;
 use App\Models\JenisKayu;
 use App\Models\Ukuran;
-use App\Models\DetailHasilPaletRotary;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Schemas\Components\Utilities\Set;
-use Illuminate\Support\Facades\DB;
 
+/**
+ * Form Modal Stik — MANUAL SEPENUHNYA.
+ *
+ * Serah terima dari Rotary (via detail_hasil_palet_rotary_serah_terima_pivot)
+ * sudah dihapus. Operator mengisi sendiri nomor palet, jenis kayu, ukuran,
+ * KW, dan isi.
+ */
 class DetailMasukStikForm
 {
     public static function configure(Schema $schema, ?int $idProduksiStik = null): Schema
     {
-        $paletDiterima = [];
-
-        if ($idProduksiStik) {
-            $idPaletDiterima = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
-                ->where('tipe', 'stik') // <-- beda dari dryer
-                ->pluck('id_detail_hasil_palet_rotary')
-                ->toArray();
-
-            $paletDiterima = DetailHasilPaletRotary::whereIn('id', $idPaletDiterima)
-                ->with('produksi.mesin') // <-- eager load relasi mesin
-                ->get()
-                ->mapWithKeys(fn($d) => [
-                    $d->id => "{$d->kode_palet}"
-                ])
-                ->toArray();
-        }
-
         return $schema
             ->schema([
-                Select::make('no_palet')
+                TextInput::make('no_palet')
                     ->label('Nomor Palet')
-                    ->options($paletDiterima)
-                    ->searchable()
-                    ->required()
-                    ->live()
-                    ->disabled(empty($paletDiterima))
-                    ->helperText(
-                        empty($paletDiterima)
-                            ? 'Belum ada palet yang diterima oleh produksi stik ini.'
-                            : 'Pilih palet untuk mengisi form otomatis.'
-                    )
-                    ->afterStateUpdated(function (Set $set, ?string $state) {
-                        if (!$state) return;
-
-                        $palet = DetailHasilPaletRotary::with([
-                            'produksi.mesin',    // <-- tambah eager load mesin
-                            'penggunaanLahan',
-                            'setoranPaletUkuran',
-                        ])->find($state);
-
-                        if (!$palet) return;
-
-                        // Simpan kode unik SP-1 bukan angka 1
-                        $set('no_palet', $palet->kode_palet);
-                        $set('kw', $palet->kw);
-                        $set('isi', $palet->total_lembar);
-
-                        $idJenisKayu = $palet->penggunaanLahan?->id_jenis_kayu;
-                        if ($idJenisKayu) {
-                            $set('id_jenis_kayu', $idJenisKayu);
-                            session(['last_jenis_kayu' => $idJenisKayu]);
-                        }
-
-                        $ukuran = $palet->setoranPaletUkuran;
-                        if ($ukuran) {
-                            $idUkuran = DB::table('ukurans')
-                                ->where('tebal', $ukuran->tebal)
-                                ->where('lebar', $ukuran->lebar)
-                                ->where('panjang', $ukuran->panjang)
-                                ->value('id');
-
-                            if ($idUkuran) {
-                                $set('id_ukuran', $idUkuran);
-                                session(['last_ukuran' => $idUkuran]);
-                            }
-                        }
-                    })
-                    ->columnSpanFull(),
+                    ->numeric()
+                    ->required(),
 
                 Select::make('id_jenis_kayu')
                     ->label('Jenis Kayu')

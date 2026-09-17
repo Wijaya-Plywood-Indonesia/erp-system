@@ -23,7 +23,8 @@ class DetailMasukForm
         ?int $idProduksi = null,
         string $tipe = 'dryer'
     ): Schema {
-        // 'stik' masih memakai alur lama (di luar scope revisi Gudang Veneer Basah)
+        // 'stik' sekarang manual sepenuhnya (lihat configureStikLegacy) —
+        // tidak lagi tergantung pivot serah terima Rotary.
         if ($tipe === 'stik') {
             return static::configureStikLegacy($schema, $idProduksi);
         }
@@ -158,8 +159,14 @@ class DetailMasukForm
     }
 
     /**
-     * Alur lama untuk Stik — TIDAK diubah, masih memakai
-     * detail_hasil_palet_rotary_serah_terima_pivot secara langsung.
+     * Alur Stik — MANUAL SEPENUHNYA.
+     *
+     * Sebelumnya "Nomor Palet" diambil dari palet Rotary yang sudah
+     * diserahterimakan (lewat detail_hasil_palet_rotary_serah_terima_pivot).
+     * Sekarang serah terima Rotary -> Stik sudah dihapus, jadi seluruh
+     * field di sini diisi manual oleh operator Stik: nomor palet, jenis
+     * kayu, ukuran, KW, dan isi — tidak ada lagi ketergantungan ke data
+     * Rotary/pivot.
      */
     protected static function configureStikLegacy(Schema $schema, ?int $idProduksi): Schema
     {
@@ -168,39 +175,49 @@ class DetailMasukForm
         return $schema->schema([
             Hidden::make($foreignKey)->default($idProduksi)->required()->dehydrated(true),
 
-            Select::make('no_palet_select')
+            TextInput::make('no_palet')
                 ->label('Nomor Palet')
-                ->options(function ($record) {
-                    $idDiterima = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
-                        ->where('tipe', 'stik')
-                        ->whereNotNull('id_detail_hasil_palet_rotary')
-                        ->pluck('id_detail_hasil_palet_rotary')
-                        ->unique()
-                        ->toArray();
-
-                    $palets = \App\Models\DetailHasilPaletRotary::with(['ukuran', 'penggunaanLahan.jenisKayu'])
-                        ->whereIn('id', $idDiterima)
-                        ->get();
-
-                    $options = [];
-                    foreach ($palets as $p) {
-                        $options[$p->id] = "{$p->kode_palet} | {$p->total_lembar} lbr";
+                ->numeric()
+                ->default(function () use ($idProduksi, $foreignKey) {
+                    if (! $idProduksi) {
+                        return 1;
                     }
 
-                    return $options;
-                })
-                ->searchable()
-                ->required(fn ($record) => $record === null)
-                ->live()
-                ->disabled(fn ($record) => $record !== null)
-                ->dehydrated(false)
-                ->columnSpanFull(),
+                    $last = (int) DB::table('detail_masuk_stik')
+                        ->where($foreignKey, $idProduksi)
+                        ->max('no_palet');
 
-            Hidden::make('no_palet')->required()->dehydrated(true),
-            TextInput::make('kw')->label('KW')->required(),
-            TextInput::make('isi')->label('Isi')->required()->numeric(),
-            Select::make('id_jenis_kayu')->label('Jenis Kayu')->options(JenisKayu::pluck('nama_kayu', 'id'))->required(),
-            Select::make('id_ukuran')->label('Ukuran')->options(Ukuran::all()->pluck('nama_ukuran', 'id'))->required(),
+                    return $last + 1;
+                })
+                ->required()
+                ->dehydrated(true),
+
+            Select::make('id_jenis_kayu')
+                ->label('Jenis Kayu')
+                ->options(JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id'))
+                ->searchable()
+                ->afterStateUpdated(fn ($state) => session(['last_jenis_kayu_stik' => $state]))
+                ->default(fn () => session('last_jenis_kayu_stik'))
+                ->required(),
+
+            Select::make('id_ukuran')
+                ->label('Ukuran')
+                ->options(Ukuran::all()->pluck('nama_ukuran', 'id'))
+                ->searchable()
+                ->afterStateUpdated(fn ($state) => session(['last_ukuran_stik' => $state]))
+                ->default(fn () => session('last_ukuran_stik'))
+                ->required(),
+
+            TextInput::make('kw')
+                ->label('KW (Kualitas)')
+                ->required()
+                ->placeholder('Cth: 1, 2, 3, dll.'),
+
+            TextInput::make('isi')
+                ->label('Isi (Lembar)')
+                ->required()
+                ->numeric()
+                ->minValue(1),
         ]);
     }
 }
