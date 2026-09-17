@@ -7,17 +7,24 @@ use App\Filament\Resources\DetailMasuks\Tables\DetailMasuksTable;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\DB;
+use App\Concerns\LocksWhenValidated;
 
+/**
+ * Modal (bahan masuk) Produksi Stik — SEPENUHNYA MANUAL.
+ *
+ * Sebelumnya bergantung pada serah terima dari Rotary lewat
+ * detail_hasil_palet_rotary_serah_terima_pivot. Sekarang operator Stik
+ * mengisi sendiri: nomor palet, jenis kayu, ukuran, KW, dan isi — tidak
+ * ada lagi pilihan "palet yang sudah diterima".
+ */
 class DetailMasukStikRelationManager extends RelationManager
 {
     protected static ?string $title = 'Modal';
     protected static string $relationship = 'detailMasukStik';
 
-    public function isReadOnly(): bool
-    {
-        return false;
-    }
+    use LocksWhenValidated;
+
+    protected string $validasiRelasi = 'validasiStik';
 
     public function form(Schema $schema): Schema
     {
@@ -27,27 +34,6 @@ class DetailMasukStikRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
-
-        $adaPaletDiterima = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
-            ->where('tipe', 'stik')
-            ->exists();
-
-        return DetailMasuksTable::configure($table, $adaPaletDiterima, 'stik');
-    }
-
-    protected function mutateFormDataBeforeCreate(array $data): array
-    {
-        unset($data['no_palet_select']);
-        unset($data['af_preview']);
-        $data['no_palet'] = (int) ($data['no_palet'] ?? 0);
-        return $data;
-    }
-
-    protected function mutateFormDataBeforeSave(array $data): array
-    {
-        unset($data['no_palet_select']);
-        unset($data['af_preview']);
-        $data['no_palet'] = (int) ($data['no_palet'] ?? 0);
-        return $data;
+        return DetailMasuksTable::configure($table, tipe: 'stik');
     }
 }

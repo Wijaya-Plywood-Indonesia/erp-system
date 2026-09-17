@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\ProduksiStiks;
 
-use App\Filament\Resources\ProduksiRotaries\RelationManagers\SerahTerimaRelationManager;
 use App\Filament\Resources\ProduksiStiks\Pages\CreateProduksiStik;
 use App\Filament\Resources\ProduksiStiks\Pages\EditProduksiStik;
 use App\Filament\Resources\ProduksiStiks\Pages\ListProduksiStiks;
@@ -17,6 +16,8 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use UnitEnum;
+use App\Services\ProduksiLockService;
+use Illuminate\Database\Eloquent\Model;
 
 class ProduksiStikResource extends Resource
 {
@@ -27,6 +28,28 @@ class ProduksiStikResource extends Resource
     protected static ?int $navigationSort = 3;
 
     protected static ?string $recordTitleAttribute = 'Stik';
+
+    /**
+     * Guard server-side: walau URL /edit diakses langsung, produksi yang
+     * sudah divalidasi tetap tidak bisa diedit — kecuali Super Admin.
+     */
+    public static function canEdit(Model $record): bool
+    {
+        if (ProduksiLockService::isLocked($record, 'validasiStik')) {
+            return false;
+        }
+
+        return parent::canEdit($record);
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        if (ProduksiLockService::isLocked($record, 'validasiStik')) {
+            return false;
+        }
+
+        return parent::canDelete($record);
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -46,7 +69,8 @@ class ProduksiStikResource extends Resource
     public static function getRelations(): array
     {
         return [
-            SerahTerimaRelationManager::class,
+            // Serah terima dari Rotary DIHAPUS — Produksi Stik sekarang
+            // sepenuhnya manual (modal diisi sendiri, bukan dari palet Rotary).
             RelationManagers\DetailPegawaiStikRelationManager::class,
             RelationManagers\DetailMasukStikRelationManager::class,
             RelationManagers\DetailHasilStikRelationManager::class,
