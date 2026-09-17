@@ -28,7 +28,7 @@ class DetailMasukKediRelationManager extends RelationManager
 
     public function form(Schema $schema): Schema
     {
-        return DetailMasukKediForm::configure($schema);
+        return DetailMasukKediForm::configure($schema, $this->getOwnerRecord()->id);
     }
     public function table(Table $table): Table
     {

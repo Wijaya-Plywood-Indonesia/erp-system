@@ -21,16 +21,12 @@ class DetailMasuksTable
             ->modifyQueryUsing(fn($query) => $query->with([
                 'jenisKayu',
                 'ukuran',
-                'detailPaletRotary.produksi.mesin',
             ]))
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No. Palet')
                     ->badge()
-                    ->color(
-                        fn($record) =>
-                        $record->getRawOriginal('no_palet') < 0 ? 'warning' : 'primary'
-                    )
+                    ->color('primary')
                     ->searchable(false),
 
                 TextColumn::make('jenisKayu.nama_kayu')

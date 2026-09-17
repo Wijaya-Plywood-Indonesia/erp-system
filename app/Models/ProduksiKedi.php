@@ -85,6 +85,11 @@ class ProduksiKedi extends Model
         return $this->hasMany(KendalaKedi::class, 'produksi_kedi_id');
     }
 
+    public function serahTerimaVeneerBasah()
+    {
+        return $this->hasMany(SerahTerimaVeneerBasah::class, 'id_produksi_kedi');
+    }
+
     public function serahTerimaVeneerKering(): HasManyThrough
     {
         return $this->hasManyThrough(

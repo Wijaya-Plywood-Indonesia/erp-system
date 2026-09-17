@@ -30,36 +30,20 @@ class ProductionValidationObserver
 
         if ($validasi->status === 'divalidasi') {
 
-            // Logika untuk Produksi Press Dryer
+            // ─────────────────────────────────────────────────────────────
+            // REVISI Gudang Veneer Basah (lihat GudangVeneerBasahService):
+            // Stok veneer basah SEKARANG dikurangi lebih awal, yaitu saat
+            // Dryer/Kedi menekan tombol "Terima" pada serah terima veneer
+            // basah dari Gudang — BUKAN lagi di sini (saat validasi produksi).
+            // Pengurangan di titik ini DIHAPUS agar stok tidak terpotong dua kali.
+            // ─────────────────────────────────────────────────────────────
+
             if (isset($validasi->id_produksi_dryer)) {
-                $produksi = $validasi->produksi;
-                $details = $produksi->detailMasuks;
-
-                Log::info("Memproses Stok Dryer. Produksi ID: {$validasi->id_produksi_dryer}, Tanggal: {$produksi->tanggal_produksi}");
-
-                if ($details && $details->count() > 0) {
-                    $this->inventoryService->kurangiStokDariProduksi($details, 'Press Dryer', $produksi->tanggal_produksi, $produksi->shift);
-                } else {
-                    Log::warning("Gagal potong stok: Detail Masuk Dryer tidak ditemukan.");
-                }
+                Log::info("Validasi Dryer #{$validasi->id_produksi_dryer}: stok veneer basah tidak dipotong di sini (sudah dipotong saat 'Terima' dari Gudang).");
             }
 
-            // Logika untuk Produksi Kedi
             if (isset($validasi->id_produksi_kedi)) {
-                $produksi = $validasi->produksi;
-                $details = $produksi->detailMasukKedi;
-
-                Log::info("Memproses Stok Kedi. Produksi ID: {$validasi->id_produksi_kedi}, Tanggal Masuk: {$produksi->tanggal}, Tanggal Bongkar: {$produksi->tanggal_actual_bongkar}");
-
-                if ($details && $details->count() > 0) {
-                    $this->inventoryService->kurangiStokDariBongkarKedi(
-                        $details,
-                        $produksi->tanggal,
-                        $produksi->tanggal_actual_bongkar
-                    );
-                } else {
-                    Log::warning("Gagal potong stok: Detail Masuk Kedi tidak ditemukan untuk Produksi ID {$validasi->id_produksi_kedi}.");
-                }
+                Log::info("Validasi Kedi #{$validasi->id_produksi_kedi}: stok veneer basah tidak dipotong di sini (sudah dipotong saat 'Terima' dari Gudang).");
             }
 
             // Logika untuk Produksi Stik

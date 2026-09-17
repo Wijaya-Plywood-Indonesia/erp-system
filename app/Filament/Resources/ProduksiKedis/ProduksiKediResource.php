@@ -13,6 +13,7 @@ use App\Filament\Resources\ProduksiKedis\RelationManagers\YesRelationManager;
 use App\Filament\Resources\ProduksiKedis\Schemas\ProduksiKediForm;
 use App\Filament\Resources\ProduksiKedis\Schemas\ProduksiKediInfolist;
 use App\Filament\Resources\ProduksiKedis\Tables\ProduksiKedisTable;
+use App\Filament\Resources\ProduksiPressDryers\RelationManagers\SerahTerimaVeneerBasahRelationManager;
 use App\Filament\Resources\ProduksiPressDryers\RelationManagers\SerahTerimaVeneerKeringRelationManager;
 use App\Models\ProduksiKedi;
 use BackedEnum;
@@ -50,6 +51,7 @@ class ProduksiKediResource extends Resource
     public static function getRelations(): array
     {
         return [
+            SerahTerimaVeneerBasahRelationManager::class,
             SerahTerimaVeneerKeringRelationManager::class,
             DetailMasukKediRelationManager::class,
             DetailBongkarRelationManager::class,
