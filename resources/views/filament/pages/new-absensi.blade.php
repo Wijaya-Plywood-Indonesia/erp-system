@@ -74,6 +74,12 @@
                         Export Format Baru
                     </x-filament::button>
 
+                    <x-filament::button wire:click="exportRumusGajiWijayaMingguan" color="info"
+                        icon="heroicon-o-document-duplicate" wire:loading.attr="disabled"
+                        wire:target="exportRumusGajiWijayaMingguan">
+                        Cetak Mingguan
+                    </x-filament::button>
+
                     {{-- Tombol "Cek Ulang Kelengkapan Target" DIHILANGKAN — sudah
                          tidak diperlukan karena pengecekan target sekarang otomatis
                          jalan saat halaman dibuka (mount()) dan setiap kali tanggal
