@@ -151,35 +151,23 @@ class DetailHasilStikRelationManager extends RelationManager
                 //
             ])
             ->headerActions([
-                // Create Action — HILANG jika status sudah divalidasi
+                // Create Action — HILANG jika sudah divalidasi, KECUALI Super Admin
                 CreateAction::make()
-                    ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    ->hidden(fn() => $this->terkunci()),
             ])
             ->recordActions([
-                // Edit Action — HILANG jika status sudah divalidasi
+                // Edit Action — HILANG jika sudah divalidasi, KECUALI Super Admin
                 EditAction::make()
-                    ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    ->hidden(fn() => $this->terkunci()),
 
-                // Delete Action — HILANG jika status sudah divalidasi
+                // Delete Action — HILANG jika sudah divalidasi, KECUALI Super Admin
                 DeleteAction::make()
-                    ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    ->hidden(fn() => $this->terkunci()),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(
-                            fn($livewire) =>
-                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                        ),
+                        ->hidden(fn() => $this->terkunci()),
                 ]),
             ]);
     }

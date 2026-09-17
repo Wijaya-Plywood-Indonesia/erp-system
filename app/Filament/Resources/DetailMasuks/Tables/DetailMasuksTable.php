@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DetailMasuks\Tables;
 
+use App\Services\ProduksiLockService;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -15,8 +16,11 @@ class DetailMasuksTable
     public static function configure(
         Table $table,
         bool $adaPaletDiterima = false,
-        string $tipe = 'dryer' // ✅ parameter tipe (untuk keperluan masa depan)
+        string $tipe = 'dryer' // 'dryer' | 'stik'
     ): Table {
+        // Nama relasi validasi berbeda antara Press Dryer dan Stik.
+        $relasiValidasi = $tipe === 'stik' ? 'validasiStik' : 'validasiPressDryers';
+
         return $table
             ->modifyQueryUsing(fn($query) => $query->with([
                 'jenisKayu',
@@ -55,22 +59,23 @@ class DetailMasuksTable
             ])
             ->filters([])
             ->headerActions([
+                // HILANG jika sudah divalidasi, KECUALI Super Admin.
                 CreateAction::make()
                     ->hidden(
                         fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        ProduksiLockService::isLocked($livewire->ownerRecord, $relasiValidasi)
                     ),
             ])
             ->recordActions([
                 EditAction::make()
                     ->hidden(
                         fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        ProduksiLockService::isLocked($livewire->ownerRecord, $relasiValidasi)
                     ),
                 DeleteAction::make()
                     ->hidden(
                         fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                        ProduksiLockService::isLocked($livewire->ownerRecord, $relasiValidasi)
                     ),
             ])
             ->toolbarActions([
@@ -78,7 +83,7 @@ class DetailMasuksTable
                     DeleteBulkAction::make()
                         ->hidden(
                             fn($livewire) =>
-                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                            ProduksiLockService::isLocked($livewire->ownerRecord, $relasiValidasi)
                         ),
                 ]),
             ]);
