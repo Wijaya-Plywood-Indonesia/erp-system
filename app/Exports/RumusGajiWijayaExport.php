@@ -139,9 +139,12 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
      */
     protected array $potonganMap = [];
 
+    protected int $currentRow = 2;
+
     public function __construct(
         protected Collection $rekap,
         protected string $tanggal,
+        protected ?string $sheetTitle = null,
     ) {
         $this->originalPrecision = (int) ini_get('precision');
         $this->originalSerializePrecision = (int) ini_get('serialize_precision');
@@ -234,32 +237,39 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
         $kodep = $row['kode_pegawai'] ?? null;
         $potongan = $this->getPotongan($kodep);
 
+        $rowNum = $this->currentRow++;
+
+        if (! empty($jamHasilMasuk) && $jamHasilMasuk >= self::AMBANG_SHIFT_MALAM) {
+            $standarLembur = 13;
+        } else {
+            $divisi = $this->resolveDivisi($row);
+            $standarLembur = self::STANDAR_JAM_KERJA_PER_DIVISI[$divisi] ?? self::STANDAR_JAM_KERJA_DEFAULT;
+        }
+
+        $formulaBulatMasuk = "=IF(C{$rowNum}=\"\",\"\",TIME(HOUR(C{$rowNum})+IF(MINUTE(C{$rowNum})=0,0,1),0,0))";
+        $formulaBulatPulang = "=IF(D{$rowNum}=\"\",\"\",TIME(HOUR(D{$rowNum}),0,0))";
+
+        $formulaJamKerja = "=IFERROR(IF(E{$rowNum}+F{$rowNum}=0, 0, ROUND(IF(E{$rowNum}<F{$rowNum}, (F{$rowNum}-E{$rowNum})*24, IF(E{$rowNum}<>\"\", (F{$rowNum}-E{$rowNum}+1)*24, 0)), 0)), 0)";
+        $formulaPerbandingan = "=IFERROR(IF(ROUND((F{$rowNum}-E{$rowNum})*24,4)=ROUND((H{$rowNum}-G{$rowNum})*24,4),\"ya\",\"tidak\"), \"tidak\")";
+        $formulaLembur2 = "=MAX(0, O{$rowNum} - {$standarLembur})";
+
         return [
             $row['kode_pegawai'] ?? '-',
             $row['nama_pegawai'] ?? '-',
             $this->convertTimeToExcel($jamMasukFinger),
             $this->convertTimeToExcel($jamPulangFinger),
-            $this->convertTimeToExcel($jamBulatMasuk),
-            $this->convertTimeToExcel($jamBulatPulang),
+            $formulaBulatMasuk,
+            $formulaBulatPulang,
             $this->convertTimeToExcel($jamHasilMasuk),
             $this->convertTimeToExcel($jamHasilPulang),
             $this->formatDivisi($row),
             $row['izin'] ?? '',
-            // FIX: sebelumnya `$lembur > 0 ? number_format(...) : ''`
-            // yang membuat nilai 0 tidak tampil di Excel (jadi cell
-            // kosong). Sekarang SELALU di-number_format() apa pun
-            // nilainya, termasuk 0 -> '0,00'.
-            number_format($lembur, 2, ',', ''),
-            // Potongan target produksi (11 divisi produksi) — dari
-            // PotonganGajiService, sama persis dengan yang tampil di
-            // kolom "Potongan" pada tabel Data Absensi di blade.
+            $formulaLembur2,
             $potongan > 0 ? (int) $potongan : '',
             $row['keterangan'] ?? '',
-            '', // Anak Baru(a) — belum ada sumber data, placeholder (lihat docblock)
-            // FIX: cast eksplisit ke int supaya sel selalu berisi angka
-            // (termasuk 0), tidak pernah null/''/float aneh.
-            (int) $jamKerja,
-            $perbandingan,
+            '', // Anak Baru(a)
+            $formulaJamKerja,
+            $formulaPerbandingan,
         ];
     }
 
@@ -461,7 +471,7 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
 
         $totalSeconds = ($h * 3600) + ($m * 60) + $s;
 
-        return round($totalSeconds / 86400, 8);
+        return $totalSeconds / 86400;
     }
 
     /**
@@ -503,7 +513,7 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
 
     public function title(): string
     {
-        return 'RUMUS_GAJI_'.$this->tanggal;
+        return $this->sheetTitle ?? 'RUMUS_GAJI_'.$this->tanggal;
     }
 
     public function styles(Worksheet $sheet): array
@@ -570,6 +580,7 @@ class RumusGajiWijayaExport implements FromCollection, WithColumnWidths, WithHea
         $sheet->getStyle("C2:H{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("J2:J{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("K2:K{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("K2:K{$lastRow}")->getNumberFormat()->setFormatCode('0.00');
         $sheet->getStyle("L2:L{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
         $sheet->getStyle("L2:L{$lastRow}")->getNumberFormat()->setFormatCode('#,##0');
         $sheet->getStyle("N2:P{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);

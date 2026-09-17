@@ -87,7 +87,7 @@ class LaporanProduksiHotPressDetailSheet implements FromCollection, WithHeadings
             }
 
             $rows->push(['BAHAN PENOLONG / BIAYA']);
-            $rows->push(['Kategori', 'Nama Bahan', 'Jumlah', 'Harga', 'Total']);
+            $rows->push(['Kategori', 'Nama Bahan', 'Jumlah', 'Harga', 'Total', 'ID Barang']);
             foreach ($item['material_usage'] as $bp) {
                 $rows->push([
                     $bp['kategori'],
@@ -628,7 +628,7 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithEvents,
                     'header' => $headerRow,
                     'start' => $workerStartRow,
                     'end' => $workerEndRow,
-                    'total' => $totalRow,
+                    'total' => $totalRow, null,
                 ];
             }
         }

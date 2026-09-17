@@ -154,6 +154,7 @@ class PotJelekDataMap
                         'kw'             => $first->kw ?? '-',
                         'hasil'          => $hasilUkuran,
                         'target'         => $targetUkuran,
+                        'selisih'        => $hasilUkuran - $targetUkuran,
                         'capaian_persen' => $capaian,
                         'has_target'     => true,
                         'no_palet_list'  => $rowsUkuran->pluck('no_palet')->filter()->implode(', ') ?: '-',
