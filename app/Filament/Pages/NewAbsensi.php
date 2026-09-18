@@ -355,6 +355,57 @@ class NewAbsensi extends Page implements HasForms
         );
     }
 
+    public function exportRumusGajiWijayaMingguan()
+    {
+        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+        
+        // Cek missing target
+        $this->missingTargetItems = app(ValidasiTargetProduksiService::class)
+            ->cekMissingTarget($tanggal);
+        $this->sudahDicekTarget = true;
+        $this->showTargetPanel = true;
+
+        if (! empty($this->missingTargetItems)) {
+            $bodyLines = collect($this->missingTargetItems)
+                ->take(10)
+                ->map(fn ($m) => "• [{$m['divisi']}] {$m['ukuran']}")
+                ->implode("\n");
+
+            $sisa = count($this->missingTargetItems) - 10;
+            if ($sisa > 0) {
+                $bodyLines .= "\n… dan {$sisa} item lainnya (lihat tabel di halaman).";
+            }
+
+            Notification::make()
+                ->warning()
+                ->title(count($this->missingTargetItems).' ukuran belum punya target — export tetap dilanjutkan')
+                ->body("Item berikut tidak punya target, potongannya akan dianggap 0:\n\n".$bodyLines)
+                ->persistent()
+                ->send();
+        }
+
+        $acuan = \Illuminate\Support\Carbon::parse($tanggal)->startOfDay();
+        $jumatAwal = $acuan->copy();
+        while (! $jumatAwal->isFriday()) {
+            $jumatAwal->subDay();
+        }
+        $kamisAkhir = $jumatAwal->copy()->addDays(6);
+
+        if ($jumatAwal->month === $kamisAkhir->month) {
+            $dateRange = $jumatAwal->format('d') . ' - ' . $kamisAkhir->format('d') . ' ' . $kamisAkhir->translatedFormat('F');
+        } else {
+            $dateRange = $jumatAwal->format('d') . ' ' . $jumatAwal->translatedFormat('F') . ' - ' . $kamisAkhir->format('d') . ' ' . $kamisAkhir->translatedFormat('F');
+        }
+
+        $brandName = filament()->getBrandName();
+        $fileName = "Rumus Gaji {$brandName} {$dateRange}.xlsx";
+
+        return Excel::download(
+            new \App\Exports\RumusGajiWijayaMingguanExport($tanggal),
+            $fileName
+        );
+    }
+
     /**
      * Riwayat upload, terbaru duluan (dibatasi 20 biar ringan, tinggal
      * diganti pagination kalau nanti datanya udah banyak).

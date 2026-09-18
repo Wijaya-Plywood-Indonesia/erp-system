@@ -247,6 +247,55 @@ class CoaAliasService
     }
 
     // ---------------------------------------------------------------------
+    // EXTRACT AKUN DARI REFERENSI
+    // ---------------------------------------------------------------------
+
+    public function extractAkunVeneer($ref): array
+    {
+        return $this->extractAkunLama($ref);
+    }
+
+    public function extractAkunPlatform($ref, bool $isHasil = false): array
+    {
+        return $this->extractAkunLama($ref);
+    }
+
+    public function extractAkunTriplek($ref): array
+    {
+        return $this->extractAkunLama($ref);
+    }
+
+    public function extractAkunPenolong($ref, $namaBahan = null): array
+    {
+        return $this->extractAkunLama($ref);
+    }
+
+    private function extractAkunLama($ref): array
+    {
+        if (! $ref) {
+            return ['UNKNOWN', 'UNKNOWN', 0.0];
+        }
+
+        if (! $ref->relationLoaded('subAnakAkun')) {
+            $ref->load('subAnakAkun');
+        }
+
+        $sub = $ref->subAnakAkun;
+        $harga = (float) $ref->harga;
+
+        if (! $sub) {
+            return ['UNKNOWN', 'UNKNOWN', $harga];
+        }
+
+        $namaLama = trim($sub->nama_sub_anak_akun ?? '') ?: 'UNKNOWN';
+        $noLama = trim($sub->kode_sub_anak_akun ?? '') ?: 'UNKNOWN';
+
+        $mapped = $this->mapAkunLama($noLama, $namaLama);
+
+        return [$mapped['nama'], $mapped['no'], $harga];
+    }
+
+    // ---------------------------------------------------------------------
     // HELPER INTERNAL
     // ---------------------------------------------------------------------
 

@@ -95,7 +95,7 @@ class JurnalKediSheetV2 implements FromArray, WithColumnWidths, WithEvents, With
         return [
             'A' => 45, 'B' => 20, 'C' => 15, 'D' => 12, 'E' => 8,
             'F' => 18, 'G' => 20, 'H' => 45, 'I' => 6,  'J' => 10,
-            'K' => 10, 'L' => 15, 'M' => 15, 'N' => 15,
+            'K' => 10, 'L' => 15, 'M' => 15, 'N' => 15, 'O' => 12,
         ];
     }
 
@@ -103,7 +103,7 @@ class JurnalKediSheetV2 implements FromArray, WithColumnWidths, WithEvents, With
     {
         $lastRow = $sheet->getHighestRow();
 
-        $sheet->getStyle("A1:N{$lastRow}")->applyFromArray([
+        $sheet->getStyle("A1:O{$lastRow}")->applyFromArray([
             'borders' => [
                 'allBorders' => [
                     'borderStyle' => Border::BORDER_THIN,
@@ -112,7 +112,7 @@ class JurnalKediSheetV2 implements FromArray, WithColumnWidths, WithEvents, With
             ],
         ]);
 
-        $sheet->getStyle('A1:N1')->applyFromArray([
+        $sheet->getStyle('A1:O1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1F4E79']],
             'alignment' => [
@@ -128,6 +128,7 @@ class JurnalKediSheetV2 implements FromArray, WithColumnWidths, WithEvents, With
         $sheet->getStyle("D2:D{$lastRow}")->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
         $sheet->getStyle("L2:L{$lastRow}")->getNumberFormat()->setFormatCode('0.0000');
         $sheet->getStyle("M2:N{$lastRow}")->getNumberFormat()->setFormatCode('#,##0');
+        $sheet->getStyle("O2:O{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getRowDimension(1)->setRowHeight(20);
 
         return [];
@@ -300,6 +301,30 @@ class JurnalKediSheetV2 implements FromArray, WithColumnWidths, WithEvents, With
         return $total;
     }
 
+    private function resolveIdBarang(string $jenisVeneer, string $jenisKayu, float $tebal, string $ukuran, ?int $kw = null, bool $isAf = false): ?int
+    {
+        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/') . '/api/barang/resolve-veneer';
+        $bagianParam = $isAf ? 'PPC' : ($tebal < 1 ? 'Face Back' : 'Core');
+        
+        // Extract only panjang and lebar (e.g. from "260 x 130 x 1.5" to "260x130")
+        $dim = array_map('trim', explode('x', strtolower($ukuran)));
+        $ukuranApi = (isset($dim[0]) ? $dim[0] : '') . 'x' . (isset($dim[1]) ? $dim[1] : '');
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(10)->get($urlApi, [
+                'jenis_veneer' => $jenisVeneer,
+                'bagian' => $bagianParam,
+                'jenis_kayu' => $jenisKayu,
+                'ketebalan' => $tebal,
+                'ukuran' => $ukuranApi,
+                'kw' => $kw,
+            ]);
+            return $response->json('id_barang');
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
     private function formatUkuran(array $dim): string
     {
         return "{$dim['p']} x {$dim['l']} x {$dim['t']}";
@@ -308,9 +333,9 @@ class JurnalKediSheetV2 implements FromArray, WithColumnWidths, WithEvents, With
     private function makeRow(
         string $namaAkun, string $noAkun, string $tgl, string $namaProduksi,
         string $keterangan, string $map, string $hitKbk,
-        $banyak, $m3, $harga, $total
+        $banyak, $m3, $harga, $total, $idBarang = null
     ): array {
-        return [$namaAkun, $tgl, '', $noAkun, '', '', $namaProduksi, $keterangan, $map, $hitKbk, $banyak, $m3, $harga, $total];
+        return [$namaAkun, $tgl, '', $noAkun, '', '', $namaProduksi, $keterangan, $map, $hitKbk, $banyak, $m3, $harga, $total, $idBarang];
     }
 
     // =========================================================================
@@ -320,7 +345,7 @@ class JurnalKediSheetV2 implements FromArray, WithColumnWidths, WithEvents, With
     public function array(): array
     {
         $rows = [];
-        $rows[] = ['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total'];
+        $rows[] = ['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total', 'ID Barang'];
 
         if (empty($this->dataKedi)) {
             return $rows;
@@ -462,10 +487,11 @@ class JurnalKediSheetV2 implements FromArray, WithColumnWidths, WithEvents, With
                     $m3Kelebihan = $keringOutputIsi > 0 ? ($kelebihan / $keringOutputIsi) * $m3KeringTotal : 0;
                     $m3KelebihanRnd = round($m3Kelebihan, 4);
                     $subtotalKel = round($m3KelebihanRnd * $hargaKering, 0);
+                    $idBarangKel = $this->resolveIdBarang('Veneer Kering', $jenisAsli, $tebal, $ukuranLengkap, 3, false);
                     $kelebihanDebitRow = $this->makeRow(
                         $akunKeringNama, $akunKeringNo, $tglProduksi, $namaProduksi,
                         $ketKering." (kelebihan {$kelebihan})", 'd', 'm',
-                        $kelebihan, $m3KelebihanRnd, $hargaKering, $subtotalKel
+                        $kelebihan, $m3KelebihanRnd, $hargaKering, $subtotalKel, $idBarangKel
                     );
 
                 } elseif ($jadiOutputIsi >= $keringOutputIsi && $jadiOutputIsi >= $afOutputIsi) {
@@ -474,10 +500,11 @@ class JurnalKediSheetV2 implements FromArray, WithColumnWidths, WithEvents, With
                     $m3Kelebihan = $jadiOutputIsi > 0 ? ($kelebihan / $jadiOutputIsi) * $m3JadiTotal : 0;
                     $m3KelebihanRnd = round($m3Kelebihan, 4);
                     $subtotalKel = round($m3KelebihanRnd * $hargaJadi, 0);
+                    $idBarangKel = $this->resolveIdBarang('Veneer Jadi', $jenisAsli, $tebal, $ukuranLengkap, 1, false);
                     $kelebihanDebitRow = $this->makeRow(
                         $akunJadiNama, $akunJadiNo, $tglProduksi, $namaProduksi,
                         $ketJadi." (kelebihan {$kelebihan})", 'd', 'm',
-                        $kelebihan, $m3KelebihanRnd, $hargaJadi, $subtotalKel
+                        $kelebihan, $m3KelebihanRnd, $hargaJadi, $subtotalKel, $idBarangKel
                     );
 
                 } else {
@@ -486,33 +513,37 @@ class JurnalKediSheetV2 implements FromArray, WithColumnWidths, WithEvents, With
                     $m3Kelebihan = $afOutputIsi > 0 ? ($kelebihan / $afOutputIsi) * $m3AfTotal : 0;
                     $m3KelebihanRnd = round($m3Kelebihan, 4);
                     $subtotalKel = round($m3KelebihanRnd * $hargaAf, 0);
+                    $idBarangKel = $this->resolveIdBarang('Veneer Afalan', $jenisAsli, $tebal, $ukuranLengkap, null, true);
                     $kelebihanDebitRow = $this->makeRow(
                         $akunAfNama, $akunAfNo, $tglProduksi, $namaProduksi,
                         $ketAf." (kelebihan {$kelebihan})", 'd', 'm',
-                        $kelebihan, $m3KelebihanRnd, $hargaAf, $subtotalKel
+                        $kelebihan, $m3KelebihanRnd, $hargaAf, $subtotalKel, $idBarangKel
                     );
                 }
             }
 
             // ── DEBIT ─────────────────────────────────────────────────────────
             if ($regJadiIsi > 0) {
+                $idBarang = $this->resolveIdBarang('Veneer Jadi', $jenisAsli, $tebal, $ukuranLengkap, 1, false);
                 $m3JadiRnd = round($m3Jadi, 4);
                 $subtotal = round($m3JadiRnd * $hargaJadi, 0);
-                $debitRows[] = $this->makeRow($akunJadiNama, $akunJadiNo, $tglProduksi, $namaProduksi, $ketJadi, 'd', 'm', $regJadiIsi, $m3JadiRnd, $hargaJadi, $subtotal);
+                $debitRows[] = $this->makeRow($akunJadiNama, $akunJadiNo, $tglProduksi, $namaProduksi, $ketJadi, 'd', 'm', $regJadiIsi, $m3JadiRnd, $hargaJadi, $subtotal, $idBarang);
                 $totalDebit += $subtotal;
             }
 
             if ($regKeringIsi > 0) {
+                $idBarang = $this->resolveIdBarang('Veneer Kering', $jenisAsli, $tebal, $ukuranLengkap, 3, false);
                 $m3KeringRnd = round($m3Kering, 4);
                 $subtotal = round($m3KeringRnd * $hargaKering, 0);
-                $debitRows[] = $this->makeRow($akunKeringNama, $akunKeringNo, $tglProduksi, $namaProduksi, $ketKering, 'd', 'm', $regKeringIsi, $m3KeringRnd, $hargaKering, $subtotal);
+                $debitRows[] = $this->makeRow($akunKeringNama, $akunKeringNo, $tglProduksi, $namaProduksi, $ketKering, 'd', 'm', $regKeringIsi, $m3KeringRnd, $hargaKering, $subtotal, $idBarang);
                 $totalDebit += $subtotal;
             }
 
             if ($regAfIsi > 0) {
+                $idBarang = $this->resolveIdBarang('Veneer Afalan', $jenisAsli, $tebal, $ukuranLengkap, null, true);
                 $m3AfRnd = round($m3Af, 4);
                 $subtotal = round($m3AfRnd * $hargaAf, 0);
-                $debitRows[] = $this->makeRow($akunAfNama, $akunAfNo, $tglProduksi, $namaProduksi, $ketAf, 'd', 'm', $regAfIsi, $m3AfRnd, $hargaAf, $subtotal);
+                $debitRows[] = $this->makeRow($akunAfNama, $akunAfNo, $tglProduksi, $namaProduksi, $ketAf, 'd', 'm', $regAfIsi, $m3AfRnd, $hargaAf, $subtotal, $idBarang);
                 $totalDebit += $subtotal;
             }
 
@@ -524,33 +555,37 @@ class JurnalKediSheetV2 implements FromArray, WithColumnWidths, WithEvents, With
             // ── KREDIT ────────────────────────────────────────────────────────
             if ($hilang >= 0) {
                 if ($jadiOutputIsi > 0 || $keringOutputIsi > 0) {
+                    $idBarang = $this->resolveIdBarang('Veneer Basah', $jenisAsli, $tebal, $ukuranLengkap, null, false);
                     $m3Reguler = round($m3JadiTotal + $m3KeringTotal, 4);
                     $subtotal = round($m3Reguler * $hargaBasah, 0);
-                    $creditRows[] = $this->makeRow($akunBasahNama, $akunBasahNo, $tglProduksi, $namaProduksi, '', 'k', 'm', ($jadiOutputIsi + $keringOutputIsi), $m3Reguler, $hargaBasah, $subtotal);
+                    $creditRows[] = $this->makeRow($akunBasahNama, $akunBasahNo, $tglProduksi, $namaProduksi, '', 'k', 'm', ($jadiOutputIsi + $keringOutputIsi), $m3Reguler, $hargaBasah, $subtotal, $idBarang);
                     $totalKredit += $subtotal;
                 }
 
                 if ($afOutputIsi > 0) {
+                    $idBarang = $this->resolveIdBarang('Veneer Afalan', $jenisAsli, $tebal, $ukuranLengkap, null, true);
                     $m3AfRound = round($m3AfTotal, 4);
                     $subtotal = round($m3AfRound * $hargaBasahAf, 0);
-                    $creditRows[] = $this->makeRow($akunBasahAfNama, $akunBasahAfNo, $tglProduksi, $namaProduksi, 'af', 'k', 'm', $afOutputIsi, $m3AfRound, $hargaBasahAf, $subtotal);
+                    $creditRows[] = $this->makeRow($akunBasahAfNama, $akunBasahAfNo, $tglProduksi, $namaProduksi, 'af', 'k', 'm', $afOutputIsi, $m3AfRound, $hargaBasahAf, $subtotal, $idBarang);
                     $totalKredit += $subtotal;
                 }
 
                 if ($hilang > 0) {
+                    $idBarang = $this->resolveIdBarang('Veneer Basah', $jenisAsli, $tebal, $ukuranLengkap, null, false);
                     $m3Hilang = round($totalMasukM3 - ($m3JadiTotal + $m3KeringTotal + $m3AfTotal), 4);
                     if ($m3Hilang < 0) {
                         $m3Hilang = 0;
                     }
                     $subtotalHilang = round($m3Hilang * $hargaBasah, 0);
-                    $creditRows[] = $this->makeRow($akunBasahNama, $akunBasahNo, $tglProduksi, $namaProduksi, 'kehilangan '.$hilang, 'k', 'm', $hilang, $m3Hilang, $hargaBasah, $subtotalHilang);
+                    $creditRows[] = $this->makeRow($akunBasahNama, $akunBasahNo, $tglProduksi, $namaProduksi, 'kehilangan '.$hilang, 'k', 'm', $hilang, $m3Hilang, $hargaBasah, $subtotalHilang, $idBarang);
                     $totalKredit += $subtotalHilang;
                 }
             } else {
                 if ($totalMasukIsi > 0) {
+                    $idBarang = $this->resolveIdBarang('Veneer Basah', $jenisAsli, $tebal, $ukuranLengkap, null, false);
                     $m3MasukRnd = round($totalMasukM3, 4);
                     $subtotal = round($m3MasukRnd * $hargaBasah, 0);
-                    $creditRows[] = $this->makeRow($akunBasahNama, $akunBasahNo, $tglProduksi, $namaProduksi, '', 'k', 'm', $totalMasukIsi, $m3MasukRnd, $hargaBasah, $subtotal);
+                    $creditRows[] = $this->makeRow($akunBasahNama, $akunBasahNo, $tglProduksi, $namaProduksi, '', 'k', 'm', $totalMasukIsi, $m3MasukRnd, $hargaBasah, $subtotal, $idBarang);
                     $totalKredit += $subtotal;
                 }
             }
@@ -596,3 +631,4 @@ class JurnalKediSheetV2 implements FromArray, WithColumnWidths, WithEvents, With
         return $row;
     }
 }
+

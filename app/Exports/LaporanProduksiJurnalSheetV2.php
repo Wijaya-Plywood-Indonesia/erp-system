@@ -214,15 +214,31 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                     $bagian = count($parts) > 1 ? trim($parts[1]) : '-';
 
                     $panjang = ($noAkun === '115-01') ? 130 : 260;
-                    $akunKayu = $this->coaAlias->getAkunKayuMasuk($parts[0] ?? '', $panjang);
+                    $jenisKayu = $parts[0] ?? '';
+                    $akunKayu = $this->coaAlias->getAkunKayuMasuk($jenisKayu, $panjang);
                     $mappedNoAkun = $akunKayu['no'];
                     $mappedNamaAkun = $akunKayu['nama'];
 
                     $lahanName = $subItem['nama_pihak'] ?? '';
                     $lahanLabel = stripos($lahanName, 'Lahan ') === 0 ? substr($lahanName, 6) : $lahanName;
                     // Nama jenis kayu asli tetap ditulis di Keterangan
-                    $keteranganSpesifikasi = 'lahan '.$lahanLabel.' - '.($parts[0] ?? '-');
+                    $keteranganSpesifikasi = 'lahan '.$lahanLabel.' - '.($jenisKayu !== '' ? $jenisKayu : '-');
                     $dkOverride = 'k';
+
+                    if (empty($subItem['id_barang'])) {
+                        try {
+                            $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/') . '/api/barang/resolve-kayu';
+                            $responseApi = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(5)->get($urlApi, [
+                                'ukuran' => $panjang,
+                                'jenis_kayu' => $jenisKayu,
+                            ]);
+                            if ($responseApi->successful()) {
+                                $subItem['id_barang'] = $responseApi->json('id_barang');
+                            }
+                        } catch (\Throwable $e) {
+                            \Illuminate\Support\Facades\Log::warning("Gagal resolve id_barang kayu: " . $e->getMessage());
+                        }
+                    }
                 } else {
                     $bagian = '-';
                     $keteranganSpesifikasi = $subItem['keterangan'] ?? '-';
@@ -284,6 +300,7 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                     'volume' => $volume !== null ? (float) $volume : null,
                     'harga' => $harga !== null ? (float) $harga : null,
                     'jumlah' => $jumlah !== null ? (float) $jumlah : null,
+                    'id_barang' => $subItem['id_barang'] ?? null,
                 ];
             }
         }
@@ -305,7 +322,7 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
 
             foreach ($rowsOfMachine as $row) {
                 $key = implode('|', [
-                    $row['no_akun'], $row['keterangan'], $row['dk'], $row['tipe'], $row['nama_akun'],
+                    $row['no_akun'], $row['keterangan'], $row['dk'], $row['tipe'], $row['nama_akun'], $row['id_barang'] ?? ''
                 ]);
 
                 if (! isset($grouped[$key])) {
@@ -322,6 +339,7 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                         'jumlah' => 0.0,
                         'has_qty' => $row['banyak'] !== null,
                         'has_vol' => $row['volume'] !== null,
+                        'id_barang' => $row['id_barang'],
                     ];
                 }
 
@@ -355,13 +373,13 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                 }
 
                 if ($isKayu) {
-                    $rowTotal = (float) $g['jumlah'];
+                    $rowTotal = round((float) $g['jumlah'], 0);
                 } elseif ($g['has_vol'] && $g['volume'] !== null && $g['volume'] > 0) {
-                    $rowTotal = round((float) $g['volume'], 4) * $rowHarga;
+                    $rowTotal = round(round((float) $g['volume'], 4) * $rowHarga, 0);
                 } elseif ($g['has_qty'] && $g['banyak'] !== null && $g['banyak'] > 0) {
-                    $rowTotal = (float) $g['banyak'] * $rowHarga;
+                    $rowTotal = round((float) $g['banyak'] * $rowHarga, 0);
                 } else {
-                    $rowTotal = $rowHarga;
+                    $rowTotal = round($rowHarga, 0);
                 }
 
                 if ($g['dk'] === 'd') {
@@ -371,8 +389,8 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                 }
             }
 
-            // Selisih -> akun HPP dari alias (akun DE -> sisi debit)
-            $selisih = round($totalDebit - $totalKredit, 2);
+            // Selisih untuk menyeimbangkan (D/K dinamis)
+            $selisih = $totalDebit - $totalKredit;
             if ($selisih != 0) {
                 $akunHpp = $this->coaAlias->getAkunHpp();
                 $grouped[] = [
@@ -380,7 +398,7 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                     'no_akun' => $akunHpp['no'],
                     'bagian' => $machine,
                     'keterangan' => '',
-                    'dk' => 'd',
+                    'dk' => $selisih > 0 ? 'k' : 'd',
                     'tipe' => 'b',
                     'banyak' => null,
                     'volume' => null,
@@ -403,7 +421,7 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
             $this->titleRows[] = $currentRow;
             $currentRow++;
 
-            $rows->push(['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total']);
+            $rows->push(['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total', 'ID Barang']);
             $this->headerRows[] = $currentRow;
             $currentRow++;
 
@@ -444,7 +462,7 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                     $hargaVal = $g['jumlah'];
                 }
 
-                $totalVal = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
+                $totalVal = "=ROUND(IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow})), 0)";
 
                 $rows->push([
                     $g['nama_akun'],
@@ -460,7 +478,7 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                     $g['has_qty'] ? $g['banyak'] : null,
                     $g['has_vol'] ? round($g['volume'], 4) : null,
                     $hargaVal,
-                    $totalVal,
+                    $totalVal, $g['id_barang'] ?? null,
                 ]);
                 $currentRow++;
             }
@@ -468,8 +486,8 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
             $dataEnd = $currentRow - 1;
             $this->dataRanges[] = ['start' => $dataStart, 'end' => $dataEnd];
 
-            $rows->push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-            $rows->push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+            $rows->push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+            $rows->push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
             $currentRow += 2;
         }
 
@@ -493,8 +511,8 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                 $sheet = $event->sheet->getDelegate();
 
                 foreach ($this->titleRows as $row) {
-                    $sheet->mergeCells("A{$row}:N{$row}");
-                    $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
+                    $sheet->mergeCells("A{$row}:O{$row}");
+                    $sheet->getStyle("A{$row}:O{$row}")->applyFromArray([
                         'font' => ['bold' => true, 'size' => 11, 'color' => ['argb' => 'FF1D2939']],
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFD2F0DA']],
                         'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
@@ -503,7 +521,7 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                 }
 
                 foreach ($this->headerRows as $row) {
-                    $sheet->getStyle("A{$row}:N{$row}")->applyFromArray([
+                    $sheet->getStyle("A{$row}:O{$row}")->applyFromArray([
                         'font' => ['bold' => true, 'size' => 10],
                         'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFE5E8EB']],
@@ -519,7 +537,7 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                         continue;
                     }
 
-                    $sheet->getStyle("A{$start}:N{$end}")->applyFromArray([
+                    $sheet->getStyle("A{$start}:O{$end}")->applyFromArray([
                         'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                     ]);
 
@@ -527,7 +545,7 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                     $sheet->getStyle("B{$start}:F{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     $sheet->getStyle("G{$start}:H{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                     $sheet->getStyle("I{$start}:J{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                    $sheet->getStyle("K{$start}:N{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    $sheet->getStyle("K{$start}:O{$end}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
                     $sheet->getStyle("K{$start}:K{$end}")->getNumberFormat()->setFormatCode('#,##0');
                     $sheet->getStyle("L{$start}:L{$end}")->getNumberFormat()->setFormatCode('#,##0.0000');
@@ -549,6 +567,8 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                 $sheet->getColumnDimension('L')->setWidth(15);
                 $sheet->getColumnDimension('M')->setWidth(18);
                 $sheet->getColumnDimension('N')->setWidth(18);
+                $sheet->getColumnDimension('O')->setWidth(15);
+                $sheet->getColumnDimension('O')->setVisible(false);
             },
         ];
     }

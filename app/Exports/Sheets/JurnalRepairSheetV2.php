@@ -7,6 +7,7 @@ use App\Models\KategoriBarang;
 use App\Models\ReferensiHargaProduksi;
 use App\Services\CoaAliasService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Http;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
@@ -42,6 +43,15 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 //   dan nilainya dipaksa jadi string eksplisit lewat registerEvents()
 //   supaya titik tetap titik dan jumlah digit di belakang titik apa
 //   adanya (1 digit / 2 digit, tidak dipaksa seragam).
+// - NEW: Kolom "ID Barang" (O) sekarang diisi dengan hasil resolve dari
+//   API eksternal /api/barang/resolve-veneer, sama seperti pola yang
+//   dipakai JurnalSheetV2 (dryer). Setiap baris veneer (jadi/kering,
+//   baik dari STEP C maupun STEP 2 ukuran manual) memanggil resolver
+//   ini. Hasil di-cache per kombinasi parameter (jenis_veneer, bagian,
+//   jenis_kayu, ketebalan, ukuran, kw) supaya tidak memanggil API
+//   berkali-kali untuk kombinasi yang identik dalam satu laporan.
+//   Baris bahan penolong & gaji tidak relevan dengan ID Barang veneer,
+//   jadi tetap dibiarkan null.
 //
 // NOTE REFACTOR: Logic ALIAS AKUN COA BARU (aliasAkunBaru,
 // extractAkunVeneer, extractAkunPenolong, getAkunHpp, getAkunGaji) sudah
@@ -78,6 +88,14 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
 
     private array $bahanRefCache = [];
 
+    /**
+     * Cache hasil resolve id_barang dari API eksternal, dikunci per
+     * kombinasi parameter (jenis_veneer|bagian|jenis_kayu|ketebalan|
+     * ukuran|kw) supaya tidak memanggil API berkali-kali untuk
+     * kombinasi yang sama dalam satu laporan.
+     */
+    private array $idBarangCache = [];
+
     public function title(): string
     {
         return 'jurnal repair v2';
@@ -100,6 +118,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
             'L' => 16,
             'M' => 16,
             'N' => 22,
+            'O' => 12,
         ];
     }
 
@@ -120,7 +139,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
     {
         $lastRow = $sheet->getHighestRow();
 
-        $sheet->getStyle('A1:N1')->applyFromArray([
+        $sheet->getStyle('A1:O1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'name' => 'Calibri', 'size' => 11],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '2E7D4F']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
@@ -128,7 +147,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
         ]);
 
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:N{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:O{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
             ]);
 
@@ -139,6 +158,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
             $sheet->getStyle("B2:G{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle("I2:J{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle("K2:N{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+            $sheet->getStyle("O2:O{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
             for ($row = 2; $row <= $lastRow; $row++) {
                 $namaAkunVal = $sheet->getCell("A{$row}")->getValue();
@@ -296,7 +316,62 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
         return $this->bahanRefCache[$key] = $ref;
     }
 
-    private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $hitKbk = 'm'): array
+    /**
+     * Resolve id_barang dari API eksternal /api/barang/resolve-veneer,
+     * dengan cache per kombinasi parameter supaya tidak memanggil API
+     * berkali-kali untuk kombinasi ukuran/jenis/kw yang identik dalam
+     * satu laporan. Mengembalikan null (bukan melempar exception) kalau
+     * API gagal/timeout, supaya proses export tidak gagal total hanya
+     * karena resolver down.
+     *
+     * @param  string  $jenisVeneer  'Veneer Jadi' atau 'Veneer Kering'
+     */
+    private function resolveIdBarang(
+        string $jenisVeneer,
+        bool $isAf,
+        float $tebal,
+        string $jenisKayu,
+        float $panjang,
+        float $lebar,
+        string $kw
+    ): ?int {
+        $bagian = $isAf ? 'PPC' : ($tebal < 1 ? 'Face Back' : 'Core');
+        $ukuran = $panjang.'x'.$lebar;
+
+        $cacheKey = implode('|', [
+            $jenisVeneer,
+            $bagian,
+            strtolower(trim($jenisKayu)),
+            $tebal,
+            $ukuran,
+            strtolower(trim($kw)),
+        ]);
+
+        if (array_key_exists($cacheKey, $this->idBarangCache)) {
+            return $this->idBarangCache[$cacheKey];
+        }
+
+        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-veneer';
+
+        try {
+            $response = Http::withoutVerifying()->timeout(10)->get($urlApi, [
+                'jenis_veneer' => $jenisVeneer,
+                'bagian' => $bagian,
+                'jenis_kayu' => $jenisKayu,
+                'ketebalan' => $tebal,
+                'ukuran' => $ukuran,
+                'kw' => $kw,
+            ]);
+
+            $idBarang = $response->json('id_barang');
+        } catch (\Throwable $e) {
+            $idBarang = null;
+        }
+
+        return $this->idBarangCache[$cacheKey] = $idBarang;
+    }
+
+    private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $hitKbk = 'm', $idBarang = null): array
     {
         return [
             $namaAkun,
@@ -313,13 +388,14 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
             ($m3 === '' || $m3 === null) ? '' : (float) $m3,
             ($harga === '' || $harga === null) ? '' : (float) $harga,
             '',
+            $idBarang,
         ];
     }
 
     public function array(): array
     {
         $rows = [];
-        $rows[] = ['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total'];
+        $rows[] = ['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total', 'ID Barang'];
 
         foreach ($this->rawCollection as $produksi) {
             $tglFormat = Carbon::parse($produksi->tanggal)->format('d-m-Y');
@@ -386,7 +462,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                     'kwRaw' => $kwRaw,
                     'isAf' => $isAf,
                     'totalBanyak' => $totalBanyak,
-                    'totalM3' => $totalM3,
+                    'totalM3' => $totalM3, null,
                 ];
             }
 
@@ -434,7 +510,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                     'kwRaw' => $kwRaw,
                     'isAf' => $isAf,
                     'totalBanyak' => $totalBanyak,
-                    'totalM3' => $totalM3,
+                    'totalM3' => $totalM3, null,
                 ];
             }
 
@@ -470,6 +546,11 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                 [$namaAkunJadi,   $noAkunJadi,   $hargaJadi] = $this->coaAlias->extractAkunVeneer($refJadi);
                 [$namaAkunKering, $noAkunKering, $hargaKering] = $this->coaAlias->extractAkunVeneer($refKering);
 
+                // NEW: resolve id_barang untuk sisi "jadi" (debit) dan
+                // "kering" (kredit) — di-cache per kombinasi parameter.
+                $idBarangJadi = $this->resolveIdBarang('Veneer Jadi', $isAf, $tebal, $jnsNorm, $panjang, $lebar, $kwRaw);
+                $idBarangKering = $this->resolveIdBarang('Veneer Kering', $isAf, $tebal, $jnsNorm, $panjang, $lebar, $kwRaw);
+
                 $keteranganNormal = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw);
                 $keteranganJadi = $keteranganNormal.(! $refJadi ? ' [UNKNOWN]' : '');
                 $keteranganKering = $keteranganNormal.(! $refKering ? ' [UNKNOWN]' : '');
@@ -486,17 +567,17 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                     $m3Kehilangan = ($panjang * $lebar * $tebal * $kehilanganBanyak) / 10000000;
 
                     if ($hasilBanyak > 0) {
-                        $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilBanyak, $m3Hasil, $hargaJadi, 'm');
+                        $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilBanyak, $m3Hasil, $hargaJadi, 'm', $idBarangJadi);
                         $totalDebit += ($m3Hasil * $hargaJadi);
                     }
 
                     if ($modalSebanding > 0) {
-                        $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKering, 'k', $modalSebanding, $m3Modal, $hargaKering, 'm');
+                        $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKering, 'k', $modalSebanding, $m3Modal, $hargaKering, 'm', $idBarangKering);
                         $totalKredit += ($m3Modal * $hargaKering);
                     }
 
                     $keteranganKehilangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw, 'Kehilangan').(! $refKering ? ' [UNKNOWN]' : '');
-                    $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKehilangan, 'k', $kehilanganBanyak, $m3Kehilangan, $hargaKering, 'm');
+                    $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKehilangan, 'k', $kehilanganBanyak, $m3Kehilangan, $hargaKering, 'm', $idBarangKering);
                     $totalKredit += ($m3Kehilangan * $hargaKering);
                 } elseif ($diffBanyak < 0) {
                     // KONDISI KELEBIHAN
@@ -507,24 +588,24 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                     $m3Kelebihan = ($panjang * $lebar * $tebal * $kelebihanBanyak) / 10000000;
                     $m3ModalUtama = ($panjang * $lebar * $tebal * $modalBanyak) / 10000000;
 
-                    $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilSebanding, $m3HasilUtama, $hargaJadi, 'm');
+                    $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilSebanding, $m3HasilUtama, $hargaJadi, 'm', $idBarangJadi);
                     $totalDebit += ($m3HasilUtama * $hargaJadi);
 
                     $keteranganKelebihan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw, 'Kelebihan').(! $refJadi ? ' [UNKNOWN]' : '');
-                    $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganKelebihan, 'd', $kelebihanBanyak, $m3Kelebihan, $hargaJadi, 'm');
+                    $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganKelebihan, 'd', $kelebihanBanyak, $m3Kelebihan, $hargaJadi, 'm', $idBarangJadi);
                     $totalDebit += ($m3Kelebihan * $hargaJadi);
 
-                    $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKering, 'k', $modalBanyak, $m3ModalUtama, $hargaKering, 'm');
+                    $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKering, 'k', $modalBanyak, $m3ModalUtama, $hargaKering, 'm', $idBarangKering);
                     $totalKredit += ($m3ModalUtama * $hargaKering);
                 } else {
                     // KONDISI NORMAL / BALANCE
                     $m3Hasil = ($panjang * $lebar * $tebal * $hasilBanyak) / 10000000;
                     $m3Modal = ($panjang * $lebar * $tebal * $modalBanyak) / 10000000;
 
-                    $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilBanyak, $m3Hasil, $hargaJadi, 'm');
+                    $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilBanyak, $m3Hasil, $hargaJadi, 'm', $idBarangJadi);
                     $totalDebit += ($m3Hasil * $hargaJadi);
 
-                    $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKering, 'k', $modalBanyak, $m3Modal, $hargaKering, 'm');
+                    $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKering, 'k', $modalBanyak, $m3Modal, $hargaKering, 'm', $idBarangKering);
                     $totalKredit += ($m3Modal * $hargaKering);
                 }
             }
@@ -560,9 +641,12 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                 $refJadi = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'jadi');
                 [$namaAkun, $noAkun, $harga] = $this->coaAlias->extractAkunVeneer($refJadi);
 
+                // NEW: resolve id_barang untuk baris hasil manual (selalu "jadi")
+                $idBarang = $this->resolveIdBarang('Veneer Jadi', $isAf, $tebal, $jnsNorm, $panjang, $lebar, $kwRaw);
+
                 $keterangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw).(! $refJadi ? ' [UNKNOWN]' : '');
 
-                $jurnalBlockDebit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'd', $banyak, $m3, $harga, 'm');
+                $jurnalBlockDebit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'd', $banyak, $m3, $harga, 'm', $idBarang);
                 $totalDebit += ($m3 * $harga);
             }
 
@@ -570,7 +654,8 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
             // STEP 3: KREDIT BAHAN PENOLONG — SEKARANG DI-ALIAS ke COA
             // baru lewat CoaAliasService::extractAkunPenolong() (dicocokkan
             // dari nama bahan asli: lem/hardner/staples/pewarna/tepung/
-            // solasi coklat/solasi putih).
+            // solasi coklat/solasi putih). ID Barang tidak relevan untuk
+            // bahan penolong, jadi dibiarkan null.
             // ============================================================
             if (! empty($produksi->bahanPenolongRepair)) {
                 foreach ($produksi->bahanPenolongRepair as $bahan) {
@@ -615,7 +700,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
             }
 
             $rows = array_merge($rows, $jurnalBlockDebit, $jurnalBlockKredit, $hppRow);
-            $rows[] = array_fill(0, 14, '');
+            $rows[] = array_fill(0, 15, '');
         }
 
         return $rows;

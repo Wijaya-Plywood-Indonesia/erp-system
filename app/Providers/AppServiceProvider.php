@@ -31,9 +31,9 @@ use App\Services\AbsensiSources\JointAbsensiSource;
 use App\Services\AbsensiSources\KediAbsensiSource;
 use App\Services\AbsensiSources\LainLainAbsensiSource;
 use App\Services\AbsensiSources\NyusupAbsensiSource;
+use App\Services\AbsensiSources\PegawaiPaletAbsensiSource;
 use App\Services\AbsensiSources\PilihPlywoodAbsensiSource;
 use App\Services\AbsensiSources\PilihVeneerAbsensiSource;
-use App\Services\AbsensiSources\PegawaiPaletAbsensiSource;
 use App\Services\AbsensiSources\PotAfJointAbsensiSource;
 use App\Services\AbsensiSources\PotJelekAbsensiSource;
 use App\Services\AbsensiSources\PotSikuAbsensiSource;
@@ -49,6 +49,8 @@ use App\Services\FingerParsers\FingerParserManager;
 use App\Services\FingerParsers\KantorDatParser;
 use App\Services\FingerParsers\MesinZkParser;
 use App\Services\NewRekapAbsensiPegawaiService;
+use App\Services\Payroll\WeeklyRekapPotonganGajiService;
+use App\Services\RekapPotonganGajiService;
 use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Facades\Blade;
@@ -112,6 +114,12 @@ class AppServiceProvider extends ServiceProvider
                 new MesinZkParser,
                 new KantorDatParser,
             ]);
+        });
+
+        $this->app->singleton(WeeklyRekapPotonganGajiService::class, function ($app) {
+            return new WeeklyRekapPotonganGajiService(
+                $app->make(RekapPotonganGajiService::class)
+            );
         });
 
         $this->app->singleton(NewRekapAbsensiPegawaiService::class, function () {
