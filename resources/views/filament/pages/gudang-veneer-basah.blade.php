@@ -38,6 +38,7 @@
                             $palet = $st->detailHasilPalet;
                             $ukuran = $palet?->ukuran;
                             $kayu = $palet?->penggunaanLahan?->jenisKayu?->nama_kayu ?? '-';
+                            $kw = $palet?->kw;
                         @endphp
                         <div wire:key="basah-st-{{ $st->id }}"
                             class="px-3 sm:px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors space-y-1.5">
@@ -48,6 +49,9 @@
                                 <span class="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 whitespace-nowrap shrink-0">
                                     {{ $this->formatKodePalet($st) }}
                                 </span>
+                                <span class="ml-auto text-[10px] text-zinc-400 whitespace-nowrap shrink-0">
+                                    {{ $st->created_at?->format('d/m/Y H:i') }}
+                                </span>
                             </div>
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="text-base sm:text-sm font-black text-zinc-900 dark:text-white uppercase">
@@ -57,6 +61,11 @@
                                     {{ $ukuran?->panjang + 0 }}×{{ $ukuran?->lebar + 0 }}×{{ $ukuran?->tebal + 0 }}
                                     <span class="text-[10px] text-zinc-400">mm</span>
                                 </span>
+                                @if ($kw)
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] sm:text-[9px] font-black uppercase whitespace-nowrap bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                                        KW {{ $kw }}
+                                    </span>
+                                @endif
                                 <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-sm sm:text-xs font-black tabular-nums whitespace-nowrap bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                                     {{ number_format($this->formatJumlahLembar($st)) }} Lbr
                                 </span>
@@ -87,6 +96,7 @@
                             $palet = $st->detailHasilPalet;
                             $ukuran = $palet?->ukuran;
                             $kayu = $palet?->penggunaanLahan?->jenisKayu?->nama_kayu ?? '-';
+                            $kw = $palet?->kw;
                         @endphp
                         <div wire:key="basah-hist-{{ $st->id }}" class="px-3 sm:px-5 py-3 opacity-80 space-y-1">
                             <div class="flex items-center gap-2 flex-wrap">
@@ -96,6 +106,11 @@
                                 <span class="font-mono text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400 tabular-nums whitespace-nowrap shrink-0">
                                     {{ $ukuran?->panjang + 0 }}×{{ $ukuran?->lebar + 0 }}×{{ $ukuran?->tebal + 0 }}
                                 </span>
+                                @if ($kw)
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 shrink-0">
+                                        KW {{ $kw }}
+                                    </span>
+                                @endif
                                 <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 whitespace-nowrap shrink-0">
                                     {{ $st->status }}
                                 </span>
