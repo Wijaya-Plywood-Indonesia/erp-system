@@ -61,7 +61,8 @@ class GudangVeneerBasah extends Page
         return SerahTerimaPivot::with(['detailHasilPalet.ukuran', 'detailHasilPalet.penggunaanLahan.jenisKayu'])
             ->where('tipe', 'rotary')
             ->where('diterima_oleh', '-')
-            ->latest()
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->get();
     }
 
@@ -69,7 +70,8 @@ class GudangVeneerBasah extends Page
     {
         return SerahTerimaPivot::with(['detailHasilPalet.ukuran', 'detailHasilPalet.penggunaanLahan.jenisKayu'])
             ->where('tipe', 'gudang_veneer_basah')
-            ->latest()
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->limit(50)
             ->get();
     }

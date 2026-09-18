@@ -9,16 +9,21 @@ use Filament\Actions\CreateAction;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
+use App\Concerns\LocksWhenValidated;
 
 class DetailMasukKediRelationManager extends RelationManager
 {
     protected static ?string $title = 'Masuk Kedi';
     protected static string $relationship = 'detailMasukKedi';
 
-    public function isReadOnly(): bool
-    {
-        return false;
-    }
+    use LocksWhenValidated;
+
+    protected string $validasiRelasi = 'validasiKedi';
+    // Tidak diisi $validasiTipe: validasi Kedi cuma ada satu jenis, yaitu
+    // tipe 'bongkar' (lihat ValidasiKediForm — field 'tipe' selalu
+    // di-hardcode 'bongkar', tidak pernah ada 'masuk'). Jadi kuncinya
+    // cukup cek "ada validasi divalidasi apa pun" tanpa filter tipe.
+
 
     public static function canViewForRecord($ownerRecord, $pageClass): bool
     {
