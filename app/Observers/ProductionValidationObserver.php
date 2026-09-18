@@ -49,11 +49,14 @@ class ProductionValidationObserver
         }
 
         // ── Press Dryer ──────────────────────────────────────────────
+        // REVISI: potong stok veneer basah berdasarkan HASIL produksi
+        // Press Dryer (detailHasils — output aktual mesin), BUKAN lagi
+        // berdasarkan detailMasuks (input mentah yang diklaim operator).
         if (isset($validasi->id_produksi_dryer)) {
             $produksi = $validasi->produksi;
-            $details = $produksi?->detailMasuks;
+            $details = $produksi?->detailHasils;
 
-            Log::info("Memotong Stok Veneer Basah - Press Dryer. Produksi ID: {$validasi->id_produksi_dryer}");
+            Log::info("Memotong Stok Veneer Basah - Press Dryer (berdasarkan hasil produksi). Produksi ID: {$validasi->id_produksi_dryer}");
 
             if ($details && $details->count() > 0) {
                 $this->inventoryService->kurangiStokDariProduksi(
@@ -63,7 +66,7 @@ class ProductionValidationObserver
                     $produksi->shift ?? null
                 );
             } else {
-                Log::warning("Gagal potong stok: Detail Masuk Press Dryer tidak ditemukan (Produksi ID: {$validasi->id_produksi_dryer}).");
+                Log::warning("Gagal potong stok: Detail Hasil Press Dryer tidak ditemukan (Produksi ID: {$validasi->id_produksi_dryer}).");
             }
         }
 

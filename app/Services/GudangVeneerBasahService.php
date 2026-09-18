@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\DetailHasilPaletRotary;
-use App\Models\HppVeneerBasahLog;
 use App\Models\HppVeneerBasahSummary;
 use App\Models\SerahTerimaVeneerBasah;
 use App\Models\Ukuran;
@@ -261,6 +260,12 @@ class GudangVeneerBasahService
      * $idProduksiKedi WAJIB diisi sesuai sesi produksi yang sedang
      * menerima — inilah yang mengikat barang ke sesi tsb sehingga
      * muncul di dropdown "Modal" produksi tersebut.
+     *
+     * REVISI: langkah ini SAMA SEKALI TIDAK menyentuh stok maupun log
+     * (HppVeneerBasahLog). "Terima" cuma mengikat baris ke sesi produksi
+     * + mencatat siapa & kapan menerima. Stok baru benar-benar dipotong
+     * (dan baru saat itu log dibuat) nanti saat produksi tsb DIVALIDASI —
+     * lihat ProductionValidationObserver.
      */
     public function terima(
         SerahTerimaVeneerBasah $row,
@@ -282,64 +287,12 @@ class GudangVeneerBasahService
             throw new RuntimeException('Sesi Produksi Kedi penerima wajib diketahui.');
         }
 
-        DB::transaction(function () use ($row, $idProduksiDryer, $idProduksiKedi, $userTerima) {
-            $detail = $row->detail()->lockForUpdate()->first();
-            $ukuran = $detail->ukuran;
-
-            $summary = HppVeneerBasahSummary::where([
-                'id_jenis_kayu' => $detail->id_jenis_kayu,
-                'panjang' => $ukuran->panjang,
-                'lebar' => $ukuran->lebar,
-                'tebal' => $ukuran->tebal,
-                'kw' => $detail->kw,
-            ])->first();
-
-            $kubikasiKeluar = $detail->m3;
-            $tujuanLabel = $row->tujuan === 'dryer' ? 'Press Dryer' : 'Kedi';
-
-            // ─────────────────────────────────────────────────────────────
-            // REVISI: stok veneer basah TIDAK dipotong di sini lagi.
-            // "Terima" di sisi produksi sekarang HANYA mengikat barang ke
-            // sesi produksi (supaya muncul di dropdown Modal) dan mencatat
-            // log jejak audit — TANPA mengubah angka stok Gudang. Stok baru
-            // benar-benar berkurang saat produksi (Press Dryer/Kedi) itu
-            // DIVALIDASI — lihat ProductionValidationObserver.
-            // ─────────────────────────────────────────────────────────────
-            $log = HppVeneerBasahLog::create([
-                'id_jenis_kayu' => $detail->id_jenis_kayu,
-                'panjang' => $ukuran->panjang,
-                'lebar' => $ukuran->lebar,
-                'tebal' => $ukuran->tebal,
-                'kw' => $detail->kw,
-                'tanggal' => now(),
-                'tipe_transaksi' => 'transfer_ke_produksi',
-                'keterangan' => "Diterima {$tujuanLabel} (belum memotong stok — dipotong saat validasi produksi) | Diterima: {$userTerima}",
-                'referensi_type' => get_class($row),
-                'referensi_id' => $row->id,
-                'total_lembar' => $detail->qty_lembar,
-                'total_kubikasi' => $kubikasiKeluar,
-                'hpp_average' => $summary->hpp_average ?? 0,
-                'nilai_stok' => 0,
-                'stok_lembar_before' => $summary->stok_lembar ?? 0,
-                'stok_kubikasi_before' => $summary->stok_kubikasi ?? 0,
-                'nilai_stok_before' => $summary->nilai_stok ?? 0,
-                // Tidak ada perubahan stok di titik ini.
-                'stok_lembar_after' => $summary->stok_lembar ?? 0,
-                'stok_kubikasi_after' => $summary->stok_kubikasi ?? 0,
-                'nilai_stok_after' => $summary->nilai_stok ?? 0,
-            ]);
-
-            if ($summary) {
-                $summary->update(['id_last_log' => $log->id]);
-            }
-
-            $row->update([
-                'id_produksi_dryer' => $idProduksiDryer,
-                'id_produksi_kedi' => $idProduksiKedi,
-                'diterima_oleh' => $userTerima,
-                'status' => 'Diterima',
-            ]);
-        });
+        $row->update([
+            'id_produksi_dryer' => $idProduksiDryer,
+            'id_produksi_kedi' => $idProduksiKedi,
+            'diterima_oleh' => $userTerima,
+            'status' => 'Diterima',
+        ]);
     }
 
     public function tolak(SerahTerimaVeneerBasah $row, string $alasan, ?string $userTolak = null): void

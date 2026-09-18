@@ -27,7 +27,7 @@ class YesRelationManager extends RelationManager
     }
     public function isReadOnly(): bool
     {
-        return false;
+        return \App\Filament\Resources\ValidasiKedis\Tables\ValidasiKedisTable::isLockedForCurrentUser($this);
     }
     public function table(Table $table): Table
     {
