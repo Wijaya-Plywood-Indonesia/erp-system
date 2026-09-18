@@ -111,6 +111,7 @@ class PortalWahana extends Page
                         \App\Filament\Resources\ProduksiTembelTripleks\ProduksiTembelTriplekResource::class,
                         \App\Filament\Resources\ProduksiTerimaGudangSatus\ProduksiTerimaGudangSatuResource::class,
                         \App\Filament\Pages\GradingPage::class,
+                        \App\Filament\Pages\PengajuanLogCore::class,
                     ],
                     'Operasional & Penjualan' => [
                         \App\Filament\Resources\DetailLainLains\DetailLainLainResource::class,
@@ -266,8 +267,8 @@ class PortalWahana extends Page
             ->map(function (array $group) {
                 if (isset($group['sections'])) {
                     $group['sections'] = collect($group['sections'])
-                        ->map(fn ($items) => $this->resolveItems($items))
-                        ->filter(fn ($items) => $items->isNotEmpty())
+                        ->map(fn($items) => $this->resolveItems($items))
+                        ->filter(fn($items) => $items->isNotEmpty())
                         ->toArray();
 
                     $group['count'] = collect($group['sections'])->flatten(1)->count();
@@ -281,7 +282,7 @@ class PortalWahana extends Page
 
                 return $group;
             })
-            ->filter(fn ($group) => ($group['count'] ?? 0) > 0)
+            ->filter(fn($group) => ($group['count'] ?? 0) > 0)
             ->values()
             ->toArray();
     }
@@ -289,7 +290,7 @@ class PortalWahana extends Page
     protected function resolveItems(array $classes)
     {
         return collect($classes)
-            ->filter(fn (string $class) => class_exists($class) && $class::canAccess())
+            ->filter(fn(string $class) => class_exists($class) && $class::canAccess())
             ->map(function (string $class) {
                 $isResource = str_contains($class, '\\Resources\\');
                 $short = class_basename($class);

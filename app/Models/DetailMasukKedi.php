@@ -16,11 +16,17 @@ class DetailMasukKedi extends Model
         'kw',
         'jumlah',
         'id_produksi_kedi',
+        'id_serah_terima_veneer_basah',
     ];
 
     public function produksi()
     {
         return $this->belongsTo(ProduksiKedi::class, 'id_produksi_kedi');
+    }
+
+    public function serahTerimaVeneerBasah()
+    {
+        return $this->belongsTo(SerahTerimaVeneerBasah::class, 'id_serah_terima_veneer_basah');
     }
 
     public function jenisKayu()

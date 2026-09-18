@@ -24,7 +24,11 @@ class ValidasiPressDryerForm
 
                         // Ambil role pertama dari user (karena bisa punya lebih dari satu)
                         /** @var User&HasRoles $user */
-                        return $user->getRoleNames()->first() ?? 'Tidak diketahui';
+                        $roleName = $user->getRoleNames()->first() ?? 'Tidak diketahui';
+
+                        // Sertakan nama user supaya kelihatan siapa yang validasi,
+                        // bukan cuma role-nya — mis. "kepala_produksi_wijaya - Faris"
+                        return $roleName . ' - ' . ($user->name ?? 'Tidak diketahui');
                     })
                     ->disabled()
                     ->dehydrated(true), // tetap ikut disimpan ke database

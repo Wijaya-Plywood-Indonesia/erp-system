@@ -136,12 +136,10 @@ class PenggunaanLahanRotariesTable
                                             ->label('Kayu Pecah Total (Batang)')
                                             ->disabled()
                                             ->dehydrated(false)
-                                            ->default(function (PenggunaanLahanRotary $record) {
-                                                return \App\Models\KayuPecahRotary::whereHas('penggunaanLahan', function ($q) use ($record) {
-                                                    $q->where('id_lahan', $record->id_lahan)
-                                                        ->where('hpp_average', 0);
-                                                })->count();
-                                            }),
+                                            ->default(
+                                                fn(PenggunaanLahanRotary $record) =>
+                                                \App\Models\KayuPecahRotary::where('id_penggunaan_lahan', $record->id)->count()
+                                            ),
 
                                         TextInput::make('akumulasi_total')
                                             ->label('Hasil Real (Batang)')
@@ -152,10 +150,7 @@ class PenggunaanLahanRotariesTable
                                                     ->where('id_jenis_kayu', $record->id_jenis_kayu)
                                                     ->sum('stok_batang');
 
-                                                $totalKayuPecah = \App\Models\KayuPecahRotary::whereHas('penggunaanLahan', function ($q) use ($record) {
-                                                    $q->where('id_lahan', $record->id_lahan)
-                                                        ->where('hpp_average', 0);
-                                                })->count();
+                                                $totalKayuPecah = \App\Models\KayuPecahRotary::where('id_penggunaan_lahan', $record->id)->count();
 
                                                 return max(0, $stokTercatat - $totalKayuPecah);
                                             })
@@ -176,10 +171,7 @@ class PenggunaanLahanRotariesTable
                                             ->where('id_jenis_kayu', $record->id_jenis_kayu)
                                             ->sum('stok_batang');
 
-                                        $totalKayuPecah = \App\Models\KayuPecahRotary::whereHas('penggunaanLahan', function ($q) use ($record) {
-                                            $q->where('id_lahan', $record->id_lahan)
-                                                ->where('hpp_average', 0);
-                                        })->count();
+                                        $totalKayuPecah = \App\Models\KayuPecahRotary::where('id_penggunaan_lahan', $record->id)->count();
 
                                         return max(0, $stokTercatat - $totalKayuPecah);
                                     })
@@ -227,10 +219,8 @@ class PenggunaanLahanRotariesTable
                             $userLogin  = Auth::user()?->name ?? 'System';
                             $tglProduksiFmt = \Carbon\Carbon::parse($tglProduksi)->translatedFormat('d F Y');
 
-                            $totalKayuPecah = \App\Models\KayuPecahRotary::whereHas('penggunaanLahan', function ($q) use ($record) {
-                                $q->where('id_lahan', $record->id_lahan)
-                                    ->where('hpp_average', 0);
-                            })->count();
+                            // SESUDAH
+                            $totalKayuPecah = \App\Models\KayuPecahRotary::where('id_penggunaan_lahan', $record->id)->count();
 
                             // ✅ Format Keterangan yang Diperbarui
                             $keteranganLengkap = sprintf(

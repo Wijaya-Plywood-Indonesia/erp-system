@@ -13,16 +13,18 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Forms\Components\Select;
+use App\Concerns\LocksWhenValidated;
+use App\Models\JenisKayu;
+use App\Models\Ukuran;
 
 class DetailHasilStikRelationManager extends RelationManager
 {
     protected static ?string $title = 'Hasil';
     protected static string $relationship = 'detailHasilStik';
 
-    public function isReadOnly(): bool
-    {
-        return false;
-    }
+    use LocksWhenValidated;
+
+    protected string $validasiRelasi = 'validasiStik';
 
     public function form(Schema $schema): Schema
     {
@@ -33,43 +35,71 @@ class DetailHasilStikRelationManager extends RelationManager
                     ->numeric()
                     ->required(),
 
-                // Relasi ke Jenis Kayu (id_jenis_kayu)
+                // Relasi ke Jenis Kayu (id_jenis_kayu) — tetap diambil dari
+                // Modal (Detail Masuk Stik) produksi ini seperti semula.
                 Select::make('id_jenis_kayu')
                     ->label('Jenis Kayu')
                     ->options(function () {
                         $produksi = $this->getOwnerRecord();
 
-                        return \App\Models\DetailMasukStik::where('id_produksi_stik', $produksi->id)
+                        $options = \App\Models\DetailMasukStik::where('id_produksi_stik', $produksi->id)
                             ->select('id_jenis_kayu')
                             ->distinct()
                             ->with('jenisKayu:id,nama_kayu')
                             ->get()
                             ->pluck('jenisKayu.nama_kayu', 'id_jenis_kayu');
+
+                        // Jaga-jaga: kalau default (dari sesi produksi ini)
+                        // belum ada di data Modal produksi ini, tetap
+                        // tampilkan labelnya (bukan angka mentah) dengan
+                        // ambil dari master. Key sesi di-scope per produksi
+                        // supaya TIDAK bocor dari produksi/form lain.
+                        $default = session("last_jenis_kayu_stik_{$produksi->id}");
+                        if ($default && ! $options->has($default)) {
+                            $nama = JenisKayu::find($default)?->nama_kayu;
+                            if ($nama) {
+                                $options->put($default, $nama);
+                            }
+                        }
+
+                        return $options;
                     })
                     ->searchable()
                     ->afterStateUpdated(function ($state) {
-                        session(['last_jenis_kayu' => $state]);
+                        session(["last_jenis_kayu_stik_{$this->getOwnerRecord()->id}" => $state]);
                     })
-                    ->default(fn() => session('last_jenis_kayu'))
+                    ->default(fn() => session("last_jenis_kayu_stik_{$this->getOwnerRecord()->id}"))
                     ->required(),
 
-                // Relasi ke Ukuran (id_ukuran)
+                // Relasi ke Ukuran (id_ukuran) — tetap diambil dari Modal
+                // (Detail Masuk Stik) produksi ini seperti semula.
                 Select::make('id_ukuran')
                     ->label('Ukuran Kayu')
                     ->options(function () {
                         $produksi = $this->getOwnerRecord();
 
-                        return \App\Models\DetailMasukStik::where('id_produksi_stik', $produksi->id)
+                        $options = \App\Models\DetailMasukStik::where('id_produksi_stik', $produksi->id)
                             ->with('ukuran')
                             ->get()
                             ->pluck('ukuran.nama_ukuran', 'id_ukuran')
                             ->unique();
+
+                        // Sama seperti di atas — di-scope per produksi.
+                        $default = session("last_ukuran_stik_{$produksi->id}");
+                        if ($default && ! $options->has($default)) {
+                            $nama = Ukuran::find($default)?->nama_ukuran;
+                            if ($nama) {
+                                $options->put($default, $nama);
+                            }
+                        }
+
+                        return $options;
                     })
                     ->searchable()
                     ->afterStateUpdated(function ($state) {
-                        session(['last_ukuran' => $state]);
+                        session(["last_ukuran_stik_{$this->getOwnerRecord()->id}" => $state]);
                     })
-                    ->default(fn() => session('last_ukuran'))
+                    ->default(fn() => session("last_ukuran_stik_{$this->getOwnerRecord()->id}"))
                     ->required(),
 
                 TextInput::make('kw')
@@ -121,35 +151,23 @@ class DetailHasilStikRelationManager extends RelationManager
                 //
             ])
             ->headerActions([
-                // Create Action — HILANG jika status sudah divalidasi
+                // Create Action — HILANG jika sudah divalidasi, KECUALI Super Admin
                 CreateAction::make()
-                    ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    ->hidden(fn() => $this->terkunci()),
             ])
             ->recordActions([
-                // Edit Action — HILANG jika status sudah divalidasi
+                // Edit Action — HILANG jika sudah divalidasi, KECUALI Super Admin
                 EditAction::make()
-                    ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    ->hidden(fn() => $this->terkunci()),
 
-                // Delete Action — HILANG jika status sudah divalidasi
+                // Delete Action — HILANG jika sudah divalidasi, KECUALI Super Admin
                 DeleteAction::make()
-                    ->hidden(
-                        fn($livewire) =>
-                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    ->hidden(fn() => $this->terkunci()),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(
-                            fn($livewire) =>
-                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                        ),
+                        ->hidden(fn() => $this->terkunci()),
                 ]),
             ]);
     }

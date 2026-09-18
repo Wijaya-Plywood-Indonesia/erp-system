@@ -2,10 +2,10 @@
 
 namespace App\Filament\Resources\DetailMasuks\Schemas;
 
-use App\Models\DetailHasilPaletRotary;
 use App\Models\DetailMasuk;
 use App\Models\DetailMasukStik;
 use App\Models\JenisKayu;
+use App\Models\SerahTerimaVeneerBasah;
 use App\Models\Ukuran;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
@@ -23,206 +23,88 @@ class DetailMasukForm
         ?int $idProduksi = null,
         string $tipe = 'dryer'
     ): Schema {
-        // 1. Tentukan Model dan Foreign Key secara dinamis
-        $modelClass = $tipe === 'stik' ? DetailMasukStik::class : DetailMasuk::class;
-        $foreignKey = $tipe === 'stik' ? 'id_produksi_stik' : 'id_produksi_dryer';
+        // 'stik' sekarang manual sepenuhnya (lihat configureStikLegacy) —
+        // tidak lagi tergantung pivot serah terima Rotary.
+        if ($tipe === 'stik') {
+            return static::configureStikLegacy($schema, $idProduksi);
+        }
+
+        $foreignKey = 'id_produksi_dryer';
 
         return $schema->schema([
-            // ✅ Simpan ID Produksi ke kolom yang benar agar tidak "Undefined id_produksi"
             Hidden::make($foreignKey)
                 ->default($idProduksi)
                 ->required()
                 ->dehydrated(true),
 
-            Select::make('no_palet_select')
-                ->label('Nomor Palet')
-                // ✅ HAPUS afterStateHydrated di sini, pindah ke Hidden no_palet
+            Select::make('id_serah_terima_veneer_basah')
+                ->label('Veneer Basah Diterima (dari Gudang)')
+                ->helperText('Hanya menampilkan veneer basah yang sudah dikonfirmasi "Terima" dari Gudang dan masih ada sisa yang belum dipakai.')
                 ->options(function ($record) {
-                    // 🔥 Semua palet dari serah terima
-                    $idDiterima = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
-                        ->whereNotNull('id_detail_hasil_palet_rotary')
-                        ->pluck('id_detail_hasil_palet_rotary')
-                        ->unique()
-                        ->toArray();
+                    $sudahDipakai = DB::table('detail_masuks')
+                        ->whereNotNull('id_serah_terima_veneer_basah')
+                        ->when($record, fn ($q) => $q->where('id', '!=', $record->id))
+                        ->selectRaw('id_serah_terima_veneer_basah, SUM(isi) as total_dipakai')
+                        ->groupBy('id_serah_terima_veneer_basah')
+                        ->pluck('total_dipakai', 'id_serah_terima_veneer_basah');
 
-                    // Sum used sheets in detail_masuks
-                    $usedInMasukQuery = DB::table((new DetailMasuk)->getTable())
-                        ->whereNotNull('no_palet')
-                        ->where('no_palet', '>', 0);
-                    if ($record) {
-                        $usedInMasukQuery->where('id', '!=', $record->id);
-                    }
-                    $usedInMasuk = $usedInMasukQuery
-                        ->groupBy('no_palet')
-                        ->select('no_palet', DB::raw('SUM(isi) as total_used'))
-                        ->pluck('total_used', 'no_palet')
-                        ->toArray();
-
-                    // Sum used sheets in detail_masuk_stiks
-                    $usedInMasukStik = DB::table((new DetailMasukStik)->getTable())
-                        ->whereNotNull('no_palet')
-                        ->groupBy('no_palet')
-                        ->select('no_palet', DB::raw('SUM(isi) as total_used'))
-                        ->pluck('total_used', 'no_palet')
-                        ->toArray();
-
-                    $palets = DetailHasilPaletRotary::with([
-                        'ukuran',
-                        'penggunaanLahan.jenisKayu',
-                        'produksi.mesin'
-                    ])
-                        ->whereIn('id', $idDiterima)
+                    $rows = SerahTerimaVeneerBasah::with(['detail.ukuran', 'detail.jenisKayu'])
+                        ->where('tujuan', 'dryer')
+                        ->where('status', 'Diterima')
                         ->get();
 
                     $options = [];
-                    foreach ($palets as $p) {
-                        $totalUsed = ($usedInMasuk[$p->id] ?? 0) + ($usedInMasukStik[$p->kode_palet] ?? 0);
-                        $remaining = $p->total_lembar - $totalUsed;
-
-                        if ($remaining <= 0) continue;
-
-                        $nomor  = $p->kode_palet;
-                        $ukuran = $p->ukuran?->nama_ukuran ?? 'Ukuran N/A';
-                        $kw     = $p->kw ?? '-';
-                        $kayu   = $p->penggunaanLahan?->jenisKayu?->nama_kayu ?? 'Kayu Tidak Diketahui';
-
-                        if ($remaining < $p->total_lembar) {
-                            $options[$p->id] = "{$nomor} | {$kayu} | {$ukuran} | KW: {$kw} | Sisa: {$remaining} lbr (dari {$p->total_lembar})";
-                        } else {
-                            $options[$p->id] = "{$nomor} | {$kayu} | {$ukuran} | KW: {$kw} | Isi: {$p->total_lembar} lbr";
+                    foreach ($rows as $row) {
+                        $d = $row->detail;
+                        if (! $d) {
+                            continue;
                         }
+                        $dipakai = (int) ($sudahDipakai[$row->id] ?? 0);
+                        $sisa = (int) $d->qty_lembar - $dipakai;
+                        if ($sisa <= 0) {
+                            continue;
+                        }
+                        $ukuran = $d->ukuran ? "{$d->ukuran->panjang}x{$d->ukuran->lebar}x{$d->ukuran->tebal}" : '-';
+                        $kayu = $d->jenisKayu?->nama_kayu ?? '-';
+                        $options[$row->id] = "{$kayu} | {$ukuran} | KW {$d->kw} | sisa {$sisa} lbr";
                     }
 
-                    // ✅ Sembunyikan AF saat edit
-                    if ($record) {
-                        return $options;
-                    }
-
-                    return ['AF' => 'Palet AF'] + $options;
+                    return $options;
                 })
                 ->searchable()
-                ->required(fn($record) => $record === null) // ✅ Required hanya saat create
+                ->required(fn ($record) => $record === null)
                 ->live()
-                ->disabled(fn($record) => $record !== null)
-                ->dehydrated(false)
-
-                // ✅ Validasi backend anti bypass duplicate/over-limit
-                ->rule(function ($record) {
-                    return function ($attribute, $value, $fail) use ($record) {
-                        if ($value === 'AF') return;
-
-                        // Jika edit palet yang sama, kurangi isi saat ini dari total digunakan
-                        $palet = \App\Models\DetailHasilPaletRotary::find($value);
-                        if (!$palet) {
-                            $fail('Palet tidak ditemukan.');
-                            return;
-                        }
-
-                        $usedInMasukQuery = DB::table((new DetailMasuk)->getTable())
-                            ->where('no_palet', $value);
-                        if ($record) {
-                            $usedInMasukQuery->where('id', '!=', $record->id);
-                        }
-                        $totalUsedMasuk = $usedInMasukQuery->sum('isi');
-
-                        $totalUsedStik = DB::table((new DetailMasukStik)->getTable())
-                            ->where('no_palet', $palet->kode_palet)
-                            ->sum('isi');
-
-                        $totalUsed = $totalUsedMasuk + $totalUsedStik;
-                        $remaining = $palet->total_lembar - $totalUsed;
-
-                        if ($remaining <= 0) {
-                            $fail('Palet sudah digunakan seluruhnya!');
-                        }
-                    };
-                })
-
-                // ✅ SATU afterStateUpdated dengan guard mode edit
-                ->afterStateUpdated(function (Set $set, Get $get, ?string $state) use ($modelClass) {
-
-                    // ✅ Guard: jika no_palet sudah ada = mode edit, skip semua
-                    $currentNoPalet = $get('no_palet');
-                    if ($currentNoPalet !== null && $currentNoPalet !== '' && (int)$currentNoPalet !== 0) {
+                ->disabled(fn ($record) => $record !== null)
+                ->afterStateUpdated(function (Set $set, ?string $state) {
+                    if (! $state) {
                         return;
                     }
 
-                    if ($state === 'AF') {
-                        $lastAF  = DB::table($modelClass::make()->getTable())
-                            ->where('no_palet', '<', 0)
-                            ->min('no_palet');
-                        $newAFId = $lastAF ? $lastAF - 1 : -1;
-
-                        $set('no_palet', $newAFId);
-                        $set('af_generated_id', $newAFId);
-                        $set('id_jenis_kayu', null);
-                        $set('id_ukuran', null);
-                        $set('kw', null);
-                        $set('isi', null);
+                    $row = SerahTerimaVeneerBasah::with(['detail.ukuran', 'detail.jenisKayu'])->find($state);
+                    if (! $row || ! $row->detail) {
                         return;
                     }
 
-                    if ($state && $state !== 'AF') {
-                        $set('no_palet', (int) $state);
-                        $palet = DetailHasilPaletRotary::with(['penggunaanLahan', 'ukuran'])->find($state);
-                        if ($palet) {
-                            $set('kw', $palet->kw);           // ✅ KW dari palet
+                    $dipakai = (int) DB::table('detail_masuks')
+                        ->where('id_serah_terima_veneer_basah', $state)
+                        ->sum('isi');
+                    $sisa = (int) $row->detail->qty_lembar - $dipakai;
 
-                            // Hitung sisa lembar untuk autofill awal
-                            $totalUsedMasuk = DB::table((new DetailMasuk)->getTable())
-                                ->where('no_palet', $state)
-                                ->sum('isi');
-                            $totalUsedStik = DB::table((new DetailMasukStik)->getTable())
-                                ->where('no_palet', $palet->kode_palet)
-                                ->sum('isi');
-                            $remaining = $palet->total_lembar - ($totalUsedMasuk + $totalUsedStik);
-
-                            $set('isi', max(0, $remaining));
-                            $set('id_jenis_kayu', $palet->penggunaanLahan?->id_jenis_kayu);
-                            $set('id_ukuran', $palet->id_ukuran);
-                        }
-                    }
+                    $set('id_jenis_kayu', $row->detail->id_jenis_kayu);
+                    $set('id_ukuran', $row->detail->id_ukuran);
+                    $set('kw', $row->detail->kw);
+                    $set('isi', $sisa);
+                    $set('sisa_tersedia', $sisa);
                 })
                 ->columnSpanFull(),
 
-            // ✅ Hidden no_palet: hydrate no_palet DAN no_palet_select dari sini
-            Hidden::make('no_palet')
-                ->required()
-                ->dehydrated(true)
-                ->afterStateHydrated(function (Set $set, $state, $record) {
-                    if ($record) {
-                        $rawNoPalet = $record->getRawOriginal('no_palet');
-
-                        $set('no_palet', $rawNoPalet);
-
-                        if ((int) $rawNoPalet < 0) {
-                            $set('no_palet_select', 'AF');
-                        } else {
-                            $set('no_palet_select', (string) $rawNoPalet);
-                        }
-                    }
-                }),
-
-            // =========================================================
-            // PERBAIKAN: Placeholder untuk AF Preview
-            // =========================================================
-            Placeholder::make('af_preview')
-                ->label('Nomor AF yang akan digunakan')
-                ->content(function (Get $get) {
-                    $noPalet = $get('no_palet');
-                    if ($noPalet !== null && (int) $noPalet < 0) {
-                        return 'AF-' . abs((int) $noPalet);
-                    }
-                    return '-';
-                })
-                ->visible(fn(Get $get) => $get('no_palet_select') === 'AF')
-                ->columnSpanFull(),
+            Hidden::make('sisa_tersedia')->dehydrated(false),
 
             Select::make('id_jenis_kayu')
                 ->label('Jenis Kayu')
                 ->options(JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id'))
                 ->searchable()
-                ->disabled(fn(Get $get) => $get('no_palet_select') !== 'AF' && $get('no_palet_select') !== null)
+                ->disabled()
                 ->dehydrated(true)
                 ->required(),
 
@@ -230,49 +112,112 @@ class DetailMasukForm
                 ->label('Ukuran')
                 ->options(Ukuran::all()->pluck('nama_ukuran', 'id'))
                 ->searchable()
-                ->disabled(fn(Get $get) => $get('no_palet_select') !== 'AF' && $get('no_palet_select') !== null)
+                ->disabled()
                 ->dehydrated(true)
                 ->required(),
 
             TextInput::make('kw')
                 ->label('KW (Kualitas)')
                 ->required()
-                ->readOnly(fn(Get $get) => $get('no_palet_select') !== 'AF' && $get('no_palet_select') !== null)
+                ->readOnly()
                 ->dehydrated(true),
 
             TextInput::make('isi')
-                ->label('Isi')
+                ->label('Isi (Lembar)')
+                ->helperText('Boleh diisi kurang dari sisa yang tersedia — sisanya tetap bisa dipakai produksi lain nanti.')
                 ->required()
                 ->numeric()
-                // ->readOnly(fn(Get $get) => $get('no_palet_select') !== 'AF' && $get('no_palet_select') !== null)
-                ->dehydrated(true)
-                ->rules([
-                    fn(Get $get, $record): \Closure => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
-                        $noPaletSelect = $get('no_palet_select');
-                        if ($noPaletSelect && $noPaletSelect !== 'AF') {
-                            $palet = \App\Models\DetailHasilPaletRotary::find($noPaletSelect);
-                            if ($palet) {
-                                // Hitung total used di detail_masuks oleh baris LAIN (selain record ini)
-                                $usedInMasukQuery = DB::table((new DetailMasuk)->getTable())
-                                    ->where('no_palet', $noPaletSelect);
-                                if ($record) {
-                                    $usedInMasukQuery->where('id', '!=', $record->id);
-                                }
-                                $totalUsedMasuk = $usedInMasukQuery->sum('isi');
+                ->minValue(1)
+                ->maxValue(fn (Get $get) => $get('sisa_tersedia') ?: null)
+                ->dehydrated(true),
 
-                                $totalUsedStik = DB::table((new DetailMasukStik)->getTable())
-                                    ->where('no_palet', $palet->kode_palet)
-                                    ->sum('isi');
+            TextInput::make('no_palet')
+                ->label('Nomor Palet')
+                ->numeric()
+                ->default(function () use ($idProduksi, $foreignKey) {
+                    if (! $idProduksi) {
+                        return 1;
+                    }
 
-                                $remaining = $palet->total_lembar - ($totalUsedMasuk + $totalUsedStik);
+                    $last = (int) DB::table('detail_masuks')
+                        ->where($foreignKey, $idProduksi)
+                        ->max('no_palet');
 
-                                if ((int)$value > $remaining) {
-                                    $fail("Jumlah isi tidak boleh melebihi sisa lembar palet ({$remaining} lembar).");
-                                }
-                            }
-                        }
-                    },
-                ]),
+                    return $last + 1;
+                })
+                ->required()
+                ->dehydrated(true),
+
+            Placeholder::make('info')
+                ->label('')
+                ->content(fn (Get $get) => filled($get('sisa_tersedia'))
+                    ? "Sisa tersedia dari serah terima ini: {$get('sisa_tersedia')} lembar."
+                    : '')
+                ->visible(fn (Get $get) => filled($get('id_serah_terima_veneer_basah')))
+                ->columnSpanFull(),
+        ]);
+    }
+
+    /**
+     * Alur Stik — MANUAL SEPENUHNYA.
+     *
+     * Sebelumnya "Nomor Palet" diambil dari palet Rotary yang sudah
+     * diserahterimakan (lewat detail_hasil_palet_rotary_serah_terima_pivot).
+     * Sekarang serah terima Rotary -> Stik sudah dihapus, jadi seluruh
+     * field di sini diisi manual oleh operator Stik: nomor palet, jenis
+     * kayu, ukuran, KW, dan isi — tidak ada lagi ketergantungan ke data
+     * Rotary/pivot.
+     */
+    protected static function configureStikLegacy(Schema $schema, ?int $idProduksi): Schema
+    {
+        $foreignKey = 'id_produksi_stik';
+
+        return $schema->schema([
+            Hidden::make($foreignKey)->default($idProduksi)->required()->dehydrated(true),
+
+            TextInput::make('no_palet')
+                ->label('Nomor Palet')
+                ->numeric()
+                ->default(function () use ($idProduksi, $foreignKey) {
+                    if (! $idProduksi) {
+                        return 1;
+                    }
+
+                    $last = (int) DB::table('detail_masuk_stik')
+                        ->where($foreignKey, $idProduksi)
+                        ->max('no_palet');
+
+                    return $last + 1;
+                })
+                ->required()
+                ->dehydrated(true),
+
+            Select::make('id_jenis_kayu')
+                ->label('Jenis Kayu')
+                ->options(JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id'))
+                ->searchable()
+                ->afterStateUpdated(fn ($state) => session(['last_jenis_kayu_stik' => $state]))
+                ->default(fn () => session('last_jenis_kayu_stik'))
+                ->required(),
+
+            Select::make('id_ukuran')
+                ->label('Ukuran')
+                ->options(Ukuran::all()->pluck('nama_ukuran', 'id'))
+                ->searchable()
+                ->afterStateUpdated(fn ($state) => session(['last_ukuran_stik' => $state]))
+                ->default(fn () => session('last_ukuran_stik'))
+                ->required(),
+
+            TextInput::make('kw')
+                ->label('KW (Kualitas)')
+                ->required()
+                ->placeholder('Cth: 1, 2, 3, dll.'),
+
+            TextInput::make('isi')
+                ->label('Isi (Lembar)')
+                ->required()
+                ->numeric()
+                ->minValue(1),
         ]);
     }
 }

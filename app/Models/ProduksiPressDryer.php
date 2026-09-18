@@ -109,4 +109,9 @@ class ProduksiPressDryer extends Model
             'id',                // PK di detail_hasils
         );
     }
+
+    public function serahTerimaVeneerBasah()
+    {
+        return $this->hasMany(\App\Models\SerahTerimaVeneerBasah::class, 'id_produksi_dryer');
+    }
 }

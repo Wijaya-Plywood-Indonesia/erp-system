@@ -16,7 +16,7 @@ class ValidasiPressDryersRelationManager extends RelationManager
     // FUNGSI BARU UNTUK MEMUNCULKAN TOMBOL DI HALAMAN VIEW
     public function isReadOnly(): bool
     {
-        return false;
+        return \App\Filament\Resources\ValidasiPressDryers\Tables\ValidasiPressDryersTable::isLockedForCurrentUser($this);
     }
 
     public function form(Schema $schema): Schema

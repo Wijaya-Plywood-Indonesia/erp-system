@@ -56,4 +56,13 @@ class NotaBarangMasuk extends Model
 {
     return $this->hasOne(PlywoodMutasi::class, 'id_nota_bm');
 }
+    public function platformJadiMutasi(): HasOne
+    {
+        return $this->hasOne(PlatformJadiMutasi::class, 'id_nota_bm');
+    }
+
+    public function platformMthMutasi(): HasOne
+    {
+        return $this->hasOne(PlatformMthMutasi::class, 'id_nota_bm');
+    }
 }

@@ -20,6 +20,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\Eloquent\Model;
+use App\Concerns\LocksWhenValidated;
 
 class DetailPegawaisRelationManager extends RelationManager
 {
@@ -41,10 +42,9 @@ class DetailPegawaisRelationManager extends RelationManager
         return true;
     }
 
-    public function isReadOnly(): bool
-    {
-        return false;
-    }
+    use LocksWhenValidated;
+
+    protected string $validasiRelasi = 'validasiPressDryers';
 
     public static function timeOptions(): array
     {
@@ -190,14 +190,14 @@ class DetailPegawaisRelationManager extends RelationManager
             ])
             ->headerActions([
                 CreateAction::make()
-                    ->hidden(fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'),
+                    ->hidden(fn() => $this->terkunci()),
             ])
             ->recordActions([
                 EditAction::make()
-                    ->hidden(fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'),
+                    ->hidden(fn() => $this->terkunci()),
 
                 DeleteAction::make()
-                    ->hidden(fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'),
+                    ->hidden(fn() => $this->terkunci()),
 
                 Action::make('aturIjin')
                     ->label(fn($record) => $record->ijin ? 'Edit Ijin' : 'Tambah Ijin')
@@ -212,12 +212,12 @@ class DetailPegawaisRelationManager extends RelationManager
                             'ket' => $data['ket'],
                         ]);
                     })
-                    ->hidden(fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'),
+                    ->hidden(fn() => $this->terkunci()),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'),
+                        ->hidden(fn() => $this->terkunci()),
                 ]),
             ]);
     }

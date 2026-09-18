@@ -98,6 +98,7 @@ class BahanHotPressForm
                             $set('sumber', null);
                             $set('id_mutasi_keluar_palet', null);
                             $set('id_mutasi_keluar_platform', null);
+                            $set('id_mutasi_keluar_triplek', null);
                             return;
                         }
 
@@ -154,6 +155,7 @@ class BahanHotPressForm
                 Hidden::make('sumber'),
                 Hidden::make('id_mutasi_keluar_palet'),
                 Hidden::make('id_mutasi_keluar_platform'),
+                Hidden::make('id_mutasi_keluar_triplek'),
 
                 TextInput::make('sisa_tersedia')
                     ->label('Sisa Tersedia (Lembar)')
@@ -172,6 +174,11 @@ class BahanHotPressForm
                             }
                         } elseif ($record->sumber === 'platform' && $record->id_mutasi_keluar_platform) {
                             $palet = PlatformJadiMutasiKeluarPalet::find($record->id_mutasi_keluar_platform);
+                            if ($palet) {
+                                $set('sisa_tersedia', $palet->sisa + (float) $record->isi);
+                            }
+                        } elseif ($record->sumber === 'triplek' && $record->id_mutasi_keluar_triplek) {
+                            $palet = TriplekJadiMutasiKeluarPalet::find($record->id_mutasi_keluar_triplek);
                             if ($palet) {
                                 $set('sisa_tersedia', $palet->sisa + (float) $record->isi);
                             }

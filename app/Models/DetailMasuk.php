@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Casts\NomorPaletCast;
 use Illuminate\Database\Eloquent\Model;
 
 class DetailMasuk extends Model
@@ -16,10 +15,16 @@ class DetailMasuk extends Model
         'id_ukuran',
         'id_jenis_kayu',
         'id_produksi_dryer',
+        'id_serah_terima_veneer_basah',
     ];
 
+    // ✅ FIX: sebelumnya no_palet di-cast dgn NomorPaletCast (dipakai untuk
+    // alur lama Stik yang menyimpan ID hasil palet rotary), padahal alur
+    // baru Dryer (via Serah Terima Veneer Basah dari Gudang) tidak pernah
+    // mengisi ID rotary yang valid — no_palet cuma diisi manual oleh user
+    // (persis seperti Kedi), jadi harus tampil apa adanya, bukan "AF".
     protected $casts = [
-        'no_palet' => NomorPaletCast::class,
+        'no_palet' => 'integer',
     ];
 
     public function ukuran()
@@ -37,24 +42,8 @@ class DetailMasuk extends Model
         return $this->belongsTo(ProduksiPressDryer::class, 'id_produksi_dryer');
     }
 
-    // ✅ FIX: foreign key harus 'no_palet' bukan 'palet'
-    public function detailPaletRotary()
+    public function serahTerimaVeneerBasah()
     {
-        return $this->belongsTo(
-            DetailHasilPaletRotary::class,
-            'no_palet', // foreign key di detail_masuks
-            'id'        // primary key di detail_hasil_palet_rotaries
-        );
-    }
-
-    public function getIsAfAttribute(): bool
-    {
-        return $this->getRawOriginal('no_palet') <= 0;
-    }
-
-    public static function nextAfNumber(): int
-    {
-        $min = static::where('no_palet', '<', 0)->min('no_palet');
-        return $min ? $min - 1 : -1;
+        return $this->belongsTo(SerahTerimaVeneerBasah::class, 'id_serah_terima_veneer_basah');
     }
 }

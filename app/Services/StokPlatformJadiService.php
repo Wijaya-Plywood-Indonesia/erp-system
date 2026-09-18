@@ -3,8 +3,12 @@
 namespace App\Services;
 
 use App\Models\HppPlatformJadiLog;
+use App\Models\PlatformJadiMutasiKeluarPalet;
+use App\Models\ProduksiHp;
 use App\Models\StokPlatformJadi;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class StokPlatformJadiService
 {
@@ -14,7 +18,7 @@ class StokPlatformJadiService
      * karena pakai lockForUpdate() supaya aman dari race condition.
      */
     public function tambah(
-        int $idJenisKayu,
+        int $idJenisBarang,
         float $panjang,
         float $lebar,
         float $tebal,
@@ -26,7 +30,7 @@ class StokPlatformJadiService
         float $hppPekerja = 0,
         float $hppBahanPenolong = 0,
     ): StokPlatformJadi {
-        $stok = $this->lockOrCreateStok($idJenisKayu, $panjang, $lebar, $tebal, $kwGrade);
+        $stok = $this->lockOrCreateStok($idJenisBarang, $panjang, $lebar, $tebal, $kwGrade);
 
         $stokLembarBefore = $stok->stok_lembar;
         $stokKubikasiBefore = $stok->stok_kubikasi;
@@ -58,7 +62,7 @@ class StokPlatformJadiService
      * Melempar exception kalau stok tidak cukup.
      */
     public function kurang(
-        int $idJenisKayu,
+        int $idJenisBarang,
         float $panjang,
         float $lebar,
         float $tebal,
@@ -68,7 +72,7 @@ class StokPlatformJadiService
         string $keterangan,
         ?Model $referensi = null,
     ): StokPlatformJadi {
-        $stok = $this->lockOrCreateStok($idJenisKayu, $panjang, $lebar, $tebal, $kwGrade);
+        $stok = $this->lockOrCreateStok($idJenisBarang, $panjang, $lebar, $tebal, $kwGrade);
 
         if ($stok->stok_lembar < $lembar) {
             throw new \RuntimeException("Stok platform jadi tidak cukup. Tersedia: {$stok->stok_lembar} lembar, diminta: {$lembar} lembar.");
@@ -100,14 +104,14 @@ class StokPlatformJadiService
     }
 
     protected function lockOrCreateStok(
-        int $idJenisKayu,
+        int $idJenisBarang,
         float $panjang,
         float $lebar,
         float $tebal,
         string $kwGrade,
     ): StokPlatformJadi {
         $key = [
-            'id_jenis_kayu' => $idJenisKayu,
+            'id_jenis_barang' => $idJenisBarang,
             'panjang' => $panjang,
             'lebar' => $lebar,
             'tebal' => $tebal,
@@ -149,7 +153,7 @@ class StokPlatformJadiService
         float $nilaiStokBefore,
     ): void {
         $log = HppPlatformJadiLog::create([
-            'id_jenis_kayu' => $stok->id_jenis_kayu,
+            'id_jenis_barang' => $stok->id_jenis_barang,
             'panjang' => $stok->panjang,
             'lebar' => $stok->lebar,
             'tebal' => $stok->tebal,
@@ -174,5 +178,83 @@ class StokPlatformJadiService
         ]);
 
         $stok->update(['id_last_log' => $log->id]);
+    }
+
+    /**
+     * Terima kembali sisa platform jadi dari Hotpress ke Gudang Platform
+     * Jadi. Pola & rumus sisa persis sama dengan
+     * StokVeneerJadiService::kembaliDariHotpress() — lihat komentar
+     * lengkap di sana. Bedanya di sini tinggal manfaatkan tambah() yang
+     * sudah ada di service ini, karena penambahan stok + catat log-nya
+     * sudah generic.
+     */
+    public function kembaliDariHotpress(PlatformJadiMutasiKeluarPalet $palet, float $jumlah, ?ProduksiHp $produksiHp = null): StokPlatformJadi
+    {
+        if ($jumlah <= 0) {
+            throw new \RuntimeException('Jumlah pengembalian harus lebih dari 0.');
+        }
+
+        return DB::transaction(function () use ($palet, $jumlah, $produksiHp) {
+            $palet = PlatformJadiMutasiKeluarPalet::query()
+                ->lockForUpdate()
+                ->find($palet->id);
+
+            if (! $palet) {
+                throw new \RuntimeException('Palet platform jadi tidak ditemukan.');
+            }
+
+            $mutasi = $palet->mutasiKeluar;
+
+            if (! $mutasi) {
+                throw new \RuntimeException('Data mutasi keluar platform jadi tidak ditemukan.');
+            }
+
+            // Validasi ulang sisa DI DALAM transaksi, memakai rumus yang
+            // sama dengan PlatformJadiMutasiKeluarPalet::sisa.
+            $terpakai = $palet->bahanHotpress()->sum('isi');
+            $sisaSaatIni = (float) $palet->jumlah_lembar - (float) $terpakai - (float) $palet->jumlah_dikembalikan;
+
+            if ($jumlah > $sisaSaatIni) {
+                throw new \RuntimeException("Jumlah melebihi sisa yang tersedia di palet ini ({$sisaSaatIni} lembar).");
+            }
+
+            $idJenisBarang = (int) $mutasi->id_jenis_barang;
+            $panjang = $mutasi->panjang;
+            $lebar = $mutasi->lebar;
+            $tebal = $mutasi->tebal;
+            $kwGrade = (string) $mutasi->kw_grade;
+
+            if (! $idJenisBarang) {
+                throw new \RuntimeException('Data jenis barang pada mutasi keluar tidak lengkap.');
+            }
+
+            $kubikasi = ((float) $panjang * (float) $lebar * (float) $tebal * $jumlah) / 10000000;
+
+            $tanggal = $produksiHp?->tanggal
+                ? Carbon::parse($produksiHp->tanggal)->format('d/m/Y')
+                : now()->format('d/m/Y');
+
+            $keterangan = "Pengembalian sisa platform jadi dari Hotpress (Palet {$palet->nomor_palet}) - {$tanggal}";
+
+            $stok = $this->tambah(
+                idJenisBarang: $idJenisBarang,
+                panjang: $panjang,
+                lebar: $lebar,
+                tebal: $tebal,
+                kwGrade: $kwGrade,
+                lembar: $jumlah,
+                kubikasi: $kubikasi,
+                keterangan: $keterangan,
+                referensi: $palet,
+            );
+
+            // Baris bahan_hotpress TIDAK disentuh — hanya palet yang dicatat
+            // sudah menerima pengembalian sebanyak $jumlah lembar.
+            $palet->update([
+                'jumlah_dikembalikan' => (float) $palet->jumlah_dikembalikan + $jumlah,
+            ]);
+
+            return $stok;
+        });
     }
 }

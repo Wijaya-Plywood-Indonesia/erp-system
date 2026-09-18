@@ -9,7 +9,7 @@ use App\Filament\Resources\ProduksiPressDryers\Pages\ViewProduksiPressDryer;
 use App\Filament\Resources\ProduksiPressDryers\Schemas\ProduksiPressDryerForm;
 use App\Filament\Resources\ProduksiPressDryers\Schemas\ProduksiPressDryerInfolist;
 use App\Filament\Resources\ProduksiPressDryers\Tables\ProduksiPressDryersTable;
-use App\Filament\Resources\ProduksiRotaries\RelationManagers\SerahTerimaRelationManager;
+use App\Filament\Resources\ProduksiPressDryers\RelationManagers\SerahTerimaVeneerBasahRelationManager;
 use App\Models\ProduksiPressDryer;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -52,7 +52,7 @@ class ProduksiPressDryerResource extends Resource
     public static function getRelations(): array
     {
         return [
-            SerahTerimaRelationManager::class,
+            SerahTerimaVeneerBasahRelationManager::class,
             RelationManagers\SerahTerimaVeneerKeringRelationManager::class,
             RelationManagers\DetailMesinsRelationManager::class,
             RelationManagers\DetailPegawaisRelationManager::class,
