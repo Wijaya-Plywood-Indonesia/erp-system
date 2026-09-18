@@ -170,6 +170,17 @@ class NewRekapAbsensiPegawaiService
         $this->sources = $sources;
     }
 
+    /**
+     * Kembalikan daftar sources yang terdaftar. Dipakai oleh NewAbsensi
+     * page untuk populate dropdown filter sumber produksi.
+     *
+     * @return AbsensiSourceInterface[]
+     */
+    public function getSources(): array
+    {
+        return $this->sources;
+    }
+
     public function getRekap(string $tanggal): Collection
     {
         // ⚠️ Urutan pipeline ini HARAM diacak (lihat README — Haram #4):

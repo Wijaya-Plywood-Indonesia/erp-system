@@ -23,41 +23,70 @@
                 Data Absensi
             </x-filament::tabs.item>
 
-            {{-- TAB 2: UPLOAD --}}
+            {{-- TAB 2: UPLOAD — hanya untuk role absen / super_admin --}}
+            @if (auth()->user()?->hasRole('super_admin') || auth()->user()?->hasRole('absen'))
             <x-filament::tabs.item alpine-active="activeTab === 'upload'" wire:click="$set('activeTab', 'upload')">
                 Upload Finger
             </x-filament::tabs.item>
 
-            {{-- TAB 3: RIWAYAT --}}
+            {{-- TAB 3: RIWAYAT — hanya untuk role absen / super_admin --}}
             <x-filament::tabs.item alpine-active="activeTab === 'riwayat'" wire:click="$set('activeTab', 'riwayat')">
                 Riwayat Upload
             </x-filament::tabs.item>
+            @endif
 
         </x-filament::tabs>
 
-        {{-- Filter Tanggal — selalu tampil di semua tab --}}
-        <div class="mt-6 max-w-xs">
-            <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Tanggal</label>
-            <input type="date" wire:model.live="tanggal"
-                class="fi-input block w-full rounded-lg border-none bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-gray-950/10 focus:ring-2 focus:ring-primary-600 dark:bg-white/5 dark:text-white dark:ring-white/20" />
+        {{-- Filter Tanggal & Sumber — selalu tampil di semua tab --}}
+        <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end gap-3">
+            <div class="w-full sm:col-span-1">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Tanggal</label>
+                <input type="date" wire:model.live="tanggal"
+                    class="fi-input block w-full rounded-lg border-none bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-gray-950/10 focus:ring-2 focus:ring-primary-600 dark:bg-white/5 dark:text-white dark:ring-white/20" />
+            </div>
+
+            <div class="w-full sm:col-span-1">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                    Filter Sumber Produksi
+                </label>
+                <div class="flex items-center gap-2">
+                    <select wire:model.live="filterSumber"
+                        class="fi-input block w-full rounded-lg border-none bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-gray-950/10 focus:ring-2 focus:ring-primary-600 dark:bg-gray-900 dark:text-white dark:ring-white/20">
+                        <option value="" class="dark:bg-gray-900">— Semua Sumber —</option>
+                        <option value="_tanpa_produksi" class="dark:bg-gray-900">Tanpa Produksi</option>
+                        @foreach ($this->getAvailableSumber() as $key => $label)
+                            <option value="{{ $key }}" class="dark:bg-gray-900">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                    @if ($filterSumber !== '')
+                        <button type="button" wire:click="$set('filterSumber', '')"
+                            title="Reset filter"
+                            class="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+                            <x-heroicon-o-x-mark class="h-4 w-4" />
+                        </button>
+                    @endif
+                </div>
+            </div>
         </div>
 
         {{-- ================= TAB CONTENT: DATA ABSENSI ================= --}}
         <div x-show="activeTab === 'data'" x-cloak wire:key="tab-data" class="mt-6 space-y-6">
 
-            {{-- Loading bar tipis di atas, muncul saat tanggal berubah --}}
-            <div wire:loading wire:target="tanggal"
+            {{-- Loading bar tipis di atas, muncul saat tanggal atau filter berubah --}}
+            <div wire:loading wire:target="tanggal,filterSumber"
                 class="h-0.5 -mt-2 mb-2 overflow-hidden rounded-full bg-primary-100 dark:bg-primary-900/30">
                 <div class="h-full w-1/3 rounded-full bg-primary-600 animate-[loading-bar_1s_ease-in-out_infinite]">
                 </div>
             </div>
 
-            <div wire:loading.class="opacity-40" wire:target="tanggal"
+            <div wire:loading.class="opacity-40" wire:target="tanggal,filterSumber"
                 class="transition-opacity duration-200 space-y-6">
 
-                {{-- Aksi: Export Excel --}}
-                <div class="flex flex-wrap items-center gap-3">
-                    <x-filament::button wire:click="exportExcel" color="success" icon="heroicon-o-table-cells">
+                {{-- Aksi: Export — hanya untuk role absen / super_admin --}}
+                @if (auth()->user()?->hasRole('super_admin') || auth()->user()?->hasRole('absen'))
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+                    <x-filament::button wire:click="exportExcel" color="success" icon="heroicon-o-table-cells"
+                        class="w-full sm:w-auto justify-center">
                         Export Excel
                     </x-filament::button>
 
@@ -70,13 +99,15 @@
                          jalan. --}}
                     <x-filament::button wire:click="exportRumusGajiWijaya" color="warning"
                         icon="heroicon-o-currency-dollar" wire:loading.attr="disabled"
-                        wire:target="exportRumusGajiWijaya">
+                        wire:target="exportRumusGajiWijaya"
+                        class="w-full sm:w-auto justify-center">
                         Export Format Baru
                     </x-filament::button>
 
                     <x-filament::button wire:click="exportRumusGajiWijayaMingguan" color="info"
                         icon="heroicon-o-document-duplicate" wire:loading.attr="disabled"
-                        wire:target="exportRumusGajiWijayaMingguan">
+                        wire:target="exportRumusGajiWijayaMingguan"
+                        class="w-full sm:w-auto justify-center">
                         Cetak Mingguan
                     </x-filament::button>
 
@@ -87,13 +118,11 @@
                          komponen tetap ada, hanya sudah tidak dipanggil manual lewat
                          tombol di UI. --}}
                 </div>
+                @endif
 
-                {{-- Tabel/peringatan hasil pengecekan target — hasilnya otomatis
-                     ada begitu halaman dibuka (lihat mount()), TIDAK memblokir
-                     export sama sekali, murni informasional. Tombol
-                     show/hide panel (toggleTargetPanel()) HANYA ditampilkan untuk
-                     super admin — role lain selalu melihat panel ini kalau ada
-                     item yang belum punya target. --}}
+                {{-- Tabel/peringatan hasil pengecekan target — hanya untuk role
+                     absen / super_admin. --}}
+                @if (auth()->user()?->hasRole('super_admin') || auth()->user()?->hasRole('absen'))
                 @if ($sudahDicekTarget && count($missingTargetItems) > 0)
                     @if (auth()->user()?->hasRole('super_admin'))
                         <div class="flex justify-end">
@@ -116,7 +145,7 @@
                             <div class="flex items-start gap-3">
                                 <x-heroicon-o-exclamation-triangle
                                     class="h-6 w-6 shrink-0 text-amber-600 dark:text-amber-400" />
-                                <div class="flex-1">
+                                <div class="flex-1 min-w-0">
                                     <div class="flex items-start justify-between gap-3">
                                         <h4 class="text-sm font-semibold text-amber-800 dark:text-amber-300">
                                             {{ count($missingTargetItems) }} item produksi belum punya target di
@@ -174,9 +203,204 @@
                         ✔ Semua item produksi tanggal ini sudah punya target.
                     </div>
                 @endif
+                @endif
 
                 {{-- Tabel Rekap Utama --}}
-                <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm dark:border-gray-700">
+                @php
+                    $rekapData = $this->getRekap();
+                    $canViewRawFinger = auth()->user()?->hasRole('super_admin') || auth()->user()?->hasRole('absen');
+                @endphp
+                @if ($filterSumber !== '')
+                    @php
+                        $filterLabel = $filterSumber === '_tanpa_produksi'
+                            ? 'Tanpa Produksi'
+                            : ($this->getAvailableSumber()[$filterSumber] ?? $filterSumber);
+                    @endphp
+                    <div class="flex items-center gap-2 text-sm text-primary-700 dark:text-primary-400">
+                        <x-heroicon-o-funnel class="h-4 w-4 shrink-0" />
+                        <span>Filter aktif: <strong>{{ $filterLabel }}</strong></span>
+                        <span class="text-gray-400">·</span>
+                        <span class="text-gray-500 dark:text-gray-400">{{ $rekapData->count() }} pegawai</span>
+                    </div>
+                @endif
+
+                {{-- ===== CARD VIEW (mobile, < sm) ===== --}}
+                <div class="sm:hidden space-y-3">
+                    @forelse ($rekapData as $row)
+                        @php
+                            $rowKey    = (string) ($row['id_pegawai'] ?? $row['nama_pegawai']);
+                            $preview   = $row['_finger_preview'] ?? null;
+                            $adaPreview = $canViewRawFinger && $preview && ($preview['hari_ini'] || $preview['besok']);
+                            $isExpanded = array_key_exists($rowKey, $this->expandedRows)
+                                ? $this->expandedRows[$rowKey]
+                                : true;
+                            $telatMenit = null;
+                            $jamMasukProduksi = $row['jam_masuk'] ?? null;
+                            $masukFingerDipakai = $row['jam_masuk_finger'] ?? null;
+                            if (
+                                !empty($jamMasukProduksi) && $jamMasukProduksi !== '-' &&
+                                !empty($masukFingerDipakai) && $masukFingerDipakai !== '-'
+                            ) {
+                                try {
+                                    $tP = \Illuminate\Support\Carbon::parse($jamMasukProduksi);
+                                    $tF = \Illuminate\Support\Carbon::parse($masukFingerDipakai);
+                                    if ($tF->gt($tP)) $telatMenit = (int) $tP->diffInMinutes($tF);
+                                } catch (\Throwable $e) {}
+                            }
+                            $shiftColors = [
+                                'pagi'  => 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-400',
+                                'siang' => 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400',
+                                'malam' => 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400',
+                            ];
+                            $shiftClass = $shiftColors[strtolower($row['shift'] ?? '')] ?? 'border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-500/20 dark:bg-gray-500/10 dark:text-gray-400';
+                        @endphp
+                        <div wire:key="card-{{ $rowKey }}"
+                            class="rounded-xl border shadow-sm overflow-hidden {{ $telatMenit ? 'border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-900/10' : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800/50' }}">
+
+                            {{-- Card Header: Nama + Kode + Shift + Sumber --}}
+                            <div class="flex items-start justify-between gap-2 px-4 pt-3 pb-2">
+                                <div class="min-w-0">
+                                    <p class="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                                        {{ $row['nama_pegawai'] }}
+                                    </p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                        {{ $row['kode_pegawai'] ?? '-' }}
+                                    </p>
+                                </div>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    @if (!empty($row['shift']))
+                                        <span class="inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize {{ $shiftClass }}">
+                                            {{ $row['shift'] }}
+                                        </span>
+                                    @endif
+                                    @if ($adaPreview)
+                                        <button type="button" wire:click="toggleRow('{{ $rowKey }}')"
+                                            title="Preview finger"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
+                                                fill="currentColor"
+                                                class="h-4 w-4 transition-transform duration-150 {{ $isExpanded ? 'rotate-90' : '' }}">
+                                                <path fill-rule="evenodd"
+                                                    d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+                                                    clip-rule="evenodd" />
+                                            </svg>
+                                        </button>
+                                    @endif
+                                </div>
+                            </div>
+
+                            {{-- Sumber badges --}}
+                            @if (!empty($row['sumber_label']))
+                                <div class="px-4 pb-2 flex flex-wrap gap-1">
+                                    @foreach ((array) $row['sumber_label'] as $sl)
+                                        @php
+                                            $parts2 = explode(':', $sl, 2);
+                                            $mainDiv2 = trim($parts2[0]);
+                                            $detailDiv2 = isset($parts2[1]) ? trim($parts2[1]) : '';
+                                        @endphp
+                                        <span class="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700 dark:border-primary-500/20 dark:bg-primary-500/10 dark:text-primary-400">
+                                            {{ $mainDiv2 }}@if ($detailDiv2 !== '')<span class="opacity-70"> · {{ $detailDiv2 }}</span>@endif
+                                        </span>
+                                    @endforeach
+                                </div>
+                            @endif
+
+                            {{-- Grid info: jam kerja & finger --}}
+                            <div class="px-4 pb-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm border-t border-gray-100 dark:border-gray-700 pt-2">
+                                <div>
+                                    <span class="text-xs text-gray-400 block">Jam Masuk</span>
+                                    <span class="text-gray-700 dark:text-gray-300 font-mono">{{ $row['jam_masuk'] ?? '-' }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-xs text-gray-400 block">Jam Pulang</span>
+                                    <span class="text-gray-700 dark:text-gray-300 font-mono">{{ $row['jam_pulang'] ?? '-' }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-xs text-gray-400 block">Finger Masuk</span>
+                                    <span class="{{ $telatMenit ? 'text-amber-700 dark:text-amber-400 font-medium' : 'text-gray-600 dark:text-gray-400' }} font-mono">
+                                        {{ $row['jam_masuk_finger'] ?? '-' }}
+                                    </span>
+                                    @if ($telatMenit)
+                                        <span class="ml-1 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400"
+                                            title="Telat {{ $telatMenit }} menit">
+                                            +{{ $telatMenit }}m
+                                        </span>
+                                    @endif
+                                </div>
+                                <div>
+                                    <span class="text-xs text-gray-400 block">Finger Pulang</span>
+                                    <span class="text-gray-600 dark:text-gray-400 font-mono">{{ $row['jam_pulang_finger'] ?? '-' }}</span>
+                                </div>
+
+                                {{-- Izin & Potongan dalam 1 row --}}
+                                @if (!empty($row['izin']) || (!empty($row['potongan']) && $row['potongan'] > 0) || !empty($row['keterangan']))
+                                <div class="col-span-2 flex flex-wrap items-center gap-2 pt-1 border-t border-gray-100 dark:border-gray-700 mt-1">
+                                    @if (!empty($row['izin']))
+                                        <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400">
+                                            {{ $row['izin'] }}
+                                        </span>
+                                    @endif
+                                    @if (!empty($row['potongan']) && $row['potongan'] > 0)
+                                        <span class="text-xs font-medium text-red-600 dark:text-red-400">
+                                            Rp{{ number_format($row['potongan'], 0, ',', '.') }}
+                                        </span>
+                                    @endif
+                                    @if (!empty($row['keterangan']))
+                                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ $row['keterangan'] }}</span>
+                                    @endif
+                                </div>
+                                @endif
+                            </div>
+
+                            {{-- Raw finger preview (expandable) --}}
+                            @if ($adaPreview && $isExpanded)
+                                @php
+                                    $hi2          = $preview['hari_ini'] ?? null;
+                                    $simPagi2     = $preview['simulasi_pagi'] ?? null;
+                                    $hiMasuk2     = $simPagi2['jam_masuk_finger'] ?? null;
+                                    $hiPulang2    = $simPagi2['jam_pulang_finger'] ?? null;
+                                    $besok2       = $preview['besok'] ?? null;
+                                    $simBesok2    = $preview['simulasi_pagi_besok'] ?? null;
+                                    $besokMasuk2  = $simBesok2['jam_masuk_finger'] ?? null;
+                                    $besokPulang2 = $simBesok2['jam_pulang_finger'] ?? null;
+                                @endphp
+                                <div class="px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/60 border-t border-gray-200 dark:border-gray-700">
+                                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400 mb-2">Raw finger</p>
+                                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                                        <div>
+                                            <span class="text-gray-400">{{ $hi2['tanggal'] ?? null ? \Illuminate\Support\Carbon::parse($hi2['tanggal'])->format('d/m') : '-' }} Masuk</span>
+                                            <span class="font-mono text-gray-600 dark:text-gray-400 ml-1">{{ $hiMasuk2 ?? '-' }}</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-gray-400">Pulang</span>
+                                            <span class="font-mono text-gray-600 dark:text-gray-400 ml-1">{{ $hiPulang2 ?? '-' }}</span>
+                                        </div>
+                                        @if ($besok2)
+                                        <div>
+                                            <span class="text-gray-400">{{ $besok2['tanggal'] ?? null ? \Illuminate\Support\Carbon::parse($besok2['tanggal'])->format('d/m') : '-' }} Masuk</span>
+                                            <span class="font-mono text-gray-600 dark:text-gray-400 ml-1">{{ $besokMasuk2 ?? '-' }}</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-gray-400">Pulang</span>
+                                            <span class="font-mono text-gray-600 dark:text-gray-400 ml-1">{{ $besokPulang2 ?? '-' }}</span>
+                                        </div>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endif
+                        </div>
+                    @empty
+                        <div class="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-10 text-center text-gray-400 dark:text-gray-500">
+                            <div class="flex flex-col items-center gap-2">
+                                <x-heroicon-o-inbox class="h-8 w-8 text-gray-300 dark:text-gray-600" />
+                                <span>Tidak ada data absensi pada tanggal ini.</span>
+                            </div>
+                        </div>
+                    @endforelse
+                </div>
+
+                {{-- ===== TABLE VIEW (desktop, >= sm) ===== --}}
+                <div class="hidden sm:block overflow-x-auto rounded-xl border border-gray-200 shadow-sm dark:border-gray-700">
                     <table class="w-full text-sm text-left border-collapse">
                         <thead
                             class="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:bg-gray-800 dark:text-gray-300">
@@ -201,7 +425,7 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                            @forelse ($this->getRekap() as $row)
+                            @forelse ($rekapData as $row)
                                 @php
                                     // Key yang sama dengan yang dipakai groupBy() di
                                     // gabungkanMultiSumber() service: id_pegawai, fallback
@@ -209,7 +433,7 @@
                                     // & identifier expand/collapse (toggleRow).
                                     $rowKey = (string) ($row['id_pegawai'] ?? $row['nama_pegawai']);
                                     $preview = $row['_finger_preview'] ?? null;
-                                    $adaPreview = $preview && ($preview['hari_ini'] || $preview['besok']);
+                                    $adaPreview = $canViewRawFinger && $preview && ($preview['hari_ini'] || $preview['besok']);
                                     $isMalam = strtolower($row['shift'] ?? '') === 'malam';
                                     // GANTI: default expand SEKARANG true (row otomatis
                                     // terbuka tanpa perlu klik), kecuali user sudah pernah
@@ -513,8 +737,31 @@
                     </div>
 
                     @if ($showAbsensiLainLain)
+                        {{-- Card view di mobile --}}
+                        <div class="sm:hidden mt-4 space-y-2">
+                            @forelse ($this->getAbsensiLainLain() as $row)
+                                <div class="rounded-xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-800/50 px-4 py-3">
+                                    <p class="font-medium text-gray-900 dark:text-gray-100">{{ $row['nama_pegawai'] }}</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ $row['kode_pegawai'] }}</p>
+                                    <div class="mt-2 grid grid-cols-2 gap-x-4 text-sm">
+                                        <div>
+                                            <span class="text-xs text-gray-400 block">Masuk</span>
+                                            <span class="font-mono text-gray-700 dark:text-gray-300">{{ $row['jam_masuk'] ?? '-' }}</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs text-gray-400 block">Pulang</span>
+                                            <span class="font-mono text-gray-700 dark:text-gray-300">{{ $row['jam_pulang'] ?? '-' }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            @empty
+                                <p class="text-center text-sm text-gray-400 py-6">Tidak ada checklog tanpa data produksi.</p>
+                            @endforelse
+                        </div>
+
+                        {{-- Table view di desktop --}}
                         <div
-                            class="overflow-x-auto rounded-xl border border-amber-200 shadow-sm dark:border-amber-800 mt-4">
+                            class="hidden sm:block overflow-x-auto rounded-xl border border-amber-200 shadow-sm dark:border-amber-800 mt-4">
                             <table class="w-full text-sm text-left border-collapse">
                                 <thead
                                     class="bg-amber-50 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
@@ -566,79 +813,133 @@
 
         {{-- ================= TAB CONTENT: UPLOAD ================= --}}
         <div x-show="activeTab === 'upload'" x-cloak wire:key="tab-upload" class="mt-6 space-y-4">
-            <form wire:submit.prevent>
-                {{ $this->uploadForm }}
-            </form>
+            @if (auth()->user()?->hasRole('super_admin') || auth()->user()?->hasRole('absen'))
+                <form wire:submit.prevent>
+                    {{ $this->uploadForm }}
+                </form>
 
-            <div class="flex flex-wrap items-center gap-3">
-                <x-filament::button wire:click="uploadFinger" icon="heroicon-o-arrow-up-tray">
-                    Proses Upload Finger
-                </x-filament::button>
+                <div class="grid grid-cols-1 sm:flex sm:flex-wrap sm:items-center gap-2 sm:gap-3">
+                    <x-filament::button wire:click="uploadFinger" icon="heroicon-o-arrow-up-tray"
+                        class="w-full sm:w-auto justify-center">
+                        Proses Upload Finger
+                    </x-filament::button>
 
-                <x-filament::button wire:click="downloadFingerForSelectedDate" color="gray"
-                    icon="heroicon-o-arrow-down-tray">
-                    Download Finger Tanggal Ini
-                </x-filament::button>
-            </div>
+                    <x-filament::button wire:click="downloadFingerForSelectedDate" color="gray"
+                        icon="heroicon-o-arrow-down-tray"
+                        class="w-full sm:w-auto justify-center">
+                        Download Finger Tanggal Ini
+                    </x-filament::button>
+                </div>
+            @else
+                <div class="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800/30 dark:text-gray-400">
+                    <x-heroicon-o-lock-closed class="mx-auto mb-2 h-8 w-8 text-gray-300 dark:text-gray-600" />
+                    Anda tidak memiliki akses ke fitur Upload Finger.
+                </div>
+            @endif
         </div>
 
         {{-- ================= TAB CONTENT: RIWAYAT UPLOAD ================= --}}
         <div x-show="activeTab === 'riwayat'" x-cloak wire:key="tab-riwayat" class="mt-6">
-            <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                Riwayat Upload Finger
-            </h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                20 upload terakhir dari semua tanggal.
-            </p>
+            @if (auth()->user()?->hasRole('super_admin') || auth()->user()?->hasRole('absen'))
+                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                    Riwayat Upload Finger
+                </h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    20 upload terakhir dari semua tanggal.
+                </p>
 
-            <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm dark:border-gray-700">
-                <table class="w-full text-sm text-left border-collapse">
-                    <thead
-                        class="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                        <tr>
-                            <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Batch #</th>
-                            <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Tanggal</th>
-                            <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">File</th>
-                            <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Diupload Oleh</th>
-                            <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Waktu Upload</th>
-                            <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 text-right">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                        @forelse ($this->getUploadHistory() as $item)
-                            <tr class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                                <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">#{{ $item->id }}</td>
-                                <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
-                                    {{ \Illuminate\Support\Carbon::parse($item->tanggal)->format('d/m/Y') }}
-                                </td>
-                                <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
-                                    @foreach ($item->file_names as $fileName)
-                                        <div>{{ $fileName }}</div>
-                                    @endforeach
-                                </td>
-                                <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">{{ $item->uploaded_by }}</td>
-                                <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
-                                    {{ $item->created_at->format('d/m/Y H:i') }}
-                                </td>
-                                <td class="px-4 py-2.5 text-right">
-                                    <x-filament::button size="sm" color="gray"
-                                        wire:click="downloadUpload({{ $item->id }})"
-                                        icon="heroicon-o-arrow-down-tray">
-                                        Download
-                                    </x-filament::button>
-                                </td>
-                            </tr>
-                        @empty
+                {{-- Card view di mobile --}}
+                <div class="sm:hidden space-y-3">
+                    @forelse ($this->getUploadHistory() as $item)
+                        <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 px-4 py-3">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <p class="font-semibold text-gray-900 dark:text-gray-100 text-sm">
+                                        #{{ $item->id }}
+                                        <span class="font-normal text-gray-500 dark:text-gray-400 ml-1">
+                                            {{ \Illuminate\Support\Carbon::parse($item->tanggal)->format('d/m/Y') }}
+                                        </span>
+                                    </p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                        {{ $item->uploaded_by }} · {{ $item->created_at->format('d/m H:i') }}
+                                    </p>
+                                    <div class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                        @foreach ($item->file_names as $fileName)
+                                            <div>{{ $fileName }}</div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                                <x-filament::button size="sm" color="gray"
+                                    wire:click="downloadUpload({{ $item->id }})"
+                                    icon="heroicon-o-arrow-down-tray"
+                                    class="shrink-0">
+                                    Unduh
+                                </x-filament::button>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-8 text-center text-gray-400 dark:text-gray-500 text-sm">
+                            Belum ada riwayat upload.
+                        </div>
+                    @endforelse
+                </div>
+
+                {{-- Table view di desktop --}}
+                <div class="hidden sm:block overflow-x-auto rounded-xl border border-gray-200 shadow-sm dark:border-gray-700">
+                    <table class="w-full text-sm text-left border-collapse">
+                        <thead
+                            class="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:bg-gray-800 dark:text-gray-300">
                             <tr>
-                                <td colspan="6" class="px-4 py-8 text-center text-gray-400 dark:text-gray-500">
-                                    Belum ada riwayat upload.
-                                </td>
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Batch #</th>
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Tanggal</th>
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">File</th>
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Diupload Oleh</th>
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Waktu Upload</th>
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 text-right">Aksi</th>
                             </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                            @forelse ($this->getUploadHistory() as $item)
+                                <tr class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                    <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">#{{ $item->id }}</td>
+                                    <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
+                                        {{ \Illuminate\Support\Carbon::parse($item->tanggal)->format('d/m/Y') }}
+                                    </td>
+                                    <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
+                                        @foreach ($item->file_names as $fileName)
+                                            <div>{{ $fileName }}</div>
+                                        @endforeach
+                                    </td>
+                                    <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">{{ $item->uploaded_by }}</td>
+                                    <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
+                                        {{ $item->created_at->format('d/m/Y H:i') }}
+                                    </td>
+                                    <td class="px-4 py-2.5 text-right">
+                                        <x-filament::button size="sm" color="gray"
+                                            wire:click="downloadUpload({{ $item->id }})"
+                                            icon="heroicon-o-arrow-down-tray">
+                                            Download
+                                        </x-filament::button>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="6" class="px-4 py-8 text-center text-gray-400 dark:text-gray-500">
+                                        Belum ada riwayat upload.
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            @else
+                <div class="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800/30 dark:text-gray-400">
+                    <x-heroicon-o-lock-closed class="mx-auto mb-2 h-8 w-8 text-gray-300 dark:text-gray-600" />
+                    Anda tidak memiliki akses ke Riwayat Upload.
+                </div>
+            @endif
         </div>
 
     </div>
+
 </x-filament-panels::page>

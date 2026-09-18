@@ -5,13 +5,15 @@ namespace App\Filament\Pages;
 use App\Exports\NewRekapAbsensiExport;
 use App\Exports\RumusGajiWijayaExport;
 use App\Models\NewAbsensiUpload;
+use App\Services\AbsensiSources\AbsensiSourceInterface;
 use App\Services\DownloadAbsensiUploadService;
 use App\Services\NewRekapAbsensiPegawaiService;
 use App\Services\PotonganGajiService;
 use App\Services\UploadFingerService;
 use App\Services\ValidasiTargetProduksiService;
 use BackedEnum;
-use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+// HasPageShield sengaja dilepas — halaman ini harus tampil untuk semua role.
+// Pembatasan akses ke tab Upload & Riwayat diatur secara manual di blade.
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
@@ -25,14 +27,13 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class NewAbsensi extends Page implements HasForms
 {
-    use HasPageShield;
     use InteractsWithForms;
-
-    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
 
     protected static ?string $navigationLabel = 'Rekap Absensi Pegawai';
 
     protected static ?string $title = 'Rekap Absensi Pegawai';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Absen dan Gaji';
 
     protected string $view = 'filament.pages.new-absensi';
 
@@ -52,6 +53,16 @@ class NewAbsensi extends Page implements HasForms
      */
     #[Url(keep: true)]
     public ?string $tanggal = null;
+
+    /**
+     * Filter sumber produksi. Nilai '' (string kosong) = tampilkan semua.
+     * Nilai '_tanpa_produksi' = hanya pegawai yang sumber_label-nya kosong
+     * (tidak terlink ke produksi manapun). Nilai lain = key source yang
+     * cocok (misal 'rotary', 'dryer', dst). Single-select: hanya bisa
+     * memilih 1 sumber sekaligus.
+     */
+    #[Url(keep: true)]
+    public string $filterSumber = '';
 
     public string $activeTab = 'data';
 
@@ -223,11 +234,62 @@ class NewAbsensi extends Page implements HasForms
         $potonganService = app(PotonganGajiService::class);
         $potonganMap = $potonganService->getPotonganMap($tanggal);
 
-        return $rekap->map(function ($row) use ($potonganService, $potonganMap) {
+        $rekap = $rekap->map(function ($row) use ($potonganService, $potonganMap) {
             $row['potongan'] = $potonganService->resolvePotongan($potonganMap, $row['kode_pegawai'] ?? null);
 
             return $row;
         });
+
+        // Terapkan filter sumber kalau ada pilihan
+        if ($this->filterSumber === '_tanpa_produksi') {
+            // Hanya tampilkan pegawai yang tidak terlink ke produksi manapun
+            // (sumber_label-nya kosong array)
+            $rekap = $rekap->filter(
+                fn ($row) => empty($row['sumber_label'])
+            )->values();
+        } elseif ($this->filterSumber !== '') {
+            // Filter berdasarkan key sumber. Setelah gabungkanMultiSumber(),
+            // field 'sumber' individual sudah tidak ada — yang tersisa adalah
+            // sumber_label (array). Cocokkan key sumber ke label dari sources
+            // terdaftar, lalu filter baris yang memiliki label tersebut.
+            $sumberKey = $this->filterSumber;
+            // Cari label yang sesuai dengan key ini dari daftar sources
+            $targetLabel = collect(app(NewRekapAbsensiPegawaiService::class)->getSources())
+                ->firstWhere(fn ($s) => $s->key() === $sumberKey)
+                ?->label();
+
+            if ($targetLabel) {
+                // Filter baris yang memiliki setidaknya satu sumber_label
+                // yang dimulai dengan label ini (misal 'Press Dryer' match
+                // 'Press Dryer Pagi' dan 'Press Dryer Malam')
+                $rekap = $rekap->filter(function ($row) use ($targetLabel) {
+                    $labels = (array) ($row['sumber_label'] ?? []);
+
+                    return collect($labels)->contains(
+                        fn ($label) => str_starts_with($label, $targetLabel)
+                    );
+                })->values();
+            }
+        }
+
+        return $rekap;
+    }
+
+    /**
+     * Kembalikan daftar sumber produksi yang terdaftar untuk ditampilkan
+     * di dropdown filter. Format: array ['key' => label].
+     * Key '_tanpa_produksi' adalah opsi khusus untuk menampilkan pegawai
+     * yang tidak terlink ke produksi manapun.
+     */
+    public function getAvailableSumber(): array
+    {
+        $sources = app(NewRekapAbsensiPegawaiService::class)->getSources();
+        $options = [];
+        foreach ($sources as $source) {
+            $options[$source->key()] = $source->label();
+        }
+
+        return $options;
     }
 
     public function getAbsensiLainLain(): Collection
@@ -236,6 +298,7 @@ class NewAbsensi extends Page implements HasForms
 
         return app(NewRekapAbsensiPegawaiService::class)->getAbsensiLainLain($tanggal);
     }
+
 
     /**
      * Dipanggil dari tombol "Export Excel" di tab Data Absensi.
@@ -271,21 +334,29 @@ class NewAbsensi extends Page implements HasForms
             ->cekMissingTarget($tanggal);
         $this->sudahDicekTarget = true;
 
+        // Notifikasi hanya dikirim untuk role absen atau super_admin.
+        $user = auth()->user();
+        $bisaLihatNotif = $user?->hasRole('super_admin') || $user?->hasRole('absen');
+
         if (empty($this->missingTargetItems)) {
-            Notification::make()
-                ->title('Semua item sudah punya target')
-                ->body('Tidak ditemukan ukuran/produksi tanpa target untuk tanggal ini.')
-                ->success()
-                ->send();
+            if ($bisaLihatNotif) {
+                Notification::make()
+                    ->title('Semua item sudah punya target')
+                    ->body('Tidak ditemukan ukuran/produksi tanpa target untuk tanggal ini.')
+                    ->success()
+                    ->send();
+            }
 
             return;
         }
 
-        Notification::make()
-            ->warning()
-            ->title(count($this->missingTargetItems).' item belum punya target')
-            ->body('Lihat daftar lengkapnya di tabel bawah tombol export. Kamu tetap bisa export — potongan untuk item tersebut akan dianggap 0.')
-            ->send();
+        if ($bisaLihatNotif) {
+            Notification::make()
+                ->warning()
+                ->title(count($this->missingTargetItems).' item belum punya target')
+                ->body('Lihat daftar lengkapnya di tabel bawah tombol export. Kamu tetap bisa export — potongan untuk item tersebut akan dianggap 0.')
+                ->send();
+        }
     }
 
     /**
@@ -494,5 +565,15 @@ class NewAbsensi extends Page implements HasForms
         $this->showTargetPanel = true;
 
         $this->cekTargetProduksi();
+    }
+
+    /**
+     * Dipanggil otomatis oleh Livewire setiap kali property $filterSumber
+     * berubah. Reset expandedRows supaya state expand/collapse tidak kacau
+     * ketika baris yang tampil di tabel berubah karena filter diganti.
+     */
+    public function updatedFilterSumber(): void
+    {
+        $this->expandedRows = [];
     }
 }
