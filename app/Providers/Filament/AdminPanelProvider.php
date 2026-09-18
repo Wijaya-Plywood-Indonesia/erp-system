@@ -127,6 +127,10 @@ class AdminPanelProvider extends PanelProvider
             )
 
             ->navigationGroups([
+                NavigationGroup::make('Absen dan Gaji')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->collapsed(),
+
                 //Kategori Menu Produksi
                 NavigationGroup::make('Gudang')
                     ->icon('heroicon-o-building-storefront')
