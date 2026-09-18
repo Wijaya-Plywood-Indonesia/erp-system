@@ -11,9 +11,15 @@ use App\Models\HppVeneerBasahSummary;
 use App\Models\JenisBarang;
 use App\Models\JenisKayu;
 use App\Models\NotaBarangKeluar;
+use App\Models\PlatformJadiMutasi;
+use App\Models\PlatformJadiMutasiDetail;
+use App\Models\PlatformMthMutasi;
+use App\Models\PlatformMthMutasiDetail;
 use App\Models\PlywoodMutasi;
 use App\Models\PlywoodMutasiDetail;
 use App\Models\StokLogCore;
+use App\Models\StokPlatformJadi;
+use App\Models\StokPlatformMth;
 use App\Models\StokPlywoodSiapJual;
 use App\Models\StokVeneerJadi;
 use App\Models\StokVeneerKering;
@@ -22,6 +28,8 @@ use App\Models\VeneerMutasi;
 use App\Models\VeneerMutasiDetail;
 use App\Services\BarangUmumInventoryService;
 use App\Services\LogCoreInventoryService;
+use App\Services\PlatformJadiMutasiService;
+use App\Services\PlatformMthMutasiService;
 use App\Services\PlywoodMutasiService;
 use App\Services\VeneerMutasiService;
 use Filament\Actions\Action;
@@ -122,6 +130,51 @@ class DetailNotaBarangKeluarsTable
             ->first();
 
         return $stok ? (float) $stok->stok_qty : 0.0;
+    }
+
+    /**
+     * Cari baris stok platform jadi tanpa peduli orientasi panjang/lebar.
+     * Platform Jadi diidentifikasi lewat id_jenis_barang (bukan id_jenis_kayu).
+     */
+    protected static function cariStokPlatformJadi($ukuran, $idJenisBarang, $kw): ?StokPlatformJadi
+    {
+        if (! $ukuran || ! $idJenisBarang || ! $kw) {
+            return null;
+        }
+
+        $a = (float) $ukuran->panjang;
+        $b = (float) $ukuran->lebar;
+
+        return StokPlatformJadi::where('id_jenis_barang', $idJenisBarang)
+            ->where('tebal', (float) $ukuran->tebal)
+            ->where('kw_grade', $kw)
+            ->where(function ($q) use ($a, $b) {
+                $q->where(fn ($s) => $s->where('panjang', $a)->where('lebar', $b))
+                    ->orWhere(fn ($s) => $s->where('panjang', $b)->where('lebar', $a));
+            })
+            ->first();
+    }
+
+    /**
+     * Cari baris stok platform mth (setengah jadi) tanpa peduli orientasi panjang/lebar.
+     */
+    protected static function cariStokPlatformMth($ukuran, $idJenisKayu, $kw): ?StokPlatformMth
+    {
+        if (! $ukuran || ! $idJenisKayu || ! $kw) {
+            return null;
+        }
+
+        $a = (float) $ukuran->panjang;
+        $b = (float) $ukuran->lebar;
+
+        return StokPlatformMth::where('id_jenis_kayu', $idJenisKayu)
+            ->where('tebal', (float) $ukuran->tebal)
+            ->where('kw_grade', $kw)
+            ->where(function ($q) use ($a, $b) {
+                $q->where(fn ($s) => $s->where('panjang', $a)->where('lebar', $b))
+                    ->orWhere(fn ($s) => $s->where('panjang', $b)->where('lebar', $a));
+            })
+            ->first();
     }
 
     /**
@@ -480,6 +533,104 @@ class DetailNotaBarangKeluarsTable
     }
 
     /**
+     * Form Platform untuk NOTA KELUAR — satu form dengan pilihan "Tipe Platform"
+     * (Jadi / Mth), mirip pola Veneer. Stok ditampilkan sebagai info (tidak
+     * membatasi pilihan lewat query filter), kecukupan stok tetap divalidasi
+     * ulang di PlatformJadiMutasiService/PlatformMthMutasiService saat Validasi Nota.
+     * - Platform Jadi diidentifikasi lewat id_jenis_barang
+     * - Platform Mth (setengah jadi) diidentifikasi lewat id_jenis_kayu
+     */
+    protected static function platformFormSchema(): array
+    {
+        return [
+            Select::make('tipe_platform')
+                ->label('Tipe Platform')
+                ->options([
+                    'jadi' => 'Platform Jadi',
+                    'mth' => 'Platform Mth (Setengah Jadi)',
+                ])
+                ->required()
+                ->live(),
+
+            Select::make('id_ukuran')
+                ->label('Ukuran')
+                ->options(Ukuran::all()->pluck('nama_ukuran', 'id'))
+                ->searchable()
+                ->required()
+                ->live(),
+
+            Select::make('id_jenis_barang')
+                ->label('Jenis Barang')
+                ->options(JenisBarang::pluck('nama_jenis_barang', 'id'))
+                ->searchable()
+                ->live()
+                ->visible(fn (callable $get) => $get('tipe_platform') === 'jadi')
+                ->required(fn (callable $get) => $get('tipe_platform') === 'jadi'),
+
+            Select::make('id_jenis_kayu')
+                ->label('Jenis Kayu')
+                ->options(JenisKayu::pluck('nama_kayu', 'id'))
+                ->searchable()
+                ->live()
+                ->visible(fn (callable $get) => $get('tipe_platform') === 'mth')
+                ->required(fn (callable $get) => $get('tipe_platform') === 'mth'),
+
+            Select::make('kw_grade')
+                ->label('KW / Grade')
+                ->options(Grade::orderBy('nama_grade')->pluck('nama_grade', 'nama_grade'))
+                ->searchable()
+                ->required()
+                ->live(),
+
+            Placeholder::make('stok_saat_ini')
+                ->label('Stok Saat Ini')
+                ->content(function (callable $get) {
+                    $tipe = $get('tipe_platform');
+                    $u = $get('id_ukuran') ? Ukuran::find($get('id_ukuran')) : null;
+                    $kw = $get('kw_grade');
+
+                    if (! $tipe || ! $u || ! $kw) {
+                        return new HtmlString('<span class="text-gray-400 dark:text-gray-500">Silakan lengkapi pilihan di atas...</span>');
+                    }
+
+                    if ($tipe === 'jadi') {
+                        if (! $get('id_jenis_barang')) {
+                            return new HtmlString('<span class="text-gray-400 dark:text-gray-500">Silakan lengkapi pilihan di atas...</span>');
+                        }
+
+                        $stok = static::cariStokPlatformJadi($u, $get('id_jenis_barang'), $kw);
+                    } else {
+                        if (! $get('id_jenis_kayu')) {
+                            return new HtmlString('<span class="text-gray-400 dark:text-gray-500">Silakan lengkapi pilihan di atas...</span>');
+                        }
+
+                        $stok = static::cariStokPlatformMth($u, $get('id_jenis_kayu'), $kw);
+                    }
+
+                    $lembar = $stok ? (int) $stok->stok_lembar : 0;
+
+                    if ($lembar <= 0) {
+                        return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 Lembar (Stok Habis)</strong>');
+                    }
+
+                    return new HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">' . number_format($lembar) . ' Lembar</strong>');
+                }),
+
+            TextInput::make('jumlah')
+                ->label('Jumlah (Lembar)')
+                ->numeric()
+                ->minValue(1)
+                ->required()
+                ->helperText('Kecukupan stok akan dicek ulang saat nota divalidasi.'),
+
+            Textarea::make('keterangan')
+                ->label('Keterangan')
+                ->rows(3)
+                ->required(),
+        ];
+    }
+
+    /**
      * Cari baris plywood_mutasi_details yang cocok dengan baris detail nota.
      */
     protected static function findPlywoodDetail($record): ?PlywoodMutasiDetail
@@ -503,6 +654,72 @@ class DetailNotaBarangKeluarsTable
             $expectedName = 'Plywood - '.$ukuran->nama_ukuran
                 .' - '.$jenisKayu->nama_kayu
                 .' - KW '.$detail->kw_grade;
+
+            if ($expectedName === $record->nama_barang && (int) $detail->qty === (int) $record->jumlah) {
+                return $detail;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Cari baris platform_jadi_mutasi_details yang cocok dengan baris detail nota.
+     */
+    protected static function findPlatformJadiDetail($record): ?PlatformJadiMutasiDetail
+    {
+        $nota = $record->nota;
+
+        if (! $nota || ! $nota->platformJadiMutasi) {
+            return null;
+        }
+
+        $details = $nota->platformJadiMutasi->details()->with(['ukuran', 'jenisBarang'])->get();
+
+        foreach ($details as $detail) {
+            $ukuran = $detail->ukuran;
+            $jenisBarang = $detail->jenisBarang;
+
+            if (! $ukuran || ! $jenisBarang) {
+                continue;
+            }
+
+            $expectedName = 'Platform Jadi - ' . $ukuran->nama_ukuran
+                . ' - ' . $jenisBarang->nama_jenis_barang
+                . ' - KW ' . $detail->kw_grade;
+
+            if ($expectedName === $record->nama_barang && (int) $detail->qty === (int) $record->jumlah) {
+                return $detail;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Cari baris platform_mth_mutasi_details yang cocok dengan baris detail nota.
+     */
+    protected static function findPlatformMthDetail($record): ?PlatformMthMutasiDetail
+    {
+        $nota = $record->nota;
+
+        if (! $nota || ! $nota->platformMthMutasi) {
+            return null;
+        }
+
+        $details = $nota->platformMthMutasi->details()->with(['ukuran', 'jenisKayu'])->get();
+
+        foreach ($details as $detail) {
+            $ukuran = $detail->ukuran;
+            $jenisKayu = $detail->jenisKayu;
+
+            if (! $ukuran || ! $jenisKayu) {
+                continue;
+            }
+
+            $expectedName = 'Platform Mth - ' . $ukuran->nama_ukuran
+                . ' - ' . $jenisKayu->nama_kayu
+                . ' - KW ' . $detail->kw_grade;
 
             if ($expectedName === $record->nama_barang && (int) $detail->qty === (int) $record->jumlah) {
                 return $detail;
@@ -974,7 +1191,7 @@ class DetailNotaBarangKeluarsTable
 
                             $livewire->dispatch('$refresh');
                         }),
-
+                    
                     // 3. Opsi Keluar Barang Umum
                     Action::make('keluar_barang_umum')
                         ->label('Barang Umum')
@@ -1042,7 +1259,90 @@ class DetailNotaBarangKeluarsTable
                             $livewire->dispatch('$refresh');
                         }),
 
-                    // 5. Opsi Input Barang Manual
+                        // 5. Opsi Keluar Platform (Jadi / Mth — dipilih di dalam form)
+                    Action::make('tambah_platform')
+                        ->label('Platform')
+                        ->icon('heroicon-o-squares-2x2')
+                        ->form(static::platformFormSchema())
+                        ->action(function (RelationManager $livewire, array $data) {
+                            $nota = $livewire->getOwnerRecord();
+                            if (! $nota) {
+                                return;
+                            }
+
+                            $isKeluar = $nota instanceof NotaBarangKeluar;
+                            $ukuran = Ukuran::findOrFail($data['id_ukuran']);
+                            $qty = (int) $data['jumlah'];
+
+                            if ($data['tipe_platform'] === 'jadi') {
+                                $mutasi = $nota->platformJadiMutasi ?? PlatformJadiMutasi::create([
+                                    'tanggal' => $nota->tanggal,
+                                    'tipe_transaksi' => $isKeluar ? 'keluar' : 'masuk',
+                                    'no_nota' => $nota->no_nota,
+                                    'tujuan_nota' => $nota->tujuan_nota ?? '-',
+                                    'status' => 'draft',
+                                    'id_nota_bk' => $isKeluar ? $nota->id : null,
+                                    'id_nota_bm' => $isKeluar ? null : $nota->id,
+                                    'dibuat_oleh' => auth()->id(),
+                                ]);
+
+                                $jenisBarang = JenisBarang::findOrFail($data['id_jenis_barang']);
+
+                                PlatformJadiMutasiDetail::create([
+                                    'id_platform_jadi_mutasi' => $mutasi->id,
+                                    'id_ukuran' => $data['id_ukuran'],
+                                    'id_jenis_barang' => $data['id_jenis_barang'],
+                                    'kw_grade' => $data['kw_grade'],
+                                    'qty' => $qty,
+                                    'm3' => PlatformJadiMutasiDetail::hitungM3($ukuran, $qty),
+                                ]);
+
+                                $namaBarang = 'Platform Jadi - ' . $ukuran->nama_ukuran
+                                    . ' - ' . $jenisBarang->nama_jenis_barang
+                                    . ' - KW ' . $data['kw_grade'];
+                            } else {
+                                $mutasi = $nota->platformMthMutasi ?? PlatformMthMutasi::create([
+                                    'tanggal' => $nota->tanggal,
+                                    'tipe_transaksi' => $isKeluar ? 'keluar' : 'masuk',
+                                    'no_nota' => $nota->no_nota,
+                                    'tujuan_nota' => $nota->tujuan_nota ?? '-',
+                                    'status' => 'draft',
+                                    'id_nota_bk' => $isKeluar ? $nota->id : null,
+                                    'id_nota_bm' => $isKeluar ? null : $nota->id,
+                                    'dibuat_oleh' => auth()->id(),
+                                ]);
+
+                                $jenisKayu = JenisKayu::findOrFail($data['id_jenis_kayu']);
+
+                                PlatformMthMutasiDetail::create([
+                                    'id_platform_mth_mutasi' => $mutasi->id,
+                                    'id_ukuran' => $data['id_ukuran'],
+                                    'id_jenis_kayu' => $data['id_jenis_kayu'],
+                                    'kw_grade' => $data['kw_grade'],
+                                    'qty' => $qty,
+                                    'm3' => PlatformMthMutasiDetail::hitungM3($ukuran, $qty),
+                                ]);
+
+                                $namaBarang = 'Platform Mth - ' . $ukuran->nama_ukuran
+                                    . ' - ' . $jenisKayu->nama_kayu
+                                    . ' - KW ' . $data['kw_grade'];
+                            }
+
+                            $payload = [
+                                'nama_barang' => $namaBarang,
+                                'jumlah' => $qty,
+                                'satuan' => 'Lembar',
+                                'keterangan' => $data['keterangan'] ?? 'Otomatis dari Mutasi Platform',
+                            ];
+
+                            $isKeluar
+                                ? DetailNotaBarangKeluar::create($payload + ['id_nota_bk' => $nota->id])
+                                : DetailNotaBarangMasuk::create($payload + ['id_nota_bm' => $nota->id]);
+
+                            $livewire->dispatch('$refresh');
+                        }),
+
+                    // 6. Opsi Input Barang Manual
                     CreateAction::make()
                         ->label('Tambah Barang(Lainnya)')
                         ->icon('heroicon-o-plus-circle'),
@@ -1092,6 +1392,8 @@ class DetailNotaBarangKeluarsTable
                         try {
                             $hasVeneer = VeneerMutasi::where('id_nota_bk', $nota->id)->exists();
                             $hasPlywood = PlywoodMutasi::where('id_nota_bk', $nota->id)->exists();
+                            $hasPlatformJadi = PlatformJadiMutasi::where('id_nota_bk', $nota->id)->exists();
+                            $hasPlatformMth = PlatformMthMutasi::where('id_nota_bk', $nota->id)->exists();
                             $hasBarangUmum = $nota->detail()
                                 ->where('nama_barang', 'like', static::BARANG_UMUM_PREFIX.'%')
                                 ->exists();
@@ -1107,6 +1409,9 @@ class DetailNotaBarangKeluarsTable
 
                                 app(PlywoodMutasiService::class)->processStockFromNota($nota);
 
+                                app(PlatformJadiMutasiService::class)->processStockFromNota($nota);
+                                app(PlatformMthMutasiService::class)->processStockFromNota($nota);
+
                                 app(BarangUmumInventoryService::class)->processStockFromNotaKeluar($nota);
                                 app(LogCoreInventoryService::class)->processStockFromNotaKeluar($nota, auth()->id());
                             });
@@ -1120,6 +1425,8 @@ class DetailNotaBarangKeluarsTable
                             $kategoriAktif = array_filter([
                                 'veneer' => $hasVeneer,
                                 'plywood' => $hasPlywood,
+                                'platform jadi' => $hasPlatformJadi,
+                                'platform mth' => $hasPlatformMth,
                                 'barang umum' => $hasBarangUmum,
                                 'log core' => $hasLogCore,
                             ]);
@@ -1154,6 +1461,11 @@ class DetailNotaBarangKeluarsTable
                     ->form(function ($record) {
                         if (str_starts_with($record->nama_barang, DetailNotaBarangKeluarsTable::BARANG_UMUM_PREFIX)) {
                             return static::barangUmumFormSchema();
+                        }
+
+                        if (str_starts_with($record->nama_barang, 'Platform Jadi ')
+                            || str_starts_with($record->nama_barang, 'Platform Mth ')) {
+                            return static::platformFormSchema();
                         }
 
                         if (str_starts_with($record->nama_barang, 'Plywood ')) {
@@ -1408,6 +1720,32 @@ class DetailNotaBarangKeluarsTable
                             return $data;
                         }
 
+                        if (str_starts_with($record->nama_barang, 'Platform Jadi ')) {
+                            $detail = static::findPlatformJadiDetail($record);
+                            $data['tipe_platform'] = 'jadi';
+
+                            if ($detail) {
+                                $data['id_ukuran'] = $detail->id_ukuran;
+                                $data['id_jenis_barang'] = $detail->id_jenis_barang;
+                                $data['kw_grade'] = $detail->kw_grade;
+                            }
+
+                            return $data;
+                        }
+
+                        if (str_starts_with($record->nama_barang, 'Platform Mth ')) {
+                            $detail = static::findPlatformMthDetail($record);
+                            $data['tipe_platform'] = 'mth';
+
+                            if ($detail) {
+                                $data['id_ukuran'] = $detail->id_ukuran;
+                                $data['id_jenis_kayu'] = $detail->id_jenis_kayu;
+                                $data['kw_grade'] = $detail->kw_grade;
+                            }
+
+                            return $data;
+                        }
+
                         if (str_starts_with($record->nama_barang, 'Plywood ')) {
                             $detail = static::findPlywoodDetail($record);
 
@@ -1463,6 +1801,62 @@ class DetailNotaBarangKeluarsTable
                                 'nama_barang' => DetailNotaBarangKeluarsTable::LOG_CORE_PREFIX
                                     .$jenisKayu->nama_kayu.' - '.static::formatQty($panjang).' cm',
                                 'jumlah' => (int) $data['jumlah'],
+                                'keterangan' => $data['keterangan'] ?? $record->keterangan,
+                            ]);
+
+                            return $record;
+                        }
+
+                        if (str_starts_with($record->nama_barang, 'Platform Jadi ')) {
+                            $matchingDetail = static::findPlatformJadiDetail($record);
+
+                            $ukuran = Ukuran::findOrFail($data['id_ukuran']);
+                            $jenisBarang = JenisBarang::findOrFail($data['id_jenis_barang']);
+                            $qty = (int) $data['jumlah'];
+
+                            if ($matchingDetail) {
+                                $matchingDetail->update([
+                                    'id_ukuran' => $data['id_ukuran'],
+                                    'id_jenis_barang' => $data['id_jenis_barang'],
+                                    'kw_grade' => $data['kw_grade'],
+                                    'qty' => $qty,
+                                    'm3' => PlatformJadiMutasiDetail::hitungM3($ukuran, $qty),
+                                ]);
+                            }
+
+                            $record->update([
+                                'nama_barang' => 'Platform Jadi - ' . $ukuran->nama_ukuran
+                                    . ' - ' . $jenisBarang->nama_jenis_barang
+                                    . ' - KW ' . $data['kw_grade'],
+                                'jumlah' => $qty,
+                                'keterangan' => $data['keterangan'] ?? $record->keterangan,
+                            ]);
+
+                            return $record;
+                        }
+
+                        if (str_starts_with($record->nama_barang, 'Platform Mth ')) {
+                            $matchingDetail = static::findPlatformMthDetail($record);
+
+                            $ukuran = Ukuran::findOrFail($data['id_ukuran']);
+                            $jenisKayu = JenisKayu::findOrFail($data['id_jenis_kayu']);
+                            $qty = (int) $data['jumlah'];
+
+                            if ($matchingDetail) {
+                                $matchingDetail->update([
+                                    'id_ukuran' => $data['id_ukuran'],
+                                    'id_jenis_kayu' => $data['id_jenis_kayu'],
+                                    'kw_grade' => $data['kw_grade'],
+                                    'qty' => $qty,
+                                    'm3' => PlatformMthMutasiDetail::hitungM3($ukuran, $qty),
+                                ]);
+                            }
+
+                            $record->update([
+                                'nama_barang' => 'Platform Mth - ' . $ukuran->nama_ukuran
+                                    . ' - ' . $jenisKayu->nama_kayu
+                                    . ' - KW ' . $data['kw_grade'],
+                                'jumlah' => $qty,
                                 'keterangan' => $data['keterangan'] ?? $record->keterangan,
                             ]);
 
@@ -1555,6 +1949,18 @@ class DetailNotaBarangKeluarsTable
                     ->before(function ($record) {
                         if (str_starts_with($record->nama_barang, 'Plywood ')) {
                             static::findPlywoodDetail($record)?->delete();
+
+                            return;
+                        }
+
+                        if (str_starts_with($record->nama_barang, 'Platform Jadi ')) {
+                            static::findPlatformJadiDetail($record)?->delete();
+
+                            return;
+                        }
+
+                        if (str_starts_with($record->nama_barang, 'Platform Mth ')) {
+                            static::findPlatformMthDetail($record)?->delete();
 
                             return;
                         }
