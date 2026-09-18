@@ -808,15 +808,23 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
                 $isAf = str_contains(strtolower($hasil->kw ?? ''), 'af');
                 
                 $bagianParam = $isAf ? 'PPC' : ((float)$ukuran->tebal < 1 ? 'Face Back' : 'Core');
-                $responseApi = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(10)->get($urlApi, [
-                    'jenis_veneer' => 'Veneer Jadi',
-                    'bagian' => $bagianParam,
-                    'jenis_kayu' => $hasil->jenisKayu->nama_kayu ?? '',
-                    'ketebalan' => $ukuran->tebal,
-                    'ukuran' => $ukuran->panjang . 'x' . $ukuran->lebar,
-                    'kw' => $hasil->kw,
-                ]);
-                $idBarang = $responseApi->json('id_barang');
+                $idBarang = null;
+                try {
+                    $responseApi = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(10)->get($urlApi, [
+                        'jenis_veneer' => 'Veneer Jadi',
+                        'bagian' => $bagianParam,
+                        'jenis_kayu' => $hasil->jenisKayu->nama_kayu ?? '',
+                        'ketebalan' => $ukuran->tebal,
+                        'ukuran' => $ukuran->panjang . 'x' . $ukuran->lebar,
+                        'kw' => $hasil->kw,
+                    ]);
+                    if ($responseApi->successful()) {
+                        $idBarang = $responseApi->json('id_barang');
+                    }
+                } catch (\Exception $e) {
+                    // API mati / timeout, biarkan idBarang null
+                }
+
 
                 [$noAkun, $namaAkun] = $this->getAkunVeneerJadi((float) $ukuran->tebal, $isAf);
                 $keterangan = ($isAf ? 'af ' : '130 ').strtolower($hasil->jenisKayu->nama_kayu ?? '').' uk '.$ukuran->panjang.' x '.$ukuran->lebar.' x '.$ukuran->tebal;
@@ -836,15 +844,22 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
                 $isAf = str_contains(strtolower($modal->kw ?? ''), 'af');
 
                 $bagianParam = $isAf ? 'PPC' : ((float)$ukuran->tebal < 1 ? 'Face Back' : 'Core');
-                $responseApi = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(10)->get($urlApi, [
-                    'jenis_veneer' => 'Veneer Jadi',
-                    'bagian' => $bagianParam,
-                    'jenis_kayu' => $modal->jenisKayu->nama_kayu ?? '',
-                    'ketebalan' => $ukuran->tebal,
-                    'ukuran' => $ukuran->panjang . 'x' . $ukuran->lebar,
-                    'kw' => $modal->kw,
-                ]);
-                $idBarang = $responseApi->json('id_barang');
+                $idBarang = null;
+                try {
+                    $responseApi = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(10)->get($urlApi, [
+                        'jenis_veneer' => 'Veneer Jadi',
+                        'bagian' => $bagianParam,
+                        'jenis_kayu' => $modal->jenisKayu->nama_kayu ?? '',
+                        'ketebalan' => $ukuran->tebal,
+                        'ukuran' => $ukuran->panjang . 'x' . $ukuran->lebar,
+                        'kw' => $modal->kw,
+                    ]);
+                    if ($responseApi->successful()) {
+                        $idBarang = $responseApi->json('id_barang');
+                    }
+                } catch (\Exception $e) {
+                    // API mati / timeout, biarkan idBarang null
+                }
 
                 [$noAkun, $namaAkun] = $this->getAkunVeneerJadi((float) $ukuran->tebal, $isAf);
                 $keterangan = ($isAf ? 'af ' : '130 ').strtolower($modal->jenisKayu->nama_kayu ?? '').' uk '.$ukuran->panjang.' x '.$ukuran->lebar.' x '.$ukuran->tebal;
