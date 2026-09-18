@@ -4,14 +4,20 @@ namespace App\Filament\Pages;
 
 use App\Models\HppVeneerBasahSummary;
 use App\Models\JenisKayu;
+use App\Models\ProduksiKedi;
+use App\Models\ProduksiPressDryer;
 use App\Models\Ukuran;
+use App\Services\GudangVeneerBasahService;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
 use UnitEnum;
 
 class StokVeneerBasah extends Page
@@ -36,9 +42,106 @@ class StokVeneerBasah extends Page
     public bool $showNilaiStok  = false;
 
     /**
+     * Header Action: keluarkan stok gudang veneer basah ke Press Dryer / Kedi.
+     * Ini hanya MEMBUAT DOKUMEN MUTASI + baris "Menunggu" di sisi penerima —
+     * stok belum berkurang sampai penerima menekan tombol "Terima".
+     */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('mutasiKeluar')
+                ->label('Keluarkan ke Produksi')
+                ->icon('heroicon-m-arrow-up-tray')
+                ->color('primary')
+                ->modalHeading('Keluarkan Veneer Basah ke Press Dryer / Kedi')
+                ->modalWidth('3xl')
+                ->form([
+                    Select::make('tujuan')
+                        ->label('Tujuan')
+                        ->options([
+                            'dryer' => 'Press Dryer',
+                            'kedi' => 'Kedi',
+                        ])
+                        ->required()
+                        ->live(),
+
+                    Select::make('id_produksi_dryer')
+                        ->label('Produksi Press Dryer Tujuan')
+                        ->options(fn () => ProduksiPressDryer::latest('tgl_produksi')->limit(50)->get()
+                            ->mapWithKeys(fn ($p) => [$p->id => "#{$p->id} - {$p->tgl_produksi}"]))
+                        ->searchable()
+                        ->required()
+                        ->visible(fn (Get $get) => $get('tujuan') === 'dryer'),
+
+                    Select::make('id_produksi_kedi')
+                        ->label('Produksi Kedi Tujuan')
+                        ->options(fn () => ProduksiKedi::latest('tanggal')->limit(50)->get()
+                            ->mapWithKeys(fn ($p) => [$p->id => "#{$p->id} - {$p->tanggal} ({$p->kode_kedi})"]))
+                        ->searchable()
+                        ->required()
+                        ->visible(fn (Get $get) => $get('tujuan') === 'kedi'),
+
+                    Repeater::make('items')
+                        ->label('Item yang Dikeluarkan')
+                        ->schema([
+                            Select::make('id_jenis_kayu')
+                                ->label('Jenis Kayu')
+                                ->options(JenisKayu::pluck('nama_kayu', 'id'))
+                                ->searchable()
+                                ->required(),
+
+                            Select::make('id_ukuran')
+                                ->label('Ukuran')
+                                ->options(Ukuran::get()->mapWithKeys(fn ($u) => [
+                                    $u->id => "{$u->panjang}x{$u->lebar}x{$u->tebal}",
+                                ]))
+                                ->searchable()
+                                ->required(),
+
+                            TextInput::make('kw')
+                                ->label('KW')
+                                ->required(),
+
+                            TextInput::make('qty_lembar')
+                                ->label('Jumlah Lembar')
+                                ->numeric()
+                                ->minValue(1)
+                                ->required(),
+                        ])
+                        ->columns(4)
+                        ->minItems(1)
+                        ->required(),
+
+                    Textarea::make('keterangan')
+                        ->label('Keterangan')
+                        ->nullable(),
+                ])
+                ->action(function (array $data) {
+                    try {
+                        app(GudangVeneerBasahService::class)->buatMutasiKeluar(
+                            items: $data['items'],
+                            tujuan: $data['tujuan'],
+                            idProduksiDryer: $data['id_produksi_dryer'] ?? null,
+                            idProduksiKedi: $data['id_produksi_kedi'] ?? null,
+                            keterangan: $data['keterangan'] ?? null,
+                        );
+
+                        Notification::make()
+                            ->title('Mutasi Keluar Dibuat')
+                            ->body('Menunggu konfirmasi Terima dari sisi penerima. Stok gudang belum berkurang.')
+                            ->success()
+                            ->send();
+                    } catch (\Throwable $e) {
+                        Notification::make()->title('Gagal Membuat Mutasi')->body($e->getMessage())->danger()->send();
+                    }
+                }),
+        ];
+    }
+
+    /**
      * Header Action untuk Inisialisasi/Input Stok Manual
      */
-    // protected function getHeaderActions(): array
+    // protected function getHeaderActionsOld(): array
     // {
     //     return [
     //         Action::make('inputStok')

@@ -300,7 +300,13 @@ class PotonganGajiService
                 'detailMasukKedi.jenisKayu',
                 'detailPegawaiKedi.pegawai',
             ])
-                ->whereDate('tanggal_actual_bongkar', $this->tanggal)
+                ->where(function ($q) {
+                    $q->whereDate('tanggal_actual_bongkar', $this->tanggal)
+                        ->orWhere(function ($sub) {
+                            $sub->whereNull('tanggal_actual_bongkar')
+                                ->whereDate('tanggal_bongkar', $this->tanggal);
+                        });
+                })
                 ->get();
 
             if ($produksiList->isNotEmpty()) {
@@ -322,7 +328,7 @@ class PotonganGajiService
                             continue;
                         }
 
-                        $tglStr = Carbon::parse($produksi->tanggal_actual_bongkar ?? $produksi->tanggal ?? now())->format('Y-m-d');
+                        $tglStr = Carbon::parse($produksi->tanggal_actual_bongkar ?? $produksi->tanggal_bongkar ?? $produksi->tanggal ?? now())->format('Y-m-d');
 
                         foreach ($produksi->detailPegawaiKedi as $dp) {
                             if (! $dp->pegawai) {

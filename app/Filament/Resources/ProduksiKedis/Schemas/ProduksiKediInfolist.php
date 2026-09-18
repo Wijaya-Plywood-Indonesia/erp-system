@@ -16,9 +16,13 @@ class ProduksiKediInfolist
                     ->label('Tanggal Masuk'),
                 TextEntry::make('status'),
                 TextEntry::make('rencana_bongkar')
-                    ->date(),
-                TextEntry::make('tanggal_bongkar')
-                    ->date(),
+                    ->date()
+                    ->label('Rencana Bongkar'),
+                TextEntry::make('tanggal_actual_bongkar')
+                    ->label('Tanggal Realisasi Bongkar')
+                    ->getStateUsing(fn ($record) => $record->tanggal_actual_bongkar ?? $record->tanggal_bongkar)
+                    ->date()
+                    ->placeholder('Belum Bongkar'),
 
                 TextEntry::make('mesin.nama_mesin')
                     ->label('Mesin Kedi'),

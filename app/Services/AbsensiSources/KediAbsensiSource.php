@@ -22,7 +22,13 @@ class KediAbsensiSource implements AbsensiSourceInterface
         return DetailPegawaiKedi::query()
             ->with(['pegawai', 'produksiKedi'])
             ->whereHas('produksiKedi', function ($q) use ($tanggal) {
-                $q->whereDate('tanggal_bongkar', $tanggal);
+                $q->where(function ($sub) use ($tanggal) {
+                    $sub->whereDate('tanggal_actual_bongkar', $tanggal)
+                        ->orWhere(function ($sub2) use ($tanggal) {
+                            $sub2->whereNull('tanggal_actual_bongkar')
+                                ->whereDate('tanggal_bongkar', $tanggal);
+                        });
+                });
             })
             ->get()
             ->map(function ($item) {
@@ -31,12 +37,14 @@ class KediAbsensiSource implements AbsensiSourceInterface
                     $label .= ': '.$item->tugas;
                 }
 
+                $tgl = $item->produksiKedi?->tanggal_actual_bongkar ?? $item->produksiKedi?->tanggal_bongkar;
+
                 return [
                     'sumber' => $this->key(),
                     'sumber_label' => $label,
                     'id_pegawai' => $item->id_pegawai,
                     'nama_pegawai' => $item->pegawai?->nama_pegawai ?? '-',
-                    'tanggal' => $item->produksiKedi?->tanggal_bongkar,
+                    'tanggal' => $tgl,
                     'shift' => 'pagi', // tabel produksi_kedi tidak punya kolom shift
                     'jam_masuk' => $item->masuk,
                     'jam_pulang' => $item->pulang,

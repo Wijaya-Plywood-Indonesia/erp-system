@@ -34,10 +34,12 @@ class DetailMasuksRelationManager extends RelationManager
     {
         $idProduksiDryer = $this->getOwnerRecord()->id;
 
-        $adaPaletDiterima = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
-            ->where('tipe', 'dryer')
+        $adaVeneerDiterima = DB::table('serah_terima_veneer_basah')
+            ->where('tujuan', 'dryer')
+            ->where('id_produksi_dryer', $idProduksiDryer)
+            ->where('status', 'Diterima')
             ->exists();
 
-        return DetailMasuksTable::configure($table, $adaPaletDiterima);
+        return DetailMasuksTable::configure($table, $adaVeneerDiterima);
     }
 }

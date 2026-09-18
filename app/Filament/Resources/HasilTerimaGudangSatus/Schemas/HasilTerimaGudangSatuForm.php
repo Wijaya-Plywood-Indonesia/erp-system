@@ -26,10 +26,13 @@ class HasilTerimaGudangSatuForm
     {
         $sisa = rtrim(rtrim(number_format($s->sisa, 2, ',', '.'), '0'), ',');
 
+        $noPalet = $s->hasilNyusup?->no_palet;
+        $paletPrefix = $noPalet ? "Palet {$noPalet} - " : "";
+
         if ($s->id_triplek_mutasi_keluar !== null) {
             $m = $s->triplekMutasiKeluar;
 
-            return 'Plywood | '.
+            return $paletPrefix . 'Plywood | '.
                 ($m ? ($m->panjang + 0).'×'.($m->lebar + 0).'×'.($m->tebal + 0) : '-').' | '.
                 ($m?->kw_grade ?? '-').' | '.
                 ($m?->jenisKayu?->nama_kayu ?? '-').
@@ -38,7 +41,7 @@ class HasilTerimaGudangSatuForm
 
         $b = $s->barangSetengahJadi;
 
-        return ($b?->grade?->kategoriBarang?->nama_kategori ?? '-').' | '.
+        return $paletPrefix . ($b?->grade?->kategoriBarang?->nama_kategori ?? '-').' | '.
             ($b?->ukuran?->nama_ukuran ?? '-').' | '.
             ($b?->grade?->nama_grade ?? '-').' | '.
             ($b?->jenisBarang?->nama_jenis_barang ?? '-').
@@ -187,6 +190,18 @@ class HasilTerimaGudangSatuForm
                                 // jadi harus di-set dengan prefix bahan.* juga.
                                 $set('bahan.id_barang_setengah_jadi_hp', $resolved['id_barang_setengah_jadi_hp']);
                                 $set('grade_asal_info', $resolved['grade_asal_info']);
+                                
+                                if ($s) {
+                                    $noPalet = $s->hasilNyusup?->no_palet;
+                                    if ($noPalet) {
+                                        $set('bahan.no_palet', $noPalet);
+                                    }
+                                    
+                                    if ($s->sisa > 0) {
+                                        $set('bahan.jumlah', $s->sisa);
+                                        $set('jumlah', $s->sisa);
+                                    }
+                                }
                             })
                             ->afterStateHydrated(function (callable $set, callable $get) {
                                 $id = $get('bahan.id_serah_terima_gudang_satu');
@@ -232,8 +247,25 @@ class HasilTerimaGudangSatuForm
                             ->required()
                             ->reactive()
                             ->minValue(0.01)
-                            // Catatan: tidak ada maxValue/lock ke sisa serah terima —
-                            // jumlah bebas diisi sesuai kebutuhan lapangan.
+                            ->rules([
+                                fn (callable $get, ?\App\Models\HasilTerimaGudangSatu $record) => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                                    $idSerahTerima = $get('bahan.id_serah_terima_gudang_satu');
+                                    if (!$idSerahTerima) return;
+
+                                    $serahTerima = \App\Models\SerahTerimaGudangSatu::find($idSerahTerima);
+                                    if (!$serahTerima) return;
+
+                                    $sisa = $serahTerima->sisa;
+
+                                    if ($record && $record->bahan && $record->bahan->id_serah_terima_gudang_satu === (int) $idSerahTerima) {
+                                        $sisa += (float) $record->bahan->jumlah;
+                                    }
+
+                                    if ($value > $sisa) {
+                                        $fail("Jumlah melebihi sisa yang tersedia dari palet ({$sisa} lbr).");
+                                    }
+                                },
+                            ])
                             ->afterStateUpdated(fn ($state, callable $set) => $set('jumlah', $state)),
                     ])
                     ->columnSpanFull(),

@@ -231,6 +231,14 @@ class MutasiMasukRelationManager extends RelationManager
                                         'stok_kubikasi' => $kubikasiAsli,
                                     ]);
                                     $mk->update(['id_produksi_hp' => $produksiHpId]);
+
+                                    \App\Models\BahanHotpress::create([
+                                        'id_produksi_hp' => $produksiHpId,
+                                        'sumber' => 'veneer',
+                                        'id_mutasi_keluar_palet' => $palet->id,
+                                        'no_palet' => $palet->nomor_palet,
+                                        'isi' => $palet->jumlah_lembar,
+                                    ]);
                                 } elseif ($record->sumber === 'triplek_jadi') {
                                     // 🌟 TRIPLEK JADI: kembali ke hotpress untuk perbaikan.
                                     // Hanya potong stok triplek jadi + tulis log KELUAR, per palet.
@@ -304,6 +312,14 @@ class MutasiMasukRelationManager extends RelationManager
 
                                     $palet->update(['diterima_by' => $userId, 'diterima_at' => now()]);
                                     $mk->update(['id_produksi_hp' => $produksiHpId]);
+
+                                    \App\Models\BahanHotpress::create([
+                                        'id_produksi_hp' => $produksiHpId,
+                                        'sumber' => 'triplek',
+                                        'id_mutasi_keluar_triplek' => $palet->id,
+                                        'no_palet' => $palet->nomor_palet,
+                                        'isi' => $palet->jumlah_lembar,
+                                    ]);
                                 } else {
                                     // platform_jadi (logika lama)
                                     $palet = PlatformJadiMutasiKeluarPalet::lockForUpdate()->findOrFail($record->id_asli);
@@ -375,6 +391,14 @@ class MutasiMasukRelationManager extends RelationManager
 
                                     $palet->update(['diterima_by' => $userId, 'diterima_at' => now()]);
                                     $mk->update(['id_produksi_hp' => $produksiHpId]);
+
+                                    \App\Models\BahanHotpress::create([
+                                        'id_produksi_hp' => $produksiHpId,
+                                        'sumber' => 'platform',
+                                        'id_mutasi_keluar_platform' => $palet->id,
+                                        'no_palet' => $palet->nomor_palet,
+                                        'isi' => $palet->jumlah_lembar,
+                                    ]);
                                 }
                             });
 

@@ -72,7 +72,7 @@ class HasilSandingsTable
             ]))
             ->columns([
                 TextColumn::make('barangSetengahJadiInfo')
-                    ->label('Barang Setengah Jadi')
+                    ->label('Modal')
                     ->getStateUsing(function ($record) {
                         // 1. Coba dari HasilSanding langsung (sumber lama / hotpress / graji)
                         $bsj = $record->barangSetengahJadi;

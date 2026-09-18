@@ -8,6 +8,9 @@ use App\Models\NotaBarangKeluar;
 use Excel;
 use Illuminate\Support\Facades\DB;
 
+use App\Models\RekeningPerusahaan;
+use Illuminate\Http\Request;
+
 class NotaBKController extends Controller
 {
     public function show(NotaBarangKeluar $record)
@@ -41,6 +44,341 @@ class NotaBKController extends Controller
         return view('nota.barang-keluar', [
             'notaBarangKeluar' => $record,
             'items' => $items,
+        ]);
+    }
+
+    /**
+     * Helper resolve items dan penamaan untuk nota kantor dan nota sales.
+     */
+    protected function resolveNotaItems(NotaBarangKeluar $record, string $jenisNota = 'kantor'): array
+    {
+        $record->load([
+            'pembuat',
+            'validator',
+            'rekeningPerusahaan',
+            'plywoodMutasi.details.ukuran',
+            'plywoodMutasi.details.jenisKayu',
+            'mutasi.details',
+            'detail',
+        ]);
+
+        $rawItems = collect();
+        foreach ($record->detail as $d) {
+            if (str_starts_with($d->nama_barang, 'Plywood ') && $record->plywoodMutasi) {
+                $matched = null;
+                foreach ($record->plywoodMutasi->details as $mutasiDetail) {
+                    $ukuran = $mutasiDetail->ukuran;
+                    $jenisKayu = $mutasiDetail->jenisKayu;
+                    if (!$ukuran || !$jenisKayu) continue;
+
+                    $expectedName = 'Plywood - '.$ukuran->nama_ukuran
+                        .' - '.$jenisKayu->nama_kayu
+                        .' - KW '.$mutasiDetail->kw_grade;
+
+                    if ($expectedName === $d->nama_barang && (int) $mutasiDetail->qty === (int) $d->jumlah) {
+                        $matched = $mutasiDetail;
+                        break;
+                    }
+                }
+                $rawItems->push($matched ?? $d);
+            } else {
+                $rawItems->push($d);
+            }
+        }
+
+        $items = [];
+        $grandTotal = 0;
+
+        foreach ($rawItems as $detail) {
+            $satuan = $detail->satuan ?? 'lembar';
+            $qty = (float) ($detail->qty ?? ($detail->jumlah ?? 0));
+            $harga = (float) ($detail->harga ?? 0);
+            $subtotal = $qty * $harga;
+            $grandTotal += $subtotal;
+
+            // Helper untuk mengambil data tebal secara dinamis
+            $tebalVal = null;
+            if (isset($detail->ukuran) && filled($detail->ukuran?->tebal)) {
+                $tebalVal = $detail->ukuran->tebal;
+            } elseif ($detail->barang?->ukuran && filled($detail->barang->ukuran->tebal)) {
+                $tebalVal = $detail->barang->ukuran->tebal;
+            } elseif (! empty($detail->id_ukuran)) {
+                $ukuranObj = \App\Models\Ukuran::find($detail->id_ukuran);
+                if ($ukuranObj && filled($ukuranObj->tebal)) {
+                    $tebalVal = $ukuranObj->tebal;
+                }
+            } elseif (! empty($detail->nama_barang)) {
+                if (preg_match('/(\d+(?:[\.,]\d+)?)\s*(?:mm|m)?\b/i', $detail->nama_barang, $matches)) {
+                    $tebalVal = str_replace(',', '.', $matches[1]);
+                }
+            }
+
+            $tebalStr = null;
+            if ($tebalVal !== null && $tebalVal !== '') {
+                $tebalFormatted = (float) $tebalVal == (int) $tebalVal
+                    ? (int) $tebalVal
+                    : rtrim(rtrim((string) $tebalVal, '0'), '.');
+                $tebalStr = "{$tebalFormatted} mm";
+            }
+
+            if ($jenisNota === 'sales') {
+                // NOTA SALES: [tebal] [merek]
+                // 1. Dapatkan merek (fallback 'Plywood' jika null atau kosong)
+                $rawMerek = $detail->barang?->merek ?? null;
+                $merek = (! empty(trim($rawMerek ?? ''))) ? trim($rawMerek) : 'Plywood';
+
+                // 2. Susun format: [tebal] [merek]
+                if ($tebalStr !== null) {
+                    $namaBarang = "{$tebalStr} {$merek}";
+                } else {
+                    $namaBarang = $merek;
+                }
+            } else {
+                // NOTA KANTOR: [tebal] [grade]
+                // 1. Dapatkan grade dari BarangSetengahJadiHp -> relasi grade (id_grade)
+                $bshp = $detail->barang ?? null;
+                $gradeModel = $bshp?->grade ?? ($bshp?->id_grade ? \App\Models\Grade::find($bshp->id_grade) : null);
+                $gradeName = ! empty(trim($gradeModel?->nama_grade ?? '')) ? trim($gradeModel->nama_grade) : null;
+
+                // Fallback grade jika detail mutasi memiliki kw_grade dan bshp belum ter-resolve
+                if (! $gradeName && ! empty(trim($detail->kw_grade ?? ''))) {
+                    $gradeName = trim($detail->kw_grade);
+                }
+
+                // 2. Susun format:
+                // Jika thickness dan grade tersedia: 12 mm A
+                // Jika thickness tersedia tetapi grade tidak: 12 mm
+                // Jika thickness tidak ada tetapi grade ada: A
+                // Jika keduanya tidak ada: fallback label/nama_barang asli
+                if ($tebalStr !== null && $gradeName !== null) {
+                    $namaBarang = "{$tebalStr} {$gradeName}";
+                } elseif ($tebalStr !== null) {
+                    $namaBarang = $tebalStr;
+                } elseif ($gradeName !== null) {
+                    $namaBarang = $gradeName;
+                } else {
+                    $namaBarang = $detail->barang?->label ?? ($detail->nama_barang ?? '-');
+                }
+            }
+
+            $m3 = null;
+
+            if (str_starts_with($detail->nama_barang, 'Veneer ')) {
+                $matchedMutasiDetail = null;
+                if ($record->mutasi) {
+                    foreach ($record->mutasi->details as $mutasiDetail) {
+                        if ((float) $mutasiDetail->qty === (float) $qty) {
+                            $matchedMutasiDetail = $mutasiDetail;
+                            break;
+                        }
+                    }
+                }
+                
+                if ($matchedMutasiDetail) {
+                    $m3 = (float) $matchedMutasiDetail->m3;
+                    if ($matchedMutasiDetail->harga) {
+                        $newHarga = (float) $matchedMutasiDetail->harga;
+                        $grandTotal -= $subtotal;
+                        $harga = $newHarga;
+                        $subtotal = $m3 * $harga;
+                        $grandTotal += $subtotal;
+                    }
+                }
+
+                $kw = null;
+                $merek = null;
+                
+                if ($matchedMutasiDetail) {
+                    $kw = $matchedMutasiDetail->kw;
+                    $ukuranId = $matchedMutasiDetail->id_ukuran;
+                    if ($ukuranId) {
+                        $ukuranObjForVeneer = \App\Models\Ukuran::find($ukuranId);
+                        if ($ukuranObjForVeneer && filled($ukuranObjForVeneer->tebal)) {
+                            $tebalVal = $ukuranObjForVeneer->tebal;
+                        }
+                        
+                        $grade = \App\Models\Grade::whereRaw('LOWER(TRIM(nama_grade)) = ?', [strtolower(trim($kw))])->first();
+                        $bshp = \App\Models\BarangSetengahJadiHp::where('id_ukuran', $ukuranId)
+                            ->when($grade, fn($q) => $q->where('id_grade', $grade->id))
+                            ->first();
+                        $merek = $bshp?->merek;
+                    }
+                } else {
+                    if (preg_match('/KW\s+(.*)$/i', $detail->nama_barang, $m)) {
+                        $kw = trim($m[1]);
+                    }
+                    // Jika mutasi detail tidak ketemu, coba ambil angka terakhir yang berdekatan dengan 'mm' (biasanya ketebalan di posisi belakang)
+                    if (preg_match('/x\s*(\d+(?:[\.,]\d+)?)\s*(?:mm|m)?\b/i', $detail->nama_barang, $m)) {
+                        $tebalVal = str_replace(',', '.', $m[1]);
+                    } elseif (preg_match_all('/(\d+(?:[\.,]\d+)?)\s*(?:mm|m)?\b/i', $detail->nama_barang, $m)) {
+                        // Ambil angka terakhir dari semua deretan angka (misal: 244, 122, 0.5 -> ambil 0.5)
+                        $tebalVal = str_replace(',', '.', end($m[1]));
+                    }
+                }
+
+                $tebalForVeneerStr = '';
+                if ($tebalVal !== null && $tebalVal !== '') {
+                    $tebalForVeneerStr = (float) $tebalVal == (int) $tebalVal
+                        ? (int) $tebalVal
+                        : rtrim(rtrim((string) $tebalVal, '0'), '.');
+                }
+
+                if (! empty(trim($merek ?? ''))) {
+                    $namaBarang = trim("{$tebalForVeneerStr} {$merek}");
+                } else {
+                    $kwStr = $kw ? "kw {$kw}" : '';
+                    $namaBarang = trim("{$tebalForVeneerStr} {$kwStr}");
+                }
+            }
+
+            $keterangan = $detail->keterangan ?? '';
+
+            $items[] = (object) [
+                'nama_barang' => $namaBarang,
+                'satuan'      => $satuan,
+                'qty'         => $qty,
+                'm3'          => $m3,
+                'harga'       => $harga,
+                'potongan'    => 0,
+                'subtotal'    => $subtotal,
+                'keterangan'  => $keterangan,
+            ];
+        }
+
+        return [$items, $grandTotal];
+    }
+
+    /**
+     * Halaman Preview Nota Kantor / Sales dengan pemilihan Metode Pembayaran.
+     */
+    public function preview(NotaBarangKeluar $record, string $jenis)
+    {
+        $jenis = strtolower($jenis) === 'sales' ? 'sales' : 'kantor';
+        [$items, $grandTotal] = $this->resolveNotaItems($record, $jenis);
+        $rekeningList = RekeningPerusahaan::all();
+
+        return view('nota.preview', [
+            'record'        => $record,
+            'jenis'         => $jenis,
+            'items'         => $items,
+            'grandTotal'    => $grandTotal,
+            'rekeningList'  => $rekeningList,
+        ]);
+    }
+
+    public function savePayment(Request $request, NotaBarangKeluar $record)
+    {
+        $validated = $request->validate([
+            'metode_pembayaran'      => 'required|string|in:Tunai,Transfer,Cek / Giro',
+            'id_rekening_perusahaan' => 'nullable|integer|exists:rekening_perusahaan,id',
+            'jenis'                  => 'required|string|in:kantor,sales',
+            'cetak_action'           => 'required|string|in:nota,sj,semua',
+        ]);
+
+        $record->update([
+            'metode_pembayaran'      => $validated['metode_pembayaran'],
+            'id_rekening_perusahaan' => $validated['metode_pembayaran'] === 'Transfer'
+                ? $validated['id_rekening_perusahaan']
+                : null,
+        ]);
+
+        if ($validated['cetak_action'] === 'nota') {
+            $targetRoute = $validated['jenis'] === 'sales' ? 'nota-bk.nota-sales' : 'nota-bk.nota-kantor';
+            return redirect()->route($targetRoute, $record);
+        } elseif ($validated['cetak_action'] === 'sj') {
+            return redirect()->route('surat-jalan.bk', ['nota' => $record->id, 'jenis' => $validated['jenis']]);
+        } else {
+            return redirect()->route('nota-bk.cetak-semua', ['record' => $record->id, 'jenis' => $validated['jenis']]);
+        }
+    }
+
+    public function cetakSemua(NotaBarangKeluar $record, $jenis)
+    {
+        [$items, $grandTotal] = $this->resolveNotaItems($record, $jenis);
+
+        $record->load(['detail', 'pembuat', 'plywoodMutasi.details.ukuran', 'plywoodMutasi.details.jenisKayu']);
+        $sjDetails = $record->detail->map(function ($d) use ($record) {
+            if (str_starts_with($d->nama_barang, 'Plywood ')) {
+                $matchedDetail = null;
+                if ($record->plywoodMutasi) {
+                    foreach ($record->plywoodMutasi->details as $mutasiDetail) {
+                        $ukuran = $mutasiDetail->ukuran;
+                        $jenisKayu = $mutasiDetail->jenisKayu;
+                        if (!$ukuran || !$jenisKayu) continue;
+
+                        $expectedName = 'Plywood - '.$ukuran->nama_ukuran
+                            .' - '.$jenisKayu->nama_kayu
+                            .' - KW '.$mutasiDetail->kw_grade;
+
+                        if ($expectedName === $d->nama_barang && (int) $mutasiDetail->qty === (int) $d->jumlah) {
+                            $matchedDetail = $mutasiDetail;
+                            break;
+                        }
+                    }
+                }
+
+                $tebalVal = null;
+                if ($matchedDetail && $matchedDetail->ukuran && filled($matchedDetail->ukuran->tebal)) {
+                    $tebalVal = $matchedDetail->ukuran->tebal;
+                } elseif (preg_match('/(\d+(?:[\.,]\d+)?)\s*(?:mm|m)?\b/i', $d->nama_barang, $matches)) {
+                    $tebalVal = str_replace(',', '.', $matches[1]);
+                }
+
+                $tebalStr = null;
+                if ($tebalVal !== null && $tebalVal !== '') {
+                    $tebalFormatted = (float) $tebalVal == (int) $tebalVal
+                        ? (int) $tebalVal
+                        : rtrim(rtrim((string) $tebalVal, '0'), '.');
+                    $tebalStr = "{$tebalFormatted} mm";
+                }
+
+                $rawMerek = $matchedDetail ? ($matchedDetail->barang?->merek ?? null) : null;
+                $merek = (! empty(trim($rawMerek ?? ''))) ? trim($rawMerek) : 'Plywood';
+
+                if ($tebalStr !== null) {
+                    $d->nama_barang = "{$tebalStr} {$merek}";
+                } else {
+                    $d->nama_barang = $merek;
+                }
+            }
+            return $d;
+        });
+
+        return view('nota.cetak-semua', [
+            'record'     => $record,
+            'nota'       => $record,
+            'jenis'      => $jenis,
+            'items'      => $items,
+            'grandTotal' => $grandTotal,
+            'details'    => $sjDetails,
+        ]);
+    }
+
+    /**
+     * Cetak Nota Kantor (Layout Gambar 1).
+     */
+    public function printNotaKantor(NotaBarangKeluar $record)
+    {
+        [$items, $grandTotal] = $this->resolveNotaItems($record, 'kantor');
+
+        return view('nota.nota-kantor', [
+            'record'     => $record,
+            'items'      => $items,
+            'grandTotal' => $grandTotal,
+        ]);
+    }
+
+    /**
+     * Cetak Nota Sales (Layout Gambar 2).
+     */
+    public function printNotaSales(NotaBarangKeluar $record)
+    {
+        [$items, $grandTotal] = $this->resolveNotaItems($record, 'sales');
+
+        return view('nota.nota-sales', [
+            'record'     => $record,
+            'items'      => $items,
+            'grandTotal' => $grandTotal,
         ]);
     }
 

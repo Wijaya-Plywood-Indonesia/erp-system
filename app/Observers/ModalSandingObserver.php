@@ -8,31 +8,35 @@ use App\Models\ModalSanding;
 class ModalSandingObserver
 {
     /**
+     * Handle the ModalSanding "creating" event.
+     */
+    public function creating(ModalSanding $modalSanding): void
+    {
+        // Jika id_serah_terima_hp negatif, berarti ini dari Hasil Sanding yang belum diserah
+        if ($modalSanding->id_serah_terima_hp < 0) {
+            $idHasilSanding = abs($modalSanding->id_serah_terima_hp);
+            
+            // Cek apakah sudah dibuat sebelumnya (mencegah duplikasi)
+            $st = \App\Models\SerahTerimaHp::firstOrCreate(
+                ['id_hasil_sanding' => $idHasilSanding, 'tujuan' => 'sanding'],
+                [
+                    'diterima_oleh' => auth()->user()?->name ?? 'System',
+                    'status' => 'Diterima',
+                    'tujuan' => 'sanding',
+                ]
+            );
+
+            // Ganti id_serah_terima_hp dengan ID SerahTerimaHp yang asli
+            $modalSanding->id_serah_terima_hp = $st->id;
+        }
+    }
+
+    /**
      * Handle the ModalSanding "created" event.
      */
     public function created(ModalSanding $modalSanding): void
     {
-        //
-        // Cek apakah sudah ada hasil sanding untuk produksi ini
-        $exists = HasilSanding::where('id_produksi_sanding', $modalSanding->id_produksi_sanding)
-            ->where('no_palet', $modalSanding->no_palet)
-            ->exists();
-
-        if ($exists) {
-            // Jika sudah ada, hentikan agar tidak duplikasi
-            return;
-        }
-
-        // Jika belum ada → buat hasil sanding baru
-        HasilSanding::create([
-            'id_produksi_sanding' => $modalSanding->id_produksi_sanding,
-            'id_barang_setengah_jadi' => $modalSanding->id_barang_setengah_jadi,
-            'kuantitas' => $modalSanding->kuantitas,
-            'jumlah_sanding_face' => 0,
-            'jumlah_sanding_back' => 0,
-            'no_palet' => $modalSanding->no_palet,
-            'status' => 'Belum Sanding',
-        ]);
+        // Fitur auto-create Hasil Sanding ditiadakan sesuai permintaan
     }
 
     /**

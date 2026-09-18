@@ -2,38 +2,49 @@
 
 namespace App\Filament\Pages;
 
-use Filament\Pages\Page;
-use Filament\Actions\Action;
-use Filament\Notifications\Notification;
-use Filament\Forms\Concerns\InteractsWithForms;
-use Filament\Forms\Contracts\HasForms;
-use Filament\Forms\Components\DatePicker;
 use App\Exports\LaporanDempulExport;
-use Maatwebsite\Excel\Facades\Excel;
 use App\Models\ProduksiDempul;
-use Carbon\Carbon;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Carbon\Carbon;
+use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Illuminate\Support\Facades\Schema;
+use Maatwebsite\Excel\Facades\Excel;
 use UnitEnum;
 
 class LaporanProduksiDempul extends Page implements HasForms
 {
-    use InteractsWithForms;
     use HasPageShield;
+    use InteractsWithForms;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
+
     protected string $view = 'filament.pages.laporan-produksi-dempul';
+
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
+
     protected static ?string $title = 'Laporan Produksi Dempul';
+
     protected static ?string $navigationLabel = 'Laporan Produksi Dempul';
+
     protected static ?int $navigationSort = 14;
+
     protected static bool $shouldRegisterNavigation = false;
 
     public $reportData = [
         'detail' => [],
-        'summary' => []
+        'summary' => [],
     ];
+
     public $tanggal = null;
+
+    // cache kolom tanggal yang benar-benar ada di tabel
+    protected static ?string $kolomTanggal = null;
 
     public function mount(): void
     {
@@ -49,14 +60,14 @@ class LaporanProduksiDempul extends Page implements HasForms
                 ->label('Refresh Data')
                 ->icon('heroicon-o-arrow-path')
                 ->color('gray')
-                ->action(fn() => $this->loadAllData()),
+                ->action(fn () => $this->loadAllData()),
 
             Action::make('exportExcel')
                 ->label('Download Excel')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
-                ->action(fn() => $this->exportExcel())
-                ->visible(fn() => !empty($this->reportData['detail'])),
+                ->action(fn () => $this->exportExcel())
+                ->visible(fn () => ! empty($this->reportData['detail'])),
         ];
     }
 
@@ -98,17 +109,41 @@ class LaporanProduksiDempul extends Page implements HasForms
         ];
     }
 
+    /**
+     * Deteksi nama kolom tanggal yang tersedia di tabel produksi_dempuls.
+     * Prioritas: 'tanggal' dulu, kalau tidak ada baru 'tanggal_produksi'.
+     */
+    protected function getKolomTanggal(): string
+    {
+        if (static::$kolomTanggal !== null) {
+            return static::$kolomTanggal;
+        }
+
+        $table = (new ProduksiDempul)->getTable();
+
+        if (Schema::hasColumn($table, 'tanggal')) {
+            return static::$kolomTanggal = 'tanggal';
+        }
+
+        if (Schema::hasColumn($table, 'tanggal_produksi')) {
+            return static::$kolomTanggal = 'tanggal_produksi';
+        }
+
+        throw new \Exception("Kolom tanggal tidak ditemukan di tabel {$table}. Pastikan tabel memiliki kolom 'tanggal' atau 'tanggal_produksi'.");
+    }
+
     public function loadAllData()
     {
         $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+        $kolomTanggal = $this->getKolomTanggal();
 
         $produksiList = ProduksiDempul::with([
             'detailDempuls.barangSetengahJadi.ukuran',
             'detailDempuls.barangSetengahJadi.grade',
             'detailDempuls.barangSetengahJadi.jenisBarang',
-            'detailDempuls.pegawais'
+            'detailDempuls.pegawais',
         ])
-            ->whereDate('tanggal', $tanggal)
+            ->whereDate($kolomTanggal, $tanggal)
             ->get();
 
         $detail = [];
@@ -125,7 +160,7 @@ class LaporanProduksiDempul extends Page implements HasForms
                 $byk = $item->hasil ?? 0;
 
                 $detail[] = [
-                    'tanggal' => Carbon::parse($prod->tanggal)->format('d-M-y'),
+                    'tanggal' => Carbon::parse($prod->{$kolomTanggal})->format('d-M-y'),
                     'p' => $p,
                     'l' => $l,
                     't' => $t,
@@ -141,7 +176,7 @@ class LaporanProduksiDempul extends Page implements HasForms
             }
 
             $summary[] = [
-                'tanggal' => Carbon::parse($prod->tanggal)->format('d-M-y'),
+                'tanggal' => Carbon::parse($prod->{$kolomTanggal})->format('d-M-y'),
                 'ttl_pkj' => $uniqueWorkers->unique()->count(),
                 'm3_total' => '',
             ];
@@ -149,7 +184,7 @@ class LaporanProduksiDempul extends Page implements HasForms
 
         $this->reportData = [
             'detail' => $detail,
-            'summary' => $summary
+            'summary' => $summary,
         ];
     }
 }

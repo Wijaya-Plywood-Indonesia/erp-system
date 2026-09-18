@@ -92,9 +92,11 @@ class DetailNotaBarangKeluarsTable
      */
     protected static function stokTersedia()
     {
-        return StokPlywoodSiapJual::where('stok_lembar', '>', 0)
-            ->orderBy('tebal')
-            ->get();
+        // return StokPlywoodSiapJual::where('stok_lembar', '>', 0)
+        //     ->orderBy('tebal')
+        //     ->get();
+
+        return StokPlywoodSiapJual::orderBy('tebal')->get();
     }
 
     /**
@@ -350,7 +352,8 @@ class DetailNotaBarangKeluarsTable
                     }
 
                     if ($lembar <= 0) {
-                        return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 Lembar (Stok Habis)</strong>');
+                        // return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">0 Lembar (Stok Habis)</strong>');
+                        return new HtmlString('<strong class="text-danger-600 dark:text-danger-400 text-lg">'.number_format($lembar).' Lembar (Stok Habis/Minus)</strong>');
                     }
 
                     return new HtmlString('<strong class="text-success-600 dark:text-success-400 text-lg">'.number_format($lembar).' Lembar</strong>');
@@ -360,20 +363,22 @@ class DetailNotaBarangKeluarsTable
                 ->label('Jumlah (Lembar)')
                 ->numeric()
                 ->minValue(1)
-                ->maxValue(fn (callable $get) => static::cariStok(
-                    $get('ukuran_key'),
-                    $get('id_jenis_kayu'),
-                    $get('kw_grade')
-                ) ?: null)
-                ->helperText('Tidak boleh melebihi stok yang tersedia.')
+                // ->maxValue(fn (callable $get) => static::cariStok(
+                //     $get('ukuran_key'),
+                //     $get('id_jenis_kayu'),
+                //     $get('kw_grade')
+                // ) ?: null)
+                // ->helperText('Tidak boleh melebihi stok yang tersedia.')
                 ->required(),
 
+            // Disembunyikan kecuali user punya role 'edmeros' / 'super_admin':
+            // tetap menyimpan nilai harga otomatis / lama di background
+            // untuk role lain.
             TextInput::make('harga')
                 ->label('Harga')
                 ->numeric()
                 ->prefix('Rp')
-                ->required()
-                ->helperText('Otomatis terisi dari data master, bisa diubah manual jika perlu.'),
+                ->hidden(fn () => ! auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin'])),
 
             Textarea::make('keterangan')
                 ->label('Keterangan')
@@ -732,7 +737,7 @@ class DetailNotaBarangKeluarsTable
     /**
      * Cari baris veneer_mutasi_details yang cocok dengan baris detail nota.
      */
-    protected static function findVeneerDetail($record): ?VeneerMutasiDetail
+    public static function findVeneerDetail($record): ?\App\Models\VeneerMutasiDetail
     {
         $nota = $record->nota;
 
@@ -841,14 +846,16 @@ class DetailNotaBarangKeluarsTable
                 TextColumn::make('harga')
                     ->label('Harga')
                     ->getStateUsing(function ($record) {
-                        if (! str_starts_with($record->nama_barang, 'Plywood ')) {
-                            return null;
+                        if (str_starts_with($record->nama_barang, 'Plywood ')) {
+                            return static::findPlywoodDetail($record)?->harga;
+                        } elseif (str_starts_with($record->nama_barang, 'Veneer ')) {
+                            return static::findVeneerDetail($record)?->harga;
                         }
-
-                        return static::findPlywoodDetail($record)?->harga;
+                        return null;
                     })
                     ->money('IDR', locale: 'id')
-                    ->toggleable(),
+                    ->toggleable()
+                    ->hidden(fn () => ! auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin'])),
 
                 TextColumn::make('keterangan')
                     ->label('Keterangan')
@@ -1060,7 +1067,34 @@ class DetailNotaBarangKeluarsTable
                                 })
                                 ->searchable()
                                 ->required()
-                                ->live(),
+                                ->live()
+                                ->afterStateUpdated(function (callable $set, callable $get, $state) {
+                                    $idUkuran = $get('id_ukuran');
+                                    $idJenisKayu = $get('id_jenis_kayu');
+                                    if ($idUkuran && $idJenisKayu && $state) {
+                                        $ukuran = \App\Models\Ukuran::find($idUkuran);
+                                        if ($ukuran) {
+                                            $jenisKayu = \App\Models\JenisKayu::find($idJenisKayu);
+                                            $jenisBarang = \App\Models\JenisBarang::where('nama_jenis_barang', 'like', $jenisKayu?->nama_kayu)->first();
+                                            $grade = \App\Models\Grade::whereRaw('LOWER(TRIM(nama_grade)) = ?', [strtolower(trim($state))])->first();
+                                            
+                                            $bshp = \App\Models\BarangSetengahJadiHp::where('id_ukuran', $ukuran->id)
+                                                ->when($jenisBarang, fn ($q) => $q->where('id_jenis_barang', $jenisBarang->id))
+                                                ->when($grade, fn ($q) => $q->where('id_grade', $grade->id))
+                                                ->first();
+                                                
+                                            if (!$bshp) {
+                                                $bshp = \App\Models\BarangSetengahJadiHp::where('id_ukuran', $ukuran->id)
+                                                    ->when($grade, fn ($q) => $q->where('id_grade', $grade->id))
+                                                    ->first();
+                                            }
+                                            
+                                            if ($bshp && filled($bshp->harga)) {
+                                                $set('harga', (float) $bshp->harga);
+                                            }
+                                        }
+                                    }
+                                }),
 
                             Placeholder::make('stok_saat_ini')
                                 ->label('Stok Saat Ini')
@@ -1124,6 +1158,12 @@ class DetailNotaBarangKeluarsTable
                                 ->numeric()
                                 ->required(),
 
+                            TextInput::make('harga')
+                                ->label('Harga')
+                                ->numeric()
+                                ->prefix('Rp')
+                                ->hidden(fn () => ! auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin'])),
+
                             Textarea::make('keterangan')
                                 ->label('Keterangan')
                                 ->rows(3)
@@ -1164,6 +1204,7 @@ class DetailNotaBarangKeluarsTable
                                 'kw' => $data['kw'],
                                 'qty' => (int) $data['jumlah'],
                                 'm3' => $m3,
+                                'harga' => $data['harga'] ?? null,
                             ]);
 
                             $namaBarang = 'Veneer '.ucfirst($data['tipe_veneer'])
@@ -1599,7 +1640,34 @@ class DetailNotaBarangKeluarsTable
                                     })
                                     ->searchable()
                                     ->required()
-                                    ->live(),
+                                    ->live()
+                                    ->afterStateUpdated(function (callable $set, callable $get, $state) {
+                                        $idUkuran = $get('id_ukuran');
+                                        $idJenisKayu = $get('id_jenis_kayu');
+                                        if ($idUkuran && $idJenisKayu && $state) {
+                                            $ukuran = \App\Models\Ukuran::find($idUkuran);
+                                            if ($ukuran) {
+                                                $jenisKayu = \App\Models\JenisKayu::find($idJenisKayu);
+                                                $jenisBarang = \App\Models\JenisBarang::where('nama_jenis_barang', 'like', $jenisKayu?->nama_kayu)->first();
+                                                $grade = \App\Models\Grade::whereRaw('LOWER(TRIM(nama_grade)) = ?', [strtolower(trim($state))])->first();
+                                                
+                                                $bshp = \App\Models\BarangSetengahJadiHp::where('id_ukuran', $ukuran->id)
+                                                    ->when($jenisBarang, fn ($q) => $q->where('id_jenis_barang', $jenisBarang->id))
+                                                    ->when($grade, fn ($q) => $q->where('id_grade', $grade->id))
+                                                    ->first();
+                                                    
+                                                if (!$bshp) {
+                                                    $bshp = \App\Models\BarangSetengahJadiHp::where('id_ukuran', $ukuran->id)
+                                                        ->when($grade, fn ($q) => $q->where('id_grade', $grade->id))
+                                                        ->first();
+                                                }
+                                                
+                                                if ($bshp && filled($bshp->harga)) {
+                                                    $set('harga', (float) $bshp->harga);
+                                                }
+                                            }
+                                        }
+                                    }),
 
                                 Placeholder::make('stok_saat_ini')
                                     ->label('Stok Saat Ini')
@@ -1662,6 +1730,12 @@ class DetailNotaBarangKeluarsTable
                                     ->label('Jumlah (Lembar)')
                                     ->numeric()
                                     ->required(),
+
+                                TextInput::make('harga')
+                                    ->label('Harga')
+                                    ->numeric()
+                                    ->prefix('Rp')
+                                    ->hidden(fn () => ! auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin'])),
 
                                 Textarea::make('keterangan')
                                     ->label('Keterangan')
@@ -1770,6 +1844,7 @@ class DetailNotaBarangKeluarsTable
                                 $data['id_ukuran'] = $detail->id_ukuran;
                                 $data['id_jenis_kayu'] = $detail->id_jenis_kayu;
                                 $data['kw'] = $detail->kw;
+                                $data['harga'] = $detail->getRawOriginal('harga');
                             }
                         }
 
@@ -1902,6 +1977,7 @@ class DetailNotaBarangKeluarsTable
                                     'id_jenis_kayu' => $data['id_jenis_kayu'],
                                     'kw' => $data['kw'],
                                     'qty' => (int) $data['jumlah'],
+                                    'harga' => $data['harga'] ?? null,
                                 ]);
 
                                 // Recalculate m3

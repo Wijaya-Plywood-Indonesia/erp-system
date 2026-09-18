@@ -225,9 +225,11 @@ class SerahTerimaHp extends Model
      */
     public function getSisaAttribute(): float
     {
-        $terpakai = $this->tipeSumber === 'triplek'
-            ? MasukGrajiTriplek::where('id_serah_terima_hp', $this->id)->sum('isi')
-            : ModalSanding::where('id_serah_terima_hp', $this->id)->sum('kuantitas');
+        if ($this->tujuan === 'sanding') {
+            $terpakai = ModalSanding::where('id_serah_terima_hp', $this->id)->sum('kuantitas');
+        } else {
+            $terpakai = MasukGrajiTriplek::where('id_serah_terima_hp', $this->id)->sum('isi');
+        }
 
         return $this->qtyAsli - (float) $terpakai;
     }

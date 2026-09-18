@@ -31,17 +31,16 @@ class SerahTerimaRelationManager extends RelationManager
 
     public static function getTitle(Model $ownerRecord, string $pageClass): string
     {
-        return match (get_class($ownerRecord)) {
-            ProduksiPressDryer::class => 'Terima Veneer',
-            default => 'Serah Terima',
-        };
+        // NB: ProduksiPressDryer TIDAK lagi pakai relation manager ini.
+        // Penerimaan Press Dryer sekarang lewat SerahTerimaVeneerBasahRelationManager
+        // (terima dari Gudang Veneer Basah, bukan langsung dari Rotary).
+        return 'Serah Terima';
     }
 
     protected function getTipePenerima(): string
     {
         return match (get_class($this->getOwnerRecord())) {
             ProduksiRotary::class => 'rotary',
-            ProduksiPressDryer::class => 'dryer',
             ProduksiStik::class => 'stik',
             default => 'unknown',
         };
@@ -53,7 +52,6 @@ class SerahTerimaRelationManager extends RelationManager
 
         return match (get_class($owner)) {
             ProduksiRotary::class => 'rotary',
-            ProduksiPressDryer::class => 'dryer',
             default => 'umum',
         };
     }

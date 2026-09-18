@@ -49,6 +49,12 @@ class UkuranBarangSetengahJadisTable
                     ->money('IDR', locale: 'id')
                     ->sortable(),
 
+                TextColumn::make('merek')
+                    ->label('Merek')
+                    ->searchable()
+                    ->sortable()
+                    ->placeholder('-'),
+
                 TextColumn::make('keterangan')
                     ->label('Keterangan')
                     ->toggleable(isToggledHiddenByDefault: true)

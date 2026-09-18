@@ -3,31 +3,33 @@
 namespace App\Exports;
 
 use App\Exports\Sheets\LaporanProduksiHotPressJurnalSheet;
-use App\Models\ProduksiHp;
-use App\Models\BahanPenolongHp;
+use App\Exports\Sheets\LaporanProduksiHotPressJurnalSheetV2;
 use App\Models\BahanPenolongProduksi;
 use App\Models\HargaPegawai;
-use App\Models\TriplekHasilHp;
-use App\Models\PlatformHasilHp;
-use App\Models\Target;
 use App\Models\Mesin;
+use App\Models\PlatformHasilHp;
+use App\Models\ProduksiHp;
+use App\Models\Target;
+use App\Models\TriplekHasilHp;
 use Carbon\Carbon;
-use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithTitle;
-use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class LaporanProduksiHotPressExport implements WithMultipleSheets
 {
     protected $tanggal;
+
     protected $data;
+
     protected $domain; // Tambahan variabel domain
 
     public function __construct($data, $tanggal, $domain = '')
@@ -45,11 +47,12 @@ class LaporanProduksiHotPressExport implements WithMultipleSheets
             new LaporanProduksiHotPressDetailSheet($this->data),
             // TAMBAHKAN SHEET JURNAL DI SINI
             new LaporanProduksiHotPressJurnalSheet($this->tanggal, $this->domain),
+            new LaporanProduksiHotPressJurnalSheetV2($this->tanggal, $this->domain),
         ];
     }
 }
 
-class LaporanProduksiHotPressDetailSheet implements FromCollection, WithHeadings, WithTitle, WithStyles
+class LaporanProduksiHotPressDetailSheet implements FromCollection, WithHeadings, WithStyles, WithTitle
 {
     protected $data;
 
@@ -69,7 +72,7 @@ class LaporanProduksiHotPressDetailSheet implements FromCollection, WithHeadings
 
             $rows->push(['HASIL PRODUKSI']);
             $rows->push(['No Palet', 'P', 'L', 'T', 'Banyak (Isi)', 'Nama Barang', 'Kubikasi', 'Tipe']);
-            
+
             foreach ($item['hasil'] as $hasil) {
                 $rows->push([
                     $hasil['no_palet'],
@@ -84,34 +87,46 @@ class LaporanProduksiHotPressDetailSheet implements FromCollection, WithHeadings
             }
 
             $rows->push(['BAHAN PENOLONG / BIAYA']);
-            $rows->push(['Kategori', 'Nama Bahan', 'Jumlah', 'Harga', 'Total']);
+            $rows->push(['Kategori', 'Nama Bahan', 'Jumlah', 'Harga', 'Total', 'ID Barang']);
             foreach ($item['material_usage'] as $bp) {
                 $rows->push([
                     $bp['kategori'],
                     $bp['nama'],
                     $bp['banyak'],
                     $bp['harga'],
-                    $bp['total']
+                    $bp['total'],
                 ]);
             }
 
             $rows->push(['INFORMASI BIAYA LAIN']);
-            $rows->push(['Pekerja', $item['total_pekerja'] . ' orang', 'Rate: ' . $item['harga_pekerja']]);
-            $rows->push(['Penyusutan', 'Rp ' . number_format($item['penyusutan'])]);
-            $rows->push(['Bulanan', 'Rp ' . number_format($item['bulanan'])]);
+            $rows->push(['Pekerja', $item['total_pekerja'].' orang', 'Rate: '.$item['harga_pekerja']]);
+            $rows->push(['Penyusutan', 'Rp '.number_format($item['penyusutan'])]);
+            $rows->push(['Bulanan', 'Rp '.number_format($item['bulanan'])]);
 
             $rows->push([]); // Space
             $rows->push([]);
         }
+
         return $rows;
     }
 
-    public function headings(): array { return []; }
-    public function title(): string { return 'Detail Produksi'; }
-    public function styles(Worksheet $sheet) { return []; }
+    public function headings(): array
+    {
+        return [];
+    }
+
+    public function title(): string
+    {
+        return 'Detail Produksi';
+    }
+
+    public function styles(Worksheet $sheet)
+    {
+        return [];
+    }
 }
 
-class LaporanProduksiHotPressRekapSheet implements FromCollection, WithHeadings, WithStyles, WithEvents, WithTitle
+class LaporanProduksiHotPressRekapSheet implements FromCollection, WithEvents, WithHeadings, WithStyles, WithTitle
 {
     protected $tanggal;
 
@@ -135,7 +150,7 @@ class LaporanProduksiHotPressRekapSheet implements FromCollection, WithHeadings,
             'platformHasilHp.jenisKayu',
             'platformHasilHp.barangSetengahJadi.jenisBarang',
             'platformHasilHp.mesin',
-            'detailPegawaiHp'
+            'detailPegawaiHp',
         ])
             ->whereDate('tanggal_produksi', $this->tanggal)
             ->get();
@@ -147,8 +162,8 @@ class LaporanProduksiHotPressRekapSheet implements FromCollection, WithHeadings,
 
         // We'll iterate through each machine's production for the day
         // Group results by machine
-        $groupedByMachine = $produksis->groupBy(function($p) {
-            return 'HOTPRESS ' . strtoupper($p->shift) . ' BESAR';
+        $groupedByMachine = $produksis->groupBy(function ($p) {
+            return 'HOTPRESS '.strtoupper($p->shift).' BESAR';
         });
 
         $finalRows = [];
@@ -158,15 +173,15 @@ class LaporanProduksiHotPressRekapSheet implements FromCollection, WithHeadings,
             $materialUsage = [];
             // Group materials by category
             $dempulNames = ['Kalsium', 'Semen putih', 'Tepung', 'Lem PVAC', 'lem Dempul', 'Semen'];
-            
+
             foreach ($bahanPenolongList as $bp) {
                 $sum = 0;
                 foreach ($records as $prod) {
                     $sum += $prod->bahanPenolongHp->where('nama_bahan', $bp->nama_bahan_penolong)->sum('jumlah');
                 }
-                
+
                 $category = 'Bahan';
-                foreach($dempulNames as $dn) {
+                foreach ($dempulNames as $dn) {
                     if (stripos($bp->nama_bahan_penolong, $dn) !== false) {
                         $category = 'Bahan Dempul';
                         break;
@@ -189,7 +204,7 @@ class LaporanProduksiHotPressRekapSheet implements FromCollection, WithHeadings,
             foreach ($records as $prod) {
                 $totalPekerja += $prod->detailPegawaiHp->count();
             }
-            
+
             $otherCosts = [
                 ['nama' => 'Penyusutan', 'banyak' => 3, 'harga' => 635000, 'total' => 3 * 635000],
                 ['nama' => 'Bulanan', 'banyak' => 1, 'harga' => 220000, 'total' => 220000],
@@ -228,7 +243,7 @@ class LaporanProduksiHotPressRekapSheet implements FromCollection, WithHeadings,
                         't' => $t,
                         'banyak' => $banyak,
                         'jenis_kayu' => $item->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? '-',
-                        'kwalitas' => strtoupper('TRIPLEK ' . ($item->barangSetengahJadi->grade->nama_grade ?? '-')),
+                        'kwalitas' => strtoupper('TRIPLEK '.($item->barangSetengahJadi->grade->nama_grade ?? '-')),
                         'kubikasi' => round($kubikasi, 4),
                     ];
                 }
@@ -249,7 +264,7 @@ class LaporanProduksiHotPressRekapSheet implements FromCollection, WithHeadings,
                         't' => $t,
                         'banyak' => $banyak,
                         'jenis_kayu' => $item->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? '-',
-                        'kwalitas' => strtoupper('PLATFORM ' . ($item->barangSetengahJadi->grade->nama_grade ?? '-')),
+                        'kwalitas' => strtoupper('PLATFORM '.($item->barangSetengahJadi->grade->nama_grade ?? '-')),
                         'kubikasi' => round($kubikasi, 4),
                     ];
                 }
@@ -301,9 +316,9 @@ class LaporanProduksiHotPressRekapSheet implements FromCollection, WithHeadings,
     public function headings(): array
     {
         return [
-            'Mesin', 'Tgl', 'Kategori Bahan', 'BAHAN', 'BANYAK', 'HARGA', 'TOTAL', 
-            '', 
-            'NO', 'Mesin', 'TGL', 'P', 'L', 'T', 'BANYAK', 'Jenis Kayu', 'Kwalitas', 'Kubikasi'
+            'Mesin', 'Tgl', 'Kategori Bahan', 'BAHAN', 'BANYAK', 'HARGA', 'TOTAL',
+            '',
+            'NO', 'Mesin', 'TGL', 'P', 'L', 'T', 'BANYAK', 'Jenis Kayu', 'Kwalitas', 'Kubikasi',
         ];
     }
 
@@ -311,6 +326,7 @@ class LaporanProduksiHotPressRekapSheet implements FromCollection, WithHeadings,
     {
         $sheet->getStyle('A1:R1')->getFont()->setBold(true);
         $sheet->getStyle('A1:R1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
         return [];
     }
 
@@ -321,22 +337,22 @@ class LaporanProduksiHotPressRekapSheet implements FromCollection, WithHeadings,
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = $sheet->getHighestRow();
 
-                $sheet->getStyle("A1:G" . $lastRow)->applyFromArray([
+                $sheet->getStyle('A1:G'.$lastRow)->applyFromArray([
                     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                 ]);
-                $sheet->getStyle("I1:R" . $lastRow)->applyFromArray([
+                $sheet->getStyle('I1:R'.$lastRow)->applyFromArray([
                     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                 ]);
 
                 // Light Yellow for Total column
-                $sheet->getStyle("G2:G" . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFF2CC');
-                
+                $sheet->getStyle('G2:G'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFF2CC');
+
                 // Light Blue for Right side dimensions
-                $sheet->getStyle("L2:O" . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('DDEBF7');
+                $sheet->getStyle('L2:O'.$lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('DDEBF7');
 
                 // Number formatting
-                $sheet->getStyle('F2:G' . $lastRow)->getNumberFormat()->setFormatCode('#,##0');
-                $sheet->getStyle('R2:R' . $lastRow)->getNumberFormat()->setFormatCode('0.0000');
+                $sheet->getStyle('F2:G'.$lastRow)->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle('R2:R'.$lastRow)->getNumberFormat()->setFormatCode('0.0000');
 
                 // Widths
                 $sheet->getColumnDimension('A')->setWidth(15);
@@ -361,13 +377,18 @@ class LaporanProduksiHotPressRekapSheet implements FromCollection, WithHeadings,
         ];
     }
 
-    public function title(): string { return 'Rekap Hot Press'; }
+    public function title(): string
+    {
+        return 'Rekap Hot Press';
+    }
 }
 
-class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeadings, WithTitle, WithEvents
+class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithEvents, WithHeadings, WithTitle
 {
     protected $tanggal;
+
     protected $mergeRanges = [];
+
     protected $tableRanges = [];
 
     public function __construct($tanggal)
@@ -412,7 +433,7 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
         $this->tableRanges = [];
 
         $allRows[] = ['LAPORAN POTONGAN GAJI HOT PRESS'];
-        $allRows[] = ['TANGGAL: ' . $tglStr];
+        $allRows[] = ['TANGGAL: '.$tglStr];
         $allRows[] = array_fill(0, 11, '');
 
         foreach ($produksis as $produksi) {
@@ -457,7 +478,7 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                 });
 
                 // FALLBACK TO WILDCARD (size 33 / '0x0x0') IF NOT FOUND
-                if (!$tgt) {
+                if (! $tgt) {
                     $tgt = $targets->first(function ($t) {
                         return $t->id_ukuran == 33;
                     });
@@ -510,7 +531,7 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
             }
 
             if ($N > 0) {
-                $allRows[] = ['PRODUKSI HOT PRESS - ' . strtoupper($shift)];
+                $allRows[] = ['PRODUKSI HOT PRESS - '.strtoupper($shift)];
                 $allRows[] = array_fill(0, 11, '');
 
                 $headerRow = count($allRows) + 1;
@@ -537,17 +558,17 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                         $mulai = $k->waktu_mulai ? Carbon::parse($k->waktu_mulai)->format('H:i') : '';
                         $selisihTime = $k->waktu_selesai ? Carbon::parse($k->waktu_selesai)->format('H:i') : '';
                         $durasi = $k->durasi_menit ? "{$k->durasi_menit} menit" : '';
-                        
+
                         $timeStr = '';
                         if ($mulai || $selisihTime) {
-                            $timeStr = " (" . ($durasi ? "{$durasi}: " : "") . "{$mulai}-{$selisihTime})";
+                            $timeStr = ' ('.($durasi ? "{$durasi}: " : '')."{$mulai}-{$selisihTime})";
                         }
-                        
-                        $mesinPart = $mesinLabel ? "{$mesinLabel}: " : "";
-                        $kendalaParts[] = $mesinPart . $k->kendala . $timeStr;
+
+                        $mesinPart = $mesinLabel ? "{$mesinLabel}: " : '';
+                        $kendalaParts[] = $mesinPart.$k->kendala.$timeStr;
                     }
                     $kendalaText = implode("\n", $kendalaParts);
-                } else if (!empty($produksi->kendala) && $produksi->kendala !== '-') {
+                } elseif (! empty($produksi->kendala) && $produksi->kendala !== '-') {
                     $kendalaText = $produksi->kendala;
                 }
                 $kendala = $kendalaText;
@@ -560,15 +581,15 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
 
                     $ketParts = [];
                     if ($jamMasuk !== '-') {
-                        $ketParts[] = "Masuk: " . $jamMasuk . ($jamPulang !== '-' ? " - " . $jamPulang : "");
+                        $ketParts[] = 'Masuk: '.$jamMasuk.($jamPulang !== '-' ? ' - '.$jamPulang : '');
                     }
-                    if (!empty($dp->ijin) && $dp->ijin !== '-') {
-                        $ketParts[] = "Ijin: " . $dp->ijin;
+                    if (! empty($dp->ijin) && $dp->ijin !== '-') {
+                        $ketParts[] = 'Ijin: '.$dp->ijin;
                     }
-                    if (!empty($dp->ket) && $dp->ket !== '-') {
+                    if (! empty($dp->ket) && $dp->ket !== '-') {
                         $ketParts[] = $dp->ket;
                     }
-                    $ketString = !empty($ketParts) ? implode(" | ", $ketParts) : '-';
+                    $ketString = ! empty($ketParts) ? implode(' | ', $ketParts) : '-';
 
                     $allRows[] = [
                         $dp->pegawaiHp->kode_pegawai ?? '-',
@@ -581,14 +602,14 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                         $idx === 0 ? (float) $targetPerJam : '',
                         $idx === 0 ? (int) $totalActualVal : '',
                         $idx === 0 ? (float) $pencapaianVal : '',
-                        $idx === 0 ? $kendala : ''
+                        $idx === 0 ? $kendala : '',
                     ];
                 }
 
                 // Total Row
                 $allRows[] = [
                     'TOTAL',
-                    $N . ' pekerja',
+                    $N.' pekerja',
                     $N > 0 ? "=SUM(C{$workerStartRow}:C{$workerEndRow})" : 0,
                     '',
                     '',
@@ -597,7 +618,7 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                     $stdJam > 0 ? 1 / $stdJam : 0,
                     $N > 0 ? "=SUM(I{$workerStartRow}:I{$workerEndRow})" : 0,
                     $N > 0 ? "=J{$workerStartRow}" : 0,
-                    ''
+                    '',
                 ];
 
                 $allRows[] = array_fill(0, 11, '');
@@ -605,9 +626,9 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
 
                 $this->tableRanges[] = [
                     'header' => $headerRow,
-                    'start'  => $workerStartRow,
-                    'end'    => $workerEndRow,
-                    'total'  => $totalRow
+                    'start' => $workerStartRow,
+                    'end' => $workerEndRow,
+                    'total' => $totalRow, null,
                 ];
             }
         }
@@ -615,15 +636,22 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
         return collect($allRows);
     }
 
-    public function headings(): array { return []; }
-    public function title(): string   { return 'Laporan Pekerja Hot Press'; }
+    public function headings(): array
+    {
+        return [];
+    }
+
+    public function title(): string
+    {
+        return 'Laporan Pekerja Hot Press';
+    }
 
     public function registerEvents(): array
     {
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-                
+
                 // Set explicit column widths
                 $sheet->getColumnDimension('A')->setWidth(10);
                 $sheet->getColumnDimension('B')->setWidth(25);
@@ -655,8 +683,8 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                             'allBorders' => [
                                 'borderStyle' => Border::BORDER_THIN,
                                 'color' => ['argb' => 'FFCBD5E1'],
-                            ]
-                        ]
+                            ],
+                        ],
                     ]);
 
                     // 2. Header row style
@@ -664,12 +692,12 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                         'font' => ['bold' => true, 'color' => ['argb' => 'FF1E293B']],
                         'fill' => [
                             'fillType' => Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFE2E8F0']
+                            'startColor' => ['argb' => 'FFE2E8F0'],
                         ],
                         'alignment' => [
                             'horizontal' => Alignment::HORIZONTAL_CENTER,
                             'vertical' => Alignment::VERTICAL_CENTER,
-                        ]
+                        ],
                     ]);
 
                     // 3. Total row style
@@ -677,8 +705,8 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                         'font' => ['bold' => true, 'color' => ['argb' => 'FF1E293B']],
                         'fill' => [
                             'fillType' => Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFF1F5F9']
-                        ]
+                            'startColor' => ['argb' => 'FFF1F5F9'],
+                        ],
                     ]);
 
                     // 4. Alignments for worker data cells (A{start} to K{end})
@@ -687,14 +715,14 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                         $sheet->getStyle("B{$startRow}:B{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                         $sheet->getStyle("C{$startRow}:C{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                         $sheet->getStyle("D{$startRow}:D{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
-                        
+
                         $sheet->getStyle("F{$startRow}:F{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                         $sheet->getStyle("G{$startRow}:G{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                         $sheet->getStyle("H{$startRow}:H{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                         $sheet->getStyle("I{$startRow}:I{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                         $sheet->getStyle("J{$startRow}:J{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                         $sheet->getStyle("K{$startRow}:K{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
-                        
+
                         // Vertical alignment top for merged cells
                         $sheet->getStyle("F{$startRow}:K{$endRow}")->getAlignment()->setVertical(Alignment::VERTICAL_TOP);
 
@@ -711,7 +739,7 @@ class LaporanProduksiHotPressSheetPekerja implements FromCollection, WithHeading
                 $highestRow = $sheet->getHighestRow();
                 $sheet->getStyle("D1:D{$highestRow}")->getAlignment()->setWrapText(true);
                 $sheet->getStyle("K1:K{$highestRow}")->getAlignment()->setWrapText(true);
-            }
+            },
         ];
     }
 }

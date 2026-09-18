@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Customers\Schemas;
 
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Schema;
 
 class CustomerForm
@@ -10,7 +12,10 @@ class CustomerForm
     {
         return $schema
             ->components([
-                //
+                TextInput::make('nama')
+                    ->required(),
+                Textarea::make('alamat')
+                    ->columnSpanFull(),
             ]);
     }
 }
