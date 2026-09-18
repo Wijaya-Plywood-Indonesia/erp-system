@@ -292,21 +292,19 @@ class GudangVeneerBasahService
                 'lebar' => $ukuran->lebar,
                 'tebal' => $ukuran->tebal,
                 'kw' => $detail->kw,
-            ])->lockForUpdate()->first();
-
-            if (! $summary || $summary->stok_lembar < $detail->qty_lembar) {
-                Log::warning('[GudangVeneerBasah] Stok tidak cukup saat Terima, tetap diproses (mungkin sudah dipakai transaksi lain).', [
-                    'id_serah_terima' => $row->id,
-                ]);
-            }
-
-            $stokTidakCukup = ! $summary || $summary->stok_lembar < $detail->qty_lembar;
+            ])->first();
 
             $kubikasiKeluar = $detail->m3;
-            $nilaiKeluar = $kubikasiKeluar * (float) ($summary->hpp_average ?? 0);
-
             $tujuanLabel = $row->tujuan === 'dryer' ? 'Press Dryer' : 'Kedi';
 
+            // ─────────────────────────────────────────────────────────────
+            // REVISI: stok veneer basah TIDAK dipotong di sini lagi.
+            // "Terima" di sisi produksi sekarang HANYA mengikat barang ke
+            // sesi produksi (supaya muncul di dropdown Modal) dan mencatat
+            // log jejak audit — TANPA mengubah angka stok Gudang. Stok baru
+            // benar-benar berkurang saat produksi (Press Dryer/Kedi) itu
+            // DIVALIDASI — lihat ProductionValidationObserver.
+            // ─────────────────────────────────────────────────────────────
             $log = HppVeneerBasahLog::create([
                 'id_jenis_kayu' => $detail->id_jenis_kayu,
                 'panjang' => $ukuran->panjang,
@@ -314,27 +312,24 @@ class GudangVeneerBasahService
                 'tebal' => $ukuran->tebal,
                 'kw' => $detail->kw,
                 'tanggal' => now(),
-                'tipe_transaksi' => 'keluar',
-                'keterangan' => "Keluar Gudang Veneer Basah -> {$tujuanLabel} | Diterima: {$userTerima}".
-                    ($stokTidakCukup ? ' [SKIP: stok tidak cukup]' : ''),
+                'tipe_transaksi' => 'transfer_ke_produksi',
+                'keterangan' => "Diterima {$tujuanLabel} (belum memotong stok — dipotong saat validasi produksi) | Diterima: {$userTerima}",
                 'referensi_type' => get_class($row),
                 'referensi_id' => $row->id,
                 'total_lembar' => $detail->qty_lembar,
                 'total_kubikasi' => $kubikasiKeluar,
                 'hpp_average' => $summary->hpp_average ?? 0,
-                'nilai_stok' => $nilaiKeluar,
+                'nilai_stok' => 0,
                 'stok_lembar_before' => $summary->stok_lembar ?? 0,
                 'stok_kubikasi_before' => $summary->stok_kubikasi ?? 0,
                 'nilai_stok_before' => $summary->nilai_stok ?? 0,
-                'stok_lembar_after' => $stokTidakCukup ? ($summary->stok_lembar ?? 0) : $summary->stok_lembar - $detail->qty_lembar,
-                'stok_kubikasi_after' => $stokTidakCukup ? ($summary->stok_kubikasi ?? 0) : $summary->stok_kubikasi - $kubikasiKeluar,
-                'nilai_stok_after' => $stokTidakCukup ? ($summary->nilai_stok ?? 0) : $summary->nilai_stok - $nilaiKeluar,
+                // Tidak ada perubahan stok di titik ini.
+                'stok_lembar_after' => $summary->stok_lembar ?? 0,
+                'stok_kubikasi_after' => $summary->stok_kubikasi ?? 0,
+                'nilai_stok_after' => $summary->nilai_stok ?? 0,
             ]);
 
-            if (! $stokTidakCukup && $summary) {
-                $summary->decrement('stok_lembar', $detail->qty_lembar);
-                $summary->decrement('stok_kubikasi', $kubikasiKeluar);
-                $summary->decrement('nilai_stok', $nilaiKeluar);
+            if ($summary) {
                 $summary->update(['id_last_log' => $log->id]);
             }
 
