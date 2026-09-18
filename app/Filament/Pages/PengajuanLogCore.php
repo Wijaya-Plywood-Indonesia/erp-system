@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Models\LogLogCore;
 use App\Models\PengajuanLogCore as ModelsPengajuanLogCore;
 use App\Models\StokLogCore;
+use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
@@ -20,13 +21,16 @@ use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Filament\Tables\Contracts\HasTable;
+use UnitEnum;
 
 class PengajuanLogCore extends Page implements HasTable
 {
     use HasPageShield, InteractsWithTable;
     protected string $view = 'filament.pages.pengajuan-log-core';
-    protected static ?string $navigationLabel = 'Log Core';
-    protected static ?string $title = 'Manajemen Log Core';
+    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-archive-box';
+    protected static string|UnitEnum|null $navigationGroup = 'Pengajuan';
+    protected static ?string $navigationLabel = 'Pengajuan Log Core';
+    protected static ?string $title = 'Pengajuan Log Core';
 
     protected function getHeaderActions(): array
     {
