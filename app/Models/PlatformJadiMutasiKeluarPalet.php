@@ -12,16 +12,9 @@ class PlatformJadiMutasiKeluarPalet extends Model
         'id_mutasi_keluar',
         'nomor_palet',
         'jumlah_lembar',
+        'jumlah_dikembalikan',
         'diterima_by',
         'diterima_at',
-        'ditolak_by',
-        'alasan_tolak',
-        'ditolak_at',
-    ];
-
-    protected $casts = [
-        'diterima_at' => 'datetime',
-        'ditolak_at' => 'datetime',
     ];
 
     public function mutasiKeluar()
@@ -34,9 +27,17 @@ class PlatformJadiMutasiKeluarPalet extends Model
         return $this->hasMany(BahanHotpress::class, 'id_mutasi_keluar_platform');
     }
 
-    public function getSisaAttribute()
+    /**
+     * Sisa lembar platform jadi dari palet ini yang masih ada di hotpress —
+     * belum tercatat dipakai oleh baris Bahan Hot Press manapun, DAN belum
+     * dikembalikan ke gudang. Rumus sama persis dengan
+     * VeneerJadiMutasiKeluarPalet::getSisaAttribute() — lihat penjelasan
+     * lengkap di sana.
+     */
+    public function getSisaAttribute(): float
     {
         $terpakai = $this->bahanHotpress()->sum('isi');
-        return (float) $this->jumlah_lembar - $terpakai;
+
+        return (float) $this->jumlah_lembar - (float) $terpakai - (float) ($this->jumlah_dikembalikan ?? 0);
     }
 }

@@ -6,6 +6,7 @@ use App\Models\Ukuran;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Illuminate\Validation\Rules\Unique;
 
 class TargetForm
 {
@@ -27,14 +28,27 @@ class TargetForm
                             ->pluck('dimensi', 'id') // ← memanggil accessor getDimensiAttribute()
                     )
                     ->searchable()
+                    ->reactive()
                     ->required(),
 
                 Select::make('id_jenis_kayu')
                     ->label('Jenis Kayu')
                     ->relationship('jenisKayu', 'nama_kayu')
                     ->required()
-                    ->dehydrated() // pastikan nilainya ikut submit
-                    ->reactive(),
+                    ->dehydrated()
+                    ->reactive()
+                    ->unique(
+                        table: 'targets',
+                        column: 'id_jenis_kayu',
+                        ignoreRecord: true,
+                        modifyRuleUsing: fn (Unique $rule, $get) => $rule
+                            ->where('id_mesin', $get('id_mesin'))
+                            ->where('id_ukuran', $get('id_ukuran'))
+                            ->where('grade', $get('grade')),
+                    )
+                    ->validationMessages([
+                        'unique' => 'Target untuk kombinasi mesin, ukuran, jenis kayu, dan grade ini sudah ada.',
+                    ]),
 
                 TextInput::make('ukuran')
                     ->label('Kode Ukuran')
