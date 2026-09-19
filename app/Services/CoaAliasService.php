@@ -46,19 +46,33 @@ class CoaAliasService
     public const AKUN_BARANG_JADI = ['no' => '1402.8', 'nama' => 'Persediaan Barang Jadi'];
 
     /** Gaji */
-    public const AKUN_BEBAN_GAJI_HARIAN = ['no' => '5061.1', 'nama' => 'Beban Gaji Harian Produksi'];
+    public const AKUN_BEBAN_GAJI_HARIAN = ['no' => '5311.0', 'nama' => 'Gaji, Tunjangan, Bonus, Honorarium, THR, dsb'];
 
-    public const AKUN_BEBAN_GAJI_BORONGAN = ['no' => '5061.2', 'nama' => 'Beban Gaji Borongan Produksi'];
+    public const AKUN_BEBAN_GAJI_BORONGAN = ['no' => '5050.0', 'nama' => 'Biaya Tenaga Kerja Langsung'];
 
     public const AKUN_HUTANG_GAJI = ['no' => '2195.1', 'nama' => 'Hutang Gaji'];
 
-    public const AKUN_HUTANG_GAJI_BORONGAN = ['no' => '2195.2', 'nama' => 'Hutang Gaji Borongan'];
+    /**
+     * Hutang ongkos turun kayu (COA baru: 2195.2).
+     * CATATAN: 2195.2 di COA baru adalah "Hutang ongkos turun kayu",
+     * BUKAN gaji borongan. Gaji borongan (harian/borongan) tetap ke 2195.1.
+     */
+    public const AKUN_HUTANG_ONGKOS_KAYU = ['no' => '2195.2', 'nama' => 'Hutang ongkos turun kayu'];
+
+    /** Pendapatan Usaha Lainnya (COA baru: 4199.0) */
+    public const AKUN_PENDAPATAN = ['no' => '4199.0', 'nama' => 'Pendapatan Usaha Lainnya'];
+
+    /** Kas Utama (COA baru: 1101.1) — dipakai sebagai Kas Mut di jurnal kayu masuk */
+    public const AKUN_KAS_MUT = ['no' => '1101.1', 'nama' => 'Kas Utama'];
 
     /** Selisih harga patok produksi (akun DE -> selalu di sisi debit) */
     public const AKUN_SELISIH_HPP = ['no' => '5069.2', 'nama' => 'Selisih harga patok produksi'];
 
-    /** Beban ongkos mesin / produksi (BARU) */
-    public const AKUN_BEBAN_PRODUKSI = ['no' => '5069.1', 'nama' => 'Beban Produksi'];
+    /** Harga Pokok Penjualan */
+    public const AKUN_HPP = ['no' => '5069.1', 'nama' => 'Harga Pokok Penjualan'];
+
+    /** Biaya Operasional Pabrik */
+    public const AKUN_BEBAN_PRODUKSI = ['no' => '5069.3', 'nama' => 'Biaya Operasional Pabrik'];
 
     /**
      * Mapping nomor akun LAMA -> akun baru.
@@ -146,8 +160,40 @@ class CoaAliasService
         ];
     }
 
-    // ---------------------------------------------------------------------
-    // VENEER
+    /**
+     * Hutang ongkos turun kayu → 2195.2 (COA baru).
+     * Dipakai oleh LaporanJurnalKayuMasukSheet2New baris kredit pertama.
+     *
+     * @return array{no:string,nama:string}
+     */
+    public function getAkunHutangOngkosKayu(): array
+    {
+        return self::AKUN_HUTANG_ONGKOS_KAYU;
+    }
+
+    /**
+     * Pendapatan Usaha Lainnya → 4199.0 (COA baru).
+     * Dipakai oleh LaporanJurnalKayuMasukSheet2New baris kredit kedua.
+     *
+     * @return array{no:string,nama:string}
+     */
+    public function getAkunPendapatan(): array
+    {
+        return self::AKUN_PENDAPATAN;
+    }
+
+    /**
+     * Kas Utama → 1101.1 (COA baru).
+     * Dipakai oleh LaporanJurnalKayuMasukSheet2New baris kredit ketiga (Kas Mut).
+     *
+     * @return array{no:string,nama:string}
+     */
+    public function getAkunKasMut(): array
+    {
+        return self::AKUN_KAS_MUT;
+    }
+
+
     // ---------------------------------------------------------------------
 
     /**
@@ -193,16 +239,18 @@ class CoaAliasService
     public function getAkunGaji(bool $isBorongan = false): array
     {
         return [
-            'beban' => $isBorongan ? self::AKUN_BEBAN_GAJI_BORONGAN : self::AKUN_BEBAN_GAJI_HARIAN,
-            'hutang' => $isBorongan ? self::AKUN_HUTANG_GAJI_BORONGAN : self::AKUN_HUTANG_GAJI,
+            'beban'  => $isBorongan ? self::AKUN_BEBAN_GAJI_BORONGAN : self::AKUN_BEBAN_GAJI_HARIAN,
+            // Borongan & harian sama-sama hutang ke 2195.1; 2195.2 khusus ongkos turun kayu.
+            'hutang' => self::AKUN_HUTANG_GAJI,
         ];
     }
 
     /** @return string[] semua nomor akun hutang gaji */
     public function nomorAkunHutangGaji(): array
     {
-        return [self::AKUN_HUTANG_GAJI['no'], self::AKUN_HUTANG_GAJI_BORONGAN['no']];
+        return [self::AKUN_HUTANG_GAJI['no']];
     }
+
 
     // ---------------------------------------------------------------------
     // HPP / SELISIH / BEBAN
