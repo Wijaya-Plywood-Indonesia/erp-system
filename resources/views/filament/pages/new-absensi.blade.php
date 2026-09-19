@@ -45,6 +45,29 @@
                     class="fi-input block w-full rounded-lg border-none bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-gray-950/10 focus:ring-2 focus:ring-primary-600 dark:bg-white/5 dark:text-white dark:ring-white/20" />
             </div>
 
+            {{-- Pencarian karyawan berdasarkan nama atau kode pegawai.
+                 wire:model.live.debounce.300ms supaya request tidak
+                 ditembak setiap ketikan huruf, tapi tetap terasa instan. --}}
+            <div class="w-full sm:col-span-1">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                    Cari Nama / Kode Pegawai
+                </label>
+                <div class="relative">
+                    <x-heroicon-o-magnifying-glass
+                        class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input type="text" wire:model.live.debounce.300ms="search"
+                        placeholder="Ketik nama atau kode pegawai..."
+                        class="fi-input block w-full rounded-lg border-none bg-white pl-9 pr-9 py-2 text-sm shadow-sm ring-1 ring-gray-950/10 focus:ring-2 focus:ring-primary-600 dark:bg-white/5 dark:text-white dark:ring-white/20" />
+                    @if ($search !== '')
+                        <button type="button" wire:click="$set('search', '')"
+                            title="Bersihkan pencarian"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700">
+                            <x-heroicon-o-x-mark class="h-4 w-4" />
+                        </button>
+                    @endif
+                </div>
+            </div>
+
             <div class="w-full sm:col-span-1">
                 <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
                     Filter Sumber Produksi
@@ -72,14 +95,14 @@
         {{-- ================= TAB CONTENT: DATA ABSENSI ================= --}}
         <div x-show="activeTab === 'data'" x-cloak wire:key="tab-data" class="mt-6 space-y-6">
 
-            {{-- Loading bar tipis di atas, muncul saat tanggal atau filter berubah --}}
-            <div wire:loading wire:target="tanggal,filterSumber"
+            {{-- Loading bar tipis di atas, muncul saat tanggal, filter, atau pencarian berubah --}}
+            <div wire:loading wire:target="tanggal,filterSumber,search"
                 class="h-0.5 -mt-2 mb-2 overflow-hidden rounded-full bg-primary-100 dark:bg-primary-900/30">
                 <div class="h-full w-1/3 rounded-full bg-primary-600 animate-[loading-bar_1s_ease-in-out_infinite]">
                 </div>
             </div>
 
-            <div wire:loading.class="opacity-40" wire:target="tanggal,filterSumber"
+            <div wire:loading.class="opacity-40" wire:target="tanggal,filterSumber,search"
                 class="transition-opacity duration-200 space-y-6">
 
                 {{-- Aksi: Export — hanya untuk role absen / super_admin --}}
@@ -219,6 +242,15 @@
                     <div class="flex items-center gap-2 text-sm text-primary-700 dark:text-primary-400">
                         <x-heroicon-o-funnel class="h-4 w-4 shrink-0" />
                         <span>Filter aktif: <strong>{{ $filterLabel }}</strong></span>
+                        <span class="text-gray-400">·</span>
+                        <span class="text-gray-500 dark:text-gray-400">{{ $rekapData->count() }} pegawai</span>
+                    </div>
+                @endif
+
+                @if ($search !== '')
+                    <div class="flex items-center gap-2 text-sm text-primary-700 dark:text-primary-400">
+                        <x-heroicon-o-magnifying-glass class="h-4 w-4 shrink-0" />
+                        <span>Hasil pencarian "<strong>{{ $search }}</strong>"</span>
                         <span class="text-gray-400">·</span>
                         <span class="text-gray-500 dark:text-gray-400">{{ $rekapData->count() }} pegawai</span>
                     </div>
@@ -393,7 +425,11 @@
                         <div class="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-10 text-center text-gray-400 dark:text-gray-500">
                             <div class="flex flex-col items-center gap-2">
                                 <x-heroicon-o-inbox class="h-8 w-8 text-gray-300 dark:text-gray-600" />
-                                <span>Tidak ada data absensi pada tanggal ini.</span>
+                                @if ($search !== '')
+                                    <span>Tidak ada pegawai yang cocok dengan pencarian "{{ $search }}".</span>
+                                @else
+                                    <span>Tidak ada data absensi pada tanggal ini.</span>
+                                @endif
                             </div>
                         </div>
                     @endforelse
@@ -703,7 +739,11 @@
                                         class="px-4 py-10 text-center text-gray-400 dark:text-gray-500">
                                         <div class="flex flex-col items-center gap-2">
                                             <x-heroicon-o-inbox class="h-8 w-8 text-gray-300 dark:text-gray-600" />
-                                            <span>Tidak ada data absensi pada tanggal ini.</span>
+                                            @if ($search !== '')
+                                                <span>Tidak ada pegawai yang cocok dengan pencarian "{{ $search }}".</span>
+                                            @else
+                                                <span>Tidak ada data absensi pada tanggal ini.</span>
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>
@@ -721,8 +761,7 @@
                                 Absensi Lain-lain (Checklog tanpa Data Produksi)
                             </h3>
                             <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                                Pegawai yang tercatat absen fingerprint pada tanggal ini, tetapi tidak memiliki data
-                                pekerjaan di Press Dryer maupun Rotary.
+                                Pegawai yang tercatat absen fingerprint pada tanggal ini, Namun Tidak ada di data Produksi.
                             </p>
                         </div>
 
