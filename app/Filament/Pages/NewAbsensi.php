@@ -37,6 +37,17 @@ class NewAbsensi extends Page implements HasForms
 
     protected string $view = 'filament.pages.new-absensi';
 
+    public static function canAccess(): bool
+    {
+        return true;
+    }
+
+    public function canManageAbsensi(): bool
+    {
+        $user = auth()->user();
+        return $user && ($user->hasRole('super_admin') || $user->hasRole('Absen'));
+    }
+
     public bool $showAbsensiLainLain = false;
 
     public function toggleAbsensiLainLain(): void
@@ -336,7 +347,7 @@ class NewAbsensi extends Page implements HasForms
 
         // Notifikasi hanya dikirim untuk role absen atau super_admin.
         $user = auth()->user();
-        $bisaLihatNotif = $user?->hasRole('super_admin') || $user?->hasRole('absen');
+        $bisaLihatNotif = $this->canManageAbsensi();
 
         if (empty($this->missingTargetItems)) {
             if ($bisaLihatNotif) {
@@ -577,3 +588,6 @@ class NewAbsensi extends Page implements HasForms
         $this->expandedRows = [];
     }
 }
+
+
+
