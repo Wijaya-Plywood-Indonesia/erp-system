@@ -8,6 +8,7 @@ use App\Models\Ukuran;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
@@ -21,7 +22,7 @@ class DetailMasukKediForm
 
                 Select::make('id_serah_terima_veneer_basah')
                     ->label('Veneer Basah Diterima (dari Gudang)')
-                    ->helperText('Hanya menampilkan veneer basah yang sudah dikonfirmasi "Terima" dari Gudang dan masih ada sisa yang belum dipakai.')
+                    ->helperText('Pilih "Input Manual (KW AF)" kalau bahan TIDAK melalui serah terima Gudang — jenis kayu, ukuran, KW, dan jumlah akan diisi manual.')
                     ->options(function ($record) {
                         $sudahDipakai = DB::table('detail_masuk_kedi')
                             ->whereNotNull('id_serah_terima_veneer_basah')
@@ -35,7 +36,11 @@ class DetailMasukKediForm
                             ->where('status', 'Diterima')
                             ->get();
 
-                        $options = [];
+                        // Opsi khusus paling atas: input manual (KW AF).
+                        $options = [
+                            'af' => '— Input Manual (KW AF) —',
+                        ];
+
                         foreach ($rows as $row) {
                             $d = $row->detail;
                             if (! $d) {
@@ -57,8 +62,27 @@ class DetailMasukKediForm
                     ->required(fn ($record) => $record === null)
                     ->live()
                     ->disabled(fn ($record) => $record !== null)
+                    // Sama seperti Press Dryer: kalau NULL di database saat
+                    // Edit, berarti dulu diisi manual (AF) — tampilkan 'af'.
+                    ->afterStateHydrated(function ($component, $record, $state) {
+                        if ($record && is_null($state)) {
+                            $component->state('af');
+                        }
+                    })
+                    // Opsi 'af' bukan ID sungguhan — simpan NULL.
+                    ->dehydrateStateUsing(fn ($state) => $state === 'af' ? null : $state)
                     ->afterStateUpdated(function ($set, ?string $state) {
                         if (! $state) {
+                            return;
+                        }
+
+                        if ($state === 'af') {
+                            $set('id_jenis_kayu', null);
+                            $set('id_ukuran', null);
+                            $set('kw', 'AF');
+                            $set('jumlah', null);
+                            $set('sisa_tersedia', null);
+
                             return;
                         }
 
@@ -87,7 +111,7 @@ class DetailMasukKediForm
                     ->label('Jenis Kayu')
                     ->options(JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id'))
                     ->searchable()
-                    ->disabled()
+                    ->disabled(fn (Get $get) => filled($get('id_serah_terima_veneer_basah')) && $get('id_serah_terima_veneer_basah') !== 'af')
                     ->dehydrated(true)
                     ->required(),
 
@@ -99,19 +123,21 @@ class DetailMasukKediForm
                             ->mapWithKeys(fn ($u) => [$u->id => $u->dimensi])
                     )
                     ->searchable()
-                    ->disabled()
+                    ->disabled(fn (Get $get) => filled($get('id_serah_terima_veneer_basah')) && $get('id_serah_terima_veneer_basah') !== 'af')
                     ->dehydrated(true)
                     ->required(),
 
                 TextInput::make('kw')
                     ->label('KW (Kualitas)')
                     ->required()
-                    ->readOnly()
+                    ->readOnly(fn (Get $get) => filled($get('id_serah_terima_veneer_basah')) && $get('id_serah_terima_veneer_basah') !== 'af')
                     ->dehydrated(true),
 
                 TextInput::make('jumlah')
                     ->label('Jumlah (Lembar)')
-                    ->helperText('Boleh diisi kurang dari sisa yang tersedia — sisanya tetap bisa dipakai produksi lain nanti.')
+                    ->helperText(fn (Get $get) => $get('id_serah_terima_veneer_basah') === 'af'
+                        ? 'Input manual (KW AF) — isi bebas sesuai jumlah aktual.'
+                        : 'Boleh diisi kurang dari sisa yang tersedia — sisanya tetap bisa dipakai produksi lain nanti.')
                     ->required()
                     ->numeric()
                     ->minValue(1)

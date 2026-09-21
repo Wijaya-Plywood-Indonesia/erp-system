@@ -30,7 +30,7 @@ class BahanHotPressesTable
                     ->searchable(),
 
                 TextColumn::make('jenis')
-                    ->label('Tipe')
+                    ->label('Jenis Barang')
                     ->state(function ($record) {
                         $sumber = $record->sumber
                             ?? ($record->id_mutasi_keluar_palet ? 'veneer' : ($record->id_mutasi_keluar_platform ? 'platform' : ($record->id_mutasi_keluar_triplek ? 'triplek' : null)));
