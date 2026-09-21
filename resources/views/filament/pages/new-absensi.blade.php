@@ -24,7 +24,7 @@
             </x-filament::tabs.item>
 
             {{-- TAB 2: UPLOAD — hanya untuk role absen / super_admin --}}
-            @if (auth()->user()?->hasRole('super_admin') || auth()->user()?->hasRole('absen'))
+            @if ($this->canManageAbsensi())
             <x-filament::tabs.item alpine-active="activeTab === 'upload'" wire:click="$set('activeTab', 'upload')">
                 Upload Finger
             </x-filament::tabs.item>
@@ -83,7 +83,7 @@
                 class="transition-opacity duration-200 space-y-6">
 
                 {{-- Aksi: Export — hanya untuk role absen / super_admin --}}
-                @if (auth()->user()?->hasRole('super_admin') || auth()->user()?->hasRole('absen'))
+                @if ($this->canManageAbsensi())
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
                     <x-filament::button wire:click="exportExcel" color="success" icon="heroicon-o-table-cells"
                         class="w-full sm:w-auto justify-center">
@@ -122,7 +122,7 @@
 
                 {{-- Tabel/peringatan hasil pengecekan target — hanya untuk role
                      absen / super_admin. --}}
-                @if (auth()->user()?->hasRole('super_admin') || auth()->user()?->hasRole('absen'))
+                @if ($this->canManageAbsensi())
                 @if ($sudahDicekTarget && count($missingTargetItems) > 0)
                     @if (auth()->user()?->hasRole('super_admin'))
                         <div class="flex justify-end">
@@ -208,7 +208,7 @@
                 {{-- Tabel Rekap Utama --}}
                 @php
                     $rekapData = $this->getRekap();
-                    $canViewRawFinger = auth()->user()?->hasRole('super_admin') || auth()->user()?->hasRole('absen');
+                    $canViewRawFinger = $this->canManageAbsensi();
                 @endphp
                 @if ($filterSumber !== '')
                     @php
@@ -813,7 +813,7 @@
 
         {{-- ================= TAB CONTENT: UPLOAD ================= --}}
         <div x-show="activeTab === 'upload'" x-cloak wire:key="tab-upload" class="mt-6 space-y-4">
-            @if (auth()->user()?->hasRole('super_admin') || auth()->user()?->hasRole('absen'))
+            @if ($this->canManageAbsensi())
                 <form wire:submit.prevent>
                     {{ $this->uploadForm }}
                 </form>
@@ -840,7 +840,7 @@
 
         {{-- ================= TAB CONTENT: RIWAYAT UPLOAD ================= --}}
         <div x-show="activeTab === 'riwayat'" x-cloak wire:key="tab-riwayat" class="mt-6">
-            @if (auth()->user()?->hasRole('super_admin') || auth()->user()?->hasRole('absen'))
+            @if ($this->canManageAbsensi())
                 <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
                     Riwayat Upload Finger
                 </h3>
