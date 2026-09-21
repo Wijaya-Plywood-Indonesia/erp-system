@@ -223,3 +223,93 @@ Route::post('/external/sync-absensi', function (Request $request) {
         return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
 });
+
+/**
+ * API EKSTERNAL: Rekap Stok Veneer Wahana
+ * Endpoint: GET /api/external/rekap-stok-veneer
+ * Dipakai oleh website Wijaya untuk mengambil data stok veneer Wahana.
+ * Autentikasi: Header X-API-KEY
+ */
+Route::get('/external/rekap-stok-veneer', function (Request $request) {
+
+    // 1. Validasi API KEY
+    if ($request->header('X-API-KEY') !== env('INTER_API_KEY', 'INTER_ERP_SECRET_KEY')) {
+        return response()->json(['message' => 'Unauthorized'], 401);
+    }
+
+    try {
+        $jenisKayus = \App\Models\JenisKayu::pluck('nama_kayu', 'id')->toArray();
+        $ukurans    = \App\Models\Ukuran::all()->keyBy('id');
+
+        $normalizeKw = function ($raw) {
+            $kw = strtoupper(trim((string) $raw));
+            if ($kw === '') return null;
+            return is_numeric($kw) ? (int) $kw : $kw;
+        };
+
+        $result = [
+            'basah'  => [],
+            'kering' => [],
+            'jadi'   => [],
+        ];
+
+        // ── Basah ────────────────────────────────────────────────────────────
+        foreach (\App\Models\HppVeneerBasahSummary::all() as $b) {
+            $kw = $normalizeKw($b->kw);
+            if ($kw === null) continue;
+            $result['basah'][] = [
+                'id_jenis_kayu' => $b->id_jenis_kayu,
+                'nama_kayu'     => $jenisKayus[$b->id_jenis_kayu] ?? 'Unknown',
+                'panjang'       => (float) $b->panjang,
+                'lebar'         => (float) $b->lebar,
+                'tebal'         => (float) $b->tebal,
+                'kw'            => $kw,
+                'stok_lembar'   => (int) $b->stok_lembar,
+            ];
+        }
+
+        // ── Kering ───────────────────────────────────────────────────────────
+        $keringIds = DB::table('stok_veneer_kerings')
+            ->select(DB::raw('MAX(id) as max_id'))
+            ->groupBy('id_ukuran', 'id_jenis_kayu', 'kw')
+            ->pluck('max_id');
+
+        foreach (\App\Models\StokVeneerKering::whereIn('id', $keringIds)->get() as $k) {
+            $kw     = $normalizeKw($k->kw);
+            if ($kw === null) continue;
+            $ukuran = $ukurans->get($k->id_ukuran);
+            if (!$ukuran) continue;
+            $result['kering'][] = [
+                'id_jenis_kayu' => $k->id_jenis_kayu,
+                'nama_kayu'     => $jenisKayus[$k->id_jenis_kayu] ?? 'Unknown',
+                'panjang'       => (float) $ukuran->panjang,
+                'lebar'         => (float) $ukuran->lebar,
+                'tebal'         => (float) $ukuran->tebal,
+                'kw'            => $kw,
+                'stok_lembar'   => (int) $k->stok_lembar_sesudah,
+            ];
+        }
+
+        // ── Jadi ─────────────────────────────────────────────────────────────
+        foreach (\App\Models\StokVeneerJadi::all() as $j) {
+            $kw = $normalizeKw($j->kw_grade);
+            if ($kw === null) continue;
+            $result['jadi'][] = [
+                'id_jenis_kayu' => $j->id_jenis_kayu,
+                'nama_kayu'     => $jenisKayus[$j->id_jenis_kayu] ?? 'Unknown',
+                'panjang'       => (float) $j->panjang,
+                'lebar'         => (float) $j->lebar,
+                'tebal'         => (float) $j->tebal,
+                'kw'            => $kw,
+                'stok_lembar'   => (int) $j->stok_lembar,
+            ];
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data'   => $result,
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+    }
+});
