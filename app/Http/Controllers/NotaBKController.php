@@ -123,15 +123,40 @@ class NotaBKController extends Controller
 
             if ($jenisNota === 'sales') {
                 // NOTA SALES: [tebal] [merek]
-                // 1. Dapatkan merek (fallback 'Plywood' jika null atau kosong)
+                // Jika merek tersedia → gunakan merek
+                // Jika merek tidak ada → fallback ke format nota kantor ([tebal] [grade])
                 $rawMerek = $detail->barang?->merek ?? null;
-                $merek = (! empty(trim($rawMerek ?? ''))) ? trim($rawMerek) : 'Plywood';
+                $hasMerek = ! empty(trim($rawMerek ?? ''));
 
-                // 2. Susun format: [tebal] [merek]
-                if ($tebalStr !== null) {
-                    $namaBarang = "{$tebalStr} {$merek}";
+                if ($hasMerek) {
+                    // Ada merek: format [tebal] [merek]
+                    $merek = trim($rawMerek);
+                    if ($tebalStr !== null) {
+                        $namaBarang = "{$tebalStr} {$merek}";
+                    } else {
+                        $namaBarang = $merek;
+                    }
                 } else {
-                    $namaBarang = $merek;
+                    // Tidak ada merek: fallback ke format nota kantor ([tebal] [grade])
+                    $bshp = $detail->barang ?? null;
+                    $gradeModel = $bshp?->grade ?? ($bshp?->id_grade ? \App\Models\Grade::find($bshp->id_grade) : null);
+                    $gradeName = ! empty(trim($gradeModel?->nama_grade ?? '')) ? trim($gradeModel->nama_grade) : null;
+
+                    // Fallback grade dari kw_grade jika bshp belum ter-resolve
+                    if (! $gradeName && ! empty(trim($detail->kw_grade ?? ''))) {
+                        $gradeName = trim($detail->kw_grade);
+                    }
+
+                    // Susun format kantor: [tebal] [grade]
+                    if ($tebalStr !== null && $gradeName !== null) {
+                        $namaBarang = "{$tebalStr} {$gradeName}";
+                    } elseif ($tebalStr !== null) {
+                        $namaBarang = $tebalStr;
+                    } elseif ($gradeName !== null) {
+                        $namaBarang = $gradeName;
+                    } else {
+                        $namaBarang = $detail->barang?->label ?? ($detail->nama_barang ?? '-');
+                    }
                 }
             } else {
                 // NOTA KANTOR: [tebal] [grade]
