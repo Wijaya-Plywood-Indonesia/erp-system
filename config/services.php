@@ -53,4 +53,12 @@ return [
         'url' => env('WEBHOOK_TEST_URL', 'https://webhook.site/0a08a904-09c6-4893-9e19-f9a1c87e740d'),
     ],
 
+    // API Stok Partner (Wijaya → Wahana, atau sebaliknya)
+    // Set di .env:  API_STOK=http://localhost:8090
+    //               INTER_API_KEY=INTER_ERP_SECRET_KEY
+    'stok_partner' => [
+        'url' => env('API_STOK'),
+        'key' => env('INTER_API_KEY'),
+    ],
+
 ];
