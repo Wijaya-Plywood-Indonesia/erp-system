@@ -3,8 +3,12 @@
 namespace App\Services;
 
 use App\Models\HppTriplekJadiLog;
+use App\Models\ProduksiHp;
 use App\Models\StokTriplekJadi;
+use App\Models\TriplekJadiMutasiKeluarPalet;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class StokTriplekJadiService
 {
@@ -174,5 +178,81 @@ class StokTriplekJadiService
         ]);
 
         $stok->update(['id_last_log' => $log->id]);
+    }
+
+    /**
+     * Terima kembali sisa triplek jadi dari Hotpress ke Gudang Triplek
+     * Jadi. Pola & rumus sisa persis sama dengan
+     * StokVeneerJadiService::kembaliDariHotpress() — lihat komentar
+     * lengkap di sana.
+     */
+    public function kembaliDariHotpress(TriplekJadiMutasiKeluarPalet $palet, float $jumlah, ?ProduksiHp $produksiHp = null): StokTriplekJadi
+    {
+        if ($jumlah <= 0) {
+            throw new \RuntimeException('Jumlah pengembalian harus lebih dari 0.');
+        }
+
+        return DB::transaction(function () use ($palet, $jumlah, $produksiHp) {
+            $palet = TriplekJadiMutasiKeluarPalet::query()
+                ->lockForUpdate()
+                ->find($palet->id);
+
+            if (! $palet) {
+                throw new \RuntimeException('Palet triplek jadi tidak ditemukan.');
+            }
+
+            $mutasi = $palet->mutasiKeluar;
+
+            if (! $mutasi) {
+                throw new \RuntimeException('Data mutasi keluar triplek jadi tidak ditemukan.');
+            }
+
+            // Validasi ulang sisa DI DALAM transaksi, memakai rumus yang
+            // sama dengan TriplekJadiMutasiKeluarPalet::sisa.
+            $terpakai = $palet->pemakaianHotpress()->sum('isi');
+            $sisaSaatIni = (float) $palet->jumlah_lembar - (float) $terpakai - (float) $palet->jumlah_dikembalikan;
+
+            if ($jumlah > $sisaSaatIni) {
+                throw new \RuntimeException("Jumlah melebihi sisa yang tersedia di palet ini ({$sisaSaatIni} lembar).");
+            }
+
+            $idJenisKayu = (int) $mutasi->id_jenis_kayu;
+            $panjang = $mutasi->panjang;
+            $lebar = $mutasi->lebar;
+            $tebal = $mutasi->tebal;
+            $kwGrade = (string) $mutasi->kw_grade;
+
+            if (! $idJenisKayu) {
+                throw new \RuntimeException('Data jenis kayu pada mutasi keluar tidak lengkap.');
+            }
+
+            $kubikasi = ((float) $panjang * (float) $lebar * (float) $tebal * $jumlah) / 10000000;
+
+            $tanggal = $produksiHp?->tanggal
+                ? Carbon::parse($produksiHp->tanggal)->format('d/m/Y')
+                : now()->format('d/m/Y');
+
+            $keterangan = "Pengembalian sisa triplek jadi dari Hotpress (Palet {$palet->nomor_palet}) - {$tanggal}";
+
+            $stok = $this->tambah(
+                idJenisKayu: $idJenisKayu,
+                panjang: $panjang,
+                lebar: $lebar,
+                tebal: $tebal,
+                kwGrade: $kwGrade,
+                lembar: $jumlah,
+                kubikasi: $kubikasi,
+                keterangan: $keterangan,
+                referensi: $palet,
+            );
+
+            // Baris bahan_hotpress TIDAK disentuh — hanya palet yang dicatat
+            // sudah menerima pengembalian sebanyak $jumlah lembar.
+            $palet->update([
+                'jumlah_dikembalikan' => (float) $palet->jumlah_dikembalikan + $jumlah,
+            ]);
+
+            return $stok;
+        });
     }
 }
