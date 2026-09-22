@@ -24,11 +24,14 @@ use Illuminate\Support\Collection;
 use Livewire\Attributes\Url;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
-
+use Filament\Support\Enums\Width;
 class NewAbsensi extends Page implements HasForms
 {
     use InteractsWithForms;
-
+    public function getMaxContentWidth(): Width
+    {
+        return Width::Full;
+    }
     protected static ?string $navigationLabel = 'Rekap Absensi Pegawai';
 
     protected static ?string $title = 'Rekap Absensi Pegawai';
