@@ -4,22 +4,23 @@ namespace App\Filament\Pages;
 
 use App\Exports\NewRekapAbsensiExport;
 use App\Exports\RumusGajiWijayaExport;
+use App\Exports\RumusGajiWijayaMingguanExport;
 use App\Models\NewAbsensiUpload;
-use App\Services\AbsensiSources\AbsensiSourceInterface;
 use App\Services\DownloadAbsensiUploadService;
 use App\Services\NewRekapAbsensiPegawaiService;
 use App\Services\PotonganGajiService;
 use App\Services\UploadFingerService;
-use App\Services\ValidasiTargetProduksiService;
-use BackedEnum;
 // HasPageShield sengaja dilepas — halaman ini harus tampil untuk semua role.
 // Pembatasan akses ke tab Upload & Riwayat diatur secara manual di blade.
+use App\Services\ValidasiTargetProduksiService;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Url;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
@@ -37,6 +38,11 @@ class NewAbsensi extends Page implements HasForms
 
     protected string $view = 'filament.pages.new-absensi';
 
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
+
     public static function canAccess(): bool
     {
         return true;
@@ -45,6 +51,7 @@ class NewAbsensi extends Page implements HasForms
     public function canManageAbsensi(): bool
     {
         $user = auth()->user();
+
         return $user && ($user->hasRole('super_admin') || $user->hasRole('Absen'));
     }
 
@@ -310,7 +317,6 @@ class NewAbsensi extends Page implements HasForms
         return app(NewRekapAbsensiPegawaiService::class)->getAbsensiLainLain($tanggal);
     }
 
-
     /**
      * Dipanggil dari tombol "Export Excel" di tab Data Absensi.
      */
@@ -440,7 +446,7 @@ class NewAbsensi extends Page implements HasForms
     public function exportRumusGajiWijayaMingguan()
     {
         $tanggal = $this->tanggal ?? now()->format('Y-m-d');
-        
+
         // Cek missing target
         $this->missingTargetItems = app(ValidasiTargetProduksiService::class)
             ->cekMissingTarget($tanggal);
@@ -466,7 +472,7 @@ class NewAbsensi extends Page implements HasForms
                 ->send();
         }
 
-        $acuan = \Illuminate\Support\Carbon::parse($tanggal)->startOfDay();
+        $acuan = Carbon::parse($tanggal)->startOfDay();
         $jumatAwal = $acuan->copy();
         while (! $jumatAwal->isFriday()) {
             $jumatAwal->subDay();
@@ -474,16 +480,16 @@ class NewAbsensi extends Page implements HasForms
         $kamisAkhir = $jumatAwal->copy()->addDays(6);
 
         if ($jumatAwal->month === $kamisAkhir->month) {
-            $dateRange = $jumatAwal->format('d') . ' - ' . $kamisAkhir->format('d') . ' ' . $kamisAkhir->translatedFormat('F');
+            $dateRange = $jumatAwal->format('d').' - '.$kamisAkhir->format('d').' '.$kamisAkhir->translatedFormat('F');
         } else {
-            $dateRange = $jumatAwal->format('d') . ' ' . $jumatAwal->translatedFormat('F') . ' - ' . $kamisAkhir->format('d') . ' ' . $kamisAkhir->translatedFormat('F');
+            $dateRange = $jumatAwal->format('d').' '.$jumatAwal->translatedFormat('F').' - '.$kamisAkhir->format('d').' '.$kamisAkhir->translatedFormat('F');
         }
 
         $brandName = filament()->getBrandName();
         $fileName = "Rumus Gaji {$brandName} {$dateRange}.xlsx";
 
         return Excel::download(
-            new \App\Exports\RumusGajiWijayaMingguanExport($tanggal),
+            new RumusGajiWijayaMingguanExport($tanggal),
             $fileName
         );
     }
@@ -588,6 +594,3 @@ class NewAbsensi extends Page implements HasForms
         $this->expandedRows = [];
     }
 }
-
-
-
