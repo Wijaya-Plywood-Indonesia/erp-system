@@ -14,10 +14,12 @@ use Filament\Actions\Action;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Pages\Page;
+use Filament\Support\Enums\Width;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use UnitEnum;
 
 class RekapStokVeneer extends Page implements HasForms
@@ -42,7 +44,14 @@ class RekapStokVeneer extends Page implements HasForms
 
     public string $filterKw = '';
 
+    public string $sortBy = 'ukuran';
+
     public function mount(): void {}
+
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
 
     protected function getHeaderActions(): array
     {
@@ -55,26 +64,25 @@ class RekapStokVeneer extends Page implements HasForms
         ];
     }
 
-    public function exportExcel(): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function exportExcel(): BinaryFileResponse
     {
-        $built         = $this->buildAllStocks();
-        $localLabel    = $this->getLocalLabel();
+        $built = $this->buildAllStocks();
+        $localLabel = $this->getLocalLabel();
         $externalLabel = $this->getExternalLabel();
-        $tanggal       = Carbon::now()->translatedFormat('d F Y');
-        $filename      = 'Rekap_Stok_Veneer_' . Carbon::now()->format('Ymd_His') . '.xlsx';
+        $tanggal = Carbon::now()->translatedFormat('d F Y');
+        $filename = 'Rekap_Stok_Veneer_'.Carbon::now()->format('Ymd_His').'.xlsx';
 
         return Excel::download(
             new RekapStokVeneerExport(
-                stocks:        $built['stocks'],
-                kws:           $built['kws'],
-                localLabel:    $localLabel,
+                stocks: $built['stocks'],
+                kws: $built['kws'],
+                localLabel: $localLabel,
                 externalLabel: $externalLabel,
-                tanggal:       $tanggal,
+                tanggal: $tanggal,
             ),
             $filename
         );
     }
-
 
     /**
      * Deteksi apakah web ini adalah Wijaya berdasarkan hostname.
@@ -310,7 +318,38 @@ class RekapStokVeneer extends Page implements HasForms
             return false;
         });
 
-        usort($allStocks, fn ($a, $b) => strcmp($a['title'], $b['title']));
+        if ($this->sortBy === 'jenis_kayu') {
+            usort($allStocks, function ($a, $b) {
+                $cmp = strcmp($a['jenis_kayu'], $b['jenis_kayu']);
+                if ($cmp !== 0) {
+                    return $cmp;
+                }
+                if ($a['tebal'] != $b['tebal']) {
+                    return $a['tebal'] <=> $b['tebal'];
+                } // Ascending: tertipis ke tertebal
+                if ($a['panjang'] != $b['panjang']) {
+                    return $a['panjang'] <=> $b['panjang'];
+                }
+
+                return $a['lebar'] <=> $b['lebar'];
+            });
+        } else {
+            // Urutkan berdasarkan TEBAL terlebih dahulu (tertipis ke tertebal),
+            // baru panjang, lebar, lalu jenis kayu sebagai tie-breaker terakhir.
+            usort($allStocks, function ($a, $b) {
+                if ($a['tebal'] != $b['tebal']) {
+                    return $a['tebal'] <=> $b['tebal'];
+                }
+                if ($a['panjang'] != $b['panjang']) {
+                    return $a['panjang'] <=> $b['panjang'];
+                }
+                if ($a['lebar'] != $b['lebar']) {
+                    return $a['lebar'] <=> $b['lebar'];
+                }
+
+                return strcmp($a['jenis_kayu'], $b['jenis_kayu']);
+            });
+        }
 
         return [
             'stocks' => array_values($allStocks),
