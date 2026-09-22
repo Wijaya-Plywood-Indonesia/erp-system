@@ -958,11 +958,77 @@ class NewRekapAbsensiPegawaiService
 
                     return $row;
                 });
-                // Representasi utama = durasi kerja terpanjang. Kalau semua
-                // durasi sama (termasuk semua 0), sortByDesc tetap stabil
-                // ambil yang pertama muncul, jadi untuk kasus tanpa
-                // perbedaan durasi perilakunya sama seperti sebelumnya.
+
+                // Row representasi untuk field NON-jam (id_pegawai, nama,
+                // kode, dst) — tetap dipilih dari durasi terpanjang seperti
+                // sebelumnya. sortByDesc stabil: kalau semua durasi sama
+                // (termasuk semua 0), ambil yang pertama muncul.
                 $utama = $rowsWithDurasi->sortByDesc('_durasi_menit')->first();
+
+                // Hanya lini dengan durasi > 0 yang ikut dihitung sebagai
+                // base/tambahan — "Izin" 00:00:00-00:00:00 di satu lini
+                // tidak boleh ikut mempengaruhi hasil.
+                $rowsDurasiPositif = $rowsWithDurasi->filter(
+                    fn ($row) => ($row['_durasi_menit'] ?? 0) > 0
+                )->values();
+
+                if ($rowsDurasiPositif->isNotEmpty()) {
+                    // BASE = lini dengan jam_masuk PALING AWAL. Kalau ada
+                    // beberapa lini dengan jam_masuk sama persis (tie),
+                    // dipilih yang DURASINYA LEBIH PANJANG di antara yang
+                    // tie tersebut.
+                    //
+                    // Diurutkan dulu ASC berdasar jam_masuk (string H:i:s
+                    // sudah dinormalisasi normalisasiJam() sebelum method
+                    // ini dipanggil, jadi perbandingan string ASC valid
+                    // sebagai perbandingan jam), lalu untuk jam_masuk yang
+                    // sama, durasi lebih panjang ditaruh duluan (sortByDesc
+                    // durasi). Setelah itu ambil baris pertama sebagai base.
+                    $base = $rowsDurasiPositif
+                        ->sortBy([
+                            fn ($a, $b) => ($a['jam_masuk'] ?? '') <=> ($b['jam_masuk'] ?? ''),
+                            fn ($a, $b) => ($b['_durasi_menit'] ?? 0) <=> ($a['_durasi_menit'] ?? 0),
+                        ])
+                        ->first();
+
+                    // Total durasi SEMUA lini SELAIN base (dibandingkan
+                    // dengan identity object, karena base adalah salah
+                    // satu elemen persis dari $rowsDurasiPositif).
+                    $totalDurasiLiniLain = $rowsDurasiPositif
+                        ->reject(fn ($row) => $row === $base)
+                        ->sum('_durasi_menit');
+
+                    $jamMasukFinal = $base['jam_masuk'] ?? null;
+                    $jamPulangFinal = $base['jam_pulang'] ?? null;
+
+                    if (! empty($jamPulangFinal) && $jamPulangFinal !== '-' && $totalDurasiLiniLain > 0) {
+                        try {
+                            $jamPulangFinal = Carbon::parse($jamPulangFinal)
+                                ->addMinutes((int) $totalDurasiLiniLain)
+                                ->format('H:i:s');
+                        } catch (\Throwable $e) {
+                            // Gagal parse -> biarkan jam_pulang base apa
+                            // adanya, tanpa tambahan (fail-safe, konsisten
+                            // dengan try-catch di seluruh service ini).
+                        }
+                    }
+
+                    $utama['jam_masuk'] = $jamMasukFinal;
+                    $utama['jam_pulang'] = $jamPulangFinal;
+
+                    // Shift dihitung ULANG dari hasil jam_masuk/jam_pulang
+                    // final di atas, bukan dari shift row representasi
+                    // lama — karena acuan jamnya sudah berubah.
+                    $utama['shift'] = $this->tentukanShiftDariJam(
+                        $utama['jam_masuk'] ?? null,
+                        $utama['jam_pulang'] ?? null
+                    );
+                }
+                // Kalau $rowsDurasiPositif kosong (semua lini durasi 0,
+                // mis. izin di semua lini), jam_masuk/jam_pulang/shift
+                // dibiarkan apa adanya dari $utama (row pertama, perilaku
+                // lama) — tidak ada base yang valid untuk dihitung.
+
                 $utama['sumber_label'] = $rowsWithDurasi
                     ->pluck('sumber_label')
                     ->filter()
