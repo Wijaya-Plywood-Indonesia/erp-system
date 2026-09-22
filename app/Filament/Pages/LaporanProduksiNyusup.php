@@ -2,18 +2,19 @@
 
 namespace App\Filament\Pages;
 
-use Filament\Pages\Page;
-use Filament\Actions\Action;
-use Filament\Notifications\Notification;
-use Filament\Forms\Concerns\InteractsWithForms;
-use Filament\Forms\Contracts\HasForms;
-use Filament\Forms\Components\DatePicker;
 use App\Exports\LaporanNyusupExport;
-use Maatwebsite\Excel\Facades\Excel;
-use App\Models\ProduksiNyusup;
-use Carbon\Carbon;
+use App\Filament\Pages\LaporanNyusup\Queries\LoadLaporanNyusup;
+use App\Filament\Pages\LaporanNyusup\Transformers\NyusupDataMap;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Carbon\Carbon;
+use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Maatwebsite\Excel\Facades\Excel;
 use UnitEnum;
 
 class LaporanProduksiNyusup extends Page implements HasForms
@@ -31,14 +32,15 @@ class LaporanProduksiNyusup extends Page implements HasForms
 
     public $reportData = [
         'detail' => [],
-        'summary' => []
+        'summary' => [],
+        'produksi' => [],
     ];
     public $tanggal = null;
 
     public function mount(): void
     {
-        $this->form->fill(['tanggal' => $this->tanggal]);
         $this->tanggal = now()->format('Y-m-d');
+        $this->form->fill(['tanggal' => $this->tanggal]);
         $this->loadAllData();
     }
 
@@ -49,14 +51,14 @@ class LaporanProduksiNyusup extends Page implements HasForms
                 ->label('Refresh Data')
                 ->icon('heroicon-o-arrow-path')
                 ->color('gray')
-                ->action(fn() => $this->loadAllData()),
+                ->action(fn () => $this->loadAllData()),
 
             Action::make('exportExcel')
                 ->label('Download Excel')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
-                ->action(fn() => $this->exportExcel())
-                ->visible(fn() => !empty($this->reportData['detail'])),
+                ->action(fn () => $this->exportExcel())
+                ->visible(fn () => ! empty($this->reportData['detail'])),
         ];
     }
 
@@ -102,14 +104,7 @@ class LaporanProduksiNyusup extends Page implements HasForms
     {
         $tanggal = $this->tanggal ?? now()->format('Y-m-d');
 
-        $produksiList = ProduksiNyusup::with([
-            'detailBarangDikerjakan.barangSetengahJadiHp.ukuran',
-            'detailBarangDikerjakan.barangSetengahJadiHp.grade',
-            'detailBarangDikerjakan.barangSetengahJadiHp.jenisBarang',
-            'pegawaiNyusup'
-        ])
-            ->whereDate('tanggal_produksi', $tanggal)
-            ->get();
+        $produksiList = LoadLaporanNyusup::run($tanggal);
 
         $detail = [];
         $summary = [];
@@ -142,7 +137,8 @@ class LaporanProduksiNyusup extends Page implements HasForms
 
         $this->reportData = [
             'detail' => $detail,
-            'summary' => $summary
+            'summary' => $summary,
+            'produksi' => NyusupDataMap::make($produksiList),
         ];
     }
 }
