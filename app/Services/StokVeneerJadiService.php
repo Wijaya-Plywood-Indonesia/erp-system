@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\HppVeneerJadiLog;
+use App\Models\ProduksiHp;
 use App\Models\SerahTerimaVeneerKering;
 use App\Models\StokVeneerJadi;
 use App\Models\Ukuran;
@@ -302,6 +303,145 @@ class StokVeneerJadiService
             ]);
 
             return $stok->fresh();
+        });
+    }
+
+    /**
+     * Terima kembali sisa veneer jadi dari Hotpress ke Gudang Veneer Jadi.
+     *
+     * Dipanggil saat tombol "Kembalikan ke Gudang" di tab Bahan Hot Press
+     * ditekan, dengan $palet = palet veneer yang dipilih dan $jumlah =
+     * berapa lembar yang dikembalikan. Method ini bertanggung jawab penuh
+     * atas SATU transaksi pengembalian:
+     *   1. Kunci baris palet (lockForUpdate) & validasi ulang sisa fisik
+     *      (jumlah_lembar - total isi bahan_hotpress - jumlah_dikembalikan
+     *      yang sudah ada) supaya tidak kembali lebih dari yang tersedia,
+     *      dan aman dari race condition kalau ada 2 orang input barengan.
+     *   2. Insert baris HppVeneerJadiLog (tipe_transaksi = 'MASUK')
+     *   3. Tambah StokVeneerJadi (stok_lembar, stok_kubikasi, nilai_stok)
+     *   4. Naikkan `jumlah_dikembalikan` pada PALET itu sendiri — bukan
+     *      pada baris bahan_hotpress manapun, karena sisa yang belum
+     *      dipakai adalah properti palet, bukan properti 1 baris
+     *      pemakaian tertentu. Tabel Bahan Hot Press sama sekali tidak
+     *      disentuh oleh method ini.
+     */
+    public function kembaliDariHotpress(VeneerJadiMutasiKeluarPalet $palet, float $jumlah, ?ProduksiHp $produksiHp = null): StokVeneerJadi
+    {
+        if ($jumlah <= 0) {
+            throw new \RuntimeException('Jumlah pengembalian harus lebih dari 0.');
+        }
+
+        return DB::transaction(function () use ($palet, $jumlah, $produksiHp) {
+            $palet = VeneerJadiMutasiKeluarPalet::query()
+                ->lockForUpdate()
+                ->find($palet->id);
+
+            if (! $palet) {
+                throw new \RuntimeException('Palet veneer jadi tidak ditemukan.');
+            }
+
+            $mutasi = $palet->mutasiKeluar;
+
+            if (! $mutasi) {
+                throw new \RuntimeException('Data mutasi keluar veneer jadi tidak ditemukan.');
+            }
+
+            // Validasi ulang sisa DI DALAM transaksi (bukan cuma di form),
+            // memakai rumus yang sama dengan VeneerJadiMutasiKeluarPalet::sisa.
+            $terpakai = $palet->pemakaianHotpress()->sum('isi');
+            $sisaSaatIni = (float) $palet->jumlah_lembar - (float) $terpakai - (float) $palet->jumlah_dikembalikan;
+
+            if ($jumlah > $sisaSaatIni) {
+                throw new \RuntimeException("Jumlah melebihi sisa yang tersedia di palet ini ({$sisaSaatIni} lembar).");
+            }
+
+            $idJenisKayu = (int) $mutasi->id_jenis_kayu;
+            $panjang = $mutasi->panjang;
+            $lebar = $mutasi->lebar;
+            $tebal = $mutasi->tebal;
+            $kwGrade = (string) $mutasi->kw_grade;
+
+            if (! $idJenisKayu) {
+                throw new \RuntimeException('Data jenis kayu pada mutasi keluar tidak lengkap.');
+            }
+
+            // Rumus kubikasi disamakan dengan terimaKeluarGudang() di atas.
+            $kubikasi = ((float) $panjang * (float) $lebar * (float) $tebal * $jumlah) / 10000000;
+
+            $tanggal = $produksiHp?->tanggal
+                ? Carbon::parse($produksiHp->tanggal)->format('d/m/Y')
+                : now()->format('d/m/Y');
+
+            $keterangan = "Pengembalian sisa veneer jadi dari Hotpress (Palet {$palet->nomor_palet}) - {$tanggal}";
+
+            $stok = StokVeneerJadi::where('id_jenis_kayu', $idJenisKayu)
+                ->where('panjang', $panjang)
+                ->where('lebar', $lebar)
+                ->where('tebal', $tebal)
+                ->where('kw_grade', $kwGrade)
+                ->lockForUpdate()
+                ->first();
+
+            $stokLembarBefore = $stok->stok_lembar ?? 0;
+            $stokKubikasiBefore = $stok->stok_kubikasi ?? 0.0;
+            $nilaiStokBefore = $stok->nilai_stok ?? 0.0;
+            $hppAverage = $stok->hpp_average ?? 0.0;
+
+            $nilaiTransaksi = $kubikasi * $hppAverage;
+
+            $stokLembarAfter = $stokLembarBefore + $jumlah;
+            $stokKubikasiAfter = $stokKubikasiBefore + $kubikasi;
+            $nilaiStokAfter = $nilaiStokBefore + $nilaiTransaksi;
+
+            $log = HppVeneerJadiLog::create([
+                'id_jenis_kayu' => $idJenisKayu,
+                'panjang' => $panjang,
+                'lebar' => $lebar,
+                'tebal' => $tebal,
+                'kw_grade' => $kwGrade,
+                'tanggal' => now()->toDateString(),
+                'tipe_transaksi' => 'MASUK',
+                'keterangan' => $keterangan,
+                'referensi_type' => VeneerJadiMutasiKeluarPalet::class,
+                'referensi_id' => $palet->id,
+                'total_lembar' => $jumlah,
+                'total_kubikasi' => $kubikasi,
+                'hpp_pekerja' => 0,
+                'hpp_bahan_penolong' => 0,
+                'hpp_average' => $hppAverage,
+                'nilai_stok' => $nilaiTransaksi,
+                'stok_lembar_before' => $stokLembarBefore,
+                'stok_kubikasi_before' => $stokKubikasiBefore,
+                'nilai_stok_before' => $nilaiStokBefore,
+                'stok_lembar_after' => $stokLembarAfter,
+                'stok_kubikasi_after' => $stokKubikasiAfter,
+                'nilai_stok_after' => $nilaiStokAfter,
+            ]);
+
+            $stokBaru = StokVeneerJadi::updateOrCreate(
+                [
+                    'id_jenis_kayu' => $idJenisKayu,
+                    'panjang' => $panjang,
+                    'lebar' => $lebar,
+                    'tebal' => $tebal,
+                    'kw_grade' => $kwGrade,
+                ],
+                [
+                    'stok_lembar' => $stokLembarAfter,
+                    'stok_kubikasi' => $stokKubikasiAfter,
+                    'nilai_stok' => $nilaiStokAfter,
+                    'hpp_average' => $hppAverage,
+                    'id_last_log' => $log->id,
+                ]
+            );
+
+            // Baris bahan_hotpress TIDAK disentuh — hanya palet yang dicatat
+            // sudah menerima pengembalian sebanyak $jumlah lembar.
+            $palet->update([
+                'jumlah_dikembalikan' => (float) $palet->jumlah_dikembalikan + $jumlah,
+            ]);
+
+            return $stokBaru;
         });
     }
 }

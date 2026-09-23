@@ -3,8 +3,15 @@
 namespace App\Services;
 
 use App\Models\HppTriplekJadiLog;
+use App\Models\ProduksiHp;
+use App\Models\ProduksiSanding;
+use App\Models\SerahTerimaHp;
+use App\Models\TriplekJadiMutasiKeluar;
 use App\Models\StokTriplekJadi;
+use App\Models\TriplekJadiMutasiKeluarPalet;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class StokTriplekJadiService
 {
@@ -174,5 +181,173 @@ class StokTriplekJadiService
         ]);
 
         $stok->update(['id_last_log' => $log->id]);
+    }
+
+    /**
+     * Terima kembali sisa triplek jadi dari Hotpress ke Gudang Triplek
+     * Jadi. Pola & rumus sisa persis sama dengan
+     * StokVeneerJadiService::kembaliDariHotpress() — lihat komentar
+     * lengkap di sana.
+     */
+    public function kembaliDariHotpress(TriplekJadiMutasiKeluarPalet $palet, float $jumlah, ?ProduksiHp $produksiHp = null): StokTriplekJadi
+    {
+        if ($jumlah <= 0) {
+            throw new \RuntimeException('Jumlah pengembalian harus lebih dari 0.');
+        }
+
+        return DB::transaction(function () use ($palet, $jumlah, $produksiHp) {
+            $palet = TriplekJadiMutasiKeluarPalet::query()
+                ->lockForUpdate()
+                ->find($palet->id);
+
+            if (! $palet) {
+                throw new \RuntimeException('Palet triplek jadi tidak ditemukan.');
+            }
+
+            $mutasi = $palet->mutasiKeluar;
+
+            if (! $mutasi) {
+                throw new \RuntimeException('Data mutasi keluar triplek jadi tidak ditemukan.');
+            }
+
+            // Validasi ulang sisa DI DALAM transaksi, memakai rumus yang
+            // sama dengan TriplekJadiMutasiKeluarPalet::sisa.
+            $terpakai = $palet->pemakaianHotpress()->sum('isi');
+            $sisaSaatIni = (float) $palet->jumlah_lembar - (float) $terpakai - (float) $palet->jumlah_dikembalikan;
+
+            if ($jumlah > $sisaSaatIni) {
+                throw new \RuntimeException("Jumlah melebihi sisa yang tersedia di palet ini ({$sisaSaatIni} lembar).");
+            }
+
+            $idJenisKayu = (int) $mutasi->id_jenis_kayu;
+            $panjang = $mutasi->panjang;
+            $lebar = $mutasi->lebar;
+            $tebal = $mutasi->tebal;
+            $kwGrade = (string) $mutasi->kw_grade;
+
+            if (! $idJenisKayu) {
+                throw new \RuntimeException('Data jenis kayu pada mutasi keluar tidak lengkap.');
+            }
+
+            $kubikasi = ((float) $panjang * (float) $lebar * (float) $tebal * $jumlah) / 10000000;
+
+            $tanggal = $produksiHp?->tanggal
+                ? Carbon::parse($produksiHp->tanggal)->format('d/m/Y')
+                : now()->format('d/m/Y');
+
+            $keterangan = "Pengembalian sisa triplek jadi dari Hotpress (Palet {$palet->nomor_palet}) - {$tanggal}";
+
+            $stok = $this->tambah(
+                idJenisKayu: $idJenisKayu,
+                panjang: $panjang,
+                lebar: $lebar,
+                tebal: $tebal,
+                kwGrade: $kwGrade,
+                lembar: $jumlah,
+                kubikasi: $kubikasi,
+                keterangan: $keterangan,
+                referensi: $palet,
+            );
+
+            // Baris bahan_hotpress TIDAK disentuh — hanya palet yang dicatat
+            // sudah menerima pengembalian sebanyak $jumlah lembar.
+            $palet->update([
+                'jumlah_dikembalikan' => (float) $palet->jumlah_dikembalikan + $jumlah,
+            ]);
+
+            return $stok;
+        });
+    }
+
+    /**
+     * Terima kembali sisa triplek jadi dari Produksi SANDING ke Gudang
+     * Triplek Jadi.
+     *
+     * Dipanggil saat tombol "Kembalikan ke Gudang" di tab Modal Sanding
+     * ditekan. $serahTerima = baris serah terima (diterima Sanding) yang
+     * berasal dari Gudang Triplek Jadi (id_triplek_mutasi_keluar terisi).
+     *
+     * Bedanya dengan kembaliDariHotpress(): di Sanding barang tidak
+     * dipecah per palet. Wadahnya adalah baris serah_terima_hp, jadi
+     * `jumlah_dikembalikan` dicatat di sana. Rumus sisa ada di
+     * SerahTerimaHp::getSisaAttribute():
+     *   sisa = qty asli - SUM(modal_sandings.kuantitas) - jumlah_dikembalikan
+     *
+     * Satu transaksi:
+     *   1. Kunci baris serah terima (lockForUpdate) lalu validasi ulang
+     *      sisa, supaya aman dari input barengan.
+     *   2. Tambah StokTriplekJadi + tulis log 'masuk' (lewat tambah()).
+     *      Stok memang sudah terpotong penuh saat barang diterima di
+     *      Sanding (TerimaTriplekJadiService::konfirmasi), jadi
+     *      pengembalian ini tidak menghitung dobel.
+     *   3. Naikkan `jumlah_dikembalikan` pada baris serah terima.
+     */
+    public function kembaliDariSanding(SerahTerimaHp $serahTerima, float $jumlah, ?ProduksiSanding $produksiSanding = null): StokTriplekJadi
+    {
+        if ($jumlah <= 0) {
+            throw new \RuntimeException('Jumlah pengembalian harus lebih dari 0.');
+        }
+
+        return DB::transaction(function () use ($serahTerima, $jumlah, $produksiSanding) {
+            $serah = SerahTerimaHp::query()
+                ->lockForUpdate()
+                ->find($serahTerima->id);
+
+            if (! $serah) {
+                throw new \RuntimeException('Data serah terima tidak ditemukan.');
+            }
+
+            if ($serah->id_triplek_mutasi_keluar === null) {
+                throw new \RuntimeException('Barang ini bukan berasal dari Gudang Triplek Jadi, tidak bisa dikembalikan ke gudang.');
+            }
+
+            if ($serah->isMenunggu()) {
+                throw new \RuntimeException('Barang ini belum diterima di Sanding.');
+            }
+
+            $mutasi = TriplekJadiMutasiKeluar::find($serah->id_triplek_mutasi_keluar);
+
+            if (! $mutasi) {
+                throw new \RuntimeException('Data mutasi keluar triplek jadi tidak ditemukan.');
+            }
+
+            // Validasi ulang sisa DI DALAM transaksi (bukan cuma di form).
+            $sisaSaatIni = $serah->sisa;
+
+            if ($jumlah > $sisaSaatIni) {
+                throw new \RuntimeException("Jumlah melebihi sisa yang tersedia ({$sisaSaatIni} lembar).");
+            }
+
+            $idJenisKayu = (int) $mutasi->id_jenis_kayu;
+
+            if (! $idJenisKayu) {
+                throw new \RuntimeException('Data jenis kayu pada mutasi keluar tidak lengkap.');
+            }
+
+            // Rumus kubikasi sama dengan kembaliDariHotpress().
+            $kubikasi = ((float) $mutasi->panjang * (float) $mutasi->lebar * (float) $mutasi->tebal * $jumlah) / 10000000;
+
+            $tanggal = $produksiSanding?->tanggal
+                ? Carbon::parse($produksiSanding->tanggal)->format('d/m/Y')
+                : now()->format('d/m/Y');
+
+            $stok = $this->tambah(
+                idJenisKayu: $idJenisKayu,
+                panjang: (float) $mutasi->panjang,
+                lebar: (float) $mutasi->lebar,
+                tebal: (float) $mutasi->tebal,
+                kwGrade: (string) $mutasi->kw_grade,
+                lembar: $jumlah,
+                kubikasi: $kubikasi,
+                keterangan: "Pengembalian sisa triplek jadi dari Sanding (Mutasi #{$mutasi->id}) - {$tanggal}",
+                referensi: $serah,
+            );
+
+            $serah->update([
+                'jumlah_dikembalikan' => (int) $serah->jumlah_dikembalikan + (int) $jumlah,
+            ]);
+
+            return $stok;
+        });
     }
 }
