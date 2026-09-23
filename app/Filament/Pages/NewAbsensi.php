@@ -25,11 +25,14 @@ use Illuminate\Support\Collection;
 use Livewire\Attributes\Url;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
-
+use Filament\Support\Enums\Width;
 class NewAbsensi extends Page implements HasForms
 {
     use InteractsWithForms;
-
+    public function getMaxContentWidth(): Width
+    {
+        return Width::Full;
+    }
     protected static ?string $navigationLabel = 'Rekap Absensi Pegawai';
 
     protected static ?string $title = 'Rekap Absensi Pegawai';
@@ -59,7 +62,7 @@ class NewAbsensi extends Page implements HasForms
 
     public function toggleAbsensiLainLain(): void
     {
-        $this->showAbsensiLainLain = ! $this->showAbsensiLainLain;
+        $this->showAbsensiLainLain = !$this->showAbsensiLainLain;
     }
 
     /**
@@ -81,6 +84,16 @@ class NewAbsensi extends Page implements HasForms
      */
     #[Url(keep: true)]
     public string $filterSumber = '';
+
+    /**
+     * Kata kunci pencarian karyawan berdasarkan nama_pegawai atau
+     * kode_pegawai. Disinkronkan ke query string URL (?search=...) sama
+     * seperti $tanggal & $filterSumber. Pencocokan dilakukan case-insensitive
+     * dan "contains" (substring), diterapkan di getRekap() setelah filter
+     * sumber, supaya search bisa dipakai berbarengan dengan filter sumber.
+     */
+    #[Url(keep: true)]
+    public string $search = '';
 
     public string $activeTab = 'data';
 
@@ -219,7 +232,7 @@ class NewAbsensi extends Page implements HasForms
 
             Notification::make()
                 ->title('Berhasil diproses')
-                ->body('Batch #'.$upload->id.' — '.count($upload->file_path).' file berhasil diproses.')
+                ->body('Batch #' . $upload->id . ' — ' . count($upload->file_path) . ' file berhasil diproses.')
                 ->success()
                 ->send();
 
@@ -263,7 +276,7 @@ class NewAbsensi extends Page implements HasForms
             // Hanya tampilkan pegawai yang tidak terlink ke produksi manapun
             // (sumber_label-nya kosong array)
             $rekap = $rekap->filter(
-                fn ($row) => empty($row['sumber_label'])
+                fn($row) => empty($row['sumber_label'])
             )->values();
         } elseif ($this->filterSumber !== '') {
             // Filter berdasarkan key sumber. Setelah gabungkanMultiSumber(),
@@ -273,8 +286,8 @@ class NewAbsensi extends Page implements HasForms
             $sumberKey = $this->filterSumber;
             // Cari label yang sesuai dengan key ini dari daftar sources
             $targetLabel = collect(app(NewRekapAbsensiPegawaiService::class)->getSources())
-                ->firstWhere(fn ($s) => $s->key() === $sumberKey)
-                ?->label();
+                ->firstWhere(fn($s) => $s->key() === $sumberKey)
+                    ?->label();
 
             if ($targetLabel) {
                 // Filter baris yang memiliki setidaknya satu sumber_label
@@ -284,10 +297,25 @@ class NewAbsensi extends Page implements HasForms
                     $labels = (array) ($row['sumber_label'] ?? []);
 
                     return collect($labels)->contains(
-                        fn ($label) => str_starts_with($label, $targetLabel)
+                        fn($label) => str_starts_with($label, $targetLabel)
                     );
                 })->values();
             }
+        }
+
+        // Terapkan filter pencarian (nama_pegawai / kode_pegawai) kalau ada
+        // kata kunci. Dijalankan setelah filter sumber supaya kedua filter
+        // bisa dipakai bersamaan. Pencocokan case-insensitive & substring
+        // ("contains"), jadi user tidak perlu ketik nama/kode lengkap.
+        $keyword = trim($this->search);
+        if ($keyword !== '') {
+            $keywordLower = mb_strtolower($keyword);
+            $rekap = $rekap->filter(function ($row) use ($keywordLower) {
+                $nama = mb_strtolower((string) ($row['nama_pegawai'] ?? ''));
+                $kode = mb_strtolower((string) ($row['kode_pegawai'] ?? ''));
+
+                return str_contains($nama, $keywordLower) || str_contains($kode, $keywordLower);
+            })->values();
         }
 
         return $rekap;
@@ -370,7 +398,7 @@ class NewAbsensi extends Page implements HasForms
         if ($bisaLihatNotif) {
             Notification::make()
                 ->warning()
-                ->title(count($this->missingTargetItems).' item belum punya target')
+                ->title(count($this->missingTargetItems) . ' item belum punya target')
                 ->body('Lihat daftar lengkapnya di tabel bawah tombol export. Kamu tetap bisa export — potongan untuk item tersebut akan dianggap 0.')
                 ->send();
         }
@@ -385,7 +413,7 @@ class NewAbsensi extends Page implements HasForms
      */
     public function toggleTargetPanel(): void
     {
-        $this->showTargetPanel = ! $this->showTargetPanel;
+        $this->showTargetPanel = !$this->showTargetPanel;
     }
 
     /**
@@ -416,10 +444,10 @@ class NewAbsensi extends Page implements HasForms
         // supaya hasil pengecekan terbaru ini benar-benar terlihat.
         $this->showTargetPanel = true;
 
-        if (! empty($this->missingTargetItems)) {
+        if (!empty($this->missingTargetItems)) {
             $bodyLines = collect($this->missingTargetItems)
                 ->take(10)
-                ->map(fn ($m) => "• [{$m['divisi']}] {$m['ukuran']}")
+                ->map(fn($m) => "• [{$m['divisi']}] {$m['ukuran']}")
                 ->implode("\n");
 
             $sisa = count($this->missingTargetItems) - 10;
@@ -429,8 +457,8 @@ class NewAbsensi extends Page implements HasForms
 
             Notification::make()
                 ->warning()
-                ->title(count($this->missingTargetItems).' ukuran belum punya target — export tetap dilanjutkan')
-                ->body("Item berikut tidak punya target, potongannya akan dianggap 0:\n\n".$bodyLines)
+                ->title(count($this->missingTargetItems) . ' ukuran belum punya target — export tetap dilanjutkan')
+                ->body("Item berikut tidak punya target, potongannya akan dianggap 0:\n\n" . $bodyLines)
                 ->persistent()
                 ->send();
         }
@@ -453,10 +481,10 @@ class NewAbsensi extends Page implements HasForms
         $this->sudahDicekTarget = true;
         $this->showTargetPanel = true;
 
-        if (! empty($this->missingTargetItems)) {
+        if (!empty($this->missingTargetItems)) {
             $bodyLines = collect($this->missingTargetItems)
                 ->take(10)
-                ->map(fn ($m) => "• [{$m['divisi']}] {$m['ukuran']}")
+                ->map(fn($m) => "• [{$m['divisi']}] {$m['ukuran']}")
                 ->implode("\n");
 
             $sisa = count($this->missingTargetItems) - 10;
@@ -466,15 +494,15 @@ class NewAbsensi extends Page implements HasForms
 
             Notification::make()
                 ->warning()
-                ->title(count($this->missingTargetItems).' ukuran belum punya target — export tetap dilanjutkan')
-                ->body("Item berikut tidak punya target, potongannya akan dianggap 0:\n\n".$bodyLines)
+                ->title(count($this->missingTargetItems) . ' ukuran belum punya target — export tetap dilanjutkan')
+                ->body("Item berikut tidak punya target, potongannya akan dianggap 0:\n\n" . $bodyLines)
                 ->persistent()
                 ->send();
         }
 
         $acuan = Carbon::parse($tanggal)->startOfDay();
         $jumatAwal = $acuan->copy();
-        while (! $jumatAwal->isFriday()) {
+        while (!$jumatAwal->isFriday()) {
             $jumatAwal->subDay();
         }
         $kamisAkhir = $jumatAwal->copy()->addDays(6);
@@ -551,7 +579,7 @@ class NewAbsensi extends Page implements HasForms
      */
     public function toggleRow(string $rowKey): void
     {
-        if (! empty($this->expandedRows[$rowKey])) {
+        if (!empty($this->expandedRows[$rowKey])) {
             unset($this->expandedRows[$rowKey]);
 
             return;
@@ -562,7 +590,7 @@ class NewAbsensi extends Page implements HasForms
 
     public function isRowExpanded(string $rowKey): bool
     {
-        return ! empty($this->expandedRows[$rowKey]);
+        return !empty($this->expandedRows[$rowKey]);
     }
 
     /**
@@ -590,6 +618,17 @@ class NewAbsensi extends Page implements HasForms
      * ketika baris yang tampil di tabel berubah karena filter diganti.
      */
     public function updatedFilterSumber(): void
+    {
+        $this->expandedRows = [];
+    }
+
+    /**
+     * Dipanggil otomatis oleh Livewire setiap kali property $search
+     * berubah (wire:model.live di blade). Reset expandedRows dengan alasan
+     * yang sama seperti updatedFilterSumber() — baris yang tampil di tabel
+     * bisa berubah karena kata kunci pencarian diganti.
+     */
+    public function updatedSearch(): void
     {
         $this->expandedRows = [];
     }
