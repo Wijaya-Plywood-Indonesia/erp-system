@@ -74,6 +74,9 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
 
     private array $kategoriCache = [];
 
+    /** Cache agar tidak query API berulang untuk kombinasi jenis_kayu + panjang yang sama */
+    private array $idBarangCache = [];
+
     public function bindValue(Cell $cell, $value)
     {
         if ($cell->getColumn() === 'D') {
@@ -90,6 +93,55 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
     {
         $this->tanggal = $tanggal;
         $this->coaAlias = $coaAlias ?? app(CoaAliasService::class);
+    }
+
+    /**
+     * Resolve id_barang kayu dari API akuntansi.
+     * Endpoint: GET /api/barang/resolve-kayu?ukuran={130|260}&jenis_kayu={nama}
+     * Hasil: id_barang (int) atau null jika gagal.
+     * Berpola sama dengan LaporanJurnalKayuMasukSheet2New::resolveIdBarang().
+     */
+    private function resolveIdBarang(string $jenisKayu, int $panjang): ?int
+    {
+        $cacheKey = $panjang . '_' . strtolower(trim($jenisKayu));
+
+        if (array_key_exists($cacheKey, $this->idBarangCache)) {
+            return $this->idBarangCache[$cacheKey];
+        }
+
+        $id = null;
+
+        try {
+            $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/')
+                . '/api/barang/resolve-kayu';
+
+            $response = Http::withoutVerifying()
+                ->timeout(5)
+                ->get($urlApi, [
+                    'ukuran'     => $panjang,
+                    'jenis_kayu' => $jenisKayu,
+                ]);
+
+            if ($response->successful()) {
+                $id = $response->json('id_barang');
+            } else {
+                Log::warning('[JurnalGabungV2] Gagal resolve id_barang', [
+                    'jenis_kayu'  => $jenisKayu,
+                    'panjang'     => $panjang,
+                    'http_status' => $response->status(),
+                    'body'        => $response->body(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[JurnalGabungV2] Exception resolve id_barang: ' . $e->getMessage(), [
+                'jenis_kayu' => $jenisKayu,
+                'panjang'    => $panjang,
+            ]);
+        }
+
+        $this->idBarangCache[$cacheKey] = $id;
+
+        return $id;
     }
 
     // =========================================================================
@@ -248,18 +300,9 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                     $dkOverride = 'k';
 
                     if (empty($subItem['id_barang'])) {
-                        try {
-                            $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-kayu';
-                            $responseApi = Http::withoutVerifying()->timeout(5)->get($urlApi, [
-                                'ukuran' => $panjang,
-                                'jenis_kayu' => $jenisKayu,
-                            ]);
-                            if ($responseApi->successful()) {
-                                $subItem['id_barang'] = $responseApi->json('id_barang');
-                            }
-                        } catch (\Throwable $e) {
-                            Log::warning('Gagal resolve id_barang kayu: '.$e->getMessage());
-                        }
+                        $idBarangPemasok = $this->resolveIdBarang($jenisKayu, $panjang);
+                    } else {
+                        $idBarangPemasok = $subItem['id_barang'];
                     }
                 } else {
                     $bagian = '-';
@@ -322,7 +365,7 @@ class LaporanProduksiJurnalGabungSheetV2 extends DefaultValueBinder implements F
                     'volume' => $volume !== null ? (float) $volume : null,
                     'harga' => $harga !== null ? (float) $harga : null,
                     'jumlah' => $jumlah !== null ? (float) $jumlah : null,
-                    'id_barang' => $subItem['id_barang'] ?? null,
+                    'id_barang' => ($jenisPihak === 'pemasok') ? ($idBarangPemasok ?? null) : ($subItem['id_barang'] ?? null),
                 ];
             }
         }
@@ -613,6 +656,9 @@ class LaporanProduksiJurnalPenggunaanSheetV2 extends DefaultValueBinder implemen
 
     protected CoaAliasService $coaAlias;
 
+    /** Cache agar tidak query API berulang untuk kombinasi jenis_kayu + panjang yang sama */
+    private array $idBarangCache = [];
+
     public function bindValue(Cell $cell, $value)
     {
         if ($cell->getColumn() === 'D') {
@@ -630,6 +676,55 @@ class LaporanProduksiJurnalPenggunaanSheetV2 extends DefaultValueBinder implemen
         $this->coaAlias = $coaAlias ?? app(CoaAliasService::class);
     }
 
+
+    /**
+     * Resolve id_barang kayu dari API akuntansi.
+     * Endpoint: GET /api/barang/resolve-kayu?ukuran={130|260}&jenis_kayu={nama}
+     * Hasil: id_barang (int) atau null jika gagal.
+     * Berpola sama dengan LaporanJurnalKayuMasukSheet2New::resolveIdBarang().
+     */
+    private function resolveIdBarang(string $jenisKayu, int $panjang): ?int
+    {
+        $cacheKey = $panjang . '_' . strtolower(trim($jenisKayu));
+
+        if (array_key_exists($cacheKey, $this->idBarangCache)) {
+            return $this->idBarangCache[$cacheKey];
+        }
+
+        $id = null;
+
+        try {
+            $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/')
+                . '/api/barang/resolve-kayu';
+
+            $response = Http::withoutVerifying()
+                ->timeout(5)
+                ->get($urlApi, [
+                    'ukuran'     => $panjang,
+                    'jenis_kayu' => $jenisKayu,
+                ]);
+
+            if ($response->successful()) {
+                $id = $response->json('id_barang');
+            } else {
+                Log::warning('[PenggunaanKayuV2] Gagal resolve id_barang', [
+                    'jenis_kayu'  => $jenisKayu,
+                    'panjang'     => $panjang,
+                    'http_status' => $response->status(),
+                    'body'        => $response->body(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[PenggunaanKayuV2] Exception resolve id_barang: ' . $e->getMessage(), [
+                'jenis_kayu' => $jenisKayu,
+                'panjang'    => $panjang,
+            ]);
+        }
+
+        $this->idBarangCache[$cacheKey] = $id;
+
+        return $id;
+    }
     public function collection()
     {
         $rows = collect();
@@ -665,33 +760,22 @@ class LaporanProduksiJurnalPenggunaanSheetV2 extends DefaultValueBinder implemen
                 // nama jenis kayu tetap disimpan di Keterangan walau akun sudah digabung
                 $keteranganSpesifikasi = 'lahan '.$lahanLabel.' - '.($jenisKayu !== '' ? $jenisKayu : '-');
 
-                if (empty($subItem['id_barang'])) {
-                    try {
-                        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-kayu';
-                        $responseApi = Http::withoutVerifying()->timeout(5)->get($urlApi, [
-                            'ukuran' => $panjang,
-                            'jenis_kayu' => $jenisKayu,
-                        ]);
-                        if ($responseApi->successful()) {
-                            $subItem['id_barang'] = $responseApi->json('id_barang');
-                        }
-                    } catch (\Throwable $e) {
-                        Log::warning('Gagal resolve id_barang kayu: '.$e->getMessage());
-                    }
-                }
+                $idBarang = ! empty($subItem['id_barang'])
+                    ? $subItem['id_barang']
+                    : $this->resolveIdBarang($jenisKayu, $panjang);
 
                 $rawRows[] = [
                     'nama_akun' => $akunKayu['nama'],
-                    'no_akun' => $akunKayu['no'],
-                    'bagian' => $bagian,
-                    'keterangan' => $keteranganSpesifikasi,
-                    'dk' => 'k',
-                    'tipe' => 'b',
-                    'banyak' => $subItem['banyak'] !== null ? (float) $subItem['banyak'] : null,
-                    'volume' => $subItem['m3'] !== null ? (float) $subItem['m3'] : null,
-                    'harga' => $subItem['harga'] !== null ? (float) $subItem['harga'] : null,
-                    'jumlah' => $subItem['jumlah'] !== null ? (float) $subItem['jumlah'] : null,
-                    'id_barang' => $subItem['id_barang'] ?? null,
+                    'no_akun'   => $akunKayu['no'],
+                    'bagian'    => $bagian,
+                    'keterangan'=> $keteranganSpesifikasi,
+                    'dk'        => 'k',
+                    'tipe'      => 'b',
+                    'banyak'    => $subItem['banyak'] !== null ? (float) $subItem['banyak'] : null,
+                    'volume'    => $subItem['m3'] !== null ? (float) $subItem['m3'] : null,
+                    'harga'     => $subItem['harga'] !== null ? (float) $subItem['harga'] : null,
+                    'jumlah'    => $subItem['jumlah'] !== null ? (float) $subItem['jumlah'] : null,
+                    'id_barang' => $idBarang,
                 ];
             }
         }
@@ -875,7 +959,55 @@ class LaporanProduksiJurnalHargaAsliSheetV2 extends DefaultValueBinder implement
         $this->tanggal = $tanggal;
         $this->coaAlias = $coaAlias ?? app(CoaAliasService::class);
     }
+    /** Cache agar tidak query API berulang untuk kombinasi jenis_kayu + panjang yang sama */
+    private array $idBarangCache = [];
 
+    /**
+     * Resolve id_barang kayu dari API akuntansi.
+     * Endpoint: GET /api/barang/resolve-kayu?ukuran={130|260}&jenis_kayu={nama}
+     */
+    private function resolveIdBarang(string $jenisKayu, int $panjang): ?int
+    {
+        $cacheKey = $panjang . '_' . strtolower(trim($jenisKayu));
+
+        if (array_key_exists($cacheKey, $this->idBarangCache)) {
+            return $this->idBarangCache[$cacheKey];
+        }
+
+        $id = null;
+
+        try {
+            $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/')
+                . '/api/barang/resolve-kayu';
+
+            $response = Http::withoutVerifying()
+                ->timeout(5)
+                ->get($urlApi, [
+                    'ukuran'     => $panjang,
+                    'jenis_kayu' => $jenisKayu,
+                ]);
+
+            if ($response->successful()) {
+                $id = $response->json('id_barang');
+            } else {
+                Log::warning('[KayuHabisV2] Gagal resolve id_barang', [
+                    'jenis_kayu'  => $jenisKayu,
+                    'panjang'     => $panjang,
+                    'http_status' => $response->status(),
+                    'body'        => $response->body(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[KayuHabisV2] Exception resolve id_barang: ' . $e->getMessage(), [
+                'jenis_kayu' => $jenisKayu,
+                'panjang'    => $panjang,
+            ]);
+        }
+
+        $this->idBarangCache[$cacheKey] = $id;
+
+        return $id;
+    }
     public function collection()
     {
         $rows = collect();
@@ -1092,7 +1224,55 @@ class LaporanProduksiKayuHabisSheetV2 extends DefaultValueBinder implements From
         $this->tanggal = $tanggal;
         $this->coaAlias = $coaAlias ?? app(CoaAliasService::class);
     }
+    /** Cache agar tidak query API berulang untuk kombinasi jenis_kayu + panjang yang sama */
+    private array $idBarangCache = [];
 
+    /**
+     * Resolve id_barang kayu dari API akuntansi.
+     * Endpoint: GET /api/barang/resolve-kayu?ukuran={130|260}&jenis_kayu={nama}
+     */
+    private function resolveIdBarang(string $jenisKayu, int $panjang): ?int
+    {
+        $cacheKey = $panjang . '_' . strtolower(trim($jenisKayu));
+
+        if (array_key_exists($cacheKey, $this->idBarangCache)) {
+            return $this->idBarangCache[$cacheKey];
+        }
+
+        $id = null;
+
+        try {
+            $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/')
+                . '/api/barang/resolve-kayu';
+
+            $response = Http::withoutVerifying()
+                ->timeout(5)
+                ->get($urlApi, [
+                    'ukuran'     => $panjang,
+                    'jenis_kayu' => $jenisKayu,
+                ]);
+
+            if ($response->successful()) {
+                $id = $response->json('id_barang');
+            } else {
+                Log::warning('[KayuHabisV2] Gagal resolve id_barang', [
+                    'jenis_kayu'  => $jenisKayu,
+                    'panjang'     => $panjang,
+                    'http_status' => $response->status(),
+                    'body'        => $response->body(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[KayuHabisV2] Exception resolve id_barang: ' . $e->getMessage(), [
+                'jenis_kayu' => $jenisKayu,
+                'panjang'    => $panjang,
+            ]);
+        }
+
+        $this->idBarangCache[$cacheKey] = $id;
+
+        return $id;
+    }
     public function collection()
     {
         $rows = collect();
@@ -1165,9 +1345,10 @@ class LaporanProduksiKayuHabisSheetV2 extends DefaultValueBinder implements From
 
             $totalVal = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
 
+            $idBarang = $this->resolveIdBarang($jenisNama, (int)$record->panjang);
             $rows->push([
                 $namaAkun, $tglVal, '', $noAkun, '', '', 'kayu keluar', $keteranganSpec,
-                'k', '', $banyak > 0 ? $banyak : null, $m3 > 0 ? $m3 : null, $totalStokValue, $totalVal, null,
+                'k', '', $banyak > 0 ? $banyak : null, $m3 > 0 ? $m3 : null, $totalStokValue, $totalVal, $idBarang,
             ]);
 
             $currentRow++;
