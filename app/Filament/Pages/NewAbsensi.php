@@ -326,9 +326,11 @@ class NewAbsensi extends Page implements HasForms
 
         $rekap = app(NewRekapAbsensiPegawaiService::class)->getRekap($tanggal);
 
+        $brandName = filament()->getBrandName();
+
         return Excel::download(
             new NewRekapAbsensiExport($rekap, $tanggal),
-            "Absen-{$tanggal}.xlsx"
+            "Absen-{$brandName}-{$tanggal}.xlsx"
         );
     }
 
@@ -436,10 +438,11 @@ class NewAbsensi extends Page implements HasForms
         }
 
         $rekap = app(NewRekapAbsensiPegawaiService::class)->getRekap($tanggal);
+        $brandName = filament()->getBrandName();
 
         return Excel::download(
             new RumusGajiWijayaExport($rekap, $tanggal),
-            "Rumus-Gaji-Wijaya-{$tanggal}.xlsx"
+            "Rumus-Gaji-{$brandName}-{$tanggal}.xlsx"
         );
     }
 
