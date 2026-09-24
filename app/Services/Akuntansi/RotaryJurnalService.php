@@ -10,8 +10,10 @@ use App\Models\HppAverageSummarie;
 use App\Models\HppVeneerBasahBahanPenolong;
 use App\Models\HppVeneerBasahLog;
 use App\Models\HppVeneerBasahSummary;
+use App\Models\KategoriBarang;
 use App\Models\PenggunaanLahanRotary;
 use App\Models\ProduksiRotary;
+use App\Models\ReferensiHargaProduksi;
 use App\Models\Target;
 use Carbon\Carbon;
 use Illuminate\Http\Client\Response;
@@ -274,24 +276,82 @@ class RotaryJurnalService
         // ── Bahan penolong ────────────────────────────────────────────────────
         $bahanPenolong = [];
 
+        // Cache id kategori "bahan penolong produksi" (atau nama serupa) agar tidak query berulang
+        $idKategoriBahanPenolong = once(function () {
+            $kategori = KategoriBarang::whereRaw('LOWER(nama_kategori) LIKE ?', ['%bahan penolong%'])->first();
+            return $kategori?->id;
+        });
+
         foreach ($produksiList as $produksi) {
             foreach ($produksi->bahanPenolongRotary as $bahan) {
                 $master = $bahan->bahanPenolong;
                 $namaBahanLower = strtolower(trim($master->nama_bahan_penolong ?? ''));
-                $hargaSatuan = (float) ($master->harga ?? 0);
-                $nilaiTotal = $hargaSatuan * (float) ($bahan->jumlah ?? 0);
                 $mappedAkun = null;
 
+                // ── 1. Coba cocokkan ke BAHAN_PENOLONG_MAP (reeling tape, dst) ──
                 foreach (self::BAHAN_PENOLONG_MAP as $keyword => $akun) {
                     if (str_contains($namaBahanLower, $keyword)) {
-                        $mappedAkun = $akun;
+                        $mappedAkun = [
+                            'kode' => $akun['kode'],
+                            'nama' => $akun['nama'],
+                            // Harga dari master bahan penolong (lama)
+                            'harga_satuan' => (float) ($master->harga ?? 0),
+                        ];
                         break;
                     }
                 }
 
+                // ── 2. Fallback: cari di ReferensiHargaProduksi via SubAnakAkun ──
+                // Bahan penolong yang tidak ada di BAHAN_PENOLONG_MAP (mis. solasi)
+                // harus mengambil akun dari id_sub_anak_akun dan harga dari tabel referensi.
                 if (! $mappedAkun) {
+                    // Normalisasi: "solasi" ↔ "isolasi" (sering beda ejaan di lapangan)
+                    $namaCandidates = [$namaBahanLower];
+                    // Jika diawali 'i', coba versi tanpa 'i' (isolasi → solasi)
+                    if (str_starts_with($namaBahanLower, 'i')) {
+                        $namaCandidates[] = substr($namaBahanLower, 1);
+                    }
+                    // Jika tidak diawali 'i', coba tambah 'i' di depan (solasi → isolasi)
+                    if (! str_starts_with($namaBahanLower, 'i')) {
+                        $namaCandidates[] = 'i' . $namaBahanLower;
+                    }
+                    // Ambil kata pertama saja sebagai keyword utama
+                    $kataUtama = explode(' ', $namaBahanLower)[0];
+                    $namaCandidates[] = $kataUtama;
+
+                    $ref = null;
+                    foreach ($namaCandidates as $candidate) {
+                        $ref = ReferensiHargaProduksi::with('subAnakAkun')
+                            ->when($idKategoriBahanPenolong, fn ($q) => $q->where('id_kategori_barang', $idKategoriBahanPenolong))
+                            ->whereHas('subAnakAkun')
+                            ->where(function ($q) use ($candidate) {
+                                $q->whereRaw('LOWER(nama) LIKE ?', ["%{$candidate}%"])
+                                  ->orWhereHas('subAnakAkun', fn ($q2) => $q2->whereRaw('LOWER(nama_sub_anak_akun) LIKE ?', ["%{$candidate}%"]));
+                            })
+                            ->first();
+
+                        if ($ref) {
+                            break;
+                        }
+                    }
+
+                    if ($ref && $ref->subAnakAkun) {
+                        $mappedAkun = [
+                            'kode' => $ref->subAnakAkun->kode_sub_anak_akun,
+                            'nama' => $ref->subAnakAkun->nama_sub_anak_akun,
+                            // Harga dari tabel referensi (bukan dari master bahan penolong)
+                            'harga_satuan' => (float) ($ref->harga ?? 0),
+                        ];
+                    }
+                }
+
+                if (! $mappedAkun) {
+                    Log::info("RotaryJurnal: Bahan penolong '{$master->nama_bahan_penolong}' tidak ditemukan di map maupun referensi, dilewati.");
                     continue;
                 }
+
+                $hargaSatuan = $mappedAkun['harga_satuan'];
+                $nilaiTotal = $hargaSatuan * (float) ($bahan->jumlah ?? 0);
 
                 $kode = $mappedAkun['kode'];
                 if (! isset($bahanPenolong[$kode])) {
@@ -300,13 +360,13 @@ class RotaryJurnalService
 
                 $bahanPenolong[$kode]['nilai'] += $nilaiTotal;
                 $bahanPenolong[$kode]['detail'][] = [
-                    'nama_mesin' => $produksi->mesin->nama_mesin,
-                    'nama_bahan' => $master->nama_bahan_penolong ?? '-',
-                    'satuan' => $master->satuan ?? '-',
-                    'jumlah' => (float) ($bahan->jumlah ?? 0),
-                    'harga_satuan' => $hargaSatuan,
-                    'nilai_total' => $nilaiTotal,
-                    'bahan_penolong_id' => $bahan->bahan_penolong_id,
+                    'nama_mesin'       => $produksi->mesin->nama_mesin,
+                    'nama_bahan'       => $master->nama_bahan_penolong ?? '-',
+                    'satuan'           => $master->satuan ?? '-',
+                    'jumlah'           => (float) ($bahan->jumlah ?? 0),
+                    'harga_satuan'     => $hargaSatuan,
+                    'nilai_total'      => $nilaiTotal,
+                    'bahan_penolong_id'=> $bahan->bahan_penolong_id,
                 ];
             }
         }
@@ -1557,8 +1617,11 @@ class RotaryJurnalService
     }
 
     /**
-     * Items untuk Bahan Penolong (Reeling Tape, dll)
-     * Tiap baris = 1 mesin, jumlah langsung (hit_kbk=null)
+     * Items untuk Bahan Penolong (Reeling Tape, Solasi, dll)
+     * Tiap baris = 1 mesin, jumlah dari nilai_total (hit_kbk=null)
+     *
+     * CATATAN: jenis_pihak sengaja dibuat 'bahan_penolong' (bukan 'produksi')
+     * agar export Excel TIDAK menimpa harga dengan harga veneer/ongkos mesin.
      */
     private function itemsBahanPenolong(array $detail, string $keterangan): array
     {
@@ -1567,17 +1630,17 @@ class RotaryJurnalService
 
         foreach ($detail as $d) {
             $items[] = [
-                'urut' => $urut++,
-                'jenis_pihak' => 'produksi',
-                'nama_pihak' => $d['nama_mesin'],
+                'urut'        => $urut++,
+                'jenis_pihak' => 'bahan_penolong',           // bukan 'produksi'
+                'nama_pihak'  => $d['nama_mesin'],
                 'nama_barang' => $d['nama_bahan'],
-                'keterangan' => '-',
-                'ukuran' => '-',
-                'banyak' => null,
-                'm3' => null,
-                'harga' => round((float) $d['jumlah'], 4),
-                'hit_kbk' => null,
-                'jumlah' => round((float) $d['jumlah'], 4),
+                'keterangan'  => $d['satuan'] ?? '-',
+                'ukuran'      => '-',
+                'banyak'      => $d['jumlah'],               // kuantitas (misal 5 roll)
+                'm3'          => null,
+                'harga'       => round((float) $d['harga_satuan'], 4), // harga per satuan dari BahanPenolongProduksi
+                'hit_kbk'     => null,
+                'jumlah'      => round((float) $d['nilai_total'], 4),  // harga_satuan × kuantitas
             ];
         }
 

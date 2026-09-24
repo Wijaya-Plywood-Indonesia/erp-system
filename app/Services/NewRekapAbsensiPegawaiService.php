@@ -160,7 +160,7 @@ class NewRekapAbsensiPegawaiService
      *     "lain-lain"), supaya pegawai yang dipaksa-malam di sini juga
      *     ikut ke-exclude dari laporan lain-lain besoknya.
      */
-    protected const PAKSA_SHIFT_MALAM_DARI_PRODUKSI = true;
+    protected const PAKSA_SHIFT_MALAM_DARI_PRODUKSI = false;
 
     /** @var AbsensiSourceInterface[] */
     protected array $sources;

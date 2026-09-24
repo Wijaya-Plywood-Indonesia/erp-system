@@ -40,20 +40,6 @@ class NotaKayuObserver
             return;
         }
 
-        // ✅ CEK APAKAH SUDAH PERNAH DIPROSES (CEGAH DUPLIKAT)
-        // Ini sebagai safety net selain dari service
-        $existingProcess = \App\Models\HppAverageLog::where('referensi_type', NotaKayu::class)
-            ->where('referensi_id', $nota->id)
-            ->exists();
-
-        if ($existingProcess) {
-            Log::warning('[OBSERVER] SKIP - Nota sudah pernah diproses', [
-                'nota_id' => $nota->id,
-                'no_nota' => $nota->no_nota,
-            ]);
-            return;
-        }
-
         Log::info('[OBSERVER] Nota Lunas — mulai proses stok masuk (DENGAN LOG HPP)', [
             'nota_id' => $nota->id,
             'no_nota' => $nota->no_nota,
