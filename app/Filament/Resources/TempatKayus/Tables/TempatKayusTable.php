@@ -734,17 +734,47 @@ class TempatKayusTable
                             return;
                         }
 
-                        $notas = \App\Models\NotaKayu::whereHas('kayuMasuk.detailTurusanKayus', function ($q) use ($lahanIds) {
-                            $q->whereIn('lahan_id', $lahanIds);
-                        })->get();
+                        $details = \App\Models\DetailTurusanKayu::whereIn('lahan_id', $lahanIds)->get();
                         
-                        $hppService = app(\App\Services\HppAverageService::class);
-                        foreach ($notas as $nota) {
-                            $hppService->prosesNotaKayuLunas($nota);
+                        $grouped = $details->groupBy(
+                            fn($d) => "{$d->lahan_id}_{$d->jenis_kayu_id}_{$d->panjang}"
+                        );
+                        
+                        foreach ($grouped as $key => $rows) {
+                            $lahanId = (int) $rows->first()->lahan_id;
+                            $jenisKayuId = (int) $rows->first()->jenis_kayu_id;
+                            $panjang = (int) $rows->first()->panjang;
+                            
+                            \App\Models\HppAverageSummarie::firstOrCreate([
+                                'id_lahan'      => $lahanId,
+                                'id_jenis_kayu' => $jenisKayuId,
+                                'panjang'       => $panjang,
+                                'grade'         => null,
+                            ], [
+                                'stok_batang'   => 0,
+                                'stok_kubikasi' => 0.0,
+                                'nilai_stok'    => 0.0,
+                                'hpp_average'   => 0.0,
+                            ]);
+                        }
+                        
+                        foreach ($lahanIds as $lahanId) {
+                            $kayuMasuk = \App\Models\KayuMasuk::whereHas('detailTurusanKayus', function ($q) use ($lahanId) {
+                                $q->where('lahan_id', $lahanId);
+                            })->latest()->first();
+                            
+                            if ($kayuMasuk) {
+                                \App\Models\TempatKayu::firstOrCreate([
+                                    'id_lahan' => $lahanId,
+                                    'id_kayu_masuk' => $kayuMasuk->id,
+                                ], [
+                                    'jumlah_batang' => 0
+                                ]);
+                            }
                         }
                         
                         \Filament\Notifications\Notification::make()
-                            ->title('Sinkronasi Lahan Baru Berhasil')
+                            ->title('Sinkronasi Lahan Baru Berhasil (0 Batang)')
                             ->success()
                             ->send();
                     }),
