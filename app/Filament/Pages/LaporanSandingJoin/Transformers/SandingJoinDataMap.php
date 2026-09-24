@@ -70,17 +70,23 @@ class SandingJoinDataMap
                 $jenisKayuModel = $firstHasil->jenisKayu;
                 $kw             = $firstHasil->kw ?? '1';
 
-                if ($ukuranModel && $jenisKayuModel) {
-                    $kwSuffix = in_array(strtolower($kw), ['afs', 'afm']) ? $kw : '';
-                    $kodeUkuran = 'SANDING JOINT' . $ukuranModel->panjang . $ukuranModel->lebar .
-                        str_replace('.', ',', $ukuranModel->tebal) . $kwSuffix;
-                } else {
-                    $kodeUkuran = 'SANDING-JOINT-NOT-FOUND';
-                }
-
                 $idUkuran    = $firstHasil->id_ukuran;
                 $idJenisKayu = $firstHasil->id_jenis_kayu;
                 $hasilGrup   = (float) $hasilRows->sum('jumlah');
+
+                if ($ukuranModel && $jenisKayuModel) {
+                    $kwSuffix = in_array(strtolower($kw), ['afs', 'afm']) ? $kw : '';
+                    $kodeUkuran = 'SANDING JOINT ' . strtoupper($jenisKayuModel->nama_kayu) . ' ' .
+                        $ukuranModel->panjang . $ukuranModel->lebar .
+                        str_replace('.', ',', $ukuranModel->tebal) . $kwSuffix;
+                } else {
+                    $kodeUkuran = 'SANDING-JOINT-NOT-FOUND-' . $idUkuran . '-' . $idJenisKayu . '-' . $kw;
+                }
+
+                // Kunci unik per kombinasi ukuran + jenis kayu + KW, supaya dua
+                // jenis kayu dengan dimensi yang sama tidak saling menimpa (overwrite)
+                // di array $result pada langkah 4 di bawah.
+                $groupKey = $idUkuran . '|' . $idJenisKayu . '|' . $kw;
 
                 $rateInfo = ($idUkuran && $idJenisKayu)
                     ? $action->resolveTargetDanRate(Mesin::SandingJoint, $idUkuran, $idJenisKayu)
@@ -95,6 +101,7 @@ class SandingJoinDataMap
                     ]);
 
                     $ukuranGroups[] = [
+                        'group_key'      => $groupKey,
                         'kode_ukuran'    => $kodeUkuran,
                         'ukuran_nama'    => $ukuranModel->nama_ukuran ?? '-',
                         'jenis_kayu'     => $jenisKayuModel->nama_kayu ?? '-',
@@ -118,6 +125,7 @@ class SandingJoinDataMap
                 $jumlahUkuranAda  += 1;
 
                 $ukuranGroups[] = [
+                    'group_key'      => $groupKey,
                     'kode_ukuran'    => $kodeUkuran,
                     'ukuran_nama'    => $ukuranModel->nama_ukuran ?? '-',
                     'jenis_kayu'     => $jenisKayuModel->nama_kayu ?? '-',
@@ -143,7 +151,7 @@ class SandingJoinDataMap
 
             // 4. Susun output per ukuran (tanpa meja, pekerja tetap gabungan per hari)
             foreach ($ukuranGroups as $grup) {
-                $key = $grup['kode_ukuran'];
+                $key = $grup['group_key'];
 
                 $result[$key] = [
                     'kode_ukuran'            => $grup['kode_ukuran'],

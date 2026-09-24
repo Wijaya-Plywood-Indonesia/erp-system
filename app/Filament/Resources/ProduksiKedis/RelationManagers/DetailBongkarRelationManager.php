@@ -35,11 +35,18 @@ class DetailBongkarRelationManager extends RelationManager
         return false;
     }
 
+    private function isSuperAdmin(): bool
+    {
+        $user = Auth::user();
+
+        return $user && method_exists($user, 'hasRole') && $user->hasRole(['super_admin', 'Super Admin']);
+    }
+
     public function form(Schema $schema): Schema
     {
         return $schema
             ->schema([
-                // Pilihan Kayu Gabungan (Jenis Kayu + Ukuran) dari data masuk
+                // Pilihan Kayu Gabungan (Jenis Kayu + Ukuran + KW) dari data masuk
                 Select::make('kayu_masuk_composite')
                     ->label('Pilih Kayu (Dari Data Masuk)')
                     ->options(function ($livewire) {
@@ -47,8 +54,9 @@ class DetailBongkarRelationManager extends RelationManager
                             ->with(['jenisKayu', 'ukuran'])
                             ->get()
                             ->mapWithKeys(function ($d) {
-                                $key = "{$d->id_jenis_kayu}-{$d->id_ukuran}";
-                                $label = "{$d->jenisKayu->nama_kayu} | {$d->ukuran->dimensi}";
+                                $kw = $d->kw !== null && trim((string) $d->kw) !== '' ? $d->kw : '-';
+                                $key = "{$d->id_jenis_kayu}-{$d->id_ukuran}-{$kw}";
+                                $label = "{$d->jenisKayu->nama_kayu} | {$d->ukuran->dimensi} | KW {$kw}";
 
                                 return [$key => $label];
                             })
@@ -56,15 +64,19 @@ class DetailBongkarRelationManager extends RelationManager
                     })
                     ->searchable()
                     ->live()
-                    ->formatStateUsing(fn ($record) => $record ? "{$record->id_jenis_kayu}-{$record->id_ukuran}" : null)
+                    ->formatStateUsing(fn ($record) => $record
+                        ? "{$record->id_jenis_kayu}-{$record->id_ukuran}-".($record->kw !== null && trim((string) $record->kw) !== '' ? $record->kw : '-')
+                        : null)
                     ->afterStateUpdated(function ($state, $set) {
                         if ($state) {
-                            [$jenisId, $ukuranId] = explode('-', $state);
+                            [$jenisId, $ukuranId, $kw] = explode('-', $state, 3);
                             $set('id_jenis_kayu', $jenisId);
                             $set('id_ukuran', $ukuranId);
+                            $set('kw', $kw === '-' ? null : $kw);
                         } else {
                             $set('id_jenis_kayu', null);
                             $set('id_ukuran', null);
+                            $set('kw', null);
                         }
                     })
                     ->required()
@@ -78,6 +90,7 @@ class DetailBongkarRelationManager extends RelationManager
 
                 TextInput::make('kw')
                     ->label('Kualitas (KW)')
+                    ->helperText('Otomatis terisi dari data masuk yang dipilih. Bisa diubah kalau memang berbeda saat dibongkar.')
                     ->required()
                     ->placeholder('Cth: 1, 2, 3 dll.'),
 
@@ -180,7 +193,7 @@ class DetailBongkarRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make()
                     ->hidden(
-                        fn ($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()
+                        fn ($livewire) => ! $this->isSuperAdmin() && $livewire->ownerRecord?->isBongkarDivalidasi()
                     ),
             ])
             ->recordActions([
@@ -271,20 +284,20 @@ HTML);
                         $sudahDiterima = $serahTerima && $serahTerima->diterima_oleh !== '-';
 
                         return $sudahDiterima
-                            || $livewire->ownerRecord?->isBongkarDivalidasi();
+                            || (! $this->isSuperAdmin() && $livewire->ownerRecord?->isBongkarDivalidasi());
                     }),
 
                 DeleteAction::make()
                     ->hidden(
                         fn ($livewire, $record) => $record->serahTerimaVeneerKering
-                            || $livewire->ownerRecord?->isBongkarDivalidasi()
+                            || (! $this->isSuperAdmin() && $livewire->ownerRecord?->isBongkarDivalidasi())
                     ),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->hidden(
-                            fn ($livewire) => $livewire->ownerRecord?->isBongkarDivalidasi()
+                            fn ($livewire) => ! $this->isSuperAdmin() && $livewire->ownerRecord?->isBongkarDivalidasi()
                         ),
                 ]),
             ]);

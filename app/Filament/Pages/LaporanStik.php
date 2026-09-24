@@ -129,14 +129,14 @@ class LaporanStik extends Page
                 // 1. Data untuk Sheet 1 (Rincian Palet)
                 $daftarHasil[] = [
                     'no_palet'     => $hasil->no_palet ?? ('ST-' . ($index + 1)),
-                    'jenis_kayu'   => $hasil->jenisKayu?->nama_jenis_kayu ?? $hasil->jenis_kayu ?? 'Sengon',
+                    'jenis_kayu'   => $hasil->jenisKayu?->nama_kayu ?? '-',
                     'ukuran'       => $formatUkuran,
                     'kualitas'     => $hasil->kualitas ?? ($hasil->kw ? 'KW ' . $hasil->kw : '-'),
                     'total_lembar' => $lembar,
                 ];
 
                 // 2. Logic Grouping untuk Sheet 2 (Berdasarkan Ukuran p, l, t & Jenis Kayu)
-                $jenisKayuNama = $hasil->jenisKayu?->nama_jenis_kayu ?? $hasil->jenis_kayu ?? 'Sengon';
+                $jenisKayuNama = $hasil->jenisKayu?->nama_kayu ?? '-';
                 $jenisSingkat  = strtolower(substr($jenisKayuNama, 0, 1));
 
                 $groupKey = "{$p}_{$l}_{$t}_{$jenisSingkat}";
