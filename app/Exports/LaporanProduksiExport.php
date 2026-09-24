@@ -557,6 +557,11 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     } else {
                         $keteranganSpesifikasi = ($subItem['keterangan'] ?? '').' ('.($subItem['ukuran'] ?? '').')';
                     }
+                } elseif (($subItem['jenis_pihak'] ?? '') === 'bahan_penolong') {
+                    // Bahan penolong (reeling tape, solasi, dll)
+                    // bagian = nama mesin, keterangan = nama bahan
+                    $bagian = $subItem['nama_pihak'] ?? '-';
+                    $keteranganSpesifikasi = $subItem['nama_barang'] ?? '-';
                 } elseif (($subItem['jenis_pihak'] ?? '') === 'karyawan') {
                     $parts = explode(' - ', $subItem['keterangan'] ?? '');
                     $bagian = count($parts) > 1 ? trim($parts[1]) : '-';
@@ -605,6 +610,10 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $harga = $ongkos;
                     $jumlah = $volume !== null ? round((float) $volume * $ongkos, 4) : null;
                 }
+
+                // Bahan penolong: harga & jumlah sudah benar dari payload (tidak di-override)
+                // $harga = harga_satuan dari BahanPenolongProduksi
+                // $jumlah = nilai_total (harga_satuan × kuantitas)
 
                 // Khusus export Excel: harga pekerja di-hardcode 150.000
                 // (tidak ambil dari database HargaPegawai)
@@ -765,7 +774,11 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                 } elseif ($isWood) {
                     $rowHarga = (float) ($g['harga'] ?? 0.0);
                 } else {
-                    $rowHarga = (float) ($g['jumlah'] ?? 0.0);
+                    // Bahan penolong dengan kuantitas → harga satuan dari BahanPenolongProduksi
+                    // Baris lain tanpa qty/vol (mis. selisih) → pakai jumlah langsung
+                    $rowHarga = ($g['has_qty'] && ($g['harga'] ?? 0) > 0)
+                        ? (float) $g['harga']
+                        : (float) ($g['jumlah'] ?? 0.0);
                 }
 
                 $rowTotal = 0.0;
@@ -862,6 +875,9 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $hitKbkVal = 'm';
                 } elseif ($isHutangGaji) {
                     $hitKbkVal = 'b';
+                } elseif ($g['has_qty'] && ! $g['has_vol']) {
+                    // Bahan penolong dengan kuantitas → hit_kbk='b' agar Excel hitung M*K
+                    $hitKbkVal = 'b';
                 }
 
                 // Format `Harga` (Col 13 / M)
@@ -899,7 +915,12 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                 } elseif ($isWood) {
                     $hargaVal = $g['harga'];
                 } else {
-                    $hargaVal = $g['jumlah'];
+                    // Bahan penolong (reeling tape, solasi, dll):
+                    // Jika ada kuantitas → harga satuan dari BahanPenolongProduksi
+                    // Jika tidak ada qty/vol → gunakan jumlah langsung (selisih, dll)
+                    $hargaVal = ($g['has_qty'] && ($g['harga'] ?? 0) > 0)
+                        ? $g['harga']
+                        : $g['jumlah'];
                 }
 
                 // Calculate Total as an Excel formula referencing 'hit kbk' (Col J), Harga (Col M), M3 (Col L), and Banyak (Col K)
