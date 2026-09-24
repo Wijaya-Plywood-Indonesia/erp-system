@@ -66,7 +66,7 @@ class NewAbsensi extends Page implements HasForms
      * Disinkronkan ke query string URL (?tanggal=YYYY-MM-DD) supaya kalau
      * halaman di-refresh atau link-nya dibagikan/dibuka ulang, tanggal yang
      * lagi dipilih user tetap sama (tidak balik ke tanggal hari ini).
-     * `keep: true` supaya parameter tetap muncul di URL walau nilainya
+     * keep: true supaya parameter tetap muncul di URL walau nilainya
      * balik ke default.
      */
     #[Url(keep: true)]
@@ -142,7 +142,7 @@ class NewAbsensi extends Page implements HasForms
      *
      * CATATAN: tombol untuk toggle property ini (toggleTargetPanel) di
      * blade sekarang HANYA ditampilkan untuk user dengan role
-     * `super_admin` — user lain selalu melihat panel ini terbuka kalau
+     * super_admin — user lain selalu melihat panel ini terbuka kalau
      * ada item yang belum punya target (tidak bisa menyembunyikannya).
      */
     public bool $showTargetPanel = true;
@@ -381,7 +381,7 @@ class NewAbsensi extends Page implements HasForms
     /**
      * Dipanggil dari tombol show/hide di panel peringatan target — di
      * blade tombolnya sekarang HANYA ditampilkan untuk role
-     * `super_admin`. Tidak menghitung ulang apa pun — hanya toggle
+     * super_admin. Tidak menghitung ulang apa pun — hanya toggle
      * visibility panelnya, datanya sendiri (missingTargetItems) tetap
      * tersimpan di property seperti biasa.
      */
