@@ -115,6 +115,7 @@ class TempatKayusTable
             'kayuMasuk.notaKayu',
         ])
             ->where('lahan_id', $lahanId)
+            ->whereHas('kayuMasuk.notaKayu')
             ->when($cutoff, function ($q) use ($cutoff) {
                 $q->whereHas('kayuMasuk.notaKayu', function ($query) use ($cutoff) {
                     $query->where(function ($sub) use ($cutoff) {
@@ -299,13 +300,21 @@ class TempatKayusTable
             ->columns([
                 TextColumn::make('lahan.kode_lahan')
                     ->label('Lahan')
-                    ->sortable()
+                    ->sortable(query: function (Builder $query, string $direction) {
+                        $joins = collect($query->getQuery()->joins)->pluck('table');
+                        if (!$joins->contains('lahans')) {
+                            $query->join('lahans', 'tempat_kayus.id_lahan', '=', 'lahans.id');
+                        }
+                        return $query->reorder('lahans.kode_lahan', $direction);
+                    })
                     ->searchable()
                     ->toggleable(),
 
                 TextColumn::make('group_panjang')
                     ->label('Pjg')
-                    ->sortable()
+                    ->sortable(query: function (Builder $query, string $direction) {
+                        return $query->reorder('hpp_average_summaries.panjang', $direction);
+                    })
                     ->badge()
                     ->color(fn($state) => $state == 260 ? 'success' : 'info')
                     ->toggleable(),
@@ -313,14 +322,30 @@ class TempatKayusTable
                 TextColumn::make('jenis_kayu')
                     ->label('Jenis Kayu')
                     ->getStateUsing(function ($record) {
-                        // $record pada tabel ini sudah merupakan representasi dari HppAverageSummarie per lahan & panjang
-                        $summary = HppAverageSummarie::with('jenisKayu')
-                            ->where('id_lahan', $record->id_lahan)
-                            ->where('panjang', $record->group_panjang)
-                            ->where('stok_batang', '>', 0)
+                        $aktif = self::getKayuAktif((int) $record->id_lahan);
+                        
+                        // Cari data kayu aktif yang panjangnya sesuai dengan group_panjang (bisa juga fallback ke semua)
+                        $matching = $aktif->where('is_opname', false)->filter(function($item) use ($record) {
+                            $panjangs = array_map('trim', explode(',', $item['Panjang'] ?? ''));
+                            return in_array((string) $record->group_panjang, $panjangs);
+                        });
+                        
+                        if ($matching->isEmpty()) {
+                            $matching = $aktif->where('is_opname', false);
+                        }
+                        
+                        $idKayuMasuks = $matching->pluck('ID Kayu')->filter()->unique();
+                        
+                        if ($idKayuMasuks->isEmpty()) {
+                            return '-';
+                        }
+                        
+                        $turusan = \App\Models\DetailTurusanKayu::with('jenisKayu')
+                            ->where('lahan_id', $record->id_lahan)
+                            ->whereIn('id_kayu_masuk', $idKayuMasuks)
                             ->first();
 
-                        return $summary?->jenisKayu?->nama_kayu ?: '-';
+                        return $turusan?->jenisKayu?->nama_kayu ?: '-';
                     })
                     ->toggleable(),
 
@@ -348,18 +373,24 @@ class TempatKayusTable
 
                 TextColumn::make('diserahkan_oleh')
                     ->label('Diserahkan Oleh')
-                    ->sortable()
+                    ->sortable(query: function (Builder $query, string $direction) {
+                        return $query->reorder('tempat_kayus.diserahkan_oleh', $direction);
+                    })
                     ->default('-')
                     ->toggleable(),
 
                 TextColumn::make('diterima_oleh')
-                    ->sortable()
+                    ->sortable(query: function (Builder $query, string $direction) {
+                        return $query->reorder('tempat_kayus.diterima_oleh', $direction);
+                    })
                     ->label('Diterima Oleh')
                     ->default('-')
                     ->toggleable(),
 
                 TextColumn::make('status')
-                    ->sortable()
+                    ->sortable(query: function (Builder $query, string $direction) {
+                        return $query->reorder('tempat_kayus.status', $direction);
+                    })
                     ->label('Status')
                     ->badge()
                     ->formatStateUsing(fn($state) => match ($state) {
