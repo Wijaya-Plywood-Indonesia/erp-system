@@ -711,6 +711,43 @@ class TempatKayusTable
                 BulkActionGroup::make([
                     DeleteBulkAction::make()->visible($isAdmin),
                 ]),
+            ])
+            ->headerActions([
+                \Filament\Actions\Action::make('sync_lahan_baru')
+                    ->label('Sinkronasi Semua Lahan Baru')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading('Sinkronasi Semua Lahan Baru')
+                    ->modalDescription('Apakah Anda yakin ingin memproses dan mensinkronisasikan semua data lahan baru (yang belum disinkronisasi) ke HPP Average Log?')
+                    ->modalSubmitActionLabel('Ya, Sinkronisasi')
+                    ->action(function () {
+                        $lahanIds = \App\Models\Lahan::whereHas('detailTurusanKayus')
+                            ->whereDoesntHave('summaries')
+                            ->pluck('id');
+                            
+                        if ($lahanIds->isEmpty()) {
+                            \Filament\Notifications\Notification::make()
+                                ->title('Tidak ada lahan baru yang perlu disinkronisasi.')
+                                ->info()
+                                ->send();
+                            return;
+                        }
+
+                        $notas = \App\Models\NotaKayu::whereHas('kayuMasuk.detailTurusanKayus', function ($q) use ($lahanIds) {
+                            $q->whereIn('lahan_id', $lahanIds);
+                        })->get();
+                        
+                        $hppService = app(\App\Services\HppAverageService::class);
+                        foreach ($notas as $nota) {
+                            $hppService->prosesNotaKayuLunas($nota);
+                        }
+                        
+                        \Filament\Notifications\Notification::make()
+                            ->title('Sinkronasi Lahan Baru Berhasil')
+                            ->success()
+                            ->send();
+                    }),
             ]);
     }
 }
