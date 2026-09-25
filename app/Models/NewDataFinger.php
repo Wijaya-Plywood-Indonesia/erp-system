@@ -13,6 +13,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon $tanggal
  * @property string|null $jam_masuk
  * @property string|null $jam_pulang
+ * @property array|null $raw_finger  Semua tap mentah hari itu, sudah diurutkan awal→akhir.
+ *                                   Format: [['waktu' => 'HH:MM:SS'], ...]
  */
 class NewDataFinger extends Model
 {
@@ -25,10 +27,12 @@ class NewDataFinger extends Model
         'tanggal',
         'jam_masuk',
         'jam_pulang',
+        'raw_finger',
     ];
 
     protected $casts = [
-        'tanggal' => 'date',
+        'tanggal'     => 'date',
+        'raw_finger'  => 'array',
     ];
 
     public function uploadMasuk()
