@@ -26,9 +26,92 @@ use Livewire\Attributes\Url;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
 
+use Filament\Actions\Action;
+use Filament\Schemas\Components\Section;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\TimePicker;
+use Filament\Forms\Components\Toggle;
+use App\Models\PengaturanAbsensi;
+
 class NewAbsensi extends Page implements HasForms
 {
     use InteractsWithForms;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('settingAbsensi')
+                ->label('Pengaturan Absensi')
+                ->icon('heroicon-o-cog-6-tooth')
+                ->color('gray')
+                ->visible(fn () => auth()->user()?->hasRole('super_admin'))
+                ->fillForm(fn () => PengaturanAbsensi::getSettings()->toArray())
+                ->form([
+                    Section::make('Jadwal Default (Fallback)')
+                        ->description('Digunakan jika jam masuk/pulang produksi kosong.')
+                        ->schema([
+                            TimePicker::make('jam_masuk_shift_pagi_default')->label('Masuk Pagi')->required(),
+                            TimePicker::make('jam_pulang_shift_pagi_default')->label('Pulang Pagi')->required(),
+                            TimePicker::make('jam_masuk_shift_malam_default')->label('Masuk Malam')->required(),
+                            TimePicker::make('jam_pulang_shift_malam_default')->label('Pulang Malam')->required(),
+                        ])->columns(2),
+                    Section::make('Toleransi & Durasi')
+                        ->schema([
+                            TextInput::make('toleransi_sesi_tunggal_menit')
+                                ->label('Toleransi 1 Sesi (Menit)')
+                                ->numeric()->required()
+                                ->helperText('Jarak antara tap masuk & pulang jika dianggap cuma 1 sesi absen (tidak sengaja tap 2x).'),
+                            TextInput::make('batas_total_durasi_menit')
+                                ->label('Batas Durasi Minimum (Menit)')
+                                ->numeric()->required()
+                                ->helperText('Finger tidak tampil jika total jam kerja produksi di bawah batas ini.'),
+                            TextInput::make('toleransi_masuk_lebih_cepat_malam_menit')
+                                ->label('Toleransi Masuk Terlalu Cepat Shift Malam (Menit)')
+                                ->numeric()->required()
+                                ->helperText('Batas maksimal berapa menit scan masuk boleh mendahului jadwal masuk sebelum dianulir.'),
+                            TextInput::make('toleransi_pulang_lebih_lambat_malam_menit')
+                                ->label('Toleransi Pulang Terlalu Lambat Shift Malam (Menit)')
+                                ->numeric()->required()
+                                ->helperText('Batas maksimal berapa menit scan pulang boleh melampaui jadwal pulang sebelum dianulir.'),
+                        ])->columns(2),
+                    Section::make('Metode Shift & Auto Fix')
+                        ->schema([
+                            Select::make('metode_shift_malam')
+                                ->label('Metode Deteksi Shift Malam')
+                                ->options([
+                                    'default' => 'Default (Berdasarkan Jam)',
+                                    'paksa_shift_malam' => 'Paksa Shift Malam (Satu Sinyal Cukup)',
+                                    'full_shift' => 'Full Shift (Ikuti Label Shift)',
+                                ])->required(),
+                            Toggle::make('auto_fix_enabled')
+                                ->label('Aktifkan Auto Fix (Dari Raw Finger)')
+                                ->inline(false),
+                            TextInput::make('auto_fix_batas_selisih_menit')
+                                ->label('Batas Selisih Auto Fix (Menit)')
+                                ->numeric()->required(),
+                        ])->columns(3),
+                    Section::make('Panduan Pengaturan')
+                        ->description('Penjelasan cara kerja pengaturan absensi')
+                        ->schema([
+                            \Filament\Forms\Components\Placeholder::make('bantuan_pengaturan')
+                                ->hiddenLabel()
+                                ->content(view('filament.pages.bantuan-pengaturan-absensi')),
+                        ])->collapsed(),
+                ])
+                ->action(function (array $data) {
+                    $setting = PengaturanAbsensi::getSettings();
+                    $data['last_updated_by'] = auth()->id();
+                    $setting->update($data);
+
+                    Notification::make()
+                        ->title('Pengaturan berhasil disimpan')
+                        ->success()
+                        ->send();
+                })
+                ->modalWidth('4xl'),
+        ];
+    }
 
     protected static ?string $navigationLabel = 'Rekap Absensi Pegawai';
 
