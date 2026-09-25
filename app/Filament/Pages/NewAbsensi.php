@@ -115,6 +115,15 @@ class NewAbsensi extends Page implements HasForms
     public array $expandedRows = [];
 
     /**
+     * Arah sorting kolom Potongan di tabel Data Absensi.
+     * null = tidak diurutkan, 'asc' = terkecil ke terbesar,
+     * 'desc' = terbesar ke terkecil.
+     *
+     * @var string|null
+     */
+    public ?string $sortPotongan = null;
+
+    /**
      * Hasil pengecekan terakhir dari ValidasiTargetProduksiService untuk
      * tanggal yang sedang dipilih. Diisi otomatis oleh cekTargetProduksi()
      * — dipanggil dari mount() (supaya user tidak perlu pencet tombol dulu
@@ -294,6 +303,13 @@ class NewAbsensi extends Page implements HasForms
                     );
                 })->values();
             }
+        }
+
+        // Terapkan sorting potongan kalau user mengklik header kolom Potongan
+        if ($this->sortPotongan === 'asc') {
+            $rekap = $rekap->sortBy(fn ($row) => $row['potongan'] ?? 0)->values();
+        } elseif ($this->sortPotongan === 'desc') {
+            $rekap = $rekap->sortByDesc(fn ($row) => $row['potongan'] ?? 0)->values();
         }
 
         return $rekap;
@@ -572,6 +588,21 @@ class NewAbsensi extends Page implements HasForms
     public function isRowExpanded(string $rowKey): bool
     {
         return ! empty($this->expandedRows[$rowKey]);
+    }
+
+    /**
+     * Toggle arah sorting kolom Potongan.
+     * Urutan: tidak sort → terbesar ke terkecil (desc) → terkecil ke terbesar (asc) → tidak sort.
+     */
+    public function sortByPotongan(): void
+    {
+        if ($this->sortPotongan === null) {
+            $this->sortPotongan = 'desc';
+        } elseif ($this->sortPotongan === 'desc') {
+            $this->sortPotongan = 'asc';
+        } else {
+            $this->sortPotongan = null;
+        }
     }
 
     /**
