@@ -139,7 +139,7 @@ class NewRekapAbsensiPegawaiService
      *   Logika perbandingan jam (jam_masuk > jam_pulang) di-disable/diabaikan untuk menentukan
      *   hasil akhir (tapi nilainya tetap dihitung di background untuk kompatibilitas/debug).
      */
-    protected const METODE_SHIFT_MALAM = 'default';
+    protected const METODE_SHIFT_MALAM = 'full_shift'; // 'default' | 'paksa_shift_malam' | 'full_shift'
 
     /** @var AbsensiSourceInterface[] */
     protected array $sources;
