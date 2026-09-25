@@ -123,7 +123,7 @@ class RepairDataMap
                 $jumlahPekerjaBaris = $pekerjaBaris->count();
                 // Hasil baris ini dibagi rata ke pegawai yg tercatat DI BARIS INI SAJA —
                 // bukan diasumsikan seluruh meja mengerjakan baris ini bersama.
-                $hasilIndividuBaris = $jumlahPekerjaBaris > 0 ? floor($jumlahHasil / $jumlahPekerjaBaris) : 0;
+                $hasilIndividuBaris = $jumlahPekerjaBaris > 0 ? ($jumlahHasil / $jumlahPekerjaBaris) : 0;
 
                 // --- Penyesuaian JAM: rata-rata jam bersih tim vs jam normal ---
                 // Tim dianggap kerja bersama; kalau ada yang pulang lebih awal,
@@ -243,10 +243,29 @@ class RepairDataMap
         // Susun output per meja (TAMPILAN tidak berubah), pot_target diambil per individu
         $result = [];
         foreach ($mejaGrup as $nomorMeja => $m) {
-            $totalTargetMeja = array_sum(array_column($m['items'], 'target'));
             $totalHasilMeja = array_sum(array_column($m['items'], 'hasil'));
-            $totalSelisih = $totalHasilMeja - $totalTargetMeja;
-            $capaianTotalMeja = $totalTargetMeja > 0 ? ($totalHasilMeja / $totalTargetMeja) * 100 : null;
+            
+            $capaianTotalMeja = 0;
+            $hasValidCapaian = false;
+            foreach ($m['items'] as $item) {
+                if ($item['capaian_persen'] !== null) {
+                    $capaianTotalMeja += $item['capaian_persen'];
+                    $hasValidCapaian = true;
+                }
+            }
+
+            if (! $hasValidCapaian) {
+                $capaianTotalMeja = null;
+                $totalTargetMeja = array_sum(array_column($m['items'], 'target'));
+                $totalSelisih = $totalHasilMeja - $totalTargetMeja;
+            } else {
+                if ($capaianTotalMeja > 0) {
+                    $totalTargetMeja = $totalHasilMeja / ($capaianTotalMeja / 100);
+                } else {
+                    $totalTargetMeja = array_sum(array_column($m['items'], 'target'));
+                }
+                $totalSelisih = $totalHasilMeja - $totalTargetMeja;
+            }
 
             $pekerjaList = [];
             foreach ($m['pekerja_ids'] as $kodePegawai => $idKey) {
