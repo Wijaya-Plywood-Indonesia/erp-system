@@ -28,18 +28,22 @@ class DempulAbsensiSource implements AbsensiSourceInterface
                 $q->whereDate($kolomTanggal, $tanggal);
             })
             ->get()
-            ->map(fn ($item) => [
-                'sumber' => $this->key(),
-                'sumber_label' => $this->label(),
-                'id_pegawai' => $item->id_pegawai,
-                'nama_pegawai' => $item->pegawai?->nama_pegawai ?? '-',
-                'tanggal' => $item->produksiDempul?->tanggalDempul,
-                'shift' => 'pagi', // tabel produksi_dempuls tidak punya kolom shift
-                'jam_masuk' => $item->jam_masuk,
-                'jam_pulang' => $item->jam_pulang,
-                'izin' => $item->ijin,
-                'keterangan' => $item->keterangan,
-                'ref_id' => $item->id,
-            ]);
+            ->map(function ($item) {
+                $shift = strtolower($item->produksiDempul?->shift ?? 'pagi');
+
+                return [
+                    'sumber' => $this->key(),
+                    'sumber_label' => $this->label().' '.ucfirst($shift),
+                    'id_pegawai' => $item->id_pegawai,
+                    'nama_pegawai' => $item->pegawai?->nama_pegawai ?? '-',
+                    'tanggal' => $item->produksiDempul?->tanggalDempul,
+                    'shift' => $shift,
+                    'jam_masuk' => $item->jam_masuk,
+                    'jam_pulang' => $item->jam_pulang,
+                    'izin' => $item->ijin,
+                    'keterangan' => $item->keterangan,
+                    'ref_id' => $item->id,
+                ];
+            });
     }
 }

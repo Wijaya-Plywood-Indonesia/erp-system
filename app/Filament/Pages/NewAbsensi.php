@@ -82,6 +82,12 @@ class NewAbsensi extends Page implements HasForms
     #[Url(keep: true)]
     public string $filterSumber = '';
 
+    /**
+     * Teks pencarian karyawan berdasarkan nama atau kode pegawai.
+     * Difilter di getRekap() — string kosong berarti tampilkan semua.
+     */
+    public string $search = '';
+
     public string $activeTab = 'data';
 
     /**
