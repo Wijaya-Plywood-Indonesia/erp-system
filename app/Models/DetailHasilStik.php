@@ -31,4 +31,16 @@ class DetailHasilStik extends Model
     {
         return $this->belongsTo(JenisKayu::class, 'id_jenis_kayu', 'id');
     }
+
+    // Relasi Multi-Select Pegawai (fitur nyusup: 2 pegawai bisa
+    // mengerjakan banyak barang, atau 1 pegawai mengerjakan banyak barang)
+    public function pegawais()
+    {
+        return $this->belongsToMany(
+            DetailPegawaiStik::class,
+            'detail_hasil_stik_pegawai',
+            'detail_hasil_stik_id',
+            'detail_pegawai_stik_id'
+        )->withTimestamps();
+    }
 }

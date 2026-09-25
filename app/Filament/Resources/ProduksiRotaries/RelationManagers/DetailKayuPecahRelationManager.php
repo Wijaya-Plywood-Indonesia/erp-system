@@ -12,7 +12,7 @@ use App\Models\ValidasiHasilRotary;
 class DetailKayuPecahRelationManager extends RelationManager
 {
     protected static string $relationship = 'DetailKayuPecah';
-    protected static ?string $title = 'Kayu Pecah';
+    protected static ?string $title = 'Kayu Bermasalah';
     public function isReadOnly(): bool
 {
     $user = \Filament\Facades\Filament::auth()->user();
