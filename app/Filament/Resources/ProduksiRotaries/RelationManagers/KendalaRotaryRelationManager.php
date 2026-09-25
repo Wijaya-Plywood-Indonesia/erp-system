@@ -88,8 +88,7 @@ class KendalaRotaryRelationManager extends RelationManager
                 FileUpload::make('foto_kendala')
                     ->label('Foto Bukti Kendala')
                     ->directory('downtime/kendala')
-                    ->image()
-                    ->required(),
+                    ->image(),
             ]);
     }
 
@@ -186,8 +185,7 @@ class KendalaRotaryRelationManager extends RelationManager
                         FileUpload::make('foto_selesai')
                             ->label('Foto Bukti Selesai')
                             ->directory('downtime/selesai')
-                            ->image()
-                            ->required(),
+                            ->image(),
                     ])
                     ->action(function ($record, array $data): void {
                         $tanggal          = Carbon::parse($record->waktu_mulai)->format('Y-m-d');
