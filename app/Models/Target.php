@@ -17,6 +17,7 @@ class Target extends Model
         'id_ukuran',
         'id_jenis_kayu',
         'id_kategori_barang',
+        'shift',
         'grade',
         'kode_ukuran',
         'target',

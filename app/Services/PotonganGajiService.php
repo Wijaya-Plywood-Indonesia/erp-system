@@ -21,20 +21,32 @@ use App\Filament\Pages\LaporanProduksi\Queries\LoadProduksi;
 use App\Filament\Pages\LaporanProduksi\Transformers\ProduksiDataMap;
 use App\Filament\Pages\LaporanRepairs\Queries\LoadLaporanRepairs;
 use App\Filament\Pages\LaporanRepairs\Transformers\RepairDataMap;
+use App\Filament\Pages\LaporanHotpress\Queries\LoadLaporanHotpress;
+use App\Filament\Pages\LaporanHotpress\Transformers\HotpressDataMap;
+use App\Filament\Pages\LaporanNyusup\Queries\LoadLaporanNyusup;
+use App\Filament\Pages\LaporanNyusup\Transformers\NyusupDataMap;
+use App\Filament\Pages\LaporanSanding\Queries\LoadLaporanSanding;
+use App\Filament\Pages\LaporanSanding\Transformers\SandingDataMap;
 use App\Filament\Pages\LaporanSandingJoin\Queries\LoadLaporanSandingJoin;
 use App\Filament\Pages\LaporanSandingJoin\Transformers\SandingJoinDataMap;
+use App\Models\PegawaiPilihPlywood;
+use App\Models\PegawaiTembeltriplek;
 use App\Models\ProduksiKedi;
 use App\Models\ProduksiPilihVeneer;
 use App\Models\ProduksiStik;
 use App\Models\Target;
+use App\Models\pegawai_guellotine;
+use App\Models\PegawaiPalet;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Service penghitung "Potongan" gaji (potongan target produksi) per
- * pegawai untuk satu tanggal, digabung dari 11 divisi produksi:
+ * pegawai untuk satu tanggal, digabung dari 18 divisi produksi:
  * Rotary, Press Dryer, Stik, Kedi, Repair, Joint, Sanding Joint, Pot
- * Afalan Joint, Pot Siku, Pot Jelek, Pilih Veneer.
+ * Afalan Joint, Pot Siku, Pot Jelek, Pilih Veneer, Sanding (Besar &
+ * Kecil), Hotpress, Nyusup, Tembel Triplek, Pilih Plywood, Buat Palet,
+ * dan Guellotine (Graji Otomatis).
  *
  * DIEKSTRAK dari App\Exports\RumusGajiWijayaExport supaya logic yang
  * sama bisa dipakai di dua tempat tanpa duplikasi:
@@ -90,6 +102,14 @@ class PotonganGajiService
         $this->loadPotonganPotSiku();
         $this->loadPotonganPotJelek();
         $this->loadPotonganPilihVeneer();
+        // Divisi tambahan (Group A — sudah ada AbsensiSource, belum ada potongan)
+        $this->loadPotonganSanding();
+        $this->loadPotonganHotpress();
+        $this->loadPotonganNyusup();
+        $this->loadPotonganTembelTriplek();
+        $this->loadPotonganPilihPlywood();
+        $this->loadPotonganBuatPalet();
+        $this->loadPotonganGuellotine();
 
         return $this->potonganMap;
     }
@@ -603,6 +623,297 @@ class PotonganGajiService
             }
         } catch (\Throwable $e) {
             Log::error('Error loading Potongan Pilih Veneer in PotonganGajiService: '.$e->getMessage());
+        }
+    }
+
+    // =========================================================================
+    // Divisi tambahan — sebelumnya hanya muncul di AbsensiSource (kehadiran)
+    // tanpa potongan gaji. Sekarang dihitung lewat DataMap yang sudah ada.
+    // =========================================================================
+
+    /**
+     * 11. Sanding (Besar & Kecil)
+     *
+     * SandingDataMap::make() mengembalikan array of produksi. Tiap produksi
+     * punya key 'pekerja' (array of rows) dengan field 'id' (kode_pegawai)
+     * dan 'pot_target'. Satu mesin sanding bisa Besar atau Kecil — keduanya
+     * pakai DataMap yang sama, dibedakan lewat id_mesin di tabel produksi.
+     */
+    protected function loadPotonganSanding(): void
+    {
+        try {
+            $raw = LoadLaporanSanding::run($this->tanggal);
+            if ($raw && $raw->isNotEmpty()) {
+                $mapped = SandingDataMap::make($raw);
+                foreach ($mapped as $produksi) {
+                    foreach ($produksi['pekerja'] ?? [] as $p) {
+                        $kodep = $p['id'] ?? null;
+                        $pot   = (int) ($p['pot_target'] ?? 0);
+                        if ($pot > 0) {
+                            $this->addPotongan($kodep, $pot);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Error loading Potongan Sanding in PotonganGajiService: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * 12. Hotpress
+     *
+     * HotpressDataMap::make() mengembalikan array of produksi. Tiap produksi
+     * punya key 'pekerja' dengan 'id' (kode_pegawai) dan 'pot_target'.
+     */
+    protected function loadPotonganHotpress(): void
+    {
+        try {
+            $raw = LoadLaporanHotpress::run($this->tanggal);
+            if ($raw && $raw->isNotEmpty()) {
+                $mapped = HotpressDataMap::make($raw);
+                foreach ($mapped as $produksi) {
+                    foreach ($produksi['pekerja'] ?? [] as $p) {
+                        $kodep = $p['id'] ?? null;
+                        $pot   = (int) ($p['pot_target'] ?? 0);
+                        if ($pot > 0) {
+                            $this->addPotongan($kodep, $pot);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Error loading Potongan Hotpress in PotonganGajiService: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * 13. Nyusup
+     *
+     * NyusupDataMap::make() mengembalikan array of produksi. Tiap produksi
+     * punya key 'pegawai' (array of rows per pegawai) dengan field
+     * 'id' (kode_pegawai) dan 'pot_target' (individual, bukan kolektif).
+     */
+    protected function loadPotonganNyusup(): void
+    {
+        try {
+            $raw = LoadLaporanNyusup::run($this->tanggal);
+            if ($raw && $raw->isNotEmpty()) {
+                $mapped = NyusupDataMap::make($raw);
+                foreach ($mapped as $produksi) {
+                    foreach ($produksi['pegawai'] ?? [] as $p) {
+                        $kodep = $p['id'] ?? null;
+                        $pot   = (int) ($p['pot_target'] ?? 0);
+                        if ($pot > 0) {
+                            $this->addPotongan($kodep, $pot);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Error loading Potongan Nyusup in PotonganGajiService: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * 14. Tembel Triplek
+     */
+    protected function loadPotonganTembelTriplek(): void
+    {
+        try {
+            $produksiList = \App\Models\ProduksiTembeltriplek::with([
+                'pegawaiTembeltriplek.pegawai:id,kode_pegawai,nama_pegawai',
+                'hasilTembeltriplek',
+            ])
+                ->whereDate('tanggal', $this->tanggal)
+                ->get();
+
+            if ($produksiList->isNotEmpty()) {
+                $action = app(HitungPotonganProduksiAction::class);
+
+                foreach ($produksiList as $produksi) {
+                    $hasilAktual = $produksi->hasilTembeltriplek->sum('hasil');
+
+                    $pekerjaInput = collect($produksi->pegawaiTembeltriplek)->map(function ($detail) {
+                        $masuk  = $detail->jam_masuk  ? Carbon::parse($detail->jam_masuk)  : null;
+                        $pulang = $detail->jam_pulang ? Carbon::parse($detail->jam_pulang) : null;
+                        $menit  = ($masuk && $pulang)
+                            ? max(0, abs($pulang->diffInMinutes($masuk)) - 60)
+                            : (9 * 60);
+
+                        return new PekerjaKerjaInput(
+                            idPegawai: $detail->pegawai?->kode_pegawai ?? '-',
+                            menitKerja: (float) $menit,
+                        );
+                    })->all();
+
+                    $result = $action->execute(Mesin::TembelTriplek, StrategiPembagian::Kolektif, $pekerjaInput, $hasilAktual);
+                    
+                    $potonganPerPegawai = $result?->potonganPerPegawai ?? [];
+                    foreach ($produksi->pegawaiTembeltriplek as $detail) {
+                        $kodep = $detail->pegawai?->kode_pegawai ?? '-';
+                        $pot = (int) ($potonganPerPegawai[$kodep] ?? 0);
+                        if ($pot > 0) {
+                            $this->addPotongan($kodep, $pot);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Error loading Potongan Tembel Triplek in PotonganGajiService: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * 15. Pilih Plywood (Pilih dan Tembel)
+     */
+    protected function loadPotonganPilihPlywood(): void
+    {
+        try {
+            $produksiList = \App\Models\ProduksiPilihPlywood::with([
+                'pegawaiPilihPlywood.pegawai:id,kode_pegawai,nama_pegawai,gaji',
+                'hasilPilihPlywood.barangSetengahJadiHp'
+            ])
+                ->whereDate('tanggal_produksi', $this->tanggal)
+                ->get();
+
+            if ($produksiList->isNotEmpty()) {
+                $action = app(HitungPotonganProduksiAction::class);
+
+                foreach ($produksiList as $produksi) {
+                    $hasilAktual = $produksi->hasilPilihPlywood->sum('jumlah');
+                    $firstHasil  = $produksi->hasilPilihPlywood->first();
+                    $barang      = $firstHasil?->barangSetengahJadiHp;
+                    $idUkuran    = $barang->id_ukuran ?? null;
+                    $idJenisKayu = $barang->id_jenis_kayu ?? null;
+
+                    $pekerjaInput = collect($produksi->pegawaiPilihPlywood)->map(function ($detail) {
+                        $masuk  = $detail->masuk  ? Carbon::parse($detail->masuk)  : null;
+                        $pulang = $detail->pulang ? Carbon::parse($detail->pulang) : null;
+                        $menit  = ($masuk && $pulang)
+                            ? max(0, abs($pulang->diffInMinutes($masuk)) - 60)
+                            : (9 * 60);
+
+                        return new PekerjaKerjaInput(
+                            idPegawai: $detail->pegawai?->kode_pegawai ?? '-',
+                            menitKerja: (float) $menit,
+                        );
+                    })->all();
+
+                    $result = $action->execute(Mesin::PilihDanTembel, StrategiPembagian::Kolektif, $pekerjaInput, $hasilAktual, $idUkuran, $idJenisKayu);
+                    
+                    $potonganPerPegawai = $result?->potonganPerPegawai ?? [];
+                    foreach ($produksi->pegawaiPilihPlywood as $detail) {
+                        $kodep = $detail->pegawai?->kode_pegawai ?? '-';
+                        $pot = (int) ($potonganPerPegawai[$kodep] ?? 0);
+                        if ($pot > 0) {
+                            $this->addPotongan($kodep, $pot);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Error loading Potongan Pilih Plywood in PotonganGajiService: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * 16. Buat Palet
+     */
+    protected function loadPotonganBuatPalet(): void
+    {
+        try {
+            $produksiList = \App\Models\ProduksiPalet::with([
+                'pegawaiPalets.pegawai:id,kode_pegawai,nama_pegawai',
+                'hasilProduksiPalets'
+            ])
+                ->whereDate('tanggal', $this->tanggal)
+                ->get();
+
+            if ($produksiList->isNotEmpty()) {
+                $action  = app(HitungPotonganProduksiAction::class);
+                foreach ($produksiList as $produksi) {
+                    $hasilAktual = $produksi->hasilProduksiPalets->sum('hasil');
+
+                    $pekerjaInput = collect($produksi->pegawaiPalets)->map(function ($detail) {
+                        $masuk  = $detail->jam_masuk  ? Carbon::parse($detail->jam_masuk)  : null;
+                        $pulang = $detail->jam_pulang ? Carbon::parse($detail->jam_pulang) : null;
+                        $menit  = ($masuk && $pulang)
+                            ? max(0, abs($pulang->diffInMinutes($masuk)) - 60)
+                            : (9 * 60);
+
+                        return new PekerjaKerjaInput(
+                            idPegawai: $detail->pegawai?->kode_pegawai ?? '-',
+                            menitKerja: (float) $menit,
+                        );
+                    })->all();
+
+                    $result = $action->execute(Mesin::BuatPalet, StrategiPembagian::Kolektif, $pekerjaInput, $hasilAktual);
+                    $potonganPerPegawai = $result?->potonganPerPegawai ?? [];
+                    
+                    foreach ($produksi->pegawaiPalets as $detail) {
+                        $kodep = $detail->pegawai?->kode_pegawai ?? '-';
+                        $pot = (int) ($potonganPerPegawai[$kodep] ?? 0);
+                        if ($pot > 0) {
+                            $this->addPotongan($kodep, $pot);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Error loading Potongan Buat Palet in PotonganGajiService: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * 17. Guellotine (Graji Otomatis)
+     */
+    protected function loadPotonganGuellotine(): void
+    {
+        try {
+            $produksiList = \App\Models\produksi_guellotine::with([
+                'pegawaiGuellotine.pegawai:id,kode_pegawai,nama_pegawai,gaji',
+                'hasilGuellotine'
+            ])
+                ->whereDate('tanggal_produksi', $this->tanggal)
+                ->get();
+
+            if ($produksiList->isNotEmpty()) {
+                $action = app(HitungPotonganProduksiAction::class);
+
+                foreach ($produksiList as $produksi) {
+                    $hasilAktual = $produksi->hasilGuellotine->sum('jumlah');
+                    $firstHasil  = $produksi->hasilGuellotine->first();
+                    $idUkuran    = $firstHasil->id_ukuran ?? null;
+                    $idJenisKayu = $firstHasil->id_jenis_kayu ?? null;
+
+                    $pekerjaInput = collect($produksi->pegawaiGuellotine)->map(function ($detail) {
+                        $masuk  = $detail->masuk  ? Carbon::parse($detail->masuk)  : null;
+                        $pulang = $detail->pulang ? Carbon::parse($detail->pulang) : null;
+                        $menit  = ($masuk && $pulang)
+                            ? max(0, abs($pulang->diffInMinutes($masuk)) - 60)
+                            : (9 * 60);
+
+                        return new PekerjaKerjaInput(
+                            idPegawai: $detail->pegawai?->kode_pegawai ?? '-',
+                            menitKerja: (float) $menit,
+                        );
+                    })->all();
+
+                    $result = $action->execute(Mesin::GrajiOtomatis, StrategiPembagian::Kolektif, $pekerjaInput, $hasilAktual, $idUkuran, $idJenisKayu);
+                    
+                    $potonganPerPegawai = $result?->potonganPerPegawai ?? [];
+                    foreach ($produksi->pegawaiGuellotine as $detail) {
+                        $kodep = $detail->pegawai?->kode_pegawai ?? '-';
+                        $pot = (int) ($potonganPerPegawai[$kodep] ?? 0);
+                        if ($pot > 0) {
+                            $this->addPotongan($kodep, $pot);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Error loading Potongan Guellotine in PotonganGajiService: '.$e->getMessage());
         }
     }
 }

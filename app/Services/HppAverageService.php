@@ -78,16 +78,6 @@ class HppAverageService
             'no_nota' => $nota->no_nota,
         ]);
 
-        // ✅ CEK APAKAH SUDAH PERNAH DIPROSES (CEGAH DUPLIKAT)
-        $existingLog = HppAverageLog::where('referensi_type', NotaKayu::class)
-            ->where('referensi_id', $nota->id)
-            ->exists();
-
-        if ($existingLog) {
-            Log::warning('[HPP] SKIP - Nota sudah pernah diproses', ['nota_id' => $nota->id]);
-            return;
-        }
-
         $kayuMasuk = $nota->kayuMasuk;
 
         if (! $kayuMasuk) {
@@ -118,6 +108,22 @@ class HppAverageService
                 $lahanId     = (int) $rows->first()->lahan_id;
                 $jenisKayuId = (int) $rows->first()->jenis_kayu_id;
                 $panjang     = (int) $rows->first()->panjang;
+
+                // ✅ CEK APAKAH KOMBINASI INI SUDAH PERNAH DIPROSES (CEGAH DUPLIKAT PER LAHAN)
+                $existingLog = HppAverageLog::where('referensi_type', NotaKayu::class)
+                    ->where('referensi_id', $nota->id)
+                    ->where('id_lahan', $lahanId)
+                    ->where('id_jenis_kayu', $jenisKayuId)
+                    ->where('panjang', $panjang)
+                    ->exists();
+
+                if ($existingLog) {
+                    Log::warning('[HPP] SKIP - Kombinasi sudah pernah diproses', [
+                        'nota_id' => $nota->id,
+                        'key'     => $key,
+                    ]);
+                    continue;
+                }
 
                 $totalBatang = (int) $rows->sum('kuantitas');
                 $totalKubikasi = (float) $rows->sum(fn($d) => $this->hitungKubikasi(

@@ -4,34 +4,32 @@ namespace App\Filament\Pages;
 
 use App\Exports\NewRekapAbsensiExport;
 use App\Exports\RumusGajiWijayaExport;
+use App\Exports\RumusGajiWijayaMingguanExport;
 use App\Models\NewAbsensiUpload;
-use App\Services\AbsensiSources\AbsensiSourceInterface;
 use App\Services\DownloadAbsensiUploadService;
 use App\Services\NewRekapAbsensiPegawaiService;
 use App\Services\PotonganGajiService;
 use App\Services\UploadFingerService;
-use App\Services\ValidasiTargetProduksiService;
-use BackedEnum;
 // HasPageShield sengaja dilepas — halaman ini harus tampil untuk semua role.
 // Pembatasan akses ke tab Upload & Riwayat diatur secara manual di blade.
+use App\Services\ValidasiTargetProduksiService;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Url;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
-use Filament\Support\Enums\Width;
+
 class NewAbsensi extends Page implements HasForms
 {
     use InteractsWithForms;
-    public function getMaxContentWidth(): Width
-    {
-        return Width::Full;
-    }
+
     protected static ?string $navigationLabel = 'Rekap Absensi Pegawai';
 
     protected static ?string $title = 'Rekap Absensi Pegawai';
@@ -40,18 +38,38 @@ class NewAbsensi extends Page implements HasForms
 
     protected string $view = 'filament.pages.new-absensi';
 
+<<<<<<< HEAD
+=======
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
+
+    public static function canAccess(): bool
+    {
+        return true;
+    }
+
+    public function canManageAbsensi(): bool
+    {
+        $user = auth()->user();
+
+        return $user && ($user->hasRole('super_admin') || $user->hasRole('Absen'));
+    }
+
+>>>>>>> 0a911385b2f7022a40855e2e8683ae63f672ed47
     public bool $showAbsensiLainLain = false;
 
     public function toggleAbsensiLainLain(): void
     {
-        $this->showAbsensiLainLain = !$this->showAbsensiLainLain;
+        $this->showAbsensiLainLain = ! $this->showAbsensiLainLain;
     }
 
     /**
      * Disinkronkan ke query string URL (?tanggal=YYYY-MM-DD) supaya kalau
      * halaman di-refresh atau link-nya dibagikan/dibuka ulang, tanggal yang
      * lagi dipilih user tetap sama (tidak balik ke tanggal hari ini).
-     * `keep: true` supaya parameter tetap muncul di URL walau nilainya
+     * keep: true supaya parameter tetap muncul di URL walau nilainya
      * balik ke default.
      */
     #[Url(keep: true)]
@@ -68,13 +86,9 @@ class NewAbsensi extends Page implements HasForms
     public string $filterSumber = '';
 
     /**
-     * Kata kunci pencarian karyawan berdasarkan nama_pegawai atau
-     * kode_pegawai. Disinkronkan ke query string URL (?search=...) sama
-     * seperti $tanggal & $filterSumber. Pencocokan dilakukan case-insensitive
-     * dan "contains" (substring), diterapkan di getRekap() setelah filter
-     * sumber, supaya search bisa dipakai berbarengan dengan filter sumber.
+     * Teks pencarian karyawan berdasarkan nama atau kode pegawai.
+     * Difilter di getRekap() — string kosong berarti tampilkan semua.
      */
-    #[Url(keep: true)]
     public string $search = '';
 
     public string $activeTab = 'data';
@@ -137,7 +151,7 @@ class NewAbsensi extends Page implements HasForms
      *
      * CATATAN: tombol untuk toggle property ini (toggleTargetPanel) di
      * blade sekarang HANYA ditampilkan untuk user dengan role
-     * `super_admin` — user lain selalu melihat panel ini terbuka kalau
+     * super_admin — user lain selalu melihat panel ini terbuka kalau
      * ada item yang belum punya target (tidak bisa menyembunyikannya).
      */
     public bool $showTargetPanel = true;
@@ -214,7 +228,7 @@ class NewAbsensi extends Page implements HasForms
 
             Notification::make()
                 ->title('Berhasil diproses')
-                ->body('Batch #' . $upload->id . ' — ' . count($upload->file_path) . ' file berhasil diproses.')
+                ->body('Batch #'.$upload->id.' — '.count($upload->file_path).' file berhasil diproses.')
                 ->success()
                 ->send();
 
@@ -258,7 +272,7 @@ class NewAbsensi extends Page implements HasForms
             // Hanya tampilkan pegawai yang tidak terlink ke produksi manapun
             // (sumber_label-nya kosong array)
             $rekap = $rekap->filter(
-                fn($row) => empty($row['sumber_label'])
+                fn ($row) => empty($row['sumber_label'])
             )->values();
         } elseif ($this->filterSumber !== '') {
             // Filter berdasarkan key sumber. Setelah gabungkanMultiSumber(),
@@ -268,8 +282,8 @@ class NewAbsensi extends Page implements HasForms
             $sumberKey = $this->filterSumber;
             // Cari label yang sesuai dengan key ini dari daftar sources
             $targetLabel = collect(app(NewRekapAbsensiPegawaiService::class)->getSources())
-                ->firstWhere(fn($s) => $s->key() === $sumberKey)
-                    ?->label();
+                ->firstWhere(fn ($s) => $s->key() === $sumberKey)
+                ?->label();
 
             if ($targetLabel) {
                 // Filter baris yang memiliki setidaknya satu sumber_label
@@ -279,25 +293,10 @@ class NewAbsensi extends Page implements HasForms
                     $labels = (array) ($row['sumber_label'] ?? []);
 
                     return collect($labels)->contains(
-                        fn($label) => str_starts_with($label, $targetLabel)
+                        fn ($label) => str_starts_with($label, $targetLabel)
                     );
                 })->values();
             }
-        }
-
-        // Terapkan filter pencarian (nama_pegawai / kode_pegawai) kalau ada
-        // kata kunci. Dijalankan setelah filter sumber supaya kedua filter
-        // bisa dipakai bersamaan. Pencocokan case-insensitive & substring
-        // ("contains"), jadi user tidak perlu ketik nama/kode lengkap.
-        $keyword = trim($this->search);
-        if ($keyword !== '') {
-            $keywordLower = mb_strtolower($keyword);
-            $rekap = $rekap->filter(function ($row) use ($keywordLower) {
-                $nama = mb_strtolower((string) ($row['nama_pegawai'] ?? ''));
-                $kode = mb_strtolower((string) ($row['kode_pegawai'] ?? ''));
-
-                return str_contains($nama, $keywordLower) || str_contains($kode, $keywordLower);
-            })->values();
         }
 
         return $rekap;
@@ -327,7 +326,6 @@ class NewAbsensi extends Page implements HasForms
         return app(NewRekapAbsensiPegawaiService::class)->getAbsensiLainLain($tanggal);
     }
 
-
     /**
      * Dipanggil dari tombol "Export Excel" di tab Data Absensi.
      */
@@ -337,9 +335,11 @@ class NewAbsensi extends Page implements HasForms
 
         $rekap = app(NewRekapAbsensiPegawaiService::class)->getRekap($tanggal);
 
+        $brandName = filament()->getBrandName();
+
         return Excel::download(
             new NewRekapAbsensiExport($rekap, $tanggal),
-            "Absen-{$tanggal}.xlsx"
+            "Absen-{$brandName}-{$tanggal}.xlsx"
         );
     }
 
@@ -381,7 +381,7 @@ class NewAbsensi extends Page implements HasForms
         if ($bisaLihatNotif) {
             Notification::make()
                 ->warning()
-                ->title(count($this->missingTargetItems) . ' item belum punya target')
+                ->title(count($this->missingTargetItems).' item belum punya target')
                 ->body('Lihat daftar lengkapnya di tabel bawah tombol export. Kamu tetap bisa export — potongan untuk item tersebut akan dianggap 0.')
                 ->send();
         }
@@ -390,13 +390,13 @@ class NewAbsensi extends Page implements HasForms
     /**
      * Dipanggil dari tombol show/hide di panel peringatan target — di
      * blade tombolnya sekarang HANYA ditampilkan untuk role
-     * `super_admin`. Tidak menghitung ulang apa pun — hanya toggle
+     * super_admin. Tidak menghitung ulang apa pun — hanya toggle
      * visibility panelnya, datanya sendiri (missingTargetItems) tetap
      * tersimpan di property seperti biasa.
      */
     public function toggleTargetPanel(): void
     {
-        $this->showTargetPanel = !$this->showTargetPanel;
+        $this->showTargetPanel = ! $this->showTargetPanel;
     }
 
     /**
@@ -427,10 +427,10 @@ class NewAbsensi extends Page implements HasForms
         // supaya hasil pengecekan terbaru ini benar-benar terlihat.
         $this->showTargetPanel = true;
 
-        if (!empty($this->missingTargetItems)) {
+        if (! empty($this->missingTargetItems)) {
             $bodyLines = collect($this->missingTargetItems)
                 ->take(10)
-                ->map(fn($m) => "• [{$m['divisi']}] {$m['ukuran']}")
+                ->map(fn ($m) => "• [{$m['divisi']}] {$m['ukuran']}")
                 ->implode("\n");
 
             $sisa = count($this->missingTargetItems) - 10;
@@ -440,17 +440,18 @@ class NewAbsensi extends Page implements HasForms
 
             Notification::make()
                 ->warning()
-                ->title(count($this->missingTargetItems) . ' ukuran belum punya target — export tetap dilanjutkan')
-                ->body("Item berikut tidak punya target, potongannya akan dianggap 0:\n\n" . $bodyLines)
+                ->title(count($this->missingTargetItems).' ukuran belum punya target — export tetap dilanjutkan')
+                ->body("Item berikut tidak punya target, potongannya akan dianggap 0:\n\n".$bodyLines)
                 ->persistent()
                 ->send();
         }
 
         $rekap = app(NewRekapAbsensiPegawaiService::class)->getRekap($tanggal);
+        $brandName = filament()->getBrandName();
 
         return Excel::download(
             new RumusGajiWijayaExport($rekap, $tanggal),
-            "Rumus-Gaji-Wijaya-{$tanggal}.xlsx"
+            "Rumus-Gaji-{$brandName}-{$tanggal}.xlsx"
         );
     }
 
@@ -464,10 +465,10 @@ class NewAbsensi extends Page implements HasForms
         $this->sudahDicekTarget = true;
         $this->showTargetPanel = true;
 
-        if (!empty($this->missingTargetItems)) {
+        if (! empty($this->missingTargetItems)) {
             $bodyLines = collect($this->missingTargetItems)
                 ->take(10)
-                ->map(fn($m) => "• [{$m['divisi']}] {$m['ukuran']}")
+                ->map(fn ($m) => "• [{$m['divisi']}] {$m['ukuran']}")
                 ->implode("\n");
 
             $sisa = count($this->missingTargetItems) - 10;
@@ -477,30 +478,30 @@ class NewAbsensi extends Page implements HasForms
 
             Notification::make()
                 ->warning()
-                ->title(count($this->missingTargetItems) . ' ukuran belum punya target — export tetap dilanjutkan')
-                ->body("Item berikut tidak punya target, potongannya akan dianggap 0:\n\n" . $bodyLines)
+                ->title(count($this->missingTargetItems).' ukuran belum punya target — export tetap dilanjutkan')
+                ->body("Item berikut tidak punya target, potongannya akan dianggap 0:\n\n".$bodyLines)
                 ->persistent()
                 ->send();
         }
 
-        $acuan = \Illuminate\Support\Carbon::parse($tanggal)->startOfDay();
+        $acuan = Carbon::parse($tanggal)->startOfDay();
         $jumatAwal = $acuan->copy();
-        while (!$jumatAwal->isFriday()) {
+        while (! $jumatAwal->isFriday()) {
             $jumatAwal->subDay();
         }
         $kamisAkhir = $jumatAwal->copy()->addDays(6);
 
         if ($jumatAwal->month === $kamisAkhir->month) {
-            $dateRange = $jumatAwal->format('d') . ' - ' . $kamisAkhir->format('d') . ' ' . $kamisAkhir->translatedFormat('F');
+            $dateRange = $jumatAwal->format('d').' - '.$kamisAkhir->format('d').' '.$kamisAkhir->translatedFormat('F');
         } else {
-            $dateRange = $jumatAwal->format('d') . ' ' . $jumatAwal->translatedFormat('F') . ' - ' . $kamisAkhir->format('d') . ' ' . $kamisAkhir->translatedFormat('F');
+            $dateRange = $jumatAwal->format('d').' '.$jumatAwal->translatedFormat('F').' - '.$kamisAkhir->format('d').' '.$kamisAkhir->translatedFormat('F');
         }
 
         $brandName = filament()->getBrandName();
         $fileName = "Rumus Gaji {$brandName} {$dateRange}.xlsx";
 
         return Excel::download(
-            new \App\Exports\RumusGajiWijayaMingguanExport($tanggal),
+            new RumusGajiWijayaMingguanExport($tanggal),
             $fileName
         );
     }
@@ -562,7 +563,7 @@ class NewAbsensi extends Page implements HasForms
      */
     public function toggleRow(string $rowKey): void
     {
-        if (!empty($this->expandedRows[$rowKey])) {
+        if (! empty($this->expandedRows[$rowKey])) {
             unset($this->expandedRows[$rowKey]);
 
             return;
@@ -573,7 +574,7 @@ class NewAbsensi extends Page implements HasForms
 
     public function isRowExpanded(string $rowKey): bool
     {
-        return !empty($this->expandedRows[$rowKey]);
+        return ! empty($this->expandedRows[$rowKey]);
     }
 
     /**
@@ -604,6 +605,7 @@ class NewAbsensi extends Page implements HasForms
     {
         $this->expandedRows = [];
     }
+<<<<<<< HEAD
 
     /**
      * Dipanggil otomatis oleh Livewire setiap kali property $search
@@ -615,4 +617,6 @@ class NewAbsensi extends Page implements HasForms
     {
         $this->expandedRows = [];
     }
+=======
+>>>>>>> 0a911385b2f7022a40855e2e8683ae63f672ed47
 }

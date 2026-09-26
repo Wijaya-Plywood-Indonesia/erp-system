@@ -74,6 +74,7 @@ class Ukuran extends Model
     {
         return $this->hasMany(RencanaPegawai::class, 'id_ukuran');
     }
+
     public function getDimensiAttribute(): string
     {
         return "{$this->panjang} x {$this->lebar} x {$this->tebal}";
@@ -84,8 +85,8 @@ class Ukuran extends Model
         return "{$this->panjang}mm x {$this->lebar}mm x {$this->tebal}mm";
     }
 
-
     protected $appends = ['kubikasi', 'nama_ukuran', 'dimensi'];
+
     public function getKubikasiAttribute()
     {
         $panjang = (float) $this->panjang;
@@ -98,5 +99,10 @@ class Ukuran extends Model
     public function referensiHargaProduksis()
     {
         return $this->hasMany(ReferensiHargaProduksi::class, 'id_ukuran');
+    }
+
+    public function isiPaletVeneers()
+    {
+        return $this->hasMany(IsiPaletVeneer::class, 'id_ukuran');
     }
 }

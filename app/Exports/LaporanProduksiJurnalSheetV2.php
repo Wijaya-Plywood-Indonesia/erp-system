@@ -204,6 +204,12 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                     } else {
                         $keteranganSpesifikasi = ($subItem['keterangan'] ?? '').' ('.($subItem['ukuran'] ?? '').')';
                     }
+                } elseif ($jenisPihak === 'bahan_penolong') {
+                    // Bahan penolong (reeling tape, solasi, dll)
+                    // Akun sudah di-set oleh RotaryJurnalService (dari ReferensiHargaProduksi / BAHAN_PENOLONG_MAP)
+                    // Harga & jumlah tidak di-override — diambil dari BahanPenolongProduksi
+                    $bagian = $subItem['nama_pihak'] ?? '-';
+                    $keteranganSpesifikasi = $subItem['nama_barang'] ?? '-';
                 } elseif ($jenisPihak === 'karyawan') {
                     $parts = explode(' - ', $subItem['keterangan'] ?? '');
                     $bagian = count($parts) > 1 ? trim($parts[1]) : '-';
@@ -280,6 +286,10 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
 
                     [$mappedNoAkun, $mappedNamaAkun] = $this->coaAlias->getAkunVeneerBasah($isCore);
                 }
+
+                // Bahan penolong: harga & jumlah sudah benar dari payload (tidak di-override)
+                // $harga = harga_satuan dari BahanPenolongProduksi
+                // $jumlah = nilai_total (harga_satuan × kuantitas)
 
                 if ($jenisPihak === 'karyawan') {
                     $akunGaji = $this->coaAlias->getAkunGaji(false);

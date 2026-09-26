@@ -9,6 +9,8 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Components\DatePicker;
 use App\Exports\LaporanProduksiHotPressExport;
+use App\Filament\Pages\LaporanHotpress\Queries\LoadLaporanHotpress;
+use App\Filament\Pages\LaporanHotpress\Transformers\HotpressDataMap;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Models\ProduksiHp;
 use App\Models\BahanPenolongProduksi;
@@ -31,6 +33,7 @@ class LaporanProduksiHotPress extends Page implements HasForms
     protected static bool $shouldRegisterNavigation = false;
 
     public $dataHp = [];
+    public array $targetData = [];
     public $tanggal = null;
 
     public function mount(): void
@@ -102,6 +105,17 @@ class LaporanProduksiHotPress extends Page implements HasForms
 
     public function loadAllData()
     {
+        // Target & potongan (Cara A: diskalakan ke jumlah orang & jam kerja).
+        // Dipisah dari blok try/catch di bawah supaya tidak saling
+        // mempengaruhi laporan bahan/biaya yang sudah ada.
+        try {
+            $produksiListTarget = LoadLaporanHotpress::run($this->tanggal ?? now()->format('Y-m-d'));
+            $this->targetData = HotpressDataMap::make($produksiListTarget);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error loading Target Hot Press: ' . $e->getMessage());
+            $this->targetData = [];
+        }
+
         try {
             $tanggal = $this->tanggal ?? now()->format('Y-m-d');
 

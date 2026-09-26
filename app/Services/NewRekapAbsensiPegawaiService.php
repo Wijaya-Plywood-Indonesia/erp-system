@@ -128,39 +128,18 @@ class NewRekapAbsensiPegawaiService
     protected const TOLERANSI_PULANG_LEBIH_LAMBAT_MALAM_MENIT = 300; // 5 jam
 
     /**
-     * NEW: Toggle ON/OFF untuk "paksa malam dari shift produksi".
+     * NEW: Pengaturan metode penentuan shift malam.
      *
-     * Konteks: shift row SEBELUMNYA murni ditentukan dari perbandingan
-     * jam_masuk vs jam_pulang produksi (lihat tentukanShiftDariJam()).
-     * Masalahnya, kadang pengawas SALAH input jam untuk pegawai shift
-     * malam (mis. pegawainya beneran shift malam, tapi jam yang diketik
-     * 06:00-16:00 kayak shift pagi). Kalau cuma andalkan jam, row ini
-     * bakal salah kedeteksi 'pagi', padahal secara PRODUKSI dia tetap
-     * shift malam — akibatnya field jam_masuk_finger/jam_pulang_finger
-     * TIDAK di-swap-silang (Haram #1) padahal harusnya di-swap, dan
-     * datanya jadi salah.
-     *
-     * Kalau true: shift dianggap 'malam' kalau SALAH SATU dari dua sinyal
-     * berikut bilang 'malam':
-     *   1. tentukanShiftDariJam() — perbandingan jam (TETAP jalan, tidak
-     *      dihapus/diganti).
-     *   2. Field 'shift' MENTAH dari source (shift produksi asli),
-     *      di-strtolower()+trim() dulu supaya gak kejebak beda casing
-     *      antar source (lihat SandingAbsensiSource yang sudah
-     *      strtolower(), tapi source lain belum tentu).
-     *
-     * Kalau false: balik ke perilaku lama — shift MURNI dari
-     * tentukanShiftDariJam() saja, field 'shift' mentah dari source sama
-     * sekali tidak dipakai untuk override.
-     *
-     * Dipakai di DUA tempat (harus konsisten, jangan cuma satu):
-     *   - enrichWithFinger() -> menentukan $row['shift'] yang dipakai
-     *     buat swap Haram #1.
-     *   - getKodePegawaiShiftMalam() -> dipakai Haram #3 (exclusion
-     *     "lain-lain"), supaya pegawai yang dipaksa-malam di sini juga
-     *     ikut ke-exclude dari laporan lain-lain besoknya.
+     * Tersedia 3 opsi metode:
+     * - 'default': Shift malam murni ditentukan dari perbandingan jam_masuk vs jam_pulang produksi.
+     *   (Field 'shift' mentah dari source diabaikan sepenuhnya).
+     * - 'paksa_shift_malam': Shift 'malam' kalau SALAH SATU dari dua sinyal bilang 'malam'
+     *   (baik dari perbandingan jam ATAU dari field 'shift' mentah source).
+     * - 'full_shift': Shift malam MURNI ditentukan dari field 'shift' mentah dari source.
+     *   Logika perbandingan jam (jam_masuk > jam_pulang) di-disable/diabaikan untuk menentukan
+     *   hasil akhir (tapi nilainya tetap dihitung di background untuk kompatibilitas/debug).
      */
-    protected const PAKSA_SHIFT_MALAM_DARI_PRODUKSI = true;
+    protected const METODE_SHIFT_MALAM = 'default';
 
     /** @var AbsensiSourceInterface[] */
     protected array $sources;
@@ -248,7 +227,7 @@ class NewRekapAbsensiPegawaiService
      * produksi) diperlakukan sebagai NON-malam di semua pemanggil,
      * sama seperti perilaku lama waktu field 'shift' kosong.
      *
-     * NOTE: fungsi ini TIDAK diubah oleh PAKSA_SHIFT_MALAM_DARI_PRODUKSI.
+     * NOTE: fungsi ini TIDAK diubah oleh METODE_SHIFT_MALAM.
      * Toggle itu bekerja di LUAR fungsi ini (di enrichWithFinger() &
      * getKodePegawaiShiftMalam()) sebagai sinyal TAMBAHAN, bukan
      * pengganti. Fungsi ini tetap murni "jam vs jam" seperti sebelumnya.
@@ -269,43 +248,26 @@ class NewRekapAbsensiPegawaiService
     }
 
     /**
-     * NEW: Gabungkan sinyal "shift dari perbandingan jam" dengan sinyal
-     * "shift produksi mentah dari source" (mis. field 'shift' di
-     * SandingAbsensiSource), dikontrol oleh toggle
-     * PAKSA_SHIFT_MALAM_DARI_PRODUKSI.
+     * NEW: Menggabungkan / menentukan shift akhir berdasarkan METODE_SHIFT_MALAM.
      *
-     * Dipanggil dari 2 tempat (enrichWithFinger() &
-     * getKodePegawaiShiftMalam()) supaya logic-nya SATU tempat saja dan
-     * kedua pemanggil selalu konsisten — jangan duplikat logic ini di
-     * masing-masing pemanggil.
-     *
-     * $shiftProduksiMentah HARUS diambil oleh caller SEBELUM field
-     * 'shift' di row ditimpa oleh hasil tentukanShiftDariJam() (di
-     * enrichWithFinger(), ini penting karena $row['shift'] di-overwrite
-     * setelah shift final dihitung).
-     *
-     * Kalau PAKSA_SHIFT_MALAM_DARI_PRODUKSI = false: fungsi ini return
-     * $shiftDariJam apa adanya (perilaku lama, field shift mentah source
-     * sama sekali tidak dipakai).
-     *
-     * Kalau PAKSA_SHIFT_MALAM_DARI_PRODUKSI = true: kalau $shiftDariJam
-     * ATAU $shiftProduksiMentah (setelah di-strtolower+trim) bernilai
-     * 'malam', hasil akhirnya 'malam' — walau jam yang diinput kelihatan
-     * seperti shift pagi (kasus salah input pengawas). Kalau tidak ada
-     * satupun yang 'malam', balik ke $shiftDariJam (termasuk null / 'pagi'
-     * apa adanya, tidak diubah).
+     * Dipanggil dari 2 tempat (enrichWithFinger() & getKodePegawaiShiftMalam()).
      */
     protected function gabungkanShift(?string $shiftDariJam, ?string $shiftProduksiMentah): ?string
     {
-        if (! self::PAKSA_SHIFT_MALAM_DARI_PRODUKSI) {
-            return $shiftDariJam;
-        }
-
         $shiftProduksiMentah = strtolower(trim((string) $shiftProduksiMentah));
 
-        return ($shiftDariJam === 'malam' || $shiftProduksiMentah === 'malam')
-            ? 'malam'
-            : $shiftDariJam;
+        if (self::METODE_SHIFT_MALAM === 'full_shift') {
+            return $shiftProduksiMentah === 'malam' ? 'malam' : ($shiftProduksiMentah === 'pagi' ? 'pagi' : $shiftDariJam);
+        }
+
+        if (self::METODE_SHIFT_MALAM === 'paksa_shift_malam') {
+            return ($shiftDariJam === 'malam' || $shiftProduksiMentah === 'malam')
+                ? 'malam'
+                : $shiftDariJam;
+        }
+
+        // 'default'
+        return $shiftDariJam;
     }
 
     /**
@@ -555,7 +517,7 @@ class NewRekapAbsensiPegawaiService
             // unconditional sesuai Haram #2).
             $recordBesok = $fingerBesok->get($kode);
             // ⚠️ Shift SEKARANG ditentukan dari GABUNGAN dua sinyal (lihat
-            // gabungkanShift() & konstanta PAKSA_SHIFT_MALAM_DARI_PRODUKSI
+            // gabungkanShift() & konstanta METODE_SHIFT_MALAM
             // di atas):
             //   1. Perbandingan jam produksi (tentukanShiftDariJam) — TETAP
             //      jalan seperti sebelumnya, TIDAK dihapus.
@@ -958,11 +920,77 @@ class NewRekapAbsensiPegawaiService
 
                     return $row;
                 });
-                // Representasi utama = durasi kerja terpanjang. Kalau semua
-                // durasi sama (termasuk semua 0), sortByDesc tetap stabil
-                // ambil yang pertama muncul, jadi untuk kasus tanpa
-                // perbedaan durasi perilakunya sama seperti sebelumnya.
+
+                // Row representasi untuk field NON-jam (id_pegawai, nama,
+                // kode, dst) — tetap dipilih dari durasi terpanjang seperti
+                // sebelumnya. sortByDesc stabil: kalau semua durasi sama
+                // (termasuk semua 0), ambil yang pertama muncul.
                 $utama = $rowsWithDurasi->sortByDesc('_durasi_menit')->first();
+
+                // Hanya lini dengan durasi > 0 yang ikut dihitung sebagai
+                // base/tambahan — "Izin" 00:00:00-00:00:00 di satu lini
+                // tidak boleh ikut mempengaruhi hasil.
+                $rowsDurasiPositif = $rowsWithDurasi->filter(
+                    fn ($row) => ($row['_durasi_menit'] ?? 0) > 0
+                )->values();
+
+                if ($rowsDurasiPositif->isNotEmpty()) {
+                    // BASE = lini dengan jam_masuk PALING AWAL. Kalau ada
+                    // beberapa lini dengan jam_masuk sama persis (tie),
+                    // dipilih yang DURASINYA LEBIH PANJANG di antara yang
+                    // tie tersebut.
+                    //
+                    // Diurutkan dulu ASC berdasar jam_masuk (string H:i:s
+                    // sudah dinormalisasi normalisasiJam() sebelum method
+                    // ini dipanggil, jadi perbandingan string ASC valid
+                    // sebagai perbandingan jam), lalu untuk jam_masuk yang
+                    // sama, durasi lebih panjang ditaruh duluan (sortByDesc
+                    // durasi). Setelah itu ambil baris pertama sebagai base.
+                    $base = $rowsDurasiPositif
+                        ->sortBy([
+                            fn ($a, $b) => ($a['jam_masuk'] ?? '') <=> ($b['jam_masuk'] ?? ''),
+                            fn ($a, $b) => ($b['_durasi_menit'] ?? 0) <=> ($a['_durasi_menit'] ?? 0),
+                        ])
+                        ->first();
+
+                    // Total durasi SEMUA lini SELAIN base (dibandingkan
+                    // dengan identity object, karena base adalah salah
+                    // satu elemen persis dari $rowsDurasiPositif).
+                    $totalDurasiLiniLain = $rowsDurasiPositif
+                        ->reject(fn ($row) => $row === $base)
+                        ->sum('_durasi_menit');
+
+                    $jamMasukFinal = $base['jam_masuk'] ?? null;
+                    $jamPulangFinal = $base['jam_pulang'] ?? null;
+
+                    if (! empty($jamPulangFinal) && $jamPulangFinal !== '-' && $totalDurasiLiniLain > 0) {
+                        try {
+                            $jamPulangFinal = Carbon::parse($jamPulangFinal)
+                                ->addMinutes((int) $totalDurasiLiniLain)
+                                ->format('H:i:s');
+                        } catch (\Throwable $e) {
+                            // Gagal parse -> biarkan jam_pulang base apa
+                            // adanya, tanpa tambahan (fail-safe, konsisten
+                            // dengan try-catch di seluruh service ini).
+                        }
+                    }
+
+                    $utama['jam_masuk'] = $jamMasukFinal;
+                    $utama['jam_pulang'] = $jamPulangFinal;
+
+                    // Shift dihitung ULANG dari hasil jam_masuk/jam_pulang
+                    // final di atas, bukan dari shift row representasi
+                    // lama — karena acuan jamnya sudah berubah.
+                    $utama['shift'] = $this->tentukanShiftDariJam(
+                        $utama['jam_masuk'] ?? null,
+                        $utama['jam_pulang'] ?? null
+                    );
+                }
+                // Kalau $rowsDurasiPositif kosong (semua lini durasi 0,
+                // mis. izin di semua lini), jam_masuk/jam_pulang/shift
+                // dibiarkan apa adanya dari $utama (row pertama, perilaku
+                // lama) — tidak ada base yang valid untuk dihitung.
+
                 $utama['sumber_label'] = $rowsWithDurasi
                     ->pluck('sumber_label')
                     ->filter()
@@ -1099,7 +1127,7 @@ class NewRekapAbsensiPegawaiService
      * ⚠️ Deteksi shift malam SEKARANG pakai GABUNGAN tentukanShiftDariJam()
      * (bandingkan jam_pulang vs jam_masuk mentah dari source) DAN field
      * 'shift' mentah dari source (via gabungkanShift() +
-     * PAKSA_SHIFT_MALAM_DARI_PRODUKSI), bukan cuma jam doang lagi. Row
+     * METODE_SHIFT_MALAM), bukan cuma jam doang lagi. Row
      * mentah di sini belum lewat normalisasiJam(), tapi itu aman karena
      * tentukanShiftDariJam() sudah parse pakai Carbon::parse() sendiri
      * (bisa handle H:i:s maupun datetime penuh), dan gabungkanShift()
