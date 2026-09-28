@@ -31,6 +31,8 @@ use App\Filament\Pages\LaporanSandingJoin\Queries\LoadLaporanSandingJoin;
 use App\Filament\Pages\LaporanSandingJoin\Transformers\SandingJoinDataMap;
 use App\Filament\Pages\LaporanPilihPlywood\Queries\LoadLaporanPilihPlywood;
 use App\Filament\Pages\LaporanPilihPlywood\Transformers\PilihPlywoodDataMap;
+use App\Filament\Pages\LaporanDempul\Queries\LoadLaporanDempul;
+use App\Filament\Pages\LaporanDempul\Transformers\DempulDataMap;
 use App\Models\PegawaiPilihPlywood;
 use App\Models\PegawaiTembeltriplek;
 use App\Models\ProduksiKedi;
@@ -44,11 +46,11 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Service penghitung "Potongan" gaji (potongan target produksi) per
- * pegawai untuk satu tanggal, digabung dari 18 divisi produksi:
+ * pegawai untuk satu tanggal, digabung dari 19 divisi produksi:
  * Rotary, Press Dryer, Stik, Kedi, Repair, Joint, Sanding Joint, Pot
  * Afalan Joint, Pot Siku, Pot Jelek, Pilih Veneer, Sanding (Besar &
- * Kecil), Hotpress, Nyusup, Tembel Triplek, Pilih Plywood, Buat Palet,
- * dan Guellotine (Graji Otomatis).
+ * Kecil), Hotpress, Nyusup, Tembel Triplek, Pilih Plywood, Dempul,
+ * Buat Palet, dan Guellotine (Graji Otomatis).
  *
  * DIEKSTRAK dari App\Exports\RumusGajiWijayaExport supaya logic yang
  * sama bisa dipakai di dua tempat tanpa duplikasi:
@@ -110,6 +112,7 @@ class PotonganGajiService
         $this->loadPotonganNyusup();
         $this->loadPotonganTembelTriplek();
         $this->loadPotonganPilihPlywood();
+        $this->loadPotonganDempul();
         $this->loadPotonganBuatPalet();
         $this->loadPotonganGuellotine();
 
@@ -130,7 +133,7 @@ class PotonganGajiService
      */
     public function resolvePotongan(array $map, ?string $kodep): int
     {
-        if (! $kodep || $kodep === '-') {
+        if (!$kodep || $kodep === '-') {
             return 0;
         }
 
@@ -218,7 +221,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Rotary in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Rotary in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -242,7 +245,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Dryer in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Dryer in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -301,7 +304,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Stik in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Stik in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -332,7 +335,7 @@ class PotonganGajiService
                 ->get();
 
             if ($produksiList->isNotEmpty()) {
-                $groups = $produksiList->groupBy(fn ($p) => $p->status);
+                $groups = $produksiList->groupBy(fn($p) => $p->status);
 
                 foreach ($groups as $status => $groupProduksi) {
                     $totalHasil = 0;
@@ -346,29 +349,29 @@ class PotonganGajiService
 
                     $uniquePegawai = [];
                     foreach ($groupProduksi as $produksi) {
-                        if (! $produksi->detailPegawaiKedi) {
+                        if (!$produksi->detailPegawaiKedi) {
                             continue;
                         }
 
                         $tglStr = Carbon::parse($produksi->tanggal_actual_bongkar ?? $produksi->tanggal_bongkar ?? $produksi->tanggal ?? now())->format('Y-m-d');
 
                         foreach ($produksi->detailPegawaiKedi as $dp) {
-                            if (! $dp->pegawai) {
+                            if (!$dp->pegawai) {
                                 continue;
                             }
 
                             $kodep = $dp->pegawai->kode_pegawai ?? '-';
                             $masukAt = null;
                             $pulangAt = null;
-                            if (! empty($dp->masuk) && ! empty($dp->pulang)) {
-                                $masukAt = Carbon::parse($tglStr.' '.$dp->masuk);
-                                $pulangAt = Carbon::parse($tglStr.' '.$dp->pulang);
+                            if (!empty($dp->masuk) && !empty($dp->pulang)) {
+                                $masukAt = Carbon::parse($tglStr . ' ' . $dp->masuk);
+                                $pulangAt = Carbon::parse($tglStr . ' ' . $dp->pulang);
                                 if ($pulangAt->lessThan($masukAt)) {
                                     $pulangAt->addDay();
                                 }
                             }
 
-                            if (! isset($uniquePegawai[$kodep])) {
+                            if (!isset($uniquePegawai[$kodep])) {
                                 $uniquePegawai[$kodep] = [
                                     'pegawai' => $dp->pegawai,
                                     'masuk' => $masukAt,
@@ -376,10 +379,10 @@ class PotonganGajiService
                                     'potongan_manual' => $dp->potongan,
                                 ];
                             } else {
-                                if ($masukAt && (! $uniquePegawai[$kodep]['masuk'] || $masukAt->lessThan($uniquePegawai[$kodep]['masuk']))) {
+                                if ($masukAt && (!$uniquePegawai[$kodep]['masuk'] || $masukAt->lessThan($uniquePegawai[$kodep]['masuk']))) {
                                     $uniquePegawai[$kodep]['masuk'] = $masukAt;
                                 }
-                                if ($pulangAt && (! $uniquePegawai[$kodep]['pulang'] || $pulangAt->greaterThan($uniquePegawai[$kodep]['pulang']))) {
+                                if ($pulangAt && (!$uniquePegawai[$kodep]['pulang'] || $pulangAt->greaterThan($uniquePegawai[$kodep]['pulang']))) {
                                     $uniquePegawai[$kodep]['pulang'] = $pulangAt;
                                 }
                                 if ($dp->potongan !== null) {
@@ -446,7 +449,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Kedi in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Kedi in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -463,7 +466,7 @@ class PotonganGajiService
                 foreach ($mapped as $table) {
                     foreach ($table['pekerja'] ?? [] as $p) {
                         $kodep = $p['id'] ?? null;
-                        if ($kodep && ! isset($handled[$kodep])) {
+                        if ($kodep && !isset($handled[$kodep])) {
                             $handled[$kodep] = true;
                             $pot = (int) ($p['pot_target'] ?? 0);
                             if ($pot > 0) {
@@ -474,7 +477,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Repair in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Repair in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -498,7 +501,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Joint in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Joint in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -520,7 +523,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Sanding Joint in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Sanding Joint in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -544,7 +547,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan PotAfalan in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan PotAfalan in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -568,7 +571,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Pot Siku in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Pot Siku in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -592,7 +595,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Pot Jelek in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Pot Jelek in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -624,7 +627,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Pilih Veneer in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Pilih Veneer in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -650,7 +653,7 @@ class PotonganGajiService
                 foreach ($mapped as $produksi) {
                     foreach ($produksi['pekerja'] ?? [] as $p) {
                         $kodep = $p['id'] ?? null;
-                        $pot   = (int) ($p['pot_target'] ?? 0);
+                        $pot = (int) ($p['pot_target'] ?? 0);
                         if ($pot > 0) {
                             $this->addPotongan($kodep, $pot);
                         }
@@ -658,7 +661,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Sanding in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Sanding in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -677,7 +680,7 @@ class PotonganGajiService
                 foreach ($mapped as $produksi) {
                     foreach ($produksi['pekerja'] ?? [] as $p) {
                         $kodep = $p['id'] ?? null;
-                        $pot   = (int) ($p['pot_target'] ?? 0);
+                        $pot = (int) ($p['pot_target'] ?? 0);
                         if ($pot > 0) {
                             $this->addPotongan($kodep, $pot);
                         }
@@ -685,7 +688,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Hotpress in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Hotpress in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -705,7 +708,7 @@ class PotonganGajiService
                 foreach ($mapped as $produksi) {
                     foreach ($produksi['pegawai'] ?? [] as $p) {
                         $kodep = $p['id'] ?? null;
-                        $pot   = (int) ($p['pot_target'] ?? 0);
+                        $pot = (int) ($p['pot_target'] ?? 0);
                         if ($pot > 0) {
                             $this->addPotongan($kodep, $pot);
                         }
@@ -713,7 +716,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Nyusup in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Nyusup in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -737,9 +740,9 @@ class PotonganGajiService
                     $hasilAktual = $produksi->hasilTembeltriplek->sum('hasil');
 
                     $pekerjaInput = collect($produksi->pegawaiTembeltriplek)->map(function ($detail) {
-                        $masuk  = $detail->jam_masuk  ? Carbon::parse($detail->jam_masuk)  : null;
+                        $masuk = $detail->jam_masuk ? Carbon::parse($detail->jam_masuk) : null;
                         $pulang = $detail->jam_pulang ? Carbon::parse($detail->jam_pulang) : null;
-                        $menit  = ($masuk && $pulang)
+                        $menit = ($masuk && $pulang)
                             ? max(0, abs($pulang->diffInMinutes($masuk)) - 60)
                             : (9 * 60);
 
@@ -750,7 +753,7 @@ class PotonganGajiService
                     })->all();
 
                     $result = $action->execute(Mesin::TembelTriplek, StrategiPembagian::Kolektif, $pekerjaInput, $hasilAktual);
-                    
+
                     $potonganPerPegawai = $result?->potonganPerPegawai ?? [];
                     foreach ($produksi->pegawaiTembeltriplek as $detail) {
                         $kodep = $detail->pegawai?->kode_pegawai ?? '-';
@@ -762,7 +765,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Tembel Triplek in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Tembel Triplek in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
@@ -786,12 +789,42 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Pilih Plywood in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Pilih Plywood in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
     /**
-     * 16. Buat Palet
+     * 16. Dempul (nama lama: "Malik Platform")
+     *
+     * DempulDataMap::make() mengembalikan array blok, satu per PASANGAN
+     * pegawai (satu tanggal bisa punya beberapa pasangan). Tiap blok punya
+     * key 'pekerja' dengan 'id' (kode_pegawai) dan 'pot_target'. Blok
+     * "tanpa pasangan tercatat" selalu pot_target = 0, jadi otomatis
+     * terlewati oleh filter $pot > 0.
+     */
+    protected function loadPotonganDempul(): void
+    {
+        try {
+            $raw = LoadLaporanDempul::run($this->tanggal);
+            if ($raw && $raw->isNotEmpty()) {
+                $mapped = DempulDataMap::make($raw);
+                foreach ($mapped as $blok) {
+                    foreach ($blok['pekerja'] ?? [] as $p) {
+                        $kodep = $p['id'] ?? null;
+                        $pot = (int) ($p['pot_target'] ?? 0);
+                        if ($pot > 0) {
+                            $this->addPotongan($kodep, $pot);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Error loading Potongan Dempul in PotonganGajiService: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * 17. Buat Palet
      */
     protected function loadPotonganBuatPalet(): void
     {
@@ -804,14 +837,14 @@ class PotonganGajiService
                 ->get();
 
             if ($produksiList->isNotEmpty()) {
-                $action  = app(HitungPotonganProduksiAction::class);
+                $action = app(HitungPotonganProduksiAction::class);
                 foreach ($produksiList as $produksi) {
                     $hasilAktual = $produksi->hasilProduksiPalets->sum('hasil');
 
                     $pekerjaInput = collect($produksi->pegawaiPalets)->map(function ($detail) {
-                        $masuk  = $detail->jam_masuk  ? Carbon::parse($detail->jam_masuk)  : null;
+                        $masuk = $detail->jam_masuk ? Carbon::parse($detail->jam_masuk) : null;
                         $pulang = $detail->jam_pulang ? Carbon::parse($detail->jam_pulang) : null;
-                        $menit  = ($masuk && $pulang)
+                        $menit = ($masuk && $pulang)
                             ? max(0, abs($pulang->diffInMinutes($masuk)) - 60)
                             : (9 * 60);
 
@@ -823,7 +856,7 @@ class PotonganGajiService
 
                     $result = $action->execute(Mesin::BuatPalet, StrategiPembagian::Kolektif, $pekerjaInput, $hasilAktual);
                     $potonganPerPegawai = $result?->potonganPerPegawai ?? [];
-                    
+
                     foreach ($produksi->pegawaiPalets as $detail) {
                         $kodep = $detail->pegawai?->kode_pegawai ?? '-';
                         $pot = (int) ($potonganPerPegawai[$kodep] ?? 0);
@@ -834,12 +867,12 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Buat Palet in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Buat Palet in PotonganGajiService: ' . $e->getMessage());
         }
     }
 
     /**
-     * 17. Guellotine (Graji Otomatis)
+     * 18. Guellotine (Graji Otomatis)
      */
     protected function loadPotonganGuellotine(): void
     {
@@ -856,14 +889,14 @@ class PotonganGajiService
 
                 foreach ($produksiList as $produksi) {
                     $hasilAktual = $produksi->hasilGuellotine->sum('jumlah');
-                    $firstHasil  = $produksi->hasilGuellotine->first();
-                    $idUkuran    = $firstHasil->id_ukuran ?? null;
+                    $firstHasil = $produksi->hasilGuellotine->first();
+                    $idUkuran = $firstHasil->id_ukuran ?? null;
                     $idJenisKayu = $firstHasil->id_jenis_kayu ?? null;
 
                     $pekerjaInput = collect($produksi->pegawaiGuellotine)->map(function ($detail) {
-                        $masuk  = $detail->masuk  ? Carbon::parse($detail->masuk)  : null;
+                        $masuk = $detail->masuk ? Carbon::parse($detail->masuk) : null;
                         $pulang = $detail->pulang ? Carbon::parse($detail->pulang) : null;
-                        $menit  = ($masuk && $pulang)
+                        $menit = ($masuk && $pulang)
                             ? max(0, abs($pulang->diffInMinutes($masuk)) - 60)
                             : (9 * 60);
 
@@ -874,7 +907,7 @@ class PotonganGajiService
                     })->all();
 
                     $result = $action->execute(Mesin::GrajiOtomatis, StrategiPembagian::Kolektif, $pekerjaInput, $hasilAktual, $idUkuran, $idJenisKayu);
-                    
+
                     $potonganPerPegawai = $result?->potonganPerPegawai ?? [];
                     foreach ($produksi->pegawaiGuellotine as $detail) {
                         $kodep = $detail->pegawai?->kode_pegawai ?? '-';
@@ -886,7 +919,7 @@ class PotonganGajiService
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Error loading Potongan Guellotine in PotonganGajiService: '.$e->getMessage());
+            Log::error('Error loading Potongan Guellotine in PotonganGajiService: ' . $e->getMessage());
         }
     }
 }
