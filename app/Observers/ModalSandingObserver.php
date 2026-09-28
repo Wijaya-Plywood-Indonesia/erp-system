@@ -15,7 +15,7 @@ class ModalSandingObserver
         // Jika id_serah_terima_hp negatif, berarti ini dari Hasil Sanding yang belum diserah
         if ($modalSanding->id_serah_terima_hp < 0) {
             $idHasilSanding = abs($modalSanding->id_serah_terima_hp);
-            
+
             // Cek apakah sudah dibuat sebelumnya (mencegah duplikasi)
             $st = \App\Models\SerahTerimaHp::firstOrCreate(
                 ['id_hasil_sanding' => $idHasilSanding, 'tujuan' => 'sanding'],
@@ -37,6 +37,34 @@ class ModalSandingObserver
     public function created(ModalSanding $modalSanding): void
     {
         // Fitur auto-create Hasil Sanding ditiadakan sesuai permintaan
+    }
+
+    /**
+     * Handle the ModalSanding "updating" event.
+     */
+    public function updating(ModalSanding $modalSanding): void
+    {
+        // Sama seperti creating(): jika id_serah_terima_hp negatif, berarti
+        // user mengganti pilihan palet ke Hasil Sanding yang belum diserah.
+        // Wajib dikonversi ke ID SerahTerimaHp asli sebelum disimpan, kalau
+        // tidak akan gagal foreign key constraint (id negatif tidak ada di
+        // tabel serah_terima_hp).
+        if ($modalSanding->id_serah_terima_hp < 0) {
+            $idHasilSanding = abs($modalSanding->id_serah_terima_hp);
+
+            // Cek apakah sudah dibuat sebelumnya (mencegah duplikasi)
+            $st = \App\Models\SerahTerimaHp::firstOrCreate(
+                ['id_hasil_sanding' => $idHasilSanding, 'tujuan' => 'sanding'],
+                [
+                    'diterima_oleh' => auth()->user()?->name ?? 'System',
+                    'status' => 'Diterima',
+                    'tujuan' => 'sanding',
+                ]
+            );
+
+            // Ganti id_serah_terima_hp dengan ID SerahTerimaHp yang asli
+            $modalSanding->id_serah_terima_hp = $st->id;
+        }
     }
 
     /**

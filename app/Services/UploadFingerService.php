@@ -69,7 +69,8 @@ class UploadFingerService
                 'uploaded_by' => $uploadedBy,
             ]);
 
-            // 5. Agregasi per (kode_pegawai, tanggal): ambil MIN & MAX waktu tap.
+            // 5. Agregasi per (kode_pegawai, tanggal): ambil MIN & MAX waktu tap
+            //    serta kumpulkan semua tap mentah ke raw_finger.
             $agregat = $semuaTap
                 ->groupBy(fn ($tap) => $tap['kode_pegawai'].'|'.$tap['tanggal'])
                 ->map(function ($taps) {
@@ -77,9 +78,10 @@ class UploadFingerService
 
                     return [
                         'kode_pegawai' => $sorted->first()['kode_pegawai'],
-                        'tanggal' => $sorted->first()['tanggal'],
-                        'jam_masuk' => $sorted->first()['waktu'],
-                        'jam_pulang' => $sorted->last()['waktu'],
+                        'tanggal'      => $sorted->first()['tanggal'],
+                        'jam_masuk'    => $sorted->first()['waktu'],
+                        'jam_pulang'   => $sorted->last()['waktu'],
+                        'raw_finger'   => $sorted->map(fn ($tap) => ['waktu' => $tap['waktu']->format('H:i:s')])->values()->all(),
                     ];
                 })
                 ->values();
@@ -120,11 +122,12 @@ class UploadFingerService
 
         if (! $existing) {
             NewDataFinger::create([
-                'kode_pegawai' => $item['kode_pegawai'],
-                'tanggal' => $item['tanggal'],
-                'jam_masuk' => $item['jam_masuk']->format('H:i:s'),
-                'jam_pulang' => $item['jam_pulang']->format('H:i:s'),
-                'id_absensi_masuk' => $uploadId,
+                'kode_pegawai'    => $item['kode_pegawai'],
+                'tanggal'         => $item['tanggal'],
+                'jam_masuk'       => $item['jam_masuk']->format('H:i:s'),
+                'jam_pulang'      => $item['jam_pulang']->format('H:i:s'),
+                'raw_finger'      => $item['raw_finger'],
+                'id_absensi_masuk'  => $uploadId,
                 'id_absensi_pulang' => $uploadId,
             ]);
 
@@ -153,8 +156,20 @@ class UploadFingerService
             $update['id_absensi_pulang'] = $uploadId;
         }
 
+        // Gabung raw_finger lama + baru, dedupe berdasarkan waktu, urutkan.
+        $rawLama = $existing->raw_finger ?? [];
+        $rawBaru = $item['raw_finger'];
+        $merged  = collect(array_merge($rawLama, $rawBaru))
+            ->unique('waktu')
+            ->sortBy('waktu')
+            ->values()
+            ->all();
+
+        $update['raw_finger'] = $merged;
+
         if (! empty($update)) {
             $existing->update($update);
         }
     }
 }
+

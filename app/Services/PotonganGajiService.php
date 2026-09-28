@@ -29,6 +29,8 @@ use App\Filament\Pages\LaporanSanding\Queries\LoadLaporanSanding;
 use App\Filament\Pages\LaporanSanding\Transformers\SandingDataMap;
 use App\Filament\Pages\LaporanSandingJoin\Queries\LoadLaporanSandingJoin;
 use App\Filament\Pages\LaporanSandingJoin\Transformers\SandingJoinDataMap;
+use App\Filament\Pages\LaporanPilihPlywood\Queries\LoadLaporanPilihPlywood;
+use App\Filament\Pages\LaporanPilihPlywood\Transformers\PilihPlywoodDataMap;
 use App\Models\PegawaiPilihPlywood;
 use App\Models\PegawaiTembeltriplek;
 use App\Models\ProduksiKedi;
@@ -770,42 +772,13 @@ class PotonganGajiService
     protected function loadPotonganPilihPlywood(): void
     {
         try {
-            $produksiList = \App\Models\ProduksiPilihPlywood::with([
-                'pegawaiPilihPlywood.pegawai:id,kode_pegawai,nama_pegawai,gaji',
-                'hasilPilihPlywood.barangSetengahJadiHp'
-            ])
-                ->whereDate('tanggal_produksi', $this->tanggal)
-                ->get();
-
-            if ($produksiList->isNotEmpty()) {
-                $action = app(HitungPotonganProduksiAction::class);
-
-                foreach ($produksiList as $produksi) {
-                    $hasilAktual = $produksi->hasilPilihPlywood->sum('jumlah');
-                    $firstHasil  = $produksi->hasilPilihPlywood->first();
-                    $barang      = $firstHasil?->barangSetengahJadiHp;
-                    $idUkuran    = $barang->id_ukuran ?? null;
-                    $idJenisKayu = $barang->id_jenis_kayu ?? null;
-
-                    $pekerjaInput = collect($produksi->pegawaiPilihPlywood)->map(function ($detail) {
-                        $masuk  = $detail->masuk  ? Carbon::parse($detail->masuk)  : null;
-                        $pulang = $detail->pulang ? Carbon::parse($detail->pulang) : null;
-                        $menit  = ($masuk && $pulang)
-                            ? max(0, abs($pulang->diffInMinutes($masuk)) - 60)
-                            : (9 * 60);
-
-                        return new PekerjaKerjaInput(
-                            idPegawai: $detail->pegawai?->kode_pegawai ?? '-',
-                            menitKerja: (float) $menit,
-                        );
-                    })->all();
-
-                    $result = $action->execute(Mesin::PilihDanTembel, StrategiPembagian::Kolektif, $pekerjaInput, $hasilAktual, $idUkuran, $idJenisKayu);
-                    
-                    $potonganPerPegawai = $result?->potonganPerPegawai ?? [];
-                    foreach ($produksi->pegawaiPilihPlywood as $detail) {
-                        $kodep = $detail->pegawai?->kode_pegawai ?? '-';
-                        $pot = (int) ($potonganPerPegawai[$kodep] ?? 0);
+            $raw = LoadLaporanPilihPlywood::run($this->tanggal);
+            if ($raw && $raw->isNotEmpty()) {
+                $mapped = PilihPlywoodDataMap::make($raw);
+                foreach ($mapped as $blok) {
+                    foreach ($blok['pekerja'] ?? [] as $p) {
+                        $kodep = $p['id'] ?? null;
+                        $pot = (int) ($p['pot_target'] ?? 0);
                         if ($pot > 0) {
                             $this->addPotongan($kodep, $pot);
                         }
