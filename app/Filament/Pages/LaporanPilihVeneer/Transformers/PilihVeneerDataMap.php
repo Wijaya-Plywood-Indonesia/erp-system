@@ -10,6 +10,11 @@ use Carbon\Carbon;
 
 class PilihVeneerDataMap
 {
+    // Jam istirahat yang dipotong dari jam kerja (sama dengan Join, Pot Siku, Pot Jelek)
+    private const ISTIRAHAT_MULAI = '12:00';
+
+    private const ISTIRAHAT_SELESAI = '13:00';
+
     public static function make($collection): array
     {
         $result = [];
@@ -20,10 +25,13 @@ class PilihVeneerDataMap
 
             // 1. Prepare Pekerja Input DTOs
             $pekerjaInput = [];
+            $totalGajiTim = 0.0;
             foreach ($produksi->pegawaiPilihVeneer as $pj) {
                 if (! $pj->pegawai) {
                     continue;
                 }
+
+                $totalGajiTim += (float) ($pj->pegawai->gaji ?? 0);
 
                 $masukAt = null;
                 $pulangAt = null;
@@ -36,7 +44,7 @@ class PilihVeneerDataMap
                 }
                 $menitKerja = 0;
                 if ($masukAt && $pulangAt) {
-                    $menitKerja = max(0, $masukAt->diffInMinutes($pulangAt));
+                    $menitKerja = self::hitungMenitKerjaBersih($masukAt, $pulangAt);
                 }
 
                 $pekerjaInput[] = new PekerjaKerjaInput(
@@ -75,50 +83,61 @@ class PilihVeneerDataMap
                 }
             }
 
-            // 3. Compute total achievement (Pencapaian) across all sizes
+            // 3. Hitung capaian total (Pencapaian) lintas ukuran
+            //    Target di-ADJUST ke total jam kerja tim (menit kerja bersih semua pekerja),
+            //    dibulatkan karena satuannya lembar utuh.
             $totalPencapaian = 0.0;
             $totalValue = 0.0;
-            $maxGaji = 0.0;
+            $jumlahUkuranAda = 0;
             $hasTarget = false;
+            $targetPerGrup = [];
 
             $resolver = TargetResolverFactory::make(Mesin::PilihVeneer);
 
-            foreach ($groupedHasil as $gh) {
+            foreach ($groupedHasil as $keyH => $gh) {
                 $targetModel = $resolver->resolve(Mesin::PilihVeneer->value, $gh['id_ukuran'], $gh['id_jenis_kayu'], (string) $gh['kw']);
-                if ($targetModel) {
-                    $hasTarget = true;
-                    // Calculate targetAdjusted for this size
-                    $menitNormalTotal = $targetModel->jam * 60;
-                    $ratePerMenit = ($targetModel->orang > 0 && $menitNormalTotal > 0)
-                        ? $targetModel->target / $menitNormalTotal
-                        : 0;
-                    $ratePerOrgPerMenit = $targetModel->orang > 0 ? $ratePerMenit / $targetModel->orang : 0;
-                    $targetAdjusted = $ratePerOrgPerMenit * $totalMenit;
-
-                    $ghPencapaian = $targetAdjusted > 0 ? ($gh['jumlah'] / $targetAdjusted) : 0;
-                    $totalPencapaian += $ghPencapaian;
-
-                    $totalValue += $targetAdjusted * (float) $targetModel->potongan;
-                    $maxGaji = max($maxGaji, (float) ($targetModel->gaji ?? 0));
+                if (! $targetModel) {
+                    continue;
                 }
+
+                $hasTarget = true;
+                $menitNormalTotal = $targetModel->jam * 60;
+                $ratePerMenit = ($targetModel->orang > 0 && $menitNormalTotal > 0)
+                    ? $targetModel->target / $menitNormalTotal
+                    : 0;
+                $ratePerOrgPerMenit = $targetModel->orang > 0 ? $ratePerMenit / $targetModel->orang : 0;
+                $targetAdjusted = round($ratePerOrgPerMenit * $totalMenit);
+
+                $targetPerGrup[$keyH] = [
+                    'model' => $targetModel,
+                    'adjusted' => $targetAdjusted,
+                ];
+
+                $totalPencapaian += $targetAdjusted > 0 ? ($gh['jumlah'] / $targetAdjusted) : 0;
+                $totalValue += $targetAdjusted * (float) $targetModel->potongan;
+                $jumlahUkuranAda++;
             }
 
-            // 4. Calculate total team deduction and share it proportionally
+            // 4. Potongan tim = kekurangan % x nilai SATU hari penuh tim
+            //    (rata-rata nilai target per ukuran, sama seperti Join),
+            //    lalu dibagi ke pekerja sesuai porsi jam kerjanya.
             $potonganTotalTim = 0.0;
             $potonganPerPegawai = [];
-            if ($hasTarget) {
+            if ($hasTarget && $jumlahUkuranAda > 0) {
+                $nilaiSatuHariPenuh = $totalValue / $jumlahUkuranAda;
                 $kekuranganPersen = max(0, 100 - ($totalPencapaian * 100)) / 100;
-                $potonganTotalTim = $kekuranganPersen * $totalValue;
+                $potonganTotalTim = $kekuranganPersen * $nilaiSatuHariPenuh;
 
-                // Rounding denda total to nearest 500 or round each worker's potongan?
-                // Let's use ProporsionalStrategy:
                 $proporsional = new ProporsionalStrategy;
                 $potonganPerPegawai = $proporsional->bagikan($pekerjaInput, $potonganTotalTim);
             }
 
+            $potonganMelebihiGaji = $totalGajiTim > 0 && $potonganTotalTim > $totalGajiTim;
+            $jamAktualRata = $orgAktual > 0 ? ($totalMenit / $orgAktual) / 60 : 0;
+
             // 5. Build BAGIAN A: DETAIL PRODUKSI PER UKURAN
             $detailProduksiList = [];
-            foreach ($groupedHasil as $gh) {
+            foreach ($groupedHasil as $keyH => $gh) {
                 $hasilModel = $gh['hasil'];
                 $m = $hasilModel->modalPilihVeneer;
 
@@ -152,17 +171,14 @@ class PilihVeneerDataMap
                     ? "{$panjang} x {$lebar}".($tebal !== null ? " x {$tebal}" : '')
                     : '-';
 
-                $targetModel = $resolver->resolve(Mesin::PilihVeneer->value, $gh['id_ukuran'], $gh['id_jenis_kayu'], (string) $gh['kw']);
+                $targetModel = $targetPerGrup[$keyH]['model'] ?? null;
                 $targetHarian = 0;
+                $targetNormal = null;
                 $capaianPersen = null;
                 if ($targetModel) {
-                    $menitNormalTotal = $targetModel->jam * 60;
-                    $ratePerMenit = ($targetModel->orang > 0 && $menitNormalTotal > 0)
-                        ? $targetModel->target / $menitNormalTotal
-                        : 0;
-                    $ratePerOrgPerMenit = $targetModel->orang > 0 ? $ratePerMenit / $targetModel->orang : 0;
-                    $targetAdjusted = $ratePerOrgPerMenit * $totalMenit;
+                    $targetAdjusted = $targetPerGrup[$keyH]['adjusted'];
                     $targetHarian = (int) $targetAdjusted;
+                    $targetNormal = (float) $targetModel->target;
                     $capaianPersen = $targetAdjusted > 0 ? ($gh['jumlah'] / $targetAdjusted) * 100 : 0;
                 }
 
@@ -176,6 +192,7 @@ class PilihVeneerDataMap
                     'kw' => $gh['kw'],
                     'no_palet_list' => $noPaletStr,
                     'target' => $targetHarian,
+                    'target_normal' => $targetNormal,
                     'hasil' => $gh['jumlah'],
                     'selisih' => $gh['jumlah'] - $targetHarian,
                     'capaian_persen' => $capaianPersen,
@@ -201,7 +218,7 @@ class PilihVeneerDataMap
                 }
                 $menitKerja = 0;
                 if ($masukAt && $pulangAt) {
-                    $menitKerja = max(0, $masukAt->diffInMinutes($pulangAt));
+                    $menitKerja = self::hitungMenitKerjaBersih($masukAt, $pulangAt);
                 }
 
                 $jamKerjaVal = round($menitKerja / 60, 1);
@@ -214,6 +231,7 @@ class PilihVeneerDataMap
                     'jam_masuk' => $pj->masuk ? Carbon::parse($pj->masuk)->format('H:i') : '-',
                     'jam_pulang' => $pj->pulang ? Carbon::parse($pj->pulang)->format('H:i') : '-',
                     'jam_kerja' => $jamKerjaVal.' jam',
+                    'jam_aktual_bersih' => round($menitKerja / 60, 2),
                     'ijin' => $pj->ijin ?? '-',
                     'pencapaian' => $totalPencapaian * 100, // percentage format
                     'kekurangan' => max(0, 1.0 - $totalPencapaian) * 100, // percentage format
@@ -230,9 +248,40 @@ class PilihVeneerDataMap
                 'detail_produksi' => $detailProduksiList,
                 'rekap_pekerja' => $rekapPekerjaList,
                 'pencapaian_global' => $totalPencapaian,
+                'jumlah_pekerja' => $orgAktual,
+                'jam_aktual' => $jamAktualRata,
+                'potongan_total_tim' => $potonganTotalTim,
+                'potongan_melebihi_gaji' => $potonganMelebihiGaji,
+                'total_gaji_tim' => $totalGajiTim,
             ];
         }
 
         return $result;
+    }
+
+    /**
+     * Menit kerja BERSIH: (pulang - masuk) dikurangi irisan dengan jam istirahat.
+     * Kalau pekerja pulang sebelum istirahat / masuk sesudah istirahat, tidak ada potongan.
+     */
+    private static function hitungMenitKerjaBersih(Carbon $masuk, Carbon $pulang): int
+    {
+        if ($pulang->lessThan($masuk)) {
+            $pulang = $pulang->copy()->addDay();
+        }
+
+        $totalMenit = (int) round($masuk->diffInMinutes($pulang, true));
+
+        $istirahatMulai = Carbon::parse($masuk->format('Y-m-d').' '.self::ISTIRAHAT_MULAI);
+        $istirahatSelesai = Carbon::parse($masuk->format('Y-m-d').' '.self::ISTIRAHAT_SELESAI);
+
+        $overlapMulai = $masuk->greaterThan($istirahatMulai) ? $masuk : $istirahatMulai;
+        $overlapSelesai = $pulang->lessThan($istirahatSelesai) ? $pulang : $istirahatSelesai;
+
+        $menitIstirahatTerpotong = 0;
+        if ($overlapSelesai->greaterThan($overlapMulai)) {
+            $menitIstirahatTerpotong = (int) round($overlapMulai->diffInMinutes($overlapSelesai, true));
+        }
+
+        return max(0, $totalMenit - $menitIstirahatTerpotong);
     }
 }
