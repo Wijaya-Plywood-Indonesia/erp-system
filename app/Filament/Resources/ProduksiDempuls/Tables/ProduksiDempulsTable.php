@@ -34,6 +34,25 @@ class ProduksiDempulsTable
                         return $query->whereDate($kolomTanggal, 'like', "%{$search}%");
                     }),
 
+                TextColumn::make('shift')
+                    ->label('Shift')
+                    ->badge()
+                    ->icon(fn(string $state): string => match ($state) {
+                        'PAGI'  => 'heroicon-o-sun',
+                        'MALAM' => 'heroicon-o-moon',
+                        default => 'heroicon-o-question-mark-circle',
+                    })
+                    ->color(fn(string $state): string => match ($state) {
+                        'PAGI'  => 'success',
+                        'MALAM' => 'gray',
+                        default => 'secondary',
+                    })
+                    ->formatStateUsing(fn(string $state): string => match ($state) {
+                        'PAGI'  => 'Pagi',
+                        'MALAM' => 'Malam',
+                        default => $state,
+                    }),
+
                 TextColumn::make('kendala')
                     ->label('Kendala')
                     ->wrap()

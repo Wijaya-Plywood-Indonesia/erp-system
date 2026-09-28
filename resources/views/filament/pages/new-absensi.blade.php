@@ -456,7 +456,24 @@
                                 </th>
                                 <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Izin</th>
                                 <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 text-right">
-                                    Potongan</th>
+                                    <button wire:click="sortByPotongan"
+                                        class="inline-flex items-center gap-1 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                                        Potongan
+                                        @if ($sortPotongan === 'desc')
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-primary-500" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                            </svg>
+                                        @elseif ($sortPotongan === 'asc')
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-primary-500" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd" />
+                                            </svg>
+                                        @else
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <path d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1zM3 6a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM7 14a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z"/>
+                                            </svg>
+                                        @endif
+                                    </button>
+                                </th>
                                 <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Keterangan</th>
                             </tr>
                         </thead>
