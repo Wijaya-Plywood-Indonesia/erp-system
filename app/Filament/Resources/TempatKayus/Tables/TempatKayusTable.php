@@ -60,7 +60,7 @@ class TempatKayusTable
      *    delta batang/kubikasi (after - before) yang BISA MINUS, sehingga otomatis
      *    mengurangi total pada kolom "Batang" dan "Kubikasi" di tabel/modal.
      */
-    private static function getKayuAktif(int $lahanId): Collection
+    public static function getKayuAktif(int $lahanId): Collection
     {
         if (isset(self::$snapshot[$lahanId])) {
             return self::$snapshot[$lahanId];
@@ -168,13 +168,19 @@ class TempatKayusTable
                 ->get();
 
             foreach ($opnameSetelahReset as $log) {
-                $deltaBatang = (int) $log->stok_batang_after - (int) $log->stok_batang_before;
+                // Opname baru menyimpan selisih khusus tempat kayu (tk_delta_*),
+                // dihitung dari total tempat kayu saat opname, bukan dari stok lahan.
+                // Log lama (kolom null) memakai rumus lama: after - before.
+                $deltaBatang = $log->tk_delta_batang !== null
+                    ? (int) $log->tk_delta_batang
+                    : (int) $log->stok_batang_after - (int) $log->stok_batang_before;
 
-                // NOTE: sesuaikan nama kolom ini jika berbeda di skema Anda.
-                $deltaKubikasi = round(
-                    (float) ($log->stok_kubikasi_after ?? 0) - (float) ($log->stok_kubikasi_before ?? 0),
-                    4
-                );
+                $deltaKubikasi = $log->tk_delta_kubikasi !== null
+                    ? round((float) $log->tk_delta_kubikasi, 4)
+                    : round(
+                        (float) ($log->stok_kubikasi_after ?? 0) - (float) ($log->stok_kubikasi_before ?? 0),
+                        4
+                    );
 
                 if ($deltaBatang === 0 && $deltaKubikasi == 0.0) {
                     continue;
@@ -203,6 +209,15 @@ class TempatKayusTable
         self::$snapshot[$lahanId] = $data;
 
         return $data;
+    }
+
+    public static function forgetSnapshot(?int $lahanId = null): void
+    {
+        if ($lahanId === null) {
+            self::$snapshot = [];
+        } else {
+            unset(self::$snapshot[$lahanId]);
+        }
     }
 
     private static function semuaLunas(int $lahanId): bool

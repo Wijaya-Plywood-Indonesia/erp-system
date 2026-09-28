@@ -8,6 +8,7 @@ use App\Models\JenisKayu;
 use App\Models\Lahan;
 use App\Models\LogLogCore;
 use App\Models\StokLogCore;
+use App\Filament\Resources\TempatKayus\Tables\TempatKayusTable;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
@@ -254,7 +255,14 @@ class OpnameStokKayu extends Page implements HasForms
             return;
         }
 
-        DB::transaction(function () use ($get, $lahanId, $jenisKayuId, $panjang, $batangBaru, $kubikasiBaru, $nilaiBaru, $selisihBatang, $selisihKubikasi, $selisihNilai) {
+        // Total tempat kayu SAAT INI (sebelum opname), dipakai untuk menghitung
+        // selisih tempat kayu agar tidak minus ketika berbeda dari stok lahan.
+        TempatKayusTable::forgetSnapshot((int) $lahanId);
+        $tkAktif = TempatKayusTable::getKayuAktif((int) $lahanId);
+        $tkBatangNow = (int) $tkAktif->sum('Batang');
+        $tkKubikNow = (float) $tkAktif->sum('Kubikasi');
+
+        DB::transaction(function () use ($get, $lahanId, $jenisKayuId, $panjang, $batangBaru, $kubikasiBaru, $nilaiBaru, $selisihBatang, $selisihKubikasi, $selisihNilai, $tkBatangNow, $tkKubikNow) {
             $summary = HppAverageSummarie::firstOrNew([
                 'id_lahan' => $lahanId,
                 'id_jenis_kayu' => $jenisKayuId,
@@ -272,6 +280,17 @@ class OpnameStokKayu extends Page implements HasForms
             $summary->hpp_average = $kubikasiBaru > 0 ? round($nilaiBaru / $kubikasiBaru, 2) : 0;
             $summary->save();
 
+            // Setelah opname, tempat kayu disamakan dengan total stok lahan.
+            $stokLahan = HppAverageSummarie::where('id_lahan', $lahanId)->whereNull('grade');
+            $stokLahanBatang = (int) (clone $stokLahan)->sum('stok_batang');
+            $stokLahanKubik = (float) (clone $stokLahan)->sum('stok_kubikasi');
+
+            // Selisih khusus tempat kayu + selisih awal stok lahan vs tempat kayu (untuk audit)
+            $tkDeltaBatang = $stokLahanBatang - $tkBatangNow;
+            $tkDeltaKubik = round($stokLahanKubik - $tkKubikNow, 4);
+            $stokLahanBatangSebelum = $stokLahanBatang - $selisihBatang;
+            $selisihAwalBatang = $stokLahanBatangSebelum - $tkBatangNow;
+
             $keteranganLog = sprintf(
                 "STOK OPNAME | %s | Batang: %s%d (%s%.4f m³) | Poin: Rp %s | User: %s",
                 $get('keterangan') ?: 'Opname berkala',
@@ -282,6 +301,25 @@ class OpnameStokKayu extends Page implements HasForms
                 number_format($selisihNilai, 0, ',', '.'),
                 Auth::user()->name
             );
+
+            // Tambahan info tempat kayu (hanya jika ada perubahan pada tempat kayu)
+            $keteranganLog .= sprintf(
+                " | Tempat Kayu: %d → %d (%s%d Btg, %s%.4f m³)",
+                $tkBatangNow,
+                $tkBatangNow + $tkDeltaBatang,
+                $tkDeltaBatang > 0 ? '+' : '',
+                $tkDeltaBatang,
+                $tkDeltaKubik > 0 ? '+' : '',
+                $tkDeltaKubik
+            );
+
+            if ($selisihAwalBatang !== 0) {
+                $keteranganLog .= sprintf(
+                    " | Selisih stok vs tempat kayu sebelum opname: %s%d Btg",
+                    $selisihAwalBatang > 0 ? '+' : '',
+                    $selisihAwalBatang
+                );
+            }
 
             HppAverageLog::create([
                 'id_lahan' => $lahanId,
@@ -302,10 +340,14 @@ class OpnameStokKayu extends Page implements HasForms
                 'stok_kubikasi_after' => round($summary->stok_kubikasi, 4),
                 'nilai_stok_after' => round($summary->nilai_stok, 2),
                 'hpp_average' => $summary->hpp_average,
+                'tk_delta_batang' => $tkDeltaBatang,
+                'tk_delta_kubikasi' => $tkDeltaKubik,
             ]);
 
             $this->syncTempatKayu($lahanId);
         });
+
+        TempatKayusTable::forgetSnapshot((int) $lahanId);
 
         Notification::make()->success()->title('✅ Opname Kayu Berhasil')->send();
         $this->resetForm();
