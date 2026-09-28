@@ -3,6 +3,8 @@
 namespace App\Filament\Pages;
 
 use App\Exports\LaporanDempulExport;
+use App\Filament\Pages\LaporanDempul\Queries\LoadLaporanDempul;
+use App\Filament\Pages\LaporanDempul\Transformers\DempulDataMap;
 use App\Models\ProduksiDempul;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -40,6 +42,8 @@ class LaporanProduksiDempul extends Page implements HasForms
         'detail' => [],
         'summary' => [],
     ];
+
+    public array $targetData = [];
 
     public $tanggal = null;
 
@@ -186,5 +190,7 @@ class LaporanProduksiDempul extends Page implements HasForms
             'detail' => $detail,
             'summary' => $summary,
         ];
+
+        $this->targetData = DempulDataMap::make($produksiList);
     }
 }
