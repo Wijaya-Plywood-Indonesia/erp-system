@@ -151,17 +151,9 @@
 
                                 <tbody>
                                     @forelse ($data['per_ukuran'] as $i => $item)
-                                        @php
-                                            $adaTarget = $item['has_target'] ?? false;
-                                            $selisih = $item['selisih'] ?? 0;
-                                        @endphp
                                         <tr class="{{ $i % 2 === 1 ? 'bg-zinc-50 dark:bg-zinc-800/50' : 'bg-white dark:bg-zinc-900' }} border-t border-zinc-300 dark:border-zinc-700">
                                             <td class="p-2 text-left text-xs border-r border-zinc-300 dark:border-zinc-700 font-medium">
-                                                @if(!$adaTarget)
-                                                    <span class="text-red-500">{{ $item['ukuran'] }} ⚠</span>
-                                                @else
-                                                    {{ $item['ukuran'] }}
-                                                @endif
+                                                {{ $item['ukuran'] }}
                                             </td>
                                             <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 uppercase">
                                                 {{ $item['jenis_kayu'] ?? '-' }}
@@ -173,29 +165,8 @@
                                             <td class="p-2 text-right text-xs border-r border-zinc-300 dark:border-zinc-700 font-bold text-green-600 dark:text-green-400">
                                                 {{ number_format($item['hasil']) }}
                                             </td>
-                                            <td class="p-2 text-right text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-500">
-                                                @if($adaTarget)
-                                                    {{ number_format($item['target']) }}
-                                                    @if(isset($item['target_normal']))
-                                                        <span class="block text-[10px] text-zinc-600">(normal: {{ number_format($item['target_normal']) }})</span>
-                                                    @endif
-                                                @else
-                                                    -
-                                                @endif
-                                            </td>
-                                            <td class="p-2 text-right text-xs border-r border-zinc-300 dark:border-zinc-700 font-mono {{ !$adaTarget ? 'text-zinc-500' : ($selisih >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500') }}">
-                                                @if($adaTarget)
-                                                    {{ $selisih >= 0 ? '+' : '' }}{{ number_format($selisih) }}
-                                                @else
-                                                    -
-                                                @endif
-                                            </td>
-                                            <td class="p-2 text-right text-xs font-bold {{ !$adaTarget ? 'text-red-500' : (($item['capaian_persen'] ?? 0) >= 100 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') }}">
-                                                @if(!$adaTarget)
-                                                    Target ?
-                                                @else
-                                                    {{ number_format($item['capaian_persen'], 1, ',', '.') }}%
-                                                @endif
+                                            <td class="p-2 text-right text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-500" colspan="3">
+                                                <span class="italic">(gabung ke total di bawah)</span>
                                             </td>
                                         </tr>
                                     @empty
@@ -205,6 +176,41 @@
                                             </td>
                                         </tr>
                                     @endforelse
+
+                                    @if(!empty($data['per_ukuran']))
+                                        <tr class="bg-zinc-200 dark:bg-zinc-800 border-t-2 border-zinc-400 dark:border-zinc-600 font-bold">
+                                            <td colspan="3" class="p-2 text-left text-xs border-r border-zinc-300 dark:border-zinc-700">
+                                                TOTAL (semua ukuran digabung, dibanding 1 target shift)
+                                            </td>
+                                            <td class="p-2 text-right text-xs border-r border-zinc-300 dark:border-zinc-700 text-green-600 dark:text-green-400">
+                                                {{ number_format($data['hasil_total'] ?? 0) }}
+                                            </td>
+                                            <td class="p-2 text-right text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">
+                                                @if($punyaTarget)
+                                                    {{ number_format($data['target_total'] ?? 0) }}
+                                                    <span class="block text-[10px] text-zinc-500 font-normal">
+                                                        (normal: {{ number_format($data['target_normal'] ?? 0) }} / {{ number_format($data['target_normal_jam'] ?? 0) }} jam / {{ $data['target_normal_orang'] ?? 0 }} org)
+                                                    </span>
+                                                @else
+                                                    -
+                                                @endif
+                                            </td>
+                                            <td class="p-2 text-right text-xs border-r border-zinc-300 dark:border-zinc-700 font-mono {{ !$punyaTarget ? 'text-zinc-500' : (($data['selisih_total'] ?? 0) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500') }}">
+                                                @if($punyaTarget)
+                                                    {{ ($data['selisih_total'] ?? 0) >= 0 ? '+' : '' }}{{ number_format($data['selisih_total'] ?? 0) }}
+                                                @else
+                                                    -
+                                                @endif
+                                            </td>
+                                            <td class="p-2 text-right text-xs {{ !$punyaTarget ? 'text-red-500' : ($capaian >= 100 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') }}">
+                                                @if($punyaTarget)
+                                                    {{ number_format($capaian, 1, ',', '.') }}%
+                                                @else
+                                                    Target ?
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endif
                                 </tbody>
 
                                 <tfoot class="bg-zinc-100 dark:bg-zinc-800 border-t-2 border-zinc-300 dark:border-zinc-600">
@@ -236,7 +242,7 @@
                                     @else
                                         <tr>
                                             <td colspan="7" class="p-2 text-center text-[11px] text-red-500 border-t border-zinc-300 dark:border-zinc-700">
-                                                Belum ada target untuk barang di produksi ini di Master Target (mesin + tebal + kategori), potongan belum bisa dihitung.
+                                                Belum ada target untuk shift ini di Master Target (mesin + shift), potongan belum bisa dihitung.
                                             </td>
                                         </tr>
                                     @endif

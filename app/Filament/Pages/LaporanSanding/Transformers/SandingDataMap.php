@@ -13,13 +13,15 @@ use Illuminate\Support\Facades\Log;
  * Hitung target & potongan Sanding per PRODUKSI (1 produksi = 1 mesin
  * Besar/Kecil + 1 shift, sesuai tabel produksi_sandings).
  *
- * - Target dari master Target: mesin (id_mesin produksi) + tebal + kategori barang.
+ * - Target dari master Target: FLAT per mesin (Besar/Kecil) + shift (Pagi/Malam),
+ *   tidak lagi dibedakan per ukuran/tebal/jenis kayu/kategori barang.
  * - Target ADJUSTED ke man-minutes aktual tim (rate per-orang-per-menit x total menit).
- * - Beberapa tebal/kategori dalam 1 produksi: capaian tiap grup DIJUMLAH, lalu
- *   potongan tim = (100% - capaian global) x nilai satu hari penuh
- *   (rata-rata nilai target antar grup), dibagi RATA ke semua pekerja,
- *   dibulatkan kelipatan 500 (strategi Kolektif).
- * - Grup tanpa target -> has_target=false, tidak ikut dihitung.
+ * - Semua hasil (berapapun ukuran/tebalnya) DIJUMLAH jadi satu total, lalu
+ *   dibandingkan ke satu target global shift ini; potongan tim =
+ *   (100% - capaian global) x nilai satu hari penuh, dibagi RATA ke semua
+ *   pekerja, dibulatkan kelipatan 500 (strategi Kolektif).
+ * - Produksi tanpa baris target (mesin+shift) di master -> punya_target=false,
+ *   tidak ikut dihitung potongannya.
  */
 class SandingDataMap
 {
@@ -46,6 +48,7 @@ class SandingDataMap
         $resolver = new SandingTargetResolver;
         $tanggal = Carbon::parse($produksi->tanggal)->format('d/m/Y');
         $idMesin = (int) $produksi->id_mesin;
+        $shift = $produksi->shift;
 
         /* 1. Pekerja & menit kerja bersih */
         $pekerjaInput = [];
@@ -116,60 +119,19 @@ class SandingDataMap
             }
         }
 
-        /* 3. Target per grup */
+        /* 3. Target flat per mesin + shift (bukan per ukuran/kategori lagi).
+         * Baris per_ukuran di bawah ini murni untuk tampilan breakdown hasil
+         * per ukuran/jenis kayu/kategori - tidak ada target individual per
+         * baris, semua dibandingkan ke SATU target global shift ini. */
         $perUkuran = [];
-        $sumCapaian = 0.0;
-        $sumNilai = 0.0;
-        $jumlahGrupAda = 0;
-        $sumTargetAdj = 0.0;
-        $sumHasilBerTarget = 0.0;
+        $totalHasilSemua = 0.0;
 
         foreach ($grup as $g) {
-            $target = $resolver->resolve($idMesin, $g['tebal'], $g['id_kategori']);
             $labelUkuran = implode(', ', array_unique($g['ukuran_list'])) ?: '-';
             $labelJenis = implode(', ', array_unique($g['jenis_list'])) ?: '-';
             $labelGrade = implode(', ', array_unique($g['grade_list'])) ?: '-';
 
-            if (! $target) {
-                Log::warning('Target Sanding tidak ditemukan', [
-                    'id_produksi' => $produksi->id,
-                    'id_mesin' => $idMesin,
-                    'tebal' => $g['tebal'],
-                    'id_kategori' => $g['id_kategori'],
-                ]);
-
-                $perUkuran[] = [
-                    'ukuran' => $labelUkuran,
-                    'jenis_kayu' => $labelJenis,
-                    'tebal' => $g['tebal'],
-                    'kategori' => $g['kategori'],
-                    'grade' => $labelGrade,
-                    'kode_ukuran' => 'SANDING '.($g['tebal'] ?? '-').' '.$g['kategori'],
-                    'hasil' => $g['hasil'],
-                    'target' => 0,
-                    'selisih' => $g['hasil'],
-                    'capaian_persen' => null,
-                    'has_target' => false,
-                ];
-
-                continue;
-            }
-
-            $menitNormal = ((float) $target->jam) * 60;
-            $orangNormal = (int) $target->orang;
-            $ratePerOrgPerMenit = ($menitNormal > 0 && $orangNormal > 0)
-                ? ((float) $target->target / $menitNormal) / $orangNormal
-                : 0.0;
-
-            $targetAdj = $ratePerOrgPerMenit * $totalMenit;
-            $capaian = $targetAdj > 0 ? ($g['hasil'] / $targetAdj) * 100 : 0.0;
-            $biayaPerUnit = (float) $target->potongan;
-
-            $sumCapaian += $capaian;
-            $sumNilai += $targetAdj * $biayaPerUnit;
-            $sumTargetAdj += $targetAdj;
-            $sumHasilBerTarget += $g['hasil'];
-            $jumlahGrupAda++;
+            $totalHasilSemua += $g['hasil'];
 
             $perUkuran[] = [
                 'ukuran' => $labelUkuran,
@@ -179,23 +141,61 @@ class SandingDataMap
                 'grade' => $labelGrade,
                 'kode_ukuran' => 'SANDING '.($g['tebal'] ?? '-').' '.$g['kategori'],
                 'hasil' => $g['hasil'],
-                'target' => $targetAdj,
-                'target_normal' => (float) $target->target,
-                'selisih' => $g['hasil'] - $targetAdj,
-                'capaian_persen' => $capaian,
-                'has_target' => true,
+                'target' => 0,
+                'selisih' => $g['hasil'],
+                'capaian_persen' => null,
+                'has_target' => false,
             ];
         }
 
-        /* 4. Potongan tim -> dibagi rata (Kolektif), kelipatan 500 */
+        $target = $resolver->resolve($idMesin, $shift);
+        $jumlahGrupAda = 0;
+        $sumCapaian = 0.0;
+        $sumTargetAdj = 0.0;
+        $targetNormal = null;
+        $orangNormalTarget = null;
+        $jamNormalTarget = null;
+        $sumHasilBerTarget = 0.0;
         $potonganTotalTim = 0.0;
         $potonganPerOrang = 0.0;
 
-        if ($jumlahGrupAda > 0 && $jumlahPekerja > 0) {
-            $nilaiSatuHariPenuh = $sumNilai / $jumlahGrupAda;
-            $kekuranganPersen = max(0, 100 - $sumCapaian) / 100;
-            $potonganTotalTim = $kekuranganPersen * $nilaiSatuHariPenuh;
-            $potonganPerOrang = round(($potonganTotalTim / $jumlahPekerja) / 500) * 500;
+        if (! $target) {
+            Log::warning('Target Sanding tidak ditemukan', [
+                'id_produksi' => $produksi->id,
+                'id_mesin' => $idMesin,
+                'shift' => $shift,
+            ]);
+        } else {
+            $menitNormal = ((float) $target->jam) * 60;
+            $orangNormal = (int) $target->orang;
+            $ratePerOrgPerMenit = ($menitNormal > 0 && $orangNormal > 0)
+                ? ((float) $target->target / $menitNormal) / $orangNormal
+                : 0.0;
+
+            $targetAdj = $ratePerOrgPerMenit * $totalMenit;
+            $capaian = $targetAdj > 0 ? ($totalHasilSemua / $targetAdj) * 100 : 0.0;
+            $biayaPerUnit = (float) $target->potongan;
+            $nilaiSatuHariPenuh = $targetAdj * $biayaPerUnit;
+
+            $sumCapaian = $capaian;
+            $sumTargetAdj = $targetAdj;
+            $targetNormal = (float) $target->target;
+            $orangNormalTarget = $orangNormal;
+            $jamNormalTarget = (float) $target->jam;
+            $sumHasilBerTarget = $totalHasilSemua;
+            $jumlahGrupAda = 1;
+
+            /* 4. Potongan tim -> dibagi rata (Kolektif), kelipatan 500.
+             * Potongan per orang dibulatkan dulu ke kelipatan 500, lalu
+             * potongan total tim dihitung ULANG dari angka yang sudah
+             * dibulatkan itu, supaya angka total (header/footer) dan
+             * angka per pekerja selalu konsisten. */
+            if ($jumlahPekerja > 0) {
+                $kekuranganPersen = max(0, 100 - $capaian) / 100;
+                $potonganTotalTimMentah = $kekuranganPersen * $nilaiSatuHariPenuh;
+                $potonganPerOrang = round(($potonganTotalTimMentah / $jumlahPekerja) / 500) * 500;
+                $potonganTotalTim = $potonganPerOrang * $jumlahPekerja;
+            }
         }
 
         $potonganPerPegawai = [];
@@ -216,6 +216,9 @@ class SandingDataMap
             'punya_target' => $jumlahGrupAda > 0,
             'capaian_global' => $sumCapaian,
             'target_total' => $sumTargetAdj,
+            'target_normal' => $targetNormal,
+            'target_normal_orang' => $orangNormalTarget,
+            'target_normal_jam' => $jamNormalTarget,
             'hasil_total' => $sumHasilBerTarget,
             'selisih_total' => $sumHasilBerTarget - $sumTargetAdj,
             'potongan_total_tim' => $potonganTotalTim,
