@@ -750,62 +750,87 @@ class TempatKayusTable
                     ->color('warning')
                     ->requiresConfirmation()
                     ->modalHeading('Sinkronasi Semua Lahan Baru')
-                    ->modalDescription('Apakah Anda yakin ingin memproses dan mensinkronisasikan semua data lahan baru (yang belum disinkronisasi) ke HPP Average Log?')
+                    ->modalDescription('Apakah Anda yakin ingin memproses dan mensinkronisasikan semua data lahan baru (yang belum disinkronisasi) ke HPP Average Log dan Tempat Kayu?')
                     ->modalSubmitActionLabel('Ya, Sinkronisasi')
                     ->action(function () {
-                        $lahanIds = \App\Models\Lahan::whereHas('detailTurusanKayus')
+                        // ── 1) Lahan yang belum punya summaries ──────────────────────────
+                        $lahanIdsTanpaSummary = \App\Models\Lahan::whereHas('detailTurusanKayus')
                             ->whereDoesntHave('summaries')
                             ->pluck('id');
-                            
-                        if ($lahanIds->isEmpty()) {
+
+                        // ── 2) Lahan yang belum punya tempat_kayu (cek independen) ──────
+                        $lahanIdsTanpaTempatKayu = \App\Models\Lahan::whereHas('detailTurusanKayus')
+                            ->whereDoesntHave('tempatKayu')
+                            ->pluck('id');
+
+                        // Gabungkan untuk cek apakah ada yang perlu disinkronisasi
+                        $semuaLahanIds = $lahanIdsTanpaSummary
+                            ->merge($lahanIdsTanpaTempatKayu)
+                            ->unique()
+                            ->values();
+
+                        if ($semuaLahanIds->isEmpty()) {
                             \Filament\Notifications\Notification::make()
-                                ->title('Tidak ada lahan baru yang perlu disinkronisasi.')
+                                ->title('Semua lahan sudah tersinkronisasi.')
                                 ->info()
                                 ->send();
                             return;
                         }
 
-                        $details = \App\Models\DetailTurusanKayu::whereIn('lahan_id', $lahanIds)->get();
-                        
-                        $grouped = $details->groupBy(
-                            fn($d) => "{$d->lahan_id}_{$d->jenis_kayu_id}_{$d->panjang}"
-                        );
-                        
-                        foreach ($grouped as $key => $rows) {
-                            $lahanId = (int) $rows->first()->lahan_id;
-                            $jenisKayuId = (int) $rows->first()->jenis_kayu_id;
-                            $panjang = (int) $rows->first()->panjang;
-                            
-                            \App\Models\HppAverageSummarie::firstOrCreate([
-                                'id_lahan'      => $lahanId,
-                                'id_jenis_kayu' => $jenisKayuId,
-                                'panjang'       => $panjang,
-                                'grade'         => null,
-                            ], [
-                                'stok_batang'   => 0,
-                                'stok_kubikasi' => 0.0,
-                                'nilai_stok'    => 0.0,
-                                'hpp_average'   => 0.0,
-                            ]);
+                        // ── 3) Buat HppAverageSummarie untuk lahan yang belum punya ──────
+                        $summaryCount = 0;
+                        if ($lahanIdsTanpaSummary->isNotEmpty()) {
+                            $details = \App\Models\DetailTurusanKayu::whereIn('lahan_id', $lahanIdsTanpaSummary)->get();
+
+                            $grouped = $details->groupBy(
+                                fn($d) => "{$d->lahan_id}_{$d->jenis_kayu_id}_{$d->panjang}"
+                            );
+
+                            foreach ($grouped as $rows) {
+                                $lahanId     = (int) $rows->first()->lahan_id;
+                                $jenisKayuId = (int) $rows->first()->jenis_kayu_id;
+                                $panjang     = (int) $rows->first()->panjang;
+
+                                \App\Models\HppAverageSummarie::firstOrCreate([
+                                    'id_lahan'      => $lahanId,
+                                    'id_jenis_kayu' => $jenisKayuId,
+                                    'panjang'       => $panjang,
+                                    'grade'         => null,
+                                ], [
+                                    'stok_batang'   => 0,
+                                    'stok_kubikasi' => 0.0,
+                                    'nilai_stok'    => 0.0,
+                                    'hpp_average'   => 0.0,
+                                ]);
+                                $summaryCount++;
+                            }
                         }
-                        
-                        foreach ($lahanIds as $lahanId) {
+
+                        // ── 4) Buat TempatKayu untuk semua lahan yang belum punya ────────
+                        $tempatKayuCount = 0;
+                        foreach ($semuaLahanIds as $lahanId) {
+                            // Skip jika sudah punya tempat_kayu
+                            if (\App\Models\TempatKayu::where('id_lahan', $lahanId)->exists()) {
+                                continue;
+                            }
+
                             $kayuMasuk = \App\Models\KayuMasuk::whereHas('detailTurusanKayus', function ($q) use ($lahanId) {
                                 $q->where('lahan_id', $lahanId);
                             })->latest()->first();
-                            
+
                             if ($kayuMasuk) {
-                                \App\Models\TempatKayu::firstOrCreate([
-                                    'id_lahan' => $lahanId,
+                                \App\Models\TempatKayu::create([
+                                    'id_lahan'      => $lahanId,
                                     'id_kayu_masuk' => $kayuMasuk->id,
-                                ], [
-                                    'jumlah_batang' => 0
+                                    'jumlah_batang' => 0,
                                 ]);
+                                $tempatKayuCount++;
                             }
                         }
-                        
+
                         \Filament\Notifications\Notification::make()
-                            ->title('Sinkronasi Lahan Baru Berhasil (0 Batang)')
+                            ->title('Sinkronasi Berhasil')
+                            ->body("Summary dibuat: {$summaryCount} | Tempat Kayu dibuat: {$tempatKayuCount} lahan")
                             ->success()
                             ->send();
                     }),
