@@ -10,6 +10,7 @@
     @if ($this->wajibAbsen)
         <div
             x-data
+            wire:poll.10s="cekUlang"
             x-init="
                 document.body.style.overflow = 'hidden';
                 document.documentElement.style.overflow = 'hidden';

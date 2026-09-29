@@ -123,7 +123,7 @@
                     @foreach($rows as $i => $row)
                     @php $diisi = (isset($row['stok_fisik']) && $row['stok_fisik'] !== null && $row['stok_fisik'] !== '')
                         || (isset($row['kubikasi_fisik']) && $row['kubikasi_fisik'] !== null && $row['kubikasi_fisik'] !== ''); @endphp
-                    <tr wire:key="row-{{ $row['_uid'] }}-{{ $row['_v'] ?? 0 }}" class="transition-colors {{ $diisi
+                    <tr wire:key="row-{{ $row['_uid'] }}-{{ $row['_v'] ?? 0 }}-{{ $i }}" class="transition-colors {{ $diisi
                         ? 'bg-green-50 hover:bg-green-100 dark:bg-green-900/10 dark:hover:bg-green-900/20'
                         : 'bg-white hover:bg-gray-50 dark:bg-gray-900/50 dark:hover:bg-gray-800/30' }}">
 
