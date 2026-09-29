@@ -247,6 +247,7 @@ class RencanaPegawaisTable
                 ->minValue(0.25)
                 ->step(0.25)
                 ->suffix('jam')
+                ->default(1)
                 ->required()
                 ->helperText('Contoh: 1 jam. Jam pulang di Repair berkurang 1 jam, dan 1 jam itu dicatat di produksi tujuan.'),
 

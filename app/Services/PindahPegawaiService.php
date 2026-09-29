@@ -25,7 +25,6 @@ use App\Models\PegawaiSanding;
 use App\Models\PegawaiSandingJoint;
 use App\Models\PegawaiTembeltriplek;
 use App\Models\PegawaiTerimaGudangSatu;
-use App\Models\PegawaiTurunKayu;
 use App\Models\PindahPegawaiLog;
 use App\Models\ProduksiGrajiBalken;
 use App\Models\ProduksiGrajitriplek;
@@ -50,7 +49,6 @@ use App\Models\ProduksiKedi;
 use App\Models\DetailPegawaiKedi;
 use App\Models\RencanaPegawai;
 use App\Models\RencanaPegawaiDempul;
-use App\Models\TurunKayu;
 use App\Models\pegawai_guellotine;
 use App\Models\produksi_guellotine;
 use Carbon\Carbon;
@@ -95,7 +93,7 @@ class PindahPegawaiService
      *  - tugas   : 'required' | 'optional' | null (lini tidak punya kolom tugas)
      *  - tugas_default : dipakai kalau tugas dikosongkan
      *  - ijin_kosong   : true bila kolom ijin NOT NULL (diisi string kosong)
-     *  - mesin   : true bila baris pegawai butuh id_mesin (Hotpress)
+     *  - mesin   : true bila baris pegawai butuh id_mesin (saat ini tidak ada lini yang memakai)
      *  - shift   : true bila produksi per tanggal + shift (form menampilkan pilihan Shift)
      *  - pilih   : label pilihan produksi yang SELALU tampil (lini per mesin: Rotary, Sanding, Kedi)
      *  - scope   : closure(query, Carbon $tgl) untuk aturan tanggal khusus (Kedi: tanggal bongkar)
@@ -114,7 +112,9 @@ class PindahPegawaiService
             'ket' => 'ket',
             'tanggal' => 'tanggal_produksi',
             'tugas' => 'required',
-            'tugas_default' => null,
+            // Default 'PINDAHAN' supaya field Nomor Meja/Tugas tidak lagi wajib ditanyakan
+            // di form pindah pegawai, kecuali lini itu meng-override tugas_default sendiri.
+            'tugas_default' => 'PINDAHAN',
             'ijin_kosong' => false,
             'mesin' => false,
             'shift' => false,
@@ -149,7 +149,10 @@ class PindahPegawaiService
                 'fk' => 'id_produksi_hp',
                 'produksi' => ProduksiHp::class,
                 'shift' => true,
-                'mesin' => true,
+                // Mesin & nomor meja tidak ditanyakan lagi. Kolom `tugas` di detail_pegawai_hp
+                // NOT NULL, jadi diisi otomatis; id_mesin dibiarkan kosong (kolom sudah nullable).
+                'mesin' => false,
+                'tugas_default' => 'PINDAHAN',
                 'label_produksi' => $shift,
             ]),
             'kedi' => $t([
@@ -179,17 +182,6 @@ class PindahPegawaiService
                 'tugas' => null,
                 'pilih' => 'Mesin Tujuan',
                 'label_produksi' => $mesin,
-            ]),
-            'turun_kayu' => $t([
-                'label' => 'Turun Kayu',
-                'model' => PegawaiTurunKayu::class,
-                'fk' => 'id_turun_kayu',
-                'masuk' => 'jam_masuk',
-                'pulang' => 'jam_pulang',
-                'ijin' => 'izin',
-                'produksi' => TurunKayu::class,
-                'tanggal' => 'tanggal',
-                'tugas' => null,
             ]),
             'graji_balken' => $t([
                 'label' => 'Graji Balken',
@@ -317,7 +309,7 @@ class PindahPegawaiService
                 'produksi' => ProduksiPotSiku::class,
             ]),
             'palet' => $t([
-                'label' => 'Palet',
+                'label' => 'Produksi Palet',
                 'model' => PegawaiPalet::class,
                 'fk' => 'id_produksi_palet',
                 'masuk' => 'jam_masuk',
@@ -329,7 +321,7 @@ class PindahPegawaiService
                 'tugas' => null,
             ]),
             'terima_gudang_satu' => $t([
-                'label' => 'Terima Gudang Satu',
+                'label' => 'Samping Plywood',
                 'model' => PegawaiTerimaGudangSatu::class,
                 'fk' => 'id_produksi_terima_gudang_satu',
                 'produksi' => ProduksiTerimaGudangSatu::class,
@@ -377,7 +369,7 @@ class PindahPegawaiService
             ->all();
     }
 
-    /** Pilihan mesin untuk lini yang butuh id_mesin (Hotpress). */
+    /** Pilihan mesin Hotpress. Tidak dipakai form pindah lagi, dibiarkan untuk kebutuhan lain. */
     public static function opsiMesinHotpress(): array
     {
         return Mesin::query()->where('kategori_mesin_id', 9)->orderBy('nama_mesin')->pluck('nama_mesin', 'id')->all();
