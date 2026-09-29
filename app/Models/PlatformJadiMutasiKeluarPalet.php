@@ -15,6 +15,9 @@ class PlatformJadiMutasiKeluarPalet extends Model
         'jumlah_dikembalikan',
         'diterima_by',
         'diterima_at',
+        'ditolak_by',
+        'alasan_tolak',
+        'ditolak_at',
     ];
 
     public function mutasiKeluar()
