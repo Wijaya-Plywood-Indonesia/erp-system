@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\PegawaiPotAfJoints\Tables;
 
 use Filament\Actions\Action;
+use App\Filament\Support\PindahPegawaiTableActions;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -17,6 +18,10 @@ class PegawaiPotAfJointsTable
 {
     public static function configure(Table $table): Table
     {
+        // Tanggal produksi yang sedang dibuka, dipakai fitur Pindah Pegawai untuk
+        // mencari/membuat produksi tujuan pada tanggal yang sama.
+        $tanggalProduksi = fn ($livewire) => $livewire->getOwnerRecord()->tanggal_produksi;
+
         return $table
             ->columns([
                 TextColumn::make('pegawai.nama_pegawai')
@@ -100,9 +105,12 @@ class PegawaiPotAfJointsTable
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
+                PindahPegawaiTableActions::recordAction('pot_af_joint', $tanggalProduksi),
+                PindahPegawaiTableActions::batalAction('pot_af_joint'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('pot_af_joint', $tanggalProduksi),
                     DeleteBulkAction::make(),
                 ]),
             ]);
