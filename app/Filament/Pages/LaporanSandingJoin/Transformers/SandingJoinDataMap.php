@@ -11,7 +11,13 @@ use Illuminate\Support\Facades\Log;
 
 class SandingJoinDataMap
 {
-    private const ISTIRAHAT_MENIT = 60;
+    /**
+     * Jam istirahat pabrik (tetap): 12:00 - 13:00.
+     * Dipotong dari jam kerja HANYA jika rentang masuk-pulang pegawai
+     * benar-benar beririsan dengan jam istirahat ini (sama dengan Join).
+     */
+    private const ISTIRAHAT_MULAI   = '12:00';
+    private const ISTIRAHAT_SELESAI = '13:00';
 
     public static function make($collection): array
     {
@@ -26,6 +32,7 @@ class SandingJoinDataMap
             $jumlahPekerja    = $produksi->pegawaiSandingJoint->count();
             $pekerjaInput     = [];
             $totalGajiTim     = 0;
+            $jamAktualPerOrang = [];
 
             foreach ($produksi->pegawaiSandingJoint as $pj) {
                 if (!$pj->pegawai) continue;
@@ -34,14 +41,10 @@ class SandingJoinDataMap
 
                 if (!$pj->masuk || !$pj->pulang) continue;
 
-                $masuk  = Carbon::parse($pj->masuk);
-                $pulang = Carbon::parse($pj->pulang);
-                if ($pulang->lessThan($masuk)) {
-                    $pulang->addDay();
-                }
-
-                $grossMenit = $masuk->diffInMinutes($pulang);
-                $netMenit   = max(0, $grossMenit - self::ISTIRAHAT_MENIT);
+                $netMenit = self::hitungMenitKerjaBersih(
+                    Carbon::parse($pj->masuk),
+                    Carbon::parse($pj->pulang)
+                );
                 $totalPersonMenit += $netMenit;
 
                 $idPegawai = (string) ($pj->id_pegawai ?? $pj->pegawai->id);
@@ -49,6 +52,7 @@ class SandingJoinDataMap
                     idPegawai: $idPegawai,
                     menitKerja: (float) $netMenit,
                 );
+                $jamAktualPerOrang[$idPegawai] = round($netMenit / 60, 2);
             }
 
             $avgMenitPerOrang = $jumlahPekerja > 0 ? $totalPersonMenit / $jumlahPekerja : 0;
@@ -108,6 +112,7 @@ class SandingJoinDataMap
                         'kw'             => $kw,
                         'hasil'          => $hasilGrup,
                         'target'         => 0,
+                        'selisih'        => $hasilGrup,
                         'capaian_persen' => null,
                         'has_target'     => false,
                     ];
@@ -115,10 +120,15 @@ class SandingJoinDataMap
                 }
 
                 $target             = $rateInfo['target'];
+                $ratePerOrgPerMenit = $rateInfo['ratePerOrgPerMenit'];
                 $biayaPerUnit       = (float) $target->potongan;
                 $targetNormal       = (float) $target->target;
-                $capaian            = $targetNormal > 0 ? ($hasilGrup / $targetNormal) * 100 : 100.0;
-                $nilaiTarget        = $targetNormal * $biayaPerUnit;
+
+                // ADJUSTED ke total tenaga kerja tim hari itu (dipakai SEKALI per ukuran),
+                // dibulatkan karena satuannya lembar utuh. Sama dengan Join.
+                $targetAdjusted     = round($ratePerOrgPerMenit * $jumlahPekerja * $avgMenitPerOrang);
+                $capaian            = $targetAdjusted > 0 ? ($hasilGrup / $targetAdjusted) * 100 : 100.0;
+                $nilaiTarget        = $targetAdjusted * $biayaPerUnit;
 
                 $sumCapaianPersen += $capaian;
                 $sumNilaiTarget   += $nilaiTarget;
@@ -131,8 +141,9 @@ class SandingJoinDataMap
                     'jenis_kayu'     => $jenisKayuModel->nama_kayu ?? '-',
                     'kw'             => $kw,
                     'hasil'          => $hasilGrup,
-                    'target'         => $targetNormal,
-                    'selisih'        => $hasilGrup - $targetNormal,
+                    'target'         => $targetAdjusted,
+                    'target_normal'  => $targetNormal,
+                    'selisih'        => $hasilGrup - $targetAdjusted,
                     'capaian_persen' => $capaian,
                     'has_target'     => true,
                 ];
@@ -160,6 +171,7 @@ class SandingJoinDataMap
                     'kw'                     => $grup['kw'],
                     'hasil'                  => $grup['hasil'],
                     'target'                 => $grup['target'],
+                    'target_normal'          => $grup['target_normal'] ?? null,
                     'selisih'                => $grup['selisih'] ?? ($grup['hasil'] - $grup['target']),
                     'capaian_persen'         => $grup['capaian_persen'],
                     'jam_aktual'             => $jamAktualRata,
@@ -183,6 +195,7 @@ class SandingJoinDataMap
                     'nama'       => $pj->pegawai->nama_pegawai ?? '-',
                     'jam_masuk'  => $pj->masuk ? Carbon::parse($pj->masuk)->format('H:i') : '-',
                     'jam_pulang' => $pj->pulang ? Carbon::parse($pj->pulang)->format('H:i') : '-',
+                    'jam_aktual_bersih' => $jamAktualPerOrang[$idPegawai] ?? null,
                     'ijin'       => $pj->ijin ?? '-',
                     'keterangan' => $pj->ket ?? '-',
                     'pot_target' => $potonganPerPegawai[$idPegawai] ?? 0,
@@ -194,5 +207,31 @@ class SandingJoinDataMap
             'per_ukuran' => array_values($result),
             'pekerja'    => $daftarPekerja ?? [],
         ];
+    }
+
+    /**
+     * Menit kerja BERSIH: (pulang - masuk) dikurangi irisan dengan jam istirahat.
+     * Kalau pekerja pulang sebelum istirahat / masuk sesudah istirahat, tidak ada potongan.
+     */
+    private static function hitungMenitKerjaBersih(Carbon $masuk, Carbon $pulang): int
+    {
+        if ($pulang->lessThan($masuk)) {
+            $pulang = $pulang->copy()->addDay();
+        }
+
+        $totalMenit = $masuk->diffInMinutes($pulang);
+
+        $istirahatMulai   = Carbon::parse($masuk->format('Y-m-d') . ' ' . self::ISTIRAHAT_MULAI);
+        $istirahatSelesai = Carbon::parse($masuk->format('Y-m-d') . ' ' . self::ISTIRAHAT_SELESAI);
+
+        $overlapMulai   = $masuk->greaterThan($istirahatMulai) ? $masuk : $istirahatMulai;
+        $overlapSelesai = $pulang->lessThan($istirahatSelesai) ? $pulang : $istirahatSelesai;
+
+        $menitIstirahatTerpotong = 0;
+        if ($overlapSelesai->greaterThan($overlapMulai)) {
+            $menitIstirahatTerpotong = $overlapMulai->diffInMinutes($overlapSelesai);
+        }
+
+        return max(0, (int) round($totalMenit - $menitIstirahatTerpotong));
     }
 }

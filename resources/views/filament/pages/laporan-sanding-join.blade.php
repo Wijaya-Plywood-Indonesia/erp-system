@@ -48,7 +48,7 @@
             <div class="flex items-center gap-2 flex-wrap">
                 <span class="w-2.5 h-2.5 rounded-full {{ $isSuccessGlobal ? 'bg-emerald-500' : 'bg-red-500' }}"></span>
                 <span>
-                    Capaian GLOBAL tim (jumlah persen semua ukuran hari ini):
+                    Capaian GLOBAL tim (jumlah persen semua ukuran hari ini, basis: target ADJUSTED ke total jam kerja tim):
                     <strong class="font-bold text-base {{ $isSuccessGlobal ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400' }}">
                         {{ number_format($capaianGlobal, 1, ',', '.') }}%
                     </strong>
@@ -110,7 +110,7 @@
                         <table class="w-full text-sm border-collapse border border-zinc-300 dark:border-zinc-600">
                             <thead>
                                 <tr>
-                                    <th colspan="7" class="p-3 text-lg font-bold text-center bg-zinc-700 text-white uppercase tracking-wider">
+                                    <th colspan="8" class="p-3 text-lg font-bold text-center bg-zinc-700 text-white uppercase tracking-wider">
                                         DATA PEKERJA SANDING JOINT
                                     </th>
                                 </tr>
@@ -119,6 +119,7 @@
                                     <th class="p-2 text-left w-40">Nama</th>
                                     <th class="p-2 text-center w-20">Masuk</th>
                                     <th class="p-2 text-center w-20">Pulang</th>
+                                    <th class="p-2 text-center w-24">Jam Aktual</th>
                                     <th class="p-2 text-center w-16">Ijin</th>
                                     <th class="p-2 text-right w-36">Potongan Target</th>
                                     <th class="p-2 text-left">Keterangan</th>
@@ -132,6 +133,7 @@
                                     <td class="p-2 text-left text-xs border-r border-zinc-300 dark:border-zinc-700 font-medium text-zinc-900 dark:text-zinc-100">{{ $p["nama"] ?? "-" }}</td>
                                     <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">{{ $p["jam_masuk"] ?? "-" }}</td>
                                     <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">{{ $p["jam_pulang"] ?? "-" }}</td>
+                                    <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 font-mono text-zinc-700 dark:text-zinc-300">{{ isset($p["jam_aktual_bersih"]) ? number_format($p["jam_aktual_bersih"], 2, ',', '.') . ' jam' : '-' }}</td>
                                     <td class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-amber-500 font-medium">{{ $p["ijin"] ?? "-" }}</td>
                                     <td class="p-2 text-right text-xs border-r border-zinc-300 dark:border-zinc-700 font-bold font-mono {{ $potTarget > 0 ? 'text-red-600 dark:text-red-400' : 'text-zinc-600 dark:text-zinc-400' }}">
                                         {{ $potTarget > 0 ? 'Rp ' . number_format($potTarget, 0, ',', '.') : '-' }}
@@ -140,7 +142,7 @@
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="7" class="p-4 text-center text-zinc-500 dark:text-zinc-400 text-xs">
+                                    <td colspan="8" class="p-4 text-center text-zinc-500 dark:text-zinc-400 text-xs">
                                         Tidak ada data pekerja untuk ukuran ini.
                                     </td>
                                 </tr>
@@ -148,14 +150,17 @@
                             </tbody>
                             <tfoot class="bg-zinc-100 dark:bg-zinc-800 border-t-2 border-zinc-300 dark:border-zinc-600">
                                 <tr>
-                                    <td colspan="7" class="p-3 text-center text-xs text-zinc-600 dark:text-zinc-400 space-x-3">
+                                    <td colspan="8" class="p-3 text-center text-xs text-zinc-600 dark:text-zinc-400 space-x-3">
                                         <span class="font-medium">Pekerja:</span>
                                         <strong class="text-zinc-900 dark:text-zinc-100">{{ count($pekerjaList) }}</strong>
 
                                         <span class="text-zinc-400">|</span>
 
-                                        <span class="font-medium">Target:</span>
+                                        <span class="font-medium">Target (Adjusted):</span>
                                         <strong class="font-mono text-zinc-900 dark:text-zinc-100">{{ number_format($target, 0, ',', '.') }}</strong>
+                                        @if (isset($data['target_normal']))
+                                            <span class="text-[10px] text-zinc-500">(normal: {{ number_format($data['target_normal'], 0, ',', '.') }})</span>
+                                        @endif
 
                                         <span class="text-zinc-400">|</span>
 
