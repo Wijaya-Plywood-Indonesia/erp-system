@@ -2,10 +2,13 @@
 
 namespace App\Filament\Resources\DetailBarangDikerjakans\Tables;
 
+use App\Models\BarangSetengahJadiHp;
+use App\Models\DetailBarangDikerjakan;
 use App\Models\JenisKayu;
 use App\Models\SerahTerimaGudangSatu;
 use App\Services\StokGudangSatuService;
 use App\Services\StokPlywoodSiapJualService;
+use App\Services\TerimaGudangSatuService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -13,13 +16,18 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -125,6 +133,186 @@ class DetailBarangDikerjakansTable
             |=====================================================
             */
             ->headerActions([
+
+                                // 🌟 Tombol pengembalian sisa bahan nyusup ke Gudang Satu.
+                //
+                // Barang yang dikembalikan dipilih dari PALET MODAL
+                // (SerahTerimaGudangSatu dengan tujuan='nyusup') — sumber
+                // yang sama persis dipakai Select "Pilih Palet Modal" di
+                // form Create/Edit Detail Barang Dikerjakan. Sisa dihitung
+                // oleh accessor SerahTerimaGudangSatu::sisa (qtyAsli -
+                // total modal terpakai - jumlah_dikembalikan), persis pola
+                // ledger per-palet yang dipakai Hotpress.
+                Action::make('kembalikanKeGudang')
+                    ->label('Kembalikan ke Gudang')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->color('success')
+                    ->modalHeading('Kembalikan Sisa Bahan ke Gudang')
+                    ->modalDescription(
+                        'Pilih bahan yang masih memiliki sisa dan tentukan jumlah yang akan dikembalikan ke Gudang Satu.'
+                    )
+                    ->modalSubmitActionLabel('Kembalikan')
+                    ->hidden(
+                        fn ($livewire) =>
+                            $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    )
+                    ->form(function ($livewire) {
+                        $ownerId = $livewire->ownerRecord?->id;
+
+                        return [
+                            Select::make('id_serah_terima_gudang_satu')
+                    ->label('Bahan')
+                    ->required()
+                    ->live()
+                    ->searchable()
+                    ->helperText(
+                        'Pilih bahan yang masih memiliki sisa untuk dikembalikan ke Gudang Satu.'
+                    )
+                    ->options(function () use ($ownerId) {
+                        if (! $ownerId) {
+                            return [];
+                        }
+
+                        // Ambil palet modal yang benar-benar dipakai di production ini saja
+                        $idSerahTerimaTerpakai = DetailBarangDikerjakan::query()
+                            ->whereHas('pegawaiNyusup', function ($q) use ($ownerId) {
+                                $q->where('id_produksi_nyusup', $ownerId);
+                            })
+                            ->whereNotNull('id_serah_terima_gudang_satu')
+                            ->pluck('id_serah_terima_gudang_satu')
+                            ->unique();
+
+                        if ($idSerahTerimaTerpakai->isEmpty()) {
+                            return [];
+                        }
+
+                        return SerahTerimaGudangSatu::query()
+                            ->whereIn('id', $idSerahTerimaTerpakai)
+                            ->where('diterima_oleh', '!=', '-')
+                            ->where('tujuan', 'nyusup')
+                            ->with([
+                                'hasilPilihPlywood.barangSetengahJadiHp',
+                                'hasilTerimaGudangSatu',
+                                'hasilNyusup',
+                                'triplekMutasiKeluar',
+                            ])
+                            ->get()
+                            ->filter(fn ($item) => $item->sisa > 0)
+                            ->mapWithKeys(function ($item) {
+                                $sisa = rtrim(rtrim(number_format($item->sisa, 2, '.', ''), '0'), '.');
+
+                                $b = $item->barangSetengahJadi;
+                                $ukuran = $b?->ukuran?->nama_ukuran ?? '-';
+                                $grade  = $b?->grade?->nama_grade ?? '-';
+                                $jenis  = $b?->jenisBarang?->nama_jenis_barang ?? '-';
+                                $noPalet = $item->hasilNyusup?->no_palet ?? '-';
+
+                                return [
+                                    $item->id =>
+                                        "Palet {$noPalet} | {$jenis} | {$ukuran} | Grade {$grade} | Sisa {$sisa} Lbr",
+                                ];
+                            })
+                            ->toArray();
+                        })
+                ->afterStateUpdated(
+                    function ($state, callable $set) {
+                        if (! $state) {
+                            $set('maks_pengembalian', null);
+                            return;
+                        }
+                        $serah = SerahTerimaGudangSatu::find($state);
+                        $set('maks_pengembalian', $serah?->sisa ?? 0);
+                    }
+                ),
+
+            TextInput::make('jumlah_kembali')
+                ->label('Jumlah Dikembalikan (Lembar)')
+                ->numeric()
+                ->required()
+                ->minValue(1)
+                ->helperText(
+                    fn (Get $get) =>
+                        $get('maks_pengembalian')
+                            ? 'Maks. bisa dikembalikan: ' .
+                                $get('maks_pengembalian') .
+                                ' lembar.'
+                            : 'Pilih bahan terlebih dahulu.'
+                )
+                ->rules([
+                    fn (Get $get) =>
+                        function (
+                            string $attribute,
+                            $value,
+                            \Closure $fail
+                        ) use ($get) {
+                            $maks =
+                                (float) (
+                                    $get('maks_pengembalian')
+                                    ?? 0
+                                );
+
+                            if (
+                                (float) $value > $maks
+                            ) {
+                                $fail(
+                                    "Jumlah melebihi sisa yang tersedia ({$maks} lembar)."
+                                );
+                            }
+                        },
+                ]),
+
+            Hidden::make('maks_pengembalian'),
+        ];
+    })
+    ->action(function (array $data, $livewire) {
+        $idSerah =
+            $data['id_serah_terima_gudang_satu']
+            ?? null;
+
+        if (! $idSerah) {
+            Notification::make()
+                ->title('Gagal Mengembalikan')
+                ->body('Bahan belum dipilih.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        try {
+            $serah =
+                SerahTerimaGudangSatu::findOrFail(
+                    $idSerah
+                );
+
+            $jumlah =
+                (float) $data['jumlah_kembali'];
+
+            $produksi =
+                $livewire->ownerRecord;
+
+            app(TerimaGudangSatuService::class)
+                ->kembaliDariNyusup($serah, $jumlah);
+
+            Notification::make()
+                ->title(
+                    'Sisa bahan berhasil dikembalikan ke Gudang'
+                )
+                ->body(
+                    "Sebanyak {$jumlah} lembar berhasil dikembalikan."
+                )
+                ->success()
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Gagal Mengembalikan')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }),
+
+
                 CreateAction::make()
                     ->hidden(
                         fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
@@ -137,7 +325,6 @@ class DetailBarangDikerjakansTable
             |=====================================================
             */
             ->recordActions([
-
                 // 🚚 TOMBOL SERAH
                 Action::make('serah')
                     ->label('Serah')
@@ -168,15 +355,12 @@ class DetailBarangDikerjakansTable
                             Placeholder::make('barang_detail')
                                 ->label('Barang')
                                 ->content("{$kategori} | {$ukuran} | {$grade} | {$jenis}"),
-
                             Placeholder::make('modal_detail')
                                 ->label('Modal')
                                 ->content((string) $record->modal),
-
                             Placeholder::make('hasil_detail')
                                 ->label('Hasil')
                                 ->content((string) $record->hasil),
-
                             Radio::make('serah_ke')
                                 ->label('Serah Ke')
                                 ->options([
@@ -186,7 +370,6 @@ class DetailBarangDikerjakansTable
                                 ->required()
                                 ->default('gudang_satu')
                                 ->live(),
-
                             // 🔒 Konfirmasi ganda — hanya wajib & tampil saat tujuan "Gudang",
                             // karena aksi ini auto-terima & langsung mengubah stok (tidak bisa dibatalkan)
                             Placeholder::make('warning')
@@ -206,9 +389,7 @@ class DetailBarangDikerjakansTable
                         ];
                     })
                     ->action(function ($record, array $data) {
-
                         if ($data['serah_ke'] === 'gudang_satu') {
-
                             SerahTerimaGudangSatu::create([
                                 'id_hasil_pilih_plywood' => null,
                                 'id_produksi_terima_gudang_satu' => null,
@@ -238,30 +419,22 @@ class DetailBarangDikerjakansTable
 
                             try {
                                 DB::transaction(function () use ($record) {
-
                                     $b = $record->barangSetengahJadiHp;
-
                                     if (! $b) {
                                         throw new \RuntimeException('Data barang setengah jadi tidak ditemukan.');
                                     }
-
                                     $panjang = $b->ukuran?->panjang ?? 0;
                                     $lebar = $b->ukuran?->lebar ?? 0;
                                     $tebal = $b->ukuran?->tebal ?? 0;
                                     $kwGrade = $b->grade?->nama_grade ?? '-';
-
                                     $namaJenisBarang = $b->jenisBarang?->nama_jenis_barang;
-
                                     $idJenisKayu = JenisKayu::where('nama_kayu', $namaJenisBarang)
                                         ->value('id');
-
                                     if (! $idJenisKayu) {
                                         throw new \RuntimeException("Jenis kayu \"{$namaJenisBarang}\" tidak ditemukan di master jenis kayu.");
                                     }
-
                                     $lembar = $record->hasil;
                                     $penyerah = auth()->user()?->name ?? '-';
-
                                     // Hitung kubikasi (m3). Sesuaikan rumus ini jika berbeda
                                     // dengan rumus yang dipakai di StokPlywoodSiapJualService.
                                     $kubikasi = ($panjang * $lebar * $tebal * $lembar) / 10_000_000_000;
@@ -366,4 +539,5 @@ class DetailBarangDikerjakansTable
             */
             ->defaultGroup('id_pegawai_nyusup');
     }
+    
 }

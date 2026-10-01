@@ -20,11 +20,16 @@ class SerahTerimaGudangSatu extends Model
         'id_hasil_terima_gudang_satu',
         'id_triplek_mutasi_keluar',
         'id_produksi_nyusup',
-        'id_hasil_nyusup', // 🆕
+        'id_hasil_nyusup',
         'tujuan',
         'diserahkan_oleh',
         'diterima_oleh',
         'status',
+        'jumlah_dikembalikan',
+    ];
+
+    protected $casts = [
+        'jumlah_dikembalikan' => 'decimal:2',
     ];
 
     // ─────────────────────────────────────────────
@@ -33,33 +38,52 @@ class SerahTerimaGudangSatu extends Model
 
     public function hasilPilihPlywood(): BelongsTo
     {
-        return $this->belongsTo(HasilPilihPlywood::class, 'id_hasil_pilih_plywood');
+        return $this->belongsTo(
+            HasilPilihPlywood::class,
+            'id_hasil_pilih_plywood'
+        );
     }
 
     public function produksiTerimaGudangSatu(): BelongsTo
     {
-        return $this->belongsTo(ProduksiTerimaGudangSatu::class, 'id_produksi_terima_gudang_satu');
+        return $this->belongsTo(
+            ProduksiTerimaGudangSatu::class,
+            'id_produksi_terima_gudang_satu'
+        );
     }
 
     public function hasilTerimaGudangSatu(): BelongsTo
     {
-        return $this->belongsTo(HasilTerimaGudangSatu::class, 'id_hasil_terima_gudang_satu');
+        return $this->belongsTo(
+            HasilTerimaGudangSatu::class,
+            'id_hasil_terima_gudang_satu'
+        );
     }
 
     public function produksiNyusup(): BelongsTo
     {
-        return $this->belongsTo(ProduksiNyusup::class, 'id_produksi_nyusup');
+        return $this->belongsTo(
+            ProduksiNyusup::class,
+            'id_produksi_nyusup'
+        );
     }
 
     public function triplekMutasiKeluar(): BelongsTo
     {
-        return $this->belongsTo(TriplekJadiMutasiKeluar::class, 'id_triplek_mutasi_keluar');
+        return $this->belongsTo(
+            TriplekJadiMutasiKeluar::class,
+            'id_triplek_mutasi_keluar'
+        );
     }
 
-    // 🆕 Relasi ke DetailBarangDikerjakan (sumber barang dari jalur nyusup)
+    // Relasi ke DetailBarangDikerjakan
+    // (sumber barang dari jalur nyusup)
     public function hasilNyusup(): BelongsTo
     {
-        return $this->belongsTo(DetailBarangDikerjakan::class, 'id_hasil_nyusup');
+        return $this->belongsTo(
+            DetailBarangDikerjakan::class,
+            'id_hasil_nyusup'
+        );
     }
 
     // ─────────────────────────────────────────────
@@ -67,9 +91,9 @@ class SerahTerimaGudangSatu extends Model
     // ─────────────────────────────────────────────
 
     /**
-     * Sumber barang aktual: dari Pilih Plywood, Hasil Terima Gudang Satu,
-     * ATAU dari Hasil Nyusup, tergantung mana yang terisi
-     * (mutually exclusive tergantung `tujuan`).
+     * Sumber barang aktual:
+     * dari Pilih Plywood, Hasil Terima Gudang Satu,
+     * atau dari Hasil Nyusup.
      */
     public function getSumberAttribute()
     {
@@ -80,9 +104,10 @@ class SerahTerimaGudangSatu extends Model
 
     /**
      * Barang setengah jadi terkait.
+     *
      * - Pilih Plywood: pakai relasi barangSetengahJadiHp.
-     * - Hasil Terima Gudang Satu: objek itu sendiri (grade/jenisBarang/ukuran langsung).
-     * - Hasil Nyusup (DetailBarangDikerjakan): pakai relasi barangSetengahJadiHp miliknya.
+     * - Hasil Terima Gudang Satu: objek itu sendiri.
+     * - Hasil Nyusup: pakai relasi barangSetengahJadiHp.
      * - Triplek Jadi: cari/buat otomatis.
      */
     public function getBarangSetengahJadiAttribute()
@@ -97,15 +122,28 @@ class SerahTerimaGudangSatu extends Model
 
         if ($this->id_triplek_mutasi_keluar !== null) {
             $m = $this->triplekMutasiKeluar;
+
             if ($m) {
-                $ukuran = Ukuran::where('panjang', $m->panjang)
+                $ukuran = Ukuran::where(
+                    'panjang',
+                    $m->panjang
+                )
                     ->where('lebar', $m->lebar)
                     ->where('tebal', $m->tebal)
                     ->first();
-                $jenisBarang = JenisBarang::where('nama_jenis_barang', $m->jenisKayu?->nama_kayu)->first();
+
+                $jenisBarang = JenisBarang::where(
+                    'nama_jenis_barang',
+                    $m->jenisKayu?->nama_kayu
+                )->first();
+
                 $grade = $m->kw_grade
-                    ? Grade::where('nama_grade', $m->kw_grade)->first()
+                    ? Grade::where(
+                        'nama_grade',
+                        $m->kw_grade
+                    )->first()
                     : null;
+
                 if ($jenisBarang && $ukuran) {
                     return BarangSetengahJadiHp::firstOrCreate([
                         'id_jenis_barang' => $jenisBarang->id,
@@ -116,17 +154,19 @@ class SerahTerimaGudangSatu extends Model
             }
         }
 
-        // HasilTerimaGudangSatu tidak punya barangSetengahJadiHp,
-        // tapi punya grade/jenisBarang/ukuran langsung.
+        // HasilTerimaGudangSatu tidak punya
+        // barangSetengahJadiHp, tetapi punya
+        // grade/jenisBarang/ukuran langsung.
         return $this->hasilTerimaGudangSatu;
     }
 
     /**
      * Jumlah/isi barang.
-     * - Triplek mutasi keluar: pakai `stok_lembar`.
-     * - Pilih Plywood: pakai `jumlah_bagus`.
-     * - Hasil Nyusup (DetailBarangDikerjakan): pakai `modal`.
-     * - Hasil Terima Gudang Satu: pakai `jumlah`.
+     *
+     * - Triplek mutasi keluar: pakai stok_lembar.
+     * - Pilih Plywood: pakai jumlah_bagus.
+     * - Hasil Nyusup: pakai modal.
+     * - Hasil Terima Gudang Satu: pakai jumlah.
      */
     public function getJumlahAttribute()
     {
@@ -152,7 +192,9 @@ class SerahTerimaGudangSatu extends Model
 
     public function getLabelStatusAttribute(): string
     {
-        return $this->isMenunggu() ? 'Menunggu' : 'Diterima';
+        return $this->isMenunggu()
+            ? 'Menunggu'
+            : 'Diterima';
     }
 
     public function getQtyAsliAttribute(): float
@@ -161,19 +203,37 @@ class SerahTerimaGudangSatu extends Model
     }
 
     /**
-     * Sisa = qty asli dikurangi total pemakaian.
-     * Pemakaian bisa berasal dari 2 sumber tergantung tujuan:
-     * - BahanTerimaGudangSatu (jalur produksi biasa)
-     * - DetailBarangDikerjakan (jalur nyusup, pakai kolom `modal`)
+     * Sisa barang yang masih dapat dikembalikan.
+     *
+     * Sisa dihitung dari:
+     *
+     * Qty asli
+     * - total pemakaian bahan
+     * - total pemakaian nyusup
+     * - total yang sudah dikembalikan ke gudang
      */
     public function getSisaAttribute(): float
     {
-        $terpakaiBahan = BahanTerimaGudangSatu::where('id_serah_terima_gudang_satu', $this->id)
-            ->sum('jumlah');
+        $terpakaiBahan = BahanTerimaGudangSatu::where(
+            'id_serah_terima_gudang_satu',
+            $this->id
+        )->sum('jumlah');
 
-        $terpakaiNyusup = DetailBarangDikerjakan::where('id_serah_terima_gudang_satu', $this->id)
-            ->sum('modal');
+        $terpakaiNyusup = DetailBarangDikerjakan::where(
+            'id_serah_terima_gudang_satu',
+            $this->id
+        )->sum('modal');
 
-        return $this->qtyAsli - (float) $terpakaiBahan - (float) $terpakaiNyusup;
+        $jumlahDikembalikan = (float) (
+            $this->jumlah_dikembalikan ?? 0
+        );
+
+        return max(
+            0,
+            $this->qtyAsli
+            - (float) $terpakaiBahan
+            - (float) $terpakaiNyusup
+            - $jumlahDikembalikan
+        );
     }
 }
