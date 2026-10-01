@@ -19,16 +19,25 @@ class ProduksiGrajiTriplekForm
                     ->displayFormat('d F Y')
                     ->required()
 
-                    // ✅ VALIDASI TANGGAL TIDAK BOLEH SAMA
+                    // ✅ VALIDASI TANGGAL TIDAK BOLEH SAMA UNTUK SHIFT DAN STATUS YANG SAMA
                     ->rules([
-                        function () {
-                            return function (string $attribute, $value, $fail) {
-                                $exists = ProduksiGrajitriplek::whereDate('tanggal_produksi', $value)->exists();
+                        fn (\Filament\Schemas\Components\Utilities\Get $get, ?\Illuminate\Database\Eloquent\Model $record) => function (string $attribute, $value, $fail) use ($get, $record) {
+                            $shift = $get('shift');
+                            $status = $get('status');
 
-                                if ($exists) {
-                                    $fail('Tanggal ini sudah digunakan. Pilih tanggal lain.');
+                            if ($shift && $status) {
+                                $query = \App\Models\ProduksiGrajitriplek::whereDate('tanggal_produksi', $value)
+                                    ->where('shift', $shift)
+                                    ->where('status', $status);
+
+                                if ($record) {
+                                    $query->where('id', '!=', $record->id);
                                 }
-                            };
+
+                                if ($query->exists()) {
+                                    $fail('Tanggal ini sudah digunakan untuk shift dan status tersebut. Pilih yang lain.');
+                                }
+                            }
                         },
                     ]),
 
