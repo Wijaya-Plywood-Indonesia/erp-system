@@ -17,6 +17,10 @@ use Illuminate\Support\Facades\DB;
  * di atas. id_ukuran dan id_jenis_kayu diisi placeholder (sama seperti
  * pola "Nebeli" pada target Hotpress) karena sudah tidak dipakai untuk
  * pencocokan target Sanding.
+ *
+ * Migration ini bersifat data-migration: kalau data master (mesin,
+ * ukuran, jenis kayu) belum ada, misalnya di database kosong pada
+ * CI/testing, migration dilewati agar tidak gagal di foreign key.
  */
 return new class extends Migration
 {
@@ -30,6 +34,10 @@ return new class extends Migration
 
     public function up(): void
     {
+        if (! $this->dataMasterAda()) {
+            return;
+        }
+
         DB::table('targets')
             ->whereIn('id_mesin', [self::ID_MESIN_BESAR, self::ID_MESIN_KECIL])
             ->delete();
@@ -103,4 +111,25 @@ return new class extends Migration
         // dikembalikan oleh down() ini. Jika perlu rollback penuh,
         // restore dari backup database sebelum migration dijalankan.
     }
-};
+
+    /**
+     * Pastikan semua data yang direferensikan foreign key `targets`
+     * sudah ada sebelum menghapus/menyisipkan baris.
+     */
+    private function dataMasterAda(): bool
+    {
+        $mesinLengkap = DB::table('mesins')
+            ->whereIn('id', [self::ID_MESIN_BESAR, self::ID_MESIN_KECIL])
+            ->count() === 2;
+
+        $ukuranAda = DB::table('ukurans')
+            ->where('id', self::ID_UKURAN_PLACEHOLDER)
+            ->exists();
+
+        $jenisKayuAda = DB::table('jenis_kayus')
+            ->where('id', self::ID_JENIS_KAYU_PLACEHOLDER)
+            ->exists();
+
+        return $mesinLengkap && $ukuranAda && $jenisKayuAda;
+    }
+}
