@@ -16,6 +16,8 @@ use Filament\Forms\Components\Select;
 use App\Concerns\LocksWhenValidated;
 use App\Models\JenisKayu;
 use App\Models\Ukuran;
+use App\Models\DetailPegawaiStik;
+use Filament\Tables\Grouping\Group;
 
 class DetailHasilStikRelationManager extends RelationManager
 {
@@ -30,6 +32,59 @@ class DetailHasilStikRelationManager extends RelationManager
     {
         return $schema
             ->schema([
+                // Fitur "nyusup": satu baris hasil bisa dikerjakan oleh
+                // lebih dari 1 pegawai (2 pegawai banyak barang), dan
+                // pegawai yang sama bisa dipakai lagi di baris lain
+                // (1 pegawai banyak barang).
+                Select::make('pegawais')
+                    ->label('Pegawai')
+                    ->relationship(
+                        name: 'pegawais',
+                        titleAttribute: 'id',
+                        modifyQueryUsing: function ($query) {
+                            $produksiId = $this->getOwnerRecord()?->id;
+
+                            if ($produksiId) {
+                                $query->with('pegawai')
+                                    ->where('id_produksi_stik', $produksiId);
+                            }
+
+                            return $query;
+                        }
+                    )
+                    ->getOptionLabelFromRecordUsing(function ($record) {
+                        $pegawai = $record->pegawai;
+                        if (! $pegawai) return "Pegawai #{$record->id}";
+
+                        $kode = $pegawai->kode_pegawai ? "{$pegawai->kode_pegawai} - " : '';
+
+                        return "{$kode}{$pegawai->nama_pegawai}";
+                    })
+                    ->getSearchResultsUsing(function (string $search) {
+                        $produksiId = $this->getOwnerRecord()?->id;
+
+                        return DetailPegawaiStik::query()
+                            ->with('pegawai')
+                            ->when($produksiId, fn($q) => $q->where('id_produksi_stik', $produksiId))
+                            ->whereHas('pegawai', function ($q) use ($search) {
+                                $q->where('nama_pegawai', 'LIKE', "%{$search}%")
+                                    ->orWhere('kode_pegawai', 'LIKE', "%{$search}%");
+                            })
+                            ->limit(50)
+                            ->get()
+                            ->mapWithKeys(function ($record) {
+                                $pegawai = $record->pegawai;
+                                $kode = $pegawai?->kode_pegawai ? "{$pegawai->kode_pegawai} - " : '';
+                                $label = $pegawai ? "{$kode}{$pegawai->nama_pegawai}" : "Pegawai #{$record->id}";
+
+                                return [$record->id => $label];
+                            });
+                    })
+                    ->multiple()
+                    ->preload()
+                    ->searchable()
+                    ->columnSpanFull(),
+
                 TextInput::make('no_palet')
                     ->label('Nomor Palet')
                     ->numeric()
@@ -118,6 +173,25 @@ class DetailHasilStikRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn($query) => $query->with('pegawais.pegawai'))
+            ->groups([
+                Group::make('id')
+                    ->label('Pegawai')
+                    ->getTitleFromRecordUsing(function ($record) {
+                        if ($record->pegawais->isEmpty()) {
+                            return 'Tanpa Pegawai';
+                        }
+
+                        $namaPegawais = $record->pegawais
+                            ->map(fn($p) => $p->pegawai?->nama_pegawai ?? 'Pegawai #' . $p->id)
+                            ->filter()
+                            ->implode(' & ');
+
+                        return $namaPegawais ?: 'Tanpa Pegawai';
+                    })
+                    ->collapsible(),
+            ])
+            ->defaultGroup('id')
             ->columns([
                 TextColumn::make('no_palet')
                     ->label('No. Palet')

@@ -17,6 +17,7 @@ class ProduksiDempul extends Model
         'tanggal',
         'tanggal_produksi',
         'kendala',
+        'shift',
         'uuid'
     ];
 

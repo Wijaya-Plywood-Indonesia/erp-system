@@ -2,18 +2,19 @@
 
 namespace App\Exports;
 
+use App\Models\ProduksiSanding;
 use Carbon\Carbon;
-use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
+use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class LaporanSandingExport implements WithMultipleSheets
 {
@@ -29,35 +30,53 @@ class LaporanSandingExport implements WithMultipleSheets
     public function sheets(): array
     {
         return [
-            new LaporanSandingPotonganGajiSheet($this->tanggal),
+            new LaporanSandingPotonganGajiSheet($this->data, $this->tanggal),
             new LaporanSandingProduksiSheet($this->data),
+            new LaporanSandingTargetSheet($this->data),
         ];
     }
 }
 
 class LaporanSandingPotonganGajiSheet implements FromCollection, WithHeadings, WithTitle, WithEvents
 {
+    protected $data;
     protected $tanggal;
     protected $mergeRanges = [];
     protected $tableRanges = [];
 
-    public function __construct($tanggal)
+    public function __construct($data, $tanggal)
     {
+        $this->data = $data;
         $this->tanggal = $tanggal;
+    }
+
+    /**
+     * Target "setara": total hasil dibagi capaian global, sehingga
+     * hasil / target selalu sama dengan persen capaian di laporan.
+     */
+    private function targetSetara(array $prod): float
+    {
+        $cap = (float) ($prod['capaian_global'] ?? 0);
+        $hasil = (float) ($prod['hasil_total'] ?? 0);
+
+        if ($cap > 0 && $hasil > 0) {
+            return $hasil / ($cap / 100);
+        }
+
+        $list = collect($prod['per_ukuran'] ?? [])->where('has_target', true);
+
+        return $list->isNotEmpty() ? (float) $list->avg('target') : 0.0;
     }
 
     public function collection()
     {
-        $produksiList = \App\Models\ProduksiSanding::with([
-            'pegawaiSandings.pegawai',
-            'hasilSandings.barangSetengahJadi.ukuran',
-            'hasilSandings.barangSetengahJadi.jenisBarang',
-            'hasilSandings.barangSetengahJadi.grade.kategoriBarang',
-            'mesin',
-            'kendalaSandings'
-        ])
-            ->whereDate('tanggal', $this->tanggal)
-            ->get();
+        $blok = $this->data['produksi'] ?? [];
+
+        $ids = collect($blok)->pluck('id_produksi')->filter()->all();
+        $modelProduksi = ProduksiSanding::with('kendalaSandings')
+            ->whereIn('id', $ids)
+            ->get()
+            ->keyBy('id');
 
         $allRows = [];
         $this->mergeRanges = [];
@@ -65,144 +84,87 @@ class LaporanSandingPotonganGajiSheet implements FromCollection, WithHeadings, W
 
         $tanggalFormatted = Carbon::parse($this->tanggal)->format('d/m/Y');
 
-        foreach ($produksiList as $prod) {
-            $mesinNama = $prod->mesin->nama_mesin ?? 'SANDING';
-            $pekerja = $prod->pegawaiSandings ?? [];
+        foreach ($blok as $prod) {
+            $mesinNama = $prod['mesin'] ?? 'SANDING';
+            $shift = $prod['shift'] ?? '';
+            $pekerja = $prod['pekerja'] ?? [];
             $N = count($pekerja);
 
-            // Calculate actual production
-            $totalActual = 0;
-            if ($prod->hasilSandings) {
-                foreach ($prod->hasilSandings as $hasil) {
-                    $totalActual += $hasil->kuantitas ?? 0;
-                }
-            }
+            $punyaTarget = (bool) ($prod['punya_target'] ?? false);
+            $target = $this->targetSetara($prod);
+            $hasil = (float) ($prod['hasil_total'] ?? 0);
+            $jamKerja = (float) ($prod['jam_aktual_rata'] ?? 0);
+            $targetPerJam = $jamKerja > 0 ? $target / $jamKerja : 0;
+            $selisih = $hasil - $target;
+            $capaianCell = $punyaTarget
+                ? ((float) ($prod['capaian_global'] ?? 0)) / 100
+                : 'Target belum ada';
 
-            // Determine dominant item in Sanding
-            $isSengon = true;
-            $maxQty = -1;
-            if ($prod->hasilSandings) {
-                foreach ($prod->hasilSandings as $hasil) {
-                    $qty = $hasil->kuantitas ?? 0;
-                    if ($qty > $maxQty) {
-                        $maxQty = $qty;
-                        $b = $hasil->barangSetengahJadi;
-                        if ($b) {
-                            $isSengon = ($b->jenisBarang && stripos($b->jenisBarang->nama_jenis_barang, 'sengon') !== false);
-                        }
-                    }
-                }
-            }
-
-            if (!$isSengon) {
-                $target = 450;
-            } else {
-                $target = 250;
-                if ($prod->id_mesin == 24 || ($prod->mesin && stripos($prod->mesin->nama_mesin, 'besar') !== false)) {
-                    $target = 800;
-                }
-            }
-
-            $potonganPerOrang = 0;
-            if ($N > 0) {
-                $deficit = $target - $totalActual;
-                if ($deficit > 0) {
-                    $potonganRaw = ($deficit * 115000) / ($target * $N);
-                    $ribuan = floor($potonganRaw / 1000);
-                    $ratusan = $potonganRaw % 1000;
-
-                    if ($ratusan < 300) {
-                        $potonganPerOrang = $ribuan * 1000;
-                    } elseif ($ratusan < 800) {
-                        $potonganPerOrang = ($ribuan * 1000) + 500;
-                    } else {
-                        $potonganPerOrang = ($ribuan + 1) * 1000;
-                    }
-                }
-            }
-
-            $jamKerja = 10;
-            $targetPerJam = $target / $jamKerja;
-            $selisih = $totalActual - $target;
-
-            // HITUNG KENDALA DOWNTIME DARI MODEL BARU (kendalaSandings)
+            // Kendala dari model kendalaSandings
             $totalDowntimeMenit = 0;
             $daftarKendala = [];
+            $model = $modelProduksi->get($prod['id_produksi'] ?? 0);
 
-            if (!empty($prod->kendalaSandings) && $prod->kendalaSandings->count() > 0) {
-                foreach ($prod->kendalaSandings as $knd) {
+            if ($model && $model->kendalaSandings && $model->kendalaSandings->count() > 0) {
+                foreach ($model->kendalaSandings as $knd) {
                     if ($knd->status === 'selesai' && !is_null($knd->durasi_menit)) {
-                        $durasiMenit = (int)$knd->durasi_menit;
+                        $durasiMenit = (int) $knd->durasi_menit;
                         $mulai = $knd->waktu_mulai ? Carbon::parse($knd->waktu_mulai) : null;
                         $selesai = $knd->waktu_selesai ? Carbon::parse($knd->waktu_selesai) : null;
 
                         $timeStr = ($mulai && $selesai) ? ': ' . $mulai->format('H:i') . '-' . $selesai->format('H:i') : '';
-                        $formattedText = ($knd->kendala ?? 'Tidak disebutkan') . ' (' . $durasiMenit . ' menit' . $timeStr . ')';
-
                         $daftarKendala[] = [
-                            'text' => $formattedText,
+                            'text' => ($knd->kendala ?? 'Tidak disebutkan') . ' (' . $durasiMenit . ' menit' . $timeStr . ')',
                         ];
                         $totalDowntimeMenit += $durasiMenit;
                     } else {
                         $mulai = $knd->waktu_mulai ? Carbon::parse($knd->waktu_mulai) : null;
                         $timeStr = $mulai ? ' (Mulai: ' . $mulai->format('H:i') . ' - Pending)' : ' (Pending)';
-                        $formattedText = ($knd->kendala ?? 'Tidak disebutkan') . $timeStr;
-
                         $daftarKendala[] = [
-                            'text' => $formattedText,
+                            'text' => ($knd->kendala ?? 'Tidak disebutkan') . $timeStr,
                         ];
                     }
                 }
-            } else {
-                // Fallback ke kolom kendala lama di tabel produksi_sandings jika ada
-                if (!empty($prod->kendala) && $prod->kendala !== '-') {
-                    $daftarKendala[] = [
-                        'text' => $prod->kendala,
-                    ];
-                }
+            } elseif ($model && !empty($model->kendala) && $model->kendala !== '-') {
+                $daftarKendala[] = ['text' => $model->kendala];
             }
 
-            $allRows[] = ['MESIN: ' . strtoupper($mesinNama)];
+            $allRows[] = ['MESIN: ' . strtoupper($mesinNama) . ($shift !== '' ? ' - SHIFT ' . strtoupper($shift) : '')];
             $allRows[] = ['TANGGAL: ' . $tanggalFormatted];
-            $allRows[] = array_fill(0, 11, '');
+            $allRows[] = array_fill(0, 12, '');
 
             $headerRow = count($allRows) + 1;
-            $allRows[] = ['ID', 'Nama', 'Potongan Gaji', 'Keterangan', '', 'Target Harian', 'Jam Kerja', 'Target/Jam', 'Hasil', 'Selisih', 'Kendala'];
+            $allRows[] = ['ID', 'Nama', 'Potongan Gaji', 'Keterangan', '', 'Target Harian', 'Jam Kerja', 'Target/Jam', 'Hasil', 'Selisih', 'Capaian', 'Kendala'];
 
             $workerStartRow = count($allRows) + 1;
             $workerEndRow = $workerStartRow + $N - 1;
             $totalRow = $workerStartRow + $N;
 
-            // Merge kolom F s/d J secara statis jika N > 1
+            // Merge kolom F s/d K (ringkasan produksi) jika N > 1
             if ($N > 1) {
-                $this->mergeRanges[] = "F{$workerStartRow}:F{$workerEndRow}";
-                $this->mergeRanges[] = "G{$workerStartRow}:G{$workerEndRow}";
-                $this->mergeRanges[] = "H{$workerStartRow}:H{$workerEndRow}";
-                $this->mergeRanges[] = "I{$workerStartRow}:I{$workerEndRow}";
-                $this->mergeRanges[] = "J{$workerStartRow}:J{$workerEndRow}";
+                foreach (['F', 'G', 'H', 'I', 'J', 'K'] as $col) {
+                    $this->mergeRanges[] = "{$col}{$workerStartRow}:{$col}{$workerEndRow}";
+                }
             }
 
-            // Pre-calculate nilai sel untuk kolom Kendala (K) secara dinamis
-            $kendalaCellValues = array_fill(0, $N, '');
+            // Nilai sel kolom Kendala (L)
+            $kendalaCellValues = array_fill(0, max($N, 1), '');
 
             if ($N > 0) {
                 if (count($daftarKendala) === 0) {
                     $kendalaCellValues[0] = 'Tidak ada kendala';
                     if ($N > 1) {
-                        $this->mergeRanges[] = "K{$workerStartRow}:K{$workerEndRow}";
+                        $this->mergeRanges[] = "L{$workerStartRow}:L{$workerEndRow}";
                     }
                 } else {
                     $M = count($daftarKendala);
-                    
+
                     if ($N < $M) {
-                        // Jika jumlah pekerja lebih sedikit dari kendala, gabungkan semua kendala dengan newline
-                        $text = implode("\n", array_column($daftarKendala, 'text'));
-                        $kendalaCellValues[0] = $text;
+                        $kendalaCellValues[0] = implode("\n", array_column($daftarKendala, 'text'));
                         if ($N > 1) {
-                            $this->mergeRanges[] = "K{$workerStartRow}:K{$workerEndRow}";
+                            $this->mergeRanges[] = "L{$workerStartRow}:L{$workerEndRow}";
                         }
                     } else {
-                        // Jika pekerja cukup, bagi rata secara chunk
                         $chunkSize = (int) ceil($N / $M);
 
                         for ($i = 0; $i < $M; $i++) {
@@ -215,7 +177,7 @@ class LaporanSandingPotonganGajiSheet implements FromCollection, WithHeadings, W
                                 $chunkEndRow = $workerStartRow + $endIdx;
 
                                 if ($chunkStartRow < $chunkEndRow) {
-                                    $this->mergeRanges[] = "K{$chunkStartRow}:K{$chunkEndRow}";
+                                    $this->mergeRanges[] = "L{$chunkStartRow}:L{$chunkEndRow}";
                                 }
                             }
                         }
@@ -223,34 +185,35 @@ class LaporanSandingPotonganGajiSheet implements FromCollection, WithHeadings, W
                 }
             }
 
-            foreach ($pekerja as $idx => $ps) {
-                $jamMasuk = $ps->masuk ? Carbon::parse($ps->masuk)->format('H:i') : '-';
-                $jamPulang = $ps->pulang ? Carbon::parse($ps->pulang)->format('H:i') : '-';
+            foreach ($pekerja as $idx => $p) {
+                $jamMasuk = $p['jam_masuk'] ?? '-';
+                $jamPulang = $p['jam_pulang'] ?? '-';
 
                 $ketParts = [];
                 if ($jamMasuk !== '-') {
-                    $ketParts[] = "Masuk: " . $jamMasuk . ($jamPulang !== '-' ? " - " . $jamPulang : "");
+                    $ketParts[] = 'Masuk: ' . $jamMasuk . ($jamPulang !== '-' ? ' - ' . $jamPulang : '');
                 }
-                if (!empty($ps->ijin) && $ps->ijin !== '-') {
-                    $ketParts[] = "Ijin: " . $ps->ijin;
+                if (!empty($p['ijin']) && $p['ijin'] !== '-') {
+                    $ketParts[] = 'Ijin: ' . $p['ijin'];
                 }
-                if (!empty($ps->ket) && $ps->ket !== '-') {
-                    $ketParts[] = $ps->ket;
+                if (!empty($p['keterangan']) && $p['keterangan'] !== '-') {
+                    $ketParts[] = $p['keterangan'];
                 }
-                $ketString = !empty($ketParts) ? implode(" | ", $ketParts) : '-';
+                $ketString = !empty($ketParts) ? implode(' | ', $ketParts) : '-';
 
                 $allRows[] = [
-                    $ps->pegawai->kode_pegawai ?? '-',
-                    $ps->pegawai->nama_pegawai ?? 'TANPA NAMA',
-                    $potonganPerOrang > 0 ? (int) $potonganPerOrang : 0,
+                    $p['id'] ?? '-',
+                    $p['nama'] ?? 'TANPA NAMA',
+                    (int) ($p['pot_target'] ?? 0),
                     $ketString,
                     '',
-                    $idx === 0 ? (int) $target : '',
-                    $idx === 0 ? (int) $jamKerja : '',
-                    $idx === 0 ? round((float) $targetPerJam, 2) : '',
-                    $idx === 0 ? (int) $totalActual : '',
-                    $idx === 0 ? (int) $selisih : '',
-                    $kendalaCellValues[$idx]
+                    $idx === 0 ? (int) round($target) : '',
+                    $idx === 0 ? round($jamKerja, 2) : '',
+                    $idx === 0 ? round($targetPerJam, 2) : '',
+                    $idx === 0 ? (int) round($hasil) : '',
+                    $idx === 0 ? (int) round($selisih) : '',
+                    $idx === 0 ? $capaianCell : '',
+                    $kendalaCellValues[$idx] ?? '',
                 ];
             }
 
@@ -262,28 +225,32 @@ class LaporanSandingPotonganGajiSheet implements FromCollection, WithHeadings, W
                 '',
                 '',
                 $N > 0 ? "=SUM(F{$workerStartRow}:F{$workerEndRow})" : 0,
-                (int) $jamKerja,
+                round($jamKerja, 2),
                 $N > 0 ? "=SUM(H{$workerStartRow}:H{$workerEndRow})" : 0,
                 $N > 0 ? "=SUM(I{$workerStartRow}:I{$workerEndRow})" : 0,
                 $N > 0 ? "=SUM(J{$workerStartRow}:J{$workerEndRow})" : 0,
-                $totalDowntimeMenit > 0 ? $totalDowntimeMenit . ' menit' : ''
+                '',
+                $totalDowntimeMenit > 0 ? $totalDowntimeMenit . ' menit' : '',
             ];
 
-            $allRows[] = array_fill(0, 11, '');
-            $allRows[] = array_fill(0, 11, '');
+            $allRows[] = array_fill(0, 12, '');
+            $allRows[] = array_fill(0, 12, '');
 
             $this->tableRanges[] = [
                 'header' => $headerRow,
-                'start'  => $workerStartRow,
-                'end'    => $workerEndRow,
-                'total'  => $totalRow
+                'start' => $workerStartRow,
+                'end' => $workerEndRow,
+                'total' => $totalRow,
             ];
         }
 
         return collect($allRows);
     }
 
-    public function headings(): array { return []; }
+    public function headings(): array
+    {
+        return [];
+    }
 
     public function title(): string
     {
@@ -295,88 +262,72 @@ class LaporanSandingPotonganGajiSheet implements FromCollection, WithHeadings, W
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-                
-                // Set explicit column widths
-                $sheet->getColumnDimension('A')->setWidth(10);
-                $sheet->getColumnDimension('B')->setWidth(25);
-                $sheet->getColumnDimension('C')->setWidth(15);
-                $sheet->getColumnDimension('D')->setWidth(20);
-                $sheet->getColumnDimension('E')->setWidth(5);
-                $sheet->getColumnDimension('F')->setWidth(15);
-                $sheet->getColumnDimension('G')->setWidth(12);
-                $sheet->getColumnDimension('H')->setWidth(12);
-                $sheet->getColumnDimension('I')->setWidth(12);
-                $sheet->getColumnDimension('J')->setWidth(12);
-                $sheet->getColumnDimension('K')->setWidth(45);
 
-                // Merge cells dynamically
+                $widths = ['A' => 10, 'B' => 25, 'C' => 15, 'D' => 32, 'E' => 5, 'F' => 14, 'G' => 11, 'H' => 12, 'I' => 12, 'J' => 12, 'K' => 16, 'L' => 45];
+                foreach ($widths as $col => $w) {
+                    $sheet->getColumnDimension($col)->setWidth($w);
+                }
+
                 foreach ($this->mergeRanges as $range) {
                     $sheet->mergeCells($range);
                 }
 
-                // Apply styles, borders, alignments and colors for each table
                 foreach ($this->tableRanges as $range) {
                     $headerRow = $range['header'];
                     $startRow = $range['start'];
                     $endRow = $range['end'];
                     $totalRow = $range['total'];
 
-                    // 1. Grid borders for the entire table (A{header} to K{total})
-                    $sheet->getStyle("A{$headerRow}:K{$totalRow}")->applyFromArray([
+                    $sheet->getStyle("A{$headerRow}:L{$totalRow}")->applyFromArray([
                         'borders' => [
                             'allBorders' => [
                                 'borderStyle' => Border::BORDER_THIN,
                                 'color' => ['argb' => 'FFCBD5E1'],
-                            ]
-                        ]
+                            ],
+                        ],
                     ]);
 
-                    // 2. Header row style
-                    $sheet->getStyle("A{$headerRow}:K{$headerRow}")->applyFromArray([
+                    $sheet->getStyle("A{$headerRow}:L{$headerRow}")->applyFromArray([
                         'font' => ['bold' => true, 'color' => ['argb' => 'FF1E293B']],
                         'fill' => [
                             'fillType' => Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFE2E8F0']
+                            'startColor' => ['argb' => 'FFE2E8F0'],
                         ],
                         'alignment' => [
                             'horizontal' => Alignment::HORIZONTAL_CENTER,
                             'vertical' => Alignment::VERTICAL_CENTER,
-                        ]
+                        ],
                     ]);
 
-                    // 3. Total row style
-                    $sheet->getStyle("A{$totalRow}:K{$totalRow}")->applyFromArray([
+                    $sheet->getStyle("A{$totalRow}:L{$totalRow}")->applyFromArray([
                         'font' => ['bold' => true, 'color' => ['argb' => 'FF1E293B']],
                         'fill' => [
                             'fillType' => Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFF1F5F9']
-                        ]
+                            'startColor' => ['argb' => 'FFF1F5F9'],
+                        ],
                     ]);
 
-                    // 4. Alignments for worker data cells (A{start} to K{end})
                     if ($startRow <= $endRow) {
                         $sheet->getStyle("A{$startRow}:A{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                         $sheet->getStyle("B{$startRow}:B{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                         $sheet->getStyle("C{$startRow}:C{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                         $sheet->getStyle("D{$startRow}:D{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
-                        
-                        $sheet->getStyle("F{$startRow}:F{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+                        foreach (['F', 'H', 'I', 'J', 'K'] as $col) {
+                            $sheet->getStyle("{$col}{$startRow}:{$col}{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        }
                         $sheet->getStyle("G{$startRow}:G{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle("H{$startRow}:H{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                        $sheet->getStyle("I{$startRow}:I{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                        $sheet->getStyle("J{$startRow}:J{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                        $sheet->getStyle("K{$startRow}:K{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
-                        
-                        // Number formats
+                        $sheet->getStyle("L{$startRow}:L{$endRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+
                         $sheet->getStyle("C{$startRow}:C{$totalRow}")->getNumberFormat()->setFormatCode('#,##0;(#,##0);"-"');
                         $sheet->getStyle("F{$startRow}:F{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
                         $sheet->getStyle("I{$startRow}:I{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
+                        $sheet->getStyle("K{$startRow}:K{$endRow}")->getNumberFormat()->setFormatCode('0.0%');
                     }
                 }
 
-                // Enable wrap text and top vertical alignment for Kendala (K)
                 $highestRow = $sheet->getHighestRow();
-                $sheet->getStyle("K1:K{$highestRow}")
+                $sheet->getStyle("L1:L{$highestRow}")
                     ->getAlignment()
                     ->setWrapText(true)
                     ->setVertical(Alignment::VERTICAL_TOP);
@@ -404,7 +355,7 @@ class LaporanSandingProduksiSheet implements FromCollection, WithHeadings, WithS
 
         for ($i = 0; $i < $max; $i++) {
             $row = [];
-            
+
             // Left side (Detail)
             if ($i < count($detailProduksi)) {
                 $d = $detailProduksi[$i];
@@ -415,12 +366,12 @@ class LaporanSandingProduksiSheet implements FromCollection, WithHeadings, WithS
                 $row['d_t'] = $d['t'];
                 $row['d_jenis'] = $d['jenis'];
                 $row['d_banyak'] = $d['banyak'];
-                $row['d_m3'] = ''; 
+                $row['d_m3'] = '';
             } else {
                 $row['d_tgl'] = $row['d_mesin'] = $row['d_p'] = $row['d_l'] = $row['d_t'] = $row['d_jenis'] = $row['d_banyak'] = $row['d_m3'] = '';
             }
 
-            $row['spacer'] = ''; 
+            $row['spacer'] = '';
 
             // Right side (Summary)
             if ($i < count($summaryProduksi)) {
@@ -428,10 +379,10 @@ class LaporanSandingProduksiSheet implements FromCollection, WithHeadings, WithS
                 $row['s_tgl'] = $s['tanggal'];
                 $row['s_mesin'] = $s['mesin'];
                 $row['s_jml_pkj'] = $s['jml_pkj'];
-                $row['s_hasil_kubikasi'] = ''; 
-                $row['s_harga'] = ''; 
-                $row['s_ongkos_m3'] = ''; 
-                $row['s_ongkos_lbr'] = ''; 
+                $row['s_hasil_kubikasi'] = '';
+                $row['s_harga'] = '';
+                $row['s_ongkos_m3'] = '';
+                $row['s_ongkos_lbr'] = '';
             } else {
                 $row['s_tgl'] = $row['s_mesin'] = $row['s_jml_pkj'] = $row['s_hasil_kubikasi'] = $row['s_harga'] = $row['s_ongkos_m3'] = $row['s_ongkos_lbr'] = '';
             }
@@ -446,8 +397,8 @@ class LaporanSandingProduksiSheet implements FromCollection, WithHeadings, WithS
     {
         return [
             'Tanggal', 'Mesin', 'p', 'l', 't', 'jenis', 'banyak', 'm3',
-            '', 
-            'tanggal', 'Mesin', 'Jumlah Pekerja', 'Hasil Kubikasi', 'Harga', 'Ongkos(m3)', 'Ongkos(lbr)'
+            '',
+            'tanggal', 'Mesin', 'Jumlah Pekerja', 'Hasil Kubikasi', 'Harga', 'Ongkos(m3)', 'Ongkos(lbr)',
         ];
     }
 
@@ -460,6 +411,7 @@ class LaporanSandingProduksiSheet implements FromCollection, WithHeadings, WithS
     {
         $sheet->getStyle('A1:P1')->getFont()->setBold(true);
         $sheet->getStyle('A1:P1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
         return [];
     }
 
@@ -470,31 +422,100 @@ class LaporanSandingProduksiSheet implements FromCollection, WithHeadings, WithS
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = $sheet->getHighestRow();
 
-                $sheet->getStyle("A1:H" . $lastRow)->applyFromArray([
+                $sheet->getStyle('A1:H' . $lastRow)->applyFromArray([
                     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                 ]);
-                $sheet->getStyle("J1:P" . $lastRow)->applyFromArray([
+                $sheet->getStyle('J1:P' . $lastRow)->applyFromArray([
                     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                 ]);
 
-                $sheet->getStyle("I1:I" . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('000000');
-                
-                $sheet->getColumnDimension('A')->setWidth(15);
-                $sheet->getColumnDimension('B')->setWidth(20);
-                $sheet->getColumnDimension('C')->setWidth(8);
-                $sheet->getColumnDimension('D')->setWidth(8);
-                $sheet->getColumnDimension('E')->setWidth(8);
-                $sheet->getColumnDimension('F')->setWidth(15);
-                $sheet->getColumnDimension('G')->setWidth(10);
-                $sheet->getColumnDimension('H')->setWidth(10);
-                $sheet->getColumnDimension('I')->setWidth(3); 
-                $sheet->getColumnDimension('J')->setWidth(15);
-                $sheet->getColumnDimension('K')->setWidth(20);
-                $sheet->getColumnDimension('L')->setWidth(15);
-                $sheet->getColumnDimension('M')->setWidth(15);
-                $sheet->getColumnDimension('N')->setWidth(15);
-                $sheet->getColumnDimension('O')->setWidth(18);
-                $sheet->getColumnDimension('P')->setWidth(18);
+                $sheet->getStyle('I1:I' . $lastRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('000000');
+
+                $widths = ['A' => 15, 'B' => 20, 'C' => 8, 'D' => 8, 'E' => 8, 'F' => 15, 'G' => 10, 'H' => 10, 'I' => 3, 'J' => 15, 'K' => 20, 'L' => 15, 'M' => 15, 'N' => 15, 'O' => 18, 'P' => 18];
+                foreach ($widths as $col => $w) {
+                    $sheet->getColumnDimension($col)->setWidth($w);
+                }
+            },
+        ];
+    }
+}
+
+class LaporanSandingTargetSheet implements FromCollection, WithHeadings, WithStyles, WithEvents, WithTitle
+{
+    protected $data;
+
+    public function __construct($data)
+    {
+        $this->data = $data;
+    }
+
+    public function collection()
+    {
+        $rows = collect();
+
+        foreach (($this->data['produksi'] ?? []) as $prod) {
+            foreach (($prod['per_ukuran'] ?? []) as $u) {
+                $adaTarget = (bool) ($u['has_target'] ?? false);
+
+                $rows->push([
+                    $prod['tanggal'] ?? '',
+                    $prod['mesin'] ?? '',
+                    $prod['shift'] ?? '',
+                    $u['ukuran'] ?? '-',
+                    $u['jenis_kayu'] ?? '-',
+                    $u['kategori'] ?? '-',
+                    $u['grade'] ?? '-',
+                    (int) round($u['hasil'] ?? 0),
+                    $adaTarget ? round((float) $u['target'], 1) : '-',
+                    $adaTarget ? round((float) ($u['target_normal'] ?? 0), 1) : '-',
+                    $adaTarget ? round((float) $u['selisih'], 1) : '-',
+                    $adaTarget ? ((float) ($u['capaian_persen'] ?? 0)) / 100 : 'Target ?',
+                ]);
+            }
+        }
+
+        return $rows;
+    }
+
+    public function headings(): array
+    {
+        return [
+            'Tanggal', 'Mesin', 'Shift', 'Ukuran', 'Jenis Kayu', 'Kategori', 'Grade',
+            'Hasil', 'Target (Adjusted)', 'Target Normal', 'Selisih', 'Capaian',
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Target per Barang';
+    }
+
+    public function styles(Worksheet $sheet)
+    {
+        $sheet->getStyle('A1:L1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:L1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        return [];
+    }
+
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function (AfterSheet $event) {
+                $sheet = $event->sheet->getDelegate();
+                $lastRow = max(1, $sheet->getHighestRow());
+
+                $sheet->getStyle('A1:L' . $lastRow)->applyFromArray([
+                    'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+                ]);
+                $sheet->getStyle('A1:L1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFE2E8F0');
+                $sheet->getStyle('L2:L' . $lastRow)->getNumberFormat()->setFormatCode('0.0%');
+                $sheet->getStyle('H2:K' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+                $widths = ['A' => 12, 'B' => 18, 'C' => 9, 'D' => 20, 'E' => 14, 'F' => 14, 'G' => 20, 'H' => 10, 'I' => 17, 'J' => 14, 'K' => 12, 'L' => 12];
+                foreach ($widths as $col => $w) {
+                    $sheet->getColumnDimension($col)->setWidth($w);
+                }
             },
         ];
     }

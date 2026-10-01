@@ -4,37 +4,139 @@ namespace App\Filament\Pages;
 
 use App\Exports\NewRekapAbsensiExport;
 use App\Exports\RumusGajiWijayaExport;
+use App\Exports\RumusGajiWijayaMingguanExport;
 use App\Models\NewAbsensiUpload;
 use App\Services\DownloadAbsensiUploadService;
 use App\Services\NewRekapAbsensiPegawaiService;
 use App\Services\PotonganGajiService;
 use App\Services\UploadFingerService;
+// HasPageShield sengaja dilepas — halaman ini harus tampil untuk semua role.
+// Pembatasan akses ke tab Upload & Riwayat diatur secara manual di blade.
 use App\Services\ValidasiTargetProduksiService;
-use BackedEnum;
-use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Url;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
 
+use Filament\Actions\Action;
+use Filament\Schemas\Components\Section;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\TimePicker;
+use Filament\Forms\Components\Toggle;
+use App\Models\PengaturanAbsensi;
+
 class NewAbsensi extends Page implements HasForms
 {
-    use HasPageShield;
     use InteractsWithForms;
 
-    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('settingAbsensi')
+                ->label('Pengaturan Absensi')
+                ->icon('heroicon-o-cog-6-tooth')
+                ->color('gray')
+                ->visible(fn () => auth()->user()?->hasRole('super_admin'))
+                ->fillForm(fn () => PengaturanAbsensi::getSettings()->toArray())
+                ->form([
+                    Section::make('Jadwal Default (Fallback)')
+                        ->description('Digunakan jika jam masuk/pulang produksi kosong.')
+                        ->schema([
+                            TimePicker::make('jam_masuk_shift_pagi_default')->label('Masuk Pagi')->required(),
+                            TimePicker::make('jam_pulang_shift_pagi_default')->label('Pulang Pagi')->required(),
+                            TimePicker::make('jam_masuk_shift_malam_default')->label('Masuk Malam')->required(),
+                            TimePicker::make('jam_pulang_shift_malam_default')->label('Pulang Malam')->required(),
+                        ])->columns(2),
+                    Section::make('Toleransi & Durasi')
+                        ->schema([
+                            TextInput::make('toleransi_sesi_tunggal_menit')
+                                ->label('Toleransi 1 Sesi (Menit)')
+                                ->numeric()->required()
+                                ->helperText('Jarak antara tap masuk & pulang jika dianggap cuma 1 sesi absen (tidak sengaja tap 2x).'),
+                            TextInput::make('batas_total_durasi_menit')
+                                ->label('Batas Durasi Minimum (Menit)')
+                                ->numeric()->required()
+                                ->helperText('Finger tidak tampil jika total jam kerja produksi di bawah batas ini.'),
+                            TextInput::make('toleransi_masuk_lebih_cepat_malam_menit')
+                                ->label('Toleransi Masuk Terlalu Cepat Shift Malam (Menit)')
+                                ->numeric()->required()
+                                ->helperText('Batas maksimal berapa menit scan masuk boleh mendahului jadwal masuk sebelum dianulir.'),
+                            TextInput::make('toleransi_pulang_lebih_lambat_malam_menit')
+                                ->label('Toleransi Pulang Terlalu Lambat Shift Malam (Menit)')
+                                ->numeric()->required()
+                                ->helperText('Batas maksimal berapa menit scan pulang boleh melampaui jadwal pulang sebelum dianulir.'),
+                        ])->columns(2),
+                    Section::make('Metode Shift & Auto Fix')
+                        ->schema([
+                            Select::make('metode_shift_malam')
+                                ->label('Metode Deteksi Shift Malam')
+                                ->options([
+                                    'default' => 'Default (Berdasarkan Jam)',
+                                    'paksa_shift_malam' => 'Paksa Shift Malam (Satu Sinyal Cukup)',
+                                    'full_shift' => 'Full Shift (Ikuti Label Shift)',
+                                ])->required(),
+                            Toggle::make('auto_fix_enabled')
+                                ->label('Aktifkan Auto Fix (Dari Raw Finger)')
+                                ->inline(false),
+                            TextInput::make('auto_fix_batas_selisih_menit')
+                                ->label('Batas Selisih Auto Fix (Menit)')
+                                ->numeric()->required(),
+                        ])->columns(3),
+                    Section::make('Panduan Pengaturan')
+                        ->description('Penjelasan cara kerja pengaturan absensi')
+                        ->schema([
+                            \Filament\Forms\Components\Placeholder::make('bantuan_pengaturan')
+                                ->hiddenLabel()
+                                ->content(view('filament.pages.bantuan-pengaturan-absensi')),
+                        ])->collapsed(),
+                ])
+                ->action(function (array $data) {
+                    $setting = PengaturanAbsensi::getSettings();
+                    $data['last_updated_by'] = auth()->id();
+                    $setting->update($data);
+
+                    Notification::make()
+                        ->title('Pengaturan berhasil disimpan')
+                        ->success()
+                        ->send();
+                })
+                ->modalWidth('4xl'),
+        ];
+    }
 
     protected static ?string $navigationLabel = 'Rekap Absensi Pegawai';
 
     protected static ?string $title = 'Rekap Absensi Pegawai';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Absen dan Gaji';
+
     protected string $view = 'filament.pages.new-absensi';
+
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
+
+    public static function canAccess(): bool
+    {
+        return true;
+    }
+
+    public function canManageAbsensi(): bool
+    {
+        $user = auth()->user();
+
+        return $user && ($user->hasRole('super_admin') || $user->hasRole('Absen'));
+    }
 
     public bool $showAbsensiLainLain = false;
 
@@ -47,11 +149,27 @@ class NewAbsensi extends Page implements HasForms
      * Disinkronkan ke query string URL (?tanggal=YYYY-MM-DD) supaya kalau
      * halaman di-refresh atau link-nya dibagikan/dibuka ulang, tanggal yang
      * lagi dipilih user tetap sama (tidak balik ke tanggal hari ini).
-     * `keep: true` supaya parameter tetap muncul di URL walau nilainya
+     * keep: true supaya parameter tetap muncul di URL walau nilainya
      * balik ke default.
      */
     #[Url(keep: true)]
     public ?string $tanggal = null;
+
+    /**
+     * Filter sumber produksi. Nilai '' (string kosong) = tampilkan semua.
+     * Nilai '_tanpa_produksi' = hanya pegawai yang sumber_label-nya kosong
+     * (tidak terlink ke produksi manapun). Nilai lain = key source yang
+     * cocok (misal 'rotary', 'dryer', dst). Single-select: hanya bisa
+     * memilih 1 sumber sekaligus.
+     */
+    #[Url(keep: true)]
+    public string $filterSumber = '';
+
+    /**
+     * Teks pencarian karyawan berdasarkan nama atau kode pegawai.
+     * Difilter di getRekap() — string kosong berarti tampilkan semua.
+     */
+    public string $search = '';
 
     public string $activeTab = 'data';
 
@@ -78,6 +196,15 @@ class NewAbsensi extends Page implements HasForms
      * @var array<string, bool>
      */
     public array $expandedRows = [];
+
+    /**
+     * Arah sorting kolom Potongan di tabel Data Absensi.
+     * null = tidak diurutkan, 'asc' = terkecil ke terbesar,
+     * 'desc' = terbesar ke terkecil.
+     *
+     * @var string|null
+     */
+    public ?string $sortPotongan = null;
 
     /**
      * Hasil pengecekan terakhir dari ValidasiTargetProduksiService untuk
@@ -113,7 +240,7 @@ class NewAbsensi extends Page implements HasForms
      *
      * CATATAN: tombol untuk toggle property ini (toggleTargetPanel) di
      * blade sekarang HANYA ditampilkan untuk user dengan role
-     * `super_admin` — user lain selalu melihat panel ini terbuka kalau
+     * super_admin — user lain selalu melihat panel ini terbuka kalau
      * ada item yang belum punya target (tidak bisa menyembunyikannya).
      */
     public bool $showTargetPanel = true;
@@ -223,11 +350,69 @@ class NewAbsensi extends Page implements HasForms
         $potonganService = app(PotonganGajiService::class);
         $potonganMap = $potonganService->getPotonganMap($tanggal);
 
-        return $rekap->map(function ($row) use ($potonganService, $potonganMap) {
+        $rekap = $rekap->map(function ($row) use ($potonganService, $potonganMap) {
             $row['potongan'] = $potonganService->resolvePotongan($potonganMap, $row['kode_pegawai'] ?? null);
 
             return $row;
         });
+
+        // Terapkan filter sumber kalau ada pilihan
+        if ($this->filterSumber === '_tanpa_produksi') {
+            // Hanya tampilkan pegawai yang tidak terlink ke produksi manapun
+            // (sumber_label-nya kosong array)
+            $rekap = $rekap->filter(
+                fn ($row) => empty($row['sumber_label'])
+            )->values();
+        } elseif ($this->filterSumber !== '') {
+            // Filter berdasarkan key sumber. Setelah gabungkanMultiSumber(),
+            // field 'sumber' individual sudah tidak ada — yang tersisa adalah
+            // sumber_label (array). Cocokkan key sumber ke label dari sources
+            // terdaftar, lalu filter baris yang memiliki label tersebut.
+            $sumberKey = $this->filterSumber;
+            // Cari label yang sesuai dengan key ini dari daftar sources
+            $targetLabel = collect(app(NewRekapAbsensiPegawaiService::class)->getSources())
+                ->firstWhere(fn ($s) => $s->key() === $sumberKey)
+                ?->label();
+
+            if ($targetLabel) {
+                // Filter baris yang memiliki setidaknya satu sumber_label
+                // yang dimulai dengan label ini (misal 'Press Dryer' match
+                // 'Press Dryer Pagi' dan 'Press Dryer Malam')
+                $rekap = $rekap->filter(function ($row) use ($targetLabel) {
+                    $labels = (array) ($row['sumber_label'] ?? []);
+
+                    return collect($labels)->contains(
+                        fn ($label) => str_starts_with($label, $targetLabel)
+                    );
+                })->values();
+            }
+        }
+
+        // Terapkan sorting potongan kalau user mengklik header kolom Potongan
+        if ($this->sortPotongan === 'asc') {
+            $rekap = $rekap->sortBy(fn ($row) => $row['potongan'] ?? 0)->values();
+        } elseif ($this->sortPotongan === 'desc') {
+            $rekap = $rekap->sortByDesc(fn ($row) => $row['potongan'] ?? 0)->values();
+        }
+
+        return $rekap;
+    }
+
+    /**
+     * Kembalikan daftar sumber produksi yang terdaftar untuk ditampilkan
+     * di dropdown filter. Format: array ['key' => label].
+     * Key '_tanpa_produksi' adalah opsi khusus untuk menampilkan pegawai
+     * yang tidak terlink ke produksi manapun.
+     */
+    public function getAvailableSumber(): array
+    {
+        $sources = app(NewRekapAbsensiPegawaiService::class)->getSources();
+        $options = [];
+        foreach ($sources as $source) {
+            $options[$source->key()] = $source->label();
+        }
+
+        return $options;
     }
 
     public function getAbsensiLainLain(): Collection
@@ -246,9 +431,11 @@ class NewAbsensi extends Page implements HasForms
 
         $rekap = app(NewRekapAbsensiPegawaiService::class)->getRekap($tanggal);
 
+        $brandName = filament()->getBrandName();
+
         return Excel::download(
             new NewRekapAbsensiExport($rekap, $tanggal),
-            "Absen-{$tanggal}.xlsx"
+            "Absen-{$brandName}-{$tanggal}.xlsx"
         );
     }
 
@@ -271,27 +458,35 @@ class NewAbsensi extends Page implements HasForms
             ->cekMissingTarget($tanggal);
         $this->sudahDicekTarget = true;
 
+        // Notifikasi hanya dikirim untuk role absen atau super_admin.
+        $user = auth()->user();
+        $bisaLihatNotif = $this->canManageAbsensi();
+
         if (empty($this->missingTargetItems)) {
-            Notification::make()
-                ->title('Semua item sudah punya target')
-                ->body('Tidak ditemukan ukuran/produksi tanpa target untuk tanggal ini.')
-                ->success()
-                ->send();
+            if ($bisaLihatNotif) {
+                Notification::make()
+                    ->title('Semua item sudah punya target')
+                    ->body('Tidak ditemukan ukuran/produksi tanpa target untuk tanggal ini.')
+                    ->success()
+                    ->send();
+            }
 
             return;
         }
 
-        Notification::make()
-            ->warning()
-            ->title(count($this->missingTargetItems).' item belum punya target')
-            ->body('Lihat daftar lengkapnya di tabel bawah tombol export. Kamu tetap bisa export — potongan untuk item tersebut akan dianggap 0.')
-            ->send();
+        if ($bisaLihatNotif) {
+            Notification::make()
+                ->warning()
+                ->title(count($this->missingTargetItems).' item belum punya target')
+                ->body('Lihat daftar lengkapnya di tabel bawah tombol export. Kamu tetap bisa export — potongan untuk item tersebut akan dianggap 0.')
+                ->send();
+        }
     }
 
     /**
      * Dipanggil dari tombol show/hide di panel peringatan target — di
      * blade tombolnya sekarang HANYA ditampilkan untuk role
-     * `super_admin`. Tidak menghitung ulang apa pun — hanya toggle
+     * super_admin. Tidak menghitung ulang apa pun — hanya toggle
      * visibility panelnya, datanya sendiri (missingTargetItems) tetap
      * tersimpan di property seperti biasa.
      */
@@ -348,17 +543,18 @@ class NewAbsensi extends Page implements HasForms
         }
 
         $rekap = app(NewRekapAbsensiPegawaiService::class)->getRekap($tanggal);
+        $brandName = filament()->getBrandName();
 
         return Excel::download(
             new RumusGajiWijayaExport($rekap, $tanggal),
-            "Rumus-Gaji-Wijaya-{$tanggal}.xlsx"
+            "Rumus-Gaji-{$brandName}-{$tanggal}.xlsx"
         );
     }
 
     public function exportRumusGajiWijayaMingguan()
     {
         $tanggal = $this->tanggal ?? now()->format('Y-m-d');
-        
+
         // Cek missing target
         $this->missingTargetItems = app(ValidasiTargetProduksiService::class)
             ->cekMissingTarget($tanggal);
@@ -384,7 +580,7 @@ class NewAbsensi extends Page implements HasForms
                 ->send();
         }
 
-        $acuan = \Illuminate\Support\Carbon::parse($tanggal)->startOfDay();
+        $acuan = Carbon::parse($tanggal)->startOfDay();
         $jumatAwal = $acuan->copy();
         while (! $jumatAwal->isFriday()) {
             $jumatAwal->subDay();
@@ -392,16 +588,16 @@ class NewAbsensi extends Page implements HasForms
         $kamisAkhir = $jumatAwal->copy()->addDays(6);
 
         if ($jumatAwal->month === $kamisAkhir->month) {
-            $dateRange = $jumatAwal->format('d') . ' - ' . $kamisAkhir->format('d') . ' ' . $kamisAkhir->translatedFormat('F');
+            $dateRange = $jumatAwal->format('d').' - '.$kamisAkhir->format('d').' '.$kamisAkhir->translatedFormat('F');
         } else {
-            $dateRange = $jumatAwal->format('d') . ' ' . $jumatAwal->translatedFormat('F') . ' - ' . $kamisAkhir->format('d') . ' ' . $kamisAkhir->translatedFormat('F');
+            $dateRange = $jumatAwal->format('d').' '.$jumatAwal->translatedFormat('F').' - '.$kamisAkhir->format('d').' '.$kamisAkhir->translatedFormat('F');
         }
 
         $brandName = filament()->getBrandName();
         $fileName = "Rumus Gaji {$brandName} {$dateRange}.xlsx";
 
         return Excel::download(
-            new \App\Exports\RumusGajiWijayaMingguanExport($tanggal),
+            new RumusGajiWijayaMingguanExport($tanggal),
             $fileName
         );
     }
@@ -478,6 +674,21 @@ class NewAbsensi extends Page implements HasForms
     }
 
     /**
+     * Toggle arah sorting kolom Potongan.
+     * Urutan: tidak sort → terbesar ke terkecil (desc) → terkecil ke terbesar (asc) → tidak sort.
+     */
+    public function sortByPotongan(): void
+    {
+        if ($this->sortPotongan === null) {
+            $this->sortPotongan = 'desc';
+        } elseif ($this->sortPotongan === 'desc') {
+            $this->sortPotongan = 'asc';
+        } else {
+            $this->sortPotongan = null;
+        }
+    }
+
+    /**
      * Dipanggil otomatis oleh Livewire setiap kali property $tanggal
      * berubah lewat wire:model.live di blade. Reset dulu hasil
      * pengecekan lama (supaya tabel peringatan tidak "nyampur" dengan
@@ -494,5 +705,15 @@ class NewAbsensi extends Page implements HasForms
         $this->showTargetPanel = true;
 
         $this->cekTargetProduksi();
+    }
+
+    /**
+     * Dipanggil otomatis oleh Livewire setiap kali property $filterSumber
+     * berubah. Reset expandedRows supaya state expand/collapse tidak kacau
+     * ketika baris yang tampil di tabel berubah karena filter diganti.
+     */
+    public function updatedFilterSumber(): void
+    {
+        $this->expandedRows = [];
     }
 }

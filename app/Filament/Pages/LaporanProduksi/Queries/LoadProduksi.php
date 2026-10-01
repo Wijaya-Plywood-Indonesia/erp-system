@@ -11,7 +11,8 @@ class LoadProduksi
         return ProduksiRotary::with([
             'mesin:id,nama_mesin',
             'detailPegawaiRotary.pegawai:id,kode_pegawai,nama_pegawai',
-            'detailPaletRotary:id,id_produksi,id_ukuran,total_lembar',
+            'detailPaletRotary:id,id_produksi,id_ukuran,kw,total_lembar',
+            'detailPaletRotary.ukuran:id,panjang,lebar,tebal',
             'kendalaRotaries',
         ])
             ->whereDate('tgl_produksi', $tgl)

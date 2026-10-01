@@ -22,6 +22,8 @@ class PengawasRekapPotonganGaji extends Page implements HasForms
 
     protected static ?string $navigationLabel = 'Rekap Potongan Gaji';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Absen dan Gaji';
+
     public ?array $data = [];
 
     public function mount(): void

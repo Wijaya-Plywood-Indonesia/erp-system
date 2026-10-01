@@ -14,11 +14,21 @@ enum Mesin: int
     case PotJelek  = 15;
     case Bongkar   = 7;
     case Stik      = 8;
-    case DryerPagi  = 17;
-    case DryerMalam = 18;
+    case DryerPagi  = 5;  // FIX: DB id=5 = DRYER PAGI (sebelumnya salah 17)
+    case DryerMalam = 6;  // FIX: DB id=6 = DRYER MALAM (sebelumnya salah 18)
     case PotAfalanJoint = 12;
     case SandingJoint = 11;
     case PilihVeneer = 14;
+    // Divisi yang ditambahkan
+    case SandingBesar   = 17; // DB id=17 = SANDING BESAR
+    case SandingKecil   = 18; // DB id=18 = SANDING KECIL
+    case Hotpress       = 13; // DB id=13 = HOTPRESS
+    case TembelTriplek  = 24; // DB id=24 = TEMBEL TRIPLEK
+    case BuatPalet      = 25; // DB id=25 = BUAT PALET
+    case PilihDanTembel = 28; // DB id=28 = PILIH DAN TEMBEL
+    case GrajiOtomatis  = 29; // DB id=29 = GRAJI OTOMATIS
+    case Nyusup         = 30; // DB id=30 = NYUSUP
+
 
     public function satuan(): Satuan
     {
@@ -34,7 +44,8 @@ enum Mesin: int
     public function resolveByShiftOnly(): bool
     {
         return match ($this) {
-            self::DryerPagi, self::DryerMalam, self::Bongkar, self::Stik => true,
+            self::DryerPagi, self::DryerMalam, self::Bongkar, self::Stik,
+            self::BuatPalet => true,
             default => false,
         };
     }
@@ -52,7 +63,7 @@ enum Mesin: int
     public function strategiPembagian(): StrategiPembagian
     {
         return match ($this) {
-            self::Repair => StrategiPembagian::IndividualTarget,
+            self::Repair, self::Nyusup => StrategiPembagian::IndividualTarget,
             default => StrategiPembagian::Kolektif,
         };
     }

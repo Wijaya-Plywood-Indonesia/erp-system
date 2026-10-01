@@ -28,9 +28,9 @@ class PengajuanLogCore extends Page implements HasTable
     use HasPageShield, InteractsWithTable;
     protected string $view = 'filament.pages.pengajuan-log-core';
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-archive-box';
-    protected static string|UnitEnum|null $navigationGroup = 'Pengajuan';
-    protected static ?string $navigationLabel = 'Pengajuan Log Core';
-    protected static ?string $title = 'Pengajuan Log Core';
+    protected static string|UnitEnum|null $navigationGroup = 'Rotary';
+    protected static ?string $navigationLabel = 'Log Core';
+    protected static ?string $title = 'Penggunaan Log Core';
 
     protected function getHeaderActions(): array
     {

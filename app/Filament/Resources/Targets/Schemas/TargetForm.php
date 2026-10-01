@@ -32,23 +32,25 @@ class TargetForm
                     ->required(),
 
                 Select::make('id_jenis_kayu')
-                ->label('Jenis Kayu')
-                ->relationship('jenisKayu', 'nama_kayu')
-                ->required()
-                ->dehydrated()
-                ->reactive()
-                ->unique(
-                    table: 'targets',
-                    column: 'id_jenis_kayu',
-                    ignoreRecord: true,
-                    modifyRuleUsing: fn (Unique $rule, $get) => $rule
-                        ->where('id_mesin', $get('id_mesin'))
-                        ->where('id_ukuran', $get('id_ukuran'))
-                        ->where('grade', $get('grade')),
-                )
-                ->validationMessages([
-                    'unique' => 'Target untuk kombinasi mesin, ukuran, jenis kayu, dan grade ini sudah ada.',
-                ]),
+
+                    ->label('Jenis Kayu')
+                    ->relationship('jenisKayu', 'nama_kayu')
+                    ->required()
+                    ->dehydrated()
+                    ->reactive()
+                    ->unique(
+                        table: 'targets',
+                        column: 'id_jenis_kayu',
+                        ignoreRecord: true,
+                        modifyRuleUsing: fn (Unique $rule, $get) => $rule
+                            ->where('id_mesin', $get('id_mesin'))
+                            ->where('id_ukuran', $get('id_ukuran'))
+                            ->where('grade', $get('grade'))
+                            ->where('shift', $get('shift')),
+                    )
+                    ->validationMessages([
+                        'unique' => 'Target untuk kombinasi mesin, ukuran, jenis kayu, dan grade ini sudah ada.',
+                    ]),
 
                 TextInput::make('ukuran')
                     ->label('Kode Ukuran')
@@ -61,6 +63,16 @@ class TargetForm
                     ->relationship('kategoriBarang', 'nama_kategori')
                     ->searchable()
                     ->preload()
+                    ->nullable(),
+
+                Select::make('shift')
+                    ->label('Shift')
+                    ->helperText('Khusus target yang dibedakan per shift, misal Sanding Besar/Kecil (Pagi/Malam). Kosongkan untuk mesin lain.')
+                    ->options([
+                        'PAGI' => 'Pagi',
+                        'MALAM' => 'Malam',
+                    ])
+                    ->native(false)
                     ->nullable(),
 
                 TextInput::make('grade')

@@ -28,6 +28,16 @@ class DetailPegawaiStik extends Model
         return $this->belongsTo(Pegawai::class, 'id_pegawai');
     }
 
+    public function detailHasilStik()
+    {
+        return $this->belongsToMany(
+            DetailHasilStik::class,
+            'detail_hasil_stik_pegawai',
+            'detail_pegawai_stik_id',
+            'detail_hasil_stik_id'
+        )->withTimestamps();
+    }
+
     protected static function booted()
     {
         // Menggunakan static::saved mencakup Created dan Updated

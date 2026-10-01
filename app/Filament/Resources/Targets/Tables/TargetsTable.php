@@ -43,6 +43,11 @@ class TargetsTable
                     ->numeric()
                     ->sortable(),
 
+                TextColumn::make('shift')
+                    ->label('Shift')
+                    ->badge()
+                    ->toggleable(),
+
                 TextColumn::make('grade')
                     ->label('KW')
                     ->badge()

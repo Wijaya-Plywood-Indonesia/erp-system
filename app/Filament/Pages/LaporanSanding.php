@@ -2,24 +2,26 @@
 
 namespace App\Filament\Pages;
 
-use Filament\Pages\Page;
-use Filament\Actions\Action;
-use Filament\Notifications\Notification;
-use Filament\Forms\Concerns\InteractsWithForms;
-use Filament\Forms\Contracts\HasForms;
-use Filament\Forms\Components\DatePicker;
 use App\Exports\LaporanSandingExport;
-use Maatwebsite\Excel\Facades\Excel;
-use App\Models\ProduksiSanding;
-use Carbon\Carbon;
+use App\Filament\Pages\LaporanSanding\Queries\LoadLaporanSanding;
+use App\Filament\Pages\LaporanSanding\Transformers\SandingDataMap;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Carbon\Carbon;
+use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Maatwebsite\Excel\Facades\Excel;
 use UnitEnum;
 
 class LaporanSanding extends Page implements HasForms
 {
     use InteractsWithForms;
     use HasPageShield;
+
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected string $view = 'filament.pages.laporan-sanding';
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
@@ -30,14 +32,15 @@ class LaporanSanding extends Page implements HasForms
 
     public $reportData = [
         'detail' => [],
-        'summary' => []
+        'summary' => [],
+        'produksi' => [],
     ];
     public $tanggal = null;
 
     public function mount(): void
     {
-        $this->form->fill(['tanggal' => $this->tanggal]);
         $this->tanggal = now()->format('Y-m-d');
+        $this->form->fill(['tanggal' => $this->tanggal]);
         $this->loadAllData();
     }
 
@@ -53,14 +56,14 @@ class LaporanSanding extends Page implements HasForms
                 ->label('Refresh Data')
                 ->icon('heroicon-o-arrow-path')
                 ->color('gray')
-                ->action(fn() => $this->loadAllData()),
+                ->action(fn () => $this->loadAllData()),
 
             Action::make('exportExcel')
                 ->label('Download Excel')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
-                ->action(fn() => $this->exportExcel())
-                ->visible(fn() => !empty($this->reportData['detail'])),
+                ->action(fn () => $this->exportExcel())
+                ->visible(fn () => ! empty($this->reportData['detail'])),
         ];
     }
 
@@ -90,7 +93,7 @@ class LaporanSanding extends Page implements HasForms
     {
         return [
             DatePicker::make('tanggal')
-                ->label('Pilih Tanggal')
+                ->label('Pilih Tanggal Laporan Sanding')
                 ->reactive()
                 ->format('Y-m-d')
                 ->displayFormat('d/m/Y')
@@ -103,58 +106,59 @@ class LaporanSanding extends Page implements HasForms
     }
 
     public function loadAllData()
-{
-    $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+    {
+        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
 
-    $produksiList = ProduksiSanding::with([
-        'hasilSandings.barangSetengahJadi.grade.kategoriBarang', // Pastikan relasi ini dimuat
-        'pegawaiSandings',
-        'mesin'
-    ])
-        ->whereDate('tanggal', $tanggal)
-        ->get();
+        $produksiList = LoadLaporanSanding::run($tanggal);
 
-    $detail = [];
-    $summary = [];
+        $detail = [];
+        $summary = [];
 
-    foreach ($produksiList as $prod) {
-        $mesinLabel = ($prod->mesin->nama_mesin ?? 'Mesin') . ' ' . ucfirst($prod->shift ?? '');
+        foreach ($produksiList as $prod) {
+            $mesinLabel = ($prod->mesin->nama_mesin ?? 'Mesin') . ' ' . ucfirst($prod->shift ?? '');
 
-        foreach ($prod->hasilSandings as $item) {
-            $b = $item->barangSetengahJadi;
-            $u = $b->ukuran ?? null;
-            $p = $u->panjang ?? 0;
-            $l = $u->lebar ?? 0;
-            $t = $u->tebal ?? 0;
-            $byk = $item->kuantitas ?? 0;
+            foreach ($prod->hasilSandings as $item) {
+                $b = $item->barangSetengahJadi;
+                $u = $b->ukuran ?? null;
+                $p = $u->panjang ?? 0;
+                $l = $u->lebar ?? 0;
+                $t = $u->tebal ?? 0;
+                $byk = $item->kuantitas ?? 0;
 
-            // Mengambil kategori dari Grade -> KategoriBarang
-            $namaKategori = $b->grade->kategoriBarang->nama_kategori ?? 'BARANG';
-            $namaGrade = $b->grade->nama_grade ?? '-';
+                // Kategori dari Grade -> KategoriBarang
+                $namaKategori = $b->grade->kategoriBarang->nama_kategori ?? 'BARANG';
+                $namaGrade = $b->grade->nama_grade ?? '-';
 
-            $detail[] = [
+                $detail[] = [
+                    'tanggal' => Carbon::parse($prod->tanggal)->format('d-M-y'),
+                    'mesin' => $mesinLabel,
+                    'p' => $p,
+                    'l' => $l,
+                    't' => $t,
+                    // Hasil: PLATFORM - BETTER
+                    'jenis' => strtoupper($namaKategori . ' - ' . $namaGrade),
+                    'banyak' => $byk,
+                    'm3' => '',
+                ];
+            }
+
+            $summary[] = [
                 'tanggal' => Carbon::parse($prod->tanggal)->format('d-M-y'),
                 'mesin' => $mesinLabel,
-                'p' => $p,
-                'l' => $l,
-                't' => $t,
-                // Hasil: PLATFORM - BETTER
-                'jenis' => strtoupper($namaKategori . ' - ' . $namaGrade),
-                'banyak' => $byk,
-                'm3' => '',
+                'jml_pkj' => $prod->pegawaiSandings->count(),
             ];
         }
 
-        $summary[] = [
-            'tanggal' => Carbon::parse($prod->tanggal)->format('d-M-y'),
-            'mesin' => $mesinLabel,
-            'jml_pkj' => $prod->pegawaiSandings->count(),
+        // Blok laporan target & potongan (1 blok per mesin + shift)
+        $produksiMap = collect(SandingDataMap::make($produksiList))
+            ->sortBy([['mesin', 'asc'], ['shift', 'asc']])
+            ->values()
+            ->all();
+
+        $this->reportData = [
+            'detail' => $detail,
+            'summary' => $summary,
+            'produksi' => $produksiMap,
         ];
     }
-
-    $this->reportData = [
-        'detail' => $detail,
-        'summary' => $summary
-    ];
-}
 }

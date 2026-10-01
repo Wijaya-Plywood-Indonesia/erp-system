@@ -9,6 +9,8 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Components\DatePicker;
 use App\Exports\LaporanPilihPlywoodExport;
+use App\Filament\Pages\LaporanPilihPlywood\Queries\LoadLaporanPilihPlywood;
+use App\Filament\Pages\LaporanPilihPlywood\Transformers\PilihPlywoodDataMap;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Models\ProduksiPilihPlywood;
 use Carbon\Carbon;
@@ -36,6 +38,8 @@ class LaporanProduksiPilihPlywood extends Page implements HasForms
         'detail' => [],
         'summary' => []
     ];
+
+    public array $targetData = [];
 
     /**
      * Tanggal laporan yang aktif.
@@ -108,6 +112,15 @@ class LaporanProduksiPilihPlywood extends Page implements HasForms
     public function loadAllData()
     {
         $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+
+        // Target & potongan (Cara A: diskalakan ke jumlah orang & jam kerja).
+        try {
+            $produksiListTarget = LoadLaporanPilihPlywood::run($tanggal);
+            $this->targetData = PilihPlywoodDataMap::make($produksiListTarget);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error loading Target Pilih Plywood: ' . $e->getMessage());
+            $this->targetData = [];
+        }
 
         $produksiList = ProduksiPilihPlywood::with([
             'hasilPilihPlywood.barangSetengahJadiHp.ukuran',

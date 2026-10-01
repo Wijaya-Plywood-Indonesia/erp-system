@@ -60,7 +60,7 @@ class TempatKayusTable
      *    delta batang/kubikasi (after - before) yang BISA MINUS, sehingga otomatis
      *    mengurangi total pada kolom "Batang" dan "Kubikasi" di tabel/modal.
      */
-    private static function getKayuAktif(int $lahanId): Collection
+    public static function getKayuAktif(int $lahanId): Collection
     {
         if (isset(self::$snapshot[$lahanId])) {
             return self::$snapshot[$lahanId];
@@ -115,6 +115,7 @@ class TempatKayusTable
             'kayuMasuk.notaKayu',
         ])
             ->where('lahan_id', $lahanId)
+            ->whereHas('kayuMasuk.notaKayu')
             ->when($cutoff, function ($q) use ($cutoff) {
                 $q->whereHas('kayuMasuk.notaKayu', function ($query) use ($cutoff) {
                     $query->where(function ($sub) use ($cutoff) {
@@ -167,13 +168,19 @@ class TempatKayusTable
                 ->get();
 
             foreach ($opnameSetelahReset as $log) {
-                $deltaBatang = (int) $log->stok_batang_after - (int) $log->stok_batang_before;
+                // Opname baru menyimpan selisih khusus tempat kayu (tk_delta_*),
+                // dihitung dari total tempat kayu saat opname, bukan dari stok lahan.
+                // Log lama (kolom null) memakai rumus lama: after - before.
+                $deltaBatang = $log->tk_delta_batang !== null
+                    ? (int) $log->tk_delta_batang
+                    : (int) $log->stok_batang_after - (int) $log->stok_batang_before;
 
-                // NOTE: sesuaikan nama kolom ini jika berbeda di skema Anda.
-                $deltaKubikasi = round(
-                    (float) ($log->stok_kubikasi_after ?? 0) - (float) ($log->stok_kubikasi_before ?? 0),
-                    4
-                );
+                $deltaKubikasi = $log->tk_delta_kubikasi !== null
+                    ? round((float) $log->tk_delta_kubikasi, 4)
+                    : round(
+                        (float) ($log->stok_kubikasi_after ?? 0) - (float) ($log->stok_kubikasi_before ?? 0),
+                        4
+                    );
 
                 if ($deltaBatang === 0 && $deltaKubikasi == 0.0) {
                     continue;
@@ -202,6 +209,15 @@ class TempatKayusTable
         self::$snapshot[$lahanId] = $data;
 
         return $data;
+    }
+
+    public static function forgetSnapshot(?int $lahanId = null): void
+    {
+        if ($lahanId === null) {
+            self::$snapshot = [];
+        } else {
+            unset(self::$snapshot[$lahanId]);
+        }
     }
 
     private static function semuaLunas(int $lahanId): bool
@@ -299,13 +315,21 @@ class TempatKayusTable
             ->columns([
                 TextColumn::make('lahan.kode_lahan')
                     ->label('Lahan')
-                    ->sortable()
+                    ->sortable(query: function (Builder $query, string $direction) {
+                        $joins = collect($query->getQuery()->joins)->pluck('table');
+                        if (!$joins->contains('lahans')) {
+                            $query->join('lahans', 'tempat_kayus.id_lahan', '=', 'lahans.id');
+                        }
+                        return $query->reorder('lahans.kode_lahan', $direction);
+                    })
                     ->searchable()
                     ->toggleable(),
 
                 TextColumn::make('group_panjang')
                     ->label('Pjg')
-                    ->sortable()
+                    ->sortable(query: function (Builder $query, string $direction) {
+                        return $query->reorder('hpp_average_summaries.panjang', $direction);
+                    })
                     ->badge()
                     ->color(fn($state) => $state == 260 ? 'success' : 'info')
                     ->toggleable(),
@@ -313,14 +337,30 @@ class TempatKayusTable
                 TextColumn::make('jenis_kayu')
                     ->label('Jenis Kayu')
                     ->getStateUsing(function ($record) {
-                        // $record pada tabel ini sudah merupakan representasi dari HppAverageSummarie per lahan & panjang
-                        $summary = HppAverageSummarie::with('jenisKayu')
-                            ->where('id_lahan', $record->id_lahan)
-                            ->where('panjang', $record->group_panjang)
-                            ->where('stok_batang', '>', 0)
+                        $aktif = self::getKayuAktif((int) $record->id_lahan);
+                        
+                        // Cari data kayu aktif yang panjangnya sesuai dengan group_panjang (bisa juga fallback ke semua)
+                        $matching = $aktif->where('is_opname', false)->filter(function($item) use ($record) {
+                            $panjangs = array_map('trim', explode(',', $item['Panjang'] ?? ''));
+                            return in_array((string) $record->group_panjang, $panjangs);
+                        });
+                        
+                        if ($matching->isEmpty()) {
+                            $matching = $aktif->where('is_opname', false);
+                        }
+                        
+                        $idKayuMasuks = $matching->pluck('ID Kayu')->filter()->unique();
+                        
+                        if ($idKayuMasuks->isEmpty()) {
+                            return '-';
+                        }
+                        
+                        $turusan = \App\Models\DetailTurusanKayu::with('jenisKayu')
+                            ->where('lahan_id', $record->id_lahan)
+                            ->whereIn('id_kayu_masuk', $idKayuMasuks)
                             ->first();
 
-                        return $summary?->jenisKayu?->nama_kayu ?: '-';
+                        return $turusan?->jenisKayu?->nama_kayu ?: '-';
                     })
                     ->toggleable(),
 
@@ -348,18 +388,24 @@ class TempatKayusTable
 
                 TextColumn::make('diserahkan_oleh')
                     ->label('Diserahkan Oleh')
-                    ->sortable()
+                    ->sortable(query: function (Builder $query, string $direction) {
+                        return $query->reorder('tempat_kayus.diserahkan_oleh', $direction);
+                    })
                     ->default('-')
                     ->toggleable(),
 
                 TextColumn::make('diterima_oleh')
-                    ->sortable()
+                    ->sortable(query: function (Builder $query, string $direction) {
+                        return $query->reorder('tempat_kayus.diterima_oleh', $direction);
+                    })
                     ->label('Diterima Oleh')
                     ->default('-')
                     ->toggleable(),
 
                 TextColumn::make('status')
-                    ->sortable()
+                    ->sortable(query: function (Builder $query, string $direction) {
+                        return $query->reorder('tempat_kayus.status', $direction);
+                    })
                     ->label('Status')
                     ->badge()
                     ->formatStateUsing(fn($state) => match ($state) {
@@ -711,6 +757,98 @@ class TempatKayusTable
                 BulkActionGroup::make([
                     DeleteBulkAction::make()->visible($isAdmin),
                 ]),
+            ])
+            ->headerActions([
+                \Filament\Actions\Action::make('sync_lahan_baru')
+                    ->label('Sinkronasi Semua Lahan Baru')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading('Sinkronasi Semua Lahan Baru')
+                    ->modalDescription('Apakah Anda yakin ingin memproses dan mensinkronisasikan semua data lahan baru (yang belum disinkronisasi) ke HPP Average Log dan Tempat Kayu?')
+                    ->modalSubmitActionLabel('Ya, Sinkronisasi')
+                    ->action(function () {
+                        // ── 1) Lahan yang belum punya summaries ──────────────────────────
+                        $lahanIdsTanpaSummary = \App\Models\Lahan::whereHas('detailTurusanKayus')
+                            ->whereDoesntHave('summaries')
+                            ->pluck('id');
+
+                        // ── 2) Lahan yang belum punya tempat_kayu (cek independen) ──────
+                        $lahanIdsTanpaTempatKayu = \App\Models\Lahan::whereHas('detailTurusanKayus')
+                            ->whereDoesntHave('tempatKayu')
+                            ->pluck('id');
+
+                        // Gabungkan untuk cek apakah ada yang perlu disinkronisasi
+                        $semuaLahanIds = $lahanIdsTanpaSummary
+                            ->merge($lahanIdsTanpaTempatKayu)
+                            ->unique()
+                            ->values();
+
+                        if ($semuaLahanIds->isEmpty()) {
+                            \Filament\Notifications\Notification::make()
+                                ->title('Semua lahan sudah tersinkronisasi.')
+                                ->info()
+                                ->send();
+                            return;
+                        }
+
+                        // ── 3) Buat HppAverageSummarie untuk lahan yang belum punya ──────
+                        $summaryCount = 0;
+                        if ($lahanIdsTanpaSummary->isNotEmpty()) {
+                            $details = \App\Models\DetailTurusanKayu::whereIn('lahan_id', $lahanIdsTanpaSummary)->get();
+
+                            $grouped = $details->groupBy(
+                                fn($d) => "{$d->lahan_id}_{$d->jenis_kayu_id}_{$d->panjang}"
+                            );
+
+                            foreach ($grouped as $rows) {
+                                $lahanId     = (int) $rows->first()->lahan_id;
+                                $jenisKayuId = (int) $rows->first()->jenis_kayu_id;
+                                $panjang     = (int) $rows->first()->panjang;
+
+                                \App\Models\HppAverageSummarie::firstOrCreate([
+                                    'id_lahan'      => $lahanId,
+                                    'id_jenis_kayu' => $jenisKayuId,
+                                    'panjang'       => $panjang,
+                                    'grade'         => null,
+                                ], [
+                                    'stok_batang'   => 0,
+                                    'stok_kubikasi' => 0.0,
+                                    'nilai_stok'    => 0.0,
+                                    'hpp_average'   => 0.0,
+                                ]);
+                                $summaryCount++;
+                            }
+                        }
+
+                        // ── 4) Buat TempatKayu untuk semua lahan yang belum punya ────────
+                        $tempatKayuCount = 0;
+                        foreach ($semuaLahanIds as $lahanId) {
+                            // Skip jika sudah punya tempat_kayu
+                            if (\App\Models\TempatKayu::where('id_lahan', $lahanId)->exists()) {
+                                continue;
+                            }
+
+                            $kayuMasuk = \App\Models\KayuMasuk::whereHas('detailTurusanKayus', function ($q) use ($lahanId) {
+                                $q->where('lahan_id', $lahanId);
+                            })->latest()->first();
+
+                            if ($kayuMasuk) {
+                                \App\Models\TempatKayu::create([
+                                    'id_lahan'      => $lahanId,
+                                    'id_kayu_masuk' => $kayuMasuk->id,
+                                    'jumlah_batang' => 0,
+                                ]);
+                                $tempatKayuCount++;
+                            }
+                        }
+
+                        \Filament\Notifications\Notification::make()
+                            ->title('Sinkronasi Berhasil')
+                            ->body("Summary dibuat: {$summaryCount} | Tempat Kayu dibuat: {$tempatKayuCount} lahan")
+                            ->success()
+                            ->send();
+                    }),
             ]);
     }
 }

@@ -44,7 +44,7 @@ class BahanHotPressForm
                     )
                     ->live()
                     ->searchable()
-                    ->placeholder('Semua Grade')
+                    ->placeholder('Grade')
                     ->dehydrated(false),
 
                 // =========================================================================
@@ -78,18 +78,18 @@ class BahanHotPressForm
                         $namaGrade = $gradeId ? Grade::find($gradeId)?->nama_grade : null;
 
                         return self::getPaletOptions($record, $ownerId, $namaGrade, $jenisId)
-    + self::getPlatformOptions($record, $ownerId, $namaGrade, $jenisId)
-    + self::getTriplekOptions($record, $ownerId, $namaGrade, $jenisId);
+                            + self::getPlatformOptions($record, $ownerId, $namaGrade, $jenisId)
+                            + self::getTriplekOptions($record, $ownerId, $namaGrade, $jenisId);
                     })
                     ->afterStateHydrated(function ($set, ?BahanHotpress $record) {
-    if ($record?->sumber === 'veneer' && $record->id_mutasi_keluar_palet) {
-        $set('barang_setengah_jadi_selector', "veneer:{$record->id_mutasi_keluar_palet}");
-    } elseif ($record?->sumber === 'platform' && $record->id_mutasi_keluar_platform) {
-        $set('barang_setengah_jadi_selector', "platform:{$record->id_mutasi_keluar_platform}");
-    } elseif ($record?->sumber === 'triplek' && $record->id_mutasi_keluar_triplek) {
-        $set('barang_setengah_jadi_selector', "triplek:{$record->id_mutasi_keluar_triplek}");
-    }
-})
+                        if ($record?->sumber === 'veneer' && $record->id_mutasi_keluar_palet) {
+                            $set('barang_setengah_jadi_selector', "veneer:{$record->id_mutasi_keluar_palet}");
+                        } elseif ($record?->sumber === 'platform' && $record->id_mutasi_keluar_platform) {
+                            $set('barang_setengah_jadi_selector', "platform:{$record->id_mutasi_keluar_platform}");
+                        } elseif ($record?->sumber === 'triplek' && $record->id_mutasi_keluar_triplek) {
+                            $set('barang_setengah_jadi_selector', "triplek:{$record->id_mutasi_keluar_triplek}");
+                        }
+                    })
                     ->afterStateUpdated(function ($state, callable $set, ?BahanHotpress $record) {
                         if (! $state || ! str_contains($state, ':')) {
                             $set('isi', null);
@@ -104,51 +104,49 @@ class BahanHotPressForm
 
                         [$sumber, $id] = explode(':', $state, 2);
 
-    if ($sumber === 'veneer') {
-        $palet = VeneerJadiMutasiKeluarPalet::find($id);
-        if (! $palet) return;
-        $sisa = $palet->sisa;
-        if ($record && $record->sumber === 'veneer' && $record->id_mutasi_keluar_palet === (int) $id) {
-            $sisa += (float) $record->isi;
-        }
-        $set('no_palet', $palet->nomor_palet);
-        $set('sisa_tersedia', $sisa);
-        $set('isi', $sisa);
-        $set('sumber', 'veneer');
-        $set('id_mutasi_keluar_palet', (int) $id);
-        $set('id_mutasi_keluar_platform', null);
-        $set('id_mutasi_keluar_triplek', null);
-
-    } elseif ($sumber === 'triplek') {
-        $palet = TriplekJadiMutasiKeluarPalet::find($id);
-        if (! $palet) return;
-        $sisa = $palet->sisa;
-        if ($record && $record->sumber === 'triplek' && $record->id_mutasi_keluar_triplek === (int) $id) {
-            $sisa += (float) $record->isi;
-        }
-        $set('no_palet', $palet->nomor_palet);
-        $set('sisa_tersedia', $sisa);
-        $set('isi', $sisa);
-        $set('sumber', 'triplek');
-        $set('id_mutasi_keluar_triplek', (int) $id);
-        $set('id_mutasi_keluar_palet', null);
-        $set('id_mutasi_keluar_platform', null);
-
-    } else {
-        $palet = PlatformJadiMutasiKeluarPalet::find($id);
-        if (! $palet) return;
-        $sisa = $palet->sisa;
-        if ($record && $record->sumber === 'platform' && $record->id_mutasi_keluar_platform === (int) $id) {
-            $sisa += (float) $record->isi;
-        }
-        $set('no_palet', $palet->nomor_palet);
-        $set('sisa_tersedia', $sisa);
-        $set('isi', $sisa);
-        $set('sumber', 'platform');
-        $set('id_mutasi_keluar_platform', (int) $id);
-        $set('id_mutasi_keluar_palet', null);
-        $set('id_mutasi_keluar_triplek', null);
-    }
+                        if ($sumber === 'veneer') {
+                            $palet = VeneerJadiMutasiKeluarPalet::find($id);
+                            if (! $palet) return;
+                            $sisa = $palet->sisa;
+                            if ($record && $record->sumber === 'veneer' && $record->id_mutasi_keluar_palet === (int) $id) {
+                                $sisa += (float) $record->isi;
+                            }
+                            $set('no_palet', $palet->nomor_palet);
+                            $set('sisa_tersedia', $sisa);
+                            $set('isi', $sisa);
+                            $set('sumber', 'veneer');
+                            $set('id_mutasi_keluar_palet', (int) $id);
+                            $set('id_mutasi_keluar_platform', null);
+                            $set('id_mutasi_keluar_triplek', null);
+                        } elseif ($sumber === 'triplek') {
+                            $palet = TriplekJadiMutasiKeluarPalet::find($id);
+                            if (! $palet) return;
+                            $sisa = $palet->sisa;
+                            if ($record && $record->sumber === 'triplek' && $record->id_mutasi_keluar_triplek === (int) $id) {
+                                $sisa += (float) $record->isi;
+                            }
+                            $set('no_palet', $palet->nomor_palet);
+                            $set('sisa_tersedia', $sisa);
+                            $set('isi', $sisa);
+                            $set('sumber', 'triplek');
+                            $set('id_mutasi_keluar_triplek', (int) $id);
+                            $set('id_mutasi_keluar_palet', null);
+                            $set('id_mutasi_keluar_platform', null);
+                        } else {
+                            $palet = PlatformJadiMutasiKeluarPalet::find($id);
+                            if (! $palet) return;
+                            $sisa = $palet->sisa;
+                            if ($record && $record->sumber === 'platform' && $record->id_mutasi_keluar_platform === (int) $id) {
+                                $sisa += (float) $record->isi;
+                            }
+                            $set('no_palet', $palet->nomor_palet);
+                            $set('sisa_tersedia', $sisa);
+                            $set('isi', $sisa);
+                            $set('sumber', 'platform');
+                            $set('id_mutasi_keluar_platform', (int) $id);
+                            $set('id_mutasi_keluar_palet', null);
+                            $set('id_mutasi_keluar_triplek', null);
+                        }
                     })
                     ->columnSpanFull(),
 
@@ -322,44 +320,44 @@ class BahanHotPressForm
     }
 
     protected static function getTriplekOptions(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
-{
-    $currentId = $record?->sumber === 'triplek' ? $record?->id_mutasi_keluar_triplek : null;
-    $currentIsi = (float) ($record?->isi ?? 0);
+    {
+        $currentId = $record?->sumber === 'triplek' ? $record?->id_mutasi_keluar_triplek : null;
+        $currentIsi = (float) ($record?->isi ?? 0);
 
-    return TriplekJadiMutasiKeluarPalet::query()
-        ->whereNotNull('diterima_by')
-        ->whereHas('mutasiKeluar', function ($q) use ($ownerRecordId, $namaGrade, $jenisId) {
-            if ($namaGrade) {
-                $q->where('kw_grade', $namaGrade);
-            }
-            if ($jenisId) {
-                $q->where('id_jenis_kayu', $jenisId);
-            }
-        })
-        ->with('mutasiKeluar.jenisKayu')
-        ->orderBy('id', 'desc')
-        ->get()
-        ->map(function ($palet) use ($currentId, $currentIsi) {
-            $sisa = $palet->sisa + ($palet->id === $currentId ? $currentIsi : 0);
-            return [$palet, $sisa];
-        })
-        ->filter(fn($pair) => $pair[1] > 0)
-        ->mapWithKeys(function ($pair) {
-            [$palet, $sisa] = $pair;
-            $mk = $palet->mutasiKeluar;
+        return TriplekJadiMutasiKeluarPalet::query()
+            ->whereNotNull('diterima_by')
+            ->whereHas('mutasiKeluar', function ($q) use ($ownerRecordId, $namaGrade, $jenisId) {
+                if ($namaGrade) {
+                    $q->where('kw_grade', $namaGrade);
+                }
+                if ($jenisId) {
+                    $q->where('id_jenis_kayu', $jenisId);
+                }
+            })
+            ->with('mutasiKeluar.jenisKayu')
+            ->orderBy('id', 'desc')
+            ->get()
+            ->map(function ($palet) use ($currentId, $currentIsi) {
+                $sisa = $palet->sisa + ($palet->id === $currentId ? $currentIsi : 0);
+                return [$palet, $sisa];
+            })
+            ->filter(fn($pair) => $pair[1] > 0)
+            ->mapWithKeys(function ($pair) {
+                [$palet, $sisa] = $pair;
+                $mk = $palet->mutasiKeluar;
 
-            $panjang = (float) $mk->panjang + 0;
-            $lebar   = (float) $mk->lebar + 0;
-            $tebal   = (float) $mk->tebal + 0;
-            $kw      = $mk->kw_grade ?? '?';
-            $kayu    = $mk->jenisKayu?->nama_kayu ?? '?';
-            $noPalet = $palet->nomor_palet ?? '?';
+                $panjang = (float) $mk->panjang + 0;
+                $lebar   = (float) $mk->lebar + 0;
+                $tebal   = (float) $mk->tebal + 0;
+                $kw      = $mk->kw_grade ?? '?';
+                $kayu    = $mk->jenisKayu?->nama_kayu ?? '?';
+                $noPalet = $palet->nomor_palet ?? '?';
 
-            $label = "Triplek Jadi | {$panjang}mm x {$lebar}mm x {$tebal}mm | {$kw} | {$kayu} "
-                . "| Palet {$noPalet} | Sisa {$sisa} Lbr";
+                $label = "Triplek Jadi | {$panjang}mm x {$lebar}mm x {$tebal}mm | {$kw} | {$kayu} "
+                    . "| Palet {$noPalet} | Sisa {$sisa} Lbr";
 
-            return ["triplek:{$palet->id}" => $label];
-        })
-        ->toArray();
-}
+                return ["triplek:{$palet->id}" => $label];
+            })
+            ->toArray();
+    }
 }

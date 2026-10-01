@@ -44,10 +44,13 @@
                 $potonganTotal = $first['potongan_total'] ?? 0;
                 $potonganPerOrang = $first['potongan_per_orang'] ?? 0;
                 $hasTarget = $first['has_target'] ?? false;
+                $itemsUkuran = $first['items'] ?? [];
 
-                // Capaian % dihitung dari target yang SUDAH disesuaikan (target adjusted),
-                // konsisten dengan basis perhitungan potongan di ProduksiDataMap.
-                $capaianPersen = $target > 0 ? ($hasil / $target) * 100 : 0;
+                // Capaian % GLOBAL: dijumlah lintas ukuran (bukan dihitung ulang
+                // dari total hasil/total target), karena kru cuma punya 1 jatah
+                // hari kerja yang dibagi ke semua ukuran — konsisten dengan
+                // ProduksiDataMap & pola yang sama dipakai di Laporan Join.
+                $capaianPersen = $first['capaian_global_persen'] ?? ($target > 0 ? ($hasil / $target) * 100 : 0);
                 $tercapai = $hasTarget ? $capaianPersen >= 100 : null;
             @endphp
 
@@ -165,31 +168,41 @@
                                     <tr>
                                         <td colspan="7"
                                             class="p-3 text-center text-xs text-zinc-600 dark:text-zinc-400 space-x-3">
-                                            <span class="font-medium">Target Normal:</span>
-                                            <strong
-                                                class="font-mono text-zinc-900 dark:text-white">{{ number_format($targetNormal) }}</strong>
+                                            @if (count($itemsUkuran) <= 1)
+                                                <span class="font-medium">Target Normal:</span>
+                                                <strong
+                                                    class="font-mono text-zinc-900 dark:text-white">{{ number_format($targetNormal) }}</strong>
 
-                                            <span class="text-zinc-400">|</span>
+                                                <span class="text-zinc-400">|</span>
 
-                                            <span class="font-medium">Target Disesuaikan:</span>
-                                            <strong
-                                                class="font-mono text-zinc-900 dark:text-white">{{ number_format($target) }}</strong>
+                                                <span class="font-medium">Target Penyesuaian:</span>
+                                                <strong
+                                                    class="font-mono text-zinc-900 dark:text-white">{{ number_format($target) }}</strong>
 
-                                            <span class="text-zinc-400">|</span>
+                                                <span class="text-zinc-400">|</span>
 
-                                            <span class="font-medium">Hasil:</span>
-                                            <strong
-                                                class="font-mono {{ $selisih >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">
-                                                {{ number_format($hasil) }}
-                                            </strong>
+                                                <span class="font-medium">Hasil:</span>
+                                                <strong
+                                                    class="font-mono {{ $selisih >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">
+                                                    {{ number_format($hasil) }}
+                                                </strong>
 
-                                            <span class="text-zinc-400">|</span>
+                                                <span class="text-zinc-400">|</span>
 
-                                            <span class="font-medium">Selisih:</span>
-                                            <strong
-                                                class="font-mono {{ $selisih >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">
-                                                {{ $selisih >= 0 ? '+' : '' }}{{ number_format(abs($selisih)) }}
-                                            </strong>
+                                                <span class="font-medium">Selisih:</span>
+                                                <strong
+                                                    class="font-mono {{ $selisih >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">
+                                                    {{ $selisih >= 0 ? '+' : '' }}{{ number_format(abs($selisih)) }}
+                                                </strong>
+                                            @else
+                                                {{-- >1 ukuran: Target Normal/Disesuaikan/Selisih gabungan tidak
+                                                     ditampilkan di sini (penjumlahan mentah antar ukuran menyesatkan
+                                                     jika dibandingkan langsung ke Hasil). Rincian & capaian per
+                                                     ukuran ada di tabel "Rincian Per Ukuran" di bawah. --}}
+                                                <span class="font-medium">Hasil (semua ukuran):</span>
+                                                <strong
+                                                    class="font-mono text-zinc-900 dark:text-white">{{ number_format($hasil) }}</strong>
+                                            @endif
 
                                             <span class="text-zinc-400">|</span>
 
@@ -288,6 +301,59 @@
                             </table>
                         </div>
                     </div>
+
+                    @if (count($itemsUkuran) > 1)
+                        <div class="mt-4 w-full overflow-x-auto">
+                            <div class="min-w-[600px]">
+                                <table class="w-full text-sm border-collapse border border-zinc-300 dark:border-zinc-600">
+                                    <thead>
+                                        <tr class="bg-zinc-700 text-white">
+                                            <th colspan="6" class="p-2 text-xs font-bold text-center uppercase tracking-wider">
+                                                Rincian Per Ukuran
+                                            </th>
+                                        </tr>
+                                        <tr class="bg-zinc-700 text-white">
+                                            <th colspan="6" class="px-2 pb-2 text-[11px] font-normal text-center normal-case text-zinc-300">
+                                                Target Penyesuaian dihitung untuk {{ $totalPekerja }} orang pekerja, jam efektif {{ number_format($jamKerjaEfektif, 1) }} jam
+                                            </th>
+                                        </tr>
+                                        <tr class="bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-300">
+                                            <th class="p-2 text-left text-xs font-semibold uppercase">Ukuran</th>
+                                            <th class="p-2 text-center text-xs font-semibold uppercase">KW</th>
+                                            <th class="p-2 text-right text-xs font-semibold uppercase">Hasil</th>
+                                            <th class="p-2 text-right text-xs font-semibold uppercase">Target Penyesuaian</th>
+                                            <th class="p-2 text-right text-xs font-semibold uppercase">Target Normal</th>
+                                            <th class="p-2 text-right text-xs font-semibold uppercase">Capaian</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($itemsUkuran as $it)
+                                            <tr class="border-t border-zinc-300 dark:border-zinc-700">
+                                                <td class="p-2 text-left text-xs text-zinc-900 dark:text-zinc-100 font-medium">
+                                                    {{ $it['ukuran'] }}
+                                                </td>
+                                                <td class="p-2 text-center text-xs text-zinc-700 dark:text-zinc-300">
+                                                    {{ $it['kw'] }}
+                                                 </td>
+                                                <td class="p-2 text-right text-xs font-mono text-zinc-900 dark:text-zinc-100">
+                                                    {{ number_format($it['hasil']) }}
+                                                </td>
+                                                <td class="p-2 text-right text-xs font-mono text-zinc-700 dark:text-zinc-300">
+                                                    {{ $it['has_target'] ? number_format($it['target']) : '-' }}
+                                                </td>
+                                                <td class="p-2 text-right text-xs font-mono text-zinc-500 dark:text-zinc-400">
+                                                    {{ $it['has_target'] ? number_format($it['target_normal']) : '-' }}
+                                                </td>
+                                                <td class="p-2 text-right text-xs font-mono font-bold {{ ($it['capaian_persen'] ?? 0) >= 100 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">
+                                                    {{ $it['has_target'] ? number_format($it['capaian_persen'], 1, ',', '.') . '%' : 'Target ?' }}
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    @endif
                 </div>
             </div>
 
