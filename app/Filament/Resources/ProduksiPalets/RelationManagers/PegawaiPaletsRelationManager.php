@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiPalets\RelationManagers;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use App\Models\Pegawai;
 use App\Services\ValidasiProduksiPaletService;
 use Carbon\CarbonPeriod;
@@ -97,6 +98,9 @@ class PegawaiPaletsRelationManager extends RelationManager
     {
         $owner = $this->getOwnerRecord();
 
+        // Tanggal produksi Palet yang sedang dibuka
+        $tanggalPalet = fn($livewire) => $livewire->getOwnerRecord()->tanggal;
+
         return $table
             ->recordTitleAttribute('PegawaiPalet')
             ->columns([
@@ -158,9 +162,16 @@ class PegawaiPaletsRelationManager extends RelationManager
                 DeleteAction::make()
                     ->hidden(fn() => $owner && ValidasiProduksiPaletService::isLocked($owner))
                     ->after(fn() => $owner && ValidasiProduksiPaletService::prosesValidasiByProduksi($owner)),
+
+                PindahPegawaiTableActions::recordAction('palet', $tanggalPalet)
+                    ->hidden(fn() => $owner && ValidasiProduksiPaletService::isLocked($owner))
+                    ->after(fn() => $owner && ValidasiProduksiPaletService::prosesValidasiByProduksi($owner)),
+                PindahPegawaiTableActions::batalAction('palet'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('palet', $tanggalPalet)
+                        ->after(fn() => $owner && ValidasiProduksiPaletService::prosesValidasiByProduksi($owner)),
                     DeleteBulkAction::make()
                         ->hidden(fn() => $owner && ValidasiProduksiPaletService::isLocked($owner))
                         ->after(fn() => $owner && ValidasiProduksiPaletService::prosesValidasiByProduksi($owner)),

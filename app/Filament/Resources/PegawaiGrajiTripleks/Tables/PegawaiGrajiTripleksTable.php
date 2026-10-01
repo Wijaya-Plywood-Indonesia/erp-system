@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PegawaiGrajiTripleks\Tables;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -17,6 +18,9 @@ class PegawaiGrajiTripleksTable
 {
     public static function configure(Table $table): Table
     {
+        // Tanggal produksi Graji Triplek yang sedang dibuka
+        $tanggalGrajiTriplek = fn($livewire) => $livewire->getOwnerRecord()->tanggal_produksi;
+
         return $table
             ->columns([
                 TextColumn::make('pegawaiGrajiTriplek.nama_pegawai')
@@ -101,9 +105,17 @@ class PegawaiGrajiTripleksTable
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
+
+                PindahPegawaiTableActions::recordAction('graji_triplek', $tanggalGrajiTriplek)
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
+                PindahPegawaiTableActions::batalAction('graji_triplek'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('graji_triplek', $tanggalGrajiTriplek),
                     DeleteBulkAction::make()
                         ->hidden(
                             fn($livewire) =>

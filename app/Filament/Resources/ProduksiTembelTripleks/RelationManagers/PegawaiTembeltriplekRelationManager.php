@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiTembelTripleks\RelationManagers;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use App\Models\Pegawai;
 use App\Models\PegawaiTembeltriplek;
 use Carbon\CarbonPeriod;
@@ -28,7 +29,7 @@ use Filament\Actions\DeleteBulkAction;
 class PegawaiTembeltriplekRelationManager extends RelationManager
 {
     protected static string $relationship = 'pegawaiTembeltriplek';
-    
+
     protected static ?string $title = 'Pegawai Tembel Triplek';
 
     public static function timeOptions(): array
@@ -101,6 +102,9 @@ class PegawaiTembeltriplekRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
+        // Tanggal produksi Tembel Triplek yang sedang dibuka
+        $tanggalTembelTriplek = fn($livewire) => $livewire->getOwnerRecord()->tanggal;
+
         return $table
             ->recordTitleAttribute('id')
             ->columns([
@@ -181,11 +185,14 @@ class PegawaiTembeltriplekRelationManager extends RelationManager
                     ->modalSubmitActionLabel('Simpan')
                     ->modalWidth('lg'),
 
+                PindahPegawaiTableActions::recordAction('tembel_triplek', $tanggalTembelTriplek),
+                PindahPegawaiTableActions::batalAction('tembel_triplek'),
                 EditAction::make(),
                 DeleteAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('tembel_triplek', $tanggalTembelTriplek),
                     DeleteBulkAction::make(),
                 ]),
             ]);
