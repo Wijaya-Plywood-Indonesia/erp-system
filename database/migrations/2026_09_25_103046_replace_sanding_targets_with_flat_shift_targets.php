@@ -132,4 +132,4 @@ return new class extends Migration
 
         return $mesinLengkap && $ukuranAda && $jenisKayuAda;
     }
-}
+};
