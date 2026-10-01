@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\DetailPegawaiHps\Tables;
 
-
+use App\Filament\Support\PindahPegawaiTableActions;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -18,6 +18,9 @@ class DetailPegawaiHpsTable
 {
     public static function configure(Table $table): Table
     {
+        // Tanggal produksi Hotpress yang sedang dibuka
+        $tanggalHotpress = fn($livewire) => $livewire->getOwnerRecord()->tanggal_produksi;
+
         return $table
             ->columns([
                 TextColumn::make('mesin.nama_mesin')
@@ -108,9 +111,17 @@ class DetailPegawaiHpsTable
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
+
+                PindahPegawaiTableActions::recordAction('hotpress', $tanggalHotpress)
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
+                PindahPegawaiTableActions::batalAction('hotpress'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('hotpress', $tanggalHotpress),
                     DeleteBulkAction::make()
                         ->hidden(
                             fn($livewire) =>

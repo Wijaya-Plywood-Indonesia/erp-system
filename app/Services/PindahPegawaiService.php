@@ -38,6 +38,7 @@ use App\Models\ProduksiPotAfJoint;
 use App\Models\ProduksiPotJelek;
 use App\Models\ProduksiPotSiku;
 use App\Models\ProduksiPressDryer;
+use App\Models\ProduksiRepair;
 use App\Models\ProduksiRotary;
 use App\Models\ProduksiSanding;
 use App\Models\ProduksiSandingJoint;
@@ -154,6 +155,17 @@ class PindahPegawaiService
                 'tanggal' => 'tanggal',
                 'tugas' => null,
                 'auto_create' => true,
+            ]),
+            'repair' => $t([
+                'label' => 'Repair',
+                'model' => RencanaPegawai::class,
+                'fk' => 'id_produksi_repair',
+                'masuk' => 'jam_masuk',
+                'pulang' => 'jam_pulang',
+                'ket' => 'keterangan',
+                'produksi' => ProduksiRepair::class,
+                'tanggal' => 'tanggal',
+                'tugas' => null, // rencana_pegawais tidak punya kolom tugas
             ]),
             'press_dryer' => $t([
                 'label' => 'Press Dryer',
@@ -531,19 +543,6 @@ class PindahPegawaiService
         $row = $sumber['model']::query()->lockForUpdate()->findOrFail($row->getKey());
         $nama = $row->pegawai?->nama_pegawai ?? "Pegawai #{$row->id_pegawai}";
 
-        // MODE 'timpa': buang SELURUH riwayat pindahan aktif pegawai ini dari sumber yang
-        // sama KE TUJUAN yang sama (mengembalikan jam & keterangan sumber ke kondisi
-        // SEBELUM pindahan pertama ke tujuan ini, dan menghapus baris tujuan lama),
-        // baru menerapkan pindahan yang diminta sekarang dari kondisi bersih itu.
-        // Tanpa ini, 'timpa' hanya mengganti rentang jam di baris tujuan tanpa
-        // mengembalikan jam yang sudah kepotong di langkah-langkah sebelumnya —
-        // membuat sumber dan tujuan jadi tidak sinkron (contoh: sumber kepotong 5 jam,
-        // padahal tujuan cuma mencatat 1 jam).
-        if ($modeDuplikat === 'timpa') {
-            self::resetPindahanSebelumnya($kodeSumber, $sumber, $row->getKey(), $kodeTujuan);
-            $row->refresh();
-        }
-
         $masuk = self::waktu($row->{$sumber['masuk']});
         $pulangAsli = self::waktu($row->{$sumber['pulang']});
         if (! $masuk || ! $pulangAsli) {
@@ -659,10 +658,6 @@ class PindahPegawaiService
             $status = 'baru';
         }
 
-        if ($modeDuplikat === 'timpa') {
-            $status = 'ditimpa';
-        }
-
         // Kurangi jam pulang di produksi asal + catat keterangan.
         // Kalau pegawai ini sudah pernah dipindah ke tujuan YANG SAMA sebelumnya (belum dibatalkan),
         // catatannya digabung jadi satu baris dengan total jam terbaru, tidak ditambah dobel.
@@ -696,54 +691,6 @@ class PindahPegawaiService
         ]);
 
         return $status;
-    }
-
-    /**
-     * MODE 'timpa': hapus/undo seluruh pindahan AKTIF pegawai ini dari sumber -> tujuan yang
-     * sama (selama belum dibatalkan), mengembalikan jam pulang & keterangan sumber ke
-     * kondisi SEBELUM pindahan pertama ke tujuan itu, dan menghapus baris-baris tujuan
-     * yang pernah dibuat/digabung oleh pindahan-pindahan tersebut.
-     *
-     * CATATAN: kalau pegawai yang sama JUGA sedang punya pindahan aktif ke tujuan LAIN
-     * (bukan $kodeTujuan ini), pindahan ke tujuan lain itu TIDAK disentuh — hanya baris
-     * & log untuk $kodeTujuan ini yang direset. Karena jam pulang sumber adalah satu
-     * field yang dipotong berurutan oleh SEMUA pindahan (apa pun tujuannya), reset ini
-     * mengasumsikan urutan pindahan sederhana (satu rangkaian per tujuan); kasus dua
-     * tujuan aktif bersamaan untuk pegawai & hari yang sama sebaiknya dihindari.
-     */
-    private static function resetPindahanSebelumnya(string $kodeSumber, array $sumber, $idSumber, string $kodeTujuan): void
-    {
-        $logAktif = PindahPegawaiLog::query()
-            ->where('sumber', $kodeSumber)
-            ->where('id_sumber', $idSumber)
-            ->where('tujuan', $kodeTujuan)
-            ->whereNull('dibatalkan_at')
-            ->orderBy('id')
-            ->get();
-
-        if ($logAktif->isEmpty()) {
-            return; // belum pernah dipindah ke tujuan ini, tidak ada yang perlu direset
-        }
-
-        // Log PALING AWAL menyimpan kondisi sumber SEBELUM pindahan pertama ke tujuan
-        // ini dibuat — itulah titik yang dikembalikan.
-        $logPertama = $logAktif->first();
-
-        $row = $sumber['model']::query()->lockForUpdate()->find($idSumber);
-        if ($row) {
-            $row->{$sumber['pulang']} = Carbon::parse($logPertama->pulang_lama)->format('H:i:s');
-            $row->{$sumber['ket']} = $logPertama->ket_sumber_lama;
-            $row->save();
-        }
-
-        // Hapus semua baris tujuan yang pernah dibuat/digabung oleh pindahan-pindahan ini.
-        // Biasanya cuma 1 baris (karena mode 'update' menggabung ke baris yang sama),
-        // tapi di-dedup dulu untuk jaga-jaga.
-        $logAktif
-            ->unique(fn ($l) => $l->model_tujuan.'#'.$l->id_tujuan)
-            ->each(fn ($l) => $l->model_tujuan::query()->whereKey($l->id_tujuan)->first()?->delete());
-
-        $logAktif->each->update(['dibatalkan_at' => now()]);
     }
 
     /** Log pindah terakhir yang masih aktif untuk baris sumber ini (null jika tidak ada). */

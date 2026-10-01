@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiPressDryers\RelationManagers;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use App\Models\Pegawai;
 use App\Models\DetailPegawai;
 use Carbon\CarbonPeriod;
@@ -149,6 +150,9 @@ class DetailPegawaisRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
+        // Tanggal produksi Press Dryer yang sedang dibuka
+        $tanggalPressDryer = fn($livewire) => $livewire->getOwnerRecord()->tanggal_produksi;
+
         return $table
             ->columns([
                 TextColumn::make('pegawai.nama_pegawai')
@@ -213,9 +217,14 @@ class DetailPegawaisRelationManager extends RelationManager
                         ]);
                     })
                     ->hidden(fn() => $this->terkunci()),
+
+                PindahPegawaiTableActions::recordAction('press_dryer', $tanggalPressDryer)
+                    ->hidden(fn() => $this->terkunci()),
+                PindahPegawaiTableActions::batalAction('press_dryer'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('press_dryer', $tanggalPressDryer),
                     DeleteBulkAction::make()
                         ->hidden(fn() => $this->terkunci()),
                 ]),
