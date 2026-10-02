@@ -212,6 +212,7 @@ class DryerDataMap
              * 5. FORMAT UKURAN (label tampilan)
              * ============================================================ */
             if ($kodeUkuran && $kodeUkuran !== '') {
+                // Kode ukuran tersedia dari target — pakai itu, buang prefix mesin
                 $ukuranDisplay = preg_replace(
                     '/^(SPINDLESS|YUEQUN|MERANTI|SANJI|DRYER\s*PAGI|DRYER\s*MALAM|PRESS)\s*/i',
                     '',
@@ -221,7 +222,19 @@ class DryerDataMap
             } elseif ($totalHasil == 0) {
                 $ukuranDisplay = 'BELUM INPUT HASIL';
             } else {
-                $ukuranDisplay = "UKURAN BELUM DISET (id: {$ukuranId})";
+                // Target tidak ada (kodeUkuran null), tapi ada detail hasil —
+                // coba ambil dimensi p×l×t dari detailHasils sebagai label.
+                // "UKURAN BELUM DISET" hanya muncul kalau dimensinya pun kosong.
+                $firstHasilUkuran = $item->detailHasils->first()?->ukuran ?? null;
+                $p = $firstHasilUkuran?->panjang ?? null;
+                $l = $firstHasilUkuran?->lebar   ?? null;
+                $t = $firstHasilUkuran?->tebal   ?? null;
+
+                if ($p && $l && $t) {
+                    $ukuranDisplay = "{$p}x{$l}x{$t}";
+                } else {
+                    $ukuranDisplay = "UKURAN BELUM DISET (id: {$ukuranId})";
+                }
             }
 
             /* ============================================================
