@@ -299,7 +299,7 @@ class LaporanKedi extends Page
                 }
             }
 
-            $labelDivisi = $status === 'bongkar' ? 'KEDI (BONGKAR)' : 'KEDI (MASUK)';
+            $labelDivisi = $status === 'bongkar' ? 'KEDI (BONGKAR) - TARGET PER PALET' : 'KEDI (MASUK)';
             if (! empty($daftarKayu)) {
                 $labelDivisi .= ' - '.implode(', ', array_keys($daftarKayu));
             }
@@ -415,11 +415,81 @@ class LaporanKedi extends Page
                     'hasil' => (float) $totalHasil,
                     'target' => $targetDisplay,
                     'selisih' => $targetDisplay !== null ? ((float) $totalHasil - $targetDisplay) : null,
-                    'satuan' => 'pcs',
+                    'satuan' => 'palet',
                     'jam_normal' => $jamNormal !== null ? (float) $jamNormal : null,
                     'jam_aktual_total' => $totalJamAktual,
                     'jam_aktual_rata' => $rataJamPerOrang,
                 ];
+
+                // === TAMBAHAN UNTUK TARGET LEMBAR (SOFT LAUNCH) ===
+                $labelDivisiLembar = str_replace('TARGET PER PALET', 'TARGET PER LEMBAR', $labelDivisi);
+                
+                $hasilLembarPerUkuran = [];
+                $totalHasilLembarSemua = 0;
+                foreach ($groupProduksi as $produksi) {
+                    if ($produksi->detailBongkarKedi) {
+                        foreach ($produksi->detailBongkarKedi as $dbk) {
+                            if (!isset($hasilLembarPerUkuran[$dbk->id_ukuran])) {
+                                $hasilLembarPerUkuran[$dbk->id_ukuran] = 0;
+                            }
+                            $hasilLembarPerUkuran[$dbk->id_ukuran] += $dbk->jumlah;
+                            $totalHasilLembarSemua += $dbk->jumlah;
+                        }
+                    }
+                }
+
+                $targetAdjustedLembar = 0;
+                $jamNormalLembarAvg = 0;
+                $countUkuran = 0;
+                
+                foreach ($hasilLembarPerUkuran as $idUkuran => $qtyLembar) {
+                    $tgtLembar = \App\Models\Target::where('id_mesin', 7)
+                        ->where('tipe_target', 'lembar')
+                        ->where('id_ukuran', $idUkuran)
+                        ->first();
+                    
+                    if ($tgtLembar) {
+                        $countUkuran++;
+                        $jamNormalLembarAvg += (float) $tgtLembar->jam;
+                        
+                        $menitNormalTotal = ((float) $tgtLembar->jam) * 60;
+                        $orgNormal = (int) $tgtLembar->orang;
+                        
+                        if ($orgNormal > 0 && $menitNormalTotal > 0) {
+                            $ratePerMenit = ((float) $tgtLembar->target) / $menitNormalTotal;
+                            $ratePerOrgPerMenit = $ratePerMenit / $orgNormal;
+                            // kalikan dengan total menit aktual dari semua pekerja
+                            $targetAdjustedLembar += $ratePerOrgPerMenit * $totalMenitAktual;
+                        }
+                    }
+                }
+                
+                $jamNormalLembar = $countUkuran > 0 ? ($jamNormalLembarAvg / $countUkuran) : null;
+                $selisihLembar = $targetAdjustedLembar > 0 ? ($totalHasilLembarSemua - $targetAdjustedLembar) : null;
+
+                $summaries[$labelDivisiLembar] = [
+                    'hasil' => (float) $totalHasilLembarSemua,
+                    'target' => $targetAdjustedLembar > 0 ? $targetAdjustedLembar : null,
+                    'selisih' => $selisihLembar,
+                    'satuan' => 'lembar',
+                    'jam_normal' => $jamNormalLembar,
+                    'jam_aktual_total' => $totalJamAktual,
+                    'jam_aktual_rata' => $rataJamPerOrang,
+                ];
+
+                foreach ($uniquePegawai as $kodep => $p) {
+                    $results[] = [
+                        'hasil' => $labelDivisiLembar,
+                        'kodep' => $kodep,
+                        'nama' => $p['pegawai']->nama_pegawai ?? 'TANPA NAMA',
+                        'masuk' => $p['masuk'] ? $p['masuk']->format('H:i:s') : '',
+                        'pulang' => $p['pulang'] ? $p['pulang']->format('H:i:s') : '',
+                        'ijin' => implode(', ', array_unique($p['ijin'])),
+                        'keterangan' => implode(', ', array_unique($p['ket'])),
+                        'potongan_targ' => 0, // Tidak ada potongan manual/denda untuk lembar sekarang
+                    ];
+                }
+                // === END TAMBAHAN ===
             } else {
                 $kodeTargetDicari = 'MASUK';
                 $targetRef = Target::where('kode_ukuran', $kodeTargetDicari)->first();

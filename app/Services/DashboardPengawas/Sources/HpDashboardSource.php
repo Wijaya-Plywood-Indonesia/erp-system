@@ -11,7 +11,7 @@ class HpDashboardSource implements DashboardSourceInterface
 {
     public function getLabel(): string
     {
-        return "Hot Press";
+        return "Hotpress";
     }
 
     public function canAccess(User $user): bool

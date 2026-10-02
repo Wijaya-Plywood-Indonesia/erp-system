@@ -18,12 +18,15 @@ class UkuranBasedResolver implements TargetResolverInterface
     ): ?Target {
         $target = Target::query()
             ->where('id_mesin', $idMesin)
+            ->where(function ($query) {
+                $query->where('tipe_target', 'palet')
+                      ->orWhereNull('tipe_target');
+            })
             ->when($idUkuran, fn ($q) => $q->where('id_ukuran', $idUkuran))
             ->when($idJenisKayu, fn ($q) => $q->where('id_jenis_kayu', $idJenisKayu))
             // Satu kombinasi ukuran + jenis kayu bisa punya beberapa baris target
             // yang cuma beda di `grade` (KW). Tanpa filter ini, orderByDesc('id')
             // bisa mengambil baris KW yang salah (asal paling baru diinput).
-          // UkuranBasedResolver.php
             ->when($grade, fn ($q) => $q->whereRaw('LOWER(grade) = ?', [strtolower($grade)]))
             ->orderByDesc('id')
             ->first();
@@ -37,9 +40,12 @@ class UkuranBasedResolver implements TargetResolverInterface
             if ($ukuranNol && $ukuranNol->id !== $idUkuran) {
                 $target = Target::query()
                     ->where('id_mesin', $idMesin)
+                    ->where(function ($query) {
+                        $query->where('tipe_target', 'palet')
+                              ->orWhereNull('tipe_target');
+                    })
                     ->where('id_ukuran', $ukuranNol->id)
                     ->when($idJenisKayu, fn ($q) => $q->where('id_jenis_kayu', $idJenisKayu))
-                 // UkuranBasedResolver.php
                     ->when($grade, fn ($q) => $q->whereRaw('LOWER(grade) = ?', [strtolower($grade)]))
                     ->orderByDesc('id')
                     ->first();
