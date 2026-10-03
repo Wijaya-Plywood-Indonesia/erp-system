@@ -2,14 +2,26 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
 use App\Services\DashboardPengawas\DashboardPengawasService;
+use App\Services\DashboardPengawas\Sources\ConfigurableDashboardSource;
+use App\Services\DashboardPengawas\Sources\GenericDashboardSource;
 use App\Services\DashboardPengawas\Sources\HpDashboardSource;
-use App\Services\DashboardPengawas\Sources\RotaryDashboardSource;
+use App\Services\DashboardPengawas\Sources\KediDashboardSource;
+use App\Services\DashboardPengawas\Sources\PotJelekDashboardSource;
+use App\Services\DashboardPengawas\Sources\PotSikuDashboardSource;
 use App\Services\DashboardPengawas\Sources\PressDryerDashboardSource;
+use App\Services\DashboardPengawas\Sources\RotaryDashboardSource;
+use App\Services\NewRekapAbsensiPegawaiService;
+use Illuminate\Support\ServiceProvider;
 
 class DashboardPengawasServiceProvider extends ServiceProvider
 {
+    /**
+     * Label divisi yang TIDAK ditampilkan di dashboard.
+     * Tambahkan label lain di sini bila perlu, mis. ['Lain-lain', 'Pegawai Palet'].
+     */
+    protected array $dikecualikan = ['Lain-lain'];
+
     /**
      * Register services.
      */
@@ -18,27 +30,37 @@ class DashboardPengawasServiceProvider extends ServiceProvider
         $this->app->singleton(DashboardPengawasService::class, function ($app) {
             // Instansiasi source spesifik
             $specificSources = [
-                'Hotpress'   => new HpDashboardSource(),
-                'Rotary'      => new RotaryDashboardSource(),
-                'Press Dryer' => new PressDryerDashboardSource(),
-                'Pot Siku'    => new \App\Services\DashboardPengawas\Sources\PotSikuDashboardSource(),
-                'Pot Jelek'   => new \App\Services\DashboardPengawas\Sources\PotJelekDashboardSource(),
+                'Hotpress' => new HpDashboardSource,
+                'Rotary' => new RotaryDashboardSource,
+                'Press Dryer' => new PressDryerDashboardSource,
+                'Pot Siku' => new PotSikuDashboardSource,
+                'Pot Jelek' => new PotJelekDashboardSource,
+                'Kedi' => new KediDashboardSource,
             ];
 
             // Ambil semua sumber absensi
-            $absensiService = $app->make(\App\Services\NewRekapAbsensiPegawaiService::class);
+            $absensiService = $app->make(NewRekapAbsensiPegawaiService::class);
             $absensiSources = $absensiService->getSources();
 
             $dashboardSources = [];
 
             // Masukkan source spesifik yang punya implementasi detail
-            foreach ($specificSources as $source) {
+            foreach ($specificSources as $label => $source) {
+                if (in_array($label, $this->dikecualikan, true)) {
+                    continue;
+                }
+
+                if (method_exists($source, 'setAbsensiSource')) {
+                    $match = collect($absensiSources)->first(fn ($a) => $a->label() === $label);
+                    if ($match) {
+                        $source->setAbsensiSource($match);
+                    }
+                }
                 $dashboardSources[] = $source;
             }
 
             $sourceMappings = [
                 'Graji Stik' => ['graji_stiks', 'hasil_graji_stiks', 'hasil_graji', 'id_graji_stiks', false, 'Lembar'],
-                'Kedi' => ['produksi_kedi', 'detail_bongkar_kedi', 'jumlah', 'id_produksi_kedi', true, 'Lembar'],
                 'Stik' => ['produksi_stik', 'detail_hasil_stik', 'total_lembar', 'id_produksi_stik', true, 'Lembar'],
                 'Repair' => ['produksi_repairs', 'detail_hasil_repairs', 'jumlah', 'id_produksi_repair', true, 'Lembar'],
                 'Joint' => ['produksi_joint', 'hasil_joint', 'jumlah', 'id_produksi_joint', true, 'Lembar'],
@@ -59,14 +81,20 @@ class DashboardPengawasServiceProvider extends ServiceProvider
             // Untuk sisanya, gunakan GenericDashboardSource atau Configurable
             foreach ($absensiSources as $abSource) {
                 $label = $abSource->label();
-                if (!array_key_exists($label, $specificSources)) {
+
+                // Lewati divisi yang disembunyikan dari dashboard
+                if (in_array($label, $this->dikecualikan, true)) {
+                    continue;
+                }
+
+                if (! array_key_exists($label, $specificSources)) {
                     if (array_key_exists($label, $sourceMappings)) {
                         $m = $sourceMappings[$label];
-                        $dashboardSources[] = new \App\Services\DashboardPengawas\Sources\ConfigurableDashboardSource(
+                        $dashboardSources[] = new ConfigurableDashboardSource(
                             $label, $m[0], $m[1], $m[2], $m[3], $m[4], $m[5], $abSource
                         );
                     } else {
-                        $dashboardSources[] = new \App\Services\DashboardPengawas\Sources\GenericDashboardSource($abSource);
+                        $dashboardSources[] = new GenericDashboardSource($abSource);
                     }
                 }
             }

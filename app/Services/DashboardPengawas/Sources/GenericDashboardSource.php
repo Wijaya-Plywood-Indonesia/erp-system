@@ -5,11 +5,11 @@ namespace App\Services\DashboardPengawas\Sources;
 use App\Models\User;
 use App\Services\AbsensiSources\AbsensiSourceInterface;
 use App\Services\DashboardPengawas\DashboardSourceInterface;
-use Illuminate\Support\Facades\DB;
+use App\Services\DashboardPengawas\Traits\HasAbsenAndPotongan;
 
 class GenericDashboardSource implements DashboardSourceInterface
 {
-    protected AbsensiSourceInterface $absensiSource;
+    use HasAbsenAndPotongan;
 
     public function __construct(AbsensiSourceInterface $absensiSource)
     {
@@ -23,36 +23,24 @@ class GenericDashboardSource implements DashboardSourceInterface
 
     public function canAccess(User $user): bool
     {
-        return true; 
+        return $this->bolehAkses($user);
     }
 
     public function getProduksi(string $tanggal): array
     {
-        return [
-            'total'  => 0,
-            'satuan' => '-',
-            'detail' => [],
-        ];
+        return ['total' => 0, 'satuan' => '-', 'detail' => []];
     }
 
     public function getSerahTerima(string $tanggal): array
     {
-        return [
-            'total'  => 0,
-            'satuan' => '-',
-            'detail' => [],
-        ];
+        return ['total' => 0, 'satuan' => '-', 'detail' => []];
     }
 
     public function getPegawai(string $tanggal): array
     {
-        // Because the dashboard now uses NewRekapAbsensiPegawaiService for 
-        // the table display, this just needs to return a quick total 
-        // for the summary card.
-        $rows = $this->absensiSource->fetch($tanggal);
         return [
-            'total' => $rows->count(),
-            'list'  => []
+            'total' => $this->absensiSource->fetch($tanggal)->count(),
+            'list' => [],
         ];
     }
 }

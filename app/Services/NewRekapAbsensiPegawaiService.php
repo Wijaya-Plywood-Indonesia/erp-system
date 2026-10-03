@@ -370,7 +370,7 @@ class NewRekapAbsensiPegawaiService
             ->get()
             ->keyBy('kode_pegawai');
 
-        return $rekap->map(function ($row) use ($kodeByIdPegawai, $fingerHariIni, $fingerBesok) {
+        return $rekap->map(function ($row) use ($kodeByIdPegawai, $fingerHariIni, $fingerBesok, $tanggal, $tanggalBerikutnya) {
             $kode = $kodeByIdPegawai->get($row['id_pegawai']);
             $row['kode_pegawai'] = $kode;
             if (! $kode) {
@@ -489,22 +489,64 @@ class NewRekapAbsensiPegawaiService
                 );
             }
             // AUTO FIX: post-processing koreksi jam_masuk_finger / jam_pulang_finger
-            // ketika selisihnya vs jam kerja produksi melebihi AUTO_FIX_BATAS_SELISIH_MENIT.
-            // Hanya aktif ketika AUTO_FIX_ENABLED = true — ketika false, baris ini
-            // tidak mengubah apapun. Dipanggil SETELAH semua logic normal di atas
-            // selesai, SEBELUM _finger_preview supaya preview ikut memperlihatkan
-            // nilai hasil fix (bukan nilai lama sebelum dikoreksi).
-            // Raw_finger diambil dari recordHariIni karena auto-fix HANYA menyasar
-            // shift pagi/non-malam (sumber datanya selalu di tanggal hari ini).
-            // Shift malam tetap ikut di-cek juga — kalau nilainya sudah benar
-            // (tidak meleset > 60 menit), method ini return apa adanya tanpa ubah.
-            [$row['jam_masuk_finger'], $row['jam_pulang_finger']] = $this->autoFixJamFingerDariRaw(
-                $row['jam_masuk_finger'],
-                $row['jam_pulang_finger'],
-                $row['jam_masuk'] ?? null,
-                $row['jam_pulang'] ?? null,
-                $recordHariIni?->raw_finger
+            // menggunakan kombinasi raw_finger hari ini dan besok, dengan full Y-m-d H:i:s
+            // agar perbandingan waktu (terutama lintas hari / shift malam) akurat.
+            
+            $allRawFinger = [];
+            if ($recordHariIni && !empty($recordHariIni->raw_finger)) {
+                $arr = is_string($recordHariIni->raw_finger) ? json_decode($recordHariIni->raw_finger, true) : $recordHariIni->raw_finger;
+                foreach ((array)$arr as $scan) {
+                    if (!empty($scan['waktu'])) {
+                        $allRawFinger[] = ['waktu' => $tanggal . ' ' . $scan['waktu']];
+                    }
+                }
+            }
+            if ($recordBesok && !empty($recordBesok->raw_finger)) {
+                $arr = is_string($recordBesok->raw_finger) ? json_decode($recordBesok->raw_finger, true) : $recordBesok->raw_finger;
+                foreach ((array)$arr as $scan) {
+                    if (!empty($scan['waktu'])) {
+                        $allRawFinger[] = ['waktu' => $tanggalBerikutnya . ' ' . $scan['waktu']];
+                    }
+                }
+            }
+
+            $fullJamMasukProduksi = null;
+            if (!empty($row['jam_masuk']) && $row['jam_masuk'] !== '-') {
+                $fullJamMasukProduksi = $tanggal . ' ' . $row['jam_masuk'];
+            }
+            $fullJamPulangProduksi = null;
+            if (!empty($row['jam_pulang']) && $row['jam_pulang'] !== '-') {
+                $tglPulang = $tanggal;
+                if ($row['jam_pulang'] < $row['jam_masuk']) {
+                    $tglPulang = $tanggalBerikutnya;
+                }
+                $fullJamPulangProduksi = $tglPulang . ' ' . $row['jam_pulang'];
+            }
+
+            $fullJamMasukFinger = null;
+            if (!empty($row['jam_masuk_finger']) && $row['jam_masuk_finger'] !== '-') {
+                $fullJamMasukFinger = $tanggal . ' ' . $row['jam_masuk_finger'];
+            }
+            $fullJamPulangFinger = null;
+            if (!empty($row['jam_pulang_finger']) && $row['jam_pulang_finger'] !== '-') {
+                $tglPulangFinger = ($shift === 'malam') ? $tanggalBerikutnya : $tanggal;
+                $fullJamPulangFinger = $tglPulangFinger . ' ' . $row['jam_pulang_finger'];
+            }
+
+            [$fixMasuk, $fixPulang] = $this->autoFixJamFingerDariRaw(
+                $fullJamMasukFinger,
+                $fullJamPulangFinger,
+                $fullJamMasukProduksi,
+                $fullJamPulangProduksi,
+                $allRawFinger
             );
+
+            if ($fixMasuk && $fixMasuk !== '-') {
+                try { $row['jam_masuk_finger'] = Carbon::parse($fixMasuk)->format('H:i:s'); } catch (\Throwable $e) {}
+            }
+            if ($fixPulang && $fixPulang !== '-') {
+                try { $row['jam_pulang_finger'] = Carbon::parse($fixPulang)->format('H:i:s'); } catch (\Throwable $e) {}
+            }
             // NEW: preview data mentah finger untuk expandable row di UI —
             // supaya user bisa lihat raw scan yang jadi dasar
             // jam_masuk_finger / jam_pulang_finger tanpa perlu buka data
