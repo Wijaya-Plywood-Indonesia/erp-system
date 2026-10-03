@@ -2,30 +2,28 @@
 
 namespace App\Services\DashboardPengawas\Sources;
 
+use App\Models\SerahTerimaHp;
 use App\Models\User;
 use App\Services\DashboardPengawas\DashboardSourceInterface;
+use App\Services\DashboardPengawas\Traits\HasAbsenAndPotongan;
 use Illuminate\Support\Facades\DB;
-use App\Models\Pegawai;
 
 class HpDashboardSource implements DashboardSourceInterface
 {
+    use HasAbsenAndPotongan;
+
     public function getLabel(): string
     {
-        return "Hotpress";
+        return 'Hotpress';
     }
 
     public function canAccess(User $user): bool
     {
-        // Contoh implementasi: hanya admin atau pengawas spesifik
-        // Sesuaikan dengan role di sistem Anda (misal Spatie Permission)
-        // return $user->hasRole('Pengawas Hot Press') || $user->hasRole('Super Admin');
-        
-        return true; // Sementara di-allow semua untuk testing
+        return $this->bolehAkses($user);
     }
 
     public function getProduksi(string $tanggal): array
     {
-        // Menghitung dari tabel platform_hasil_hp berdasarkan tanggal
         $total = DB::table('platform_hasil_hp')
             ->whereDate('created_at', $tanggal)
             ->sum('isi');
@@ -35,53 +33,43 @@ class HpDashboardSource implements DashboardSourceInterface
             ->sum('isi');
 
         return [
-            'total'  => $total + $totalTriplek,
+            'total' => $total + $totalTriplek,
             'satuan' => 'Lembar',
             'detail' => [
                 ['nama' => 'Platform', 'jumlah' => $total],
                 ['nama' => 'Triplek', 'jumlah' => $totalTriplek],
-            ]
+            ],
         ];
     }
 
     public function getSerahTerima(string $tanggal): array
     {
-        // Menggunakan model agar accessor getJumlahAttribute() berjalan
-        $records = \App\Models\SerahTerimaHp::whereDate('created_at', $tanggal)->get();
-        $total = $records->sum('jumlah');
+        // Pakai model supaya accessor getJumlahAttribute() berjalan
+        $records = SerahTerimaHp::whereDate('created_at', $tanggal)->get();
 
         return [
-            'total'  => $total,
+            'total' => $records->sum('jumlah'),
             'satuan' => 'Lembar',
-            'detail' => []
+            'detail' => [],
         ];
     }
 
     public function getPegawai(string $tanggal): array
     {
-        // Query ke tabel detail_pegawai_hp untuk mencari siapa saja yang bekerja di tanggal tersebut
-        $pegawaiIds = DB::table('detail_pegawai_hp')
-            ->whereDate('created_at', $tanggal)
-            ->whereNotNull('id_pegawai')
-            ->pluck('id_pegawai')
-            ->unique()
-            ->toArray();
+        $rows = DB::table('detail_pegawai_hp')
+            ->join('pegawais', 'pegawais.id', '=', 'detail_pegawai_hp.id_pegawai')
+            ->whereDate('detail_pegawai_hp.created_at', $tanggal)
+            ->whereNotNull('detail_pegawai_hp.id_pegawai')
+            ->select('pegawais.kode_pegawai', 'detail_pegawai_hp.id_pegawai')
+            ->distinct()
+            ->get();
 
-        $listPegawai = Pegawai::whereIn('id', $pegawaiIds)
-            ->select('id', 'nama_pegawai', 'karyawan_di')
-            ->get()
-            ->map(function ($p) {
-                return [
-                    'nama'      => $p->nama_pegawai,
-                    'shift'     => '-', // Belum ada data jam_masuk, bisa di-join dengan absen finger jika diperlukan
-                    'jam_masuk' => '-',
-                ];
-            })
-            ->toArray();
+        $kodePegawaiList = $rows->pluck('kode_pegawai')->filter()->unique()->values()->toArray();
 
         return [
-            'total' => count($listPegawai),
-            'list'  => $listPegawai,
+            'total' => $rows->pluck('id_pegawai')->unique()->count(),
+            'list' => $kodePegawaiList,
+            'filter_absen' => true,
         ];
     }
 }
