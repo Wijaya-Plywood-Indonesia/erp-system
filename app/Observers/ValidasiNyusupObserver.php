@@ -41,7 +41,12 @@ class ValidasiNyusupObserver
 
         DB::transaction(function () use ($details, $produksi) {
             foreach ($details as $detail) {
-                $lembar = (float) $detail->modal;
+                // 🆕 Pakai (modal - jumlah_dikembalikan), BUKAN modal penuh.
+                // Bahan yang sudah dicatat "Kembalikan Sisa" (lewat tombol di
+                // tab Detail Barang Dikerjakan, sebelum validasi) tidak boleh
+                // ikut dipotong dari stok Gudang Satu — karena bahan itu
+                // tidak pernah benar-benar terpakai.
+                $lembar = (float) $detail->modal - (float) $detail->jumlah_dikembalikan;
                 if ($lembar <= 0) {
                     continue;
                 }
@@ -90,7 +95,7 @@ class ValidasiNyusupObserver
 
                 $kubikasi = ($lembar * (float) $ukuran->panjang * (float) $ukuran->lebar * (float) $ukuran->tebal) / 10000000;
 
-                $keterangan = "Kurangi stok (modal) dari Produksi Nyusup ID: {$produksi->id} tgl {$produksi->tanggal_produksi}";
+                $keterangan = "Kurangi stok (modal - dikembalikan) dari Produksi Nyusup ID: {$produksi->id} tgl {$produksi->tanggal_produksi}";
 
                 $this->stokService->kurang(
                     idJenisKayu: $jenisKayu->id,

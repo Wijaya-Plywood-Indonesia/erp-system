@@ -26,9 +26,92 @@ use Livewire\Attributes\Url;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
 
+use Filament\Actions\Action;
+use Filament\Schemas\Components\Section;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\TimePicker;
+use Filament\Forms\Components\Toggle;
+use App\Models\PengaturanAbsensi;
+
 class NewAbsensi extends Page implements HasForms
 {
     use InteractsWithForms;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('settingAbsensi')
+                ->label('Pengaturan Absensi')
+                ->icon('heroicon-o-cog-6-tooth')
+                ->color('gray')
+                ->visible(fn() => auth()->user()?->hasRole('super_admin'))
+                ->fillForm(fn() => PengaturanAbsensi::getSettings()->toArray())
+                ->form([
+                    Section::make('Jadwal Default (Fallback)')
+                        ->description('Digunakan jika jam masuk/pulang produksi kosong.')
+                        ->schema([
+                            TimePicker::make('jam_masuk_shift_pagi_default')->label('Masuk Pagi')->required(),
+                            TimePicker::make('jam_pulang_shift_pagi_default')->label('Pulang Pagi')->required(),
+                            TimePicker::make('jam_masuk_shift_malam_default')->label('Masuk Malam')->required(),
+                            TimePicker::make('jam_pulang_shift_malam_default')->label('Pulang Malam')->required(),
+                        ])->columns(2),
+                    Section::make('Toleransi & Durasi')
+                        ->schema([
+                            TextInput::make('toleransi_sesi_tunggal_menit')
+                                ->label('Toleransi 1 Sesi (Menit)')
+                                ->numeric()->required()
+                                ->helperText('Jarak antara tap masuk & pulang jika dianggap cuma 1 sesi absen (tidak sengaja tap 2x).'),
+                            TextInput::make('batas_total_durasi_menit')
+                                ->label('Batas Durasi Minimum (Menit)')
+                                ->numeric()->required()
+                                ->helperText('Finger tidak tampil jika total jam kerja produksi di bawah batas ini.'),
+                            TextInput::make('toleransi_masuk_lebih_cepat_malam_menit')
+                                ->label('Toleransi Masuk Terlalu Cepat Shift Malam (Menit)')
+                                ->numeric()->required()
+                                ->helperText('Batas maksimal berapa menit scan masuk boleh mendahului jadwal masuk sebelum dianulir.'),
+                            TextInput::make('toleransi_pulang_lebih_lambat_malam_menit')
+                                ->label('Toleransi Pulang Terlalu Lambat Shift Malam (Menit)')
+                                ->numeric()->required()
+                                ->helperText('Batas maksimal berapa menit scan pulang boleh melampaui jadwal pulang sebelum dianulir.'),
+                        ])->columns(2),
+                    Section::make('Metode Shift & Auto Fix')
+                        ->schema([
+                            Select::make('metode_shift_malam')
+                                ->label('Metode Deteksi Shift Malam')
+                                ->options([
+                                    'default' => 'Default (Berdasarkan Jam)',
+                                    'paksa_shift_malam' => 'Paksa Shift Malam (Satu Sinyal Cukup)',
+                                    'full_shift' => 'Full Shift (Ikuti Label Shift)',
+                                ])->required(),
+                            Toggle::make('auto_fix_enabled')
+                                ->label('Aktifkan Auto Fix (Dari Raw Finger)')
+                                ->inline(false),
+                            TextInput::make('auto_fix_batas_selisih_menit')
+                                ->label('Batas Selisih Auto Fix (Menit)')
+                                ->numeric()->required(),
+                        ])->columns(3),
+                    Section::make('Panduan Pengaturan')
+                        ->description('Penjelasan cara kerja pengaturan absensi')
+                        ->schema([
+                            \Filament\Forms\Components\Placeholder::make('bantuan_pengaturan')
+                                ->hiddenLabel()
+                                ->content(view('filament.pages.bantuan-pengaturan-absensi')),
+                        ])->collapsed(),
+                ])
+                ->action(function (array $data) {
+                    $setting = PengaturanAbsensi::getSettings();
+                    $data['last_updated_by'] = auth()->id();
+                    $setting->update($data);
+
+                    Notification::make()
+                        ->title('Pengaturan berhasil disimpan')
+                        ->success()
+                        ->send();
+                })
+                ->modalWidth('4xl'),
+        ];
+    }
 
     protected static ?string $navigationLabel = 'Rekap Absensi Pegawai';
 
@@ -38,8 +121,6 @@ class NewAbsensi extends Page implements HasForms
 
     protected string $view = 'filament.pages.new-absensi';
 
-<<<<<<< HEAD
-=======
     public function getMaxContentWidth(): Width|string|null
     {
         return Width::Full;
@@ -57,12 +138,11 @@ class NewAbsensi extends Page implements HasForms
         return $user && ($user->hasRole('super_admin') || $user->hasRole('Absen'));
     }
 
->>>>>>> 0a911385b2f7022a40855e2e8683ae63f672ed47
     public bool $showAbsensiLainLain = false;
 
     public function toggleAbsensiLainLain(): void
     {
-        $this->showAbsensiLainLain = ! $this->showAbsensiLainLain;
+        $this->showAbsensiLainLain = !$this->showAbsensiLainLain;
     }
 
     /**
@@ -116,6 +196,15 @@ class NewAbsensi extends Page implements HasForms
      * @var array<string, bool>
      */
     public array $expandedRows = [];
+
+    /**
+     * Arah sorting kolom Potongan di tabel Data Absensi.
+     * null = tidak diurutkan, 'asc' = terkecil ke terbesar,
+     * 'desc' = terbesar ke terkecil.
+     *
+     * @var string|null
+     */
+    public ?string $sortPotongan = null;
 
     /**
      * Hasil pengecekan terakhir dari ValidasiTargetProduksiService untuk
@@ -228,7 +317,7 @@ class NewAbsensi extends Page implements HasForms
 
             Notification::make()
                 ->title('Berhasil diproses')
-                ->body('Batch #'.$upload->id.' — '.count($upload->file_path).' file berhasil diproses.')
+                ->body('Batch #' . $upload->id . ' — ' . count($upload->file_path) . ' file berhasil diproses.')
                 ->success()
                 ->send();
 
@@ -272,7 +361,7 @@ class NewAbsensi extends Page implements HasForms
             // Hanya tampilkan pegawai yang tidak terlink ke produksi manapun
             // (sumber_label-nya kosong array)
             $rekap = $rekap->filter(
-                fn ($row) => empty($row['sumber_label'])
+                fn($row) => empty($row['sumber_label'])
             )->values();
         } elseif ($this->filterSumber !== '') {
             // Filter berdasarkan key sumber. Setelah gabungkanMultiSumber(),
@@ -282,8 +371,8 @@ class NewAbsensi extends Page implements HasForms
             $sumberKey = $this->filterSumber;
             // Cari label yang sesuai dengan key ini dari daftar sources
             $targetLabel = collect(app(NewRekapAbsensiPegawaiService::class)->getSources())
-                ->firstWhere(fn ($s) => $s->key() === $sumberKey)
-                ?->label();
+                ->firstWhere(fn($s) => $s->key() === $sumberKey)
+                    ?->label();
 
             if ($targetLabel) {
                 // Filter baris yang memiliki setidaknya satu sumber_label
@@ -293,10 +382,17 @@ class NewAbsensi extends Page implements HasForms
                     $labels = (array) ($row['sumber_label'] ?? []);
 
                     return collect($labels)->contains(
-                        fn ($label) => str_starts_with($label, $targetLabel)
+                        fn($label) => str_starts_with($label, $targetLabel)
                     );
                 })->values();
             }
+        }
+
+        // Terapkan sorting potongan kalau user mengklik header kolom Potongan
+        if ($this->sortPotongan === 'asc') {
+            $rekap = $rekap->sortBy(fn($row) => $row['potongan'] ?? 0)->values();
+        } elseif ($this->sortPotongan === 'desc') {
+            $rekap = $rekap->sortByDesc(fn($row) => $row['potongan'] ?? 0)->values();
         }
 
         return $rekap;
@@ -381,7 +477,7 @@ class NewAbsensi extends Page implements HasForms
         if ($bisaLihatNotif) {
             Notification::make()
                 ->warning()
-                ->title(count($this->missingTargetItems).' item belum punya target')
+                ->title(count($this->missingTargetItems) . ' item belum punya target')
                 ->body('Lihat daftar lengkapnya di tabel bawah tombol export. Kamu tetap bisa export — potongan untuk item tersebut akan dianggap 0.')
                 ->send();
         }
@@ -396,7 +492,7 @@ class NewAbsensi extends Page implements HasForms
      */
     public function toggleTargetPanel(): void
     {
-        $this->showTargetPanel = ! $this->showTargetPanel;
+        $this->showTargetPanel = !$this->showTargetPanel;
     }
 
     /**
@@ -427,10 +523,10 @@ class NewAbsensi extends Page implements HasForms
         // supaya hasil pengecekan terbaru ini benar-benar terlihat.
         $this->showTargetPanel = true;
 
-        if (! empty($this->missingTargetItems)) {
+        if (!empty($this->missingTargetItems)) {
             $bodyLines = collect($this->missingTargetItems)
                 ->take(10)
-                ->map(fn ($m) => "• [{$m['divisi']}] {$m['ukuran']}")
+                ->map(fn($m) => "• [{$m['divisi']}] {$m['ukuran']}")
                 ->implode("\n");
 
             $sisa = count($this->missingTargetItems) - 10;
@@ -440,8 +536,8 @@ class NewAbsensi extends Page implements HasForms
 
             Notification::make()
                 ->warning()
-                ->title(count($this->missingTargetItems).' ukuran belum punya target — export tetap dilanjutkan')
-                ->body("Item berikut tidak punya target, potongannya akan dianggap 0:\n\n".$bodyLines)
+                ->title(count($this->missingTargetItems) . ' ukuran belum punya target — export tetap dilanjutkan')
+                ->body("Item berikut tidak punya target, potongannya akan dianggap 0:\n\n" . $bodyLines)
                 ->persistent()
                 ->send();
         }
@@ -465,10 +561,10 @@ class NewAbsensi extends Page implements HasForms
         $this->sudahDicekTarget = true;
         $this->showTargetPanel = true;
 
-        if (! empty($this->missingTargetItems)) {
+        if (!empty($this->missingTargetItems)) {
             $bodyLines = collect($this->missingTargetItems)
                 ->take(10)
-                ->map(fn ($m) => "• [{$m['divisi']}] {$m['ukuran']}")
+                ->map(fn($m) => "• [{$m['divisi']}] {$m['ukuran']}")
                 ->implode("\n");
 
             $sisa = count($this->missingTargetItems) - 10;
@@ -478,23 +574,23 @@ class NewAbsensi extends Page implements HasForms
 
             Notification::make()
                 ->warning()
-                ->title(count($this->missingTargetItems).' ukuran belum punya target — export tetap dilanjutkan')
-                ->body("Item berikut tidak punya target, potongannya akan dianggap 0:\n\n".$bodyLines)
+                ->title(count($this->missingTargetItems) . ' ukuran belum punya target — export tetap dilanjutkan')
+                ->body("Item berikut tidak punya target, potongannya akan dianggap 0:\n\n" . $bodyLines)
                 ->persistent()
                 ->send();
         }
 
         $acuan = Carbon::parse($tanggal)->startOfDay();
         $jumatAwal = $acuan->copy();
-        while (! $jumatAwal->isFriday()) {
+        while (!$jumatAwal->isFriday()) {
             $jumatAwal->subDay();
         }
         $kamisAkhir = $jumatAwal->copy()->addDays(6);
 
         if ($jumatAwal->month === $kamisAkhir->month) {
-            $dateRange = $jumatAwal->format('d').' - '.$kamisAkhir->format('d').' '.$kamisAkhir->translatedFormat('F');
+            $dateRange = $jumatAwal->format('d') . ' - ' . $kamisAkhir->format('d') . ' ' . $kamisAkhir->translatedFormat('F');
         } else {
-            $dateRange = $jumatAwal->format('d').' '.$jumatAwal->translatedFormat('F').' - '.$kamisAkhir->format('d').' '.$kamisAkhir->translatedFormat('F');
+            $dateRange = $jumatAwal->format('d') . ' ' . $jumatAwal->translatedFormat('F') . ' - ' . $kamisAkhir->format('d') . ' ' . $kamisAkhir->translatedFormat('F');
         }
 
         $brandName = filament()->getBrandName();
@@ -563,7 +659,7 @@ class NewAbsensi extends Page implements HasForms
      */
     public function toggleRow(string $rowKey): void
     {
-        if (! empty($this->expandedRows[$rowKey])) {
+        if (!empty($this->expandedRows[$rowKey])) {
             unset($this->expandedRows[$rowKey]);
 
             return;
@@ -574,7 +670,22 @@ class NewAbsensi extends Page implements HasForms
 
     public function isRowExpanded(string $rowKey): bool
     {
-        return ! empty($this->expandedRows[$rowKey]);
+        return !empty($this->expandedRows[$rowKey]);
+    }
+
+    /**
+     * Toggle arah sorting kolom Potongan.
+     * Urutan: tidak sort → terbesar ke terkecil (desc) → terkecil ke terbesar (asc) → tidak sort.
+     */
+    public function sortByPotongan(): void
+    {
+        if ($this->sortPotongan === null) {
+            $this->sortPotongan = 'desc';
+        } elseif ($this->sortPotongan === 'desc') {
+            $this->sortPotongan = 'asc';
+        } else {
+            $this->sortPotongan = null;
+        }
     }
 
     /**
@@ -605,7 +716,7 @@ class NewAbsensi extends Page implements HasForms
     {
         $this->expandedRows = [];
     }
-<<<<<<< HEAD
+
 
     /**
      * Dipanggil otomatis oleh Livewire setiap kali property $search
@@ -617,6 +728,5 @@ class NewAbsensi extends Page implements HasForms
     {
         $this->expandedRows = [];
     }
-=======
->>>>>>> 0a911385b2f7022a40855e2e8683ae63f672ed47
+
 }

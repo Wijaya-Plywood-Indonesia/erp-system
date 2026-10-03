@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\RencanaPegawais\Tables;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -17,6 +18,9 @@ class RencanaPegawaisTable
 {
     public static function configure(Table $table): Table
     {
+        // Tanggal produksi Repair yang sedang dibuka (semua pegawai di halaman ini satu tanggal)
+        $tanggalRepair = fn ($livewire) => $livewire->getOwnerRecord()->tanggal;
+
         return $table
             ->columns([
                 TextColumn::make('pegawai.nama_pegawai')
@@ -103,6 +107,8 @@ class RencanaPegawaisTable
                     ->modalHeading(fn($record) => "Ijin & Keterangan - {$record->pegawai->nama_pegawai}")
                     ->modalSubmitActionLabel('Simpan')
                     ->modalWidth('lg'),
+                PindahPegawaiTableActions::recordAction('repair', $tanggalRepair),
+                PindahPegawaiTableActions::batalAction('repair'),
                 EditAction::make(),
                 Action::make('delete_rencana')
                     ->label('Hapus')
@@ -129,6 +135,7 @@ class RencanaPegawaisTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('repair', $tanggalRepair),
                     DeleteBulkAction::make(),
                 ]),
             ]);

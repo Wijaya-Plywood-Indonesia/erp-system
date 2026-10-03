@@ -82,6 +82,9 @@ class LainLainsTable
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
-            ]);
+            ])
+            // Data terbaru di atas. Pakai id (auto-increment) karena created_at bisa
+            // sama persis untuk banyak baris (input massal) sehingga urutannya acak.
+            ->defaultSort('id', 'desc');
     }
 }

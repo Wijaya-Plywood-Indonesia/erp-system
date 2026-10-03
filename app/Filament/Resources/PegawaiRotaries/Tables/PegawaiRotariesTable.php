@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PegawaiRotaries\Tables;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -12,6 +13,9 @@ class PegawaiRotariesTable
 {
     public static function configure(Table $table): Table
     {
+        // Tanggal produksi Rotary yang sedang dibuka
+        $tanggalRotary = fn($livewire) => $livewire->getOwnerRecord()->tgl_produksi;
+
         return $table
             ->columns([
 
@@ -54,9 +58,12 @@ class PegawaiRotariesTable
             ])
             ->recordActions([
                 EditAction::make(),
+                PindahPegawaiTableActions::recordAction('rotary', $tanggalRotary),
+                PindahPegawaiTableActions::batalAction('rotary'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('rotary', $tanggalRotary),
                     DeleteBulkAction::make(),
                 ]),
             ]);

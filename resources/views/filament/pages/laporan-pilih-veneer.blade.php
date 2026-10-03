@@ -16,30 +16,23 @@
     @endif
 
     @php
-        $tables = collect($dataProduksi ?? [])->values();
-
-        // Flatten all workers
-        $semuaPekerja = $tables
-            ->flatMap(function ($table) {
-                return collect($table['rekap_pekerja'] ?? [])->map(function ($p) use ($table) {
-                    $p['tanggal'] = $table['tanggal'] ?? '-';
-                    $p['nomor_meja'] = $table['nomor_meja'] ?? '-';
-                    $p['detail_produksi'] = $table['detail_produksi'] ?? [];
-                    $p['pencapaian_global'] = $table['pencapaian_global'] ?? 0;
-                    return $p;
-                });
-            })
+        // 1 kartu = 1 produksi (satu tim), pekerja & barang digabung dalam satu blok
+        $tables = collect($dataProduksi ?? [])
+            ->filter(fn($item) => is_array($item))
             ->values();
     @endphp
 
     <div class="space-y-12 mt-6">
-        @forelse ($semuaPekerja as $p)
+        @forelse ($tables as $data)
             @php
-                $pencapaianGlobal = $p['pencapaian'] ?? 0;
-                $tercapai = $pencapaianGlobal >= 100;
-                $potongan = (int) ($p['pot_target'] ?? 0);
-                $detailProduksi = $p['detail_produksi'] ?? [];
-                $totalUkuran = count($detailProduksi);
+                $capaianGlobal = ($data['pencapaian_global'] ?? 0) * 100;
+                $tercapai = $capaianGlobal >= 100;
+                $pekerjaList = $data['rekap_pekerja'] ?? [];
+                $detailProduksi = $data['detail_produksi'] ?? [];
+                $jumlahPekerja = (int) ($data['jumlah_pekerja'] ?? count($pekerjaList));
+                $potonganTim = (float) ($data['potongan_total_tim'] ?? 0);
+                $rataRataPerOrang = $jumlahPekerja > 0 ? $potonganTim / $jumlahPekerja : 0;
+                $adaTarget = collect($detailProduksi)->contains(fn($d) => $d['has_target'] ?? false);
             @endphp
 
             <div
@@ -47,18 +40,19 @@
                 {{-- Header Blok Produksi --}}
                 <div class="bg-zinc-800 p-4 text-white flex justify-between items-center">
                     <h2 class="text-lg font-bold text-center">
-                        {{ $p['id'] }} - {{ strtoupper($p['nama']) }}
+                        {{ strtoupper($data['nomor_meja'] ?? 'PILIH VENEER') }}
                     </h2>
                     <div class="flex gap-4 items-center">
-                        <span class="text-xs px-2 py-1 rounded bg-zinc-700 font-semibold uppercase">
-                            Meja: {{ $p['nomor_meja'] }}
-                        </span>
-                        <span class="text-xs px-2 py-1 rounded {{ $tercapai ? 'bg-green-700' : 'bg-red-700' }}">
-                            Capaian: {{ number_format($pencapaianGlobal, 1, ',', '.') }}%
-                        </span>
-                        @if ($potongan > 0)
-                            <span class="text-xs px-2 py-1 rounded bg-amber-600 font-bold">
-                                ⚠ Potongan: Rp {{ number_format($potongan) }}
+                        @if ($adaTarget)
+                            <span class="text-xs px-2 py-1 rounded {{ $tercapai ? 'bg-green-700' : 'bg-red-700' }}">
+                                Capaian Global: {{ number_format($capaianGlobal, 1, ',', '.') }}%
+                            </span>
+                        @endif
+                        @if ($potonganTim > 0)
+                            <span class="text-xs px-2 py-1 rounded bg-amber-600 font-bold"
+                                title="Total tim dibagi sesuai jam kerja pekerja">
+                                ⚠ Rp {{ number_format($potonganTim) }} ÷ {{ $jumlahPekerja }} org ≈ Rp
+                                {{ number_format($rataRataPerOrang) }}/org
                             </span>
                         @endif
                         <span class="text-xs bg-zinc-700 px-2 py-1 rounded">
@@ -67,46 +61,143 @@
                     </div>
                 </div>
 
-                <div class="p-4">
+                <div class="p-4 space-y-6">
+
+                    {{-- ================= TABEL ATAS: DATA PEKERJA ================= --}}
                     <div class="w-full overflow-x-auto">
                         <div class="min-w-[800px]">
-                            <table class="w-full text-sm border-collapse border border-zinc-300 dark:border-zinc-600">
+                            <table
+                                class="w-full text-sm border-collapse border border-zinc-300 dark:border-zinc-600">
                                 <thead>
                                     <tr>
-                                        <th colspan="7"
-                                            class="p-4 text-xl font-bold text-center bg-zinc-700 text-white uppercase tracking-wider">
-                                            Detail Produksi Meja
+                                        <th colspan="8"
+                                            class="p-3 text-lg font-bold text-center bg-zinc-700 text-white">
+                                            DATA PEKERJA
                                         </th>
                                     </tr>
                                     <tr
                                         class="bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-300 border-t border-zinc-300 dark:border-zinc-600">
-                                        <th class="p-2 text-left text-xs font-semibold uppercase">Ukuran</th>
-                                        <th class="p-2 text-center text-xs font-semibold w-24 uppercase">Jenis Kayu</th>
-                                        <th class="p-2 text-center text-xs font-semibold w-16 uppercase">KW</th>
-                                        <th class="p-2 text-center text-xs font-semibold w-28 uppercase">No. Palet</th>
-                                        <th class="p-2 text-right text-xs font-semibold w-24 uppercase">Hasil</th>
-                                        <th class="p-2 text-right text-xs font-semibold w-24 uppercase">Target</th>
-                                        <th class="p-2 text-right text-xs font-semibold w-20 uppercase">Capaian</th>
+                                        <th class="p-2 text-center text-xs font-medium w-16">ID</th>
+                                        <th class="p-2 text-left text-xs font-medium w-40">Nama</th>
+                                        <th class="p-2 text-center text-xs font-medium w-20">Masuk</th>
+                                        <th class="p-2 text-center text-xs font-medium w-20">Pulang</th>
+                                        <th class="p-2 text-center text-xs font-medium w-24">Jam Aktual</th>
+                                        <th class="p-2 text-center text-xs font-medium w-16">Ijin</th>
+                                        <th class="p-2 text-left text-xs font-medium">Ket</th>
+                                        <th class="p-2 text-right text-xs font-medium w-36">Potongan Target</th>
                                     </tr>
                                 </thead>
+
+                                <tbody>
+                                    @forelse ($pekerjaList as $i => $p)
+                                        @php $potTarget = (int) ($p['pot_target'] ?? 0); @endphp
+                                        <tr
+                                            class="{{ $i % 2 === 1 ? 'bg-zinc-50 dark:bg-zinc-800/50' : 'bg-white dark:bg-zinc-900' }} border-t border-zinc-300 dark:border-zinc-700">
+                                            <td
+                                                class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 font-mono">
+                                                {{ $p['id'] ?? '-' }}
+                                            </td>
+                                            <td
+                                                class="p-2 text-left text-xs border-r border-zinc-300 dark:border-zinc-700 font-medium">
+                                                {{ $p['nama'] ?? '-' }}
+                                            </td>
+                                            <td
+                                                class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700">
+                                                {{ $p['jam_masuk'] ?? '-' }}
+                                            </td>
+                                            <td
+                                                class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700">
+                                                {{ $p['jam_pulang'] ?? '-' }}
+                                            </td>
+                                            <td
+                                                class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 font-mono">
+                                                {{ isset($p['jam_aktual_bersih']) ? number_format($p['jam_aktual_bersih'], 2, ',', '.') . ' jam' : '-' }}
+                                            </td>
+                                            <td
+                                                class="p-2 text-center text-xs border-r border-zinc-300 dark:border-zinc-700 text-yellow-600 dark:text-yellow-400">
+                                                {{ $p['ijin'] ?? '-' }}
+                                            </td>
+                                            <td
+                                                class="p-2 text-left text-xs border-r border-zinc-300 dark:border-zinc-700 italic text-zinc-500">
+                                                {{ $p['keterangan'] ?? '-' }}
+                                            </td>
+                                            <td
+                                                class="p-2 text-right text-xs font-bold {{ $potTarget > 0 ? 'text-red-500' : '' }}">
+                                                {{ $potTarget > 0 ? 'Rp ' . number_format($potTarget) : '-' }}
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="8"
+                                                class="p-4 text-center text-zinc-500 dark:text-zinc-400 text-sm italic">
+                                                Tidak ada data pekerja.
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+
+                                <tfoot
+                                    class="bg-zinc-100 dark:bg-zinc-800 border-t-2 border-zinc-300 dark:border-zinc-600">
+                                    <tr>
+                                        <td colspan="8"
+                                            class="p-2 text-center text-[11px] text-zinc-500 dark:text-zinc-400">
+                                            <span class="font-medium">Jumlah Pekerja:</span>
+                                            <strong class="text-zinc-900 dark:text-white">{{ $jumlahPekerja }}</strong>
+                                            <span class="text-zinc-400">|</span>
+                                            <span class="font-medium">Rata-rata Jam Aktual Kru:</span>
+                                            <strong class="font-mono text-zinc-900 dark:text-white">
+                                                {{ number_format($data['jam_aktual'] ?? 0, 2, ',', '.') }} jam</strong>
+                                            <span class="text-zinc-400">|</span>
+                                            <span class="text-xs">Tgl: {{ $data['tanggal'] ?? '-' }}</span>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    {{-- ================= TABEL BAWAH: BARANG DIKERJAKAN ================= --}}
+                    <div class="w-full overflow-x-auto">
+                        <div class="min-w-[800px]">
+                            <table
+                                class="w-full text-sm border-collapse border border-zinc-300 dark:border-zinc-600">
+                                <thead>
+                                    <tr>
+                                        <th colspan="7"
+                                            class="p-3 text-lg font-bold text-center bg-zinc-700 text-white">
+                                            DATA BARANG DIKERJAKAN
+                                        </th>
+                                    </tr>
+                                    <tr
+                                        class="bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-300 border-t border-zinc-300 dark:border-zinc-600">
+                                        <th class="p-2 text-left text-xs font-medium">Ukuran</th>
+                                        <th class="p-2 text-center text-xs font-medium w-28">Jenis Kayu</th>
+                                        <th class="p-2 text-center text-xs font-medium w-16">KW</th>
+                                        <th class="p-2 text-center text-xs font-medium w-28">No. Palet</th>
+                                        <th class="p-2 text-right text-xs font-medium w-24">Hasil</th>
+                                        <th class="p-2 text-right text-xs font-medium w-28">Target (Adjusted)</th>
+                                        <th class="p-2 text-right text-xs font-medium w-20">Capaian</th>
+                                    </tr>
+                                </thead>
+
                                 <tbody>
                                     @forelse ($detailProduksi as $i => $prod)
                                         @php
-                                            $isMencapaiTarget = ($prod['hasil'] ?? 0) >= ($prod['target'] ?? 0);
-                                            $warnaStatus = $isMencapaiTarget
-                                                ? 'text-green-500 font-bold'
-                                                : 'text-red-500 font-bold';
-                                            // NOTE: kode_ukuran === 'PILIH-VENEER-NOT-FOUND' berarti relasi
-                                            // Ukuran/JenisKayu (model ModalPilihVeneer) gagal di-resolve,
-                                            // BUKAN berarti Target tidak ditemukan. Jangan gabungkan dengan has_target.
+                                            // 'PILIH-VENEER-NOT-FOUND' = relasi Ukuran/JenisKayu gagal di-resolve,
+                                            // BUKAN berarti Target tidak ditemukan.
                                             $isUkuranNotFound =
                                                 ($prod['kode_ukuran'] ?? null) === 'PILIH-VENEER-NOT-FOUND';
+                                            $hasTarget = $prod['has_target'] ?? false;
                                         @endphp
                                         <tr
-                                            class="{{ $i % 2 === 1 ? 'bg-zinc-50 dark:bg-zinc-800/50' : 'bg-white dark:bg-zinc-900' }} border-t border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors">
+                                            class="{{ $i % 2 === 1 ? 'bg-zinc-50 dark:bg-zinc-800/50' : 'bg-white dark:bg-zinc-900' }} border-t border-zinc-300 dark:border-zinc-700">
                                             <td
                                                 class="p-2 text-left text-xs border-r border-zinc-300 dark:border-zinc-700 font-medium">
-                                                {{ $prod['ukuran'] ?? '-' }}
+                                                @if ($isUkuranNotFound || !$hasTarget)
+                                                    <span class="text-red-500">{{ $prod['ukuran'] ?? '-' }} ⚠</span>
+                                                @else
+                                                    {{ $prod['ukuran'] ?? '-' }}
+                                                @endif
                                                 @if ($isUkuranNotFound)
                                                     <span class="text-red-400 font-semibold">(Ukuran/Jenis Kayu Tidak
                                                         Ditemukan)</span>
@@ -130,11 +221,19 @@
                                             </td>
                                             <td
                                                 class="p-2 text-right text-xs border-r border-zinc-300 dark:border-zinc-700 text-zinc-500">
-                                                {{ $prod['has_target'] ? number_format($prod['target'] ?? 0) : '-' }}
+                                                @if ($hasTarget)
+                                                    {{ number_format($prod['target'] ?? 0) }}
+                                                    @if (isset($prod['target_normal']))
+                                                        <span class="block text-[10px] text-zinc-600">(normal:
+                                                            {{ number_format($prod['target_normal']) }})</span>
+                                                    @endif
+                                                @else
+                                                    -
+                                                @endif
                                             </td>
                                             <td
-                                                class="p-2 text-right text-xs font-bold {{ !$prod['has_target'] ? 'text-red-500' : (($prod['capaian_persen'] ?? 0) >= 100 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') }}">
-                                                @if (!$prod['has_target'])
+                                                class="p-2 text-right text-xs font-bold {{ !$hasTarget ? 'text-red-500' : (($prod['capaian_persen'] ?? 0) >= 100 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400') }}">
+                                                @if (!$hasTarget)
                                                     Target ?
                                                 @else
                                                     {{ number_format($prod['capaian_persen'] ?? 0, 1, ',', '.') }}%
@@ -145,80 +244,50 @@
                                         <tr>
                                             <td colspan="7"
                                                 class="p-4 text-center text-zinc-500 dark:text-zinc-400 text-sm italic">
-                                                Tidak ada detail produksi untuk meja ini.
+                                                Tidak ada barang dikerjakan.
                                             </td>
                                         </tr>
                                     @endforelse
                                 </tbody>
+
                                 <tfoot
                                     class="bg-zinc-100 dark:bg-zinc-800 border-t-2 border-zinc-300 dark:border-zinc-600">
                                     <tr>
                                         <td colspan="7"
-                                            class="p-3 text-center text-xs text-zinc-600 dark:text-zinc-400 space-x-3">
-                                            <span class="font-medium">Ukuran Dikerjakan:</span>
-                                            <strong class="text-zinc-900 dark:text-white">{{ $totalUkuran }}</strong>
-
-                                            <span class="text-zinc-400">|</span>
-
-                                            <span class="font-medium">Masuk:</span>
-                                            <strong
-                                                class="font-mono text-zinc-900 dark:text-white">{{ $p['jam_masuk'] }}</strong>
-
-                                            <span class="text-zinc-400">|</span>
-
-                                            <span class="font-medium">Pulang:</span>
-                                            <strong
-                                                class="font-mono text-zinc-900 dark:text-white">{{ $p['jam_pulang'] }}</strong>
-
-                                            <span class="text-zinc-400">|</span>
-
-                                            <span class="font-medium">Ijin:</span>
-                                            <strong
-                                                class="text-yellow-600 dark:text-yellow-400">{{ $p['ijin'] }}</strong>
-
-                                            <span class="text-zinc-400">|</span>
-
-                                            <span class="font-medium">Jam Kerja:</span>
-                                            <strong
-                                                class="font-mono text-zinc-900 dark:text-white">{{ $p['jam_kerja'] }}</strong>
-
-                                            <span class="text-zinc-400">|</span>
-
-                                            <span class="text-xs">Tgl: {{ $p['tanggal'] }}</span>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan="7"
                                             class="p-2 text-center text-[11px] text-zinc-500 dark:text-zinc-400 border-t border-zinc-300 dark:border-zinc-700">
-                                            Capaian GLOBAL (jumlah persen semua ukuran yang dikerjakan hari ini, basis:
-                                            target per ukuran, BUKAN rata-rata):
+                                            Capaian GLOBAL tim (jumlah persen semua ukuran hari ini, basis: target
+                                            ADJUSTED ke total jam kerja tim):
                                             <strong
                                                 class="{{ $tercapai ? 'text-green-600 dark:text-green-400' : 'text-red-500' }}">
-                                                {{ number_format($pencapaianGlobal, 1, ',', '.') }}%
+                                                {{ number_format($capaianGlobal, 1, ',', '.') }}%
                                             </strong>
-                                            @if (!empty($p['keterangan']) && $p['keterangan'] !== '-')
-                                                <span class="text-zinc-400">|</span>
-                                                <span class="italic">Ket: {{ $p['keterangan'] }}</span>
-                                            @endif
                                         </td>
                                     </tr>
                                     <tr>
                                         <td colspan="7"
-                                            class="px-3 py-2 text-center border-t border-zinc-300 dark:border-zinc-700 {{ $potongan > 0 ? 'bg-red-50 dark:bg-red-950/30' : '' }}">
+                                            class="px-3 py-2 text-center border-t border-zinc-300 dark:border-zinc-700">
                                             <span
-                                                class="text-xs font-bold uppercase tracking-wide {{ $potongan > 0 ? 'text-red-600 dark:text-red-400' : 'text-zinc-500 dark:text-zinc-400' }}">
-                                                Potongan Target:
+                                                class="text-xs font-semibold {{ $potonganTim > 0 ? 'text-red-500 dark:text-red-400' : 'text-zinc-500 dark:text-zinc-400' }}">
+                                                Potongan: Rp {{ number_format($potonganTim) }} / tim
+                                                @if ($jumlahPekerja > 0)
+                                                    ÷ {{ $jumlahPekerja }} orang (sesuai jam kerja)
+                                                    ≈ <strong>Rp {{ number_format($rataRataPerOrang) }}/orang</strong>
+                                                @endif
                                             </span>
-                                            <span
-                                                class="text-base font-black {{ $potongan > 0 ? 'text-red-600 dark:text-red-400' : 'text-zinc-500 dark:text-zinc-400' }}">
-                                                {{ $potongan > 0 ? 'Rp ' . number_format($potongan) : 'Rp 0' }}
-                                            </span>
+                                            @if ($data['potongan_melebihi_gaji'] ?? false)
+                                                <span
+                                                    class="ml-2 px-2 py-0.5 rounded bg-yellow-600 text-white text-[10px] font-bold">
+                                                    ⚠ MELEBIHI GAJI NORMAL TIM (Rp
+                                                    {{ number_format($data['total_gaji_tim'] ?? 0) }})
+                                                </span>
+                                            @endif
                                         </td>
                                     </tr>
                                 </tfoot>
                             </table>
                         </div>
                     </div>
+
                 </div>
             </div>
         @empty

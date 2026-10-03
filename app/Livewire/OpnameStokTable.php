@@ -107,8 +107,40 @@ class OpnameStokTable extends Component
         }
         if ($index === null) return;
 
+        // Simpan kondisi baris sebelum diubah, untuk dikembalikan bila kembar
+        $sebelum = $this->rows[$index];
+
         $this->rows[$index][$field] = $this->kosongJadiNull($value);
         $this->refreshStokSistem($index);
+
+        // Cek kembar hanya saat jenis kayu/barang + ukuran + grade sudah terisi
+        // semua, supaya tidak muncul peringatan palsu di tengah pengisian.
+        $kembar = $this->cariBarisKembar($index, true);
+        if ($kembar !== null) {
+            // Baris tidak pernah dihapus otomatis, baik baris baru maupun
+            // baris lama dari database — cukup dikembalikan ke pilihan
+            // sebelumnya. Menghapus baris bisa bikin user frustrasi kalau
+            // ternyata cuma salah pilih, apalagi kalau isian lain di baris
+            // itu (stok fisik, catatan) ikut hilang.
+            $barisAda = $this->rows[$kembar];
+
+            $this->rows[$index] = $sebelum;
+            // Naikkan versi baris agar dropdown Alpine dirender ulang
+            // dan kembali menampilkan pilihan sebelumnya.
+            $this->rows[$index]['_v'] = ($sebelum['_v'] ?? 0) + 1;
+
+            $this->notifDuplikat($barisAda, $kembar);
+            return;
+        }
+
+        // Render ulang baris ini juga saat TIDAK kembar. Dropdown Alpine
+        // hanya membaca daftar opsinya sekali saat elemen pertama kali
+        // dipasang, jadi tanpa ini, kolom lain di baris yang sama akan
+        // tetap menampilkan opsi lama (belum tersaring) sampai baris ini
+        // dipasang ulang. Menaikkan versi di sini membuat kombinasi yang
+        // baru saja dipakai langsung hilang dari pilihan kolom lain,
+        // sebelum sempat dipilih dan ditolak.
+        $this->rows[$index]['_v'] = ($this->rows[$index]['_v'] ?? 0) + 1;
     }
 
     /** Fallback bila ada field kunci yang masih memakai wire:model */
@@ -124,6 +156,125 @@ class OpnameStokTable extends Component
 
         $this->rows[$index][$field] = $this->kosongJadiNull($value);
         $this->refreshStokSistem($index);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // CEGAH DATA KEMBAR (jenis kayu/barang + ukuran + grade)
+    // ────────────────────────────────────────────────────────────
+
+    /**
+     * Kunci unik sebuah baris. Ukuran dibandingkan lewat dimensinya
+     * (P x L x T) karena tabel stok memang dikunci per dimensi, bukan per
+     * id_ukuran. Grade dinormalisasi (trim + huruf kecil) agar 'b1' = 'B1',
+     * sama seperti collation MySQL.
+     *
+     * $lengkap = true  → null bila ada kolom kunci yang masih kosong
+     * $lengkap = false → kolom kosong dianggap nilai sah (null = null)
+     */
+    private function kunciBaris(array $row, bool $lengkap = false): ?string
+    {
+        if (empty($row['id_ukuran'])) return null;
+
+        $idEntitas = $this->jenisStok === 'platform_jadi'
+            ? ($row['id_jenis_barang'] ?? null)
+            : ($row['id_jenis_kayu'] ?? null);
+        $idEntitas = $this->kosongJadiNull($idEntitas);
+        $kw        = $this->kosongJadiNull($row['kw'] ?? null);
+
+        if ($lengkap && ($idEntitas === null || $kw === null)) return null;
+
+        // Label dimensi dari master ukuran dipakai sebagai kunci, bukan id_ukuran,
+        // supaya dua id ukuran dengan dimensi sama tetap dianggap kembar.
+        $ukuran = $this->ukuranOptions[(int) $row['id_ukuran']] ?? ('u' . $row['id_ukuran']);
+
+        return implode('|', [
+            (int) ($idEntitas ?? 0),
+            $ukuran,
+            mb_strtolower(trim((string) ($kw ?? ''))),
+        ]);
+    }
+
+    /**
+     * Opsi dropdown untuk $field pada baris $row, setelah membuang pilihan
+     * yang akan membuat kombinasi kembar dengan baris lain. Penyaringan
+     * hanya aktif kalau DUA field kunci lainnya di baris ini sudah terisi —
+     * itulah field yang "terakhir" dipilih user, persis yang perlu dijaga.
+     */
+    public function opsiTersedia(string $field, array $row): array
+    {
+        $opsiAsal = match ($field) {
+            'id_jenis_kayu'   => $this->jenisKayuOptions,
+            'id_jenis_barang' => $this->jenisBarangOptions,
+            'id_ukuran'       => $this->ukuranOptions,
+            'kw'              => $this->gradeOptions,
+            default           => [],
+        };
+
+        $fieldEntitas = $this->jenisStok === 'platform_jadi' ? 'id_jenis_barang' : 'id_jenis_kayu';
+        [$field1, $field2] = array_values(array_diff([$fieldEntitas, 'id_ukuran', 'kw'], [$field]));
+
+        $lainTerisi = $this->kosongJadiNull($row[$field1] ?? null) !== null
+            && $this->kosongJadiNull($row[$field2] ?? null) !== null;
+
+        if (!$lainTerisi) {
+            return $opsiAsal;
+        }
+
+        $uidSaatIni = $row['_uid'] ?? null;
+        $terpakai   = [];
+        foreach ($this->rows as $r) {
+            if (($r['_uid'] ?? null) === $uidSaatIni) continue;
+            $k = $this->kunciBaris($r, true);
+            if ($k !== null) $terpakai[$k] = true;
+        }
+
+        return array_filter($opsiAsal, function ($label, $nilai) use ($field, $row, $terpakai) {
+            $kandidat          = $row;
+            $kandidat[$field]  = $nilai;
+            $k = $this->kunciBaris($kandidat, true);
+            return $k === null || !isset($terpakai[$k]);
+        }, ARRAY_FILTER_USE_BOTH);
+    }
+
+    /** Index baris lain yang kuncinya sama dengan baris $index, atau null. */
+    private function cariBarisKembar(int $index, bool $lengkap = false): ?int
+    {
+        $kunci = $this->kunciBaris($this->rows[$index] ?? [], $lengkap);
+        if ($kunci === null) return null;
+
+        foreach ($this->rows as $i => $r) {
+            if ($i !== $index && $this->kunciBaris($r, $lengkap) === $kunci) {
+                return $i;
+            }
+        }
+
+        return null;
+    }
+
+    private function labelKombinasi(array $row): string
+    {
+        $opsi = $this->jenisStok === 'platform_jadi'
+            ? $this->jenisBarangOptions
+            : $this->jenisKayuOptions;
+        $idEntitas = $this->jenisStok === 'platform_jadi'
+            ? ($row['id_jenis_barang'] ?? null)
+            : ($row['id_jenis_kayu'] ?? null);
+
+        $entitas = $idEntitas ? ($opsi[(int) $idEntitas] ?? '-') : '-';
+        $ukuran  = $this->ukuranOptions[(int) ($row['id_ukuran'] ?? 0)] ?? '-';
+        $grade   = $this->kosongJadiNull($row['kw'] ?? null) ?? '-';
+
+        return "{$entitas} / {$ukuran} / Grade {$grade}";
+    }
+
+    private function notifDuplikat(array $barisAda, int $indexAda): void
+    {
+        Notification::make()
+            ->title('Data sudah ada')
+            ->body($this->labelKombinasi($barisAda) . ' sudah ada di baris no. ' . ($indexAda + 1)
+                . '. Data duplikat tidak dapat dibuat, pilihan dikembalikan.')
+            ->danger()
+            ->send();
     }
 
     private function kosongJadiNull($value)
@@ -263,6 +414,26 @@ class OpnameStokTable extends Component
         if (empty($rowsDiisi) && empty($deletedRows)) {
             Notification::make()->title('Tidak ada perubahan')->warning()->send();
             return;
+        }
+
+        // Pengaman terakhir: tolak bila ada dua baris terisi dengan kunci sama,
+        // atau baris terisi yang kuncinya sama dengan baris yang sedang dihapus
+        // (proses penolan akan menimpa hasil opname baris tsb).
+        $kunciDihapus = collect($deletedRows)->map(fn ($r) => $this->kunciBaris($r))->filter()->all();
+        $kunciTerlihat = [];
+        foreach ($rowsDiisi as $r) {
+            $k = $this->kunciBaris($r);
+            if ($k === null) continue;
+
+            if (isset($kunciTerlihat[$k]) || in_array($k, $kunciDihapus, true)) {
+                Notification::make()
+                    ->title('Data duplikat, opname dibatalkan')
+                    ->body($this->labelKombinasi($r) . ' muncul lebih dari sekali. Hapus atau ubah salah satu barisnya.')
+                    ->danger()
+                    ->send();
+                return;
+            }
+            $kunciTerlihat[$k] = true;
         }
 
         $berhasil = 0;

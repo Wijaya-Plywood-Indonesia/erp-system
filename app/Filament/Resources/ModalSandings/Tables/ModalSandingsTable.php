@@ -2,11 +2,20 @@
 
 namespace App\Filament\Resources\ModalSandings\Tables;
 
+use App\Models\ModalSanding;
+use App\Models\SerahTerimaHp;
+use App\Services\SerahTerimaHpService;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -147,11 +156,157 @@ class ModalSandingsTable
                 //
             ])
             ->headerActions([
+                
+                // 🌟 Tombol pengembalian sisa bahan Sanding ke gudang. Alurnya
+                // sama dengan tombol "Kembalikan ke Gudang" di tab Bahan Hot
+                // Press: pilih bahan yang sudah dipakai sebagai modal pada
+                // produksi ini, isi jumlahnya, lalu stok gudang bertambah.
+                // Asal bahan (Gudang Triplek Jadi, Gudang Platform Mentah,
+                // hasil Hotpress, hasil Graji) tidak dibatasi.
+                Action::make('kembalikanKeGudang')
+                    ->label('Kembalikan ke Gudang')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->color('success')
+                    ->modalHeading('Kembalikan Bahan ke Gudang')
+                    ->modalDescription(
+                        'Sisa bahan yang tidak terpakai pada produksi sanding ini akan dikembalikan sebagai stok di gudang.'
+                    )
+                    ->modalSubmitActionLabel('Kembalikan')
+                    ->hidden(
+                        fn ($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    )
+                    ->schema(function ($livewire) {
+
+                        $ownerId = $livewire->ownerRecord?->id;
+
+                        return [
+
+                            // =====================================================
+                            // FIELD PALET
+                            // =====================================================
+                            Select::make('id_serah_terima_hp')
+                                ->label('Palet Bahan')
+                                ->helperText(
+                                    'Pilih palet bahan yang akan dikembalikan.'
+                                )
+                                ->required()
+                                ->live()
+                                ->searchable()
+                                ->options(
+                                    fn () => self::opsiPengembalian($ownerId)
+                                )
+                                ->afterStateUpdated(function ($state, callable $set) {
+
+                                    if (! $state) {
+
+                                        $set('no_palet', null);
+                                        $set('maks_pengembalian', null);
+
+                                        return;
+                                    }
+
+                                    $serahTerima = SerahTerimaHp::find($state);
+
+                                    // Nomor palet otomatis diambil dari bahan
+                                    $set(
+                                        'no_palet',
+                                        $serahTerima?->no_palet
+                                    );
+
+                                    // Sisa bahan yang masih bisa dikembalikan
+                                    $set(
+                                        'maks_pengembalian',
+                                        $serahTerima?->sisa ?? 0
+                                    );
+                                }),
+
+                            // =====================================================
+                            // NOMOR PALET
+                            // Otomatis mengikuti palet yang dipilih
+                            // =====================================================
+                            TextInput::make('no_palet')
+                                ->label('Nomor Palet')
+                                ->disabled()
+                                ->dehydrated(false),
+
+                            // =====================================================
+                            // JUMLAH PENGEMBALIAN
+                            // =====================================================
+                            TextInput::make('jumlah_kembali')
+                                ->label('Jumlah Dikembalikan (Lembar)')
+                                ->numeric()
+                                ->required()
+                                ->minValue(1)
+                                ->helperText(
+                                    fn (Get $get) =>
+                                    $get('maks_pengembalian')
+                                        ? 'Maks. bisa dikembalikan: '
+                                            . $get('maks_pengembalian')
+                                            . ' lembar.'
+                                        : 'Pilih palet terlebih dahulu.'
+                                )
+                                ->rules([
+                                    fn (Get $get) =>
+                                        function (
+                                            string $attribute,
+                                            $value,
+                                            \Closure $fail
+                                        ) use ($get) {
+
+                                            $maks = (float) (
+                                                $get('maks_pengembalian') ?? 0
+                                            );
+
+                                            if ($value > $maks) {
+                                                $fail(
+                                                    "Jumlah melebihi sisa yang tersedia ({$maks} lembar)."
+                                                );
+                                            }
+                                        },
+                                ]),
+
+                            // Menyimpan batas maksimum pengembalian
+                            Hidden::make('maks_pengembalian'),
+                        ];
+                    })
+                    ->action(function (array $data, $livewire) {
+
+                        try {
+
+                            $serahTerima = SerahTerimaHp::findOrFail(
+                                (int) $data['id_serah_terima_hp']
+                            );
+
+                            $jumlah = (float) $data['jumlah_kembali'];
+
+                            app(SerahTerimaHpService::class)->kembaliKeGudang(
+                                $serahTerima,
+                                $jumlah,
+                                $livewire->ownerRecord,
+                            );
+
+                            Notification::make()
+                                ->title('Bahan berhasil dikembalikan ke gudang')
+                                ->success()
+                                ->send();
+
+                        } catch (\Throwable $e) {
+
+                            Notification::make()
+                                ->title('Gagal Mengembalikan')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
+
                 CreateAction::make()
                     ->label('+ Tambah Modal')
                     ->hidden(
                         fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
+
             ])
             ->recordActions([
                 EditAction::make()
@@ -173,5 +328,52 @@ class ModalSandingsTable
                         ),
                 ]),
             ]);
+    }
+
+    /**
+     * Opsi dropdown untuk Select 'id_serah_terima_hp' di tombol "Kembalikan
+     * ke Gudang" — bahan yang sudah dipakai sebagai modal pada produksi
+     * sanding ini (sama seperti Hotpress yang membaca bahan produksinya),
+     * asalnya apa saja, dan masih punya sisa > 0.
+     */
+    protected static function opsiPengembalian(?int $idProduksiSanding): array
+    {
+        if (! $idProduksiSanding) {
+            return [];
+        }
+
+        return ModalSanding::query()
+            ->where('id_produksi_sanding', $idProduksiSanding)
+            ->whereNotNull('id_serah_terima_hp')
+            ->with([
+                'serahTerimaHp.triplekMutasiKeluar.jenisKayu',
+                'serahTerimaHp.platformMthMutasiKeluar.jenisKayu',
+            ])
+            ->get()
+            ->pluck('serahTerimaHp')
+            ->filter()
+            ->unique('id')
+            ->filter(fn ($item) => SerahTerimaHpService::sumberSanding($item) !== null && $item->sisa > 0)
+            ->mapWithKeys(fn ($item) => [$item->id => self::labelPengembalian($item)])
+            ->toArray();
+    }
+
+    /**
+     * Label yang ditampilkan di dropdown: asal · ukuran/jenis/grade · sisa.
+     */
+    protected static function labelPengembalian(SerahTerimaHp $item): string
+    {
+        $sisa = rtrim(rtrim(number_format($item->sisa, 2, '.', ''), '0'), '.');
+
+        $mutasi = $item->triplekMutasiKeluar ?? $item->platformMthMutasiKeluar;
+
+        if ($mutasi) {
+            $detail = ($mutasi->panjang + 0).' x '.($mutasi->lebar + 0).' x '.($mutasi->tebal + 0)
+                .' '.($mutasi->jenisKayu?->nama_kayu ?? '?').' '.($mutasi->kw_grade ?? '?');
+        } else {
+            $detail = $item->barangSetengahJadi?->label ?? '-';
+        }
+
+        return "{$item->asal_label} · {$detail} · Sisa {$sisa} Lbr";
     }
 }

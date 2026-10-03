@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DetailPegawaiKedis\Tables;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -17,6 +18,10 @@ class DetailPegawaiKedisTable
 {
     public static function configure(Table $table): Table
     {
+        // Kedi dicatat di hari bongkar: pakai tanggal actual kalau sudah ada, kalau belum pakai rencana.
+        $tanggalKedi = fn($livewire) => $livewire->getOwnerRecord()->tanggal_actual_bongkar
+            ?? $livewire->getOwnerRecord()->tanggal_bongkar;
+
         return $table
             ->columns([
 
@@ -81,10 +86,13 @@ class DetailPegawaiKedisTable
                             'ket'  => $data['ket'],
                         ]);
                     }),
+                PindahPegawaiTableActions::recordAction('kedi', $tanggalKedi),
+                PindahPegawaiTableActions::batalAction('kedi'),
                 DeleteAction::make()
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('kedi', $tanggalKedi),
                     DeleteBulkAction::make(),
                 ]),
             ]);

@@ -5,18 +5,14 @@ namespace App\Filament\Pages;
 use Filament\Pages\Page;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
-<<<<<<< HEAD
 use Illuminate\Support\Facades\DB;
 use BackedEnum;
-=======
-use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
->>>>>>> 0a911385b2f7022a40855e2e8683ae63f672ed47
+
 use UnitEnum;
 
 class RekapStokVeneer extends Page implements HasForms
@@ -36,10 +32,10 @@ class RekapStokVeneer extends Page implements HasForms
 
     public string $sortBy = 'ukuran';
 
-    public function mount(): void {}
+    public function mount(): void
+    {
+    }
 
-<<<<<<< HEAD
-=======
     public function getMaxContentWidth(): Width|string|null
     {
         return Width::Full;
@@ -52,7 +48,7 @@ class RekapStokVeneer extends Page implements HasForms
                 ->label('Export Excel')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
-                ->action(fn () => $this->exportExcel()),
+                ->action(fn() => $this->exportExcel()),
         ];
     }
 
@@ -62,7 +58,7 @@ class RekapStokVeneer extends Page implements HasForms
         $localLabel = $this->getLocalLabel();
         $externalLabel = $this->getExternalLabel();
         $tanggal = Carbon::now()->translatedFormat('d F Y');
-        $filename = 'Rekap_Stok_Veneer_'.Carbon::now()->format('Ymd_His').'.xlsx';
+        $filename = 'Rekap_Stok_Veneer_' . Carbon::now()->format('Ymd_His') . '.xlsx';
 
         return Excel::download(
             new RekapStokVeneerExport(
@@ -126,7 +122,7 @@ class RekapStokVeneer extends Page implements HasForms
         $empty = ['basah' => [], 'kering' => [], 'jadi' => []];
         $baseUrl = rtrim((string) config('services.stok_partner.url'), '/');
         $apiKey = config('services.stok_partner.key');
-        $logTag = 'RekapStokVeneer['.$this->getLocalLabel().'→'.$this->getExternalLabel().']';
+        $logTag = 'RekapStokVeneer[' . $this->getLocalLabel() . '→' . $this->getExternalLabel() . ']';
 
         if ($baseUrl === '' || empty($apiKey)) {
             Log::warning("{$logTag}: API_STOK atau INTER_API_KEY belum diisi di .env");
@@ -137,7 +133,7 @@ class RekapStokVeneer extends Page implements HasForms
         try {
             $response = Http::withHeaders(['X-API-KEY' => $apiKey])
                 ->timeout(10)
-                ->get($baseUrl.'/api/external/rekap-stok-veneer');
+                ->get($baseUrl . '/api/external/rekap-stok-veneer');
 
             if ($response->successful() && $response->json('status') === 'success') {
                 return $response->json('data', $empty);
@@ -178,42 +174,43 @@ class RekapStokVeneer extends Page implements HasForms
         return $kws;
     }
 
->>>>>>> 0a911385b2f7022a40855e2e8683ae63f672ed47
     protected function buildAllStocks(): array
     {
         $allStocks = [];
         $jenisKayus = \App\Models\JenisKayu::pluck('nama_kayu', 'id')->toArray();
 
         $getGroupKey = fn($idJk, $p, $l, $t) =>
-            $idJk . '_' . (float)$p . 'x' . (float)$l . 'x' . (float)$t;
+            $idJk . '_' . (float) $p . 'x' . (float) $l . 'x' . (float) $t;
 
         $initGroup = function ($key, $idJk, $p, $l, $t) use (&$allStocks, $jenisKayus) {
             if (!isset($allStocks[$key])) {
                 $namaKayu = $jenisKayus[$idJk] ?? 'Unknown';
                 $allStocks[$key] = [
-                    'title'        => (float)$p . ' × ' . (float)$l . ' × ' . (float)$t . ' mm — ' . $namaKayu,
-                    'ukuran'       => (float)$p . 'x' . (float)$l . 'x' . (float)$t,
-                    'jenis_kayu'   => $namaKayu,
-                    'panjang'      => (float)$p,
-                    'lebar'        => (float)$l,
-                    'tebal'        => (float)$t,
-                    'wijayaBasah'  => [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0, 'AF' => 0],
+                    'title' => (float) $p . ' × ' . (float) $l . ' × ' . (float) $t . ' mm — ' . $namaKayu,
+                    'ukuran' => (float) $p . 'x' . (float) $l . 'x' . (float) $t,
+                    'jenis_kayu' => $namaKayu,
+                    'panjang' => (float) $p,
+                    'lebar' => (float) $l,
+                    'tebal' => (float) $t,
+                    'wijayaBasah' => [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0, 'AF' => 0],
                     'wijayaKering' => [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0, 'AF' => 0],
-                    'wijayaJadi'   => [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0, 'AF' => 0],
+                    'wijayaJadi' => [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0, 'AF' => 0],
                 ];
             }
         };
 
         $normalizeKw = function ($raw) {
-            $kw = strtoupper(trim((string)$raw));
-            if (!in_array($kw, ['1', '2', '3', '4', '5', 'AF'])) return null;
-            return is_numeric($kw) ? (int)$kw : $kw;
+            $kw = strtoupper(trim((string) $raw));
+            if (!in_array($kw, ['1', '2', '3', '4', '5', 'AF']))
+                return null;
+            return is_numeric($kw) ? (int) $kw : $kw;
         };
 
         // 1. Basah
         foreach (\App\Models\HppVeneerBasahSummary::all() as $b) {
             $kw = $normalizeKw($b->kw);
-            if ($kw === null) continue;
+            if ($kw === null)
+                continue;
             $key = $getGroupKey($b->id_jenis_kayu, $b->panjang, $b->lebar, $b->tebal);
             $initGroup($key, $b->id_jenis_kayu, $b->panjang, $b->lebar, $b->tebal);
             $allStocks[$key]['wijayaBasah'][$kw] += $b->stok_lembar;
@@ -222,24 +219,27 @@ class RekapStokVeneer extends Page implements HasForms
         // 2. Jadi
         foreach (\App\Models\StokVeneerJadi::all() as $j) {
             $kw = $normalizeKw($j->kw_grade);
-            if ($kw === null) continue;
+            if ($kw === null)
+                continue;
             $key = $getGroupKey($j->id_jenis_kayu, $j->panjang, $j->lebar, $j->tebal);
             $initGroup($key, $j->id_jenis_kayu, $j->panjang, $j->lebar, $j->tebal);
             $allStocks[$key]['wijayaJadi'][$kw] += $j->stok_lembar;
         }
 
         // 3. Kering
-        $ukurans  = \App\Models\Ukuran::all()->keyBy('id');
+        $ukurans = \App\Models\Ukuran::all()->keyBy('id');
         $keringIds = DB::table('stok_veneer_kerings')
             ->select(DB::raw('MAX(id) as max_id'))
             ->groupBy('id_ukuran', 'id_jenis_kayu', 'kw')
             ->pluck('max_id');
 
         foreach (\App\Models\StokVeneerKering::whereIn('id', $keringIds)->get() as $k) {
-            $kw     = $normalizeKw($k->kw);
-            if ($kw === null) continue;
+            $kw = $normalizeKw($k->kw);
+            if ($kw === null)
+                continue;
             $ukuran = $ukurans->get($k->id_ukuran);
-            if (!$ukuran) continue;
+            if (!$ukuran)
+                continue;
             $key = $getGroupKey($k->id_jenis_kayu, $ukuran->panjang, $ukuran->lebar, $ukuran->tebal);
             $initGroup($key, $k->id_jenis_kayu, $ukuran->panjang, $ukuran->lebar, $ukuran->tebal);
             $allStocks[$key]['wijayaKering'][$kw] += $k->stok_lembar_sesudah;
@@ -249,15 +249,16 @@ class RekapStokVeneer extends Page implements HasForms
         $allStocks = array_filter($allStocks, function ($g) {
             foreach (['wijayaBasah', 'wijayaKering', 'wijayaJadi'] as $cat) {
                 foreach ($g[$cat] as $v) {
-                    if ($v != 0) return true;
+                    if ($v != 0)
+                        return true;
                 }
             }
             return false;
         });
 
-<<<<<<< HEAD
+
         usort($allStocks, fn($a, $b) => strcmp($a['title'], $b['title']));
-=======
+
         if ($this->sortBy === 'jenis_kayu') {
             usort($allStocks, function ($a, $b) {
                 $cmp = strcmp($a['jenis_kayu'], $b['jenis_kayu']);
@@ -290,7 +291,6 @@ class RekapStokVeneer extends Page implements HasForms
                 return strcmp($a['jenis_kayu'], $b['jenis_kayu']);
             });
         }
->>>>>>> 0a911385b2f7022a40855e2e8683ae63f672ed47
 
         return array_values($allStocks);
     }
@@ -309,25 +309,27 @@ class RekapStokVeneer extends Page implements HasForms
 
         // Terapkan filter
         if ($this->filterKayu !== '') {
-            $allStocks = array_values(array_filter($allStocks,
+            $allStocks = array_values(array_filter(
+                $allStocks,
                 fn($g) => strtolower($g['jenis_kayu']) === strtolower($this->filterKayu)
             ));
         }
 
         if ($this->search !== '') {
             $q = strtolower($this->search);
-            $allStocks = array_values(array_filter($allStocks,
+            $allStocks = array_values(array_filter(
+                $allStocks,
                 fn($g) => str_contains(strtolower($g['title']), $q)
             ));
         }
 
         if ($this->filterKw !== '') {
             $filterKw = $this->filterKw;
-            $kw = is_numeric($filterKw) ? (int)$filterKw : strtoupper($filterKw);
+            $kw = is_numeric($filterKw) ? (int) $filterKw : strtoupper($filterKw);
             $allStocks = array_values(array_filter($allStocks, function ($g) use ($kw) {
-                $basah  = $g['wijayaBasah'][$kw]  ?? 0;
+                $basah = $g['wijayaBasah'][$kw] ?? 0;
                 $kering = $g['wijayaKering'][$kw] ?? 0;
-                $jadi   = $g['wijayaJadi'][$kw]   ?? 0;
+                $jadi = $g['wijayaJadi'][$kw] ?? 0;
                 return ($basah + $kering + $jadi) != 0;
             }));
         }

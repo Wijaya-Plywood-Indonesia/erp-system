@@ -10,18 +10,10 @@ class VeneerJadiMutasiKeluarPalet extends Model
         'id_mutasi_keluar',
         'nomor_palet',
         'jumlah_lembar',
+        'jumlah_dikembalikan',
         'diterima_by',
         'diterima_at',
-        'ditolak_by',
-        'alasan_tolak',
-        'ditolak_at',
     ];
-
-    protected $casts = [
-        'diterima_at' => 'datetime',
-        'ditolak_at' => 'datetime',
-    ];
-
     public function mutasiKeluar()
     {
         return $this->belongsTo(VeneerJadiMutasiKeluar::class, 'id_mutasi_keluar');
@@ -32,10 +24,23 @@ class VeneerJadiMutasiKeluarPalet extends Model
         return $this->hasMany(BahanHotpress::class, 'id_mutasi_keluar_palet');
     }
 
-
+    /**
+     * Sisa lembar veneer jadi dari palet ini yang masih ada di hotpress —
+     * belum tercatat dipakai oleh baris Bahan Hot Press manapun, DAN
+     * belum dikembalikan ke gudang.
+     *
+     * Contoh: palet 100 lembar, 1 baris pemakaian isi=90 (belum pernah
+     * dikembalikan) -> sisa = 100 - 90 - 0 = 10. Setelah dikembalikan 5
+     * lembar (jumlah_dikembalikan jadi 5) -> sisa = 100 - 90 - 5 = 5.
+     *
+     * `jumlah_dikembalikan` sengaja disimpan di PALET (bukan di baris
+     * bahan_hotpress) karena "sisa yang belum dipakai" adalah properti
+     * palet itu sendiri, bukan properti satu baris pemakaian tertentu.
+     */
     public function getSisaAttribute(): float
     {
         $terpakai = $this->pemakaianHotpress()->sum('isi');
-        return (float) $this->jumlah_lembar - (float) $terpakai;
+
+        return (float) $this->jumlah_lembar - (float) $terpakai - (float) ($this->jumlah_dikembalikan ?? 0);
     }
 }

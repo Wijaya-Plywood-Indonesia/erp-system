@@ -2,22 +2,45 @@
 
 namespace App\Observers;
 
-use App\Models\HasilSanding;
 use App\Models\ModalSanding;
+use App\Models\SerahTerimaHp;
+use App\Services\ResolveBarangSetengahJadi;
 
 class ModalSandingObserver
 {
-    /**
-     * Handle the ModalSanding "creating" event.
-     */
     public function creating(ModalSanding $modalSanding): void
     {
-        // Jika id_serah_terima_hp negatif, berarti ini dari Hasil Sanding yang belum diserah
+        $this->konversiIdNegatif($modalSanding);
+        $this->isiBarangSetengahJadi($modalSanding);
+    }
+
+    public function created(ModalSanding $modalSanding): void
+    {
+        // Fitur auto-create Hasil Sanding ditiadakan sesuai permintaan
+    }
+
+    public function updating(ModalSanding $modalSanding): void
+    {
+        $this->konversiIdNegatif($modalSanding);
+        $this->isiBarangSetengahJadi($modalSanding);
+    }
+
+    public function updated(ModalSanding $modalSanding): void
+    {
+        //
+    }
+
+    // ... method deleted/restored/forceDeleted bawaan Anda tetap dibiarkan ...
+
+    /**
+     * Jika id_serah_terima_hp negatif, berarti ini dari Hasil Sanding yang belum diserah.
+     */
+    private function konversiIdNegatif(ModalSanding $modalSanding): void
+    {
         if ($modalSanding->id_serah_terima_hp < 0) {
             $idHasilSanding = abs($modalSanding->id_serah_terima_hp);
-            
-            // Cek apakah sudah dibuat sebelumnya (mencegah duplikasi)
-            $st = \App\Models\SerahTerimaHp::firstOrCreate(
+
+            $st = SerahTerimaHp::firstOrCreate(
                 ['id_hasil_sanding' => $idHasilSanding, 'tujuan' => 'sanding'],
                 [
                     'diterima_oleh' => auth()->user()?->name ?? 'System',
@@ -26,48 +49,29 @@ class ModalSandingObserver
                 ]
             );
 
-            // Ganti id_serah_terima_hp dengan ID SerahTerimaHp yang asli
             $modalSanding->id_serah_terima_hp = $st->id;
         }
     }
 
     /**
-     * Handle the ModalSanding "created" event.
+     * Palet dari gudang mentah (Platform Mentah / Triplek Jadi / Triplek Mentah)
+     * tidak punya barang setengah jadi -> id_barang_setengah_jadi NULL ->
+     * tidak muncul di dropdown Hasil Sanding. Isi otomatis di sini.
      */
-    public function created(ModalSanding $modalSanding): void
+    private function isiBarangSetengahJadi(ModalSanding $modalSanding): void
     {
-        // Fitur auto-create Hasil Sanding ditiadakan sesuai permintaan
-    }
+        if ($modalSanding->id_barang_setengah_jadi !== null || ! $modalSanding->id_serah_terima_hp) {
+            return;
+        }
 
-    /**
-     * Handle the ModalSanding "updated" event.
-     */
-    public function updated(ModalSanding $modalSanding): void
-    {
-        //
-    }
+        $st = SerahTerimaHp::with([
+            'platformMthMutasiKeluar.jenisKayu',
+            'triplekMutasiKeluar.jenisKayu',
+            'triplekMthMutasiKeluar.jenisKayu',
+        ])->find($modalSanding->id_serah_terima_hp);
 
-    /**
-     * Handle the ModalSanding "deleted" event.
-     */
-    public function deleted(ModalSanding $modalSanding): void
-    {
-        //
-    }
-
-    /**
-     * Handle the ModalSanding "restored" event.
-     */
-    public function restored(ModalSanding $modalSanding): void
-    {
-        //
-    }
-
-    /**
-     * Handle the ModalSanding "force deleted" event.
-     */
-    public function forceDeleted(ModalSanding $modalSanding): void
-    {
-        //
+        if ($st) {
+            $modalSanding->id_barang_setengah_jadi = ResolveBarangSetengahJadi::fromSerahTerima($st)?->id;
+        }
     }
 }

@@ -30,6 +30,8 @@ class HppAverageLog extends Model
         'stok_kubikasi_after',
         'nilai_stok_after',
         'hpp_average',
+        'tk_delta_batang',
+        'tk_delta_kubikasi',
     ];
 
     protected $casts = [

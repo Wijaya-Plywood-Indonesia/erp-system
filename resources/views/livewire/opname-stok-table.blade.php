@@ -123,7 +123,7 @@
                     @foreach($rows as $i => $row)
                     @php $diisi = (isset($row['stok_fisik']) && $row['stok_fisik'] !== null && $row['stok_fisik'] !== '')
                         || (isset($row['kubikasi_fisik']) && $row['kubikasi_fisik'] !== null && $row['kubikasi_fisik'] !== ''); @endphp
-                    <tr wire:key="row-{{ $row['_uid'] }}" class="transition-colors {{ $diisi
+                    <tr wire:key="row-{{ $row['_uid'] }}-{{ $row['_v'] ?? 0 }}-{{ $i }}" class="transition-colors {{ $diisi
                         ? 'bg-green-50 hover:bg-green-100 dark:bg-green-900/10 dark:hover:bg-green-900/20'
                         : 'bg-white hover:bg-gray-50 dark:bg-gray-900/50 dark:hover:bg-gray-800/30' }}">
 
@@ -133,7 +133,7 @@
                         <td class="px-3 py-2">
                             @if($jenisStok === 'platform_jadi')
                                 <div x-data="searchSelect({
-                                    options: {{ json_encode(collect($jenisBarangOptions)->map(fn($v,$k) => ['id'=>$k,'label'=>$v])->values()) }},
+                                    options: {{ json_encode(collect($this->opsiTersedia('id_jenis_barang', $row))->map(fn($v,$k) => ['id'=>$k,'label'=>$v])->values()) }},
                                     selected: {{ $row['id_jenis_barang'] ?? 'null' }},
                                     onChange: (val) => $wire.setField('{{ $row['_uid'] }}', 'id_jenis_barang', val)
                                 })">
@@ -141,7 +141,7 @@
                                 </div>
                             @else
                                 <div x-data="searchSelect({
-                                    options: {{ json_encode(collect($jenisKayuOptions)->map(fn($v,$k) => ['id'=>$k,'label'=>$v])->values()) }},
+                                    options: {{ json_encode(collect($this->opsiTersedia('id_jenis_kayu', $row))->map(fn($v,$k) => ['id'=>$k,'label'=>$v])->values()) }},
                                     selected: {{ $row['id_jenis_kayu'] ?? 'null' }},
                                     onChange: (val) => $wire.setField('{{ $row['_uid'] }}', 'id_jenis_kayu', val)
                                 })">
@@ -153,7 +153,7 @@
                         {{-- Ukuran --}}
                         <td class="px-3 py-2">
                             <div x-data="searchSelect({
-                                options: {{ json_encode(collect($ukuranOptions)->map(fn($v,$k) => ['id'=>$k,'label'=>$v])->values()) }},
+                                options: {{ json_encode(collect($this->opsiTersedia('id_ukuran', $row))->map(fn($v,$k) => ['id'=>$k,'label'=>$v])->values()) }},
                                 selected: {{ $row['id_ukuran'] ?? 'null' }},
                                 onChange: (val) => $wire.setField('{{ $row['_uid'] }}', 'id_ukuran', val)
                             })">
@@ -164,7 +164,7 @@
                         {{-- Grade --}}
                         <td class="px-3 py-2">
                             <div x-data="searchSelect({
-                                options: {{ json_encode(collect($gradeOptions)->map(fn($v,$k) => ['id'=>$k,'label'=>$v])->values()) }},
+                                options: {{ json_encode(collect($this->opsiTersedia('kw', $row))->map(fn($v,$k) => ['id'=>$k,'label'=>$v])->values()) }},
                                 selected: '{{ $row['kw'] ?? '' }}',
                                 onChange: (val) => $wire.setField('{{ $row['_uid'] }}', 'kw', val)
                             })">

@@ -13,11 +13,14 @@ class ShiftBasedResolver implements TargetResolverInterface
         ?int $idJenisKayu = null,
         ?string $grade = null,
     ): ?Target {
-        // Mesin berbasis shift tidak dibedakan per ukuran/jenis kayu/grade,
-        // jadi parameter tambahan di atas sengaja tidak dipakai di sini.
         return Target::query()
             ->where('id_mesin', $idMesin)
+            ->where(function ($query) {
+                $query->where('tipe_target', 'palet')
+                      ->orWhereNull('tipe_target');
+            })
             ->orderByDesc('id')
             ->first();
     }
 }
+

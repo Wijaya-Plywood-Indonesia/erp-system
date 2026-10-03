@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\RencanaPegawaiDempuls\Tables;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -18,6 +19,10 @@ class RencanaPegawaiDempulsTable
 {
     public static function configure(Table $table): Table
     {
+        // Tanggal produksi Dempul yang sedang dibuka (nama kolom beda-beda tergantung versi migrasi)
+        $tanggalDempul = fn($livewire) => $livewire->getOwnerRecord()->tanggal_produksi
+            ?? $livewire->getOwnerRecord()->tanggal;
+
         return $table
             ->columns([
                 TextColumn::make('pegawai.nama_pegawai')
@@ -105,11 +110,14 @@ class RencanaPegawaiDempulsTable
                     ->modalHeading(fn($record) => "Ijin & Keterangan - {$record->pegawai->nama_pegawai}")
                     ->modalSubmitActionLabel('Simpan')
                     ->modalWidth('lg'),
+                PindahPegawaiTableActions::recordAction('dempul', $tanggalDempul),
+                PindahPegawaiTableActions::batalAction('dempul'),
                 EditAction::make(),
                 DeleteAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('dempul', $tanggalDempul),
                     DeleteBulkAction::make(),
                 ]),
             ]);

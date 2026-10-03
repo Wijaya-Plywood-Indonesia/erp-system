@@ -6,7 +6,10 @@ use App\Models\DetailLainLain;
 use App\Models\LainLain;
 use App\Models\Pegawai;
 use Filament\Notifications\Notification;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 
@@ -76,45 +79,88 @@ class AbsenWajibModal extends Component
         return $options;
     }
 
+    /**
+     * Dipanggil berkala (wire:poll) selama modal tampil. Kalau absen sudah dicatat
+     * dari tab/perangkat lain, modal ini ikut tertutup tanpa perlu submit lagi.
+     */
+    public function cekUlang(): void
+    {
+        unset($this->wajibAbsen);
+        if (!$this->wajibAbsen) {
+            $this->dispatch('absen-selesai');
+        }
+    }
+
     public function submit(): void
-{
-    $data = $this->validate([
-        'id_pegawai' => ['required', 'exists:pegawais,id'],
-        'masuk'      => ['required'],
-        'pulang'     => ['nullable'],
-        'ijin'       => ['nullable', 'string'],
-        'ket'        => ['nullable', 'string'],
-        'hasil'      => ['nullable', 'string'],
-    ]);
+    {
+        $data = $this->validate([
+            'id_pegawai' => ['required', 'exists:pegawais,id'],
+            'masuk'      => ['required'],
+            'pulang'     => ['nullable'],
+            'ijin'       => ['nullable', 'string'],
+            'ket'        => ['nullable', 'string'],
+            'hasil'      => ['nullable', 'string'],
+        ]);
 
-    $detail = DetailLainLain::firstOrCreate([
-        'tanggal' => today()->toDateString(),
-    ]);
+        $tanggal = today()->toDateString();
 
-    LainLain::create([
-        'id_detail_lain_lain' => $detail->id,
-        'id_pegawai'          => $data['id_pegawai'],
-        'masuk'               => $data['masuk'],
-        'pulang'              => $data['pulang'] ?: null,
-        'ijin'                => $data['ijin'],
-        'ket'                 => $data['ket'],
-        'hasil'               => $data['hasil'],
-        'created_by'          => auth()->id(),
-    ]);
+        // Lock per pegawai + tanggal supaya submit bersamaan dari beberapa tab
+        // diproses satu per satu (bukan paralel), lalu dicek ulang di dalam lock.
+        $lock = Cache::lock("absen-wajib:{$data['id_pegawai']}:{$tanggal}", 10);
 
-    Notification::make()
-        ->title('Absen berhasil dicatat')
-        ->success()
-        ->send();
+        try {
+            $tersimpan = $lock->block(5, function () use ($data, $tanggal) {
+                return DB::transaction(function () use ($data, $tanggal) {
+                    $sudahAbsen = LainLain::where('id_pegawai', $data['id_pegawai'])
+                        ->whereHas('detailLainLain', fn ($q) => $q->whereDate('tanggal', $tanggal))
+                        ->exists();
 
-    unset($this->wajibAbsen);
+                    if ($sudahAbsen) {
+                        return false;
+                    }
 
-    $this->reset(['id_pegawai', 'pulang', 'ijin', 'ket', 'hasil']);
-    $this->masuk = '08:00';
-    $this->pulang = '16:00';
-    $this->id_pegawai = auth()->user()?->id_pegawai;
-    $this->dispatch('absen-selesai');
-}
+                    $detail = DetailLainLain::firstOrCreate(['tanggal' => $tanggal]);
+
+                    LainLain::create([
+                        'id_detail_lain_lain' => $detail->id,
+                        'id_pegawai'          => $data['id_pegawai'],
+                        'masuk'               => $data['masuk'],
+                        'pulang'              => $data['pulang'] ?: null,
+                        'ijin'                => $data['ijin'],
+                        'ket'                 => $data['ket'],
+                        'hasil'               => $data['hasil'],
+                        'created_by'          => auth()->id(),
+                    ]);
+
+                    return true;
+                });
+            });
+        } catch (LockTimeoutException $e) {
+            Notification::make()
+                ->title('Sistem sedang memproses absen Anda, coba lagi sebentar.')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        if ($tersimpan) {
+            Notification::make()->title('Absen berhasil dicatat')->success()->send();
+        } else {
+            Notification::make()
+                ->title('Pegawai ini sudah tercatat absen hari ini')
+                ->body('Absen tidak dicatat ulang.')
+                ->warning()
+                ->send();
+        }
+
+        unset($this->wajibAbsen);
+
+        $this->reset(['id_pegawai', 'pulang', 'ijin', 'ket', 'hasil']);
+        $this->masuk = '08:00';
+        $this->pulang = '16:00';
+        $this->id_pegawai = auth()->user()?->id_pegawai;
+        $this->dispatch('absen-selesai');
+    }
 
     public function render()
     {
@@ -124,10 +170,8 @@ class AbsenWajibModal extends Component
     public function logout()
     {
         auth()->logout();
-
         request()->session()->invalidate();
         request()->session()->regenerateToken();
-
         return redirect()->to(filament()->getLoginUrl());
     }
 }
