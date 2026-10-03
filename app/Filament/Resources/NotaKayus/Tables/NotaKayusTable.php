@@ -184,34 +184,10 @@ class NotaKayusTable
                         // 1. Update status pelunasan dengan Audit Trail (Siapa & Kapan)
                         $record->status_pelunasan = "Lunas - {$timestamp} ({$user->name})";
                         $record->save();
+                        // Catatan: NotaKayuObserver::updated() otomatis dipanggil saat save()
+                        // dan akan menjalankan prosesNotaKayuLunas() untuk update stok & tempat kayu.
 
-                        // 2. TRIGGER PEMBARUAN STOK & TEMPAT KAYU:
-                        // Cek apakah log HPP sudah ada untuk mencegah data ganda (Double Entry)
-                        $sudahAdaLog = HppAverageLog::where('referensi_type', NotaKayu::class)
-                            ->where('referensi_id', $record->id)
-                            ->exists();
-
-                        if (! $sudahAdaLog) {
-                            try {
-                                // Service ini secara otomatis mengupdate:
-                                // - HppAverageLog (Riwayat)
-                                // - HppAverageSummaries (Saldo Stok)
-                                // - TempatKayu (Sinkronisasi Lahan untuk Produksi)
-                                app(HppAverageService::class)->prosesNotaKayuMasuk($record);
-
-                                Log::info('[NotaKayu] Stok & Tempat Kayu berhasil diperbarui', [
-                                    'nota_id' => $record->id,
-                                    'user' => $user->name,
-                                ]);
-                            } catch (\Throwable $e) {
-                                Log::error('[NotaKayu] GAGAL update stok & tempat kayu', [
-                                    'nota_id' => $record->id,
-                                    'error' => $e->getMessage(),
-                                ]);
-                            }
-                        }
-
-                        // 3. TRIGGER JURNAL: Sinkronisasi data ke Perusahaan 2
+                        // TRIGGER JURNAL: Sinkronisasi data ke Perusahaan 2
                         self::jalankanSync($record);
 
                         Notification::make()

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PegawaiGuellotines\Tables;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -17,6 +18,9 @@ class PegawaiGuellotinesTable
 {
     public static function configure(Table $table): Table
     {
+        // Tanggal produksi Guellotine yang sedang dibuka
+        $tanggalGuellotine = fn($livewire) => $livewire->getOwnerRecord()->tanggal_produksi;
+
         return $table
             ->columns([
                 TextColumn::make('pegawai.nama_pegawai')
@@ -100,9 +104,17 @@ class PegawaiGuellotinesTable
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
+
+                PindahPegawaiTableActions::recordAction('guellotine', $tanggalGuellotine)
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
+                PindahPegawaiTableActions::batalAction('guellotine'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('guellotine', $tanggalGuellotine),
                     DeleteBulkAction::make(),
                 ]),
             ]);

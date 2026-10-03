@@ -25,7 +25,6 @@ use App\Models\PegawaiSanding;
 use App\Models\PegawaiSandingJoint;
 use App\Models\PegawaiTembeltriplek;
 use App\Models\PegawaiTerimaGudangSatu;
-use App\Models\PegawaiTurunKayu;
 use App\Models\PindahPegawaiLog;
 use App\Models\ProduksiGrajiBalken;
 use App\Models\ProduksiGrajitriplek;
@@ -39,6 +38,7 @@ use App\Models\ProduksiPotAfJoint;
 use App\Models\ProduksiPotJelek;
 use App\Models\ProduksiPotSiku;
 use App\Models\ProduksiPressDryer;
+use App\Models\ProduksiRepair;
 use App\Models\ProduksiRotary;
 use App\Models\ProduksiSanding;
 use App\Models\ProduksiSandingJoint;
@@ -50,7 +50,6 @@ use App\Models\ProduksiKedi;
 use App\Models\DetailPegawaiKedi;
 use App\Models\RencanaPegawai;
 use App\Models\RencanaPegawaiDempul;
-use App\Models\TurunKayu;
 use App\Models\pegawai_guellotine;
 use App\Models\produksi_guellotine;
 use Carbon\Carbon;
@@ -67,13 +66,34 @@ use RuntimeException;
  *   Sumber : 06:00-16:00, pindah 1 jam -> 06:00-15:00
  *   Tujuan : baris baru pegawai yang sama 15:00-16:00
  *
- * Menambah lini baru = tambah entri di sumber() atau tujuan(). Tidak ada logic lain yang berubah.
+ * Bisa dipakai dari halaman produksi MANAPUN yang ada di tujuan() (lihat
+ * App\Filament\Support\PindahPegawaiTableActions) — bukan cuma Repair.
+ * Menambah lini baru = tambah satu entri di tujuan(). Otomatis jadi sumber
+ * juga (lihat sumber()), tidak perlu didaftarkan dua kali.
  */
 class PindahPegawaiService
 {
-    /** Lini ASAL (baris pegawai yang jamnya dikurangi). */
+    /**
+     * Lini ASAL (baris pegawai yang jamnya dikurangi).
+     *
+     * 'repair' didefinisikan manual karena nama kolomnya beda sendiri
+     * (jam_masuk/jam_pulang/keterangan). Lini lainnya diambil OTOMATIS dari
+     * tujuan() — kolom yang sama dipakai baik sebagai asal maupun tujuan,
+     * supaya menambah satu lini baru cukup di satu tempat saja.
+     */
     public static function sumber(): array
     {
+        $dariTujuan = collect(self::tujuan())
+            ->except(['lain_lain']) // pindah DARI Lain-lain tidak masuk akal (tidak ada durasi kerja pasti)
+            ->map(fn ($cfg) => [
+                'label' => $cfg['label'],
+                'model' => $cfg['model'],
+                'masuk' => $cfg['masuk'],
+                'pulang' => $cfg['pulang'],
+                'ket' => $cfg['ket'],
+            ])
+            ->all();
+
         return [
             'repair' => [
                 'label' => 'Repair',
@@ -81,13 +101,13 @@ class PindahPegawaiService
                 'masuk' => 'jam_masuk',
                 'pulang' => 'jam_pulang',
                 'ket' => 'keterangan',
-                'tanggal' => fn ($row) => $row->produksiRepair?->tanggal,
             ],
-        ];
+        ] + $dariTujuan;
     }
 
     /**
-     * Lini TUJUAN (baris pegawai baru yang dibuat). "Lain-lain" sengaja di paling atas.
+     * Lini TUJUAN (baris pegawai baru yang dibuat, atau digabung/ditimpa bila sudah ada).
+     * "Lain-lain" sengaja di paling atas.
      *
      * Kunci tiap entri:
      *  - model/fk/masuk/pulang/ijin/ket : baris pegawai di lini tujuan
@@ -95,7 +115,7 @@ class PindahPegawaiService
      *  - tugas   : 'required' | 'optional' | null (lini tidak punya kolom tugas)
      *  - tugas_default : dipakai kalau tugas dikosongkan
      *  - ijin_kosong   : true bila kolom ijin NOT NULL (diisi string kosong)
-     *  - mesin   : true bila baris pegawai butuh id_mesin (Hotpress)
+     *  - mesin   : true bila baris pegawai butuh id_mesin (saat ini tidak ada lini yang memakai)
      *  - shift   : true bila produksi per tanggal + shift (form menampilkan pilihan Shift)
      *  - pilih   : label pilihan produksi yang SELALU tampil (lini per mesin: Rotary, Sanding, Kedi)
      *  - scope   : closure(query, Carbon $tgl) untuk aturan tanggal khusus (Kedi: tanggal bongkar)
@@ -114,7 +134,9 @@ class PindahPegawaiService
             'ket' => 'ket',
             'tanggal' => 'tanggal_produksi',
             'tugas' => 'required',
-            'tugas_default' => null,
+            // Default 'PINDAHAN' supaya field Nomor Meja/Tugas tidak lagi wajib ditanyakan
+            // di form pindah pegawai, kecuali lini itu meng-override tugas_default sendiri.
+            'tugas_default' => 'PINDAHAN',
             'ijin_kosong' => false,
             'mesin' => false,
             'shift' => false,
@@ -134,6 +156,17 @@ class PindahPegawaiService
                 'tugas' => null,
                 'auto_create' => true,
             ]),
+            'repair' => $t([
+                'label' => 'Repair',
+                'model' => RencanaPegawai::class,
+                'fk' => 'id_produksi_repair',
+                'masuk' => 'jam_masuk',
+                'pulang' => 'jam_pulang',
+                'ket' => 'keterangan',
+                'produksi' => ProduksiRepair::class,
+                'tanggal' => 'tanggal',
+                'tugas' => null, // rencana_pegawais tidak punya kolom tugas
+            ]),
             'press_dryer' => $t([
                 'label' => 'Press Dryer',
                 'model' => DetailPegawai::class,
@@ -149,7 +182,10 @@ class PindahPegawaiService
                 'fk' => 'id_produksi_hp',
                 'produksi' => ProduksiHp::class,
                 'shift' => true,
-                'mesin' => true,
+                // Mesin & nomor meja tidak ditanyakan lagi. Kolom `tugas` di detail_pegawai_hp
+                // NOT NULL, jadi diisi otomatis; id_mesin dibiarkan kosong (kolom sudah nullable).
+                'mesin' => false,
+                'tugas_default' => 'PINDAHAN',
                 'label_produksi' => $shift,
             ]),
             'kedi' => $t([
@@ -179,17 +215,6 @@ class PindahPegawaiService
                 'tugas' => null,
                 'pilih' => 'Mesin Tujuan',
                 'label_produksi' => $mesin,
-            ]),
-            'turun_kayu' => $t([
-                'label' => 'Turun Kayu',
-                'model' => PegawaiTurunKayu::class,
-                'fk' => 'id_turun_kayu',
-                'masuk' => 'jam_masuk',
-                'pulang' => 'jam_pulang',
-                'ijin' => 'izin',
-                'produksi' => TurunKayu::class,
-                'tanggal' => 'tanggal',
-                'tugas' => null,
             ]),
             'graji_balken' => $t([
                 'label' => 'Graji Balken',
@@ -317,7 +342,7 @@ class PindahPegawaiService
                 'produksi' => ProduksiPotSiku::class,
             ]),
             'palet' => $t([
-                'label' => 'Palet',
+                'label' => 'Produksi Palet',
                 'model' => PegawaiPalet::class,
                 'fk' => 'id_produksi_palet',
                 'masuk' => 'jam_masuk',
@@ -329,7 +354,7 @@ class PindahPegawaiService
                 'tugas' => null,
             ]),
             'terima_gudang_satu' => $t([
-                'label' => 'Terima Gudang Satu',
+                'label' => 'Samping Plywood',
                 'model' => PegawaiTerimaGudangSatu::class,
                 'fk' => 'id_produksi_terima_gudang_satu',
                 'produksi' => ProduksiTerimaGudangSatu::class,
@@ -337,9 +362,13 @@ class PindahPegawaiService
         ];
     }
 
-    public static function opsiTujuan(): array
+    /** @param  string|null  $kecuali  kode lini yang dikecualikan dari daftar (biasanya lini asal sendiri) */
+    public static function opsiTujuan(?string $kecuali = null): array
     {
-        return collect(self::tujuan())->map(fn ($t) => $t['label'])->all();
+        return collect(self::tujuan())
+            ->except($kecuali ? [$kecuali] : [])
+            ->map(fn ($t) => $t['label'])
+            ->all();
     }
 
     public static function config(?string $kodeTujuan): ?array
@@ -377,7 +406,54 @@ class PindahPegawaiService
             ->all();
     }
 
-    /** Pilihan mesin untuk lini yang butuh id_mesin (Hotpress). */
+    /**
+     * Nama pegawai (dari daftar id) yang SUDAH punya baris di produksi tujuan pada tanggal ini.
+     * Dipakai form pindah untuk menampilkan peringatan + pilihan Update/Timpa HANYA kalau
+     * memang ada duplikat — kalau kosong, form tidak menanyakan apa-apa.
+     *
+     * @param  array<int>  $idPegawaiList
+     * @return array<string> nama pegawai yang sudah ada
+     */
+    public static function pegawaiSudahAda(string $kodeTujuan, array $idPegawaiList, $tanggalSumber, ?string $shift, $idProduksi): array
+    {
+        $cfg = self::config($kodeTujuan);
+        $idPegawaiList = array_values(array_filter($idPegawaiList));
+        if (! $cfg || empty($idPegawaiList) || ! $tanggalSumber) {
+            return [];
+        }
+
+        $tanggal = Carbon::parse($tanggalSumber)->startOfDay();
+
+        if ($cfg['auto_create']) {
+            $produksi = $cfg['produksi']::query()
+                ->whereDate($cfg['tanggal'], $tanggal->toDateString())
+                ->first();
+        } else {
+            $q = self::produksiPadaTanggal($cfg, $tanggal)
+                ->when($cfg['shift'], fn ($qq) => $qq->whereRaw('LOWER(shift) = ?', [strtolower((string) $shift)]));
+
+            if (filled($idProduksi)) {
+                $produksi = (clone $q)->whereKey($idProduksi)->first();
+            } else {
+                $kandidat = $q->get();
+                $produksi = $kandidat->count() === 1 ? $kandidat->first() : null;
+            }
+        }
+
+        if (! $produksi) {
+            return [];
+        }
+
+        return $cfg['model']::query()
+            ->where($cfg['fk'], $produksi->getKey())
+            ->whereIn('id_pegawai', $idPegawaiList)
+            ->with('pegawai')
+            ->get()
+            ->map(fn ($row) => $row->pegawai?->nama_pegawai ?? "Pegawai #{$row->id_pegawai}")
+            ->all();
+    }
+
+    /** Pilihan mesin Hotpress. Tidak dipakai form pindah lagi, dibiarkan untuk kebutuhan lain. */
     public static function opsiMesinHotpress(): array
     {
         return Mesin::query()->where('kategori_mesin_id', 9)->orderBy('nama_mesin')->pluck('nama_mesin', 'id')->all();
@@ -387,7 +463,11 @@ class PindahPegawaiService
      * Pindahkan jam beberapa pegawai sekaligus. All-or-nothing: kalau satu gagal, semua dibatalkan.
      *
      * @param  Collection<int, \Illuminate\Database\Eloquent\Model>  $rows
-     * @return int jumlah pegawai yang dipindah
+     * @param  \Carbon\Carbon|string  $tanggalSumber  tanggal produksi ASAL yang sedang dibuka (dipakai
+     *                                                 untuk mencari/membuat produksi tujuan pada tanggal yang sama)
+     * @param  string  $modeDuplikat  'update' (gabung jam dengan baris yang sudah ada) atau
+     *                                'timpa' (ganti baris yang sudah ada dengan data baru)
+     * @return array{baru: int, digabung: int, ditimpa: int} rincian jumlah pegawai yang diproses
      *
      * @throws RuntimeException pesan siap tampil ke user
      */
@@ -396,19 +476,30 @@ class PindahPegawaiService
         Collection $rows,
         string $kodeTujuan,
         float $durasiJam,
+        $tanggalSumber,
         $idProduksi = null,
         ?string $shift = null,
         ?string $tugas = null,
         $idMesin = null,
         ?string $keterangan = null,
-    ): int {
+        string $modeDuplikat = 'update',
+    ): array {
         $sumber = self::sumber()[$kodeSumber] ?? throw new RuntimeException('Lini asal tidak dikenal.');
         $tujuan = self::config($kodeTujuan) ?? throw new RuntimeException('Lini tujuan tidak dikenal.');
+
+        if (! in_array($modeDuplikat, ['update', 'timpa'], true)) {
+            $modeDuplikat = 'update';
+        }
 
         $durasiMenit = (int) round($durasiJam * 60);
         if ($durasiMenit <= 0) {
             throw new RuntimeException('Durasi harus lebih dari 0 jam.');
         }
+        if (! $tanggalSumber) {
+            throw new RuntimeException('Tanggal produksi asal tidak ditemukan.');
+        }
+        $tanggal = Carbon::parse($tanggalSumber)->startOfDay();
+
         if ($tujuan['shift'] && blank($shift)) {
             throw new RuntimeException('Shift tujuan harus dipilih.');
         }
@@ -419,15 +510,19 @@ class PindahPegawaiService
             throw new RuntimeException("Tugas / meja di {$tujuan['label']} harus diisi.");
         }
 
-        return DB::transaction(function () use ($kodeSumber, $sumber, $kodeTujuan, $tujuan, $rows, $durasiJam, $durasiMenit, $idProduksi, $shift, $tugas, $idMesin, $keterangan) {
+        return DB::transaction(function () use ($kodeSumber, $sumber, $kodeTujuan, $tujuan, $rows, $durasiJam, $durasiMenit, $tanggal, $idProduksi, $shift, $tugas, $idMesin, $keterangan, $modeDuplikat) {
+            $hasil = ['baru' => 0, 'digabung' => 0, 'ditimpa' => 0];
+
             foreach ($rows as $row) {
-                self::pindahSatu($kodeSumber, $sumber, $kodeTujuan, $tujuan, $row, $durasiJam, $durasiMenit, $idProduksi, $shift, $tugas, $idMesin, $keterangan);
+                $status = self::pindahSatu($kodeSumber, $sumber, $kodeTujuan, $tujuan, $row, $durasiJam, $durasiMenit, $tanggal, $idProduksi, $shift, $tugas, $idMesin, $keterangan, $modeDuplikat);
+                $hasil[$status]++;
             }
 
-            return $rows->count();
+            return $hasil;
         });
     }
 
+    /** @return string 'baru' | 'digabung' | 'ditimpa' */
     private static function pindahSatu(
         string $kodeSumber,
         array $sumber,
@@ -436,21 +531,17 @@ class PindahPegawaiService
         $row,
         float $durasiJam,
         int $durasiMenit,
+        Carbon $tanggal,
         $idProduksi,
         ?string $shift,
         ?string $tugas,
         $idMesin,
         ?string $keterangan,
-    ): void {
+        string $modeDuplikat,
+    ): string {
         // Ambil ulang + kunci baris supaya tidak bentrok dengan edit lain
         $row = $sumber['model']::query()->lockForUpdate()->findOrFail($row->getKey());
         $nama = $row->pegawai?->nama_pegawai ?? "Pegawai #{$row->id_pegawai}";
-
-        $tanggal = $sumber['tanggal']($row);
-        if (! $tanggal) {
-            throw new RuntimeException("{$nama}: tanggal produksi asal tidak ditemukan.");
-        }
-        $tanggal = Carbon::parse($tanggal)->startOfDay();
 
         $masuk = self::waktu($row->{$sumber['masuk']});
         $pulangAsli = self::waktu($row->{$sumber['pulang']});
@@ -501,39 +592,89 @@ class PindahPegawaiService
         $jamPulangBaru = $pulangBaru->format('H:i:s');
         $jamPulangLama = $pulangAsli->format('H:i:s');
 
-        // 1. Baris pegawai di produksi tujuan: dari jam pulang baru sampai jam pulang lama
-        $data = [
-            $tujuan['fk'] => $produksiTujuan->getKey(),
-            'id_pegawai' => $row->id_pegawai,
-            $tujuan['masuk'] => $jamPulangBaru,
-            $tujuan['pulang'] => $jamPulangLama,
-            $tujuan['ket'] => $keterangan ?: "Pindahan dari {$sumber['label']} {$durasiJam} jam",
-        ];
-        if ($tujuan['ijin_kosong']) {
-            $data[$tujuan['ijin']] = '';
-        }
-        if ($tujuan['tugas'] !== null) {
-            $data['tugas'] = filled($tugas) ? $tugas : $tujuan['tugas_default'];
-        }
-        if ($tujuan['mesin']) {
-            $data['id_mesin'] = $idMesin;
-        }
-        if ($tujuan['model'] === LainLain::class) {
-            $data['created_by'] = Auth::id();
-        }
-        $baris = $tujuan['model']::create($data);
+        // Cek duplikat: pegawai yang sama sudah ada baris di produksi tujuan ini?
+        // (Mencegah dobel kalau tombol "Pindahkan" ke-klik 2x atau pegawai sudah pernah dipindah ke sini.)
+        $existing = $tujuan['model']::query()
+            ->where($tujuan['fk'], $produksiTujuan->getKey())
+            ->where('id_pegawai', $row->id_pegawai)
+            ->lockForUpdate()
+            ->first();
 
-        // 2. Kurangi jam pulang di produksi asal + catat keterangan
+        $ketPindah = $keterangan ?: "Pindahan dari {$sumber['label']} {$durasiJam} jam";
+
+        if ($existing) {
+            if ($modeDuplikat === 'timpa') {
+                // TIMPA: baris lama diganti total dengan jam pindahan yang baru ini
+                $masukFinal = $jamPulangBaru;
+                $pulangFinal = $jamPulangLama;
+                $ketFinal = $ketPindah;
+                $status = 'ditimpa';
+            } else {
+                // UPDATE (default): gabungkan, jam kerja jadi rentang gabungan lama + baru
+                $masukLama = self::waktu($existing->{$tujuan['masuk']});
+                $pulangLama = self::waktu($existing->{$tujuan['pulang']});
+                $masukBaruC = self::waktu($jamPulangBaru);
+                $pulangBaruC = self::waktu($jamPulangLama);
+
+                $masukFinal = ($masukLama && $masukLama->lessThan($masukBaruC) ? $masukLama : $masukBaruC)->format('H:i:s');
+                $pulangFinal = ($pulangLama && $pulangLama->greaterThan($pulangBaruC) ? $pulangLama : $pulangBaruC)->format('H:i:s');
+
+                $ketLamaTujuan = $existing->{$tujuan['ket']};
+                $ketFinal = Str::limit(trim(($ketLamaTujuan ? $ketLamaTujuan.' | ' : '').$ketPindah), 250, '');
+                $status = 'digabung';
+            }
+
+            $dataUpdate = [
+                $tujuan['masuk'] => $masukFinal,
+                $tujuan['pulang'] => $pulangFinal,
+                $tujuan['ket'] => $ketFinal,
+            ];
+            if ($tujuan['tugas'] !== null && filled($tugas)) {
+                $dataUpdate['tugas'] = $tugas;
+            }
+            $existing->update($dataUpdate);
+            $baris = $existing;
+        } else {
+            $data = [
+                $tujuan['fk'] => $produksiTujuan->getKey(),
+                'id_pegawai' => $row->id_pegawai,
+                $tujuan['masuk'] => $jamPulangBaru,
+                $tujuan['pulang'] => $jamPulangLama,
+                $tujuan['ket'] => $ketPindah,
+            ];
+            if ($tujuan['ijin_kosong']) {
+                $data[$tujuan['ijin']] = '';
+            }
+            if ($tujuan['tugas'] !== null) {
+                $data['tugas'] = filled($tugas) ? $tugas : $tujuan['tugas_default'];
+            }
+            if ($tujuan['mesin']) {
+                $data['id_mesin'] = $idMesin;
+            }
+            if ($tujuan['model'] === LainLain::class) {
+                $data['created_by'] = Auth::id();
+            }
+            $baris = $tujuan['model']::create($data);
+            $status = 'baru';
+        }
+
+        // Kurangi jam pulang di produksi asal + catat keterangan.
+        // Kalau pegawai ini sudah pernah dipindah ke tujuan YANG SAMA sebelumnya (belum dibatalkan),
+        // catatannya digabung jadi satu baris dengan total jam terbaru, tidak ditambah dobel.
         $ketLama = $row->{$sumber['ket']};
+        $totalMenitKeTujuanSebelumnya = (int) PindahPegawaiLog::query()
+            ->where('sumber', $kodeSumber)
+            ->where('id_sumber', $row->getKey())
+            ->where('tujuan', $kodeTujuan)
+            ->whereNull('dibatalkan_at')
+            ->sum('durasi_menit');
+        $totalJamKeTujuan = ($totalMenitKeTujuanSebelumnya + $durasiMenit) / 60;
+
         $row->{$sumber['pulang']} = $jamPulangBaru;
-        $row->{$sumber['ket']} = Str::limit(
-            trim(($ketLama ? $ketLama.' | ' : '')."Pindah {$durasiJam} jam ke {$tujuan['label']}"),
-            250,
-            ''
-        );
+        $row->{$sumber['ket']} = self::gabungKeteranganPindah($ketLama, $tujuan['label'], $totalJamKeTujuan);
         $row->save();
 
-        // 3. Log, dipakai untuk fitur Batal Pindah + audit
+        // Log, dipakai untuk fitur Batal Pindah + audit
         PindahPegawaiLog::create([
             'sumber' => $kodeSumber,
             'id_sumber' => $row->getKey(),
@@ -548,6 +689,8 @@ class PindahPegawaiService
             'ket_sumber_lama' => $ketLama,
             'created_by' => Auth::id(),
         ]);
+
+        return $status;
     }
 
     /** Log pindah terakhir yang masih aktif untuk baris sumber ini (null jika tidak ada). */
@@ -563,6 +706,10 @@ class PindahPegawaiService
 
     /**
      * Batalkan pindah TERAKHIR: jam pulang asal dikembalikan, baris tujuan dihapus.
+     *
+     * PENTING: kalau pindahan tadi digabung ("update") ke baris yang sudah ada milik
+     * pindahan lain sebelumnya, membatalkan ini akan MENGHAPUS seluruh baris gabungan
+     * itu (bukan cuma mengurangi jamnya) — cek dulu datanya sebelum membatalkan.
      *
      * @throws RuntimeException
      */
@@ -593,6 +740,29 @@ class PindahPegawaiService
 
             $log->update(['dibatalkan_at' => now()]);
         });
+    }
+
+    /** "1.50" -> "1.5", "2.00" -> "2" — angka jam yang enak dibaca di keterangan. */
+    private static function formatJam(float $jam): string
+    {
+        return rtrim(rtrim(number_format($jam, 2, '.', ''), '0'), '.');
+    }
+
+    /**
+     * Gabungkan catatan "Pindah X jam ke Y" ke keterangan lama, TANPA menduplikasi baris
+     * kalau pegawai ini memang sudah pernah dipindah ke tujuan yang sama sebelumnya — baris
+     * lama untuk tujuan itu diganti (bukan ditambah lagi) dengan total jam yang terbaru.
+     */
+    private static function gabungKeteranganPindah(?string $ketLama, string $labelTujuan, float $totalJamKeTujuan): string
+    {
+        $segmenBaru = 'Pindah '.self::formatJam($totalJamKeTujuan)." jam ke {$labelTujuan}";
+
+        $bagian = collect(explode('|', (string) $ketLama))
+            ->map(fn ($b) => trim($b))
+            ->filter(fn ($b) => $b !== '' && ! preg_match('/^Pindah\s+[\d.,]+\s+jam\s+ke\s+'.preg_quote($labelTujuan, '/').'$/i', $b))
+            ->push($segmenBaru);
+
+        return Str::limit($bagian->implode(' | '), 250, '');
     }
 
     /** Waktu dijadikan Carbon di tanggal patokan, supaya aman dibandingkan. */

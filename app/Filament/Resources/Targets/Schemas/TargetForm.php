@@ -32,6 +32,7 @@ class TargetForm
                     ->required(),
 
                 Select::make('id_jenis_kayu')
+
                     ->label('Jenis Kayu')
                     ->relationship('jenisKayu', 'nama_kayu')
                     ->required()

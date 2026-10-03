@@ -4,7 +4,12 @@ namespace App\Services;
 
 use App\Models\GudangSatuLog;
 use App\Models\StokGudangSatu;
+use App\Models\JenisKayu; 
+use App\Models\SerahTerimaGudangSatu;
 use Illuminate\Database\Eloquent\Model;
+
+use Illuminate\Support\Facades\DB;
+
 
 class StokGudangSatuService
 {
@@ -89,6 +94,94 @@ class StokGudangSatuService
         );
 
         return $stok->fresh();
+    }
+
+        /**
+     * Terima kembali sisa bahan dari Nyusup ke Gudang Satu.
+     *
+     * Dipanggil saat tombol "Kembalikan Sisa" di tab Detail Barang
+     * Dikerjakan (Produksi Nyusup) ditekan, dengan $serahTerima = palet
+     * modal (SerahTerimaGudangSatu) yang dipilih dan $jumlah = berapa
+     * lembar yang dikembalikan. Method ini bertanggung jawab penuh atas
+     * SATU transaksi pengembalian:
+     *   1. Kunci baris palet (lockForUpdate) & validasi ulang sisa
+     *      (memakai rumus yang sama dengan SerahTerimaGudangSatu::sisa)
+     *      supaya tidak kembali lebih dari yang tersedia, dan aman dari
+     *      race condition kalau ada 2 orang input barengan.
+     *   2. Tambah StokGudangSatu + catat GudangSatuLog lewat tambah().
+     *   3. Naikkan `jumlah_dikembalikan` pada PALET itu sendiri — bukan
+     *      pada baris DetailBarangDikerjakan manapun, karena sisa yang
+     *      belum dipakai adalah properti palet, bukan properti 1 baris
+     *      pemakaian tertentu.
+     */
+    public function kembaliDariNyusup(SerahTerimaGudangSatu $serahTerima, float $jumlah): StokGudangSatu
+    {
+        if ($jumlah <= 0) {
+            throw new \RuntimeException('Jumlah pengembalian harus lebih dari 0.');
+        }
+
+        return DB::transaction(function () use ($serahTerima, $jumlah) {
+            $serahTerima = SerahTerimaGudangSatu::query()
+                ->lockForUpdate()
+                ->find($serahTerima->id);
+
+            if (! $serahTerima) {
+                throw new \RuntimeException('Data serah terima tidak ditemukan.');
+            }
+
+            // Validasi ulang sisa DI DALAM transaksi (bukan cuma di form),
+            // memakai rumus yang sama dengan SerahTerimaGudangSatu::sisa.
+            $sisaSaatIni = $serahTerima->sisa;
+
+            if ($jumlah > $sisaSaatIni) {
+                throw new \RuntimeException("Jumlah melebihi sisa yang tersedia di palet ini ({$sisaSaatIni} lembar).");
+            }
+
+            $b = $serahTerima->barangSetengahJadi;
+
+            if (! $b) {
+                throw new \RuntimeException('Data barang setengah jadi tidak ditemukan pada palet ini.');
+            }
+
+            $panjang = $b->ukuran?->panjang ?? ($b->panjang ?? 0);
+            $lebar = $b->ukuran?->lebar ?? ($b->lebar ?? 0);
+            $tebal = $b->ukuran?->tebal ?? ($b->tebal ?? 0);
+            $kwGrade = $b->grade?->nama_grade ?? ($b->kw_grade ?? '-');
+            $namaJenisBarang = $b->jenisBarang?->nama_jenis_barang ?? ($b->jenisKayu?->nama_kayu ?? null);
+
+            $idJenisKayu = JenisKayu::where('nama_kayu', $namaJenisBarang)->value('id');
+
+            if (! $idJenisKayu) {
+                throw new \RuntimeException("Jenis kayu \"{$namaJenisBarang}\" tidak ditemukan di master jenis kayu.");
+            }
+
+            $kubikasi = ((float) $panjang * (float) $lebar * (float) $tebal * $jumlah) / 10_000_000_000;
+
+            $noPalet = $serahTerima->hasilNyusup?->no_palet;
+            $keterangan = $noPalet
+                ? "Pengembalian sisa bahan dari Nyusup (Palet {$noPalet}) - ".now()->format('d/m/Y')
+                : 'Pengembalian sisa bahan dari Nyusup - '.now()->format('d/m/Y');
+
+            $stok = $this->tambah(
+                idJenisKayu: $idJenisKayu,
+                panjang: $panjang,
+                lebar: $lebar,
+                tebal: $tebal,
+                kwGrade: $kwGrade,
+                lembar: $jumlah,
+                kubikasi: $kubikasi,
+                keterangan: $keterangan,
+                referensi: $serahTerima,
+            );
+
+            // Baris DetailBarangDikerjakan TIDAK disentuh — hanya palet
+            // yang dicatat sudah menerima pengembalian sebanyak $jumlah lembar.
+            $serahTerima->update([
+                'jumlah_dikembalikan' => (float) $serahTerima->jumlah_dikembalikan + $jumlah,
+            ]);
+
+            return $stok;
+        });
     }
 
     protected function lockOrCreateStok(

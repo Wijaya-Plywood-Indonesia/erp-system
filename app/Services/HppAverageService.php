@@ -67,6 +67,57 @@ class HppAverageService
     }
 
     // =========================================================================
+    // ROLLBACK NOTA KAYU LUNAS
+    // =========================================================================
+    public function rollbackNotaKayuLunas(\App\Models\NotaKayu $nota): void
+    {
+        Log::info('[HPP] rollbackNotaKayuLunas mulai (DENGAN LOG HPP)', [
+            'nota_id' => $nota->id,
+            'no_nota' => $nota->no_nota,
+        ]);
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($nota) {
+            $logs = \App\Models\HppAverageLog::where('referensi_type', \App\Models\NotaKayu::class)
+                ->where('referensi_id', $nota->id)
+                ->where('tipe_transaksi', 'masuk')
+                ->get();
+
+            if ($logs->isEmpty()) {
+                Log::warning('[HPP] rollbackNotaKayuLunas SKIP - tidak ada log untuk nota ini', ['nota_id' => $nota->id]);
+                return;
+            }
+
+            $lahanTerpengaruh = collect();
+
+            foreach ($logs as $log) {
+                $summary = \App\Models\HppAverageSummarie::forKombinasi(
+                    $log->id_lahan, 
+                    $log->id_jenis_kayu, 
+                    $log->panjang
+                );
+
+                if ($summary) {
+                    $summary->kurangiStok($log->total_batang, $log->total_kubikasi, $log->nilai_stok);
+                    $lahanTerpengaruh->push($log->id_lahan);
+                    
+                    Log::info('[HPP] rollbackNotaKayuLunas: stok dikurangi', [
+                        'log_id' => $log->id,
+                        'batang' => $log->total_batang
+                    ]);
+                }
+
+                $log->delete();
+            }
+
+            $lahanTerpengaruh->unique()->each(function (int $lahanId) {
+                $this->syncTempatKayuByLahan($lahanId);
+            });
+        });
+
+        Log::info('[HPP] rollbackNotaKayuLunas selesai', ['nota_id' => $nota->id]);
+    }
+
+    // =========================================================================
     // PROSES NOTA KAYU LUNAS (DENGAN LOG HPP)
     // Dipanggil dari observer saat status_pelunasan berubah ke "Lunas"
     // =========================================================================

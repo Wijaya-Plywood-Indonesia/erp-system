@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PegawaiStiks\Tables;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -12,6 +13,9 @@ class PegawaiStiksTable
 {
     public static function configure(Table $table): Table
     {
+        // Tanggal produksi Stik yang sedang dibuka
+        $tanggalStik = fn($livewire) => $livewire->getOwnerRecord()->tanggal_produksi;
+
         return $table
             ->columns([
                 TextColumn::make('pegawai.nama_pegawai')
@@ -58,9 +62,12 @@ class PegawaiStiksTable
             ])
             ->recordActions([
                 EditAction::make(),
+                PindahPegawaiTableActions::recordAction('stik', $tanggalStik),
+                PindahPegawaiTableActions::batalAction('stik'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('stik', $tanggalStik),
                     DeleteBulkAction::make(),
                 ]),
             ]);
