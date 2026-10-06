@@ -266,18 +266,19 @@ class GudangVeneerKering extends Page
                 DB::raw('(SELECT MAX(id) as max_id FROM stok_veneer_kerings GROUP BY id_ukuran, id_jenis_kayu, kw) as latest'),
                 fn ($join) => $join->on('stok_veneer_kerings.id', '=', 'latest.max_id')
             )
-            ->where('stok_m3_sesudah', '>', 0)
             ->get();
 
         $rows = $rows->map(function (StokVeneerKering $row) {
-            $row->total_lembar = StokVeneerKering::saldoLembarTerakhir(
-                (int) $row->id_ukuran,
-                (int) $row->id_jenis_kayu,
-                (string) $row->kw
-            );
-
+        $row->total_lembar = StokVeneerKering::saldoLembarTerakhir(
+            (int) $row->id_ukuran,
+            (int) $row->id_jenis_kayu,
+            (string) $row->kw
+        );
             return $row;
-        });
+        })
+        // Stok tetap tampil selama lembar tidak 0,
+        // terlepas dari kubikasi.
+        ->filter(fn (StokVeneerKering $row) => (int) $row->total_lembar !== 0);
 
         if (trim($this->search) !== '') {
             $needle = strtolower(trim($this->search));
