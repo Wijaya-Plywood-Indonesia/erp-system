@@ -11,6 +11,7 @@ use App\Models\Ukuran;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Pages\Page;
@@ -87,7 +88,23 @@ class RekapStokVeneer extends Page implements HasForms
                 ->label('Export Excel')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
-                ->action(fn () => $this->exportExcel()),
+                ->modalHeading('Export Rekap Stok Veneer')
+                ->modalSubmitActionLabel('Download')
+                ->fillForm(fn (): array => [
+                    'tanggal' => $this->tanggal !== '' ? $this->tanggal : null,
+                ])
+                ->schema([
+                    DatePicker::make('tanggal')
+                        ->label('Posisi stok per tanggal')
+                        ->helperText('Kosongkan untuk stok saat ini.')
+                        ->maxDate(now())
+                        ->native(false),
+                ])
+                ->action(function (array $data) {
+                    $this->tanggal = $data['tanggal'] ?? '';
+
+                    return $this->exportExcel();
+                }),
         ];
     }
 
@@ -96,8 +113,10 @@ class RekapStokVeneer extends Page implements HasForms
         $built = $this->buildAllStocks();
         $localLabel = $this->getLocalLabel();
         $externalLabel = $this->getExternalLabel();
-        $tanggal = ($this->tanggal !== '' ? Carbon::parse($this->tanggal) : Carbon::now())->translatedFormat('d F Y');
-        $filename = 'Rekap_Stok_Veneer_'.Carbon::now()->format('Ymd_His').'.xlsx';
+
+        $tglCarbon = $this->tanggal !== '' ? Carbon::parse($this->tanggal) : Carbon::now();
+        $tanggal = $tglCarbon->translatedFormat('d F Y');
+        $filename = 'Rekap_Stok_Veneer_'.$tglCarbon->format('Y-m-d').'.xlsx';
 
         return Excel::download(
             new RekapStokVeneerExport(
@@ -148,10 +167,6 @@ class RekapStokVeneer extends Page implements HasForms
 
     /**
      * Ambil data stok veneer dari API partner (web sebelah).
-     *
-     * URL diambil dari satu variabel env: API_STOK
-     *  - di web Wijaya, API_STOK menunjuk ke Wahana
-     *  - di web Wahana, API_STOK menunjuk ke Wijaya
      *
      * Jika API gagal / timeout / env kosong, kembalikan array kosong
      * agar halaman tetap tampil dengan data lokal saja.
@@ -358,7 +373,7 @@ class RekapStokVeneer extends Page implements HasForms
                 }
                 if ($a['tebal'] != $b['tebal']) {
                     return $a['tebal'] <=> $b['tebal'];
-                } // Ascending: tertipis ke tertebal
+                }
                 if ($a['panjang'] != $b['panjang']) {
                     return $a['panjang'] <=> $b['panjang'];
                 }
@@ -366,8 +381,7 @@ class RekapStokVeneer extends Page implements HasForms
                 return $a['lebar'] <=> $b['lebar'];
             });
         } else {
-            // Urutkan berdasarkan TEBAL terlebih dahulu (tertipis ke tertebal),
-            // baru panjang, lebar, lalu jenis kayu sebagai tie-breaker terakhir.
+            // Urutkan berdasarkan TEBAL (tertipis ke tertebal), lalu panjang, lebar, jenis kayu.
             usort($allStocks, function ($a, $b) {
                 if ($a['tebal'] != $b['tebal']) {
                     return $a['tebal'] <=> $b['tebal'];
@@ -395,7 +409,6 @@ class RekapStokVeneer extends Page implements HasForms
         $allStocks = $built['stocks'];
         $allKws = $built['kws'];
 
-        // Label tetap ditentukan dari hostname (isWijayaWeb)
         $localLabel = $this->getLocalLabel();
         $externalLabel = $this->getExternalLabel();
 
