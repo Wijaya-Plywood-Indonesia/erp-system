@@ -138,13 +138,9 @@ class RepairDataMap
 
                 $pekerjaBaris = $detail->rencanaPegawais->filter(fn($rp) => $rp->pegawai);
                 $jumlahPekerjaBaris = $pekerjaBaris->count();
-<<<<<<< Updated upstream
                 // Hasil baris ini dibagi rata ke pegawai yg tercatat DI BARIS INI SAJA —
                 // bukan diasumsikan seluruh meja mengerjakan baris ini bersama.
                 $hasilIndividuBaris = $jumlahPekerjaBaris > 0 ? ($jumlahHasil / $jumlahPekerjaBaris) : 0;
-=======
-                $hasilIndividuBaris = $jumlahPekerjaBaris > 0 ? floor($jumlahHasil / $jumlahPekerjaBaris) : 0;
->>>>>>> Stashed changes
 
                 $menitNormal = $rateInfo ? ((float) $rateInfo['target']->jam) * 60 : 0;
 
@@ -254,7 +250,7 @@ class RepairDataMap
         $result = [];
         foreach ($mejaGrup as $nomorMeja => $m) {
             $totalHasilMeja = array_sum(array_column($m['items'], 'hasil'));
-            
+
             $capaianTotalMeja = 0;
             $hasValidCapaian = false;
             foreach ($m['items'] as $item) {
