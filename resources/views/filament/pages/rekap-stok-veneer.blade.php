@@ -8,7 +8,7 @@
                 <div>
                     <h2 class="text-base font-semibold text-gray-950 dark:text-white">Rekap Stok Veneer</h2>
                     <p class="text-sm text-gray-950 dark:text-white">Per tanggal
-                        {{ \Carbon\Carbon::now()->translatedFormat('d F Y') }}</p>
+                        {{ ($tanggal !== '' ? \Carbon\Carbon::parse($tanggal) : \Carbon\Carbon::now())->translatedFormat('d F Y') }}</p>
                 </div>
                 <span class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-950 dark:text-white">
                     <x-heroicon-o-calendar-days class="h-4 w-4" />
@@ -57,6 +57,13 @@
                     </select>
                 </div>
 
+                {{-- Tanggal (posisi stok berdasarkan log) --}}
+                <div class="min-w-[150px]">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Posisi Stok per Tanggal</label>
+                    <input wire:model.live="tanggal" type="date" max="{{ now()->toDateString() }}"
+                        class="block w-full rounded-lg border-0 py-1.5 px-3 text-sm text-gray-950 dark:text-white shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-inset focus:ring-primary-600 dark:focus:ring-primary-500" />
+                </div>
+
                 {{-- Urutkan --}}
                 <div class="min-w-[120px]">
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Urutkan</label>
@@ -67,9 +74,9 @@
                     </select>
                 </div>
 
-                @if ($search !== '' || $filterKayu !== '' || $filterKw !== '' || $sortBy !== 'ukuran')
+                @if ($search !== '' || $filterKayu !== '' || $filterKw !== '' || $sortBy !== 'ukuran' || $tanggal !== '')
                     <div class="flex items-end">
-                        <button wire:click="$set('search', ''); $set('filterKayu', ''); $set('filterKw', ''); $set('sortBy', 'ukuran')"
+                        <button wire:click="$set('search', ''); $set('filterKayu', ''); $set('filterKw', ''); $set('sortBy', 'ukuran'); $set('tanggal', '')"
                             class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-white/5 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-white/10 transition">
                             <x-heroicon-o-x-mark class="h-4 w-4" />
                             Reset

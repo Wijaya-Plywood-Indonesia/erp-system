@@ -46,6 +46,33 @@ class RekapStokVeneer extends Page implements HasForms
 
     public string $sortBy = 'ukuran';
 
+    /** Kosong = stok saat ini. Terisi (Y-m-d) = posisi stok akhir hari itu berdasarkan log. */
+    public string $tanggal = '';
+
+    /**
+     * Ambil saldo stok terakhir (stok_lembar_after) per ukuran+jenis kayu+KW
+     * dari tabel log, sampai dengan tanggal tertentu.
+     */
+    protected function stokFromLog(string $table, string $kwColumn, string $tgl)
+    {
+        $ids = DB::table($table)
+            ->whereDate('tanggal', '<=', $tgl)
+            ->select(DB::raw('MAX(id) as max_id'))
+            ->groupBy('id_jenis_kayu', 'panjang', 'lebar', 'tebal', $kwColumn)
+            ->pluck('max_id');
+
+        return DB::table($table)
+            ->whereIn('id', $ids)
+            ->get()
+            ->map(function ($r) use ($kwColumn) {
+                $r->stok_lembar = (int) $r->stok_lembar_after;
+                $r->kw = $r->{$kwColumn};
+                $r->kw_grade = $r->{$kwColumn};
+
+                return $r;
+            });
+    }
+
     public function mount(): void {}
 
     public function getMaxContentWidth(): Width|string|null
@@ -69,7 +96,7 @@ class RekapStokVeneer extends Page implements HasForms
         $built = $this->buildAllStocks();
         $localLabel = $this->getLocalLabel();
         $externalLabel = $this->getExternalLabel();
-        $tanggal = Carbon::now()->translatedFormat('d F Y');
+        $tanggal = ($this->tanggal !== '' ? Carbon::parse($this->tanggal) : Carbon::now())->translatedFormat('d F Y');
         $filename = 'Rekap_Stok_Veneer_'.Carbon::now()->format('Ymd_His').'.xlsx';
 
         return Excel::download(
@@ -145,7 +172,7 @@ class RekapStokVeneer extends Page implements HasForms
         try {
             $response = Http::withHeaders(['X-API-KEY' => $apiKey])
                 ->timeout(10)
-                ->get($baseUrl.'/api/external/rekap-stok-veneer');
+                ->get($baseUrl.'/api/external/rekap-stok-veneer', array_filter(['tanggal' => $this->tanggal]));
 
             if ($response->successful() && $response->json('status') === 'success') {
                 return $response->json('data', $empty);
@@ -217,8 +244,11 @@ class RekapStokVeneer extends Page implements HasForms
 
         // ── DATA LOKAL (DB web ini) ───────────────────────────────────────────
 
+        $tgl = $this->tanggal !== '' ? $this->tanggal : null;
+
         // 1. Lokal Basah
-        foreach (HppVeneerBasahSummary::all() as $b) {
+        $basahRows = $tgl ? $this->stokFromLog('hpp_veneer_basah_logs', 'kw', $tgl) : HppVeneerBasahSummary::all();
+        foreach ($basahRows as $b) {
             $kw = $this->normalizeKw($b->kw);
             if ($kw === null) {
                 continue;
@@ -231,7 +261,8 @@ class RekapStokVeneer extends Page implements HasForms
         }
 
         // 2. Lokal Jadi
-        foreach (StokVeneerJadi::all() as $j) {
+        $jadiRows = $tgl ? $this->stokFromLog('hpp_veneer_jadi_log', 'kw_grade', $tgl) : StokVeneerJadi::all();
+        foreach ($jadiRows as $j) {
             $kw = $this->normalizeKw($j->kw_grade);
             if ($kw === null) {
                 continue;
@@ -246,6 +277,7 @@ class RekapStokVeneer extends Page implements HasForms
         // 3. Lokal Kering (ambil baris terbaru per ukuran + jenis kayu + KW)
         $ukurans = Ukuran::all()->keyBy('id');
         $keringIds = DB::table('stok_veneer_kerings')
+            ->when($tgl, fn ($q) => $q->whereDate('tanggal_transaksi', '<=', $tgl))
             ->select(DB::raw('MAX(id) as max_id'))
             ->groupBy('id_ukuran', 'id_jenis_kayu', 'kw')
             ->pluck('max_id');
