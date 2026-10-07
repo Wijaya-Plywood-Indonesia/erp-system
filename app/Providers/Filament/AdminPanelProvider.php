@@ -12,6 +12,7 @@ use App\Http\Middleware\RunDailyScheduler;
 use App\Http\Middleware\RedirectToPortalForAdmins;
 use App\Livewire\AbsenWajibModal;
 use App\Livewire\GradingWizard;
+use App\Support\Brand;
 use Filament\Http\Middleware\Authenticate;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -49,28 +50,19 @@ class AdminPanelProvider extends PanelProvider
 
     public function panel(Panel $panel): Panel
     {
-        $currentHost = request()->getHost();
-
         // ============================================================
-        // KONFIGURASI BRAND (Wijaya / Wahana)
-        // Domain yang ada di daftar ini dianggap Wijaya, selain itu Wahana.
-        // Untuk tes lokal Wijaya: ganti sementara jadi  $isWijaya = true;
+        // BRAND (Wijaya / Wahana)
+        // Ditentukan di satu tempat: App\Support\Brand + config/brand.php
+        // Tes lokal: isi BRAND_OVERRIDE=wijaya di .env
         // ============================================================
-        $isWijaya = in_array($currentHost, ['kayu.wijayaplywoods.com', 'prarelease.wijayaplywoods.com']);
-
-        $brandKey = $isWijaya ? 'wijaya' : 'wahana';
-
-        // Pakai PNG kalau ada, kalau tidak pakai WebP
-        $logoPath = file_exists(public_path("images/logo-{$brandKey}.png"))
-            ? "images/logo-{$brandKey}.png"
-            : "images/logo-{$brandKey}.webp";
+        $data = Brand::current();
 
         $brand = [
-            'name'        => $isWijaya ? 'Wijaya' : 'Wahana',
-            'logo'        => $logoPath,
-            'background'  => 'images/login-bg.webp', // nanti: 'images/login-bg-wijaya.webp' / 'images/login-bg-wahana.webp'
-            'logo_height' => $isWijaya ? '6rem' : '5rem',
-            'logo_height_mobile' => $isWijaya ? '5rem' : '4.25rem',
+            'name'               => $data['name'],
+            'logo'               => $data['logo'],
+            'background'         => $data['background'],
+            'logo_height'        => $data['login_logo_height'],
+            'logo_height_mobile' => $data['login_logo_height_mobile'],
         ];
 
         return $panel
@@ -404,13 +396,70 @@ class AdminPanelProvider extends PanelProvider
                         color: #fca5a5 !important;
                     }
 
-                    /* ===== HP ===== */
-                    @media (max-width: 768px) {
+                    /* ============================================================
+                       MOBILE / HP (layar <= 640px)
+                       ============================================================ */
+                    @media (max-width: 640px) {
+                        /* Tinggi layar yang benar di browser HP (address bar) */
                         .fi-simple-layout {
+                            min-height: 100vh;
+                            min-height: 100dvh;
                             background-attachment: scroll !important;
+                            /* geser sedikit supaya tumpukan kayu ikut terlihat */
+                            background-position: 62% center !important;
+                            background-image:
+                                linear-gradient(180deg, rgba(15,23,42,0.55) 0%, rgba(15,23,42,0.35) 100%),
+                                url("' . asset($brand['background']) . '") !important;
+                        }
+
+                        /* Wadah card: beri ruang kiri-kanan */
+                        .fi-simple-main-ctn {
+                            width: 100%;
+                            padding-left: 1rem !important;
+                            padding-right: 1rem !important;
+                        }
+
+                        /* Card tidak lagi menempel ke tepi layar */
+                        .fi-simple-main {
+                            width: 100% !important;
+                            max-width: 26rem !important;
+                            margin: 1.5rem auto !important;
+                            padding: 2rem 1.5rem !important;
+                            border-radius: 1.5rem !important;
+                            background: rgba(15, 23, 42, 0.58) !important;
+                        }
+
+                        .login-brand-logo {
+                            margin-bottom: 0.75rem;
                         }
                         .login-brand-logo img {
                             height: ' . $brand['logo_height_mobile'] . ';
+                            max-width: 70%;
+                        }
+
+                        .fi-simple-main .fi-simple-header {
+                            margin-bottom: 1.25rem !important;
+                        }
+                        .fi-simple-main .fi-simple-header-heading {
+                            font-size: 1.5rem !important;
+                            line-height: 2rem !important;
+                        }
+
+                        /* Font 16px agar iOS tidak auto-zoom saat input difokus */
+                        .fi-simple-main input.fi-input {
+                            font-size: 16px !important;
+                            padding-top: 0.7rem !important;
+                            padding-bottom: 0.7rem !important;
+                        }
+
+                        /* Tombol lebih besar & mudah ditekan */
+                        .fi-simple-main .fi-btn {
+                            width: 100%;
+                            padding-top: 0.75rem !important;
+                            padding-bottom: 0.75rem !important;
+                        }
+                        .fi-simple-main .fi-btn:hover {
+                            transform: none;
                         }
                     }
                 </style>'
