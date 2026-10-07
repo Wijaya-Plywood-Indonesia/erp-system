@@ -59,10 +59,10 @@ class NotaBarangMasuksTable
                 ViewAction::make(),
 
                 EditAction::make()
-                    ->visible(fn($record) => $record->divalidasi_oleh === null),
+                    ->visible(fn($record) => $record->divalidasi_oleh === null || auth()->user()?->hasRole('super_admin')),
 
                 DeleteAction::make()
-                    ->visible(fn($record) => $record->divalidasi_oleh === null)
+                    ->visible(fn($record) => $record->divalidasi_oleh === null || auth()->user()?->hasRole('super_admin'))
                     ->before(function ($record) {
                         if ($record->mutasi) {
                             $record->mutasi->details()->delete();

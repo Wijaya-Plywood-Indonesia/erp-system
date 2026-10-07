@@ -300,8 +300,8 @@
                         <td class="text-center" style="white-space: nowrap;">{{ $item->m3 !== null ? number_format($item->m3, 4, ',', '.') : '-' }}</td>
                         @endif
                         <td class="text-right">{{ number_format($item->harga, 0, ',', '.') }}</td>
-                        <td class="text-center">0</td>
-                        <td class="text-center">0</td>
+                        <td class="text-center">{{ number_format($item->potongan ?? 0, 0, ',', '.') }}</td>
+                        <td class="text-center">{{ number_format($item->total_pot ?? 0, 0, ',', '.') }}</td>
                         <td class="text-right">{{ number_format($item->subtotal, 0, ',', '.') }}</td>
                     </tr>
                 @endforeach
