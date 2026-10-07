@@ -1396,7 +1396,7 @@ class DetailNotaBarangKeluarsTable
                         $nota = $livewire->getOwnerRecord();
 
                         // Hanya muncul jika nota belum divalidasi
-                        return $nota && empty($nota->divalidasi_oleh);
+                        return $nota && (empty($nota->divalidasi_oleh) || auth()->user()?->hasRole('super_admin'));
                     }),
 
                 /* ==============================================================
@@ -2013,14 +2013,14 @@ class DetailNotaBarangKeluarsTable
                     ->visible(function (RelationManager $livewire) {
                         $nota = $livewire->getOwnerRecord();
 
-                        return $nota && empty($nota->divalidasi_oleh);
+                        return $nota && (empty($nota->divalidasi_oleh) || auth()->user()?->hasRole('super_admin'));
                     }),
 
                 DeleteAction::make()
                     ->visible(function (RelationManager $livewire) {
                         $nota = $livewire->getOwnerRecord();
 
-                        return $nota && empty($nota->divalidasi_oleh);
+                        return $nota && (empty($nota->divalidasi_oleh) || auth()->user()?->hasRole('super_admin'));
                     })
                     ->before(function ($record) {
                         if (str_starts_with($record->nama_barang, 'Plywood ')) {

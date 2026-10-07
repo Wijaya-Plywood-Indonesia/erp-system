@@ -3,7 +3,7 @@
     ═══════════════════════════════════════════════════════════════════════ --}}
     @php
         $menungguTerima = $this->menungguTerima;  // dari Hotpress
-        $menungguGraji  = $this->menungguGraji;   // dari Graji Triplek
+        $menungguGraji  = method_exists($this, 'getMenungguGrajiProperty') ? $this->menungguGraji : collect();
         $riwayatTerima  = $this->riwayatTerima;
 
         $totalAktif = $menungguTerima->count() + $menungguGraji->count();
@@ -38,12 +38,13 @@
                     {{-- ── Pending dari Hotpress ── --}}
                     @foreach ($menungguTerima as $st)
                         @php
-                            $bsj    = $st->triplekHasilHp?->barangSetengahJadi;
+                            $hasilHp = $st->id_platform_hasil_hp !== null ? $st->platformHasilHp : $st->triplekHasilHp;
+                            $bsj    = $hasilHp?->barangSetengahJadi;
                             $ukuran = $bsj?->ukuran;
                             $kayu   = $bsj?->jenisBarang?->nama_jenis_barang ?? '-';
                             $kw     = $bsj?->grade?->nama_grade ?? '-';
-                            $qty    = (float) ($st->triplekHasilHp?->isi ?? 0);
-                            $palet  = $st->triplekHasilHp?->no_palet ?? '-';
+                            $qty    = (float) ($hasilHp?->isi ?? 0);
+                            $palet  = $hasilHp?->no_palet ?? '-';
                         @endphp
                         <div wire:key="hp-aktif-{{ $st->id }}"
                             class="px-3 sm:px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors">
@@ -155,19 +156,17 @@
                                 $hasil  = $st->hasilGrajiTriplek;
                                 $bsj    = $hasil?->barangSetengahJadiHp;
                                 $palet  = $hasil?->no_palet ?? '-';
+                                $qty    = (float) ($hasil?->isi ?? 0);
                             } else {
-                                $bsj    = $st->triplekHasilHp?->barangSetengahJadi;
-                                $palet  = $st->triplekHasilHp?->no_palet ?? '-';
+                                $hasilHp = $st->id_platform_hasil_hp !== null ? $st->platformHasilHp : $st->triplekHasilHp;
+                                $bsj    = $hasilHp?->barangSetengahJadi;
+                                $palet  = $hasilHp?->no_palet ?? '-';
+                                $qty    = (float) ($hasilHp?->isi ?? 0);
                             }
 
                             $ukuran = $bsj?->ukuran;
-                            $kayu   = $dariGraji
-                                ? ($bsj?->jenisBarang?->nama_jenis_barang ?? '-')
-                                : ($bsj?->jenisBarang?->nama_jenis_barang ?? '-');
+                            $kayu   = $bsj?->jenisBarang?->nama_jenis_barang ?? '-';
                             $kw     = $bsj?->grade?->nama_grade ?? '-';
-                            $qty    = $dariGraji
-                                ? (float) ($hasil?->isi ?? 0)
-                                : (float) ($st->triplekHasilHp?->isi ?? 0);
                         @endphp
                         <div wire:key="hist-{{ $st->id }}"
                             class="px-3 sm:px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors">
