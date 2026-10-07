@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\ProduksiHotPresses\RelationManagers;
 
-use App\Models\JenisKayu;
 use App\Models\PlatformHasilHp;
 use App\Models\ProduksiGrajitriplek;
 use App\Models\ProduksiHp;
@@ -243,7 +242,10 @@ class SerahTerimaHpRelationManager extends RelationManager
                         // 🌟 Barang yang sudah ditolak tidak muncul lagi di sini.
                         ->whereNull('ditolak_oleh')
                         ->where(function ($q) use ($ownerId) {
-                            $q->where('diterima_oleh', '-')
+                            // Serahan langsung dari hotpress TIDAK diterima di sini lagi —
+                            // masuk Gudang Triplek Mentah dulu, baru dikirim ke Graji.
+                            $q->where(fn ($w) => $w->where('diterima_oleh', '-')
+                                ->whereNull('id_triplek_hasil_hp'))
                                 ->orWhere('id_produksi_graji_triplek', $ownerId);
                         })
                         ->orderBy('diterima_oleh', 'asc')
@@ -260,7 +262,10 @@ class SerahTerimaHpRelationManager extends RelationManager
                         // 🌟 Barang yang sudah ditolak tidak muncul lagi di sini.
                         ->whereNull('ditolak_oleh')
                         ->where(function ($q) use ($ownerId) {
-                            $q->where('diterima_oleh', '-')
+                            // Serahan langsung dari hotpress TIDAK diterima di sini lagi —
+                            // masuk Gudang Platform Mentah dulu, baru dikirim ke Sanding.
+                            $q->where(fn ($w) => $w->where('diterima_oleh', '-')
+                                ->whereNull('id_platform_hasil_hp'))
                                 ->orWhere('id_produksi_sanding', $ownerId);
                         })
                         ->orderBy('diterima_oleh', 'asc')
@@ -535,23 +540,10 @@ class SerahTerimaHpRelationManager extends RelationManager
                                                 : 'Terima dari Sanding'),
                                     ]);
 
-                                    // Stok triplek BERTAMBAH kalau barang berasal dari hotpress.
-                                    if ($fresh->id_triplek_hasil_hp) {
-                                        $this->prosesTerimaTriplek($fresh, $stokTriplekService);
+                                    // Dari GUDANG TRIPLEK MENTAH: potong stok saat Graji menerima.
+                                    if ($fresh->id_triplek_mth_mutasi_keluar) {
+                                        $this->prosesKeluarTriplekMth($fresh, $stokTriplekService);
                                     }
-                                    // 🚫 DINONAKTIFKAN SEMENTARA (atas permintaan): pengurangan
-                                    // stok Triplek Mentah saat diterima dari Gudang Triplek
-                                    // Mentah TIDAK dibutuhkan untuk saat ini. Barang tetap bisa
-                                    // "Diterima" seperti biasa (status/diterima_oleh tetap
-                                    // ter-update di atas), hanya saja baris stok Triplek Mentah
-                                    // TIDAK dipotong otomatis lagi.
-                                    // Untuk mengaktifkan kembali, un-comment blok di bawah ini:
-                                    // elseif ($fresh->id_triplek_mth_mutasi_keluar) {
-                                    //     // 🌟 Dari GUDANG TRIPLEK MENTAH: potong stok triplek
-                                    //     // mentah, tulis log 'keluar', mutasi sudah ditandai
-                                    //     // diterima di atas.
-                                    //     $this->prosesKeluarTriplekMth($fresh, $stokTriplekService);
-                                    // }
 
                                     return;
                                 }
@@ -573,10 +565,10 @@ class SerahTerimaHpRelationManager extends RelationManager
                                                     : 'Terima dari Graji')),
                                     ]);
 
-                                    if ($fresh->id_platform_hasil_hp) {
-                                        // Dari hotpress: stok platform mentah bertambah (logika lama).
-                                        $this->prosesTerimaPlatform($fresh, $stokPlatformService);
-                                    } elseif ($fresh->id_triplek_mutasi_keluar) {
+                                    // Stok platform dari hotpress TIDAK lagi bertambah di sini —
+                                    // ditambahkan lewat tombol "Terima ke Gudang" di halaman
+                                    // Gudang Platform Mentah (TerimaGudangHpService).
+                                    if ($fresh->id_triplek_mutasi_keluar) {
                                         // Dari GUDANG TRIPLEK JADI: potong stok triplek jadi +
                                         // tulis HppTriplekJadiLog 'keluar' + tandai mutasi diterima.
                                         // Sanding adalah tujuan produksi, jadi TIDAK menambah stok
@@ -584,20 +576,11 @@ class SerahTerimaHpRelationManager extends RelationManager
                                         app(TerimaTriplekJadiService::class)
                                             ->konfirmasi($fresh, tambahStokGudangSatu: false);
                                     }
-                                    // 🚫 DINONAKTIFKAN SEMENTARA (atas permintaan): pengurangan
-                                    // stok Platform Mentah saat diterima dari Gudang Platform
-                                    // Mentah TIDAK dibutuhkan untuk saat ini. Barang tetap bisa
-                                    // "Diterima" seperti biasa (status/diterima_oleh tetap
-                                    // ter-update di atas), hanya saja baris stok Platform Mentah
-                                    // TIDAK dipotong otomatis lagi.
-                                    // Untuk mengaktifkan kembali, un-comment blok di bawah ini:
-                                    // elseif ($fresh->id_platform_mth_mutasi_keluar) {
-                                    //     // 🌟 Dari GUDANG PLATFORM MENTAH: potong stok platform
-                                    //     // mentah, tulis log 'keluar', mutasi sudah ditandai
-                                    //     // diterima di atas.
-                                    //     $this->prosesKeluarPlatformMth($fresh, $stokPlatformService);
-                                    // }
-                                    // Serah manual dari Graji -> Sanding: tetap tanpa efek stok.
+                                    // Dari GUDANG PLATFORM MENTAH: potong stok saat Sanding menerima.
+                                    elseif ($fresh->id_platform_mth_mutasi_keluar) {
+                                        $this->prosesKeluarPlatformMth($fresh, $stokPlatformService);
+                                    }
+                                    // Serah manual dari Graji → Sanding: tetap tanpa efek stok.
                                 }
                             });
 
@@ -685,98 +668,6 @@ class SerahTerimaHpRelationManager extends RelationManager
                         ->visible(fn () => Auth::user()->hasAnyRole(self::ROLE_ADMIN)),
                 ]),
             ]);
-    }
-
-    /**
-     * Resolve data dari hasil triplek HP, lalu delegasikan penambahan stok
-     * ke StokTriplekMthService. HPP belum dihitung (0 dulu, menyusul).
-     */
-    protected function prosesTerimaTriplek(SerahTerimaHp $serahTerima, StokTriplekMthService $service): void
-    {
-        $hasil = $serahTerima->triplekHasilHp()
-            ->with('barangSetengahJadi.ukuran', 'barangSetengahJadi.grade', 'barangSetengahJadi.jenisBarang')
-            ->first();
-
-        if (! $hasil || ! $hasil->barangSetengahJadi) {
-            throw new \RuntimeException('Data barang setengah jadi tidak ditemukan.');
-        }
-
-        $ukuran = $hasil->barangSetengahJadi->ukuran;
-        $grade = $hasil->barangSetengahJadi->grade;
-        $jenisBarang = $hasil->barangSetengahJadi->jenisBarang;
-
-        if (! $ukuran || ! $grade || ! $jenisBarang) {
-            throw new \RuntimeException('Data ukuran, grade, atau jenis barang tidak lengkap.');
-        }
-
-        // "Jenis Barang" pada hasil triplek sebenarnya merepresentasikan jenis kayu,
-        // tapi disimpan lewat tabel jenis_barang (bukan jenis_kayus) — dicocokkan by nama.
-        $jenisKayu = JenisKayu::where('nama_kayu', $jenisBarang->nama_jenis_barang)->first();
-
-        if (! $jenisKayu) {
-            throw new \RuntimeException("Jenis kayu \"{$jenisBarang->nama_jenis_barang}\" tidak ditemukan di data Jenis Kayu. Mohon samakan penamaan atau tambahkan datanya terlebih dahulu.");
-        }
-
-        $lembar = (float) $hasil->isi;
-        $kubikasi = $lembar * (float) $ukuran->kubikasi / 10000000;
-
-        $service->tambah(
-            idJenisKayu: $jenisKayu->id,
-            panjang: $ukuran->panjang,
-            lebar: $ukuran->lebar,
-            tebal: $ukuran->tebal,
-            kwGrade: $grade->nama_grade,
-            lembar: $lembar,
-            kubikasi: $kubikasi,
-            keterangan: 'Masuk dari Graji — terima triplek dari hotpress (via serah terima #'.$serahTerima->id.')',
-            referensi: $serahTerima,
-        );
-    }
-
-    /**
-     * Resolve data dari hasil platform HP, lalu delegasikan penambahan stok
-     * ke StokPlatformMthService. HPP belum dihitung (0 dulu, menyusul).
-     */
-    protected function prosesTerimaPlatform(SerahTerimaHp $serahTerima, StokPlatformMthService $service): void
-    {
-        $hasil = $serahTerima->platformHasilHp()
-            ->with('barangSetengahJadi.ukuran', 'barangSetengahJadi.grade', 'barangSetengahJadi.jenisBarang')
-            ->first();
-
-        if (! $hasil || ! $hasil->barangSetengahJadi) {
-            throw new \RuntimeException('Data barang setengah jadi tidak ditemukan.');
-        }
-
-        $ukuran = $hasil->barangSetengahJadi->ukuran;
-        $grade = $hasil->barangSetengahJadi->grade;
-        $jenisBarang = $hasil->barangSetengahJadi->jenisBarang;
-
-        if (! $ukuran || ! $grade || ! $jenisBarang) {
-            throw new \RuntimeException('Data ukuran, grade, atau jenis barang tidak lengkap.');
-        }
-
-        // "Jenis Barang" pada hasil platform sebenarnya merepresentasikan jenis kayu,
-        // tapi disimpan lewat tabel jenis_barang (bukan jenis_kayus) — dicocokkan by nama.
-        $jenisKayu = JenisKayu::where('nama_kayu', $jenisBarang->nama_jenis_barang)->first();
-
-        if (! $jenisKayu) {
-            throw new \RuntimeException("Jenis kayu \"{$jenisBarang->nama_jenis_barang}\" tidak ditemukan di data Jenis Kayu. Mohon samakan penamaan atau tambahkan datanya terlebih dahulu.");
-        }
-
-        $lembar = (float) $hasil->isi;
-        $kubikasi = $lembar * (float) $ukuran->kubikasi / 10000000;
-
-        $service->tambah(
-            idJenisKayu: $jenisKayu->id,
-            panjang: $ukuran->panjang,
-            lebar: $ukuran->lebar,
-            tebal: $ukuran->tebal,
-            kwGrade: $grade->nama_grade,
-            lembar: $lembar,
-            kubikasi: $kubikasi,
-            keterangan: 'Masuk dari Sanding — terima platform dari hotpress (via serah terima #'.$serahTerima->id.')',
-            referensi: $serahTerima,
-        );
     }
 
     /**

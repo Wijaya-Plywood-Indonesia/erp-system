@@ -6,6 +6,7 @@ use App\Models\MasukGrajiTriplek;
 use App\Models\SerahTerimaHp;
 use App\Models\StokTriplekMth;
 use App\Models\TriplekMthMutasiKeluar;
+use App\Services\TerimaGudangHpService;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -90,6 +91,105 @@ class GudangTriplekMth extends Page
                 ['kw_grade', 'asc'],
             ])
             ->values();
+    }
+
+    // ─── MENUNGGU DITERIMA GUDANG (hasil hotpress) ───────────────────────────
+
+    public function getMenungguTerimaProperty(): Collection
+    {
+        return SerahTerimaHp::with([
+            'triplekHasilHp.mesin',
+            'triplekHasilHp.barangSetengahJadi.jenisBarang',
+            'triplekHasilHp.barangSetengahJadi.grade',
+            'triplekHasilHp.barangSetengahJadi.ukuran',
+        ])
+            ->whereNotNull('id_triplek_hasil_hp')
+            ->where('diterima_oleh', '-')
+            ->whereNull('ditolak_oleh')
+            ->whereNull('diterima_gudang_at')
+            ->latest()
+            ->get();
+    }
+
+    // ─── MENUNGGU DITERIMA GUDANG (hasil graji triplek) ──────────────────────
+
+    public function getMenungguGrajiProperty(): Collection
+    {
+        return SerahTerimaHp::with([
+            'hasilGrajiTriplek.barangSetengahJadiHp.jenisBarang',
+            'hasilGrajiTriplek.barangSetengahJadiHp.grade',
+            'hasilGrajiTriplek.barangSetengahJadiHp.ukuran',
+        ])
+            ->whereNotNull('id_hasil_graji_triplek')
+            ->where('tujuan', 'gudang_triplek_mth')
+            ->where('diterima_oleh', '-')
+            ->whereNull('ditolak_oleh')
+            ->whereNull('diterima_gudang_at')
+            ->latest()
+            ->get();
+    }
+
+    public string $serahTerimaTab = 'aktif';
+
+    public function getRiwayatTerimaProperty(): Collection
+    {
+        return SerahTerimaHp::with([
+            'triplekHasilHp.mesin',
+            'triplekHasilHp.barangSetengahJadi.jenisBarang',
+            'triplekHasilHp.barangSetengahJadi.grade',
+            'triplekHasilHp.barangSetengahJadi.ukuran',
+            'hasilGrajiTriplek.barangSetengahJadiHp.jenisBarang',
+            'hasilGrajiTriplek.barangSetengahJadiHp.grade',
+            'hasilGrajiTriplek.barangSetengahJadiHp.ukuran',
+        ])
+            ->where(fn ($q) => $q
+                ->whereNotNull('id_triplek_hasil_hp')
+                ->orWhere(fn ($w) => $w
+                    ->whereNotNull('id_hasil_graji_triplek')
+                    ->where('tujuan', 'gudang_triplek_mth')))
+            ->whereNotNull('diterima_gudang_at')
+            ->whereNull('ditolak_oleh')
+            ->orderByDesc('diterima_gudang_at')
+            ->limit(100)
+            ->get();
+    }
+
+    public function terimaKeGudang(int $id): void
+    {
+        try {
+            app(TerimaGudangHpService::class)->terimaTriplek($id);
+
+            unset($this->menungguTerima, $this->riwayatTerima);
+
+            Notification::make()->success()
+                ->title('Stok Bertambah')
+                ->body('Barang diterima di Gudang Triplek Mentah.')
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()->danger()
+                ->title('Gagal Menerima')
+                ->body($e->getMessage())
+                ->send();
+        }
+    }
+
+    public function terimaGrajiKeGudang(int $id): void
+    {
+        try {
+            app(TerimaGudangHpService::class)->terimaGraji($id);
+
+            unset($this->menungguGraji, $this->riwayatTerima);
+
+            Notification::make()->success()
+                ->title('Stok Bertambah')
+                ->body('Hasil Graji diterima di Gudang Triplek Mentah.')
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()->danger()
+                ->title('Gagal Menerima')
+                ->body($e->getMessage())
+                ->send();
+        }
     }
 
     // ─── BARANG KELUAR ────────────────────────────────────────────────────────
