@@ -229,7 +229,7 @@ class BahanHotPressForm
             ]);
     }
 
-    protected static function getPaletOptions(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
+    public static function getPaletOptions(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
     {
         $currentId = $record?->sumber === 'veneer' ? $record?->id_mutasi_keluar_palet : null;
         $currentIsi = (float) ($record?->isi ?? 0);
@@ -274,7 +274,7 @@ class BahanHotPressForm
             ->toArray();
     }
 
-    protected static function getPlatformOptions(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
+    public static function getPlatformOptions(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
     {
         $currentId = $record?->sumber === 'platform' ? $record?->id_mutasi_keluar_platform : null;
         $currentIsi = (float) ($record?->isi ?? 0);
@@ -319,7 +319,7 @@ class BahanHotPressForm
             ->toArray();
     }
 
-    protected static function getTriplekOptions(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
+    public static function getTriplekOptions(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
     {
         $currentId = $record?->sumber === 'triplek' ? $record?->id_mutasi_keluar_triplek : null;
         $currentIsi = (float) ($record?->isi ?? 0);
