@@ -28,7 +28,7 @@
             @endforeach
         </select>
 
-        <input wire:model.live="filterKw" placeholder="Filter KW (1,2,3...)"
+        <input wire:model.live.debounce.400ms="filterKw" placeholder="Cari kayu/ukuran/KW"
             class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500 w-36" />
 
         <span class="ml-auto text-[10px] font-black uppercase tracking-widest text-gray-400">{{ $this->logs->count() }} entri log</span>
