@@ -33,6 +33,7 @@ class HasilGrajiTripleksTable
         if ($record->serahTerimaHp) {
             $tujuan = match ($record->serahTerimaHp->tujuan) {
                 'gudang' => 'Gudang',
+                'gudang_triplek_mth' => 'Gudang Triplek Mentah',
                 'sanding' => 'Sanding',
                 default => '-',
             };
@@ -228,10 +229,10 @@ class HasilGrajiTripleksTable
                         Radio::make('tujuan')
                             ->label('Diterima Di Mana')
                             ->options([
-                                'sanding' => 'Sanding',
-                                'gudang' => 'Gudang',
+                                'gudang_triplek_mth' => 'Gudang Triplek Mentah',
+                                'gudang_triplek_jadi' => 'Gudang Triplek Jadi',
                             ])
-                            ->default('sanding')
+                            ->default('gudang_triplek_mth')
                             ->required()
                             ->inline(false)
                             ->extraFieldWrapperAttributes(['class' => 'flex flex-col gap-2']),
@@ -239,9 +240,9 @@ class HasilGrajiTripleksTable
                     ->action(function (HasilGrajiTriplek $record, array $data) {
                         try {
                             DB::transaction(function () use ($record, $data) {
-                                if ($data['tujuan'] === 'gudang') {
-                                    // Gudang: hanya catat serah terima, stok BELUM ditambah.
-                                    // Stok baru ditambahkan nanti saat proses "Terima" (menyusul).
+                                if ($data['tujuan'] === 'gudang_triplek_jadi') {
+                                    // Gudang Triplek Jadi: catat SerahTerimaTriplekJadi,
+                                    // stok ditambah saat operator gudang menerima.
                                     SerahTerimaTriplekJadi::create([
                                         'id_hasil_graji_triplek' => $record->id,
                                         'diserahkan_oleh' => Auth::user()->name,
@@ -252,13 +253,15 @@ class HasilGrajiTripleksTable
                                     return;
                                 }
 
-                                // Sanding: tetap seperti semula, pakai SerahTerimaHp.
+                                // Gudang Triplek Mentah: buat SerahTerimaHp pending —
+                                // gudang harus terima dulu, baru stok +tambah dan
+                                // bisa dikeluarkan ke Sanding dari halaman gudang.
                                 SerahTerimaHp::create([
                                     'id_hasil_graji_triplek' => $record->id,
-                                    'tujuan' => 'sanding',
-                                    'diserahkan_oleh' => Auth::user()->name,
-                                    'diterima_oleh' => '-',
-                                    'status' => 'Serah Graji Triplek',
+                                    'tujuan'                 => 'gudang_triplek_mth',
+                                    'diserahkan_oleh'        => Auth::user()->name,
+                                    'diterima_oleh'          => '-',
+                                    'status'                 => 'Serah Graji ke Gudang Triplek Mentah',
                                 ]);
                             });
 
@@ -266,7 +269,9 @@ class HasilGrajiTripleksTable
                             $record->unsetRelation('serahTerimaTriplekJadi');
                             $record->refresh();
 
-                            $tujuanLabel = $data['tujuan'] === 'gudang' ? 'Gudang' : 'Sanding';
+                            $tujuanLabel = $data['tujuan'] === 'gudang_triplek_jadi'
+                                ? 'Gudang Triplek Jadi'
+                                : 'Gudang Triplek Mentah (menuju Sanding)';
 
                             Notification::make()
                                 ->title('Penyerahan Berhasil')
