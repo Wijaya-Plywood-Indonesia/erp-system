@@ -82,68 +82,113 @@
 
         <!-- Ringkasan Item Nota yang akan dicetak -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 class="text-lg font-bold text-gray-900 mb-4 pb-2 border-b border-gray-100">Daftar Barang (Item Nota)</h2>
-            <div class="overflow-x-auto">
-                @php
-                    $hasM3 = collect($items)->contains(fn($item) => $item->m3 !== null);
-                @endphp
-                <table class="w-full text-left border-collapse text-sm">
-                    <thead>
-                        <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold text-xs uppercase tracking-wider">
-                            <th class="py-3 px-3 w-12 text-center">No</th>
-                            <th class="py-3 px-3">Nama Barang</th>
-                            <th class="py-3 px-3 text-center w-20">Satuan</th>
-                            <th class="py-3 px-3 text-right w-20">Qty</th>
-                            @if($hasM3)
-                            <th class="py-3 px-3 text-right w-28 whitespace-nowrap">m3</th>
-                            @endif
-                            <th class="py-3 px-3 text-right w-32">Harga</th>
-                            @if($jenis === 'sales')
-                            <th class="py-3 px-3 text-right w-24">Pot/pcs</th>
-                            <th class="py-3 px-3 text-right w-24">Total Pot</th>
-                            @endif
-                            <th class="py-3 px-3 text-right w-36">Subtotal</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100">
-                        @forelse ($items as $index => $item)
-                            <tr class="hover:bg-gray-50">
-                                <td class="py-2.5 px-3 text-center text-gray-500">{{ $index + 1 }}</td>
-                                <td class="py-2.5 px-3 font-medium text-gray-900">{{ $item->nama_barang }}</td>
-                                <td class="py-2.5 px-3 text-center text-gray-600">{{ $item->satuan }}</td>
-                                <td class="py-2.5 px-3 text-right text-gray-900">{{ number_format($item->qty) }}</td>
-                                @if($hasM3)
-                                <td class="py-2.5 px-3 text-right text-gray-900 whitespace-nowrap">{{ $item->m3 !== null ? number_format($item->m3, 4, ',', '.') : '-' }}</td>
-                                @endif
-                                <td class="py-2.5 px-3 text-right text-gray-900">{{ number_format($item->harga, 0, ',', '.') }}</td>
-                                @if($jenis === 'sales')
-                                <td class="py-2.5 px-3 text-right text-gray-500">0</td>
-                                <td class="py-2.5 px-3 text-right text-gray-500">0</td>
-                                @endif
-                                <td class="py-2.5 px-3 text-right font-semibold text-gray-900">{{ number_format($item->subtotal, 0, ',', '.') }}</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                @php
-                                    $colCount = $jenis === 'sales' ? ($hasM3 ? 9 : 8) : ($hasM3 ? 7 : 6);
-                                @endphp
-                                <td colspan="{{ $colCount }}" class="py-6 text-center text-gray-400">
-                                    Tidak ada item barang pada nota ini.
-                                </td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                    <tfoot>
-                        <tr class="bg-gray-50 font-bold text-gray-900 border-t-2 border-gray-200">
-                            @php
-                                $footColCount = $jenis === 'sales' ? ($hasM3 ? 8 : 7) : ($hasM3 ? 6 : 5);
-                            @endphp
-                            <td colspan="{{ $footColCount }}" class="py-3 px-3 text-right uppercase">Total:</td>
-                            <td class="py-3 px-3 text-right text-indigo-700 text-base">{{ number_format($grandTotal, 0, ',', '.') }}</td>
-                        </tr>
-                    </tfoot>
-                </table>
+            <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-100">
+                <h2 class="text-lg font-bold text-gray-900">Daftar Barang (Item Nota)</h2>
             </div>
+            
+            @if(session('success'))
+                <div class="mb-4 bg-green-50 text-green-700 p-3 rounded-md text-sm border border-green-200">
+                    {{ session('success') }}
+                </div>
+            @endif
+
+            <form action="{{ route('nota-bk.update-items', $record) }}" method="POST">
+                @csrf
+                <div class="overflow-x-auto">
+                    @php
+                        $hasM3 = collect($items)->contains(fn($item) => $item->m3 !== null);
+                    @endphp
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold text-xs uppercase tracking-wider">
+                                <th class="py-3 px-3 w-12 text-center">No</th>
+                                <th class="py-3 px-3">Nama Barang</th>
+                                <th class="py-3 px-3 text-center w-20">Satuan</th>
+                                <th class="py-3 px-3 text-right w-20">Qty</th>
+                                @if($hasM3)
+                                <th class="py-3 px-3 text-right w-28 whitespace-nowrap">m3</th>
+                                @endif
+                                <th class="py-3 px-3 text-right w-32">Harga</th>
+                                @if($jenis === 'sales')
+                                <th class="py-3 px-3 text-right w-24">Pot/pcs</th>
+                                <th class="py-3 px-3 text-right w-24">Total Pot</th>
+                                @endif
+                                <th class="py-3 px-3 text-right w-36">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            @forelse ($items as $index => $item)
+                                <tr class="hover:bg-gray-50">
+                                    <td class="py-2.5 px-3 text-center text-gray-500">{{ $index + 1 }}</td>
+                                    <td class="py-2.5 px-3 font-medium text-gray-900">
+                                        @if(isset($item->id_detail) && $item->id_detail)
+                                            <input type="text" name="items[{{ $item->id_detail }}][nama_barang]" value="{{ $item->nama_barang }}" class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1">
+                                        @else
+                                            {{ $item->nama_barang }}
+                                        @endif
+                                    </td>
+                                    <td class="py-2.5 px-3 text-center text-gray-600">{{ $item->satuan }}</td>
+                                    <td class="py-2.5 px-3 text-right text-gray-900">{{ number_format($item->qty) }}</td>
+                                    @if($hasM3)
+                                    <td class="py-2.5 px-3 text-right text-gray-900 whitespace-nowrap">{{ $item->m3 !== null ? number_format($item->m3, 4, ',', '.') : '-' }}</td>
+                                    @endif
+                                    <td class="py-2.5 px-3 text-right text-gray-900">
+                                        @if(isset($item->id_detail) && $item->id_detail)
+                                            <input type="text" name="items[{{ $item->id_detail }}][harga]" value="{{ number_format($item->harga, 0, ',', '.') }}" class="w-full text-right border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1">
+                                        @else
+                                            {{ number_format($item->harga, 0, ',', '.') }}
+                                        @endif
+                                    </td>
+                                    @if($jenis === 'sales')
+                                    <td class="py-2.5 px-3 text-right text-gray-500">
+                                        @if(isset($item->id_detail) && $item->id_detail)
+                                            <input type="text" name="items[{{ $item->id_detail }}][potongan]" value="{{ number_format($item->potongan ?? 0, 0, ',', '.') }}" class="w-full text-right border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1">
+                                        @else
+                                            {{ number_format($item->potongan ?? 0, 0, ',', '.') }}
+                                        @endif
+                                    </td>
+                                    <td class="py-2.5 px-3 text-right text-gray-500">
+                                        {{ number_format(($item->total_pot ?? 0), 0, ',', '.') }}
+                                    </td>
+                                    @endif
+                                    <td class="py-2.5 px-3 text-right font-semibold text-gray-900">{{ number_format($item->subtotal, 0, ',', '.') }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    @php
+                                        $colCount = $jenis === 'sales' ? ($hasM3 ? 9 : 8) : ($hasM3 ? 7 : 6);
+                                    @endphp
+                                    <td colspan="{{ $colCount }}" class="py-6 text-center text-gray-400">
+                                        Tidak ada item barang pada nota ini.
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                        <tfoot>
+                            <tr class="bg-gray-50 font-bold text-gray-900 border-t-2 border-gray-200">
+                                @php
+                                    $footColCount = $jenis === 'sales' ? ($hasM3 ? 8 : 7) : ($hasM3 ? 6 : 5);
+                                @endphp
+                                <td colspan="{{ $footColCount }}" class="py-3 px-3 text-right uppercase">Total:</td>
+                                <td class="py-3 px-3 text-right text-indigo-700 text-base">{{ number_format($grandTotal, 0, ',', '.') }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                
+                <div class="mt-4 flex justify-end space-x-3">
+                    <button type="button" onclick="if(confirm('Apakah Anda yakin ingin mengembalikan semua data nama & harga ke nilai default?')) { document.getElementById('resetForm').submit(); }" class="bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 font-medium py-2 px-4 rounded-md shadow-sm text-sm transition duration-150 ease-in-out">
+                        Reset ke Default
+                    </button>
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md shadow-sm text-sm transition duration-150 ease-in-out">
+                        Simpan Perubahan
+                    </button>
+                </div>
+            </form>
+            
+            <form id="resetForm" action="{{ route('nota-bk.reset-items', $record) }}" method="POST" class="hidden">
+                @csrf
+            </form>
         </div>
     </div>
 
