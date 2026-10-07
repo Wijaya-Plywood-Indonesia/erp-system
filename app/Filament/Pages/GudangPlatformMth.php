@@ -6,6 +6,7 @@ use App\Models\ModalSanding;
 use App\Models\PlatformMthMutasiKeluar;
 use App\Models\SerahTerimaHp;
 use App\Models\StokPlatformMth;
+use App\Services\TerimaGudangHpService;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -84,6 +85,61 @@ class GudangPlatformMth extends Page
                 ['kw_grade', 'asc'],
             ])
             ->values();
+    }
+
+    // ─── MENUNGGU DITERIMA GUDANG (hasil hotpress) ───────────────────────────
+
+    public function getMenungguTerimaProperty(): Collection
+    {
+        return SerahTerimaHp::with([
+            'platformHasilHp.mesin',
+            'platformHasilHp.barangSetengahJadi.jenisBarang',
+            'platformHasilHp.barangSetengahJadi.grade',
+            'platformHasilHp.barangSetengahJadi.ukuran',
+        ])
+            ->whereNotNull('id_platform_hasil_hp')
+            ->where('diterima_oleh', '-')
+            ->whereNull('ditolak_oleh')
+            ->whereNull('diterima_gudang_at')
+            ->latest()
+            ->get();
+    }
+
+    public string $serahTerimaTab = 'aktif';
+
+    public function getRiwayatTerimaProperty(): Collection
+    {
+        return SerahTerimaHp::with([
+            'platformHasilHp.mesin',
+            'platformHasilHp.barangSetengahJadi.jenisBarang',
+            'platformHasilHp.barangSetengahJadi.grade',
+            'platformHasilHp.barangSetengahJadi.ukuran',
+        ])
+            ->whereNotNull('id_platform_hasil_hp')
+            ->whereNotNull('diterima_gudang_at')
+            ->whereNull('ditolak_oleh')
+            ->orderByDesc('diterima_gudang_at')
+            ->limit(100)
+            ->get();
+    }
+
+    public function terimaKeGudang(int $id): void
+    {
+        try {
+            app(TerimaGudangHpService::class)->terimaPlatform($id);
+
+            unset($this->menungguTerima, $this->riwayatTerima);
+
+            Notification::make()->success()
+                ->title('Stok Bertambah')
+                ->body('Barang diterima di Gudang Platform Mentah.')
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()->danger()
+                ->title('Gagal Menerima')
+                ->body($e->getMessage())
+                ->send();
+        }
     }
 
     // ─── BARANG KELUAR ────────────────────────────────────────────────────────

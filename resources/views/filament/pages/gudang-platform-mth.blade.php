@@ -1,6 +1,8 @@
 {{-- resources/views/filament/pages/gudang-platform-mth.blade.php --}}
 <x-filament-panels::page>
 
+    @include('filament.pages.partials.serah-terima-hotpress')
+
     {{-- ══════════════════════════════════════════════════════════════════════
          BARANG KELUAR (menuju Produksi Sanding)
     ═══════════════════════════════════════════════════════════════════════ --}}
