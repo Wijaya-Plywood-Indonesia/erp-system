@@ -40,21 +40,42 @@ class RepairDataMap
         return $kerjaKotor - $potonganIstirahat;
     }
 
+    /**
+     * KETERANGAN LABEL (tampilan saja, TIDAK mengubah nominal potongan):
+     * Tentukan status kerja seseorang berdasarkan jumlah pekerja di SETIAP
+     * baris/ukuran yang ia kerjakan.
+     * - Semua baris berisi PAS 2 orang -> "Tim (2 org)"
+     * - Ada baris yang jumlahnya BUKAN 2 (1 orang sendirian, atau 3+ orang)
+     *   -> "Individu"
+     */
+    private static function tentukanStatusKerja(array $jumlahPekerjaPerBaris): string
+    {
+        if (empty($jumlahPekerjaPerBaris)) {
+            return '-';
+        }
+
+        $semuaTim2 = true;
+        foreach ($jumlahPekerjaPerBaris as $n) {
+            if ($n !== 2) {
+                $semuaTim2 = false;
+                break;
+            }
+        }
+
+        return $semuaTim2 ? 'Tim (2 org)' : 'Individu';
+    }
+
     public static function make($collection): array
     {
         $action = new HitungPotonganProduksiAction;
         $targetCache = [];
 
-        // Kunci cache HARUS mencakup id_ukuran + id_jenis_kayu + grade(kw) sekaligus.
-        // Sebelumnya cache cuma pakai id_ukuran saja, jadi satu ukuran yang punya
-        // beberapa baris target (beda jenis kayu / beda KW) bisa saling "menimpa"
-        // hasil resolve satu sama lain.
         $resolveTarget = function (?int $idUkuran, ?int $idJenisKayu, ?string $grade) use ($action, &$targetCache) {
             if (! $idUkuran) {
                 return null;
             }
 
-            $cacheKey = $idUkuran.'|'.($idJenisKayu ?? '0').'|'.($grade ?? '');
+            $cacheKey = $idUkuran . '|' . ($idJenisKayu ?? '0') . '|' . ($grade ?? '');
 
             if (! array_key_exists($cacheKey, $targetCache)) {
                 $targetCache[$cacheKey] = $action->resolveTargetDanRate(
@@ -85,14 +106,12 @@ class RepairDataMap
 
                 if ($ukuranModel && $jenisKayuModel) {
                     $kwSuffix = in_array(strtolower((string) $kw), ['afs', 'afm']) ? $kw : '';
-                    $kodeUkuran = 'REPAIR '.$ukuranModel->panjang.$ukuranModel->lebar.
-                        str_replace('.', ',', $ukuranModel->tebal).$kwSuffix;
+                    $kodeUkuran = 'REPAIR ' . $ukuranModel->panjang . $ukuranModel->lebar .
+                        str_replace('.', ',', $ukuranModel->tebal) . $kwSuffix;
                 } else {
                     $kodeUkuran = 'REPAIR-NOT-FOUND';
                 }
 
-                // Kolom `grade` di tabel targets bertipe varchar — cast eksplisit
-                // supaya perbandingan di query resolver konsisten (mis. "3" bukan 3).
                 $idJenisKayuBaris = $jenisKayuModel->id ?? null;
                 $gradeBaris = $kw !== null ? strtolower((string) $kw) : null;
 
@@ -115,20 +134,14 @@ class RepairDataMap
                 $biayaPerUnit = $rateInfo ? (float) $rateInfo['target']->potongan : 0;
                 $orangNormal = $rateInfo ? (int) $rateInfo['target']->orang : 0;
 
-                // Target PER-KEPALA sesuai desain tabel target (kolom "Tgt/Org").
-                // Nilai ini TETAP, tidak peduli berapa orang yang aktual kerja hari ini.
                 $targetPerOrang = $orangNormal > 0 ? $targetBaris / $orangNormal : $targetBaris;
 
-                $pekerjaBaris = $detail->rencanaPegawais->filter(fn ($rp) => $rp->pegawai);
+                $pekerjaBaris = $detail->rencanaPegawais->filter(fn($rp) => $rp->pegawai);
                 $jumlahPekerjaBaris = $pekerjaBaris->count();
                 // Hasil baris ini dibagi rata ke pegawai yg tercatat DI BARIS INI SAJA —
                 // bukan diasumsikan seluruh meja mengerjakan baris ini bersama.
                 $hasilIndividuBaris = $jumlahPekerjaBaris > 0 ? ($jumlahHasil / $jumlahPekerjaBaris) : 0;
 
-                // --- Penyesuaian JAM: rata-rata jam bersih tim vs jam normal ---
-                // Tim dianggap kerja bersama; kalau ada yang pulang lebih awal,
-                // target tim ikut turun mengikuti rata-rata jam bersih semua
-                // pekerja di baris ini — BUKAN dihitung per orang secara terpisah.
                 $menitNormal = $rateInfo ? ((float) $rateInfo['target']->jam) * 60 : 0;
 
                 $daftarMenitBersih = $pekerjaBaris
@@ -138,31 +151,22 @@ class RepairDataMap
 
                         return self::hitungMenitBersih($masuk, $pulang);
                     })
-                    ->filter(fn ($menit) => $menit !== null); // abaikan yg datanya kosong
+                    ->filter(fn($menit) => $menit !== null);
 
                 $rataMenitBersihBaris = $daftarMenitBersih->count() > 0
                     ? $daftarMenitBersih->avg()
                     : null;
 
-                // Kalau tidak ada data jam sama sekali, anggap normal (rasio = 1,
-                // tidak mengubah target) daripada memaksa target jadi 0.
                 $rasioJam = ($menitNormal > 0 && $rataMenitBersihBaris !== null)
                     ? ($rataMenitBersihBaris / $menitNormal)
                     : 1.0;
 
-                // Target PER-KEPALA, sudah dikoreksi rata-rata jam kerja tim.
                 $targetPerOrangJamAdjusted = $targetPerOrang * $rasioJam;
 
-                // Target BARIS (untuk tampilan) disesuaikan proporsional terhadap
-                // jumlah pekerja AKTUAL vs jumlah pekerja NORMAL di tabel target,
-                // DAN terhadap rata-rata jam kerja aktual tim vs jam normal.
-                // - Semua aktual == normal  -> target TETAP (tidak berubah).
-                // - Ada yang beda (orang atau jam)  -> target ikut menyesuaikan.
                 $targetEfektifBaris = ($orangNormal > 0 && $jumlahPekerjaBaris > 0)
                     ? $targetPerOrangJamAdjusted * $jumlahPekerjaBaris
                     : $targetBaris;
 
-                // --- kumpulan untuk tampilan (per meja) ---
                 if (! isset($mejaGrup[$nomorMeja])) {
                     $mejaGrup[$nomorMeja] = [
                         'nomor_meja' => $nomorMeja,
@@ -171,7 +175,14 @@ class RepairDataMap
                         'keterangan_kerja' => $kendalaHariIni,
                         'items' => [],
                         'pekerja_ids' => [],
+                        'status_pekerja' => [],
+                        'jam_bersih_semua' => [], // menit bersih semua pekerja/baris di meja ini
                     ];
+                }
+
+                // Kumpulkan menit bersih baris ini ke akumulator meja (utk rata-rata jam kerja meja)
+                foreach ($daftarMenitBersih as $menit) {
+                    $mejaGrup[$nomorMeja]['jam_bersih_semua'][] = $menit;
                 }
 
                 $capaianBaris = $targetEfektifBaris > 0 ? ($jumlahHasil / $targetEfektifBaris) * 100 : null;
@@ -185,14 +196,15 @@ class RepairDataMap
                     'selisih' => $jumlahHasil - $targetEfektifBaris,
                     'capaian_persen' => $capaianBaris,
                     'has_target' => $rateInfo !== null,
+                    'jumlah_pekerja' => $jumlahPekerjaBaris,
                 ];
 
-                // --- kumpulan untuk LOGIKA (per individu, lintas baris/meja) ---
                 foreach ($pekerjaBaris as $rp) {
                     $kodePegawai = $rp->pegawai->kode_pegawai ?? '-';
                     $idKey = $rp->id_pegawai ?? $rp->pegawai->id;
 
                     $mejaGrup[$nomorMeja]['pekerja_ids'][$kodePegawai] = $idKey;
+                    $mejaGrup[$nomorMeja]['status_pekerja'][$idKey][] = $jumlahPekerjaBaris;
 
                     if (! isset($porPegawai[$idKey])) {
                         $porPegawai[$idKey] = [
@@ -209,10 +221,6 @@ class RepairDataMap
                     }
 
                     if ($rateInfo) {
-                        // Capaian individu dibandingkan ke target PER-ORANG yang sudah
-                        // dikoreksi rata-rata jam kerja tim (targetPerOrangJamAdjusted) —
-                        // bukan target baris mentah, dan bukan target per-orang yang
-                        // masih mengasumsikan semua orang kerja jam normal penuh.
                         $capaianIndividu = $targetPerOrangJamAdjusted > 0
                             ? ($hasilIndividuBaris / $targetPerOrangJamAdjusted) * 100
                             : 100.0;
@@ -226,7 +234,6 @@ class RepairDataMap
             }
         }
 
-        // Hitung capaian global & potongan PER INDIVIDU (jumlah-persen, gaya PotSiku)
         $potonganPerIndividu = [];
         foreach ($porPegawai as $idKey => $data) {
             if ($data['jumlahUkuranAda'] === 0) {
@@ -240,11 +247,10 @@ class RepairDataMap
             $potonganPerIndividu[$idKey] = round(($kekuranganPersen * $nilaiSatuHariPenuh) / 500) * 500;
         }
 
-        // Susun output per meja (TAMPILAN tidak berubah), pot_target diambil per individu
         $result = [];
         foreach ($mejaGrup as $nomorMeja => $m) {
             $totalHasilMeja = array_sum(array_column($m['items'], 'hasil'));
-            
+
             $capaianTotalMeja = 0;
             $hasValidCapaian = false;
             foreach ($m['items'] as $item) {
@@ -267,12 +273,21 @@ class RepairDataMap
                 $totalSelisih = $totalHasilMeja - $totalTargetMeja;
             }
 
+            // Rata-rata jam bersih (menit -> jam) dari semua pekerja/baris di meja ini,
+            // setara "jam_aktual" pada laporan press dryer.
+            $jamBersihList = collect($m['jam_bersih_semua'] ?? []);
+            $jamKerjaMeja = $jamBersihList->count() > 0 ? $jamBersihList->avg() / 60 : 0;
+
             $pekerjaList = [];
             foreach ($m['pekerja_ids'] as $kodePegawai => $idKey) {
                 $src = $porPegawai[$idKey] ?? null;
                 if (! $src) {
                     continue;
                 }
+
+                $jumlahPerBarisOrangIni = $m['status_pekerja'][$idKey] ?? [];
+                $statusKerja = self::tentukanStatusKerja($jumlahPerBarisOrangIni);
+
                 $pekerjaList[] = [
                     'id' => $kodePegawai,
                     'nama' => $src['nama'],
@@ -280,9 +295,8 @@ class RepairDataMap
                     'jam_pulang' => $src['jam_pulang'],
                     'ijin' => $src['ijin'],
                     'keterangan' => $src['keterangan'],
-                    // Potongan sekarang PER ORANG, dari capaian individunya sendiri —
-                    // bukan lagi dibagi rata dari total denda meja.
                     'pot_target' => $potonganPerIndividu[$idKey] ?? 0,
+                    'status_kerja' => $statusKerja,
                 ];
             }
 
@@ -296,7 +310,8 @@ class RepairDataMap
                 'total_target' => $totalTargetMeja,
                 'total_hasil' => $totalHasilMeja,
                 'total_selisih' => $totalSelisih,
-                'capaian_total' => $capaianTotalMeja, // tetap ditampilkan sebagai info rasio-meja
+                'capaian_total' => $capaianTotalMeja,
+                'jam_kerja' => $jamKerjaMeja, // <-- baru: rata-rata jam bersih tim, setara jam_aktual press dryer
                 'keterangan_hasil' => $m['keterangan_hasil'],
                 'keterangan_kerja' => $m['keterangan_kerja'],
                 'kode_ukuran' => $firstItem['kode_ukuran'] ?? '-',
@@ -311,7 +326,7 @@ class RepairDataMap
             ];
         }
 
-        usort($result, fn ($a, $b) => strnatcmp((string) $a['nomor_meja'], (string) $b['nomor_meja']));
+        usort($result, fn($a, $b) => strnatcmp((string) $a['nomor_meja'], (string) $b['nomor_meja']));
 
         return $result;
     }

@@ -29,11 +29,14 @@ class SerahTerimaHp extends Model
         'ditolak_oleh',
         'alasan_tolak',
         'ditolak_at',
+        'diterima_gudang_at',
+        'diterima_gudang_oleh',
     ];
 
     // 🆕 Supaya nilainya selalu float saat dibaca, bukan string.
     protected $casts = [
         'jumlah_dikembalikan' => 'decimal:2',
+        'diterima_gudang_at' => 'datetime',
     ];
 
     // ─────────────────────────────────────────────

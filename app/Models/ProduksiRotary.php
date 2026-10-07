@@ -84,6 +84,11 @@ class ProduksiRotary extends Model
         return $this->hasMany(BahanPenolongRotary::class, 'id_produksi');
     }
 
+    public function hasilLogCores()
+    {
+        return $this->hasMany(HasilLogCore::class, 'produksi_rotary_id');
+    }
+
     public function riwayatKayu(): HasMany
     {
         return $this->hasMany(RiwayatKayu::class, 'id_rotary');

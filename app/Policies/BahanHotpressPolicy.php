@@ -14,57 +14,57 @@ class BahanHotpressPolicy
     
     public function viewAny(AuthUser $authUser): bool
     {
-        return $authUser->can('ViewAny:BahanHotPress');
+        return $authUser->can('ViewAny:BahanHotpress');
     }
 
     public function view(AuthUser $authUser, BahanHotpress $bahanHotpress): bool
     {
-        return $authUser->can('View:BahanHotPress');
+        return $authUser->can('View:BahanHotpress');
     }
 
     public function create(AuthUser $authUser): bool
     {
-        return $authUser->can('Create:BahanHotPress');
+        return $authUser->can('Create:BahanHotpress');
     }
 
     public function update(AuthUser $authUser, BahanHotpress $bahanHotpress): bool
     {
-        return $authUser->can('Update:BahanHotPress');
+        return $authUser->can('Update:BahanHotpress');
     }
 
     public function delete(AuthUser $authUser, BahanHotpress $bahanHotpress): bool
     {
-        return $authUser->can('Delete:BahanHotPress');
+        return $authUser->can('Delete:BahanHotpress');
     }
 
     public function restore(AuthUser $authUser, BahanHotpress $bahanHotpress): bool
     {
-        return $authUser->can('Restore:BahanHotPress');
+        return $authUser->can('Restore:BahanHotpress');
     }
 
     public function forceDelete(AuthUser $authUser, BahanHotpress $bahanHotpress): bool
     {
-        return $authUser->can('ForceDelete:BahanHotPress');
+        return $authUser->can('ForceDelete:BahanHotpress');
     }
 
     public function forceDeleteAny(AuthUser $authUser): bool
     {
-        return $authUser->can('ForceDeleteAny:BahanHotPress');
+        return $authUser->can('ForceDeleteAny:BahanHotpress');
     }
 
     public function restoreAny(AuthUser $authUser): bool
     {
-        return $authUser->can('RestoreAny:BahanHotPress');
+        return $authUser->can('RestoreAny:BahanHotpress');
     }
 
     public function replicate(AuthUser $authUser, BahanHotpress $bahanHotpress): bool
     {
-        return $authUser->can('Replicate:BahanHotPress');
+        return $authUser->can('Replicate:BahanHotpress');
     }
 
     public function reorder(AuthUser $authUser): bool
     {
-        return $authUser->can('Reorder:BahanHotPress');
+        return $authUser->can('Reorder:BahanHotpress');
     }
 
 }
