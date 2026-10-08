@@ -14,7 +14,7 @@ class BahanHotpressPolicy
     
     public function viewAny(AuthUser $authUser): bool
     {
-        return $authUser->can('ViewAny:BahanHotpress');
+        return $authUser->can('ViewAny:BahanHotPress');
     }
 
     public function view(AuthUser $authUser, BahanHotpress $bahanHotpress): bool
