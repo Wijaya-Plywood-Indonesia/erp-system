@@ -63,6 +63,13 @@ class AdminPanelProvider extends PanelProvider
             'background'         => $data['background'],
             'logo_height'        => $data['login_logo_height'],
             'logo_height_mobile' => $data['login_logo_height_mobile'],
+            'overlay_start'      => $data['overlay_start'],
+            'overlay_end'        => $data['overlay_end'],
+            'card_bg'            => $data['card_bg'],
+            'card_bg_mobile'     => $data['card_bg_mobile'],
+            'card_blur'          => $data['card_blur'],
+            'card_saturate'      => $data['card_saturate'],
+            'bg_position_mobile' => $data['bg_position_mobile'],
         ];
 
         return $panel
@@ -251,6 +258,7 @@ class AdminPanelProvider extends PanelProvider
 
             // ============================================================
             // STYLE HALAMAN LOGIN (background foto + card glassmorphism)
+            // Nilai overlay / card / posisi diambil dari config/brand.php
             // ============================================================
             ->renderHook(
                 PanelsRenderHook::STYLES_AFTER,
@@ -259,7 +267,7 @@ class AdminPanelProvider extends PanelProvider
                     .fi-simple-layout {
                         background-color: #0f172a !important;
                         background-image:
-                            linear-gradient(135deg, rgba(15,23,42,0.65) 0%, rgba(15,23,42,0.25) 100%),
+                            linear-gradient(135deg, rgba(15,23,42,' . $brand['overlay_start'] . ') 0%, rgba(15,23,42,' . $brand['overlay_end'] . ') 100%),
                             url("' . asset($brand['background']) . '") !important;
                         background-size: cover !important;
                         background-position: center !important;
@@ -270,9 +278,9 @@ class AdminPanelProvider extends PanelProvider
 
                     /* ===== CARD GLASS ===== */
                     .fi-simple-main {
-                        background: rgba(15, 23, 42, 0.45) !important;
-                        -webkit-backdrop-filter: blur(22px) saturate(160%);
-                        backdrop-filter: blur(22px) saturate(160%);
+                        background: ' . $brand['card_bg'] . ' !important;
+                        -webkit-backdrop-filter: blur(' . $brand['card_blur'] . ') saturate(' . $brand['card_saturate'] . ');
+                        backdrop-filter: blur(' . $brand['card_blur'] . ') saturate(' . $brand['card_saturate'] . ');
                         border: 1px solid rgba(255, 255, 255, 0.18) !important;
                         border-radius: 1.75rem !important;
                         box-shadow:
@@ -405,10 +413,10 @@ class AdminPanelProvider extends PanelProvider
                             min-height: 100vh;
                             min-height: 100dvh;
                             background-attachment: scroll !important;
-                            /* geser sedikit supaya tumpukan kayu ikut terlihat */
-                            background-position: 62% center !important;
+                            /* bagian foto yang tampil di HP (diatur per brand) */
+                            background-position: ' . $brand['bg_position_mobile'] . ' !important;
                             background-image:
-                                linear-gradient(180deg, rgba(15,23,42,0.55) 0%, rgba(15,23,42,0.35) 100%),
+                                linear-gradient(180deg, rgba(15,23,42,' . $brand['overlay_start'] . ') 0%, rgba(15,23,42,' . $brand['overlay_end'] . ') 100%),
                                 url("' . asset($brand['background']) . '") !important;
                         }
 
@@ -426,7 +434,7 @@ class AdminPanelProvider extends PanelProvider
                             margin: 1.5rem auto !important;
                             padding: 2rem 1.5rem !important;
                             border-radius: 1.5rem !important;
-                            background: rgba(15, 23, 42, 0.58) !important;
+                            background: ' . $brand['card_bg_mobile'] . ' !important;
                         }
 
                         .login-brand-logo {
