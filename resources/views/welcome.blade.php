@@ -25,7 +25,7 @@
             color: #fff;
             background-color: #0f172a;
             background-image:
-                linear-gradient(135deg, rgba(15,23,42,.72) 0%, rgba(15,23,42,.35) 100%),
+                linear-gradient(135deg, rgba(15,23,42,{{ $b['overlay_start'] }}) 0%, rgba(15,23,42,{{ $b['overlay_end'] }}) 100%),
                 url("{{ asset($b['background']) }}");
             background-size: cover;
             background-position: center;
@@ -37,9 +37,9 @@
         .panel {
             width: 100%; max-width: 30rem; text-align: center;
             padding: 2.75rem 2.25rem;
-            background: rgba(15, 23, 42, 0.45);
-            -webkit-backdrop-filter: blur(22px) saturate(160%);
-            backdrop-filter: blur(22px) saturate(160%);
+            background: {{ $b['card_bg'] }};
+            -webkit-backdrop-filter: blur({{ $b['card_blur'] }}) saturate({{ $b['card_saturate'] }});
+            backdrop-filter: blur({{ $b['card_blur'] }}) saturate({{ $b['card_saturate'] }});
             border: 1px solid rgba(255,255,255,.18);
             border-radius: 1.75rem;
             box-shadow: 0 30px 60px -15px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.2);
@@ -74,8 +74,11 @@
         .foot { margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid rgba(255,255,255,.12); font-size: .78rem; color: rgba(255,255,255,.55); }
 
         @media (max-width: 768px) {
-            body { background-attachment: scroll; }
-            .panel { padding: 2.25rem 1.5rem; }
+            body {
+                background-attachment: scroll;
+                background-position: {{ $b['bg_position_mobile'] }};
+            }
+            .panel { padding: 2.25rem 1.5rem; background: {{ $b['card_bg_mobile'] }}; }
             h1 { font-size: 1.6rem; }
         }
     </style>
@@ -90,8 +93,9 @@
         <h1>Sistem ERP Produksi</h1>
         <p>Masuk untuk mengakses data produksi, stok, dan laporan {{ $b['company'] }}.</p>
 
+        {{-- Teks tombol selalu sama. Tujuan: sudah login -> /admin, belum -> halaman login --}}
         <a href="{{ $loggedIn ? url('/admin') : route('filament.admin.auth.login') }}" class="btn">
-            {{ $loggedIn ? 'Buka Dashboard' : 'Masuk ke Sistem' }}
+            Masuk ke Sistem
             <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         </a>
 
