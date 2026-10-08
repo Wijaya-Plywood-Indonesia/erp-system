@@ -99,12 +99,12 @@ class SerahTerimaVeneerKering extends Model
         return $this->diterima_oleh === '-';
     }
 
-    public function getSumberAttribute(): DetailHasil|DetailBongkarKedi|HasilSandingJoint|VeneerKeringMutasiKeluarPalet|VeneerJadiMutasiKeluarPalet|null
+    public function getSumberAttribute(): DetailHasil|DetailBongkarKedi|HasilJoint|HasilSandingJoint|VeneerKeringMutasiKeluarPalet|VeneerJadiMutasiKeluarPalet|null
     {
         return match ($this->tipe_sumber) {
             'dryer' => $this->detailHasil,
             'kedi' => $this->detailBongkarKedi,
-            'joint' => $this->hasilSandingJoint,
+            'joint' => $this->hasilJoint,
             'gudang' => $this->mutasiKeluarPalet,
             'gudang_jadi' => $this->mutasiKeluarPaletJadi,
             default => null,
