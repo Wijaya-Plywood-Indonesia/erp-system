@@ -11,7 +11,7 @@ use Filament\Tables\Table;
 class ValidasiHpRelationManager extends RelationManager
 {
     protected static ?string $title = 'Validasi';
-    protected static string $relationship = 'ValidasiHp';
+    protected static string $relationship = 'validasiHp';
 
     public function isReadOnly(): bool
     {
