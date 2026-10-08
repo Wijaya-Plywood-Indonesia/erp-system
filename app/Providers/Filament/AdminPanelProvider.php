@@ -8,6 +8,7 @@ use App\Filament\Pages\OpnameStokKayu;
 use App\Filament\Pages\OpnameStokPage;
 use App\Filament\Pages\LaporanJurnalKayuMasuk;
 use App\Filament\Pages\PortalWahana;
+use App\Filament\Resources\ProduksiNyusups\Widgets\RekapProduksiNyusup;
 use App\Http\Middleware\RunDailyScheduler;
 use App\Http\Middleware\RedirectToPortalForAdmins;
 use App\Livewire\AbsenWajibModal;
@@ -88,6 +89,7 @@ class AdminPanelProvider extends PanelProvider
             ->widgets([
                 // AccountWidget::class,
                 // FilamentInfoWidget::class,
+                RekapProduksiNyusup::class,
             ])
             ->middleware([
                 EncryptCookies::class,
@@ -121,7 +123,7 @@ class AdminPanelProvider extends PanelProvider
             // (logic pengecekan ada di dalam komponen AbsenWajibModal itu sendiri).
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn (): string => auth()->check()
+                fn(): string => auth()->check()
                     ? Blade::render('@livewire(\'absen-wajib-modal\')')
                     : ''
             )
