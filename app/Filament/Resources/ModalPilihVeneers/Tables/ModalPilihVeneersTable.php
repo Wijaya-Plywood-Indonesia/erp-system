@@ -9,6 +9,8 @@ use Filament\Tables\Table;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Tables\Columns\TextColumn;
+use App\Models\Ukuran;
+use App\Models\JenisKayu;
 
 class ModalPilihVeneersTable
 {
@@ -20,28 +22,46 @@ class ModalPilihVeneersTable
                     ->label('No. Palet')
                     ->searchable(),
 
-                TextColumn::make('stokVeneerJadi.jenisKayu.nama_kayu')
+                TextColumn::make('jenis_veneer')
+                    ->label('Jenis')
+                    ->badge()
+                    ->color(fn ($state) => $state === 'jadi' ? 'success' : 'warning')
+                    ->formatStateUsing(fn ($state) => $state === 'jadi' ? 'Veneer Jadi' : 'Veneer Kering'),
+
+                TextColumn::make('jenis_kayu_display')
                     ->label('Jenis Kayu')
-                    ->searchable()
+                    ->getStateUsing(function ($record) {
+                        // Veneer Jadi: ambil dari relasi stokVeneerJadi
+                        if ($record->jenis_veneer === 'jadi' || $record->id_stok_veneer_jadi) {
+                            return $record->stokVeneerJadi?->jenisKayu?->nama_kayu ?? '-';
+                        }
+
+                        // Veneer Kering: ambil dari id_jenis_kayu langsung
+                        if ($record->id_jenis_kayu) {
+                            return JenisKayu::find($record->id_jenis_kayu)?->nama_kayu ?? '-';
+                        }
+
+                        return '-';
+                    })
                     ->placeholder('-'),
 
-                // 3. UKURAN (Diambil dari kolom panjang, lebar, tebal di ModalPilihVeneer)
                 TextColumn::make('dimensi')
                     ->label('Ukuran')
                     ->getStateUsing(function ($record) {
-                        if ($record->panjang && $record->lebar && $record->tebal) {
-                            $p = floatval($record->panjang);
-                            $l = floatval($record->lebar);
-                            $t = floatval($record->tebal);
-                            return "{$p} x {$l} x {$t}";
+                        // Veneer Jadi: dimensi dari stokVeneerJadi
+                        if ($record->jenis_veneer === 'jadi' || $record->id_stok_veneer_jadi) {
+                            $stok = $record->stokVeneerJadi;
+                            if ($stok) {
+                                return floatval($stok->panjang) . ' x ' . floatval($stok->lebar) . ' x ' . floatval($stok->tebal);
+                            }
                         }
 
-                        // Fallback ke stokVeneerJadi jika nilai di record kosong
-                        if ($record->stokVeneerJadi) {
-                            $p = floatval($record->stokVeneerJadi->panjang);
-                            $l = floatval($record->stokVeneerJadi->lebar);
-                            $t = floatval($record->stokVeneerJadi->tebal);
-                            return "{$p} x {$l} x {$t}";
+                        // Veneer Kering: dimensi dari tabel ukurans via id_ukuran
+                        if ($record->id_ukuran) {
+                            $ukuran = Ukuran::find($record->id_ukuran);
+                            if ($ukuran) {
+                                return floatval($ukuran->panjang) . ' x ' . floatval($ukuran->lebar) . ' x ' . floatval($ukuran->tebal);
+                            }
                         }
 
                         return '-';
@@ -63,7 +83,16 @@ class ModalPilihVeneersTable
                     ->hidden(
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    )
+                    ->after(function (\App\Models\ModalPilihVeneer $record) {
+                        $record->hasilPilihVeneers()->create([
+                            'id_produksi_pilih_veneer' => $record->id_produksi_pilih_veneer,
+                            'jenis_veneer' => 'jadi',
+                            'kw' => null,
+                            'no_palet' => null,
+                            'jumlah' => null,
+                        ]);
+                    }),
             ])
             ->recordActions([
                 // Edit Action — HILANG jika status sudah divalidasi
