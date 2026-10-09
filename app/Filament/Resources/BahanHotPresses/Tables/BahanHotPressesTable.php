@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\BahanHotPresses\Tables;
 
+use App\Filament\Resources\BahanHotPresses\Schemas\BahanHotPressForm;
 use App\Models\BahanHotpress;
 use App\Models\PlatformJadiMutasiKeluarPalet;
 use App\Models\TriplekJadiMutasiKeluarPalet;
@@ -168,43 +169,21 @@ class BahanHotPressesTable
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     )
-                    ->schema(function ($livewire) {
-                        $ownerId = $livewire->ownerRecord?->id;
-
+                    ->schema(function () {
                         return [
                             Select::make('sumber_palet_selector')
                                 ->label('Palet Bahan')
-                                ->helperText('Hanya menampilkan palet (veneer/platform/triplek) yang sudah diambil sebagai bahan pada produksi ini dan masih menyisakan jumlah yang belum dikembalikan.')
+                                ->helperText('Menampilkan palet (veneer/platform/triplek) yang masih memiliki sisa.')
                                 ->required()
                                 ->live()
-                                ->options(function () use ($ownerId) {
-                                    if (! $ownerId) {
-                                        return [];
-                                    }
-
-                                    return BahanHotpress::query()
-                                        ->where('id_produksi_hp', $ownerId)
-                                        ->whereNotNull('sumber')
-                                        ->with([
-                                            'mutasiKeluarPalet.mutasiKeluar.jenisKayu',
-                                            'mutasiKeluarPlatform.mutasiKeluar.jenisBarang',
-                                            'mutasiKeluarTriplek.mutasiKeluar.jenisKayu',
-                                        ])
-                                        ->get()
-                                        ->unique(fn($b) => $b->sumber . ':' . self::idPaletDariBahan($b))
-                                        ->mapWithKeys(function ($bahan) {
-                                            $sumber = $bahan->sumber;
-                                            $palet = self::paletDariBahan($bahan);
-
-                                            if (! $palet || $palet->sisa <= 0) {
-                                                return [];
-                                            }
-
-                                            $label = self::labelPalet($bahan, $sumber, $palet->sisa);
-
-                                            return ["{$sumber}:{$palet->id}" => $label];
-                                        })
-                                        ->toArray();
+                                ->searchable()
+                                ->options(function () {
+                                    // Sama persis dengan dropdown "Barang Setengah Jadi"
+                                    // di tombol New Bahan Hotpress: palet yang sudah
+                                    // diterima dan masih punya sisa > 0.
+                                    return BahanHotPressForm::getPaletOptions(null)
+                                        + BahanHotPressForm::getPlatformOptions(null)
+                                        + BahanHotPressForm::getTriplekOptions(null);
                                 })
                                 ->afterStateUpdated(function ($state, callable $set) {
                                     if (! $state || ! str_contains($state, ':')) {
@@ -365,36 +344,6 @@ class BahanHotPressesTable
     }
 
     /**
-     * Ambil id palet dari sebuah baris BahanHotpress, sesuai sumbernya.
-     */
-    protected static function idPaletDariBahan(BahanHotpress $bahan): ?int
-    {
-        return match ($bahan->sumber) {
-            'veneer'   => $bahan->id_mutasi_keluar_palet,
-            'platform' => $bahan->id_mutasi_keluar_platform,
-            'triplek'  => $bahan->id_mutasi_keluar_triplek,
-            default    => null,
-        };
-    }
-
-    /**
-     * Ambil MODEL PALET (bukan cuma id) dari sebuah baris BahanHotpress,
-     * sesuai sumbernya. Dipakai supaya bisa langsung baca `->sisa`
-     * (VeneerJadiMutasiKeluarPalet / PlatformJadiMutasiKeluarPalet /
-     * TriplekJadiMutasiKeluarPalet — ketiganya punya accessor `sisa` yang
-     * sudah memperhitungkan jumlah_dikembalikan).
-     */
-    protected static function paletDariBahan(BahanHotpress $bahan): VeneerJadiMutasiKeluarPalet|PlatformJadiMutasiKeluarPalet|TriplekJadiMutasiKeluarPalet|null
-    {
-        return match ($bahan->sumber) {
-            'veneer'   => $bahan->mutasiKeluarPalet,
-            'platform' => $bahan->mutasiKeluarPlatform,
-            'triplek'  => $bahan->mutasiKeluarTriplek,
-            default    => null,
-        };
-    }
-
-    /**
      * Muat ulang model palet dari sumber + id (dipakai di afterStateUpdated,
      * setelah Select cuma mengirim "sumber:id" sebagai string).
      */
@@ -406,40 +355,5 @@ class BahanHotPressesTable
             'triplek'  => TriplekJadiMutasiKeluarPalet::find($paletId),
             default    => null,
         };
-    }
-
-    /**
-     * Label yang ditampilkan di dropdown pilihan palet, sesuai sumbernya.
-     */
-    protected static function labelPalet(BahanHotpress $bahan, string $sumber, float $sisa): string
-    {
-        if ($sumber === 'veneer') {
-            $palet = $bahan->mutasiKeluarPalet;
-            $mk = $palet?->mutasiKeluar;
-            $kayu = $mk?->jenisKayu?->nama_kayu ?? '?';
-            $kw = $mk?->kw_grade ?? '?';
-            $noPalet = $palet?->nomor_palet ?? '?';
-
-            return "Veneer | Palet {$noPalet} | {$kayu} | {$kw} | Sisa Bisa Dikembalikan {$sisa} Lbr";
-        }
-
-        if ($sumber === 'platform') {
-            $palet = $bahan->mutasiKeluarPlatform;
-            $mk = $palet?->mutasiKeluar;
-            $jenisBarang = $mk?->jenisBarang?->nama_jenis_barang ?? '?';
-            $kw = $mk?->kw_grade ?? '?';
-            $noPalet = $palet?->nomor_palet ?? '?';
-
-            return "Platform | Palet {$noPalet} | {$jenisBarang} | {$kw} | Sisa Bisa Dikembalikan {$sisa} Lbr";
-        }
-
-        // triplek
-        $palet = $bahan->mutasiKeluarTriplek;
-        $mk = $palet?->mutasiKeluar;
-        $kayu = $mk?->jenisKayu?->nama_kayu ?? '?';
-        $kw = $mk?->kw_grade ?? '?';
-        $noPalet = $palet?->nomor_palet ?? '?';
-
-        return "Triplek | Palet {$noPalet} | {$kayu} | {$kw} | Sisa Bisa Dikembalikan {$sisa} Lbr";
     }
 }
