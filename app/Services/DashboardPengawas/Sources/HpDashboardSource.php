@@ -45,7 +45,12 @@ class HpDashboardSource implements DashboardSourceInterface
     public function getSerahTerima(string $tanggal): array
     {
         // Pakai model supaya accessor getJumlahAttribute() berjalan
-        $records = SerahTerimaHp::whereDate('created_at', $tanggal)->get();
+        $records = SerahTerimaHp::whereDate('created_at', $tanggal)
+            ->where(function ($query) {
+                $query->whereNotNull('id_triplek_hasil_hp')
+                    ->orWhereNotNull('id_platform_hasil_hp');
+            })
+            ->get();
 
         return [
             'total' => $records->sum('jumlah'),

@@ -42,19 +42,19 @@
                 @if ($serahTerimaTab === 'aktif')
                 @forelse($serahTerima as $st)
                 @php
-                $sumber = $st->tipe_sumber === 'dryer' ? $st->detailHasil : $st->detailBongkarKedi;
-                $noPalet = $sumber?->no_palet ?? '-';
-                $ukuran = $sumber?->ukuran;
-                $kayu = $sumber?->jenisKayu?->nama_kayu ?? '-';
-                $kw = $sumber?->kw ?? '-';
-                $qty = $st->tipe_sumber === 'dryer' ? $sumber?->isi ?? 0 : $sumber?->jumlah ?? 0;
+                $t = $st->tampilan;
+                $noPalet = $t['no_palet'] ?? '-';
+                $dimensi = $t['dimensi'] ?? '0x0x0';
+                $kayu = $t['jenis_kayu'] ?? '-';
+                $kw = $t['kw'] ?? '-';
+                $qty = $st->qty_asli;
                 @endphp
                 <div wire:key="st-{{ $st->id }}"
                     class="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors flex-wrap">
                     <span
                         class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap shrink-0
-                                {{ $st->tipe_sumber === 'dryer' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }}">
-                        {{ $st->tipe_sumber === 'dryer' ? 'Press Dryer' : 'Kedi' }}
+                                {{ $st->tipe_sumber === 'dryer' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' : ($st->tipe_sumber === 'gudang_jadi' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400') }}">
+                        {{ $st->label_sumber }}
                     </span>
                     <span
                         class="text-[10px] font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap shrink-0">
@@ -62,7 +62,7 @@
                     </span>
                     <span
                         class="font-mono text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap shrink-0">
-                        {{ number_format((float) $ukuran?->panjang, 2) }}×{{ number_format((float) $ukuran?->lebar, 2) }}×{{ number_format((float) $ukuran?->tebal, 2) }}
+                        {{ str_replace('x', '×', $dimensi) }}
                         <span class="text-[10px] text-gray-400">mm</span>
                     </span>
                     <span
@@ -97,12 +97,12 @@
                 @else
                 @forelse($riwayatSerahTerima as $st)
                 @php
-                $sumber = $st->tipe_sumber === 'dryer' ? $st->detailHasil : $st->detailBongkarKedi;
-                $noPalet = $sumber?->no_palet ?? '-';
-                $ukuran = $sumber?->ukuran;
-                $kayu = $sumber?->jenisKayu?->nama_kayu ?? '-';
-                $kw = $sumber?->kw ?? '-';
-                $qty = $st->tipe_sumber === 'dryer' ? $sumber?->isi ?? 0 : $sumber?->jumlah ?? 0;
+                $t = $st->tampilan;
+                $noPalet = $t['no_palet'] ?? '-';
+                $dimensi = $t['dimensi'] ?? '0x0x0';
+                $kayu = $t['jenis_kayu'] ?? '-';
+                $kw = $t['kw'] ?? '-';
+                $qty = $st->qty_asli;
                 $diterimaOleh = trim(explode(' - ', $st->diterima_oleh ?? '-')[0]);
                 @endphp
                 <div wire:key="rst-{{ $st->id }}"
@@ -110,8 +110,8 @@
                     <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
                         <span
                             class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap shrink-0
-                                    {{ $st->tipe_sumber === 'dryer' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }}">
-                            {{ $st->tipe_sumber === 'dryer' ? 'Press Dryer' : 'Kedi' }}
+                                    {{ $st->tipe_sumber === 'dryer' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' : ($st->tipe_sumber === 'gudang_jadi' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400') }}">
+                            {{ $st->label_sumber }}
                         </span>
                         <span
                             class="text-[10px] font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap shrink-0">
@@ -119,7 +119,7 @@
                         </span>
                         <span
                             class="font-mono text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap shrink-0">
-                            {{ number_format((float) $ukuran?->panjang, 2) }}×{{ number_format((float) $ukuran?->lebar, 2) }}×{{ number_format((float) $ukuran?->tebal, 2) }}
+                            {{ str_replace('x', '×', $dimensi) }}
                             <span class="text-[10px] text-gray-400">mm</span>
                         </span>
                         <span
@@ -418,15 +418,18 @@
         </div>
         @endif
 
-        {{-- 3. TUJUAN KELUAR (tetap: Repair) --}}
+        {{-- 3. TUJUAN KELUAR --}}
         <div class="space-y-1.5">
             <label
                 class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">Tujuan
                 Keluar</label>
-            <div
-                class="w-full text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-sm bg-gray-50 dark:bg-gray-950/50 text-gray-900 dark:text-gray-100 font-bold">
-                Repair
-            </div>
+            <select wire:model="tujuanKeluar" required
+                class="w-full text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:border-amber-500 focus:outline-none">
+                <option value="">-- Pilih Tujuan --</option>
+                @foreach($daftarTujuanKeluar as $tujuan)
+                    <option value="{{ $tujuan }}">{{ $tujuan }}</option>
+                @endforeach
+            </select>
         </div>
 
         {{-- 4. KETERANGAN --}}

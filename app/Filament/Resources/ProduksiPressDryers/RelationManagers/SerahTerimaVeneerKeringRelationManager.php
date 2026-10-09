@@ -245,7 +245,10 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                         $qq->where('tujuan', $tipe);
 
                         if ($tipe === 'repair') {
-                            $qq->orWhere('tipe_sumber', 'gudang');
+                            $qq->orWhere(function ($q2) {
+                                $q2->where('tipe_sumber', 'gudang')
+                                   ->whereNull('tujuan');
+                            });
                         }
                     });
 
