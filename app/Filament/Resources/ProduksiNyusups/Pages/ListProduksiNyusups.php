@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ProduksiNyusups\Pages;
 
 use App\Filament\Resources\ProduksiNyusups\ProduksiNyusupResource;
+use App\Filament\Resources\ProduksiNyusups\Widgets\RekapProduksiNyusup;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -14,6 +15,13 @@ class ListProduksiNyusups extends ListRecords
     {
         return [
             CreateAction::make(),
+        ];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            RekapProduksiNyusup::class,
         ];
     }
 }
