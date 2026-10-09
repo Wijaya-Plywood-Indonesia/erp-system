@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ProduksiKedis\Pages;
 
 use App\Filament\Resources\ProduksiKedis\ProduksiKediResource;
+use App\Filament\Resources\ProduksiKedis\Widgets\RekapProduksiKedi;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -23,13 +24,18 @@ class ListProduksiKedis extends ListRecords
         return [
             'semua' => Tab::make('Semua Data'),
             'masuk' => Tab::make('Masuk')
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'masuk'))
+                ->modifyQueryUsing(fn(Builder $query) => $query->where('status', 'masuk'))
                 ->icon('heroicon-m-arrow-down-left')
                 ->badge(fn() => $this->getModel()::where('status', 'masuk')->count()),
             'bongkar' => Tab::make('Bongkar')
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'bongkar'))
+                ->modifyQueryUsing(fn(Builder $query) => $query->where('status', 'bongkar'))
                 ->icon('heroicon-m-arrow-up-right')
                 ->badge(fn() => $this->getModel()::where('status', 'bongkar')->count()),
         ];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [RekapProduksiKedi::class];
     }
 }
