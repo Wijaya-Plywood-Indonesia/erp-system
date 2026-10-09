@@ -65,8 +65,22 @@ class PilihVeneerDataMap
                 }
                 $ukId = $m->id_ukuran;
                 $jkId = $m->id_jenis_kayu;
+
+                if ($m->id_stok_veneer_jadi && $m->stokVeneerJadi) {
+                    $stok = $m->stokVeneerJadi;
+                    $jkId = $stok->id_jenis_kayu;
+                    $matchUkuran = \App\Models\Ukuran::where('panjang', floatval($stok->panjang))
+                        ->where('lebar', floatval($stok->lebar))
+                        ->where(function($q) use ($stok) {
+                            $q->where('tebal', floatval($stok->tebal))
+                              ->orWhereNull('tebal');
+                        })
+                        ->first();
+                    $ukId = $matchUkuran?->id;
+                }
+
                 $kwRaw = $hasil->kw ?? '1';
-                $keyH = $ukId.'-'.$jkId.'-'.$kwRaw;
+                $keyH = ($ukId ?? 'null').'-'.($jkId ?? 'null').'-'.$kwRaw;
                 if (! isset($groupedHasil[$keyH])) {
                     $groupedHasil[$keyH] = [
                         'id_ukuran' => $ukId,
@@ -95,6 +109,10 @@ class PilihVeneerDataMap
             $resolver = TargetResolverFactory::make(Mesin::PilihVeneer);
 
             foreach ($groupedHasil as $keyH => $gh) {
+                if (! $gh['id_ukuran']) {
+                    continue;
+                }
+
                 $targetModel = $resolver->resolve(Mesin::PilihVeneer->value, $gh['id_ukuran'], $gh['id_jenis_kayu'], (string) $gh['kw']);
                 if (! $targetModel) {
                     continue;

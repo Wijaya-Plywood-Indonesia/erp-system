@@ -350,6 +350,17 @@ class GudangVeneerKering extends Page
             ->get();
     }
 
+    public function getHasilPilihVeneerProperty(): Collection
+    {
+        return \App\Models\HasilPilihVeneer::query()
+            ->with(['modalPilihVeneer.stokVeneerJadi.jenisKayu', 'modalPilihVeneer.jenisKayu', 'modalPilihVeneer.ukuran'])
+            ->where('jenis_veneer', 'kering')
+            ->whereNotNull('diserahkan_at')
+            ->whereNull('diterima_gudang_at')
+            ->orderBy('diserahkan_at')
+            ->get();
+    }
+
     /**
      * Riwayat veneer dari Dryer/Kedi yang SUDAH diterima ke Gudang Veneer
      * Kering (untuk tab "History" — supaya bisa dilihat kapan diterimanya).
@@ -381,6 +392,17 @@ class GudangVeneerKering extends Page
      * Kering. Selalu diterima sebagai "kering" (bukan "jadi"), karena memang
      * ini alur masuk ke Gudang Veneer Kering.
      */
+    public function getRiwayatHasilPilihVeneerProperty(): Collection
+    {
+        return \App\Models\HasilPilihVeneer::query()
+            ->with(['modalPilihVeneer.stokVeneerJadi.jenisKayu', 'modalPilihVeneer.jenisKayu', 'modalPilihVeneer.ukuran'])
+            ->where('jenis_veneer', 'kering')
+            ->whereNotNull('diserahkan_at')
+            ->whereNotNull('diterima_gudang_at')
+            ->orderByDesc('diterima_gudang_at')
+            ->get();
+    }
+
     public function terimaDryer(int $id): void
     {
         try {
@@ -416,6 +438,32 @@ class GudangVeneerKering extends Page
         } catch (\Throwable $e) {
             Notification::make()
                 ->title('Gagal Menerima Veneer')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function terimaHasilPilihVeneer(int $id): void
+    {
+        try {
+            $hasil = \App\Models\HasilPilihVeneer::findOrFail($id);
+            if ($hasil->diterima_gudang_at !== null) {
+                throw new \RuntimeException('Hasil Pilih Veneer ini sudah diterima sebelumnya.');
+            }
+
+            $hasil->update([
+                'diterima_gudang_at' => now(),
+                'diterima_gudang_by' => auth()->id(),
+            ]);
+
+            Notification::make()
+                ->title('Veneer kering dari Pilih Veneer berhasil diterima ke Gudang.')
+                ->success()
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Gagal Menerima Hasil Pilih Veneer')
                 ->body($e->getMessage())
                 ->danger()
                 ->send();

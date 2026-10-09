@@ -13,6 +13,7 @@ class HasilPilihVeneer extends Model
     protected $fillable = [
         'id_produksi_pilih_veneer',
         'id_modal_pilih_veneer',
+        'jenis_veneer',
         'kw',
         'no_palet',
         'jumlah',
@@ -76,170 +77,186 @@ class HasilPilihVeneer extends Model
         });
     }
 
-    // Untuk Mutasi Veneer Jadi Dari Hasil Pilih Veneer ke Gudang Veneer Jadi, kita perlu menghitung sisa yang belum diterima di gudang.
     protected static function mutasiStokSaatDiterima(self $model): void
     {
         DB::transaction(function () use ($model) {
-            $modal = $model->modalPilihVeneer()->with('stokVeneerJadi')->lockForUpdate()->first();
-            $stokAsal = $modal?->stokVeneerJadi;
-
-            if (! $stokAsal) {
-                throw new \RuntimeException('Data stok asal modal tidak ditemukan, mutasi stok dibatalkan.');
+            $modal = $model->modalPilihVeneer()->first();
+            if (!$modal) {
+                throw new \RuntimeException('Modal pilih veneer tidak ditemukan.');
             }
 
-            $kwHasil = (string) $model->kw;
-            $kwAsal = (string) $stokAsal->kw_grade;
+            $jenisVeneerAsal = $modal->id_stok_veneer_jadi ? 'jadi' : 'kering';
+            $jenisVeneerHasil = $model->jenis_veneer ?? 'jadi';
+            
             $jumlah = (float) $model->jumlah;
-
-            // KW tidak berubah -> tidak ada apa-apa yang perlu dimutasi.
-            if ($kwHasil === $kwAsal) {
-                return;
-            }
-
             $userName = auth()->user()?->name ?? 'System';
+            $kwHasil = (string) $model->kw;
 
-            // Kunci ulang baris stok asal (row yang sama dengan $stokAsal,
-            // tapi dengan lock, supaya aman dari transaksi lain).
-            $stokLama = StokVeneerJadi::where('id', $stokAsal->id)->lockForUpdate()->first();
-
-            if (! $stokLama || $stokLama->stok_lembar < $jumlah) {
-                throw new \RuntimeException('Stok asal tidak mencukupi untuk mutasi turun/naik KW.');
+            // AMBIL DATA ASAL UNTUK MENDAPATKAN UKURAN DAN JENIS KAYU
+            if ($jenisVeneerAsal === 'jadi') {
+                $stokAsalJadi = StokVeneerJadi::where('id', $modal->id_stok_veneer_jadi)->first();
+                if (!$stokAsalJadi) {
+                    throw new \RuntimeException('Stok Veneer Jadi asal tidak ditemukan.');
+                }
+                
+                $idJenisKayu = $stokAsalJadi->id_jenis_kayu;
+                $kwAsal = (string) $stokAsalJadi->kw_grade;
+                $panjang = $stokAsalJadi->panjang;
+                $lebar = $stokAsalJadi->lebar;
+                $tebal = $stokAsalJadi->tebal;
+                $idUkuran = null;
+                $hppAsal = $stokAsalJadi->hpp_average;
+            } else {
+                $idUkuran = $modal->id_ukuran;
+                $idJenisKayu = $modal->id_jenis_kayu;
+                $kwAsal = (string) $modal->kw;
+                
+                $ukuran = Ukuran::find($idUkuran);
+                if (!$ukuran) {
+                    throw new \RuntimeException('Ukuran Veneer Kering asal tidak ditemukan.');
+                }
+                $panjang = $ukuran->panjang;
+                $lebar = $ukuran->lebar;
+                $tebal = $ukuran->tebal;
+                
+                $snapshotAsal = StokVeneerKering::snapshotTerakhir($idUkuran, $idJenisKayu, $kwAsal);
+                $hppAsal = $snapshotAsal['hpp_average'];
             }
 
-            // ── 1. KELUARKAN dari baris KW lama ──────────────────────────
-            $stokLembarBeforeLama = $stokLama->stok_lembar;
-            $stokKubikasiBeforeLama = $stokLama->stok_kubikasi;
-            $nilaiStokBeforeLama = $stokLama->nilai_stok;
+            $kubikasiPindah = ($panjang * $lebar * $tebal * $jumlah) / 10000000;
+            
+            // HPP yang dibawa masuk ke gudang dari hasil pilih veneer menggunakan HPP rata-rata dari stok asal
+            if ($jenisVeneerAsal === 'jadi') {
+                $nilaiPindah = $hppAsal * $jumlah; // hpp veneer jadi = per lembar
+            } else {
+                $nilaiPindah = $hppAsal * $kubikasiPindah; // hpp veneer kering = per m3
+            }
 
-            $kubikasiPindah = ($stokLama->panjang * $stokLama->lebar * $stokLama->tebal * $jumlah) / 10000000;
-            $nilaiPindah = $stokLama->hpp_average * $jumlah;
+            // KITA HANYA PERLU MEMASUKKAN STOK HASIL, KARENA STOK ASAL SUDAH DIKURANGI SAAT MODAL DIBUAT
+            if ($jenisVeneerHasil === 'jadi') {
+                $stokBaru = StokVeneerJadi::where('id_jenis_kayu', $idJenisKayu)
+                    ->where('panjang', $panjang)
+                    ->where('lebar', $lebar)
+                    ->where('tebal', $tebal)
+                    ->where('kw_grade', $kwHasil)
+                    ->lockForUpdate()
+                    ->first();
 
-            $stokLembarAfterLama = $stokLembarBeforeLama - $jumlah;
-            $stokKubikasiAfterLama = $stokKubikasiBeforeLama - $kubikasiPindah;
-            $nilaiStokAfterLama = $nilaiStokBeforeLama - $nilaiPindah;
+                if (! $stokBaru) {
+                    $stokBaru = StokVeneerJadi::create([
+                        'id_jenis_kayu' => $idJenisKayu,
+                        'panjang' => $panjang,
+                        'lebar' => $lebar,
+                        'tebal' => $tebal,
+                        'kw_grade' => $kwHasil,
+                        'stok_lembar' => 0,
+                        'stok_kubikasi' => 0,
+                        'nilai_stok' => 0,
+                        'hpp_average' => 0,
+                        'hpp_pekerja_last' => 0,
+                        'hpp_bahan_penolong_last' => 0,
+                        'id_last_log' => null,
+                    ]);
+                }
 
-            $logKeluar = HppVeneerJadiLog::create([
-                'id_jenis_kayu' => $stokLama->id_jenis_kayu,
-                'panjang' => $stokLama->panjang,
-                'lebar' => $stokLama->lebar,
-                'tebal' => $stokLama->tebal,
-                'kw_grade' => $stokLama->kw_grade,
-                'tanggal' => now(),
-                'tipe_transaksi' => 'KELUAR',
-                'referensi_type' => static::class,
-                'referensi_id' => $model->id,
-                'total_lembar' => $jumlah,
-                'total_kubikasi' => $kubikasiPindah,
-                'hpp_pekerja' => 0,
-                'hpp_bahan_penolong' => 0,
-                'hpp_average' => $stokLama->hpp_average,
-                'nilai_stok' => $nilaiPindah,
-                'stok_lembar_before' => $stokLembarBeforeLama,
-                'stok_kubikasi_before' => $stokKubikasiBeforeLama,
-                'nilai_stok_before' => $nilaiStokBeforeLama,
-                'stok_lembar_after' => $stokLembarAfterLama,
-                'stok_kubikasi_after' => $stokKubikasiAfterLama,
-                'nilai_stok_after' => $nilaiStokAfterLama,
-                'keterangan' => sprintf(
-                    'Hasil pilih veneer palet %s berubah KW %s -> %s, diterima oleh: %s pada %s',
-                    $model->no_palet,
-                    $kwAsal,
-                    $kwHasil,
-                    $userName,
-                    now()->translatedFormat('d F Y H:i')
-                ),
-            ]);
+                $stokLembarBefore = $stokBaru->stok_lembar;
+                $stokKubikasiBefore = $stokBaru->stok_kubikasi;
+                $nilaiStokBefore = $stokBaru->nilai_stok;
 
-            $stokLama->update([
-                'stok_lembar' => $stokLembarAfterLama,
-                'stok_kubikasi' => $stokKubikasiAfterLama,
-                'nilai_stok' => $nilaiStokAfterLama,
-                'id_last_log' => $logKeluar->id,
-            ]);
+                $stokLembarAfter = $stokLembarBefore + $jumlah;
+                $stokKubikasiAfter = $stokKubikasiBefore + $kubikasiPindah;
+                $nilaiStokAfter = $nilaiStokBefore + $nilaiPindah;
 
-            // ── 2. MASUKKAN ke baris KW baru (buat kalau belum ada) ──────
-            $stokBaru = StokVeneerJadi::where('id_jenis_kayu', $stokLama->id_jenis_kayu)
-                ->where('panjang', $stokLama->panjang)
-                ->where('lebar', $stokLama->lebar)
-                ->where('tebal', $stokLama->tebal)
-                ->where('kw_grade', $kwHasil)
-                ->lockForUpdate()
-                ->first();
+                $hppAverageBaru = $stokLembarAfter > 0 ? ($nilaiStokAfter / $stokLembarAfter) : 0;
 
-            if (! $stokBaru) {
-                $stokBaru = StokVeneerJadi::create([
-                    'id_jenis_kayu' => $stokLama->id_jenis_kayu,
-                    'panjang' => $stokLama->panjang,
-                    'lebar' => $stokLama->lebar,
-                    'tebal' => $stokLama->tebal,
+                $logMasuk = HppVeneerJadiLog::create([
+                    'id_jenis_kayu' => $idJenisKayu,
+                    'panjang' => $panjang,
+                    'lebar' => $lebar,
+                    'tebal' => $tebal,
                     'kw_grade' => $kwHasil,
-                    'stok_lembar' => 0,
-                    'stok_kubikasi' => 0,
-                    'nilai_stok' => 0,
-                    'hpp_average' => 0,
-                    'hpp_pekerja_last' => 0,
-                    'hpp_bahan_penolong_last' => 0,
-                    'id_last_log' => null,
+                    'tanggal' => now(),
+                    'tipe_transaksi' => 'MASUK',
+                    'referensi_type' => static::class,
+                    'referensi_id' => $model->id,
+                    'total_lembar' => $jumlah,
+                    'total_kubikasi' => $kubikasiPindah,
+                    'hpp_pekerja' => 0,
+                    'hpp_bahan_penolong' => 0,
+                    'hpp_average' => $hppAverageBaru,
+                    'nilai_stok' => $nilaiPindah,
+                    'stok_lembar_before' => $stokLembarBefore,
+                    'stok_kubikasi_before' => $stokKubikasiBefore,
+                    'nilai_stok_before' => $nilaiStokBefore,
+                    'stok_lembar_after' => $stokLembarAfter,
+                    'stok_kubikasi_after' => $stokKubikasiAfter,
+                    'nilai_stok_after' => $nilaiStokAfter,
+                    'keterangan' => sprintf(
+                        'Hasil pilih veneer palet %s (%s KW %s), diterima oleh: %s',
+                        $model->no_palet,
+                        $jenisVeneerHasil,
+                        $kwHasil,
+                        $userName
+                    ),
+                ]);
+
+                $stokBaru->update([
+                    'stok_lembar' => $stokLembarAfter,
+                    'stok_kubikasi' => $stokKubikasiAfter,
+                    'nilai_stok' => $nilaiStokAfter,
+                    'hpp_average' => $hppAverageBaru,
+                    'id_last_log' => $logMasuk->id,
+                ]);
+            } else {
+                $idUkuranHasil = $idUkuran;
+                if (!$idUkuranHasil) {
+                    $ukuranMatch = Ukuran::firstOrCreate([
+                        'panjang' => $panjang,
+                        'lebar' => $lebar,
+                        'tebal' => $tebal,
+                    ]);
+                    $idUkuranHasil = $ukuranMatch->id;
+                }
+
+                $snapshot = StokVeneerKering::snapshotTerakhir($idUkuranHasil, $idJenisKayu, $kwHasil);
+                $saldoLembarHasil = StokVeneerKering::saldoLembarTerakhir($idUkuranHasil, $idJenisKayu, $kwHasil);
+                $stokM3Hasil = $snapshot['stok_m3'];
+                $nilaiStokHasil = $snapshot['nilai_stok'];
+                
+                $stokLembarAfter = $saldoLembarHasil + $jumlah;
+                $stokM3After = $stokM3Hasil + $kubikasiPindah;
+                $nilaiStokAfter = $nilaiStokHasil + $nilaiPindah;
+                
+                $hppAverageBaru = $stokM3After > 0 ? ($nilaiStokAfter / $stokM3After) : 0;
+                
+                StokVeneerKering::create([
+                    'id_ukuran' => $idUkuranHasil,
+                    'id_jenis_kayu' => $idJenisKayu,
+                    'kw' => $kwHasil,
+                    'jenis_transaksi' => 'masuk',
+                    'tanggal_transaksi' => now(),
+                    'qty' => $jumlah,
+                    'm3' => $kubikasiPindah,
+                    'stok_lembar_sebelum' => $saldoLembarHasil,
+                    'stok_lembar_sesudah' => $stokLembarAfter,
+                    'hpp_veneer_basah_per_m3' => 0,
+                    'ongkos_dryer_per_m3' => 0,
+                    'hpp_kering_per_m3' => 0,
+                    'nilai_transaksi' => $nilaiPindah,
+                    'stok_m3_sebelum' => $stokM3Hasil,
+                    'nilai_stok_sebelum' => $nilaiStokHasil,
+                    'stok_m3_sesudah' => $stokM3After,
+                    'nilai_stok_sesudah' => $nilaiStokAfter,
+                    'hpp_average' => $hppAverageBaru,
+                    'keterangan' => sprintf(
+                        'Hasil pilih veneer palet %s (%s KW %s), diterima oleh: %s',
+                        $model->no_palet,
+                        $jenisVeneerHasil,
+                        $kwHasil,
+                        $userName
+                    ),
                 ]);
             }
-
-            $stokLembarBeforeBaru = $stokBaru->stok_lembar;
-            $stokKubikasiBeforeBaru = $stokBaru->stok_kubikasi;
-            $nilaiStokBeforeBaru = $stokBaru->nilai_stok;
-
-            // Nilai yang dibawa masuk pakai HPP dari stok ASAL (harga
-            // pokoknya tidak berubah cuma karena grade berubah).
-            $nilaiMasuk = $nilaiPindah;
-
-            $stokLembarAfterBaru = $stokLembarBeforeBaru + $jumlah;
-            $stokKubikasiAfterBaru = $stokKubikasiBeforeBaru + $kubikasiPindah;
-            $nilaiStokAfterBaru = $nilaiStokBeforeBaru + $nilaiMasuk;
-
-            // Rata-rata tertimbang: gabungkan nilai stok tujuan yang sudah
-            // ada dengan nilai yang baru masuk, dibagi total lembar.
-            $hppAverageAfterBaru = $stokLembarAfterBaru > 0
-                ? ($nilaiStokAfterBaru / $stokLembarAfterBaru)
-                : 0;
-
-            $logMasuk = HppVeneerJadiLog::create([
-                'id_jenis_kayu' => $stokBaru->id_jenis_kayu,
-                'panjang' => $stokBaru->panjang,
-                'lebar' => $stokBaru->lebar,
-                'tebal' => $stokBaru->tebal,
-                'kw_grade' => $stokBaru->kw_grade,
-                'tanggal' => now(),
-                'tipe_transaksi' => 'MASUK',
-                'referensi_type' => static::class,
-                'referensi_id' => $model->id,
-                'total_lembar' => $jumlah,
-                'total_kubikasi' => $kubikasiPindah,
-                'hpp_pekerja' => 0,
-                'hpp_bahan_penolong' => 0,
-                'hpp_average' => $hppAverageAfterBaru,
-                'nilai_stok' => $nilaiMasuk,
-                'stok_lembar_before' => $stokLembarBeforeBaru,
-                'stok_kubikasi_before' => $stokKubikasiBeforeBaru,
-                'nilai_stok_before' => $nilaiStokBeforeBaru,
-                'stok_lembar_after' => $stokLembarAfterBaru,
-                'stok_kubikasi_after' => $stokKubikasiAfterBaru,
-                'nilai_stok_after' => $nilaiStokAfterBaru,
-                'keterangan' => sprintf(
-                    'Hasil pilih veneer palet %s naik/turun KW %s -> %s, diterima oleh: %s pada %s',
-                    $model->no_palet,
-                    $kwAsal,
-                    $kwHasil,
-                    $userName,
-                    now()->translatedFormat('d F Y H:i')
-                ),
-            ]);
-
-            $stokBaru->update([
-                'stok_lembar' => $stokLembarAfterBaru,
-                'stok_kubikasi' => $stokKubikasiAfterBaru,
-                'nilai_stok' => $nilaiStokAfterBaru,
-                'hpp_average' => $hppAverageAfterBaru,
-                'id_last_log' => $logMasuk->id,
-            ]);
         });
     }
 }

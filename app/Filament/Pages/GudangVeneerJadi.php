@@ -1155,25 +1155,34 @@ class GudangVeneerJadi extends Page
     // Untuk serah terima hasil pilih veneer
     protected function ambilAntreanDariPilihVeneer(): Collection
     {
-        $hasilRows = HasilPilihVeneer::with(['modalPilihVeneer.stokVeneerJadi.jenisKayu'])
+        $hasilRows = HasilPilihVeneer::with(['modalPilihVeneer.stokVeneerJadi.jenisKayu', 'modalPilihVeneer.jenisKayu', 'modalPilihVeneer.ukuran'])
             ->whereNotNull('diserahkan_at')
             ->whereNull('diterima_gudang_at')
+            ->where(function ($q) {
+                $q->where('jenis_veneer', 'jadi')->orWhereNull('jenis_veneer');
+            })
             ->get();
 
         return $hasilRows->map(function ($hasil) {
-            $stokAsal = $hasil->modalPilihVeneer?->stokVeneerJadi;
+            $modal = $hasil->modalPilihVeneer;
+            $isKeringAsal = ($modal?->jenis_veneer === 'kering');
+            
+            $jenisKayuNama = $isKeringAsal ? ($modal->jenisKayu?->nama_kayu) : ($modal->stokVeneerJadi?->jenisKayu?->nama_kayu);
+            $panjang = $isKeringAsal ? ($modal->ukuran?->panjang) : ($modal->stokVeneerJadi?->panjang);
+            $lebar = $isKeringAsal ? ($modal->ukuran?->lebar) : ($modal->stokVeneerJadi?->lebar);
+            $tebal = $isKeringAsal ? ($modal->ukuran?->tebal) : ($modal->stokVeneerJadi?->tebal);
 
             return [
                 'id' => 'pilih-' . $hasil->id,
                 'source' => 'pilih_veneer',
                 'sumber_label' => 'Pilih Veneer',
-                'jenis_kayu' => $stokAsal?->jenisKayu?->nama_kayu,
-                'panjang' => $stokAsal?->panjang,
-                'lebar' => $stokAsal?->lebar,
-                'tebal' => $stokAsal?->tebal,
+                'jenis_kayu' => $jenisKayuNama,
+                'panjang' => $panjang,
+                'lebar' => $lebar,
+                'tebal' => $tebal,
                 'kw' => $hasil->kw, // KW HASIL, bukan KW modal
                 'jumlah' => $hasil->jumlah,
-                'stok_kubikasi' => $this->hitungKubikasi($stokAsal?->panjang ?? 0, $stokAsal?->lebar ?? 0, $stokAsal?->tebal ?? 0, $hasil->jumlah),
+                'stok_kubikasi' => $this->hitungKubikasi($panjang ?? 0, $lebar ?? 0, $tebal ?? 0, $hasil->jumlah),
                 'created_at' => $hasil->created_at,
                 'created_at_ts' => $hasil->created_at?->timestamp ?? 0,
                 'status_gudang' => 'belum diterima',
