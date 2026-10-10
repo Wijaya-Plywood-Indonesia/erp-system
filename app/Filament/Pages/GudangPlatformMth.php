@@ -87,6 +87,37 @@ class GudangPlatformMth extends Page
             ->values();
     }
 
+
+    /**
+     * Opsi stok untuk pop up "Catat Barang Keluar".
+     * Pencarian dilakukan di sisi client (Alpine) berdasarkan ukuran,
+     * jenis kayu, dan KW.
+     */
+    public function getStokOpsiKeluarProperty(): array
+    {
+        return StokPlatformMth::with(['jenisKayu'])
+            ->where('stok_lembar', '>', 0)
+            ->get()
+            ->sortBy([
+                ['id_jenis_kayu', 'asc'],
+                ['tebal', 'asc'],
+                ['panjang', 'asc'],
+                ['lebar', 'asc'],
+                ['kw_grade', 'asc'],
+            ])
+            ->map(fn ($s) => [
+                'id'   => (string) $s->id,
+                'kayu' => (string) $s->jenisKayu?->nama_kayu,
+                'kw'   => (string) $s->kw_grade,
+                'p'    => (float) $s->panjang,
+                'l'    => (float) $s->lebar,
+                't'    => (float) $s->tebal,
+                'sisa' => (int) $s->stok_lembar,
+            ])
+            ->values()
+            ->all();
+    }
+  
     // ─── MENUNGGU DITERIMA GUDANG (hasil hotpress) ───────────────────────────
 
     public function getMenungguTerimaProperty(): Collection

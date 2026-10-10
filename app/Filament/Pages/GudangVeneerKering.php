@@ -259,7 +259,10 @@ class GudangVeneerKering extends Page
         }
     }
 
-    public function getSummariesProperty()
+    /**
+     * Semua ringkasan stok (TANPA filter search halaman).
+     */
+    public function getSemuaSummariesProperty()
     {
         $rows = StokVeneerKering::query()
             ->with(['ukuran', 'jenisKayu'])
@@ -268,19 +271,28 @@ class GudangVeneerKering extends Page
                 DB::raw('(SELECT MAX(id) as max_id FROM stok_veneer_kerings GROUP BY id_ukuran, id_jenis_kayu, kw) as latest'),
                 fn ($join) => $join->on('stok_veneer_kerings.id', '=', 'latest.max_id')
             )
+            ->where('stok_m3_sesudah', '>', 0)
             ->get();
 
         $rows = $rows->map(function (StokVeneerKering $row) {
-        $row->total_lembar = StokVeneerKering::saldoLembarTerakhir(
-            (int) $row->id_ukuran,
-            (int) $row->id_jenis_kayu,
-            (string) $row->kw
-        );
+            $row->total_lembar = StokVeneerKering::saldoLembarTerakhir(
+                (int) $row->id_ukuran,
+                (int) $row->id_jenis_kayu,
+                (string) $row->kw
+            );
+
             return $row;
-        })
-        // Stok tetap tampil selama lembar tidak 0,
-        // terlepas dari kubikasi.
-        ->filter(fn (StokVeneerKering $row) => (int) $row->total_lembar !== 0);
+        });
+
+        return $rows;
+    }
+
+    /**
+     * Ringkasan stok untuk tabel halaman (sudah difilter kolom search).
+     */
+    public function getSummariesProperty()
+    {
+        $rows = $this->semuaSummaries;
 
         if (trim($this->search) !== '') {
             $needle = strtolower(trim($this->search));
@@ -301,6 +313,28 @@ class GudangVeneerKering extends Page
         }
 
         return $rows;
+    }
+
+    /**
+     * Opsi stok untuk pop up "Catat Barang Keluar" (komponen x-gudang.pilih-stok).
+     * Sengaja TIDAK difilter oleh kolom search halaman — pencarian di pop up
+     * dilakukan di sisi client (Alpine) per kata kunci: ukuran, jenis kayu, KW.
+     */
+    public function getStokOpsiKeluarProperty(): array
+    {
+        return $this->semuaSummaries
+            ->sortBy(fn (StokVeneerKering $r) => (float) ($r->ukuran?->tebal ?? 0))
+            ->map(fn (StokVeneerKering $s) => [
+                'id'   => (string) $s->id,
+                'kayu' => (string) $s->jenisKayu?->nama_kayu,
+                'kw'   => (string) $s->kw,
+                'p'    => (float) $s->ukuran?->panjang,
+                'l'    => (float) $s->ukuran?->lebar,
+                't'    => (float) $s->ukuran?->tebal,
+                'sisa' => (float) $s->total_lembar,
+            ])
+            ->values()
+            ->all();
     }
 
     public function getFacebackProperty()

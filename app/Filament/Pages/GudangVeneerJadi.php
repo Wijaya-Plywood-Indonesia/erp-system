@@ -523,6 +523,34 @@ class GudangVeneerJadi extends Page
     }
 
     /**
+     * Opsi stok untuk pop up "Catat Barang Keluar" (komponen x-gudang.pilih-stok).
+     * Sengaja TIDAK difilter oleh kolom search halaman — pencarian di pop up
+     * dilakukan di sisi client (Alpine) per kata kunci: ukuran, jenis kayu, KW.
+     */
+    public function getStokOpsiKeluarProperty(): array
+    {
+        return StokVeneerJadi::with(['jenisKayu'])
+            ->get()
+            ->filter(fn ($s) => $s->jenisKayu !== null)
+            ->sortBy([
+                ['tebal', 'asc'],
+                ['panjang', 'asc'],
+                ['lebar', 'asc'],
+            ])
+            ->map(fn ($s) => [
+                'id'   => (string) $s->id,
+                'kayu' => (string) $s->jenisKayu->nama_kayu,
+                'kw'   => (string) $s->kw_grade,
+                'p'    => (float) $s->panjang,
+                'l'    => (float) $s->lebar,
+                't'    => (float) $s->tebal,
+                'sisa' => (int) $s->stok_lembar,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
      * 📥 ANTREAN GABUNGAN: GudangVeneerJadi (Produksi/Repair) + VeneerMutasiDetail
      * (Barang Masuk yang sudah divalidasi tapi belum "Diterima").
      *

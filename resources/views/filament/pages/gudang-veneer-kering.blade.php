@@ -407,73 +407,7 @@
             <form wire:submit.prevent="prosesKeluar" class="p-5 space-y-4 text-xs">
 
                 {{-- 1. PILIH VENEER (search dropdown dari stok) --}}
-                <div class="space-y-1.5 relative" x-data="{
-                        isDropdownOpen: false,
-                        searchTerm: '',
-                        selectedStokId: @entangle('selectedStokId'),
-                        options: [
-                            @foreach ($faceback->concat($core) as $s)
-                        {
-                            id: '{{ $s->id }}',
-                            nama: '{{ $s->jenisKayu?->nama_kayu }} (KW {{ $s->kw }}) - Sisa: {{ number_format((float) $s->total_lembar) }} lbr',
-                            no: '{{ number_format((float) $s->ukuran?->panjang, 2) }}x{{ number_format((float) $s->ukuran?->lebar, 2) }}x{{ number_format((float) $s->ukuran?->tebal, 2) }}'
-                        }, @endforeach
-                        ],
-                        get filteredOptions() {
-                            if (this.searchTerm === '') return this.options;
-                            return this.options.filter(o =>
-                                o.nama.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-                                o.no.toLowerCase().includes(this.searchTerm.toLowerCase())
-                            );
-                        },
-                        selectVeneer(item) {
-                            this.selectedStokId = item.id;
-                            this.searchTerm = item.no + ' | ' + item.nama;
-                            this.isDropdownOpen = false;
-                        },
-                        clearVeneer() {
-                            this.selectedStokId = null;
-                            this.searchTerm = '';
-                        },
-                        init() {
-                            let found = this.options.find(o => o.id == this.selectedStokId);
-                            if (found) this.searchTerm = found.no + ' | ' + found.nama;
-                        }
-                    }" @click.away="isDropdownOpen = false">
-                    <label
-                        class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">Pilih
-                        Veneer</label>
-                    <div class="relative flex items-center">
-                        <input type="text" x-model="searchTerm" @focus="isDropdownOpen = true"
-                            placeholder="Ketik dimensi ukuran atau KW..."
-                            class="w-full px-3 py-2 bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-700 rounded-sm font-bold text-gray-900 dark:text-gray-100 outline-none pr-10 focus:border-amber-500 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-600 placeholder:font-normal placeholder:text-xs">
-                        <button type="button" x-show="searchTerm.length > 0 || selectedStokId"
-                            @click="clearVeneer()"
-                            class="absolute right-3 text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                                    d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-                    <div x-show="isDropdownOpen" x-cloak
-                        class="absolute z-50 w-full mt-1 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-sm shadow-2xl max-h-48 overflow-y-auto p-1 divide-y divide-gray-100 dark:divide-gray-900/60">
-                        <template x-for="item in filteredOptions" :key="item.id">
-                            <button type="button" @click="selectVeneer(item)"
-                                class="w-full text-left px-3 py-2 hover:bg-amber-500 hover:text-gray-950 flex flex-col transition-colors group">
-                                <span
-                                    class="text-[11px] text-gray-500 dark:text-gray-400 group-hover:text-gray-900 font-medium"
-                                    x-text="item.nama"></span>
-                                <span
-                                    class="font-bold text-gray-800 dark:text-gray-200 group-hover:text-gray-950 text-xs"
-                                    x-text="item.no"></span>
-                            </button>
-                        </template>
-                        <div x-show="filteredOptions.length === 0"
-                            class="text-gray-400 dark:text-gray-600 p-3 text-center italic text-[11px]">Veneer
-                            tidak ditemukan</div>
-                    </div>
-                </div>
+                <x-pilih-stok model="selectedStokId" label="Pilih Veneer" :items="$this->stokOpsiKeluar" />
 
                 {{-- 2A. JUMLAH PALET --}}
                 <div class="space-y-1.5">

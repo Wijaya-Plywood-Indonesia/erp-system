@@ -30,6 +30,7 @@ class SerahTerimaHpService
             $serahTerima->id_platform_mth_mutasi_keluar !== null => 'platform_mth',
             $serahTerima->id_platform_hasil_hp !== null => 'platform_hp',
             $serahTerima->id_hasil_graji_triplek !== null => 'graji',
+            $serahTerima->id_hasil_sanding !== null => 'hasil_sanding',     
             default => null,
         };
     }

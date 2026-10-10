@@ -284,12 +284,17 @@ class SerahTerimaHp extends Model
      */
     public function getSisaAttribute(): float
     {
-        // 🆕 Bahan yang menuju Sanding (hasil Hotpress, hasil Graji, Gudang
-        // Platform Mentah, DAN Gudang Triplek Jadi) dihitung dari ModalSanding.
-        // Sebelumnya Gudang Triplek Jadi ikut terhitung 'triplek' sehingga
-        // pemakaiannya dicari di MasukGrajiTriplek dan sisanya tidak pernah
-        // berkurang walau sudah dipakai sebagai modal.
-        $menujuSanding = $this->tipeSumber === 'platform'
+        // Bahan yang menuju Sanding dikenali dari kolom `tujuan`, bukan dari
+        // tipeSumber. Dulu hanya sumber 'platform' dan Gudang Triplek Jadi yang
+        // dihitung dari ModalSanding, sehingga palet 'sanding' lain tidak ikut
+        // terhitung:
+        //   - Hasil Sanding dari produksi lain (id_hasil_sanding)
+        //   - Gudang Triplek Mentah yang tujuannya Sanding (id_triplek_mth_mutasi_keluar)
+        // Keduanya bertipeSumber 'triplek', jadi pemakaiannya dicari di
+        // MasukGrajiTriplek dan sisanya tidak pernah berkurang, sehingga
+        // pilihannya tidak hilang dari dropdown Modal Sanding.
+        $menujuSanding = strtolower((string) $this->tujuan) === 'sanding'
+            || $this->tipeSumber === 'platform'
             || $this->id_triplek_mutasi_keluar !== null;
 
         $terpakai = $menujuSanding
