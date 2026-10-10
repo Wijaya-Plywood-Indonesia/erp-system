@@ -349,6 +349,36 @@ class GudangTriplekJadi extends Page
             ->values();
     }
 
+    /**
+     * Opsi stok untuk pop up "Catat Barang Keluar" (komponen x-gudang.pilih-stok).
+     * Sengaja TIDAK difilter oleh kolom search halaman — pencarian di pop up
+     * dilakukan di sisi client (Alpine) per kata kunci: ukuran, jenis kayu, KW.
+     */
+    public function getStokOpsiKeluarProperty(): array
+    {
+        return StokTriplekJadi::with(['jenisKayu'])
+            ->where('stok_lembar', '>', 0)
+            ->get()
+            ->sortBy([
+                ['id_jenis_kayu', 'asc'],
+                ['tebal', 'asc'],
+                ['panjang', 'asc'],
+                ['lebar', 'asc'],
+                ['kw_grade', 'asc'],
+            ])
+            ->map(fn ($s) => [
+                'id'   => (string) $s->id,
+                'kayu' => (string) $s->jenisKayu?->nama_kayu,
+                'kw'   => (string) $s->kw_grade,
+                'p'    => (float) $s->panjang,
+                'l'    => (float) $s->lebar,
+                't'    => (float) $s->tebal,
+                'sisa' => (int) $s->stok_lembar,
+            ])
+            ->values()
+            ->all();
+    }
+
     // ─── BARANG KELUAR ───────────────────────────────────────────────────────
 
     public function updatedJumlahPalet($value): void

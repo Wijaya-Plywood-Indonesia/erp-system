@@ -6,6 +6,7 @@ use App\Models\ModalSanding;
 use App\Models\PlatformMthMutasiKeluar;
 use App\Models\SerahTerimaHp;
 use App\Models\StokPlatformMth;
+use App\Services\TerimaGudangHpService;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -84,6 +85,91 @@ class GudangPlatformMth extends Page
                 ['kw_grade', 'asc'],
             ])
             ->values();
+    }
+
+    /**
+     * Opsi stok untuk pop up "Catat Barang Keluar" (komponen x-gudang.pilih-stok).
+     * Sengaja TIDAK difilter oleh kolom search halaman — pencarian di pop up
+     * dilakukan di sisi client (Alpine) per kata kunci: ukuran, jenis kayu, KW.
+     */
+    public function getStokOpsiKeluarProperty(): array
+    {
+        return StokPlatformMth::with(['jenisKayu'])
+            ->where('stok_lembar', '>', 0)
+            ->get()
+            ->sortBy([
+                ['id_jenis_kayu', 'asc'],
+                ['tebal', 'asc'],
+                ['panjang', 'asc'],
+                ['lebar', 'asc'],
+                ['kw_grade', 'asc'],
+            ])
+            ->map(fn ($s) => [
+                'id'   => (string) $s->id,
+                'kayu' => (string) $s->jenisKayu?->nama_kayu,
+                'kw'   => (string) $s->kw_grade,
+                'p'    => (float) $s->panjang,
+                'l'    => (float) $s->lebar,
+                't'    => (float) $s->tebal,
+                'sisa' => (int) $s->stok_lembar,
+            ])
+            ->values()
+            ->all();
+    }
+
+    // ─── MENUNGGU DITERIMA GUDANG (hasil hotpress) ───────────────────────────
+
+    public function getMenungguTerimaProperty(): Collection
+    {
+        return SerahTerimaHp::with([
+            'platformHasilHp.mesin',
+            'platformHasilHp.barangSetengahJadi.jenisBarang',
+            'platformHasilHp.barangSetengahJadi.grade',
+            'platformHasilHp.barangSetengahJadi.ukuran',
+        ])
+            ->whereNotNull('id_platform_hasil_hp')
+            ->where('diterima_oleh', '-')
+            ->whereNull('ditolak_oleh')
+            ->whereNull('diterima_gudang_at')
+            ->latest()
+            ->get();
+    }
+
+    public string $serahTerimaTab = 'aktif';
+
+    public function getRiwayatTerimaProperty(): Collection
+    {
+        return SerahTerimaHp::with([
+            'platformHasilHp.mesin',
+            'platformHasilHp.barangSetengahJadi.jenisBarang',
+            'platformHasilHp.barangSetengahJadi.grade',
+            'platformHasilHp.barangSetengahJadi.ukuran',
+        ])
+            ->whereNotNull('id_platform_hasil_hp')
+            ->whereNotNull('diterima_gudang_at')
+            ->whereNull('ditolak_oleh')
+            ->orderByDesc('diterima_gudang_at')
+            ->limit(100)
+            ->get();
+    }
+
+    public function terimaKeGudang(int $id): void
+    {
+        try {
+            app(TerimaGudangHpService::class)->terimaPlatform($id);
+
+            unset($this->menungguTerima, $this->riwayatTerima);
+
+            Notification::make()->success()
+                ->title('Stok Bertambah')
+                ->body('Barang diterima di Gudang Platform Mentah.')
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()->danger()
+                ->title('Gagal Menerima')
+                ->body($e->getMessage())
+                ->send();
+        }
     }
 
     // ─── BARANG KELUAR ────────────────────────────────────────────────────────

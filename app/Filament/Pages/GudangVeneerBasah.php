@@ -131,6 +131,27 @@ class GudangVeneerBasah extends Page
             ->get();
     }
 
+    /**
+     * Opsi stok untuk pop up "Catat Barang Keluar" (komponen x-gudang.pilih-stok).
+     * Sengaja TIDAK difilter oleh kolom search halaman — pencarian di pop up
+     * dilakukan di sisi client (Alpine) per kata kunci: ukuran, jenis kayu, KW.
+     */
+    public function getStokOpsiKeluarProperty(): array
+    {
+        return $this->veneerStokAll
+            ->map(fn ($s) => [
+                'id'   => (string) $s->id,
+                'kayu' => (string) $s->jenisKayu?->nama_kayu,
+                'kw'   => (string) $s->kw,
+                'p'    => (float) $s->panjang,
+                'l'    => (float) $s->lebar,
+                't'    => (float) $s->tebal,
+                'sisa' => (float) $s->stok_lembar,
+            ])
+            ->values()
+            ->all();
+    }
+
     public function openFormKeluar(): void
     {
         $this->reset([
