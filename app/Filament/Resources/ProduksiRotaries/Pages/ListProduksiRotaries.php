@@ -6,21 +6,18 @@ use App\Filament\Resources\ProduksiRotaries\ProduksiRotaryResource;
 use Filament\Actions\CreateAction;
 use Filament\Forms\Components\Radio;
 use Filament\Resources\Pages\ListRecords;
-
-use Filament\Notifications\Notification;
-use Illuminate\Support\Facades\Http;
-use Filament\Forms\Components\DatePicker;
-use App\Services\Akuntansi\RotaryJurnalService;
-use Filament\Actions\Action;
-use Illuminate\Http\Client\Response;
-use App\Exports\LaporanProduksiRotaryCustomExport;
-use Maatwebsite\Excel\Facades\Excel;
-use Carbon\Carbon;
-
+use App\Filament\Resources\ProduksiRotaries\Widgets\RekapProduksiRotary;
 
 class ListProduksiRotaries extends ListRecords
 {
     protected static string $resource = ProduksiRotaryResource::class;
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            RekapProduksiRotary::class,
+        ];
+    }
 
     protected function getHeaderActions(): array
     {

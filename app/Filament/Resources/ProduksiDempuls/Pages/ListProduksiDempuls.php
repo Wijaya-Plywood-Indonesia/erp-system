@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ProduksiDempuls\Pages;
 
 use App\Filament\Resources\ProduksiDempuls\ProduksiDempulResource;
+use App\Filament\Resources\ProduksiDempuls\Widgets\RekapProduksiDempul;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -15,5 +16,10 @@ class ListProduksiDempuls extends ListRecords
         return [
             CreateAction::make(),
         ];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [RekapProduksiDempul::class];
     }
 }
