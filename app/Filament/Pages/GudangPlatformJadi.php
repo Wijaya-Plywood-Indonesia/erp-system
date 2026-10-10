@@ -437,7 +437,8 @@ class GudangPlatformJadi extends Page
                 ]);
 
                 // ── KURANGI STOK PLATFORM MENTAH (boleh minus, crosscheck) ──
-                $this->kurangiStokPlatformMth($bsj, $p, $l, $t, $kw, $qty, $hs);
+                // Double cut removed: Stok platform mentah sudah dikurangi saat Mutasi Keluar
+                // $this->kurangiStokPlatformMth($bsj, $p, $l, $t, $kw, $qty, $hs);
             });
 
             Notification::make()->success()

@@ -394,11 +394,7 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
         // Jadi: barang itu tidak pernah ada di stok mentah (sudah dipotong dari
         // Stok Triplek Jadi saat diterima di sanding), jadi memotong mentah akan
         // salah — membuat stok mentah minus tanpa dasar.
-        if ($this->berasalDariTriplekJadi($serahTerima, $jenisKayu, $ukuran, $grade->nama_grade)) {
-            return;
-        }
-
-        $this->kurangiStokTriplekMth($jenisKayu, $ukuran, $grade->nama_grade, $lembar, $serahTerima);
+        // Stok mentah tidak lagi dipotong di sini karena sudah dipotong di awal mutasi keluar.
     }
 
     /**
@@ -471,3 +467,4 @@ class SerahTerimaTriplekJadiRelationManager extends RelationManager
         $stokMth->update(['id_last_log' => $log->id]);
     }
 }
+

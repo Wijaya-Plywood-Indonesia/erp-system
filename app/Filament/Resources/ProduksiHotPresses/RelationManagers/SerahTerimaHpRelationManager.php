@@ -680,25 +680,7 @@ class SerahTerimaHpRelationManager extends RelationManager
      * di mutasi keluar tersebut. HPP belum dihitung (mengikuti hpp_average
      * berjalan, lewat StokPlatformMthService::kurang()).
      */
-    protected function prosesKeluarPlatformMth(SerahTerimaHp $serahTerima, StokPlatformMthService $service): void
-    {
-        $mutasi = $serahTerima->platformMthMutasiKeluar;
-
-        if (! $mutasi) {
-            throw new \RuntimeException('Data mutasi keluar Gudang Platform Mentah tidak ditemukan.');
-        }
-
-        $service->kurang(
-            idJenisKayu: $mutasi->id_jenis_kayu,
-            panjang: $mutasi->panjang,
-            lebar: $mutasi->lebar,
-            tebal: $mutasi->tebal,
-            kwGrade: (string) $mutasi->kw_grade,
-            lembar: (float) $mutasi->stok_lembar,
-            kubikasi: (float) $mutasi->stok_kubikasi,
-            keterangan: 'Keluar ke Sanding — diterima dari Gudang Platform Mentah (via serah terima #'.$serahTerima->id.')',
-            referensi: $serahTerima,
-        );
+    protected function prosesKeluarPlatformMth(SerahTerimaHp $serahTerima, StokPlatformMthService $service): void { // Stok mentah sudah dipotong saat keluar gudang, tidak perlu potong lagi
     }
 
     /**
@@ -710,24 +692,9 @@ class SerahTerimaHpRelationManager extends RelationManager
      * Graji Triplek). Potong stok Triplek Mentah sesuai kuantitas yang
      * tercatat di mutasi keluar tersebut.
      */
-    protected function prosesKeluarTriplekMth(SerahTerimaHp $serahTerima, StokTriplekMthService $service): void
-    {
-        $mutasi = $serahTerima->triplekMthMutasiKeluar;
-
-        if (! $mutasi) {
-            throw new \RuntimeException('Data mutasi keluar Gudang Triplek Mentah tidak ditemukan.');
-        }
-
-        $service->kurang(
-            idJenisKayu: $mutasi->id_jenis_kayu,
-            panjang: $mutasi->panjang,
-            lebar: $mutasi->lebar,
-            tebal: $mutasi->tebal,
-            kwGrade: (string) $mutasi->kw_grade,
-            lembar: (float) $mutasi->stok_lembar,
-            kubikasi: (float) $mutasi->stok_kubikasi,
-            keterangan: 'Keluar ke Graji Triplek — diterima dari Gudang Triplek Mentah (via serah terima #'.$serahTerima->id.')',
-            referensi: $serahTerima,
-        );
+    protected function prosesKeluarTriplekMth(SerahTerimaHp $serahTerima, StokTriplekMthService $service): void { // Stok mentah sudah dipotong saat keluar gudang, tidak perlu potong lagi
     }
 }
+
+
+
