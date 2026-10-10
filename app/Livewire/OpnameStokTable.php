@@ -47,6 +47,9 @@ class OpnameStokTable extends Component
     /** Field kunci yang memicu refresh stok sistem */
     const FIELD_KUNCI = ['id_jenis_kayu', 'id_jenis_barang', 'id_ukuran', 'kw'];
 
+    /** Pembagi rumus kubikasi: (p x l x t x stok) / 10.000.000 */
+    const PEMBAGI_KUBIKASI = 10000000;
+
     public string $jenisStok       = '';
     public bool   $headerCollapsed = false;
     public array  $rows            = [];
@@ -113,6 +116,11 @@ class OpnameStokTable extends Component
         $this->rows[$index][$field] = $this->kosongJadiNull($value);
         $this->refreshStokSistem($index);
 
+        // Ukuran berubah → kubikasi fisik lama tidak berlaku lagi
+        if ($field === 'id_ukuran') {
+            $this->rows[$index]['kubikasi_fisik'] = null;
+        }
+
         // Cek kembar hanya saat jenis kayu/barang + ukuran + grade sudah terisi
         // semua, supaya tidak muncul peringatan palsu di tengah pengisian.
         $kembar = $this->cariBarisKembar($index, true);
@@ -151,6 +159,13 @@ class OpnameStokTable extends Component
 
         $index = (int) $parts[0];
         $field = $parts[1];
+
+        // Stok fisik berubah → kubikasi lama sudah tidak cocok, kosongkan
+        // supaya user wajib menekan tombol Hitung Kubikasi lagi.
+        if ($field === 'stok_fisik') {
+            $this->rows[$index]['kubikasi_fisik'] = null;
+            return;
+        }
 
         if (!in_array($field, self::FIELD_KUNCI, true)) return;
 
@@ -385,6 +400,65 @@ class OpnameStokTable extends Component
     }
 
     // ────────────────────────────────────────────────────────────
+    // HITUNG KUBIKASI FISIK
+    // ────────────────────────────────────────────────────────────
+
+    private function terisi($value): bool
+    {
+        return $value !== null && $value !== '';
+    }
+
+    /** Baris yang stok fisiknya terisi tapi kubikasi fisiknya belum dihitung */
+    public function jumlahBelumDihitung(): int
+    {
+        return collect($this->rows)->filter(
+            fn ($r) => $this->terisi($r['stok_fisik'] ?? null)
+                && !$this->terisi($r['kubikasi_fisik'] ?? null)
+        )->count();
+    }
+
+    /**
+     * Isi Kbk Fisik semua baris yang stok fisiknya terisi dan kubikasinya
+     * masih kosong. Rumus: (panjang x lebar x tebal x stok fisik) / 10.000.000
+     */
+    public function hitungKubikasi(): void
+    {
+        $dihitung = 0;
+        $tanpaUkuran = 0;
+
+        foreach ($this->rows as $i => $row) {
+            if (!$this->terisi($row['stok_fisik'] ?? null)) continue;
+            if ($this->terisi($row['kubikasi_fisik'] ?? null)) continue;
+
+            $p = (float) ($row['panjang'] ?? 0);
+            $l = (float) ($row['lebar'] ?? 0);
+            $t = (float) ($row['tebal'] ?? 0);
+
+            if ($p <= 0 || $l <= 0 || $t <= 0) {
+                $tanpaUkuran++;
+                continue;
+            }
+
+            $stok = (float) $row['stok_fisik'];
+            $this->rows[$i]['kubikasi_fisik'] = round(($p * $l * $t * $stok) / self::PEMBAGI_KUBIKASI, 6);
+            $dihitung++;
+        }
+
+        if ($dihitung === 0 && $tanpaUkuran === 0) {
+            Notification::make()->title('Tidak ada baris yang perlu dihitung')->warning()->send();
+            return;
+        }
+
+        $notif = Notification::make()->title("{$dihitung} baris kubikasi berhasil dihitung");
+        if ($tanpaUkuran > 0) {
+            $notif->body("{$tanpaUkuran} baris dilewati karena ukuran belum dipilih.")->warning();
+        } else {
+            $notif->success();
+        }
+        $notif->send();
+    }
+
+    // ────────────────────────────────────────────────────────────
     // SUBMIT
     // ────────────────────────────────────────────────────────────
     public function submit(): void
@@ -413,6 +487,17 @@ class OpnameStokTable extends Component
 
         if (empty($rowsDiisi) && empty($deletedRows)) {
             Notification::make()->title('Tidak ada perubahan')->warning()->send();
+            return;
+        }
+
+        // Kubikasi fisik wajib dihitung (dasar perhitungan HPP per m³)
+        $belumHitung = $this->jumlahBelumDihitung();
+        if ($belumHitung > 0) {
+            Notification::make()
+                ->title('Kubikasi belum dihitung')
+                ->body("{$belumHitung} baris belum punya Kbk Fisik. Klik tombol Hitung Kubikasi dulu.")
+                ->danger()
+                ->send();
             return;
         }
 
