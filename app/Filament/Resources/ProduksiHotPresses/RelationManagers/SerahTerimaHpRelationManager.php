@@ -680,7 +680,23 @@ class SerahTerimaHpRelationManager extends RelationManager
      * di mutasi keluar tersebut. HPP belum dihitung (mengikuti hpp_average
      * berjalan, lewat StokPlatformMthService::kurang()).
      */
-    protected function prosesKeluarPlatformMth(SerahTerimaHp $serahTerima, StokPlatformMthService $service): void { // Stok mentah sudah dipotong saat keluar gudang, tidak perlu potong lagi
+    protected function prosesKeluarPlatformMth(SerahTerimaHp $serahTerima, StokPlatformMthService $service): void {
+        $mutasi = $serahTerima->platformMthMutasiKeluar;
+        if (! $mutasi) {
+            return;
+        }
+
+        $service->kurang(
+            idJenisKayu: $mutasi->id_jenis_kayu,
+            panjang: $mutasi->panjang,
+            lebar: $mutasi->lebar,
+            tebal: $mutasi->tebal,
+            kwGrade: $mutasi->kw_grade,
+            lembar: $mutasi->stok_lembar,
+            kubikasi: $mutasi->stok_kubikasi,
+            keterangan: "Diterima oleh Sanding (Dari Mutasi Keluar Gudang)",
+            referensi: $mutasi
+        );
     }
 
     /**
@@ -692,7 +708,23 @@ class SerahTerimaHpRelationManager extends RelationManager
      * Graji Triplek). Potong stok Triplek Mentah sesuai kuantitas yang
      * tercatat di mutasi keluar tersebut.
      */
-    protected function prosesKeluarTriplekMth(SerahTerimaHp $serahTerima, StokTriplekMthService $service): void { // Stok mentah sudah dipotong saat keluar gudang, tidak perlu potong lagi
+    protected function prosesKeluarTriplekMth(SerahTerimaHp $serahTerima, StokTriplekMthService $service): void {
+        $mutasi = $serahTerima->triplekMthMutasiKeluar;
+        if (! $mutasi) {
+            return;
+        }
+
+        $service->kurang(
+            idJenisKayu: $mutasi->id_jenis_kayu,
+            panjang: $mutasi->panjang,
+            lebar: $mutasi->lebar,
+            tebal: $mutasi->tebal,
+            kwGrade: $mutasi->kw_grade,
+            lembar: $mutasi->stok_lembar,
+            kubikasi: $mutasi->stok_kubikasi,
+            keterangan: "Diterima oleh Graji (Dari Mutasi Keluar Gudang)",
+            referensi: $mutasi
+        );
     }
 }
 

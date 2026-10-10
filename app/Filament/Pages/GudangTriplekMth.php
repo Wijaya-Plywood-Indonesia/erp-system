@@ -248,7 +248,8 @@ class GudangTriplekMth extends Page
                     'keterangan' => trim($this->keteranganKeluar) !== '' ? trim($this->keteranganKeluar) : null,
                 ]);
                 
-                $service = app(\App\Services\StokTriplekMthService::class);
+                // Stok dipotong saat diterima oleh tujuan
+                /* $service = app(\App\Services\StokTriplekMthService::class);
                 $service->kurang(
                     idJenisKayu: $stok->id_jenis_kayu,
                     panjang: $stok->panjang,
@@ -259,7 +260,7 @@ class GudangTriplekMth extends Page
                     kubikasi: $this->hitungKubikasi($stok->panjang, $stok->lebar, $stok->tebal, $qty),
                     keterangan: "Mutasi Keluar ke {$tujuanTerpilih}",
                     referensi: $mutasi
-                );
+                ); */
 
                 SerahTerimaHp::create([
                     'id_triplek_mth_mutasi_keluar' => $mutasi->id,
@@ -434,7 +435,8 @@ class GudangTriplekMth extends Page
                     throw new \Exception('Sisa stok fisik di gudang tidak mencukupi untuk kuantitas baru.');
                 }
                 
-                $service = app(\App\Services\StokTriplekMthService::class);
+                // Stok dipotong di penerima, jadi update tidak memotong stok lagi
+                /* $service = app(\App\Services\StokTriplekMthService::class);
                 
                 // Tambahkan kembali qty lama
                 $service->tambah(
@@ -447,14 +449,14 @@ class GudangTriplekMth extends Page
                     kubikasi: (float) $mutasi->stok_kubikasi,
                     keterangan: "Koreksi Mutasi Keluar (Tambah qty lama)",
                     referensi: $mutasi
-                );
+                ); */
 
                 $mutasi->update([
                     'stok_lembar' => $qty,
                     'stok_kubikasi' => $this->hitungKubikasi($mutasi->panjang, $mutasi->lebar, $mutasi->tebal, $qty),
                 ]);
                 
-                // Kurangi qty baru
+                /* // Kurangi qty baru
                 $service->kurang(
                     idJenisKayu: $mutasi->id_jenis_kayu,
                     panjang: $mutasi->panjang,
@@ -465,7 +467,7 @@ class GudangTriplekMth extends Page
                     kubikasi: $this->hitungKubikasi($mutasi->panjang, $mutasi->lebar, $mutasi->tebal, $qty),
                     keterangan: "Koreksi Mutasi Keluar (Kurangi qty baru)",
                     referensi: $mutasi
-                );
+                ); */
             });
 
             unset($this->riwayatKeluar);

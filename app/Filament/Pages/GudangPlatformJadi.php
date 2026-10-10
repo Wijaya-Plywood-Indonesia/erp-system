@@ -333,6 +333,35 @@ class GudangPlatformJadi extends Page
      * upsert stok jadi + tulis log + catat serah terima + KURANGI stok mentah.
      * HPP sementara diabaikan (0).
      */
+    public function tolak(int $idHasilSanding): void
+    {
+        try {
+            DB::transaction(function () use ($idHasilSanding) {
+                $hs = HasilSanding::lockForUpdate()->findOrFail($idHasilSanding);
+
+                if (SerahTerimaPlatformJadi::where('id_hasil_sanding', $hs->id)->exists()) {
+                    throw new \Exception('Palet ini sudah diterima, tidak bisa ditolak.');
+                }
+
+                $hs->update([
+                    'tujuan_serah' => null,
+                    'diserahkan_at' => null,
+                    'diserahkan_oleh' => null,
+                ]);
+            });
+
+            Notification::make()->success()
+                ->title('Barang Ditolak')
+                ->body('Barang berhasil dikembalikan ke antrean Sanding.')
+                ->send();
+        } catch (\Exception $e) {
+            Notification::make()->danger()
+                ->title('Gagal Menolak Barang')
+                ->body($e->getMessage())
+                ->send();
+        }
+    }
+
     public function terima(int $idHasilSanding): void
     {
         try {
