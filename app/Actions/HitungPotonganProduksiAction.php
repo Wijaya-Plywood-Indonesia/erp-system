@@ -13,6 +13,7 @@ use App\Enums\StrategiPembagian;
 use App\Models\Target;
 use App\Services\Target\TargetPotonganService;
 use App\Services\Target\TargetResolverFactory;
+use App\Support\MesinId;
 
 class HitungPotonganProduksiAction
 {
@@ -104,8 +105,11 @@ class HitungPotonganProduksiAction
     ): ?Target {
         $resolver = TargetResolverFactory::make($mesin);
 
-        return $resolver->resolve($mesin->value, $idUkuran, $idJenisKayu, $grade);
+        // Translasi id_mesin sesuai DB aktif (Wahana vs Kayu).
+        return $resolver->resolve(MesinId::of($mesin), $idUkuran, $idJenisKayu, $grade);
     }
+
+
 
     /**
      * @param  UkuranHasilInput[]  $ukuranList

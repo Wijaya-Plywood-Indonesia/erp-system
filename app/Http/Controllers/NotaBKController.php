@@ -80,8 +80,11 @@ class NotaBKController extends Controller
                         break;
                     }
                 }
-                $rawItems->push($matched ?? $d);
+                $obj = $matched ?? $d;
+                $obj->_nota_detail = $d;
+                $rawItems->push($obj);
             } else {
+                $d->_nota_detail = $d;
                 $rawItems->push($d);
             }
         }
@@ -258,13 +261,48 @@ class NotaBKController extends Controller
 
             $keterangan = $detail->keterangan ?? '';
 
+            // --- OVERRIDES FROM DETAIL NOTA ---
+            $notaDetail = $detail->_nota_detail ?? null;
+            $potongan = 0;
+            
+            if ($notaDetail) {
+                if (!empty($notaDetail->custom_nama)) {
+                    $namaBarang = $notaDetail->custom_nama;
+                }
+                if ($notaDetail->custom_m3 !== null) {
+                    $m3 = (float) $notaDetail->custom_m3;
+                }
+                if ($notaDetail->harga !== null) {
+                    // kita kembalikan subtotal awal dulu agar dihitung ulang
+                    $grandTotal -= $subtotal;
+                    $harga = (float) $notaDetail->harga;
+                    $subtotal = ($m3 !== null ? $m3 : $qty) * $harga;
+                    $grandTotal += $subtotal;
+                }
+                if ($notaDetail->potongan !== null) {
+                    $potongan = (float) $notaDetail->potongan;
+                    // Potongan dikalikan dengan Qty (karena pot/pcs).
+                    // Subtotal dikurangi total potongan.
+                    $totalPotongan = $qty * $potongan;
+                    
+                    // hapus grandtotal lama (karena subtotal lama belum dipotong)
+                    $grandTotal -= $subtotal;
+                    
+                    $subtotal -= $totalPotongan;
+                    
+                    $grandTotal += $subtotal;
+                }
+            }
+
             $items[] = (object) [
+                'id_detail'   => $notaDetail ? $notaDetail->id : null,
                 'nama_barang' => $namaBarang,
                 'satuan'      => $satuan,
                 'qty'         => $qty,
                 'm3'          => $m3,
                 'harga'       => $harga,
-                'potongan'    => 0,
+                'potongan'    => $potongan,
+                'total_pot'   => $potongan * $qty,
                 'subtotal'    => $subtotal,
                 'keterangan'  => $keterangan,
             ];
@@ -484,4 +522,45 @@ class NotaBKController extends Controller
         );
     }
 
+    public function updateItems(Request $request, NotaBarangKeluar $record)
+    {
+        $itemsData = $request->input('items', []);
+
+        foreach ($itemsData as $id => $data) {
+            $detail = \App\Models\DetailNotaBarangKeluar::find($id);
+            if ($detail && $detail->id_nota_bk == $record->id) {
+                if (isset($data['nama_barang'])) {
+                    $detail->custom_nama = $data['nama_barang'];
+                }
+                if (isset($data['harga'])) {
+                    // hapus separator ribuan jika ada
+                    $hargaStr = str_replace('.', '', $data['harga']);
+                    $hargaStr = str_replace(',', '.', $hargaStr);
+                    $detail->harga = (float) $hargaStr;
+                }
+                if (isset($data['potongan'])) {
+                    // hapus separator ribuan jika ada
+                    $potStr = str_replace('.', '', $data['potongan']);
+                    $potStr = str_replace(',', '.', $potStr);
+                    $detail->potongan = (float) $potStr;
+                }
+                $detail->save();
+            }
+        }
+
+        return redirect()->back()->with('success', 'Perubahan pada nota berhasil disimpan.');
+    }
+
+    public function resetItems(NotaBarangKeluar $record)
+    {
+        \App\Models\DetailNotaBarangKeluar::where('id_nota_bk', $record->id)
+            ->update([
+                'custom_nama' => null,
+                'custom_m3'   => null,
+                'harga'       => null,
+                'potongan'    => null,
+            ]);
+
+        return redirect()->back()->with('success', 'Berhasil mereset nota ke nilai default.');
+    }
 }

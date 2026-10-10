@@ -275,18 +275,6 @@ class PenggunaanLahanRotariesTable
                                     'hpp_average'   => 0,
                                     'id_last_log'   => $log->id,
                                 ]);
-
-                                if ($batangKeluar > 0) {
-                                    app(LogCoreStokService::class)->tambahStok(
-                                        idJenisKayu: $idJenisKayu,
-                                        panjang: $item->panjang,
-                                        qty: $batangKeluar,
-                                        hargaSatuan: 0,
-                                        referensi: $record,
-                                        keterangan: $keteranganLengkap,
-                                        tanggal: $tglProduksi,
-                                    );
-                                }
                             }
 
                             $record->update([

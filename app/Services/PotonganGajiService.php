@@ -120,6 +120,21 @@ class PotonganGajiService
     }
 
     /**
+     * Ambil data potongan untuk satu jenis produksi saja.
+     */
+    public function getPotonganMapFor(string $tanggal, string $method): array
+    {
+        $this->tanggal = $tanggal;
+        $this->potonganMap = [];
+
+        if (method_exists($this, $method)) {
+            $this->$method();
+        }
+
+        return $this->potonganMap;
+    }
+
+    /**
      * Cari nominal potongan seorang pegawai dari $map hasil
      * getPotonganMap(). Method stateless (tidak menghitung ulang apa
      * pun) — dipakai berulang kali per baris pegawai tanpa perlu

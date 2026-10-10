@@ -247,6 +247,25 @@ Route::get('/external/rekap-stok-veneer', function (Request $request) {
             return is_numeric($kw) ? (int) $kw : $kw;
         };
 
+        // Opsional ?tanggal=Y-m-d → posisi stok akhir hari tsb berdasarkan log
+        $tgl = $request->query('tanggal');
+        $tgl = ($tgl && preg_match('/^\d{4}-\d{2}-\d{2}$/', $tgl)) ? $tgl : null;
+
+        $logRows = function (string $table, string $kwCol) use ($tgl) {
+            if (!$tgl) return null;
+            $ids = DB::table($table)
+                ->whereDate('tanggal', '<=', $tgl)
+                ->select(DB::raw('MAX(id) as max_id'))
+                ->groupBy('id_jenis_kayu', 'panjang', 'lebar', 'tebal', $kwCol)
+                ->pluck('max_id');
+            return DB::table($table)->whereIn('id', $ids)->get()->map(function ($r) use ($kwCol) {
+                $r->stok_lembar = (int) $r->stok_lembar_after;
+                $r->kw = $r->{$kwCol};
+                $r->kw_grade = $r->{$kwCol};
+                return $r;
+            });
+        };
+
         $result = [
             'basah'  => [],
             'kering' => [],
@@ -254,7 +273,7 @@ Route::get('/external/rekap-stok-veneer', function (Request $request) {
         ];
 
         // ── Basah ────────────────────────────────────────────────────────────
-        foreach (\App\Models\HppVeneerBasahSummary::all() as $b) {
+        foreach ($logRows('hpp_veneer_basah_logs', 'kw') ?? \App\Models\HppVeneerBasahSummary::all() as $b) {
             $kw = $normalizeKw($b->kw);
             if ($kw === null) continue;
             $result['basah'][] = [
@@ -270,6 +289,7 @@ Route::get('/external/rekap-stok-veneer', function (Request $request) {
 
         // ── Kering ───────────────────────────────────────────────────────────
         $keringIds = DB::table('stok_veneer_kerings')
+            ->when($tgl, fn ($q) => $q->whereDate('tanggal_transaksi', '<=', $tgl))
             ->select(DB::raw('MAX(id) as max_id'))
             ->groupBy('id_ukuran', 'id_jenis_kayu', 'kw')
             ->pluck('max_id');
@@ -291,7 +311,7 @@ Route::get('/external/rekap-stok-veneer', function (Request $request) {
         }
 
         // ── Jadi ─────────────────────────────────────────────────────────────
-        foreach (\App\Models\StokVeneerJadi::all() as $j) {
+        foreach ($logRows('hpp_veneer_jadi_log', 'kw_grade') ?? \App\Models\StokVeneerJadi::all() as $j) {
             $kw = $normalizeKw($j->kw_grade);
             if ($kw === null) continue;
             $result['jadi'][] = [

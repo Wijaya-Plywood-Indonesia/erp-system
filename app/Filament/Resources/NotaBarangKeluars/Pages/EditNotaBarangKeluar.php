@@ -18,4 +18,13 @@ class EditNotaBarangKeluar extends EditRecord
             DeleteAction::make(),
         ];
     }
+
+    public function mount(int | string $record): void
+    {
+        parent::mount($record);
+
+        if ($this->record->divalidasi_oleh !== null && !auth()->user()?->hasRole('super_admin')) {
+            abort(403, 'Nota yang sudah divalidasi tidak dapat diedit.');
+        }
+    }
 }

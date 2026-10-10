@@ -64,19 +64,12 @@
                 @if ($serahTerimaTab === 'aktif')
                 @forelse($serahTerima as $st)
                 @php
-                // ✅ FIX: 'joint' pakai relasi hasilJoint (tabel hasil_joint),
-                // BUKAN hasilSandingJoint yang menunjuk tabel berbeda.
-                $sumber = match ($st->tipe_sumber) {
-                'dryer' => $st->detailHasil,
-                'kedi' => $st->detailBongkarKedi,
-                'joint' => $st->hasilJoint,
-                default => null,
-                };
-                $ukuran = $sumber?->ukuran;
-                $kayu = $sumber?->jenisKayu?->nama_kayu ?? '-';
-                $kw = $sumber?->kw ?? '-';
-                $qty = $st->tipe_sumber === 'dryer' ? $sumber?->isi ?? 0 : $sumber?->jumlah ?? 0;
-                $labelSumber = $labelMap[$st->tipe_sumber] ?? '-';
+                $t = $st->tampilan;
+                $dimensi = $t['dimensi'] ?? '0x0x0';
+                $kayu = $t['jenis_kayu'] ?? '-';
+                $kw = $t['kw'] ?? '-';
+                $qty = $st->qty_asli;
+                $labelSumber = $labelMap[$st->tipe_sumber] ?? $st->label_sumber;
                 $badgeColor =
                 $badgeColorMap[$st->tipe_sumber] ??
                 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400';
@@ -93,7 +86,7 @@
                     </span>
                     <span
                         class="font-mono text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400 tabular-nums whitespace-nowrap shrink-0">
-                        {{ $ukuran?->panjang + 0 }}×{{ $ukuran?->lebar + 0 }}×{{ $ukuran?->tebal + 0 }}
+                        {{ str_replace('x', '×', $dimensi) }}
                         <span class="text-[10px] text-zinc-400">mm</span>
                     </span>
                     <span
@@ -128,18 +121,13 @@
                 @else
                 @forelse($riwayatSerahTerima as $st)
                 @php
-                $sumber = match ($st->tipe_sumber) {
-                'dryer' => $st->detailHasil,
-                'kedi' => $st->detailBongkarKedi,
-                'joint' => $st->hasilJoint,
-                default => null,
-                };
-                $ukuran = $sumber?->ukuran;
-                $kayu = $sumber?->jenisKayu?->nama_kayu ?? '-';
-                $kw = $sumber?->kw ?? '-';
-                $qty = $st->tipe_sumber === 'dryer' ? $sumber?->isi ?? 0 : $sumber?->jumlah ?? 0;
+                $t = $st->tampilan;
+                $dimensi = $t['dimensi'] ?? '0x0x0';
+                $kayu = $t['jenis_kayu'] ?? '-';
+                $kw = $t['kw'] ?? '-';
+                $qty = $st->qty_asli;
                 $diterimaOleh = trim(explode(' - ', $st->diterima_oleh ?? '-')[0]);
-                $labelSumber = $labelMap[$st->tipe_sumber] ?? '-';
+                $labelSumber = $labelMap[$st->tipe_sumber] ?? $st->label_sumber;
                 $badgeColor =
                 $badgeColorMap[$st->tipe_sumber] ??
                 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400';
@@ -157,7 +145,7 @@
                         </span>
                         <span
                             class="font-mono text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400 tabular-nums whitespace-nowrap shrink-0">
-                            {{ $ukuran?->panjang + 0 }}×{{ $ukuran?->lebar + 0 }}×{{ $ukuran?->tebal + 0 }}
+                            {{ str_replace('x', '×', $dimensi) }}
                             <span class="text-[10px] text-zinc-400">mm</span>
                         </span>
                         <span

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PegawaiNyusups\Tables;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -17,6 +18,9 @@ class PegawaiNyusupsTable
 {
     public static function configure(Table $table): Table
     {
+        // Tanggal produksi Nyusup yang sedang dibuka
+        $tanggalNyusup = fn($livewire) => $livewire->getOwnerRecord()->tanggal_produksi;
+
         return $table
             ->columns([
                 TextColumn::make('pegawai.nama_pegawai')
@@ -100,9 +104,17 @@ class PegawaiNyusupsTable
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
+
+                PindahPegawaiTableActions::recordAction('nyusup', $tanggalNyusup)
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
+                PindahPegawaiTableActions::batalAction('nyusup'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('nyusup', $tanggalNyusup),
                     DeleteBulkAction::make(),
                 ]),
             ]);

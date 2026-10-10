@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PegawaiGrajiStiks\Tables;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -18,6 +19,9 @@ class PegawaiGrajiStiksTable
 {
     public static function configure(Table $table): Table
     {
+        // Tanggal produksi Graji Stik yang sedang dibuka
+        $tanggalGrajiStik = fn($livewire) => $livewire->getOwnerRecord()->tanggal;
+
         return $table
             ->columns([
                 TextColumn::make('pegawai.nama_pegawai')
@@ -104,9 +108,14 @@ class PegawaiGrajiStiksTable
                     ->hidden(fn($livewire) => $livewire->ownerRecord?->isLocked()),
                 DeleteAction::make()
                     ->hidden(fn($livewire) => $livewire->ownerRecord?->isLocked()),
+
+                PindahPegawaiTableActions::recordAction('graji_stik', $tanggalGrajiStik)
+                    ->hidden(fn($livewire) => $livewire->ownerRecord?->isLocked()),
+                PindahPegawaiTableActions::batalAction('graji_stik'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('graji_stik', $tanggalGrajiStik),
                     DeleteBulkAction::make()
                         ->hidden(fn($livewire) => $livewire->ownerRecord?->isLocked()),
                 ]),

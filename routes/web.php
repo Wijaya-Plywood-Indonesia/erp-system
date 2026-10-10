@@ -67,6 +67,10 @@ Route::get('/nota-barang-keluar/{record}/barang-keluar', [NotaBKController::clas
 
 Route::get('/nota-barang-keluar/{record}/preview/{jenis}', [NotaBKController::class, 'preview'])
     ->name('nota-bk.preview');
+Route::post('/nota-barang-keluar/{record}/update-items', [NotaBKController::class, 'updateItems'])
+    ->name('nota-bk.update-items');
+Route::post('/nota-barang-keluar/{record}/reset-items', [NotaBKController::class, 'resetItems'])
+    ->name('nota-bk.reset-items');
 
 Route::post('/nota-barang-keluar/{record}/save-payment', [NotaBKController::class, 'savePayment'])
     ->name('nota-bk.save-payment');

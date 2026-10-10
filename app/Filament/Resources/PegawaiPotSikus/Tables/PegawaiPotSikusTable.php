@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\PegawaiPotSikus\Tables;
 
 use Filament\Actions\Action;
+use App\Filament\Support\PindahPegawaiTableActions;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -17,6 +18,10 @@ class PegawaiPotSikusTable
 {
     public static function configure(Table $table): Table
     {
+        // Tanggal produksi yang sedang dibuka, dipakai fitur Pindah Pegawai untuk
+        // mencari/membuat produksi tujuan pada tanggal yang sama.
+        $tanggalProduksi = fn ($livewire) => $livewire->getOwnerRecord()->tanggal_produksi;
+
         return $table
             ->columns([
                 TextColumn::make('pegawai.nama_pegawai')
@@ -98,9 +103,12 @@ class PegawaiPotSikusTable
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
+                PindahPegawaiTableActions::recordAction('pot_siku', $tanggalProduksi),
+                PindahPegawaiTableActions::batalAction('pot_siku'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('pot_siku', $tanggalProduksi),
                     DeleteBulkAction::make(),
                 ]),
             ]);

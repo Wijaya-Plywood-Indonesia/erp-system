@@ -20,6 +20,7 @@ class NotaKayuForm
                     ->options(
                         KayuMasuk::query()
                             ->with('penggunaanSupplier')
+                            ->doesntHave('notaKayu')
                             ->orderByDesc('id')
                             ->get()
                             ->mapWithKeys(function ($kayu_masuk) {

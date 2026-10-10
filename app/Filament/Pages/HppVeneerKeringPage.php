@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Concerns\FlexibleLogSearch;
 use App\Models\StokVeneerKering; // Menggunakan ini karena menyimpan detail transaksi
 use App\Models\JenisKayu;
 use App\Models\Ukuran;
@@ -12,6 +13,7 @@ use UnitEnum;
 class HppVeneerKeringPage extends Page
 {
     use HasPageShield;
+    use FlexibleLogSearch;
     protected string $view = 'filament.pages.hpp-veneer-kering-page';
     protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Log HPP Veneer Kering';
@@ -35,7 +37,7 @@ class HppVeneerKeringPage extends Page
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->when($this->filterPanjang,   fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('panjang', $this->filterPanjang)))
             ->when($this->filterTebal,     fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('tebal', $this->filterTebal)))
-            ->when($this->filterKw,        fn($q) => $q->where('kw', $this->filterKw))
+            ->when(trim($this->filterKw) !== '', fn($q) => $this->flexibleSearch($q, $this->filterKw, $this->logSearchConfig()))
             ->orderByDesc('tanggal_transaksi')
             ->orderByDesc('id')
             ->get();
@@ -50,4 +52,16 @@ class HppVeneerKeringPage extends Page
             ->orderBy('panjang')->orderBy('lebar')->orderBy('tebal')
             ->get();
     }
+
+    protected function logSearchConfig(): array
+{
+    return [
+        'text'          => ['keterangan', 'jenis_transaksi'],
+        'kw'            => 'kw',
+        'relations'     => ['jenisKayu.nama_kayu'],
+        'size'          => ['panjang', 'lebar', 'tebal'],
+        'size_relation' => 'ukuran',
+        'date'          => 'tanggal_transaksi',
+    ];
+}
 }

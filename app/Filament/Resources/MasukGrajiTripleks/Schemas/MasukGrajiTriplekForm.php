@@ -37,7 +37,10 @@ class MasukGrajiTriplekForm
 
                 Select::make('id_serah_terima_hp')
                     ->label('Pilih Palet (Serah Terima)')
-                    ->options(fn (?MasukGrajiTriplek $record) => self::getPaletOptions($record))
+                    ->options(fn (?MasukGrajiTriplek $record, $livewire) => self::getPaletOptions(
+                        $record,
+                        $livewire->getOwnerRecord()?->id,
+                    ))
                     ->searchable()
                     ->live()
                     ->required()
@@ -190,21 +193,30 @@ class MasukGrajiTriplekForm
             ]);
     }
 
-    protected static function getPaletOptions(?MasukGrajiTriplek $record): array
+    /**
+     * @param  ?MasukGrajiTriplek  $record  Record yang sedang diedit (null = create baru).
+     * @param  int|null  $ownerRecordId  ID produksi Graji Triplek yang sedang dibuka.
+     */
+    protected static function getPaletOptions(?MasukGrajiTriplek $record, ?int $ownerRecordId = null): array
     {
         $currentId = $record?->id_serah_terima_hp;
         $currentIsi = (float) ($record?->isi ?? 0);
 
         return SerahTerimaHp::query()
-            ->where('diterima_oleh', '!=', '-')
             ->where('tujuan', 'graji_triplek')
-            // Dibatasi EKSPLISIT hanya ke sumber yang didukung form ini:
-            // Hotpress (id_triplek_hasil_hp) ATAU Gudang Triplek Mentah
-            // (id_triplek_mth_mutasi_keluar). Sengaja TIDAK ikut menarik
-            // id_hasil_sanding (serah manual Sanding -> Graji) supaya barang
-            // dari sumber yang belum tentu dimaksudkan bisa dipakai di sini
-            // tidak tiba-tiba muncul di dropdown.
-
+            ->whereNull('ditolak_oleh')
+            ->where(fn ($q) => $q
+                // Sudah diterima oleh produksi ini (boleh dari sumber mana saja)
+                ->where('id_produksi_graji_triplek', $ownerRecordId)
+                // ATAU: dikirim dari Gudang Triplek Mentah ke Graji (id_triplek_mth_mutasi_keluar),
+                // sudah diterima Graji (diterima_oleh != '-'), belum diklaim produksi mana pun.
+                // Sengaja TIDAK include id_triplek_hasil_hp tanpa id_triplek_mth_mutasi_keluar
+                // karena record HP yang sudah "diterima_oleh = Gudang Triplek Mentah" adalah
+                // stok di gudang — belum jadi kiriman ke Graji.
+                ->orWhere(fn ($w) => $w
+                    ->whereNotNull('id_triplek_mth_mutasi_keluar')
+                    ->where('diterima_oleh', '!=', '-')
+                    ->whereNull('id_produksi_graji_triplek')))
             ->with(self::HASIL_RELATIONS)
             ->get()
             ->map(function ($item) use ($currentId, $currentIsi) {

@@ -1,20 +1,63 @@
 <x-filament-panels::page>
     <div class="space-y-6">
 
-        {{-- Header info tanggal --}}
+        {{-- Header + Filter Tanggal (highlight) --}}
         <div
-            class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10 px-6 py-4">
-            <div class="flex items-center justify-between flex-wrap gap-2">
+            class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10 overflow-hidden">
+
+            <div class="px-6 py-4 flex items-center justify-between flex-wrap gap-4">
                 <div>
                     <h2 class="text-base font-semibold text-gray-950 dark:text-white">Rekap Stok Veneer</h2>
-                    <p class="text-sm text-gray-950 dark:text-white">Per tanggal
-                        {{ \Carbon\Carbon::now()->translatedFormat('d F Y') }}</p>
+                    <p class="text-sm text-gray-950 dark:text-white">
+                        Per tanggal
+                        <span class="font-semibold">
+                            {{ ($tanggal !== '' ? \Carbon\Carbon::parse($tanggal) : \Carbon\Carbon::now())->translatedFormat('d F Y') }}
+                        </span>
+                        <span class="mx-1 text-gray-400">•</span>
+                        <span class="inline-flex items-center gap-1 font-medium">
+                            <x-heroicon-o-calendar-days class="h-4 w-4" />
+                            {{ count($allStocks) }} ukuran ditampilkan
+                        </span>
+                    </p>
                 </div>
-                <span class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-950 dark:text-white">
-                    <x-heroicon-o-calendar-days class="h-4 w-4" />
-                    {{ count($allStocks) }} ukuran ditampilkan
-                </span>
+
+                {{-- Pilih tanggal --}}
+                <div
+                    class="flex items-end gap-2 rounded-xl bg-primary-50 dark:bg-primary-950/30 ring-1 ring-primary-500/40 px-4 py-3">
+                    <div>
+                        <label
+                            class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300 mb-1">
+                            <x-heroicon-o-calendar class="h-4 w-4" />
+                            Posisi Stok per Tanggal
+                        </label>
+                        <input wire:model.live="tanggal" type="date" max="{{ now()->toDateString() }}"
+                            class="block w-48 rounded-lg border-0 py-1.5 px-3 text-sm font-medium text-gray-950 dark:text-white shadow-sm ring-1 ring-inset ring-primary-500/50 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-inset focus:ring-primary-600 dark:focus:ring-primary-500" />
+                    </div>
+
+                    @if ($tanggal !== '')
+                        <button type="button" wire:click="$set('tanggal', '')"
+                            class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-primary-700 dark:text-primary-300 bg-white dark:bg-white/5 shadow-sm ring-1 ring-inset ring-primary-500/50 hover:bg-primary-100 dark:hover:bg-white/10 transition">
+                            <x-heroicon-o-arrow-path class="h-4 w-4" />
+                            Hari ini
+                        </button>
+                    @endif
+
+                    <span wire:loading wire:target="tanggal"
+                        class="text-xs font-medium text-primary-700 dark:text-primary-300 pb-2">
+                        Memuat…
+                    </span>
+                </div>
             </div>
+
+            {{-- Banner saat melihat stok tanggal lampau --}}
+            @if ($tanggal !== '' && $tanggal !== now()->toDateString())
+                <div
+                    class="flex items-center gap-2 px-6 py-2 bg-amber-50 dark:bg-amber-950/20 border-t border-amber-200 dark:border-amber-500/20 text-sm font-medium text-amber-800 dark:text-amber-300">
+                    <x-heroicon-o-clock class="h-4 w-4 shrink-0" />
+                    Menampilkan posisi stok akhir hari
+                    {{ \Carbon\Carbon::parse($tanggal)->translatedFormat('d F Y') }}, bukan stok saat ini.
+                </div>
+            @endif
         </div>
 
         {{-- Filter bar --}}
@@ -69,7 +112,8 @@
 
                 @if ($search !== '' || $filterKayu !== '' || $filterKw !== '' || $sortBy !== 'ukuran')
                     <div class="flex items-end">
-                        <button wire:click="$set('search', ''); $set('filterKayu', ''); $set('filterKw', ''); $set('sortBy', 'ukuran')"
+                        <button
+                            wire:click="$set('search', ''); $set('filterKayu', ''); $set('filterKw', ''); $set('sortBy', 'ukuran')"
                             class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-white/5 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-white/10 transition">
                             <x-heroicon-o-x-mark class="h-4 w-4" />
                             Reset
@@ -83,26 +127,36 @@
         {{-- STOCK GROUPS                                            --}}
         {{-- ════════════════════════════════════════════════════════ --}}
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            @php 
-                $currentKayu = null; 
+            @php
+                $currentKayu = null;
                 $currentUkuran = null;
             @endphp
             @forelse($allStocks as $stockGroup)
                 @if ($sortBy === 'jenis_kayu' && $currentKayu !== $stockGroup['jenis_kayu'])
                     @php $currentKayu = $stockGroup['jenis_kayu']; @endphp
-                    <div class="col-span-1 xl:col-span-2 border-b-2 border-primary-500/30 dark:border-primary-500/20 pb-2 mt-4 first:mt-0 flex items-center gap-2">
+                    <div
+                        class="col-span-1 xl:col-span-2 border-b-2 border-primary-500/30 dark:border-primary-500/20 pb-2 mt-4 first:mt-0 flex items-center gap-2">
                         <x-heroicon-o-tag class="h-5 w-5 text-primary-600 dark:text-primary-400" />
-                        <h2 class="text-xl font-bold text-gray-900 dark:text-white uppercase tracking-wider">{{ $currentKayu }}</h2>
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                            {{ $currentKayu }}</h2>
                     </div>
                 @elseif ($sortBy === 'ukuran')
-                    @php 
-                        $ukuranLabel = $stockGroup['panjang'] . ' × ' . $stockGroup['lebar'] . ' × ' . $stockGroup['tebal'] . ' mm';
+                    @php
+                        $ukuranLabel =
+                            $stockGroup['panjang'] .
+                            ' × ' .
+                            $stockGroup['lebar'] .
+                            ' × ' .
+                            $stockGroup['tebal'] .
+                            ' mm';
                     @endphp
                     @if ($currentUkuran !== $ukuranLabel)
                         @php $currentUkuran = $ukuranLabel; @endphp
-                        <div class="col-span-1 xl:col-span-2 border-b-2 border-primary-500/30 dark:border-primary-500/20 pb-2 mt-4 first:mt-0 flex items-center gap-2">
+                        <div
+                            class="col-span-1 xl:col-span-2 border-b-2 border-primary-500/30 dark:border-primary-500/20 pb-2 mt-4 first:mt-0 flex items-center gap-2">
                             <x-heroicon-o-arrows-pointing-out class="h-5 w-5 text-primary-600 dark:text-primary-400" />
-                            <h2 class="text-xl font-bold text-gray-900 dark:text-white uppercase tracking-wider">{{ $currentUkuran }}</h2>
+                            <h2 class="text-xl font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                                {{ $currentUkuran }}</h2>
                         </div>
                     @endif
                 @endif
@@ -428,7 +482,8 @@
                         @if (($filterKw === '' || in_array($filterKw, ['2', '3'])) && $tot23 > 0)
                             <div class="bg-amber-50 dark:bg-amber-950/20 px-4 py-3 flex items-center justify-between">
                                 <div>
-                                    <p class="text-xs font-semibold text-gray-700 dark:text-gray-300">Total KW 2 + KW 3</p>
+                                    <p class="text-xs font-semibold text-gray-700 dark:text-gray-300">Total KW 2 + KW 3
+                                    </p>
                                     {{-- LOGIKA FUSO (dinonaktifkan sementara): 1 fuso = 3600 lembar --}}
                                     {{-- <p class="text-xs text-gray-950 dark:text-white">{{ number_format(ceil($tot23 / 3600), 0, ',', '.') }} fuso</p> --}}
                                 </div>
@@ -441,13 +496,14 @@
 
                 </div>{{-- end stock group --}}
             @empty
-                <div class="col-span-1 xl:col-span-2 fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10 flex flex-col items-center justify-center py-20">
+                <div
+                    class="col-span-1 xl:col-span-2 fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10 flex flex-col items-center justify-center py-20">
                     <x-heroicon-o-archive-box-x-mark class="h-12 w-12 text-red-600 dark:text-red-400 mb-4" />
                     <p class="text-sm font-semibold text-gray-950 dark:text-white">Tidak ada data ditemukan</p>
-                    <p class="mt-1 text-xs text-gray-800 dark:text-gray-200">Coba ubah kata kunci atau reset filter.</p>
+                    <p class="mt-1 text-xs text-gray-800 dark:text-gray-200">Coba ubah kata kunci atau reset filter.
+                    </p>
                 </div>
             @endforelse
         </div>
     </div>
 </x-filament-panels::page>
-

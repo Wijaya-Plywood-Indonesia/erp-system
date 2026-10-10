@@ -56,6 +56,8 @@
         </div>
     @endif
 
+    {{-- Detail Produksi Kedi per tanggal disembunyikan berdasarkan permintaan user --}}
+    @if (false)
     <div class="space-y-12 mt-6">
         @forelse($dataKedi as $data)
             <div
@@ -285,6 +287,7 @@
             </div>
         @endforelse
     </div>
+    @endif
 
     {{-- ================= REKAP POTONGAN TARGET (GABUNGAN PER TANGGAL) ================= --}}
     {{-- Dihitung sekali untuk seluruh tanggal, sama persis dengan sheet "Potongan" di Excel export --}}

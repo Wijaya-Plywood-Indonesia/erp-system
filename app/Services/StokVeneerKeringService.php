@@ -33,8 +33,8 @@ class StokVeneerKeringService
      */
     protected function buatKeterangan(SerahTerimaVeneerKering $serahTerima, $sumber): string
     {
-        $labelSumber = $serahTerima->label_sumber; // "Press Dryer" | "Kedi"
-        $noPalet = $sumber->no_palet ?? '-';
+        $labelSumber = $serahTerima->label_sumber; // "Press Dryer" | "Kedi" | "Gudang Veneer Jadi"
+        $noPalet = $sumber->no_palet ?? $sumber->nomor_palet ?? '-';
 
         $produksiRepair = $serahTerima->produksiRepair;
         $tanggalRepair = $produksiRepair?->tanggal
@@ -82,12 +82,24 @@ class StokVeneerKeringService
             throw new \RuntimeException('Sumber data serah terima tidak ditemukan.');
         }
 
-        $idUkuran = $sumber->id_ukuran;
-        $idJenisKayu = $sumber->id_jenis_kayu;
-        $kw = (string) $sumber->kw;
-        $qty = (float) ($sumber->isi ?? $sumber->jumlah ?? 0);
-
-        $ukuran = $sumber->ukuran ?? Ukuran::find($idUkuran);
+        if ($sumber instanceof \App\Models\VeneerJadiMutasiKeluarPalet) {
+            $mutasiKeluar = $sumber->mutasiKeluar;
+            $ukuran = \App\Models\Ukuran::firstOrCreate([
+                'panjang' => $mutasiKeluar->panjang,
+                'lebar' => $mutasiKeluar->lebar,
+                'tebal' => $mutasiKeluar->tebal,
+            ]);
+            $idUkuran = $ukuran->id;
+            $idJenisKayu = $mutasiKeluar->id_jenis_kayu;
+            $kw = (string) $mutasiKeluar->kw_grade;
+            $qty = (float) $serahTerima->qty_asli;
+        } else {
+            $idUkuran = $sumber->id_ukuran;
+            $idJenisKayu = $sumber->id_jenis_kayu;
+            $kw = (string) $sumber->kw;
+            $qty = (float) ($sumber->isi ?? $sumber->jumlah ?? 0);
+            $ukuran = $sumber->ukuran ?? \App\Models\Ukuran::find($idUkuran);
+        }
         $m3PerLembar = $this->m3PerLembar($ukuran);
         $m3 = $qty * $m3PerLembar / 10000000;
 

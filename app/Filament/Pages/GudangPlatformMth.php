@@ -87,10 +87,11 @@ class GudangPlatformMth extends Page
             ->values();
     }
 
+
     /**
-     * Opsi stok untuk pop up "Catat Barang Keluar" (komponen x-gudang.pilih-stok).
-     * Sengaja TIDAK difilter oleh kolom search halaman — pencarian di pop up
-     * dilakukan di sisi client (Alpine) per kata kunci: ukuran, jenis kayu, KW.
+     * Opsi stok untuk pop up "Catat Barang Keluar".
+     * Pencarian dilakukan di sisi client (Alpine) berdasarkan ukuran,
+     * jenis kayu, dan KW.
      */
     public function getStokOpsiKeluarProperty(): array
     {
@@ -116,7 +117,7 @@ class GudangPlatformMth extends Page
             ->values()
             ->all();
     }
-
+  
     // ─── MENUNGGU DITERIMA GUDANG (hasil hotpress) ───────────────────────────
 
     public function getMenungguTerimaProperty(): Collection

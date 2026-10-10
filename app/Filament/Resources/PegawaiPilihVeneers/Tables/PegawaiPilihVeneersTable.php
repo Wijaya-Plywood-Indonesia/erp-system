@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PegawaiPilihVeneers\Tables;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -17,6 +18,9 @@ class PegawaiPilihVeneersTable
 {
     public static function configure(Table $table): Table
     {
+        // Tanggal produksi Pilih Veneer yang sedang dibuka
+        $tanggalPilihVeneer = fn($livewire) => $livewire->getOwnerRecord()->tanggal_produksi;
+
         return $table
             ->columns([
                 TextColumn::make('pegawai.nama_pegawai')
@@ -100,9 +104,17 @@ class PegawaiPilihVeneersTable
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
+
+                PindahPegawaiTableActions::recordAction('pilih_veneer', $tanggalPilihVeneer)
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
+                PindahPegawaiTableActions::batalAction('pilih_veneer'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('pilih_veneer', $tanggalPilihVeneer),
                     DeleteBulkAction::make(),
                 ]),
             ]);

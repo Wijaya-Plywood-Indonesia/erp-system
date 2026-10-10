@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PegawaiJoints\Tables;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -17,6 +18,9 @@ class PegawaiJointsTable
 {
     public static function configure(Table $table): Table
     {
+        // Tanggal produksi Joint yang sedang dibuka (semua pegawai di halaman ini satu tanggal)
+        $tanggalJoint = fn($livewire) => $livewire->getOwnerRecord()->tanggal_produksi;
+
         return $table
             ->columns([
                 TextColumn::make('pegawai.nama_pegawai')
@@ -98,9 +102,17 @@ class PegawaiJointsTable
                         fn($livewire) =>
                         $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
                     ),
+
+                PindahPegawaiTableActions::recordAction('joint', $tanggalJoint)
+                    ->hidden(
+                        fn($livewire) =>
+                        $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
+                    ),
+                PindahPegawaiTableActions::batalAction('joint'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('joint', $tanggalJoint),
                     DeleteBulkAction::make(),
                 ]),
             ]);

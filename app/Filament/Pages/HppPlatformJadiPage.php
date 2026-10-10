@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Concerns\FlexibleLogSearch;
 use App\Models\HppPlatformJadiLog;
 use App\Models\JenisBarang;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -11,6 +12,7 @@ use UnitEnum;
 class HppPlatformJadiPage extends Page
 {
     use HasPageShield;
+    use FlexibleLogSearch;
     protected string $view = 'filament.pages.hpp-platform-jadi-page';
     protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationLabel = 'Log HPP Platform Jadi';
@@ -33,7 +35,7 @@ class HppPlatformJadiPage extends Page
             ->when($this->filterPanjang,     fn($q) => $q->where('panjang', $this->filterPanjang))
             ->when($this->filterLebar,       fn($q) => $q->where('lebar',   $this->filterLebar))
             ->when($this->filterTebal,       fn($q) => $q->where('tebal',   $this->filterTebal))
-            ->when($this->filterKw,          fn($q) => $q->where('kw_grade', $this->filterKw))
+            ->when(trim($this->filterKw) !== '', fn($q) => $this->flexibleSearch($q, $this->filterKw, $this->logSearchConfig()))
             ->orderByDesc('tanggal')
             ->orderByDesc('id')
             ->get();
@@ -47,4 +49,15 @@ class HppPlatformJadiPage extends Page
             ->orderBy('panjang')->orderBy('lebar')->orderBy('tebal')
             ->get();
     }
+
+    protected function logSearchConfig(): array
+{
+    return [
+        'text'      => ['keterangan', 'tipe_transaksi'],
+        'kw'        => 'kw_grade',            // di HppVeneerBasahPage ganti jadi 'kw'
+        'relations' => ['jenisBarang.nama_jenis_barang'],
+        'size'      => ['panjang', 'lebar', 'tebal'],
+        'date'      => 'tanggal',
+    ];
+}
 }

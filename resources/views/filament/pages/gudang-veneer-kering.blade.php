@@ -25,7 +25,7 @@
                     Aktif
                     <span
                         class="ml-1 inline-flex items-center justify-center min-w-[1.1rem] px-1 rounded-full text-[9px] font-bold {{ $serahTerimaTab === 'aktif' ? 'bg-amber-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400' }}">
-                        {{ $serahTerima->count() }}
+                        {{ $serahTerima->count() + $this->hasilPilihVeneer->count() }}
                     </span>
                 </button>
                 <button type="button" wire:click="$set('serahTerimaTab', 'history')"
@@ -42,19 +42,19 @@
                 @if ($serahTerimaTab === 'aktif')
                 @forelse($serahTerima as $st)
                 @php
-                $sumber = $st->tipe_sumber === 'dryer' ? $st->detailHasil : $st->detailBongkarKedi;
-                $noPalet = $sumber?->no_palet ?? '-';
-                $ukuran = $sumber?->ukuran;
-                $kayu = $sumber?->jenisKayu?->nama_kayu ?? '-';
-                $kw = $sumber?->kw ?? '-';
-                $qty = $st->tipe_sumber === 'dryer' ? $sumber?->isi ?? 0 : $sumber?->jumlah ?? 0;
+                $t = $st->tampilan;
+                $noPalet = $t['no_palet'] ?? '-';
+                $dimensi = $t['dimensi'] ?? '0x0x0';
+                $kayu = $t['jenis_kayu'] ?? '-';
+                $kw = $t['kw'] ?? '-';
+                $qty = $st->qty_asli;
                 @endphp
                 <div wire:key="st-{{ $st->id }}"
                     class="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors flex-wrap">
                     <span
                         class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap shrink-0
-                                {{ $st->tipe_sumber === 'dryer' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }}">
-                        {{ $st->tipe_sumber === 'dryer' ? 'Press Dryer' : 'Kedi' }}
+                                {{ $st->tipe_sumber === 'dryer' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' : ($st->tipe_sumber === 'gudang_jadi' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400') }}">
+                        {{ $st->label_sumber }}
                     </span>
                     <span
                         class="text-[10px] font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap shrink-0">
@@ -62,7 +62,7 @@
                     </span>
                     <span
                         class="font-mono text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap shrink-0">
-                        {{ number_format((float) $ukuran?->panjang, 2) }}×{{ number_format((float) $ukuran?->lebar, 2) }}×{{ number_format((float) $ukuran?->tebal, 2) }}
+                        {{ str_replace('x', '×', $dimensi) }}
                         <span class="text-[10px] text-gray-400">mm</span>
                     </span>
                     <span
@@ -94,15 +94,78 @@
                     Tidak ada veneer dari Dryer/Kedi yang menunggu diterima
                 </div>
                 @endforelse
+                
+                {{-- DARI PILIH VENEER --}}
+                @forelse($this->hasilPilihVeneer as $hasil)
+                @php
+                    $modal = $hasil->modalPilihVeneer;
+                    $noPalet = $hasil->no_palet;
+                    $kw = $hasil->kw;
+                    $qty = $hasil->jumlah;
+                    
+                    if ($modal->id_stok_veneer_jadi) {
+                        $stok = $modal->stokVeneerJadi;
+                        $dimensi = floatval($stok->panjang) . 'x' . floatval($stok->lebar) . 'x' . floatval($stok->tebal);
+                        $kayu = $stok->jenisKayu?->nama_kayu ?? '-';
+                    } else {
+                        $ukuran = $modal->ukuran;
+                        $dimensi = floatval($ukuran->panjang) . 'x' . floatval($ukuran->lebar) . 'x' . floatval($ukuran->tebal);
+                        $kayu = $modal->jenisKayu?->nama_kayu ?? '-';
+                    }
+                @endphp
+                <div wire:key="hasil-{{ $hasil->id }}"
+                    class="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors flex-wrap border-t border-gray-100 dark:border-gray-800">
+                    <span
+                        class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap shrink-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        Pilih Veneer
+                    </span>
+                    <span
+                        class="text-[10px] font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap shrink-0">
+                        Palet {{ $noPalet }}
+                    </span>
+                    <span
+                        class="font-mono text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap shrink-0">
+                        {{ str_replace('x', '×', $dimensi) }}
+                        <span class="text-[10px] text-gray-400">mm</span>
+                    </span>
+                    <span
+                        class="inline-flex items-center justify-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 whitespace-nowrap shrink-0">
+                        KW {{ $kw }}
+                    </span>
+                    <span
+                        class="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase truncate min-w-0 flex-1">
+                        {{ $kayu }}
+                    </span>
+                    <span
+                        class="text-right font-black text-sm text-amber-500 dark:text-amber-400 whitespace-nowrap tabular-nums shrink-0">
+                        {{ number_format((float) $qty) }} <span
+                            class="text-[10px] font-semibold text-gray-400">Lbr</span>
+                    </span>
+                    <button type="button" wire:click="terimaHasilPilihVeneer({{ $hasil->id }})"
+                        wire:confirm="Terima hasil pilih veneer ini ke stok Gudang Veneer Kering?"
+                        wire:loading.attr="disabled" wire:target="terimaHasilPilihVeneer({{ $hasil->id }})"
+                        class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span>Terima</span>
+                    </button>
+                </div>
+                @empty
+                <div class="px-5 py-8 text-center text-xs text-gray-400 dark:text-gray-600 border-t border-gray-100 dark:border-gray-800">
+                    Tidak ada veneer dari Pilih Veneer yang menunggu diterima
+                </div>
+                @endforelse
                 @else
                 @forelse($riwayatSerahTerima as $st)
                 @php
-                $sumber = $st->tipe_sumber === 'dryer' ? $st->detailHasil : $st->detailBongkarKedi;
-                $noPalet = $sumber?->no_palet ?? '-';
-                $ukuran = $sumber?->ukuran;
-                $kayu = $sumber?->jenisKayu?->nama_kayu ?? '-';
-                $kw = $sumber?->kw ?? '-';
-                $qty = $st->tipe_sumber === 'dryer' ? $sumber?->isi ?? 0 : $sumber?->jumlah ?? 0;
+                $t = $st->tampilan;
+                $noPalet = $t['no_palet'] ?? '-';
+                $dimensi = $t['dimensi'] ?? '0x0x0';
+                $kayu = $t['jenis_kayu'] ?? '-';
+                $kw = $t['kw'] ?? '-';
+                $qty = $st->qty_asli;
                 $diterimaOleh = trim(explode(' - ', $st->diterima_oleh ?? '-')[0]);
                 @endphp
                 <div wire:key="rst-{{ $st->id }}"
@@ -110,8 +173,8 @@
                     <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
                         <span
                             class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap shrink-0
-                                    {{ $st->tipe_sumber === 'dryer' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }}">
-                            {{ $st->tipe_sumber === 'dryer' ? 'Press Dryer' : 'Kedi' }}
+                                    {{ $st->tipe_sumber === 'dryer' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' : ($st->tipe_sumber === 'gudang_jadi' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400') }}">
+                            {{ $st->label_sumber }}
                         </span>
                         <span
                             class="text-[10px] font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap shrink-0">
@@ -119,7 +182,7 @@
                         </span>
                         <span
                             class="font-mono text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap shrink-0">
-                            {{ number_format((float) $ukuran?->panjang, 2) }}×{{ number_format((float) $ukuran?->lebar, 2) }}×{{ number_format((float) $ukuran?->tebal, 2) }}
+                            {{ str_replace('x', '×', $dimensi) }}
                             <span class="text-[10px] text-gray-400">mm</span>
                         </span>
                         <span
@@ -146,6 +209,68 @@
                 @empty
                 <div class="px-5 py-8 text-center text-xs text-gray-400 dark:text-gray-600">
                     Belum ada riwayat serah terima dari Dryer/Kedi
+                </div>
+                @endforelse
+                
+                {{-- DARI PILIH VENEER (HISTORY) --}}
+                @forelse($this->riwayatHasilPilihVeneer as $hasil)
+                @php
+                    $modal = $hasil->modalPilihVeneer;
+                    $noPalet = $hasil->no_palet;
+                    $kw = $hasil->kw;
+                    $qty = $hasil->jumlah;
+                    $diterimaOleh = \App\Models\User::find($hasil->diterima_gudang_by)?->name ?? 'System';
+                    
+                    if ($modal->id_stok_veneer_jadi) {
+                        $stok = $modal->stokVeneerJadi;
+                        $dimensi = floatval($stok->panjang) . 'x' . floatval($stok->lebar) . 'x' . floatval($stok->tebal);
+                        $kayu = $stok->jenisKayu?->nama_kayu ?? '-';
+                    } else {
+                        $ukuran = $modal->ukuran;
+                        $dimensi = floatval($ukuran->panjang) . 'x' . floatval($ukuran->lebar) . 'x' . floatval($ukuran->tebal);
+                        $kayu = $modal->jenisKayu?->nama_kayu ?? '-';
+                    }
+                @endphp
+                <div wire:key="rst-hasil-{{ $hasil->id }}"
+                    class="px-3 sm:px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors border-t border-gray-100 dark:border-gray-800">
+                    <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+                        <span
+                            class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap shrink-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            Pilih Veneer
+                        </span>
+                        <span
+                            class="text-[10px] font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap shrink-0">
+                            Palet {{ $noPalet }}
+                        </span>
+                        <span
+                            class="font-mono text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap shrink-0">
+                            {{ str_replace('x', '×', $dimensi) }}
+                            <span class="text-[10px] text-gray-400">mm</span>
+                        </span>
+                        <span
+                            class="inline-flex items-center justify-center px-1.5 sm:px-2 py-0.5 rounded-sm text-[9px] font-black uppercase bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 whitespace-nowrap shrink-0">
+                            KW {{ $kw }}
+                        </span>
+                        <span
+                            class="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase truncate min-w-0 flex-1">
+                            {{ $kayu }}
+                        </span>
+                        <span
+                            class="text-right font-black text-sm text-emerald-500 dark:text-emerald-400 whitespace-nowrap tabular-nums shrink-0">
+                            +{{ number_format((float) $qty) }} <span
+                                class="text-[10px] font-semibold text-gray-400">Lbr</span>
+                        </span>
+                    </div>
+                    <div class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 truncate">
+                        Diterima oleh: <span
+                            class="font-semibold text-gray-600 dark:text-gray-300">{{ $diterimaOleh }}</span>
+                        <span class="text-gray-300 dark:text-gray-600">·</span>
+                        {{ optional($hasil->diterima_gudang_at)->translatedFormat('d M Y H:i') }}
+                    </div>
+                </div>
+                @empty
+                <div class="px-5 py-8 text-center text-xs text-gray-400 dark:text-gray-600 border-t border-gray-100 dark:border-gray-800">
+                    Belum ada riwayat serah terima dari Pilih Veneer
                 </div>
                 @endforelse
                 @endif
@@ -352,15 +477,18 @@
         </div>
         @endif
 
-        {{-- 3. TUJUAN KELUAR (tetap: Repair) --}}
+        {{-- 3. TUJUAN KELUAR --}}
         <div class="space-y-1.5">
             <label
                 class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">Tujuan
                 Keluar</label>
-            <div
-                class="w-full text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-sm bg-gray-50 dark:bg-gray-950/50 text-gray-900 dark:text-gray-100 font-bold">
-                Repair
-            </div>
+            <select wire:model="tujuanKeluar" required
+                class="w-full text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:border-amber-500 focus:outline-none">
+                <option value="">-- Pilih Tujuan --</option>
+                @foreach($daftarTujuanKeluar as $tujuan)
+                    <option value="{{ $tujuan }}">{{ $tujuan }}</option>
+                @endforeach
+            </select>
         </div>
 
         {{-- 4. KETERANGAN --}}

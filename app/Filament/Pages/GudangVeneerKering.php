@@ -53,6 +53,8 @@ class GudangVeneerKering extends Page
 
     public string $tujuanKeluar = 'Repair';
 
+    public array $daftarTujuanKeluar = ['Repair', 'Gudang Veneer Jadi'];
+
     public string $keteranganKeluar = '';
 
     protected $queryString = ['activeTab'];
@@ -232,7 +234,7 @@ class GudangVeneerKering extends Page
                         'diserahkan_oleh' => $user?->name ?? 'System',
                         'diterima_oleh' => '-',
                         'status' => 'Serah Veneer',
-                        'jenis_terima' => 'kering',
+                        'jenis_terima' => $tujuan === 'gudang veneer jadi' ? 'jadi' : 'kering',
                         'tujuan' => $tujuan,
                     ]);
                 }
@@ -363,20 +365,33 @@ class GudangVeneerKering extends Page
     public function getSerahTerimaProperty(): Collection
     {
         return SerahTerimaVeneerKering::query()
-            ->whereIn('tipe_sumber', ['dryer', 'kedi'])
+            ->whereIn('tipe_sumber', ['dryer', 'kedi', 'gudang_jadi'])
             ->where('jenis_terima', 'kering')
             ->where('diterima_oleh', '-')
             ->where(function ($q) {
                 $q->whereNotNull('id_detail_hasil')
-                    ->orWhereNotNull('id_detail_bongkar_kedi');
+                    ->orWhereNotNull('id_detail_bongkar_kedi')
+                    ->orWhereNotNull('id_mutasi_keluar_palet_jadi');
             })
             ->with([
                 'detailHasil.ukuran',
                 'detailHasil.jenisKayu',
                 'detailBongkarKedi.ukuran',
                 'detailBongkarKedi.jenisKayu',
+                'mutasiKeluarPaletJadi.mutasiKeluar.jenisKayu',
             ])
             ->orderBy('created_at')
+            ->get();
+    }
+
+    public function getHasilPilihVeneerProperty(): Collection
+    {
+        return \App\Models\HasilPilihVeneer::query()
+            ->with(['modalPilihVeneer.stokVeneerJadi.jenisKayu', 'modalPilihVeneer.jenisKayu', 'modalPilihVeneer.ukuran'])
+            ->where('jenis_veneer', 'kering')
+            ->whereNotNull('diserahkan_at')
+            ->whereNull('diterima_gudang_at')
+            ->orderBy('diserahkan_at')
             ->get();
     }
 
@@ -387,18 +402,20 @@ class GudangVeneerKering extends Page
     public function getRiwayatSerahTerimaProperty(): Collection
     {
         return SerahTerimaVeneerKering::query()
-            ->whereIn('tipe_sumber', ['dryer', 'kedi'])
+            ->whereIn('tipe_sumber', ['dryer', 'kedi', 'gudang_jadi'])
             ->where('jenis_terima', 'kering')
             ->where('diterima_oleh', '!=', '-')
             ->where(function ($q) {
                 $q->whereNotNull('id_detail_hasil')
-                    ->orWhereNotNull('id_detail_bongkar_kedi');
+                    ->orWhereNotNull('id_detail_bongkar_kedi')
+                    ->orWhereNotNull('id_mutasi_keluar_palet_jadi');
             })
             ->with([
                 'detailHasil.ukuran',
                 'detailHasil.jenisKayu',
                 'detailBongkarKedi.ukuran',
                 'detailBongkarKedi.jenisKayu',
+                'mutasiKeluarPaletJadi.mutasiKeluar.jenisKayu',
             ])
             ->orderByDesc('updated_at')
             ->get();
@@ -409,6 +426,17 @@ class GudangVeneerKering extends Page
      * Kering. Selalu diterima sebagai "kering" (bukan "jadi"), karena memang
      * ini alur masuk ke Gudang Veneer Kering.
      */
+    public function getRiwayatHasilPilihVeneerProperty(): Collection
+    {
+        return \App\Models\HasilPilihVeneer::query()
+            ->with(['modalPilihVeneer.stokVeneerJadi.jenisKayu', 'modalPilihVeneer.jenisKayu', 'modalPilihVeneer.ukuran'])
+            ->where('jenis_veneer', 'kering')
+            ->whereNotNull('diserahkan_at')
+            ->whereNotNull('diterima_gudang_at')
+            ->orderByDesc('diterima_gudang_at')
+            ->get();
+    }
+
     public function terimaDryer(int $id): void
     {
         try {
@@ -419,7 +447,7 @@ class GudangVeneerKering extends Page
                     throw new \RuntimeException('Veneer ini sudah diterima sebelumnya.');
                 }
 
-                if (! in_array($fresh->tipe_sumber, ['dryer', 'kedi'], true)) {
+                if (! in_array($fresh->tipe_sumber, ['dryer', 'kedi', 'gudang_jadi'], true)) {
                     throw new \RuntimeException('Sumber veneer tidak valid untuk diterima di Gudang Veneer Kering.');
                 }
 
@@ -444,6 +472,32 @@ class GudangVeneerKering extends Page
         } catch (\Throwable $e) {
             Notification::make()
                 ->title('Gagal Menerima Veneer')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function terimaHasilPilihVeneer(int $id): void
+    {
+        try {
+            $hasil = \App\Models\HasilPilihVeneer::findOrFail($id);
+            if ($hasil->diterima_gudang_at !== null) {
+                throw new \RuntimeException('Hasil Pilih Veneer ini sudah diterima sebelumnya.');
+            }
+
+            $hasil->update([
+                'diterima_gudang_at' => now(),
+                'diterima_gudang_by' => auth()->id(),
+            ]);
+
+            Notification::make()
+                ->title('Veneer kering dari Pilih Veneer berhasil diterima ke Gudang.')
+                ->success()
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Gagal Menerima Hasil Pilih Veneer')
                 ->body($e->getMessage())
                 ->danger()
                 ->send();
@@ -496,9 +550,6 @@ class GudangVeneerKering extends Page
      */
     public function prosesKeluar(): void
     {
-        // Tujuan keluar dikunci: selalu Repair.
-        $this->tujuanKeluar = 'Repair';
-
         $totalLembar = array_sum(array_map('intval', $this->paletQuantities));
 
         if (! $this->selectedStokId || $totalLembar <= 0 || trim($this->tujuanKeluar) === '') {
@@ -573,7 +624,7 @@ class GudangVeneerKering extends Page
                         'diserahkan_oleh' => $user?->name ?? 'System',
                         'diterima_oleh' => '-',
                         'status' => 'Serah Veneer',
-                        'jenis_terima' => 'kering',
+                        'jenis_terima' => $tujuan === 'gudang veneer jadi' ? 'jadi' : 'kering',
                         'tujuan' => $tujuan,
                     ]);
                 }
