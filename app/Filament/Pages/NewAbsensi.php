@@ -32,6 +32,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
 use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\Slider;
 use App\Models\PengaturanAbsensi;
 
 class NewAbsensi extends Page implements HasForms
@@ -91,6 +92,21 @@ class NewAbsensi extends Page implements HasForms
                                 ->label('Batas Selisih Auto Fix (Menit)')
                                 ->numeric()->required(),
                         ])->columns(3),
+                    Section::make('Upload & Sinkronisasi')
+                        ->schema([
+                            Select::make('batas_hari_mundur_upload')
+                                ->label('Batas Hari Mundur saat Upload')
+                                ->options([
+                                    1 => '1 Hari',
+                                    3 => '3 Hari',
+                                    7 => '7 Hari',
+                                    30 => '30 Hari',
+                                    9999 => 'Unlimited (Semua Data)',
+                                ])
+                                ->required()
+                                ->default(7)
+                                ->helperText('Pilih berapa hari data ke belakang yang akan diproses saat upload absen. Semakin sedikit hari, proses mapping akan semakin cepat (default: 7 hari).'),
+                        ]),
                     Section::make('Panduan Pengaturan')
                         ->description('Penjelasan cara kerja pengaturan absensi')
                         ->schema([

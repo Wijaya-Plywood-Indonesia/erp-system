@@ -331,7 +331,7 @@ class ModalSandingForm
                             }
                             $sisa = $hasilSanding->kuantitas;
                             if ($value > $sisa) {
-                                // $fail("Jumlah melebihi sisa yang tersedia dari Hasil Sanding ({$sisa})."); // Dibuka sementara agar bisa over qty
+                                $fail("Jumlah melebihi sisa yang tersedia dari Hasil Sanding ({$sisa}).");
                             }
                             return;
                         }
@@ -349,7 +349,7 @@ class ModalSandingForm
                         }
 
                         if ($value > $sisa) {
-                            // $fail("Jumlah melebihi sisa yang tersedia ({$sisa})."); // Dibuka sementara agar bisa over qty
+                            $fail("Jumlah melebihi sisa yang tersedia ({$sisa}).");
                         }
                     },
                 ]),
@@ -400,13 +400,17 @@ class ModalSandingForm
         $serahTerimaOptions = SerahTerimaHp::query()
             ->where('diterima_oleh', '!=', '-')
             ->where('tujuan', 'sanding')
+            ->where(function ($query) {
+                $query->whereNotNull('id_triplek_mutasi_keluar')
+                      ->orWhereNotNull('id_triplek_mth_mutasi_keluar');
+            })
             ->with(self::HASIL_RELATIONS)
             ->get()
             ->map(function ($item) use ($currentId, $currentKuantitas) {
                 $sisa = $item->sisa + ($item->id === $currentId ? $currentKuantitas : 0);
                 return [$item, $sisa];
             })
-            ->filter(fn ($pair) => $pair[1] > 0)
+            ->filter(fn ($pair) => round($pair[1], 4) > 0)
             ->mapWithKeys(function ($pair) {
                 [$item, $sisa] = $pair;
                 $tersedia = rtrim(rtrim(number_format($sisa, 2, '.', ''), '0'), '.');
@@ -463,6 +467,7 @@ class ModalSandingForm
         $hasilSandingOptions = \App\Models\HasilSanding::with(['barangSetengahJadi.ukuran', 'barangSetengahJadi.grade', 'barangSetengahJadi.jenisBarang', 'barangSetengahJadi.grade.kategoriBarang', 'produksiSanding'])
             ->whereNull('tujuan_serah')
             ->whereNull('diserahkan_at')
+            ->where('kuantitas', '>', 0)
             ->whereNotIn('id', $usedHasilSandingIds)
             ->when($currentProduksiId, function ($query, $currentProduksiId) {
                 // Pastikan tidak mengambil Hasil Sanding dari sesi produksi yang sama

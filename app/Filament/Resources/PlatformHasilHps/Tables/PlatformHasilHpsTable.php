@@ -57,8 +57,8 @@ class PlatformHasilHpsTable
                         }
 
                         return $serahTerima->diterima_oleh === '-'
-                            ? 'Menunggu Diterima Sanding'
-                            : 'Sudah Diterima Sanding';
+                            ? 'Menunggu Diterima Gudang Platform Mentah'
+                            : 'Sudah Diterima Gudang Platform Mentah';
                     }),
 
                 TextColumn::make('barangSetengahJadi.jenisBarang.nama_jenis_barang')
@@ -100,7 +100,7 @@ class PlatformHasilHpsTable
                         }
 
                         $tujuan = match ($serahTerima->tujuan) {
-                            'sanding' => 'Sanding',
+                            'sanding' => 'Gudang Platform Mentah',
                             default => '-',
                         };
 
@@ -161,7 +161,7 @@ class PlatformHasilHpsTable
                     ->icon('heroicon-o-paper-airplane')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->modalHeading('Serahkan Platform ini ke Sanding?')
+                    ->modalHeading('Serahkan Platform ini ke Gudang Platform Mentah?')
                     ->modalDescription('Pastikan data berikut sudah sesuai sebelum diserahkan.')
                     ->modalContent(function (PlatformHasilHp $record) {
                         $mesin = $record->mesin?->nama_mesin ?? '-';
@@ -215,7 +215,7 @@ class PlatformHasilHpsTable
 
                             Notification::make()
                                 ->title('Penyerahan Berhasil')
-                                ->body('Palet telah masuk ke daftar Serah Terima ke Sanding.')
+                                ->body('Palet telah masuk ke daftar Serah Terima ke Gudang Platform Mentah.')
                                 ->success()
                                 ->send();
 

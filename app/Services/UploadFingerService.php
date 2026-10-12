@@ -53,8 +53,21 @@ class UploadFingerService
             });
         });
 
+        $settings = \App\Models\PengaturanAbsensi::getSettings();
+        $batasHariMundur = $settings->batas_hari_mundur_upload ?? 7;
+
+        if ($batasHariMundur != 9999) {
+            $maxDateInFile = $semuaTap->max('tanggal');
+            $minDate = Carbon::parse($maxDateInFile)->subDays($batasHariMundur)->format('Y-m-d');
+
+            $semuaTap = $semuaTap->filter(function ($tap) use ($minDate) {
+                return $tap['tanggal'] >= $minDate;
+            })->values();
+        }
+
         if ($semuaTap->isEmpty()) {
-            throw new \RuntimeException('Tidak ada data tap yang berhasil dibaca dari file yang diupload. Cek kembali format file.');
+            $batasText = $batasHariMundur == 9999 ? 'unlimited' : $batasHariMundur . ' hari';
+            throw new \RuntimeException('Tidak ada data tap yang berhasil dibaca dari file yang diupload atau semua data berada di luar batas hari mundur (' . $batasText . '). Cek kembali format file.');
         }
 
         // 3. Tanggal batch = dari datepicker UI ($tanggalBatch, parameter),

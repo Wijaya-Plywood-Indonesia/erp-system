@@ -122,7 +122,9 @@
                 <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
                     @foreach($rows as $i => $row)
                     @php $diisi = (isset($row['stok_fisik']) && $row['stok_fisik'] !== null && $row['stok_fisik'] !== '')
-                        || (isset($row['kubikasi_fisik']) && $row['kubikasi_fisik'] !== null && $row['kubikasi_fisik'] !== ''); @endphp
+                        || (isset($row['kubikasi_fisik']) && $row['kubikasi_fisik'] !== null && $row['kubikasi_fisik'] !== '');
+                    $belumHitung = isset($row['stok_fisik']) && $row['stok_fisik'] !== null && $row['stok_fisik'] !== ''
+                        && (!isset($row['kubikasi_fisik']) || $row['kubikasi_fisik'] === null || $row['kubikasi_fisik'] === ''); @endphp
                     <tr wire:key="row-{{ $row['_uid'] }}-{{ $row['_v'] ?? 0 }}-{{ $i }}" class="transition-colors {{ $diisi
                         ? 'bg-green-50 hover:bg-green-100 dark:bg-green-900/10 dark:hover:bg-green-900/20'
                         : 'bg-white hover:bg-gray-50 dark:bg-gray-900/50 dark:hover:bg-gray-800/30' }}">
@@ -208,10 +210,12 @@
                                 type="number"
                                 step="0.0001"
                                 wire:model.lazy="rows.{{ $i }}.kubikasi_fisik"
-                                placeholder="-"
-                                class="w-28 rounded-lg border {{ $diisi
-                                    ? 'border-green-400 bg-green-50 dark:border-green-500/50 dark:bg-green-900/20'
-                                    : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700/80' }}
+                                placeholder="{{ $belumHitung ? 'belum dihitung' : '-' }}"
+                                class="w-28 rounded-lg border {{ $belumHitung
+                                    ? 'border-red-400 bg-red-50 dark:border-red-500/60 dark:bg-red-900/20'
+                                    : ($diisi
+                                        ? 'border-green-400 bg-green-50 dark:border-green-500/50 dark:bg-green-900/20'
+                                        : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700/80') }}
                                     text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500
                                     px-2 py-1.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500 transition-colors"
                             />
@@ -259,6 +263,19 @@
                 Tambah Baris Baru
             </button>
 
+            <div class="flex items-center gap-3">
+            @php $pending = $this->jumlahBelumDihitung(); @endphp
+            @if($pending > 0)
+            <button
+                wire:click="hitungKubikasi"
+                wire:loading.attr="disabled"
+                class="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-500/30 hover:border-blue-400 rounded-lg px-3 py-2 transition-all"
+            >
+                <span wire:loading.remove wire:target="hitungKubikasi">Hitung Kubikasi ({{ $pending }} baris)</span>
+                <span wire:loading wire:target="hitungKubikasi">Menghitung...</span>
+            </button>
+            @endif
+
             <button
                 wire:click="submit"
                 wire:loading.attr="disabled"
@@ -278,6 +295,7 @@
                     Memproses...
                 </span>
             </button>
+            </div>
         </div>
     </div>
 
@@ -348,7 +366,7 @@ function searchSelect({ options, selected, onChange }) {
             const spaceBelow = window.innerHeight - rect.bottom;
 
             const top = spaceBelow < dropdownHeight
-                ? Math.max(8, rect.top - dropdownHeight - 4)
+                ? Math.max(8, rect.top - dropdownHeight - 4) 
                 : rect.bottom + 4;
 
             this.dropdownStyle = `position:fixed; top:${top}px; left:${rect.left}px; min-width:${rect.width}px; z-index:9999;`;
