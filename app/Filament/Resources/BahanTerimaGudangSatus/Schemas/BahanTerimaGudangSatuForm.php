@@ -6,6 +6,7 @@ use App\Models\BahanTerimaGudangSatu;
 use App\Models\Grade;
 use App\Models\JenisBarang;
 use App\Models\SerahTerimaGudangSatu;
+use App\Support\PaletSearch;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -48,12 +49,10 @@ class BahanTerimaGudangSatuForm
     {
         return $schema
             ->components([
-                Select::make('id_serah_terima_gudang_satu')
-                    ->label('Bahan (Serah Terima Gudang Satu)')
-                    ->required()
-                    ->searchable()
-                    ->reactive()
-                    ->options(function (callable $get) {
+                PaletSearch::configure(
+                    Select::make('id_serah_terima_gudang_satu')
+                        ->label('Bahan (Serah Terima Gudang Satu)'),
+                    function (callable $get) {
                         $query = SerahTerimaGudangSatu::query()
                             ->with([
                                 'hasilPilihPlywood.barangSetengahJadiHp.ukuran',
@@ -101,11 +100,35 @@ class BahanTerimaGudangSatuForm
                             ->get()
                             // sisa dihitung via accessor (bukan kolom DB), jadi difilter di PHP
                             ->filter(fn ($s) => $s->sisa > 0)
-                            ->sortBy(fn ($s) => $s->id_triplek_mutasi_keluar !== null
-                                ? (float) ($s->triplekMutasiKeluar?->tebal ?? 0)
-                                : (float) ($s->barangSetengahJadi?->ukuran?->tebal ?? 0))
-                            ->mapWithKeys(fn ($s) => [$s->id => static::labelOpsi($s)]);
-                    })
+                            ->map(function ($s) {
+                                $triplek = $s->id_triplek_mutasi_keluar !== null;
+                                $m = $s->triplekMutasiKeluar;
+                                $b = $s->barangSetengahJadi;
+                                $u = $b?->ukuran;
+
+                                $ukuran = $triplek
+                                    ? ($m ? ($m->panjang + 0).'x'.($m->lebar + 0).'x'.($m->tebal + 0) : '')
+                                    : ($u ? ($u->panjang + 0).'x'.($u->lebar + 0).'x'.($u->tebal + 0) : '');
+                                $tebal = $triplek ? (float) ($m?->tebal ?? 0) : (float) ($u?->tebal ?? 0);
+
+                                return [
+                                    'id' => $s->id,
+                                    'label' => static::labelOpsi($s),
+                                    'no' => (string) ($s->hasilNyusup?->no_palet ?? ''),
+                                    'kategori' => $triplek ? 'Triplek Jadi' : ($b?->grade?->kategoriBarang?->nama_kategori ?? ''),
+                                    'jenis' => $triplek ? ($m?->jenisKayu?->nama_kayu ?? '') : ($b?->jenisBarang?->nama_jenis_barang ?? ''),
+                                    'grade' => $triplek ? ($m?->kw_grade ?? '') : ($b?->grade?->nama_grade ?? ''),
+                                    'ukuran' => $ukuran,
+                                    'asal' => $triplek ? 'triplek jadi' : ($s->id_hasil_nyusup !== null ? 'nyusup' : 'pilih plywood'),
+                                    'urut' => $tebal, // urut tebal kecil -> besar (sama seperti sebelumnya)
+                                ];
+                            })
+                            ->values()
+                            ->all();
+                    },
+                )
+                    ->required()
+                    ->reactive()
                     ->afterStateUpdated(function ($state, callable $set) {
                         // reset jumlah biar tidak kebawa nilai lama yang mungkin melebihi sisa baru
                         $set('jumlah', null);

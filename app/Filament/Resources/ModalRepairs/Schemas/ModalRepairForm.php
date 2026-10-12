@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ModalRepairs\Schemas;
 use App\Models\JenisKayu;
 use App\Models\ModalRepair;
 use App\Models\SerahTerimaVeneerKering;
+use App\Support\PaletSearch;
 use App\Models\Ukuran;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
@@ -24,10 +25,11 @@ class ModalRepairForm
                 Hidden::make('id_produksi_repair')
                     ->default(fn($livewire) => $livewire->getOwnerRecord()?->id),
 
-                Select::make('palet_select')
-                    ->label('Pilih Palet (Veneer)')
-                    ->options(fn(?ModalRepair $record) => self::getPaletOptions($record))
-                    ->searchable()
+                PaletSearch::configure(
+                    Select::make('palet_select')
+                        ->label('Pilih Palet (Veneer)'),
+                    fn (?ModalRepair $record) => self::getPaletEntries($record),
+                )
                     ->live()
                     ->required(fn($record) => $record === null)
                     ->disabled(fn($record) => $record !== null)
@@ -291,12 +293,17 @@ class ModalRepairForm
             ]);
     }
 
-    protected static function getPaletOptions(?ModalRepair $record): array
+    /**
+     * Data palet untuk dropdown + bahan pencarian fleksibel (App\Support\PaletSearch).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected static function getPaletEntries(?ModalRepair $record): array
     {
         $currentId = $record ? (int) $record->id_serah_terima_veneer_kering : null;
         $currentJumlah = (float) ($record?->jumlah ?? 0);
 
-        $options = SerahTerimaVeneerKering::query()
+        $entries = SerahTerimaVeneerKering::query()
             ->where('diterima_oleh', '!=', '-')
             ->whereIn('tujuan', ['repair']) // ✅ filter sumber gudang & gudang jadi
             ->with([
@@ -315,7 +322,7 @@ class ModalRepairForm
                 return [$item, $sisa];
             })
             ->filter(fn($pair) => $pair[1] > 0 || (int) $pair[0]->id === $currentId)
-            ->mapWithKeys(function ($pair) {
+            ->map(function ($pair) {
                 [$item, $sisa] = $pair;
                 // ⚠️ "tampilan" adalah accessor array di model SerahTerimaVeneerKering,
                 // key "no_palet" di sini TIDAK terkait kolom modal_repairs, jadi dibiarkan tetap.
@@ -324,14 +331,30 @@ class ModalRepairForm
                 $label = "Palet {$tampilan['no_palet']} · {$tampilan['dimensi']} {$tampilan['jenis_kayu']} KW{$tampilan['kw']}"
                     . " · ({$item->label_jenis_terima}) · Sisa {$sisa} lbr";
 
-                return [$item->id => $label];
+                return [
+                    'id' => $item->id,
+                    'label' => $label,
+                    'no' => (string) $tampilan['no_palet'],
+                    'jenis' => $tampilan['jenis_kayu'],
+                    'grade' => 'KW '.$tampilan['kw'],
+                    'ukuran' => $tampilan['dimensi'],
+                    'asal' => $item->label_jenis_terima,
+                    'kategori' => 'veneer',
+                ];
             })
-            ->toArray();
+            ->values()
+            ->all();
 
         if ($record) {
-            return $options;
+            return $entries;
         }
 
-        return ['AF' => 'Afalan'] + $options;
+        return array_merge([[
+            'id' => 'AF',
+            'label' => 'Afalan',
+            'jenis' => 'afalan',
+            'grade' => 'AF',
+            'pin' => true,
+        ]], $entries);
     }
 }

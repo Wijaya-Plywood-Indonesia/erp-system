@@ -6,6 +6,7 @@ use App\Models\DetailMasuk;
 use App\Models\DetailMasukStik;
 use App\Models\JenisKayu;
 use App\Models\SerahTerimaVeneerBasah;
+use App\Support\PaletSearch;
 use App\Models\Ukuran;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
@@ -37,10 +38,10 @@ class DetailMasukForm
                 ->required()
                 ->dehydrated(true),
 
-            Select::make('id_serah_terima_veneer_basah')
-                ->label('Veneer Basah Diterima (dari Gudang)')
-                ->helperText('Pilih "Input Manual (KW AF)" kalau bahan TIDAK melalui serah terima Gudang — jenis kayu, ukuran, KW, dan isi akan diisi manual.')
-                ->options(function ($record) {
+            PaletSearch::configure(
+                Select::make('id_serah_terima_veneer_basah')
+                    ->label('Veneer Basah Diterima (dari Gudang)'),
+                function ($record) {
                     $sudahDipakai = DB::table('detail_masuks')
                         ->whereNotNull('id_serah_terima_veneer_basah')
                         ->when($record, fn ($q) => $q->where('id', '!=', $record->id))
@@ -55,9 +56,13 @@ class DetailMasukForm
 
                     // Opsi khusus paling atas: input manual (KW AF), tidak
                     // terikat data serah terima Gudang sama sekali.
-                    $options = [
-                        'af' => '— Input Manual (KW AF) —',
-                    ];
+                    $options = [[
+                        'id' => 'af',
+                        'label' => '— Input Manual (KW AF) —',
+                        'jenis' => 'input manual',
+                        'grade' => 'AF',
+                        'pin' => true,
+                    ]];
 
                     foreach ($rows as $row) {
                         $d = $row->detail;
@@ -71,12 +76,21 @@ class DetailMasukForm
                         }
                         $ukuran = $d->ukuran ? "{$d->ukuran->panjang}x{$d->ukuran->lebar}x{$d->ukuran->tebal}" : '-';
                         $kayu = $d->jenisKayu?->nama_kayu ?? '-';
-                        $options[$row->id] = "{$kayu} | {$ukuran} | KW {$d->kw} | sisa {$sisa} lbr";
+                        $options[] = [
+                            'id' => $row->id,
+                            'label' => "{$kayu} | {$ukuran} | KW {$d->kw} | sisa {$sisa} lbr",
+                            'kategori' => 'veneer basah',
+                            'jenis' => $kayu,
+                            'grade' => 'KW '.$d->kw,
+                            'ukuran' => $d->ukuran ? "{$d->ukuran->panjang}x{$d->ukuran->lebar}x{$d->ukuran->tebal}" : '',
+                            'asal' => 'gudang',
+                        ];
                     }
 
                     return $options;
-                })
-                ->searchable()
+                },
+            )
+                ->helperText('Pilih "Input Manual (KW AF)" kalau bahan TIDAK melalui serah terima Gudang — jenis kayu, ukuran, KW, dan isi akan diisi manual.')
                 ->required(fn ($record) => $record === null)
                 ->live()
                 ->disabled(fn ($record) => $record !== null)
