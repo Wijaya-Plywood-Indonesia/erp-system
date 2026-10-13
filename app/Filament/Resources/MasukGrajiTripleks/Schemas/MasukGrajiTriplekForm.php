@@ -208,13 +208,18 @@ class MasukGrajiTriplekForm
             ->where(fn ($q) => $q
                 // Sudah diterima oleh produksi ini (boleh dari sumber mana saja)
                 ->where('id_produksi_graji_triplek', $ownerRecordId)
-                // ATAU: dikirim dari Gudang Triplek Mentah ke Graji (id_triplek_mth_mutasi_keluar),
+                // ATAU: dikirim dari Gudang Triplek Mentah (mutasi manual),
                 // sudah diterima Graji (diterima_oleh != '-'), belum diklaim produksi mana pun.
-                // Sengaja TIDAK include id_triplek_hasil_hp tanpa id_triplek_mth_mutasi_keluar
-                // karena record HP yang sudah "diterima_oleh = Gudang Triplek Mentah" adalah
-                // stok di gudang — belum jadi kiriman ke Graji.
                 ->orWhere(fn ($w) => $w
                     ->whereNotNull('id_triplek_mth_mutasi_keluar')
+                    ->where('diterima_oleh', '!=', '-')
+                    ->whereNull('id_produksi_graji_triplek'))
+                // ATAU: dari Hotpress yang sudah diterima Gudang Triplek Mentah
+                // (diterima_gudang_at terisi), sudah diterima Graji (diterima_oleh != '-'),
+                // belum diklaim produksi mana pun — flow baru HP → Gudang → Graji.
+                ->orWhere(fn ($w) => $w
+                    ->whereNotNull('id_triplek_hasil_hp')
+                    ->whereNotNull('diterima_gudang_at')
                     ->where('diterima_oleh', '!=', '-')
                     ->whereNull('id_produksi_graji_triplek')))
             ->with(self::HASIL_RELATIONS)
