@@ -305,6 +305,19 @@ class PenggunaanLahanRotariesTable
                                 ]);
                         });
 
+                        // HPP veneer basah: finalkan semua palet milik batch lahan ini.
+                        // Kegagalan di sini tidak boleh membatalkan penyelesaian lahan.
+                        if (config('hpp.veneer_basah_baru')) {
+                            try {
+                                app(\App\Services\HppVeneerBasahIsiService::class)
+                                    ->finalisasiBatchLahan($record->fresh());
+                            } catch (\Throwable $e) {
+                                \Illuminate\Support\Facades\Log::error(
+                                    '[VeneerBasah] Gagal finalisasi HPP lahan #'.$record->id.': '.$e->getMessage()
+                                );
+                            }
+                        }
+
                         Notification::make()
                             ->title('✅ Lahan Berhasil Diselesaikan')
                             ->body('Stok direset ke 0. Catatan dan hasil riil telah tersimpan.')
