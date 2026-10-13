@@ -234,19 +234,33 @@ class SerahTerimaHpRelationManager extends RelationManager
                 }
 
                 if ($tipe === 'graji') {
-                    // Menuju Graji Triplek: cukup filter langsung dari kolom `tujuan`
-                    // (mencakup dari hotpress via id_triplek_hasil_hp, serah manual dari
-                    // Sanding, ATAU dari Gudang Triplek Mentah).
+                    // Menuju Graji Triplek: filter dari kolom `tujuan`.
+                    // Mencakup dari Gudang Triplek Mentah, serah manual dari Sanding,
+                    // ATAU Hotpress yang sudah melewati Gudang Triplek Mentah.
                     return $query
                         ->where('tujuan', self::TIPE_TO_TUJUAN['graji'])
                         // 🌟 Barang yang sudah ditolak tidak muncul lagi di sini.
                         ->whereNull('ditolak_oleh')
                         ->where(function ($q) use ($ownerId) {
-                            // Serahan langsung dari hotpress TIDAK diterima di sini lagi —
-                            // masuk Gudang Triplek Mentah dulu, baru dikirim ke Graji.
-                            $q->where(fn ($w) => $w->where('diterima_oleh', '-')
-                                ->whereNull('id_triplek_hasil_hp'))
-                                ->orWhere('id_produksi_graji_triplek', $ownerId);
+                            // Pending: hanya barang yang sudah "legal" masuk ke Graji —
+                            // bukan serahan langsung dari HP yang belum melewati gudang.
+                            // Sumber yang valid untuk pending:
+                            //   1. Dari Gudang Triplek Mentah (mutasi manual)
+                            //   2. Serah manual dari Sanding (id_hasil_sanding IS NOT NULL)
+                            //   3. Dari Hotpress yang SUDAH diterima Gudang Triplek Mentah
+                            //      (diterima_gudang_at terisi) — flow baru HP → Gudang → Graji
+                            $q->where(fn ($w) => $w
+                                ->where('diterima_oleh', '-')
+                                ->where(fn ($inner) => $inner
+                                    ->whereNotNull('id_triplek_mth_mutasi_keluar')
+                                    ->orWhereNotNull('id_hasil_sanding')
+                                    ->orWhere(fn ($hp) => $hp
+                                        ->whereNotNull('id_triplek_hasil_hp')
+                                        ->whereNotNull('diterima_gudang_at'))
+                                )
+                            )
+                            // History: barang yang sudah diterima oleh sesi graji ini.
+                            ->orWhere('id_produksi_graji_triplek', $ownerId);
                         })
                         ->orderBy('diterima_oleh', 'asc')
                         ->orderBy('created_at', 'desc');
@@ -254,19 +268,34 @@ class SerahTerimaHpRelationManager extends RelationManager
 
                 if ($tipe === 'sanding') {
                     // Menuju Sanding: filter langsung dari kolom `tujuan`.
-                    // Baris dari Gudang Triplek Jadi & Gudang Platform Mentah
-                    // juga bertujuan 'sanding', jadi otomatis ikut tampil di sini
-                    // tanpa syarat tambahan.
+                    // Baris dari Gudang Platform Mentah / Triplek Mentah / Triplek Jadi
+                    // juga bertujuan 'sanding', jadi otomatis ikut tampil di sini.
                     return $query
                         ->where('tujuan', self::TIPE_TO_TUJUAN['sanding'])
                         // 🌟 Barang yang sudah ditolak tidak muncul lagi di sini.
                         ->whereNull('ditolak_oleh')
                         ->where(function ($q) use ($ownerId) {
-                            // Serahan langsung dari hotpress TIDAK diterima di sini lagi —
-                            // masuk Gudang Platform Mentah dulu, baru dikirim ke Sanding.
-                            $q->where(fn ($w) => $w->where('diterima_oleh', '-')
-                                ->whereNull('id_platform_hasil_hp'))
-                                ->orWhere('id_produksi_sanding', $ownerId);
+                            // Pending: hanya barang yang sudah "legal" masuk ke Sanding —
+                            // bukan serahan langsung dari HP yang belum melewati gudang.
+                            // Sumber yang valid untuk pending:
+                            //   1. Dari Gudang Platform Mentah (mutasi manual)
+                            //   2. Dari Gudang Triplek Mentah (mutasi manual, tujuan sanding)
+                            //   3. Dari Gudang Triplek Jadi
+                            //   4. Dari Hotpress yang SUDAH diterima Gudang Platform Mentah
+                            //      (diterima_gudang_at terisi) — flow baru HP → Gudang → Sanding
+                            $q->where(fn ($w) => $w
+                                ->where('diterima_oleh', '-')
+                                ->where(fn ($inner) => $inner
+                                    ->whereNotNull('id_platform_mth_mutasi_keluar')
+                                    ->orWhereNotNull('id_triplek_mth_mutasi_keluar')
+                                    ->orWhereNotNull('id_triplek_mutasi_keluar')
+                                    ->orWhere(fn ($hp) => $hp
+                                        ->whereNotNull('id_platform_hasil_hp')
+                                        ->whereNotNull('diterima_gudang_at'))
+                                )
+                            )
+                            // History: barang yang sudah diterima oleh sesi sanding ini.
+                            ->orWhere('id_produksi_sanding', $ownerId);
                         })
                         ->orderBy('diterima_oleh', 'asc')
                         ->orderBy('created_at', 'desc');
