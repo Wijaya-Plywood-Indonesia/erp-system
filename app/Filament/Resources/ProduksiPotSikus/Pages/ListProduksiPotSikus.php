@@ -5,12 +5,7 @@ namespace App\Filament\Resources\ProduksiPotSikus\Pages;
 use App\Filament\Resources\ProduksiPotSikus\ProduksiPotSikuResource;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
-
-use Filament\Actions\Action;
-use Filament\Forms\Components\DatePicker;
-use App\Exports\LaporanProduksiPotSikuCustomExport;
-use Maatwebsite\Excel\Facades\Excel;
-use Carbon\Carbon;
+use App\Filament\Resources\ProduksiPotSikus\Widgets\RekapProduksiPotSiku;
 
 class ListProduksiPotSikus extends ListRecords
 {
@@ -20,6 +15,13 @@ class ListProduksiPotSikus extends ListRecords
     {
         return [
             CreateAction::make(),
+        ];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            RekapProduksiPotSiku::class,
         ];
     }
 }

@@ -729,6 +729,17 @@ class RotaryJurnalService
                 'stok_kubikasi' => $log->stok_kubikasi_after,
                 'id_last_log' => $log->id,
             ]);
+
+            // HPP dari batch lahan (sama dengan Persentase Kayu):
+            // FINAL bila lahan sudah selesai, SEMENTARA bila belum (di-true-up saat "Selesaikan Lahan").
+            // Gagal isi HPP tidak boleh menggagalkan penerimaan stok.
+            if (config('hpp.veneer_basah_baru')) {
+                try {
+                    app(\App\Services\HppVeneerBasahIsiService::class)->prosesLogBaru($log);
+                } catch (\Throwable $e) {
+                    Log::error('[VeneerBasah] Gagal isi HPP palet #'.$palet->id.': '.$e->getMessage());
+                }
+            }
         });
     }
 

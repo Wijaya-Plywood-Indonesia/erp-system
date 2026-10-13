@@ -204,6 +204,7 @@ class DetailTurusanKayuForm
                     ->label('Diameter (cm)')
                     ->placeholder('Masukkan diameter kayu')
                     ->required()
+                    ->minValue(1)
                     ->numeric()
             ]);
     }

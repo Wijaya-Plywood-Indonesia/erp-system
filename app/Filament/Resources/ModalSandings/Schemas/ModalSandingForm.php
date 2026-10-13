@@ -411,6 +411,8 @@ class ModalSandingForm
         $serahTerimaOptions = SerahTerimaHp::query()
             ->where('diterima_oleh', '!=', '-')
             ->where('tujuan', 'sanding')
+            // 🔒 Hanya palet milik produksi sanding ini — cegah bocor ke produksi lain.
+            ->where('id_produksi_sanding', $currentProduksiId)
             ->with(self::HASIL_RELATIONS)
             ->get()
             ->map(function ($item) use ($currentId, $currentKuantitas) {

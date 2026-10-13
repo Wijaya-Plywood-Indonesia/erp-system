@@ -8,7 +8,24 @@ use App\Filament\Pages\OpnameStokKayu;
 use App\Filament\Pages\OpnameStokPage;
 use App\Filament\Pages\LaporanJurnalKayuMasuk;
 use App\Filament\Pages\PortalWahana;
+use App\Filament\Resources\ProduksiDempuls\Widgets\RekapProduksiDempul;
+use App\Filament\Resources\ProduksiGrajiTripleks\Widgets\RekapProduksiGraji;
+use App\Filament\Resources\ProduksiGuellotines\Widgets\RekapProduksiGuellotine;
+use App\Filament\Resources\ProduksiHotPresses\Widgets\RekapProduksiHotPress;
+use App\Filament\Resources\ProduksiJoints\Widgets\RekapProduksiJoint;
+use App\Filament\Resources\ProduksiKedis\Widgets\RekapProduksiKedi;
 use App\Filament\Resources\ProduksiNyusups\Widgets\RekapProduksiNyusup;
+use App\Filament\Resources\ProduksiPilihVeneers\Widgets\RekapProduksiPilihVeneer;
+use App\Filament\Resources\ProduksiPotAfJoints\Widgets\RekapProduksiPotAfJoint;
+use App\Filament\Resources\ProduksiPotJeleks\Widgets\RekapProduksiPotJelek;
+use App\Filament\Resources\ProduksiPotSikus\Widgets\RekapProduksiPotSiku;
+use App\Filament\Resources\ProduksiPressDryers\Widgets\RekapProduksiDryer;
+use App\Filament\Resources\ProduksiRepairs\Widgets\RekapProduksiRepair;
+use App\Filament\Resources\ProduksiRotaries\Widgets\RekapProduksiRotary;
+use App\Filament\Resources\ProduksiSandingJoints\Widgets\RekapProduksiSandingJoint;
+use App\Filament\Resources\ProduksiSandings\Widgets\RekapProduksiSanding;
+use App\Filament\Resources\ProduksiStiks\Widgets\RekapProduksiStik;
+use App\Filament\Resources\ProduksiTembelTripleks\Widgets\RekapProduksiTembelTriplek;
 use App\Http\Middleware\RunDailyScheduler;
 use App\Http\Middleware\RedirectToPortalForAdmins;
 use App\Livewire\AbsenWajibModal;
@@ -20,9 +37,7 @@ use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 
-use Filament\Navigation\NavigationBuilder;
 use Filament\Navigation\NavigationGroup;
-use Filament\Navigation\NavigationItem;
 
 
 use Filament\Pages\Dashboard;
@@ -30,8 +45,6 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\View\PanelsRenderHook;
-use Filament\Widgets\AccountWidget;
-use Filament\Widgets\FilamentInfoWidget;
 
 
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -108,6 +121,23 @@ class AdminPanelProvider extends PanelProvider
                 // AccountWidget::class,
                 // FilamentInfoWidget::class,
                 RekapProduksiNyusup::class,
+                RekapProduksiGraji::class,
+                RekapProduksiDempul::class,
+                RekapProduksiSanding::class,
+                RekapProduksiTembelTriplek::class,
+                RekapProduksiPilihVeneer::class,
+                RekapProduksiGuellotine::class,
+                RekapProduksiHotPress::class,
+                RekapProduksiSandingJoint::class,
+                RekapProduksiPotAfJoint::class,
+                RekapProduksiJoint::class,
+                RekapProduksiRepair::class,
+                RekapProduksiStik::class,
+                RekapProduksiKedi::class,
+                RekapProduksiDryer::class,
+                RekapProduksiRotary::class,
+                RekapProduksiPotSiku::class,
+                RekapProduksiPotJelek::class,
             ])
             ->middleware([
                 EncryptCookies::class,
