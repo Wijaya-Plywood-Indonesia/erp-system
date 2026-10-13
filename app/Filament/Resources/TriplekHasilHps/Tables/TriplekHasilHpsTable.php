@@ -57,8 +57,8 @@ class TriplekHasilHpsTable
                         }
 
                         return $serahTerima->diterima_oleh === '-'
-                            ? 'Menunggu Diterima Graji Triplek'
-                            : 'Sudah Diterima Graji Triplek';
+                            ? 'Menunggu Diterima Gudang Triplek Mentah'
+                            : 'Sudah Diterima Gudang Triplek Mentah';
                     }),
 
                 TextColumn::make('barangSetengahJadi.jenisBarang.nama_jenis_barang')
@@ -100,7 +100,7 @@ class TriplekHasilHpsTable
                         }
 
                         $tujuan = match ($serahTerima->tujuan) {
-                            'graji_triplek' => 'Graji Triplek',
+                            'graji_triplek' => 'Gudang Triplek Mentah',
                             default => '-',
                         };
 
@@ -161,7 +161,7 @@ class TriplekHasilHpsTable
                     ->icon('heroicon-o-paper-airplane')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->modalHeading('Serahkan Triplek ini ke Graji Triplek?')
+                    ->modalHeading('Serahkan Triplek ini ke Gudang Triplek Mentah?')
                     ->modalDescription('Pastikan data berikut sudah sesuai sebelum diserahkan.')
                     ->modalContent(function (TriplekHasilHp $record) {
                         $mesin = $record->mesin?->nama_mesin ?? '-';
@@ -215,7 +215,7 @@ class TriplekHasilHpsTable
 
                             Notification::make()
                                 ->title('Penyerahan Berhasil')
-                                ->body('Palet telah masuk ke daftar Serah Terima ke Graji Triplek.')
+                                ->body('Palet telah masuk ke daftar Serah Terima ke Gudang Triplek Mentah.')
                                 ->success()
                                 ->send();
 

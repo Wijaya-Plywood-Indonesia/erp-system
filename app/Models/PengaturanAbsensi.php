@@ -19,6 +19,7 @@ class PengaturanAbsensi extends Model
         'toleransi_masuk_lebih_cepat_malam_menit' => 'integer',
         'toleransi_pulang_lebih_lambat_malam_menit' => 'integer',
         'auto_fix_batas_selisih_menit' => 'integer',
+        'batas_hari_mundur_upload' => 'integer',
     ];
 
     public function updater(): BelongsTo
