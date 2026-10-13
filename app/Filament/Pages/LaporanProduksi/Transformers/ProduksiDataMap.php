@@ -2,11 +2,11 @@
 
 namespace App\Filament\Pages\LaporanProduksi\Transformers;
 
-use App\Actions\HitungPotonganProduksiAction;
 use App\DataTransferObjects\PekerjaKerjaInput;
-use App\Enums\Mesin;
 use App\Models\Target;
+use App\Services\Target\Strategies\ProporsionalStrategy;
 use Carbon\Carbon;
+use Exception;
 use Illuminate\Support\Facades\Log;
 
 class ProduksiDataMap
@@ -14,7 +14,6 @@ class ProduksiDataMap
     public static function make($collection)
     {
         $result = [];
-        $action = new HitungPotonganProduksiAction;
 
         foreach ($collection as $item) {
 
@@ -22,12 +21,11 @@ class ProduksiDataMap
             $tanggal = Carbon::parse($item->tgl_produksi)->format('d/m/Y');
 
             // ---------------------------------------------------------
-            // KENDALA / DOWNTIME (tidak berubah dari sebelumnya)
+            // KENDALA / DOWNTIME
             // ---------------------------------------------------------
-            $totalKendalaMenit = 0;
             $totalDowntimeMenit = 0;
             $daftarKendala = [];
-            $daftarDowntime = [];
+            $merged = []; // interval downtime gabungan (timestamp), dipakai juga per pekerja
 
             if (! empty($item->kendalaRotaries) && $item->kendalaRotaries->count() > 0) {
                 $intervals = [];
@@ -39,12 +37,8 @@ class ProduksiDataMap
                         $mulai = $knd->waktu_mulai ? Carbon::parse($knd->waktu_mulai) : null;
                         $selesai = $knd->waktu_selesai ? Carbon::parse($knd->waktu_selesai) : null;
 
-                        if ($mulai && $selesai) {
-                            $startTs = $mulai->timestamp;
-                            $endTs = $selesai->timestamp;
-                            if ($endTs > $startTs) {
-                                $intervals[] = ['start' => $startTs, 'end' => $endTs];
-                            }
+                        if ($mulai && $selesai && $selesai->timestamp > $mulai->timestamp) {
+                            $intervals[] = ['start' => $mulai->timestamp, 'end' => $selesai->timestamp];
                         }
 
                         $timeStr = ($mulai && $selesai) ? ': '.$mulai->format('H:i').'-'.$selesai->format('H:i') : '';
@@ -75,22 +69,14 @@ class ProduksiDataMap
                 }
 
                 if (! empty($intervals)) {
-                    usort($intervals, function ($a, $b) {
-                        return $a['start'] <=> $b['start'];
-                    });
+                    usort($intervals, fn ($a, $b) => $a['start'] <=> $b['start']);
 
-                    $merged = [];
                     foreach ($intervals as $interval) {
-                        if (empty($merged)) {
-                            $merged[] = $interval;
+                        $lastIndex = count($merged) - 1;
+                        if ($lastIndex >= 0 && $interval['start'] <= $merged[$lastIndex]['end']) {
+                            $merged[$lastIndex]['end'] = max($merged[$lastIndex]['end'], $interval['end']);
                         } else {
-                            $lastIndex = count($merged) - 1;
-                            $last = &$merged[$lastIndex];
-                            if ($interval['start'] <= $last['end']) {
-                                $last['end'] = max($last['end'], $interval['end']);
-                            } else {
-                                $merged[] = $interval;
-                            }
+                            $merged[] = $interval;
                         }
                     }
 
@@ -105,7 +91,6 @@ class ProduksiDataMap
             $totalKendalaMenit = $totalDowntimeMenit;
             $daftarDowntime = $daftarKendala;
 
-            $totalDowntimeFormatted = '';
             if ($totalDowntimeMenit >= 60) {
                 $jam = floor($totalDowntimeMenit / 60);
                 $menit = $totalDowntimeMenit % 60;
@@ -114,24 +99,15 @@ class ProduksiDataMap
                 $totalDowntimeFormatted = "{$totalDowntimeMenit} Menit";
             }
 
-            $kendalaText = '-';
-            if (count($daftarKendala) > 0) {
-                $kendalaText = implode(', ', array_column($daftarKendala, 'text'));
-            }
+            $kendalaText = count($daftarKendala) > 0
+                ? implode(', ', array_column($daftarKendala, 'text'))
+                : '-';
 
             // ---------------------------------------------------------
-            // JAM KERJA EFEKTIF (Jumat -2 jam + downtime) — dipakai SEKALI
-            // untuk seluruh kru hari itu, terlepas dari berapa banyak
-            // ukuran yang mereka kerjakan (sama seperti pola di JoinDataMap:
-            // 1 kru cuma punya 1 "jatah hari kerja").
+            // JAM KERJA NORMAL HARI INI (batas atas jam hadir per orang)
             // ---------------------------------------------------------
             $jumlahPekerja = $item->detailPegawaiRotary->count();
 
-            // Target "jam" master dipakai untuk basis pengurangan Jumat.
-            // Karena bisa ada >1 ukuran (>1 baris target) per produksi,
-            // kita ambil jam master dari target ukuran PERTAMA yang
-            // ketemu sebagai representasi jam kerja normal hari itu
-            // (semua target mesin yang sama biasanya punya jam sama).
             $firstPaletForJam = $item->detailPaletRotary->first();
             $jamKerjaMasterModel = $firstPaletForJam
                 ? Target::where('id_mesin', $item->id_mesin)
@@ -150,24 +126,36 @@ class ProduksiDataMap
             if ($prodDate->isFriday() && $jamKerjaNormalHariIni > 2) {
                 $jamKerjaNormalHariIni -= 2;
             }
-
             $jamKerjaMenit = $jamKerjaNormalHariIni * 60;
-            $jamKerjaEfektifMenit = max(0, $jamKerjaMenit - $totalKendalaMenit);
-            $jamKerjaEfektif = $jamKerjaEfektifMenit / 60;
+
+            // ---------------------------------------------------------
+            // MENIT HADIR REAL PER PEKERJA (jam_masuk/jam_pulang dikurangi
+            // downtime yang beririsan dengan jam hadirnya). Dihitung SEKALI
+            // di sini, dipakai untuk target, pembagian potongan & tampilan.
+            // ---------------------------------------------------------
+            $tglBase = Carbon::parse($item->tgl_produksi)->startOfDay();
+            $pekerjaInput = [];
+            $menitPerPekerja = []; // indeks sama dengan detailPegawaiRotary->values()
+            $totalMenitOrang = 0.0;
+
+            foreach ($item->detailPegawaiRotary->values() as $i => $det) {
+                $kode = $det->pegawai->kode_pegawai ?? (string) ($det->id_pegawai ?? $det->id);
+
+                $menitHadir = self::hitungMenitHadir($det, $tglBase, $merged, $jamKerjaMenit, $totalDowntimeMenit);
+
+                $menitPerPekerja[$i] = $menitHadir;
+                $totalMenitOrang += $menitHadir;
+                $pekerjaInput[] = new PekerjaKerjaInput(
+                    idPegawai: (string) $kode,
+                    menitKerja: (float) $menitHadir
+                );
+            }
+
+            $jamKerjaEfektif = $jumlahPekerja > 0 ? ($totalMenitOrang / $jumlahPekerja) / 60 : 0;
 
             // ---------------------------------------------------------
             // KELOMPOKKAN detailPaletRotary PER UKURAN
             // ---------------------------------------------------------
-            // PENTING (bug lama): sebelumnya cuma palet PERTAMA yang
-            // dipakai untuk cari target & label ukuran, sementara
-            // total_lembar dijumlah dari SEMUA palet termasuk ukuran lain
-            // → ukuran lain hilang dari laporan & capaian jadi salah.
-            //
-            // Untuk mesin rotary (Spindless/Meranti/Sanji/Yuequn dll):
-            // KW/grade TIDAK diisi di tabel targets (kolom grade selalu
-            // NULL), jadi target cuma di-resolve pakai (id_mesin,
-            // id_ukuran) — KW diabaikan untuk pencarian target, tapi tetap
-            // dicatat untuk tampilan.
             if ($item->detailPaletRotary->isEmpty()) {
                 Log::warning('Produksi tanpa detail palet', [
                     'id_produksi' => $item->id,
@@ -223,14 +211,8 @@ class ProduksiDataMap
             }
 
             // ---------------------------------------------------------
-            // HITUNG TARGET-ADJUSTED, CAPAIAN & POTONGAN — KOLEKTIF LINTAS
-            // UKURAN (pola sama seperti JoinDataMap): tiap ukuran dihitung
-            // seolah kru kerja PENUH sehari cuma untuk ukuran itu (pakai
-            // jam efektif & jumlah pekerja yang SAMA, bukan diulang penuh
-            // per ukuran), lalu capaian % dijumlah lintas ukuran, dan
-            // potongan final dihitung SEKALI dari kekurangan % itu — bukan
-            // dijumlah dari potongan tiap ukuran (supaya tidak dobel
-            // hitung kalau kru menghasilkan >1 ukuran di hari yang sama).
+            // TARGET-ADJUSTED & CAPAIAN (kolektif lintas ukuran)
+            // Target disesuaikan ke TOTAL MENIT-ORANG yang benar-benar hadir.
             // ---------------------------------------------------------
             $itemsUkuran = [];
             $sumCapaianPersen = 0;
@@ -272,7 +254,7 @@ class ProduksiDataMap
                 $ratePerMenit = ($orgNormal > 0 && $jamNormalMenit > 0) ? $targetNormal / $jamNormalMenit : 0;
                 $ratePerOrgPerMenit = $orgNormal > 0 ? $ratePerMenit / $orgNormal : 0;
 
-                $targetAdjusted = round($ratePerOrgPerMenit * $jumlahPekerja * $jamKerjaEfektifMenit);
+                $targetAdjusted = round($ratePerOrgPerMenit * $totalMenitOrang);
 
                 $capaian = $targetAdjusted > 0 ? ($grup['hasil'] / $targetAdjusted) * 100 : 100.0;
                 $nilaiTarget = $targetAdjusted * $biayaPerUnit;
@@ -299,51 +281,63 @@ class ProduksiDataMap
             $capaianGlobal = $sumCapaianPersen;
             $nilaiSatuHariPenuh = $jumlahUkuranAda > 0 ? ($sumNilaiTarget / $jumlahUkuranAda) : 0;
 
+            // ---------------------------------------------------------
+            // POTONGAN — proporsional menit hadir (ProporsionalStrategy)
+            // ---------------------------------------------------------
             $potonganTotal = 0;
             $potonganPerPegawai = [];
 
-            if ($hasTarget && $jumlahPekerja > 0) {
+            if ($hasTarget && $jumlahPekerja > 0 && $totalMenitOrang > 0) {
                 if ($totalHasilSemua <= 0) {
-                    // Sama sekali tidak ada hasil: tiap orang kena potongan
-                    // penuh sebesar gaji (konsisten dengan KolektifStrategy).
-                    $potonganPerOrang = $gajiPerOrang;
-                    $potonganTotal = $gajiPerOrang * $jumlahPekerja;
+                    // Tidak ada hasil sama sekali: tiap orang yang hadir kena
+                    // potongan penuh sebesar gaji (konsisten dengan sebelumnya).
+                    foreach ($pekerjaInput as $p) {
+                        if ($p->menitKerja > 0) {
+                            $potonganPerPegawai[$p->idPegawai] = $gajiPerOrang;
+                            $potonganTotal += $gajiPerOrang;
+                        }
+                    }
                 } else {
                     $kekuranganPersen = max(0, 100 - $capaianGlobal) / 100;
                     $potonganTotal = $kekuranganPersen * $nilaiSatuHariPenuh;
-                    $potonganPerOrang = $jumlahPekerja > 0
-                        ? round(($potonganTotal / $jumlahPekerja) / 500) * 500
-                        : 0;
-                }
 
-                foreach ($item->detailPegawaiRotary as $det) {
-                    $idPegawai = $det->pegawai->kode_pegawai ?? (string) ($det->id_pegawai ?? $det->id);
-                    $potonganPerPegawai[(string) $idPegawai] = $potonganPerOrang;
+                    if ($potonganTotal > 0) {
+                        $potonganPerPegawai = (new ProporsionalStrategy)->bagikan($pekerjaInput, $potonganTotal);
+                    }
                 }
-            } else {
+            } elseif (! $hasTarget) {
                 Log::warning('Tidak ada target ditemukan untuk semua ukuran, potongan tidak dihitung', [
                     'id_produksi' => $item->id,
                     'mesin' => $namaMesin,
                     'id_mesin' => $item->id_mesin,
                 ]);
+            } elseif ($jumlahPekerja > 0 && $totalMenitOrang <= 0) {
+                Log::warning('Total menit hadir pekerja 0, potongan tidak dihitung', [
+                    'id_produksi' => $item->id,
+                    'mesin' => $namaMesin,
+                ]);
             }
 
-            $pekerja = $item->detailPegawaiRotary->map(function ($det) use ($potonganPerPegawai) {
-                $idPegawai = $det->pegawai->kode_pegawai ?? (string) ($det->id_pegawai ?? $det->id);
+            $pekerja = $item->detailPegawaiRotary->values()->map(function ($det, $i) use ($potonganPerPegawai, $menitPerPekerja) {
+                $kode = (string) ($det->pegawai->kode_pegawai ?? ($det->id_pegawai ?? $det->id));
+                $menitHadir = (float) ($menitPerPekerja[$i] ?? 0);
+                $pot = $potonganPerPegawai[$kode] ?? $potonganPerPegawai[ltrim($kode, '0')] ?? 0;
 
                 return [
                     'id' => $det->pegawai->kode_pegawai ?? '-',
                     'nama' => $det->pegawai->nama_pegawai ?? '-',
                     'jam_masuk' => $det->jam_masuk ?? '-',
                     'jam_pulang' => $det->jam_pulang ?? '-',
+                    'jam_hadir' => round($menitHadir / 60, 2),
+                    'menit_hadir' => round($menitHadir, 1),
                     'ijin' => $det->ijin ?? '-',
                     'keterangan' => $det->keterangan ?? '-',
-                    'pot_target' => (int) ($potonganPerPegawai[(string) $idPegawai] ?? 0),
+                    'pot_target' => (int) $pot,
                 ];
             })->toArray();
 
-            // Label ukuran ringkas di header kartu: gabungan semua ukuran
-            // hari itu (kalau cuma 1 ukuran, hasilnya sama seperti dulu).
+            $potonganDibagikan = (int) round(array_sum($potonganPerPegawai));
+
             $ukuranDisplayHeader = count($itemsUkuran) > 0
                 ? implode(' + ', array_column($itemsUkuran, 'ukuran'))
                 : ($item->detailPaletRotary->isEmpty() ? 'BELUM INPUT PALET' : 'TIDAK ADA UKURAN');
@@ -352,41 +346,89 @@ class ProduksiDataMap
                 'mesin' => $namaMesin,
                 'tanggal' => $tanggal,
                 'ukuran' => $ukuranDisplayHeader,
-                'items' => $itemsUkuran, // breakdown per ukuran
+                'items' => $itemsUkuran,
                 'pekerja' => $pekerja,
                 'kendala' => $kendalaText,
                 'daftar_kendala' => $daftarKendala,
                 'daftar_downtime' => $daftarDowntime,
                 'jam_kerja' => $jamKerja,
+                // rata-rata jam hadir efektif per orang (sudah dikurangi downtime)
                 'jam_kerja_efektif' => round($jamKerjaEfektif, 2),
+                'total_menit_orang' => round($totalMenitOrang, 1),
                 'total_kendala_menit' => $totalKendalaMenit,
                 'total_downtime_menit' => $totalDowntimeMenit,
                 'total_downtime_formatted' => $totalDowntimeFormatted,
-                'target' => $targetAdjustedTotal, // jumlah target disesuaikan lintas semua ukuran
-                'target_normal' => $targetNormalTotal, // jumlah target normal lintas semua ukuran
+                'target' => $targetAdjustedTotal,
+                'target_normal' => $targetNormalTotal,
                 'target_per_jam' => $jamKerja > 0 ? round($targetNormalTotal / $jamKerja, 2) : 0,
                 'hasil' => $totalHasilSemua,
                 'selisih' => $totalHasilSemua - $targetAdjustedTotal,
                 'capaian_global_persen' => $capaianGlobal,
                 'potongan_total' => $potonganTotal,
-                'potongan_per_orang' => $jumlahPekerja > 0 ? (int) round($potonganTotal / $jumlahPekerja) : 0,
+                // rata-rata dari angka yang benar-benar dibebankan ke pekerja,
+                // supaya header sama dengan jumlah di tabel
+                'potongan_per_orang' => $jumlahPekerja > 0 ? (int) round($potonganDibagikan / $jumlahPekerja) : 0,
+                'potongan_dibagikan' => $potonganDibagikan,
                 'has_target' => $hasTarget,
             ];
 
             Log::info('ProduksiDataMap', [
                 'mesin' => $namaMesin,
                 'jumlah_ukuran' => count($itemsUkuran),
+                'jumlah_pekerja' => $jumlahPekerja,
+                'total_menit_orang' => $totalMenitOrang,
                 'target_normal_total' => $targetNormalTotal,
                 'target_disesuaikan_total' => $targetAdjustedTotal,
                 'capaian_global_persen' => $capaianGlobal,
                 'total_kendala_menit' => $totalKendalaMenit,
-                'jam_kerja_efektif' => $jamKerjaEfektif,
                 'hasil' => $totalHasilSemua,
                 'potongan_total' => $potonganTotal,
             ]);
         }
 
         return $result;
+    }
+
+    /**
+     * Menit hadir real satu pekerja: (jam_pulang - jam_masuk), dibatasi jam kerja
+     * normal hari itu, dikurangi irisan dengan downtime mesin.
+     *
+     * Kalau jam_masuk/jam_pulang kosong atau tidak valid, dianggap hadir penuh
+     * (jam kerja normal dikurangi total downtime) seperti perilaku lama.
+     */
+    private static function hitungMenitHadir($det, Carbon $tglBase, array $merged, float $jamKerjaMenit, int $totalDowntimeMenit): float
+    {
+        $fallback = max(0, $jamKerjaMenit - $totalDowntimeMenit);
+
+        if (empty($det->jam_masuk) || empty($det->jam_pulang)) {
+            return (float) $fallback;
+        }
+
+        try {
+            $in = $tglBase->copy()->setTimeFromTimeString((string) $det->jam_masuk);
+            $out = $tglBase->copy()->setTimeFromTimeString((string) $det->jam_pulang);
+        } catch (Exception $e) {
+            return (float) $fallback;
+        }
+
+        if ($out->lessThanOrEqualTo($in)) {
+            $out->addDay();
+        }
+
+        $menit = ($out->timestamp - $in->timestamp) / 60;
+
+        if ($jamKerjaMenit > 0) {
+            $menit = min($menit, $jamKerjaMenit);
+        }
+
+        foreach ($merged as $iv) {
+            $overlap = min($iv['end'], $out->timestamp) - max($iv['start'], $in->timestamp);
+            if ($overlap > 0) {
+                $menit -= $overlap / 60;
+            }
+        }
+
+        return (float) max(0, $menit);
     }
 
     /**
