@@ -235,8 +235,9 @@ class PenggunaanLahanRotariesTable
                                 $catatanUser
                             );
 
+                            // Reset SEMUA kombinasi jenis_kayu + panjang di lahan ini, tanpa peduli jenis kayu.
+                            // Satu lahan selalu hanya satu jenis kayu, tapi ini memastikan tidak ada sisa stok.
                             $summariesBerstok = HppAverageSummarie::where('id_lahan', $idLahan)
-                                ->where('id_jenis_kayu', $idJenisKayu)
                                 ->where('stok_batang', '>', 0)
                                 ->get();
 
@@ -248,7 +249,7 @@ class PenggunaanLahanRotariesTable
 
                                 $log = HppAverageLog::create([
                                     'id_lahan'             => $idLahan,
-                                    'id_jenis_kayu'        => $idJenisKayu,
+                                    'id_jenis_kayu'        => $item->id_jenis_kayu, // pakai dari item, bukan dari record penggunaan
                                     'panjang'              => $item->panjang,
                                     'tanggal'              => $tglProduksi,
                                     'tipe_transaksi'       => 'keluar',
