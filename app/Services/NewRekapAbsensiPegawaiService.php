@@ -339,6 +339,8 @@ class NewRekapAbsensiPegawaiService
             'shift' => null,
             'jam_masuk' => null,
             'jam_pulang' => null,
+            'izin' => null,
+            'keterangan' => null,
             'sumber_label' => [],
         ]);
 
@@ -1083,6 +1085,23 @@ class NewRekapAbsensiPegawaiService
                 // mis. izin di semua lini), jam_masuk/jam_pulang/shift
                 // dibiarkan apa adanya dari $utama (row pertama, perilaku
                 // lama) — tidak ada base yang valid untuk dihitung.
+
+                $keteranganGabungan = $rowsWithDurasi
+                    ->pluck('keterangan')
+                    ->filter(fn ($k) => ! empty($k) && trim((string) $k) !== '' && trim((string) $k) !== '-')
+                    ->map(fn ($k) => trim((string) $k))
+                    ->unique()
+                    ->implode('; ');
+
+                $izinGabungan = $rowsWithDurasi
+                    ->pluck('izin')
+                    ->filter(fn ($i) => ! empty($i) && trim((string) $i) !== '' && trim((string) $i) !== '-')
+                    ->map(fn ($i) => trim((string) $i))
+                    ->unique()
+                    ->implode(', ');
+
+                $utama['keterangan'] = ! empty($keteranganGabungan) ? $keteranganGabungan : ($utama['keterangan'] ?? null);
+                $utama['izin'] = ! empty($izinGabungan) ? $izinGabungan : ($utama['izin'] ?? null);
 
                 $utama['sumber_label'] = $rowsWithDurasi
                     ->pluck('sumber_label')
