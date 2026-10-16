@@ -16,6 +16,7 @@ class SerahTerimaHp extends Model
         'id_hasil_sanding',
         'id_triplek_mutasi_keluar',
         'id_platform_mth_mutasi_keluar',
+        'id_platform_jadi_mutasi_keluar', // 🆕 mutasi Gudang Platform Jadi -> Gudang Platform Mentah
         'id_triplek_mth_mutasi_keluar',
         'id_produksi_graji_triplek',
         'id_produksi_sanding',
@@ -23,7 +24,7 @@ class SerahTerimaHp extends Model
         'diterima_oleh',
         'status',
         'tujuan',
-        // 🆕 Pengembalian sisa bahan ke gudang (lihat method kembaliKeGudang()
+        // Pengembalian sisa bahan ke gudang (lihat method kembaliKeGudang()
         // di SerahTerimaHpService, dan getSisaAttribute() di bawah).
         'jumlah_dikembalikan',
         'ditolak_oleh',
@@ -33,7 +34,6 @@ class SerahTerimaHp extends Model
         'diterima_gudang_oleh',
     ];
 
-    // 🆕 Supaya nilainya selalu float saat dibaca, bukan string.
     protected $casts = [
         'jumlah_dikembalikan' => 'decimal:2',
         'diterima_gudang_at' => 'datetime',
@@ -79,12 +79,21 @@ class SerahTerimaHp extends Model
     }
 
     /**
-     * Mutasi keluar dari Gudang Platform Mentah. Terisi hanya untuk barang
-     * yang dikeluarkan dari stok platform mentah dengan tujuan Produksi Sanding.
+     * Mutasi keluar dari Gudang Platform Mentah. Terisi untuk barang yang
+     * dikeluarkan dari stok platform mentah (tujuan Produksi Sanding atau
+     * Gudang Platform Jadi).
      */
     public function platformMthMutasiKeluar(): BelongsTo
     {
         return $this->belongsTo(PlatformMthMutasiKeluar::class, 'id_platform_mth_mutasi_keluar');
+    }
+
+    /**
+     * 🆕 Mutasi keluar dari Gudang Platform Jadi menuju Gudang Platform Mentah.
+     */
+    public function platformJadiMutasiKeluar(): BelongsTo
+    {
+        return $this->belongsTo(PlatformJadiMutasiKeluar::class, 'id_platform_jadi_mutasi_keluar');
     }
 
     /**
@@ -139,17 +148,21 @@ class SerahTerimaHp extends Model
             (bool) $this->id_hasil_sanding => 'Sanding',
             (bool) $this->id_triplek_mutasi_keluar => 'Gudang Triplek Jadi',
             (bool) $this->id_platform_mth_mutasi_keluar => 'Gudang Platform Mentah',
+            (bool) $this->id_platform_jadi_mutasi_keluar => 'Gudang Platform Jadi',
             (bool) $this->id_triplek_mth_mutasi_keluar => 'Gudang Triplek Mentah',
             default => '-',
         };
     }
 
     /**
-     * 🆕 Apakah baris ini berasal dari salah satu gudang (Triplek Jadi /
+     * Apakah baris ini berasal dari salah satu gudang (Triplek Jadi /
      * Platform Mentah / Triplek Mentah) — bukan dari WIP internal
      * (Hotpress/Graji/Sanding). Hanya sumber gudang yang stoknya betul-betul
      * berkurang saat diserahkan, jadi hanya sumber ini yang bisa
      * "dikembalikan ke gudang".
+     *
+     * Catatan: id_platform_jadi_mutasi_keluar SENGAJA tidak dimasukkan; mutasi
+     * antar-gudang habis terpakai saat diterima, tidak ada "sisa" yang dikembalikan.
      */
     public function isDariGudang(): bool
     {
@@ -159,7 +172,7 @@ class SerahTerimaHp extends Model
     }
 
     /**
-     * 🆕 Ambil model mutasi keluar gudang yang relevan (TriplekJadiMutasiKeluar
+     * Ambil model mutasi keluar gudang yang relevan (TriplekJadiMutasiKeluar
      * / PlatformMthMutasiKeluar / TriplekMthMutasiKeluar), atau null kalau
      * baris ini bukan dari gudang (lihat isDariGudang()).
      */
@@ -181,7 +194,7 @@ class SerahTerimaHp extends Model
     }
 
     /**
-     * 🆕 Kunci sumber gudang ('triplek_jadi' | 'platform_mth' | 'triplek_mth'),
+     * Kunci sumber gudang ('triplek_jadi' | 'platform_mth' | 'triplek_mth'),
      * atau null kalau bukan dari gudang. Dipakai SerahTerimaHpService untuk
      * memilih Stok*Service yang benar.
      */
@@ -229,6 +242,7 @@ class SerahTerimaHp extends Model
      * Jumlah/isi barang.
      * - Dari Gudang Triplek Jadi: pakai stok_lembar mutasi keluar.
      * - Dari Gudang Platform Mentah: pakai stok_lembar mutasi keluar.
+     * - Dari Gudang Platform Jadi: pakai stok_lembar mutasi keluar.
      * - Selain itu (TriplekHasilHp/PlatformHasilHp/HasilGrajiTriplek pakai `isi`,
      *   HasilSanding pakai `kuantitas`).
      */
@@ -240,6 +254,10 @@ class SerahTerimaHp extends Model
 
         if ($this->id_platform_mth_mutasi_keluar !== null) {
             return $this->platformMthMutasiKeluar->stok_lembar ?? null;
+        }
+
+        if ($this->id_platform_jadi_mutasi_keluar !== null) {
+            return $this->platformJadiMutasiKeluar->stok_lembar ?? null;
         }
 
         if ($this->id_triplek_mth_mutasi_keluar !== null) {
@@ -277,18 +295,15 @@ class SerahTerimaHp extends Model
      * - Menuju triplek (Graji): pemakaian dihitung dari MasukGrajiTriplek.
      * - Menuju platform (Sanding): pemakaian dihitung dari ModalSanding.
      *
-     * 🆕 Ditambah `- jumlah_dikembalikan` supaya konsisten dengan pola
+     * Ditambah `- jumlah_dikembalikan` supaya konsisten dengan pola
      * VeneerJadiMutasiKeluarPalet::sisa di fitur Hotpress: begitu sebagian
      * sudah dikembalikan, sisa yang BISA dikembalikan lagi otomatis berkurang
      * (tidak bisa dikembalikan dua kali untuk jumlah yang sama).
      */
     public function getSisaAttribute(): float
     {
-        // 🆕 Bahan yang menuju Sanding (hasil Hotpress, hasil Graji, Gudang
+        // Bahan yang menuju Sanding (hasil Hotpress, hasil Graji, Gudang
         // Platform Mentah, DAN Gudang Triplek Jadi) dihitung dari ModalSanding.
-        // Sebelumnya Gudang Triplek Jadi ikut terhitung 'triplek' sehingga
-        // pemakaiannya dicari di MasukGrajiTriplek dan sisanya tidak pernah
-        // berkurang walau sudah dipakai sebagai modal.
         $menujuSanding = $this->tipeSumber === 'platform'
             || $this->id_triplek_mutasi_keluar !== null;
 
@@ -302,5 +317,13 @@ class SerahTerimaHp extends Model
     public function serahTerimaHp()
     {
         return $this->hasOne(SerahTerimaHp::class, 'id_produksi_graji_triplek');
+    }
+
+    public function triplekJadiMutasiKeluar()
+    {
+        return $this->belongsTo(
+            TriplekJadiMutasiKeluar::class,
+            'id_triplek_mutasi_keluar'
+        );
     }
 }
