@@ -14,7 +14,7 @@ class JurnalProduksiRegistry
     private const SOURCES = [
         DryerJurnalSource::class,
         JoinJurnalSource::class,
-        // Tambahkan produksi lain di sini, mis.:
+        RepairJurnalSource::class,
         KediJurnalSource::class,
         // RotaryJurnalSource::class,
     ];

@@ -34,7 +34,7 @@ final class JurnalSheetRows
             if ($grup) {
                 $jurnals[] = [
                     'no_dokumen' => $noDokumenFor($grup[0], count($jurnals)),
-                    'rows' => $grup,
+                    'rows' => self::seimbangkan($grup),
                 ];
                 $grup = [];
             }
@@ -88,6 +88,68 @@ final class JurnalSheetRows
         $tutup();
 
         return $jurnals;
+    }
+
+    /** Selisih pembulatan (rupiah) yang masih boleh diserap baris selisih patok. */
+    public const TOLERANSI_PEMBULATAN = 50;
+
+    /**
+     * Sebagian sheet (mis. Repair) menghitung baris selisih dari angka
+     * yang BELUM dibulatkan, sedangkan tiap baris ditulis dibulatkan, jadi
+     * debit dan kredit bisa beda beberapa rupiah. Akuntansi menolak posting
+     * jurnal yang tidak balance, jadi selisih kecil itu diserap oleh baris
+     * "Selisih harga patok produksi" (5069.2).
+     *
+     * Selisih lebih besar dari toleransi TIDAK diubah (tetap tidak balance
+     * dan akan ditahan oleh pengirim).
+     */
+    public static function seimbangkan(array $rows, float $toleransi = self::TOLERANSI_PEMBULATAN): array
+    {
+        $net = 0.0; // debit - kredit
+        foreach ($rows as $r) {
+            $net += $r['map'] === 'd' ? $r['total'] : -$r['total'];
+        }
+
+        if ($net == 0.0 || abs($net) > $toleransi) {
+            return $rows;
+        }
+
+        foreach ($rows as $i => $r) {
+            if ($r['no_akun'] === '5069.2' && $r['hit_kbk'] === null) {
+                $kini = $r['map'] === 'd' ? $r['total'] : -$r['total'];
+                $baru = $kini - $net;
+
+                if (abs($baru) < 0.5) {
+                    unset($rows[$i]);
+
+                    return array_values($rows);
+                }
+
+                $rows[$i]['map'] = $baru >= 0 ? 'd' : 'k';
+                $rows[$i]['total'] = abs($baru);
+                $rows[$i]['harga'] = abs($baru);
+
+                return $rows;
+            }
+        }
+
+        $akhir = end($rows);
+        $rows[] = [
+            'no_akun' => '5069.2',
+            'nama_akun' => 'Selisih harga patok produksi',
+            'tgl' => $akhir['tgl'],
+            'map' => $net > 0 ? 'k' : 'd',
+            'nama' => $akhir['nama'],
+            'keterangan' => '',
+            'hit_kbk' => null,
+            'banyak' => null,
+            'm3' => null,
+            'harga' => abs($net),
+            'total' => abs($net),
+            'id_barang' => null,
+        ];
+
+        return $rows;
     }
 
     /**
