@@ -13,6 +13,7 @@ class JurnalProduksiRegistry
     /** @var array<int, class-string<JurnalProduksiSource>> */
     private const SOURCES = [
         DryerJurnalSource::class,
+        JoinJurnalSource::class,
         // Tambahkan produksi lain di sini, mis.:
         KediJurnalSource::class,
         // RotaryJurnalSource::class,
