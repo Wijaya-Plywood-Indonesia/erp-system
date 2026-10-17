@@ -16,6 +16,7 @@ class JurnalProduksiRegistry
         JoinJurnalSource::class,
         RepairJurnalSource::class,
         KediJurnalSource::class,
+        HotPressJurnalSource::class,
         // RotaryJurnalSource::class,
     ];
 
