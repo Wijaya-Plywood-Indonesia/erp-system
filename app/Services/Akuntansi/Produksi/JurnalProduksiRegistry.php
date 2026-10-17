@@ -12,15 +12,14 @@ class JurnalProduksiRegistry
 {
     /** @var array<int, class-string<JurnalProduksiSource>> */
     private const SOURCES = [
-        DryerJurnalSource::class,
-        JoinJurnalSource::class,
-        RepairJurnalSource::class,
-        KediJurnalSource::class,
-        HotPressJurnalSource::class,
         RotaryJurnalSource::class,
-        KayuKeluarJurnalSource::class,
         KayuMasukJurnalSource::class,
-        // RotaryJurnalSource::class,
+        KayuKeluarJurnalSource::class,
+        DryerJurnalSource::class,
+        KediJurnalSource::class,
+        RepairJurnalSource::class,
+        JoinJurnalSource::class,
+        HotPressJurnalSource::class,
     ];
 
     /** @return array<string, JurnalProduksiSource> keyed by key() */
