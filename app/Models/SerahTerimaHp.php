@@ -312,8 +312,7 @@ class SerahTerimaHp extends Model
         //   - Gudang Triplek Mentah yang tujuannya Sanding
         //   - Gudang Triplek Jadi yang tujuannya Sanding
         $menujuSanding = strtolower((string) $this->tujuan) === 'sanding'
-            || $this->tipeSumber === 'platform';
-
+            || $this->tipeSumber === 'platform'
             || $this->id_triplek_mutasi_keluar !== null;
 
         $terpakai = $menujuSanding

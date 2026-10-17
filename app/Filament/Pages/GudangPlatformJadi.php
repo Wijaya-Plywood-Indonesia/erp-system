@@ -494,8 +494,6 @@ class GudangPlatformJadi extends Page
         }
     }
 
-    }
-
     // ─── SERAH TERIMA (dari Hasil Sanding) ───────────────────────────────────
 
     /**
