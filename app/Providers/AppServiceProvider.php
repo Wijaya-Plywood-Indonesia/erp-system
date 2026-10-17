@@ -163,7 +163,7 @@ class AppServiceProvider extends ServiceProvider
         // ⬆⬆⬆  WAJIB: supaya MySQL ikut Asia/Jakarta
         ModalSanding::observe(ModalSandingObserver::class);
         RencanaKerjaHp::observe(RencanaKerjaHpObserver::class);
-        ValidasiHasilRotary::observe(ValidasiHasilRotaryObserver::class);
+        // ValidasiHasilRotary::observe(ValidasiHasilRotaryObserver::class);
         NotaKayu::observe(NotaKayuObserver::class);
         PenggunaanLahanRotary::observe(RotaryObserver::class);
         ValidasiPressDryer::observe(ProductionValidationObserver::class);
