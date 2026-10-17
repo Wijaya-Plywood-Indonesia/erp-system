@@ -81,6 +81,19 @@ class GudangVeneerJadi extends Page
 
     public array $editPaletQuantities = [0 => ''];
 
+    // ── Modal Tolak Serah Terima ──
+    public bool $showTolakModal = false;
+
+    public ?int $tolakId = null;
+
+    public string $tolakTipe = '';
+
+    public string $alasanTolak = '';
+
+    public string $tolakModalTitle = 'Tolak Veneer Jadi';
+
+    public string $tolakModalDescription = 'Veneer ini akan ditolak dan tidak dimasukkan ke stok Gudang Veneer Jadi.';
+
     // Stok veneer yang dipilih ulang saat edit (bisa beda dari stok asal)
     public ?int $editSelectedStokId = null;
 
@@ -866,6 +879,7 @@ class GudangVeneerJadi extends Page
             ->whereIn('tipe_sumber', ['dryer', 'kedi', 'joint', 'gudang'])
             ->where('jenis_terima', 'jadi')
             ->where('diterima_oleh', '-')
+            ->whereNull('ditolak_oleh')
             ->where(function ($q) {
                 $q->whereNotNull('id_detail_hasil')
                     ->orWhereNotNull('id_detail_bongkar_kedi')
@@ -1061,6 +1075,70 @@ class GudangVeneerJadi extends Page
                 ->title('Gagal Menerima Veneer')
                 ->body($e->getMessage())
                 ->danger()
+                ->send();
+        }
+    }
+
+    public function bukaModalTolak(int $id, string $tipe = 'kering'): void
+    {
+        $this->tolakId = $id;
+        $this->tolakTipe = $tipe;
+        $this->alasanTolak = '';
+        $this->tolakModalTitle = 'Tolak Veneer Jadi';
+        $this->tolakModalDescription = 'Veneer ini akan ditolak dan tidak akan menambah stok Gudang Veneer Jadi.';
+        $this->showTolakModal = true;
+    }
+
+    public function batalTolak(): void
+    {
+        $this->showTolakModal = false;
+        $this->tolakId = null;
+        $this->tolakTipe = '';
+        $this->alasanTolak = '';
+    }
+
+    public function prosesTolak(): void
+    {
+        if (! $this->tolakId) {
+            return;
+        }
+
+        if (trim($this->alasanTolak) === '') {
+            Notification::make()->danger()
+                ->title('Gagal Menolak')
+                ->body('Alasan penolakan wajib diisi.')
+                ->send();
+
+            return;
+        }
+
+        try {
+            DB::transaction(function () {
+                $st = SerahTerimaVeneerKering::lockForUpdate()->findOrFail($this->tolakId);
+
+                if ($st->diterima_oleh !== '-' || $st->ditolak_oleh) {
+                    throw new \RuntimeException('Veneer ini sudah diproses (diterima/ditolak) sebelumnya.');
+                }
+
+                $st->update([
+                    'ditolak_oleh' => Auth::user()->name,
+                    'alasan_tolak' => $this->alasanTolak,
+                    'ditolak_at' => now(),
+                    'status' => 'Ditolak',
+                ]);
+            });
+
+            $this->batalTolak();
+            unset($this->serahTerima, $this->riwayatSerahTerima);
+
+            Notification::make()->warning()
+                ->title('Veneer Ditolak')
+                ->body('Veneer jadi berhasil ditolak.')
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()->danger()
+                ->title('Gagal Menolak')
+                ->body($e->getMessage())
                 ->send();
         }
     }

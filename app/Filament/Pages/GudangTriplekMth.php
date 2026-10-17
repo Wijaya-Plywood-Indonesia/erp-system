@@ -7,6 +7,7 @@ use App\Models\SerahTerimaHp;
 use App\Models\StokTriplekMth;
 use App\Models\TriplekMthMutasiKeluar;
 use App\Services\TerimaGudangHpService;
+use App\Services\TransferTriplekJadiKeMthService;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -42,13 +43,14 @@ class GudangTriplekMth extends Page
 
     public string $keteranganKeluar = '';
 
-    // Tujuan keluar: Produksi Graji Triplek atau Produksi Sanding.
+    // Tujuan keluar: Graji Triplek, Sanding, atau Gudang Triplek Jadi.
     public string $tujuanKeluar = 'Graji Triplek';
 
     // key => label tampilan; key juga dipakai sebagai value kolom 'tujuan'.
     public array $opsiTujuan = [
         'Graji Triplek' => 'Produksi Graji Triplek',
         'Sanding' => 'Produksi Sanding',
+        'Triplek Jadi' => 'Gudang Triplek Jadi',
     ];
 
     // Modal Edit Riwayat Keluar
@@ -58,9 +60,44 @@ class GudangTriplekMth extends Page
 
     public $editKuantitas = '';
 
+    // ── Modal Tolak Serah Terima ──
+    public bool $showTolakModal = false;
+
+    public ?int $tolakId = null;
+
+    public string $tolakTipe = '';
+
+    public string $alasanTolak = '';
+
+    public string $tolakModalTitle = 'Tolak Serah Terima';
+
+    public string $tolakModalDescription = 'Kiriman ini akan ditolak dan tidak dimasukkan ke stok Gudang Triplek Mentah.';
+
+    public string $serahTerimaTab = 'aktif';
+
     public function hitungKubikasi(float $p, float $l, float $t, ?int $lembar): float
     {
         return ($p * $l * $t * ($lembar ?? 0)) / 10000000;
+    }
+
+    /**
+     * Lembar yang sudah dicatat keluar tetapi belum diterima/ditolak tujuan.
+     * Stok fisik baru dipotong saat diterima, jadi angka ini harus dikurangkan
+     * dari stok agar barang yang sama tidak bisa dikirim dua kali.
+     */
+    protected function pendingLembar(StokTriplekMth $stok, ?int $kecualiMutasiId = null): int
+    {
+        return (int) TriplekMthMutasiKeluar::query()
+            ->where('id_jenis_kayu', $stok->id_jenis_kayu)
+            ->where('panjang', $stok->panjang)
+            ->where('lebar', $stok->lebar)
+            ->where('tebal', $stok->tebal)
+            ->where('kw_grade', $stok->kw_grade)
+            ->when($kecualiMutasiId, fn ($q) => $q->where('id', '!=', $kecualiMutasiId))
+            ->whereHas('serahTerimaHp', fn ($q) => $q
+                ->where('diterima_oleh', '-')
+                ->whereNull('ditolak_oleh'))
+            ->sum('stok_lembar');
     }
 
     // ─── DETAIL STOK (untuk dropdown pilih barang) ───────────────────────────
@@ -160,8 +197,6 @@ class GudangTriplekMth extends Page
             ->get();
     }
 
-    public string $serahTerimaTab = 'aktif';
-
     public function getRiwayatTerimaProperty(): Collection
     {
         return SerahTerimaHp::with([
@@ -223,14 +258,128 @@ class GudangTriplekMth extends Page
         }
     }
 
+    // ─── TERIMA DARI GUDANG TRIPLEK JADI ─────────────────────────────────────
+
+    public function getMenungguDariJadiProperty(): Collection
+    {
+        return SerahTerimaHp::with('triplekJadiMutasiKeluar.jenisKayu')
+            ->where('tujuan', TransferTriplekJadiKeMthService::TUJUAN)
+            ->whereNotNull('id_triplek_mutasi_keluar')
+            ->where('diterima_oleh', '-')
+            ->whereNull('ditolak_oleh')
+            ->whereNull('diterima_gudang_at')
+            ->latest()
+            ->get();
+    }
+
+    public function getRiwayatDariJadiProperty(): Collection
+    {
+        return SerahTerimaHp::with('triplekJadiMutasiKeluar.jenisKayu')
+            ->where('tujuan', TransferTriplekJadiKeMthService::TUJUAN)
+            ->whereNotNull('diterima_gudang_at')
+            ->orderByDesc('diterima_gudang_at')
+            ->limit(50)
+            ->get();
+    }
+
+    public function terimaDariJadi(int $id): void
+    {
+        try {
+            app(TransferTriplekJadiKeMthService::class)->terima($id);
+
+            unset($this->menungguDariJadi, $this->riwayatDariJadi, $this->stokList);
+
+            Notification::make()->success()
+                ->title('Stok Bertambah')
+                ->body('Triplek dari Gudang Triplek Jadi diterima di Gudang Triplek Mentah.')
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()->danger()
+                ->title('Gagal Menerima')
+                ->body($e->getMessage())
+                ->send();
+        }
+    }
+
+    public function bukaModalTolak(int $id, string $tipe = 'hp'): void
+    {
+        $this->tolakId = $id;
+        $this->tolakTipe = $tipe;
+        $this->alasanTolak = '';
+        if ($tipe === 'jadi') {
+            $this->tolakModalTitle = 'Tolak Kiriman dari Gudang Triplek Jadi';
+            $this->tolakModalDescription = 'Kiriman ini akan ditolak dan tidak akan menambah stok Gudang Triplek Mentah.';
+        } elseif ($tipe === 'graji') {
+            $this->tolakModalTitle = 'Tolak Hasil Graji Triplek';
+            $this->tolakModalDescription = 'Hasil Graji ini akan ditolak dan tidak dimasukkan ke stok Gudang Triplek Mentah.';
+        } else {
+            $this->tolakModalTitle = 'Tolak Serah Terima Hotpress';
+            $this->tolakModalDescription = 'Barang Hotpress ini akan ditolak dan tidak dimasukkan ke stok Gudang Triplek Mentah.';
+        }
+        $this->showTolakModal = true;
+    }
+
+    public function batalTolak(): void
+    {
+        $this->showTolakModal = false;
+        $this->tolakId = null;
+        $this->tolakTipe = '';
+        $this->alasanTolak = '';
+    }
+
+    public function prosesTolak(): void
+    {
+        if (! $this->tolakId) {
+            return;
+        }
+
+        if (trim($this->alasanTolak) === '') {
+            Notification::make()->danger()
+                ->title('Gagal Menolak')
+                ->body('Alasan penolakan wajib diisi.')
+                ->send();
+
+            return;
+        }
+
+        try {
+            DB::transaction(function () {
+                $st = SerahTerimaHp::lockForUpdate()->findOrFail($this->tolakId);
+
+                if ($st->diterima_gudang_at || $st->ditolak_oleh || $st->diterima_oleh !== '-') {
+                    throw new \RuntimeException('Barang ini sudah diproses (diterima/ditolak) sebelumnya.');
+                }
+
+                $st->update([
+                    'ditolak_oleh' => Auth::user()->name,
+                    'alasan_tolak' => $this->alasanTolak,
+                    'ditolak_at' => now(),
+                    'status' => 'Ditolak',
+                ]);
+            });
+
+            $this->batalTolak();
+            unset($this->menungguTerima, $this->menungguGraji, $this->riwayatTerima, $this->menungguDariJadi, $this->riwayatDariJadi, $this->stokList);
+
+            Notification::make()->warning()
+                ->title('Barang Ditolak')
+                ->body('Serah terima barang telah ditolak.')
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()->danger()
+                ->title('Gagal Menolak')
+                ->body($e->getMessage())
+                ->send();
+        }
+    }
+
     // ─── BARANG KELUAR ────────────────────────────────────────────────────────
 
     /**
-     * Keluarkan barang dari stok Triplek Mentah menuju Produksi Graji Triplek
-     * atau Produksi Sanding (sesuai $tujuanKeluar). Header mutasi dibuat di sini,
-     * sekaligus baris SerahTerimaHp berstatus "menunggu" (diterima_oleh = '-').
-     * Stok TIDAK dipotong sekarang — baru dipotong nanti oleh proses produksi
-     * tujuan saat barang ini benar-benar dipakai/diselesaikan.
+     * Keluarkan barang dari stok Triplek Mentah menuju Graji Triplek, Sanding,
+     * atau Gudang Triplek Jadi. Header mutasi dibuat di sini, sekaligus baris
+     * SerahTerimaHp berstatus "menunggu" (diterima_oleh = '-').
+     * Stok TIDAK dipotong sekarang; dipotong saat tujuan menerima.
      */
     public function prosesKeluar(): void
     {
@@ -260,8 +409,10 @@ class GudangTriplekMth extends Page
             DB::transaction(function () use ($qty, $tujuanTerpilih) {
                 $stok = StokTriplekMth::lockForUpdate()->findOrFail($this->selectedStokId);
 
-                if ($qty > (int) $stok->stok_lembar) {
-                    throw new \Exception('Sisa stok tidak mencukupi. Tersedia: '.$stok->stok_lembar.' lembar.');
+                $tersedia = (int) $stok->stok_lembar - $this->pendingLembar($stok);
+
+                if ($qty > $tersedia) {
+                    throw new \Exception("Sisa stok tidak mencukupi. Tersedia (setelah dikurangi yang menunggu diterima): {$tersedia} lembar.");
                 }
 
                 $user = Auth::user();
@@ -278,27 +429,25 @@ class GudangTriplekMth extends Page
                     'dikeluarkan_by' => $user?->id,
                     'keterangan' => trim($this->keteranganKeluar) !== '' ? trim($this->keteranganKeluar) : null,
                 ]);
-                
-                // Stok dipotong saat diterima oleh tujuan
-                /* $service = app(\App\Services\StokTriplekMthService::class);
-                $service->kurang(
-                    idJenisKayu: $stok->id_jenis_kayu,
-                    panjang: $stok->panjang,
-                    lebar: $stok->lebar,
-                    tebal: $stok->tebal,
-                    kwGrade: $stok->kw_grade,
-                    lembar: $qty,
-                    kubikasi: $this->hitungKubikasi($stok->panjang, $stok->lebar, $stok->tebal, $qty),
-                    keterangan: "Mutasi Keluar ke {$tujuanTerpilih}",
-                    referensi: $mutasi
-                ); */
 
-                SerahTerimaHp::create([
+                $tujuanKode = match ($tujuanTerpilih) {
+                    'Sanding' => 'sanding',
+                    'Triplek Jadi' => 'triplek_jadi',
+                    default => 'graji_triplek',
+                };
+
+                $data = [
                     'id_triplek_mth_mutasi_keluar' => $mutasi->id,
-                    'tujuan' => $tujuanTerpilih === 'Sanding' ? 'sanding' : 'graji_triplek',
+                    'tujuan' => $tujuanKode,
                     'diserahkan_oleh' => $user?->name ?? 'System',
                     'diterima_oleh' => '-',
-                ]);
+                ];
+
+                if ($tujuanKode === 'triplek_jadi') {
+                    $data['status'] = 'Serah ke Gudang Triplek Jadi';
+                }
+
+                SerahTerimaHp::create($data);
             });
 
             $labelTujuan = $this->opsiTujuan[$tujuanTerpilih];
@@ -314,7 +463,7 @@ class GudangTriplekMth extends Page
 
             Notification::make()->success()
                 ->title('Mutasi Keluar Dicatat')
-                ->body("{$qty} lembar tercatat dikirim ke {$labelTujuan}. Stok akan terpotong setelah barang diproses di tujuan.")
+                ->body("{$qty} lembar tercatat dikirim ke {$labelTujuan}. Stok akan terpotong setelah diterima di tujuan.")
                 ->send();
         } catch (\Exception $e) {
             Notification::make()->danger()
@@ -354,9 +503,8 @@ class GudangTriplekMth extends Page
 
     /**
      * Cek apakah barang sudah mulai dipakai di produksi tujuan.
-     * Saat ini hanya tersedia pengecekan untuk tujuan Graji Triplek
-     * (via model MasukGrajiTriplek). Tambahkan cabang serupa di sini
-     * kalau nanti ada model "MasukProduksiSanding" dsb.
+     * Tujuan 'Triplek Jadi' dikunci lewat status diterima (isMenunggu),
+     * jadi tidak perlu cabang di sini.
      */
     protected function cekSudahTerpakai(TriplekMthMutasiKeluar $mutasi, ?SerahTerimaHp $st): bool
     {
@@ -366,7 +514,6 @@ class GudangTriplekMth extends Page
 
         return match ($mutasi->tujuan) {
             'Graji Triplek' => MasukGrajiTriplek::where('id_serah_terima_hp', $st->id)->exists(),
-            // 'Sanding' => MasukProduksiSanding::where('id_serah_terima_hp', $st->id)->exists(),
             default => false,
         };
     }
@@ -444,7 +591,7 @@ class GudangTriplekMth extends Page
 
                 $st = $mutasi->serahTerimaHp;
 
-                // 🔒 Re-cek race condition
+                // Re-cek race condition
                 if ($st !== null && ! $st->isMenunggu()) {
                     throw new \Exception('Mutasi ini sudah diterima di tujuan, tidak bisa diedit lagi.');
                 }
@@ -453,7 +600,6 @@ class GudangTriplekMth extends Page
                     throw new \Exception('Barang ini sudah mulai dipakai di tujuan, tidak bisa diedit lagi.');
                 }
 
-                // Validasi sisa stok fisik masih cukup untuk kuantitas baru (setelah mengembalikan stok lama)
                 $stok = StokTriplekMth::where('id_jenis_kayu', $mutasi->id_jenis_kayu)
                     ->where('panjang', $mutasi->panjang)
                     ->where('lebar', $mutasi->lebar)
@@ -462,43 +608,16 @@ class GudangTriplekMth extends Page
                     ->lockForUpdate()
                     ->first();
 
-                if (! $stok || $qty > ((int) $stok->stok_lembar + (int) $mutasi->stok_lembar)) {
+                // Stok belum dipotong untuk mutasi ini, jadi bandingkan dengan
+                // stok fisik dikurangi mutasi LAIN yang masih menunggu.
+                if (! $stok || $qty > ((int) $stok->stok_lembar - $this->pendingLembar($stok, $mutasi->id))) {
                     throw new \Exception('Sisa stok fisik di gudang tidak mencukupi untuk kuantitas baru.');
                 }
-                
-                // Stok dipotong di penerima, jadi update tidak memotong stok lagi
-                /* $service = app(\App\Services\StokTriplekMthService::class);
-                
-                // Tambahkan kembali qty lama
-                $service->tambah(
-                    idJenisKayu: $mutasi->id_jenis_kayu,
-                    panjang: $mutasi->panjang,
-                    lebar: $mutasi->lebar,
-                    tebal: $mutasi->tebal,
-                    kwGrade: $mutasi->kw_grade,
-                    lembar: (float) $mutasi->stok_lembar,
-                    kubikasi: (float) $mutasi->stok_kubikasi,
-                    keterangan: "Koreksi Mutasi Keluar (Tambah qty lama)",
-                    referensi: $mutasi
-                ); */
 
                 $mutasi->update([
                     'stok_lembar' => $qty,
                     'stok_kubikasi' => $this->hitungKubikasi($mutasi->panjang, $mutasi->lebar, $mutasi->tebal, $qty),
                 ]);
-                
-                /* // Kurangi qty baru
-                $service->kurang(
-                    idJenisKayu: $mutasi->id_jenis_kayu,
-                    panjang: $mutasi->panjang,
-                    lebar: $mutasi->lebar,
-                    tebal: $mutasi->tebal,
-                    kwGrade: $mutasi->kw_grade,
-                    lembar: $qty,
-                    kubikasi: $this->hitungKubikasi($mutasi->panjang, $mutasi->lebar, $mutasi->tebal, $qty),
-                    keterangan: "Koreksi Mutasi Keluar (Kurangi qty baru)",
-                    referensi: $mutasi
-                ); */
             });
 
             unset($this->riwayatKeluar);

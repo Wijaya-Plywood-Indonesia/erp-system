@@ -47,6 +47,10 @@ class TriplekHasilHpsTable
                             return 'gray';
                         }
 
+                        if ($serahTerima->isDitolak()) {
+                            return 'danger';
+                        }
+
                         return $serahTerima->diterima_oleh === '-' ? 'warning' : 'success';
                     })
                     ->description(function ($record) {
@@ -54,6 +58,11 @@ class TriplekHasilHpsTable
 
                         if (! $serahTerima) {
                             return 'Belum Serah';
+                        }
+
+                        if ($serahTerima->isDitolak()) {
+                            $alasan = $serahTerima->alasan_tolak ? ": {$serahTerima->alasan_tolak}" : '';
+                            return "Ditolak Gudang Triplek Mentah{$alasan}";
                         }
 
                         return $serahTerima->diterima_oleh === '-'
@@ -104,11 +113,16 @@ class TriplekHasilHpsTable
                             default => '-',
                         };
 
+                        if ($serahTerima->isDitolak()) {
+                            return "Ditolak {$tujuan}";
+                        }
+
                         return $serahTerima->diterima_oleh === '-'
                             ? "Menunggu Diterima {$tujuan}"
                             : "Sudah Diterima {$tujuan}";
                     })
                     ->color(fn ($state) => match (true) {
+                        str_contains($state, 'Ditolak') => 'danger',
                         str_contains($state, 'Sudah Diterima') => 'success',
                         str_contains($state, 'Menunggu Diterima') => 'warning',
                         default => 'gray',
@@ -196,18 +210,34 @@ class TriplekHasilHpsTable
             </div>
         HTML);
                     })
-                    ->visible(fn (TriplekHasilHp $record) => ! $record->serahTerimaHp)
+                    ->visible(fn (TriplekHasilHp $record) => ! $record->serahTerimaHp || $record->serahTerimaHp->isDitolak())
                     ->action(function (TriplekHasilHp $record) {
                         try {
                             DB::transaction(function () use ($record) {
-                                SerahTerimaHp::create([
-                                    'id_triplek_hasil_hp' => $record->id,
-                                    'id_produksi_graji_triplek' => null,
-                                    'tujuan' => 'graji_triplek',
-                                    'diserahkan_oleh' => Auth::user()->name,
-                                    'diterima_oleh' => '-',
-                                    'status' => 'Serah Triplek',
-                                ]);
+                                if ($record->serahTerimaHp) {
+                                    $record->serahTerimaHp->update([
+                                        'id_produksi_graji_triplek' => null,
+                                        'tujuan' => 'graji_triplek',
+                                        'diserahkan_oleh' => Auth::user()->name,
+                                        'diterima_oleh' => '-',
+                                        'status' => 'Serah Triplek',
+                                        'ditolak_oleh' => null,
+                                        'alasan_tolak' => null,
+                                        'ditolak_at' => null,
+                                        'diterima_gudang_at' => null,
+                                        'diterima_gudang_oleh' => null,
+                                        'created_at' => now(),
+                                    ]);
+                                } else {
+                                    SerahTerimaHp::create([
+                                        'id_triplek_hasil_hp' => $record->id,
+                                        'id_produksi_graji_triplek' => null,
+                                        'tujuan' => 'graji_triplek',
+                                        'diserahkan_oleh' => Auth::user()->name,
+                                        'diterima_oleh' => '-',
+                                        'status' => 'Serah Triplek',
+                                    ]);
+                                }
                             });
 
                             $record->unsetRelation('serahTerimaHp');
@@ -232,16 +262,23 @@ class TriplekHasilHpsTable
                     ->hidden(function ($livewire, TriplekHasilHp $record) {
                         $serahTerima = $record->serahTerimaHp;
                         $sudahDiterima = $serahTerima && $serahTerima->diterima_oleh !== '-';
+                        $sedangMenunggu = $serahTerima && $serahTerima->diterima_oleh === '-' && ! $serahTerima->isDitolak();
 
                         return $sudahDiterima
+                            || $sedangMenunggu
                             || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi';
                     }),
 
                 DeleteAction::make()
                     ->hidden(
-                        fn ($livewire, TriplekHasilHp $record) => $record->serahTerimaHp
+                        fn ($livewire, TriplekHasilHp $record) => ($record->serahTerimaHp && ! $record->serahTerimaHp->isDitolak())
                             || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    )
+                    ->before(function (TriplekHasilHp $record) {
+                        if ($record->serahTerimaHp) {
+                            $record->serahTerimaHp->delete();
+                        }
+                    }),
             ])
 
             ->toolbarActions([

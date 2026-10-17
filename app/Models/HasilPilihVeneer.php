@@ -21,11 +21,15 @@ class HasilPilihVeneer extends Model
         'diserahkan_by',
         'diterima_gudang_at',
         'diterima_gudang_by',
+        'ditolak_gudang_oleh',
+        'alasan_tolak_gudang',
+        'ditolak_gudang_at',
     ];
 
     protected $casts = [
         'diserahkan_at' => 'datetime',
         'diterima_gudang_at' => 'datetime',
+        'ditolak_gudang_at' => 'datetime',
     ];
 
     public function diserahkanOleh(): BelongsTo

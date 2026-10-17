@@ -24,10 +24,14 @@ class SerahTerimaVeneerKering extends Model
         'jenis_terima',
         'tujuan',
         'status',
+        'ditolak_oleh',
+        'alasan_tolak',
+        'ditolak_at',
     ];
 
     protected $casts = [
         'tipe_sumber' => 'string',
+        'ditolak_at' => 'datetime',
     ];
 
     // ───────────── Relations ─────────────
@@ -84,6 +88,11 @@ class SerahTerimaVeneerKering extends Model
     public function isMenunggu(): bool
     {
         return $this->diterima_oleh === '-';
+    }
+
+    public function isDitolak(): bool
+    {
+        return $this->ditolak_oleh !== null;
     }
 
     public function getSumberAttribute(): DetailHasil|DetailBongkarKedi|HasilJoint|VeneerKeringMutasiKeluarPalet|VeneerJadiMutasiKeluarPalet|null
