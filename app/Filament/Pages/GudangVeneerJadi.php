@@ -513,11 +513,50 @@ class GudangVeneerJadi extends Page
             'core' => $allStok->filter(fn ($item) => $item->tebal >= 1.0),
         ];
     }
-
+    
     /**
-     * ANTREAN GABUNGAN: GudangVeneerJadi (Produksi/Repair) + Hasil Pilih Veneer.
-     * (Sumber mutasi/BM sementara dinonaktifkan; method-nya tetap ada di bawah.)
+     * Opsi stok untuk pop up "Catat Barang Keluar" (komponen x-gudang.pilih-stok).
+     * Pencarian di pop up dilakukan di sisi client (Alpine) berdasarkan ukuran,
+     * jenis kayu, dan KW.
      */
+    public function getStokOpsiKeluarProperty(): array
+    {
+        return StokVeneerJadi::with(['jenisKayu'])
+            ->get()
+            ->filter(fn ($s) => $s->jenisKayu !== null)
+            ->sortBy([
+                ['tebal', 'asc'],
+                ['panjang', 'asc'],
+                ['lebar', 'asc'],
+            ])
+            ->map(fn ($s) => [
+                'id'   => (string) $s->id,
+                'kayu' => (string) $s->jenisKayu->nama_kayu,
+                'kw'   => (string) $s->kw_grade,
+                'p'    => (float) $s->panjang,
+                'l'    => (float) $s->lebar,
+                't'    => (float) $s->tebal,
+                'sisa' => (int) $s->stok_lembar,
+            ])
+            ->values()
+            ->all();
+    }
+
+      /**
+     * Antrean gabungan dari Gudang Veneer Jadi (Produksi/Repair)
+     * dan Hasil Pilih Veneer.
+     *
+     * Antrean dari VeneerMutasiDetail sementara tidak ditampilkan.
+     * Method terkait tetap dipertahankan agar dapat diaktifkan kembali
+     * jika alur penerimaan dari Nota Barang Masuk diperlukan.
+     *
+     * Setiap baris hasil memiliki:
+     * - id     => composite id "{source}-{id_asli}"
+     * - source => 'gudang', 'mutasi', atau 'pilih_veneer'
+     *
+     * Sumber mutasi/BM sementara tidak ditampilkan dalam antrean.
+     */
+  
     public function getAntreanFilteredProperty(): Collection
     {
         $dariGudang = $this->ambilAntreanDariGudang();

@@ -7,6 +7,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Illuminate\Validation\Rules\Unique;
 
 class ProduksiSandingForm
 {
@@ -50,7 +51,18 @@ class ProduksiSandingForm
                         'MALAM' => 'Malam',
                     ])
                     ->required()
-                    ->native(false),
+                    ->native(false)
+                    ->unique(
+                        table: 'produksi_sandings',
+                        column: 'shift',
+                        ignoreRecord: true,
+                        modifyRuleUsing: fn (Unique $rule, $get) => $rule
+                            ->where('tanggal', $get('tanggal'))
+                            ->where('id_mesin', $get('id_mesin')),
+                    )
+                    ->validationMessages([
+                        'unique' => 'Produksi sanding untuk tanggal, mesin, dan shift ini sudah ada.',
+                    ]),
             ]);
     }
 }

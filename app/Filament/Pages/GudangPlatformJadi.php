@@ -325,6 +325,37 @@ class GudangPlatformJadi extends Page
             ->values();
     }
 
+
+    /**
+     * Opsi stok untuk pop up "Catat Barang Keluar" (komponen x-gudang.pilih-stok).
+     * Sengaja TIDAK difilter oleh kolom search halaman — pencarian di pop up
+     * dilakukan di sisi client (Alpine) per kata kunci: ukuran, jenis kayu, KW.
+     */
+    public function getStokOpsiKeluarProperty(): array
+    {
+        return StokPlatformJadi::with(['jenisBarang'])
+            ->where('stok_lembar', '>', 0)
+            ->get()
+            ->sortBy([
+                ['id_jenis_barang', 'asc'],
+                ['tebal', 'asc'],
+                ['panjang', 'asc'],
+                ['lebar', 'asc'],
+                ['kw_grade', 'asc'],
+            ])
+            ->map(fn ($s) => [
+                'id'   => (string) $s->id,
+                'kayu' => (string) $s->jenisBarang?->nama_jenis_barang,
+                'kw'   => (string) $s->kw_grade,
+                'p'    => (float) $s->panjang,
+                'l'    => (float) $s->lebar,
+                't'    => (float) $s->tebal,
+                'sisa' => (int) $s->stok_lembar,
+            ])
+            ->values()
+            ->all();
+    }
+
     // ─── TERIMA DARI GUDANG PLATFORM MENTAH ──────────────────────────────────
 
     public function getMenungguDariMthProperty(): Collection
@@ -373,6 +404,7 @@ class GudangPlatformJadi extends Page
         $this->tolakId = $id;
         $this->tolakTipe = $tipe;
         $this->alasanTolak = '';
+
         if ($tipe === 'sanding') {
             $this->tolakModalTitle = 'Tolak Palet Hasil Sanding';
             $this->tolakModalDescription = 'Palet ini akan ditolak dan dikembalikan ke antrean Sanding.';
@@ -380,6 +412,7 @@ class GudangPlatformJadi extends Page
             $this->tolakModalTitle = 'Tolak Kiriman dari Gudang Platform Mentah';
             $this->tolakModalDescription = 'Kiriman ini akan ditolak dan tidak akan menambah stok Gudang Platform Jadi.';
         }
+
         $this->showTolakModal = true;
     }
 
@@ -459,6 +492,8 @@ class GudangPlatformJadi extends Page
                 ->body($e->getMessage())
                 ->send();
         }
+    }
+
     }
 
     // ─── SERAH TERIMA (dari Hasil Sanding) ───────────────────────────────────

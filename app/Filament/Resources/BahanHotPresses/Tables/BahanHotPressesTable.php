@@ -7,6 +7,7 @@ use App\Models\BahanHotpress;
 use App\Models\PlatformJadiMutasiKeluarPalet;
 use App\Models\TriplekJadiMutasiKeluarPalet;
 use App\Models\VeneerJadiMutasiKeluarPalet;
+use App\Support\PaletSearch;
 use App\Services\StokPlatformJadiService;
 use App\Services\StokTriplekJadiService;
 use App\Services\StokVeneerJadiService;
@@ -171,20 +172,17 @@ class BahanHotPressesTable
                     )
                     ->schema(function () {
                         return [
-                            Select::make('sumber_palet_selector')
-                                ->label('Palet Bahan')
+                            PaletSearch::configure(
+                                Select::make('sumber_palet_selector')
+                                    ->label('Palet Bahan'),
+                                // Sama persis dengan dropdown "Barang Setengah Jadi"
+                                // di tombol New Bahan Hotpress: palet yang sudah
+                                // diterima dan masih punya sisa > 0.
+                                fn () => BahanHotPressForm::getPaletEntries(null),
+                            )
                                 ->helperText('Menampilkan palet (veneer/platform/triplek) yang masih memiliki sisa.')
                                 ->required()
                                 ->live()
-                                ->searchable()
-                                ->options(function () {
-                                    // Sama persis dengan dropdown "Barang Setengah Jadi"
-                                    // di tombol New Bahan Hotpress: palet yang sudah
-                                    // diterima dan masih punya sisa > 0.
-                                    return BahanHotPressForm::getPaletOptions(null)
-                                        + BahanHotPressForm::getPlatformOptions(null)
-                                        + BahanHotPressForm::getTriplekOptions(null);
-                                })
                                 ->afterStateUpdated(function ($state, callable $set) {
                                     if (! $state || ! str_contains($state, ':')) {
                                         $set('no_palet', null);

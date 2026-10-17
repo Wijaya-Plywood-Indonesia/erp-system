@@ -6,6 +6,7 @@ use Filament\Schemas\Schema;
 use App\Models\JenisKayu;
 use App\Models\StokVeneerJadi;
 use App\Models\Ukuran;
+use App\Support\PaletSearch;
 use Filament\Forms\Components\Hidden;
 use App\Models\PegawaiPilihVeneer;
 use Filament\Forms\Components\Select;
@@ -31,16 +32,16 @@ class ModalPilihVeneerForm
                     ->required(),
 
                 // 2A. VENEER JADI
-                Select::make('id_stok_veneer_jadi')
-                    ->label('Pilih Stok Veneer Jadi')
-                    ->visible(fn(Get $get) => $get('jenis_veneer') === 'jadi')
-                    ->options(function ($record) {
+                PaletSearch::configure(
+                    Select::make('id_stok_veneer_jadi')
+                        ->label('Pilih Stok Veneer Jadi'),
+                    function ($record) {
                         return StokVeneerJadi::query()
                             ->with('jenisKayu')
                             ->where('stok_lembar', '>', 0)
                             ->when($record?->id_stok_veneer_jadi, fn($q) => $q->orWhere('id', $record->id_stok_veneer_jadi))
                             ->get()
-                            ->mapWithKeys(function ($stok) use ($record) {
+                            ->map(function ($stok) use ($record) {
                                 $dimensi = "{$stok->panjang} x {$stok->lebar} x {$stok->tebal}";
                                 $kayu    = $stok->jenisKayu?->nama_kayu ?? '-';
 
@@ -51,10 +52,20 @@ class ModalPilihVeneerForm
 
                                 $label = "{$kayu} · {$dimensi} · KW: {$stok->kw_grade} [Sisa: {$stokTersedia} lbr]";
 
-                                return [$stok->id => $label];
-                            });
-                    })
-                    ->searchable()
+                                return [
+                                    'id' => $stok->id,
+                                    'label' => $label,
+                                    'kategori' => 'veneer jadi',
+                                    'jenis' => $kayu,
+                                    'grade' => (string) $stok->kw_grade,
+                                    'ukuran' => $dimensi,
+                                ];
+                            })
+                            ->values()
+                            ->all();
+                    },
+                )
+                    ->visible(fn(Get $get) => $get('jenis_veneer') === 'jadi')
                     ->live()
                     ->required(fn(Get $get) => $get('jenis_veneer') === 'jadi')
                     ->afterStateUpdated(function ($state, Set $set, $record) {
@@ -76,11 +87,10 @@ class ModalPilihVeneerForm
                     }),
 
                 // 2B. VENEER KERING — composite key: "{id_ukuran}-{id_jenis_kayu}-{kw}"
-                Select::make('kering_key')
-                    ->dehydrated(false)
-                    ->label('Pilih Stok Veneer Kering')
-                    ->visible(fn(Get $get) => $get('jenis_veneer') === 'kering')
-                    ->options(function ($record) {
+                PaletSearch::configure(
+                    Select::make('kering_key')
+                        ->label('Pilih Stok Veneer Kering'),
+                    function ($record) {
                         $stok = \Illuminate\Support\Facades\DB::table('stok_veneer_kerings')
                             ->join('ukurans', 'stok_veneer_kerings.id_ukuran', '=', 'ukurans.id')
                             ->join('jenis_kayus', 'stok_veneer_kerings.id_jenis_kayu', '=', 'jenis_kayus.id')
@@ -106,7 +116,7 @@ class ModalPilihVeneerForm
                             ->having('saldo_lembar', '>', 0)
                             ->get();
 
-                        return $stok->mapWithKeys(function ($item) use ($record) {
+                        return $stok->map(function ($item) use ($record) {
                             $key = "{$item->id_ukuran}-{$item->id_jenis_kayu}-{$item->kw}";
 
                             $saldo = $item->saldo_lembar;
@@ -123,10 +133,19 @@ class ModalPilihVeneerForm
                             $dimensi = "{$item->panjang} x {$item->lebar} x {$item->tebal}";
                             $label   = "{$item->nama_kayu} - {$dimensi} - KW: {$item->kw} [Sisa: {$saldo} lbr]";
 
-                            return [$key => $label];
-                        });
-                    })
-                    ->searchable()
+                            return [
+                                'id' => $key,
+                                'label' => $label,
+                                'kategori' => 'veneer kering',
+                                'jenis' => (string) $item->nama_kayu,
+                                'grade' => (string) $item->kw,
+                                'ukuran' => $dimensi,
+                            ];
+                        })->values()->all();
+                    },
+                )
+                    ->dehydrated(false)
+                    ->visible(fn(Get $get) => $get('jenis_veneer') === 'kering')
                     ->live()
                     ->required(fn(Get $get) => $get('jenis_veneer') === 'kering')
                     // Populate form state with initialised record values when editing

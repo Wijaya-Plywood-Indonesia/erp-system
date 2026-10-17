@@ -536,6 +536,14 @@ class VeneerMutasiService
      */
     public function recalculateStokKering(int $idUkuran, int $idJenisKayu, string $kw): void
     {
+        // Baris masuk non-dryer (nota, opname, pilih veneer, repair, dll) yang belum punya komponen
+        // HPP diisi dulu dari komposisi palet dryer, supaya HPP Average tidak tertarik ke 0.
+        try {
+            app(HppDryerService::class)->turunkanSumberLainProduk($idUkuran, $idJenisKayu, $kw);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Turunan HPP veneer kering gagal: '.$e->getMessage());
+        }
+
         $records = StokVeneerKering::where('id_ukuran', $idUkuran)
             ->where('id_jenis_kayu', $idJenisKayu)
             ->where('kw', $kw)

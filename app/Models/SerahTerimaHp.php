@@ -302,9 +302,18 @@ class SerahTerimaHp extends Model
      */
     public function getSisaAttribute(): float
     {
-        // Bahan yang menuju Sanding (hasil Hotpress, hasil Graji, Gudang
-        // Platform Mentah, DAN Gudang Triplek Jadi) dihitung dari ModalSanding.
-        $menujuSanding = $this->tipeSumber === 'platform'
+
+        // Bahan yang menuju Sanding dikenali dari kolom `tujuan`, bukan dari
+        // tipeSumber. Bahan bertipe 'triplek' yang ditujukan ke Sanding juga
+        // harus dihitung dari ModalSanding agar stoknya berkurang dengan benar.
+        // Mencakup:
+        //   - Platform yang menuju Sanding
+        //   - Hasil Sanding dari produksi lain (id_hasil_sanding)
+        //   - Gudang Triplek Mentah yang tujuannya Sanding
+        //   - Gudang Triplek Jadi yang tujuannya Sanding
+        $menujuSanding = strtolower((string) $this->tujuan) === 'sanding'
+            || $this->tipeSumber === 'platform';
+
             || $this->id_triplek_mutasi_keluar !== null;
 
         $terpakai = $menujuSanding

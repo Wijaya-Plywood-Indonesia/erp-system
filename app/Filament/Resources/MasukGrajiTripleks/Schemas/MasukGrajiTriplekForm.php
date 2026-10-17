@@ -4,6 +4,7 @@ namespace App\Filament\Resources\MasukGrajiTripleks\Schemas;
 
 use App\Models\MasukGrajiTriplek;
 use App\Models\SerahTerimaHp;
+use App\Support\PaletSearch;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -35,13 +36,14 @@ class MasukGrajiTriplekForm
 
                 Hidden::make('id_barang_setengah_jadi_hp'),
 
-                Select::make('id_serah_terima_hp')
-                    ->label('Pilih Palet (Serah Terima)')
-                    ->options(fn (?MasukGrajiTriplek $record, $livewire) => self::getPaletOptions(
+                PaletSearch::configure(
+                    Select::make('id_serah_terima_hp')
+                        ->label('Pilih Palet (Serah Terima)'),
+                    fn (?MasukGrajiTriplek $record, $livewire) => self::getPaletEntries(
                         $record,
                         $livewire->getOwnerRecord()?->id,
-                    ))
-                    ->searchable()
+                    ),
+                )
                     ->live()
                     ->required()
                     ->afterStateUpdated(function ($state, $set, ?MasukGrajiTriplek $record) {
@@ -197,7 +199,7 @@ class MasukGrajiTriplekForm
      * @param  ?MasukGrajiTriplek  $record  Record yang sedang diedit (null = create baru).
      * @param  int|null  $ownerRecordId  ID produksi Graji Triplek yang sedang dibuka.
      */
-    protected static function getPaletOptions(?MasukGrajiTriplek $record, ?int $ownerRecordId = null): array
+    protected static function getPaletEntries(?MasukGrajiTriplek $record, ?int $ownerRecordId = null): array
     {
         $currentId = $record?->id_serah_terima_hp;
         $currentIsi = (float) ($record?->isi ?? 0);
@@ -230,7 +232,7 @@ class MasukGrajiTriplekForm
                 return [$item, $sisa];
             })
             ->filter(fn ($pair) => $pair[1] > 0)
-            ->mapWithKeys(function ($pair) {
+            ->map(function ($pair) {
                 [$item, $sisa] = $pair;
                 $sisaLabel = rtrim(rtrim(number_format($sisa, 2, '.', ''), '0'), '.');
 
@@ -252,7 +254,12 @@ class MasukGrajiTriplekForm
                     $label = "{$identitas} - {$ukuranLabel} {$jenis} {$gradeLabel}"
                         ." — Sisa: {$sisaLabel} (triplek mentah)";
 
-                    return [$item->id => $label];
+                    return [
+                        'id' => $item->id, 'label' => $label, 'identitas' => $identitas,
+                        'no' => (string) $item->id_triplek_mth_mutasi_keluar, 'kategori' => 'plywood',
+                        'jenis' => $jenis, 'grade' => $gradeLabel, 'ukuran' => $ukuranLabel,
+                        'asal' => 'triplek mentah',
+                    ];
                 }
 
                 // Sumber Hotpress (triplekHasilHp).
@@ -268,8 +275,15 @@ class MasukGrajiTriplekForm
 
                 $label = "Palet {$hasil?->no_palet} - {$ukuranLabel} {$kodeJenisBarang} {$gradeLabel} — Sisa: {$sisaLabel}";
 
-                return [$item->id => $label];
+                return [
+                    'id' => $item->id, 'label' => $label,
+                    'no' => (string) ($hasil?->no_palet ?? ''), 'kategori' => 'plywood',
+                    'jenis' => trim(($barang?->jenisBarang?->nama_jenis_barang ?? '').' '.$kodeJenisBarang),
+                    'grade' => $gradeLabel, 'ukuran' => $ukuranLabel,
+                    'asal' => 'hotpress',
+                ];
             })
-            ->toArray();
+            ->values()
+            ->all();
     }
 }
