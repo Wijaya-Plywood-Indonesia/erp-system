@@ -78,16 +78,26 @@
                         {{ number_format((float) $qty) }} <span
                             class="text-[10px] font-semibold text-gray-400">Lbr</span>
                     </span>
-                    <button type="button" wire:click="terimaDryer({{ $st->id }})"
-                        wire:confirm="Terima veneer ini ke stok Gudang Veneer Kering?"
-                        wire:loading.attr="disabled" wire:target="terimaDryer({{ $st->id }})"
-                        class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                                d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span>Terima</span>
-                    </button>
+                    <div class="shrink-0 flex items-center gap-1.5">
+                        <button type="button" wire:click="bukaModalTolak({{ $st->id }}, 'dryer')"
+                            wire:loading.attr="disabled"
+                            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-sm text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 dark:text-rose-400 dark:bg-rose-950/40 dark:border-rose-900/50 dark:hover:bg-rose-900/60 disabled:opacity-50 transition-colors">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            <span>Tolak</span>
+                        </button>
+                        <button type="button" wire:click="terimaDryer({{ $st->id }})"
+                            wire:confirm="Terima veneer ini ke stok Gudang Veneer Kering?"
+                            wire:loading.attr="disabled" wire:target="terimaDryer({{ $st->id }})"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                    d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>Terima</span>
+                        </button>
+                    </div>
                 </div>
                 @empty
                 <div class="px-5 py-8 text-center text-xs text-gray-400 dark:text-gray-600">
@@ -141,16 +151,26 @@
                         {{ number_format((float) $qty) }} <span
                             class="text-[10px] font-semibold text-gray-400">Lbr</span>
                     </span>
-                    <button type="button" wire:click="terimaHasilPilihVeneer({{ $hasil->id }})"
-                        wire:confirm="Terima hasil pilih veneer ini ke stok Gudang Veneer Kering?"
-                        wire:loading.attr="disabled" wire:target="terimaHasilPilihVeneer({{ $hasil->id }})"
-                        class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                                d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span>Terima</span>
-                    </button>
+                    <div class="shrink-0 flex items-center gap-1.5">
+                        <button type="button" wire:click="bukaModalTolak({{ $hasil->id }}, 'pilih')"
+                            wire:loading.attr="disabled"
+                            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-sm text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 dark:text-rose-400 dark:bg-rose-950/40 dark:border-rose-900/50 dark:hover:bg-rose-900/60 disabled:opacity-50 transition-colors">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            <span>Tolak</span>
+                        </button>
+                        <button type="button" wire:click="terimaHasilPilihVeneer({{ $hasil->id }})"
+                            wire:confirm="Terima hasil pilih veneer ini ke stok Gudang Veneer Kering?"
+                            wire:loading.attr="disabled" wire:target="terimaHasilPilihVeneer({{ $hasil->id }})"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                    d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>Terima</span>
+                        </button>
+                    </div>
                 </div>
                 @empty
                 <div class="px-5 py-8 text-center text-xs text-gray-400 dark:text-gray-600 border-t border-gray-100 dark:border-gray-800">
@@ -652,5 +672,7 @@
     </div>
     </div>
     @endif
+ 
+    @include('filament.pages.partials.modal-tolak')
 
 </x-filament-panels::page>
