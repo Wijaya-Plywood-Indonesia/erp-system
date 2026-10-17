@@ -112,20 +112,39 @@ class DetailHasilPaletRotariesTable
                         fn($record) => !DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
                             ->where('id_detail_hasil_palet_rotary', $record->id)
                             ->where('tipe', 'rotary')
+                            ->whereNull('ditolak_oleh')
                             ->exists()
                     )
                     ->action(function ($record) {
-                        // 1. Catat serah terima
-                        DB::table('detail_hasil_palet_rotary_serah_terima_pivot')->insert([
-                            'id_detail_hasil_palet_rotary' => $record->id,
-                            'diserahkan_oleh'              => Auth::user()->name,
-                            'diterima_oleh'                => '-',
-                            'tipe'                         => 'rotary',
-                            'status'                       => 'Serah Barang',
-                            'created_at'                   => now(),
-                            'updated_at'                   => now(),
-                        ]);
+                        // 1. Catat serah terima (jika sebelumnya ada row ditolak, update atau re-insert)
+                        $existing = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
+                            ->where('id_detail_hasil_palet_rotary', $record->id)
+                            ->where('tipe', 'rotary')
+                            ->first();
 
+                        if ($existing) {
+                            DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
+                                ->where('id', $existing->id)
+                                ->update([
+                                    'diserahkan_oleh' => Auth::user()->name,
+                                    'diterima_oleh'   => '-',
+                                    'status'          => 'Serah Barang',
+                                    'ditolak_oleh'    => null,
+                                    'alasan_tolak'    => null,
+                                    'ditolak_at'      => null,
+                                    'updated_at'      => now(),
+                                ]);
+                        } else {
+                            DB::table('detail_hasil_palet_rotary_serah_terima_pivot')->insert([
+                                'id_detail_hasil_palet_rotary' => $record->id,
+                                'diserahkan_oleh'              => Auth::user()->name,
+                                'diterima_oleh'                => '-',
+                                'tipe'                         => 'rotary',
+                                'status'                       => 'Serah Barang',
+                                'created_at'                   => now(),
+                                'updated_at'                   => now(),
+                            ]);
+                        }
 
                         // 2. Tambah stok veneer basah (HPP = 0, diisi saat validasi)
                         $record->loadMissing(['ukuran', 'penggunaanLahan.lahan', 'produksi']);
@@ -140,7 +159,7 @@ class DetailHasilPaletRotariesTable
                     /**
                      * LOGIKA VALIDASI EDIT:
                      * 1. Admin/Super Admin selalu bisa edit.
-                     * 2. User biasa bisa edit jika: Data belum diserahkan ATAU statusnya masih 'Serah Barang'.
+                     * 2. User biasa bisa edit jika: Data belum diserahkan ATAU statusnya masih 'Serah Barang' ATAU 'Ditolak'.
                      * 3. User biasa TIDAK BISA edit jika status sudah 'Terima Barang'.
                      */
                     ->visible(function ($record) {
@@ -159,7 +178,7 @@ class DetailHasilPaletRotariesTable
                             return false;
                         }
 
-                        // Selain itu (Belum Serah atau baru Serah Barang), masih boleh edit
+                        // Selain itu (Belum Serah, Serah Barang, atau Ditolak), masih boleh edit
                         return true;
                     }),
 
@@ -184,6 +203,11 @@ class DetailHasilPaletRotariesTable
                         }
 
                         return true;
+                    })
+                    ->before(function ($record) {
+                        DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
+                            ->where('id_detail_hasil_palet_rotary', $record->id)
+                            ->delete();
                     }),
             ])
             ->toolbarActions([

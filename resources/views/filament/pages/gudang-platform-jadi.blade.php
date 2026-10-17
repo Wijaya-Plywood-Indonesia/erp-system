@@ -109,12 +109,22 @@
                                     {{ number_format($mk->stok_lembar) }} <span
                                         class="text-[10px] font-semibold text-gray-400">Lbr</span>
                                 </span>
-                                <button type="button" wire:click="terimaDariMth({{ $st->id }})"
-                                    wire:confirm="Terima platform ini ke stok Gudang Platform Jadi?"
-                                    wire:loading.attr="disabled" wire:target="terimaDariMth({{ $st->id }})"
-                                    class="px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
-                                    Terima
-                                </button>
+                                <div class="shrink-0 flex items-center gap-1.5">
+                                    <button type="button" wire:click="bukaModalTolak({{ $st->id }}, 'mth')"
+                                        wire:loading.attr="disabled"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-sm text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 dark:text-rose-400 dark:bg-rose-950/40 dark:border-rose-900/50 dark:hover:bg-rose-900/60 disabled:opacity-50 transition-colors">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                        <span>Tolak</span>
+                                    </button>
+                                    <button type="button" wire:click="terimaDariMth({{ $st->id }})"
+                                        wire:confirm="Terima platform ini ke stok Gudang Platform Jadi?"
+                                        wire:loading.attr="disabled" wire:target="terimaDariMth({{ $st->id }})"
+                                        class="px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
+                                        Terima
+                                    </button>
+                                </div>
                             </div>
                         @endif
                     @empty
@@ -253,9 +263,8 @@
                                     </span>
                                     @unless ($r->sudah)
                                         <div class="flex items-center gap-2">
-                                            <button type="button" wire:click="tolak({{ $r->id }})"
-                                                wire:confirm="Tolak Palet {{ $r->no_palet }} ({{ number_format($r->jumlah) }} lbr {{ $r->jenis_barang }}) dan kembalikan ke Sanding?"
-                                                wire:loading.attr="disabled" wire:target="tolak({{ $r->id }})"
+                                            <button type="button" wire:click="bukaModalTolak({{ $r->id }}, 'sanding')"
+                                                wire:loading.attr="disabled"
                                                 class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 dark:text-gray-300 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors">
                                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
                                                     viewBox="0 0 24 24">
@@ -688,5 +697,7 @@
             </div>
         </div>
     @endif
+ 
+    @include('filament.pages.partials.modal-tolak')
 
 </x-filament-panels::page>

@@ -68,15 +68,25 @@
                                 <span class="text-right font-black text-sm text-amber-500 dark:text-amber-400 whitespace-nowrap tabular-nums shrink-0">
                                     {{ number_format($qty) }} <span class="text-[10px] font-semibold text-zinc-400">Lbr</span>
                                 </span>
-                                <button type="button" wire:click="terimaKeGudang({{ $st->id }})"
-                                    wire:confirm="Terima barang dari Hotpress ke gudang? Stok akan bertambah."
-                                    wire:loading.attr="disabled" wire:target="terimaKeGudang({{ $st->id }})"
-                                    class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    <span>Terima</span>
-                                </button>
+                                <div class="shrink-0 flex items-center gap-1.5">
+                                    <button type="button" wire:click="bukaModalTolak({{ $st->id }}, 'hp')"
+                                        wire:loading.attr="disabled"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-sm text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 dark:text-rose-400 dark:bg-rose-950/40 dark:border-rose-900/50 dark:hover:bg-rose-900/60 disabled:opacity-50 transition-colors">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                        <span>Tolak</span>
+                                    </button>
+                                    <button type="button" wire:click="terimaKeGudang({{ $st->id }})"
+                                        wire:confirm="Terima barang dari Hotpress ke gudang? Stok akan bertambah."
+                                        wire:loading.attr="disabled" wire:target="terimaKeGudang({{ $st->id }})"
+                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span>Terima</span>
+                                    </button>
+                                </div>
                             </div>
                             <div class="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500 truncate">
                                 Diserahkan oleh:
@@ -120,15 +130,25 @@
                                 <span class="text-right font-black text-sm text-amber-500 dark:text-amber-400 whitespace-nowrap tabular-nums shrink-0">
                                     {{ number_format($qty) }} <span class="text-[10px] font-semibold text-zinc-400">Lbr</span>
                                 </span>
-                                <button type="button" wire:click="terimaGrajiKeGudang({{ $st->id }})"
-                                    wire:confirm="Terima hasil Graji ke gudang? Stok akan bertambah."
-                                    wire:loading.attr="disabled" wire:target="terimaGrajiKeGudang({{ $st->id }})"
-                                    class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    <span>Terima</span>
-                                </button>
+                                <div class="shrink-0 flex items-center gap-1.5">
+                                    <button type="button" wire:click="bukaModalTolak({{ $st->id }}, 'graji')"
+                                        wire:loading.attr="disabled"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-sm text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 dark:text-rose-400 dark:bg-rose-950/40 dark:border-rose-900/50 dark:hover:bg-rose-900/60 disabled:opacity-50 transition-colors">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                        <span>Tolak</span>
+                                    </button>
+                                    <button type="button" wire:click="terimaGrajiKeGudang({{ $st->id }})"
+                                        wire:confirm="Terima hasil Graji ke gudang? Stok akan bertambah."
+                                        wire:loading.attr="disabled" wire:target="terimaGrajiKeGudang({{ $st->id }})"
+                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span>Terima</span>
+                                    </button>
+                                </div>
                             </div>
                             <div class="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500 truncate">
                                 Diserahkan oleh:

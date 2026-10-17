@@ -56,11 +56,25 @@ class GudangVeneerBasah extends Page
 
     public array $editPaletQuantities = [0 => ''];
 
+    // ── Modal Tolak Serah Terima ──
+    public bool $showTolakModal = false;
+
+    public ?int $tolakId = null;
+
+    public string $tolakTipe = '';
+
+    public string $alasanTolak = '';
+
+    public string $tolakModalTitle = 'Tolak Palet dari Rotary';
+
+    public string $tolakModalDescription = 'Palet ini akan ditolak dan tidak dimasukkan ke stok Gudang Veneer Basah.';
+
     public function getSerahTerimaProperty(): Collection
     {
         return SerahTerimaPivot::with(['detailHasilPalet.ukuran', 'detailHasilPalet.penggunaanLahan.jenisKayu'])
             ->where('tipe', 'rotary')
             ->where('diterima_oleh', '-')
+            ->whereNull('ditolak_oleh')
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
@@ -90,6 +104,70 @@ class GudangVeneerBasah extends Page
                 ->title('Gagal Menerima')
                 ->body($e->getMessage())
                 ->danger()
+                ->send();
+        }
+    }
+
+    public function bukaModalTolak(int $id, string $tipe = 'rotary'): void
+    {
+        $this->tolakId = $id;
+        $this->tolakTipe = $tipe;
+        $this->alasanTolak = '';
+        $this->tolakModalTitle = 'Tolak Palet dari Rotary';
+        $this->tolakModalDescription = 'Palet ini akan ditolak dan tidak dimasukkan ke stok Gudang Veneer Basah.';
+        $this->showTolakModal = true;
+    }
+
+    public function batalTolak(): void
+    {
+        $this->showTolakModal = false;
+        $this->tolakId = null;
+        $this->tolakTipe = '';
+        $this->alasanTolak = '';
+    }
+
+    public function prosesTolak(): void
+    {
+        if (! $this->tolakId) {
+            return;
+        }
+
+        if (trim($this->alasanTolak) === '') {
+            Notification::make()->danger()
+                ->title('Gagal Menolak')
+                ->body('Alasan penolakan wajib diisi.')
+                ->send();
+
+            return;
+        }
+
+        try {
+            DB::transaction(function () {
+                $pivot = SerahTerimaPivot::lockForUpdate()->findOrFail($this->tolakId);
+
+                if ($pivot->diterima_oleh !== '-' || $pivot->ditolak_oleh) {
+                    throw new \RuntimeException('Palet ini sudah diproses (diterima/ditolak) sebelumnya.');
+                }
+
+                $pivot->update([
+                    'ditolak_oleh' => Auth::user()->name,
+                    'alasan_tolak' => $this->alasanTolak,
+                    'ditolak_at' => now(),
+                    'status' => 'Ditolak',
+                ]);
+            });
+
+            $this->batalTolak();
+            unset($this->serahTerima, $this->riwayatSerahTerima);
+
+            Notification::make()->warning()
+                ->title('Palet Ditolak')
+                ->body('Palet dari Rotary berhasil ditolak.')
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()->danger()
+                ->title('Gagal Menolak')
+                ->body($e->getMessage())
                 ->send();
         }
     }

@@ -60,6 +60,19 @@ class GudangTriplekMth extends Page
 
     public $editKuantitas = '';
 
+    // ── Modal Tolak Serah Terima ──
+    public bool $showTolakModal = false;
+
+    public ?int $tolakId = null;
+
+    public string $tolakTipe = '';
+
+    public string $alasanTolak = '';
+
+    public string $tolakModalTitle = 'Tolak Serah Terima';
+
+    public string $tolakModalDescription = 'Kiriman ini akan ditolak dan tidak dimasukkan ke stok Gudang Triplek Mentah.';
+
     public string $serahTerimaTab = 'aktif';
 
     public function hitungKubikasi(float $p, float $l, float $t, ?int $lembar): float
@@ -252,6 +265,78 @@ class GudangTriplekMth extends Page
         } catch (\Throwable $e) {
             Notification::make()->danger()
                 ->title('Gagal Menerima')
+                ->body($e->getMessage())
+                ->send();
+        }
+    }
+
+    public function bukaModalTolak(int $id, string $tipe = 'hp'): void
+    {
+        $this->tolakId = $id;
+        $this->tolakTipe = $tipe;
+        $this->alasanTolak = '';
+        if ($tipe === 'jadi') {
+            $this->tolakModalTitle = 'Tolak Kiriman dari Gudang Triplek Jadi';
+            $this->tolakModalDescription = 'Kiriman ini akan ditolak dan tidak akan menambah stok Gudang Triplek Mentah.';
+        } elseif ($tipe === 'graji') {
+            $this->tolakModalTitle = 'Tolak Hasil Graji Triplek';
+            $this->tolakModalDescription = 'Hasil Graji ini akan ditolak dan tidak dimasukkan ke stok Gudang Triplek Mentah.';
+        } else {
+            $this->tolakModalTitle = 'Tolak Serah Terima Hotpress';
+            $this->tolakModalDescription = 'Barang Hotpress ini akan ditolak dan tidak dimasukkan ke stok Gudang Triplek Mentah.';
+        }
+        $this->showTolakModal = true;
+    }
+
+    public function batalTolak(): void
+    {
+        $this->showTolakModal = false;
+        $this->tolakId = null;
+        $this->tolakTipe = '';
+        $this->alasanTolak = '';
+    }
+
+    public function prosesTolak(): void
+    {
+        if (! $this->tolakId) {
+            return;
+        }
+
+        if (trim($this->alasanTolak) === '') {
+            Notification::make()->danger()
+                ->title('Gagal Menolak')
+                ->body('Alasan penolakan wajib diisi.')
+                ->send();
+
+            return;
+        }
+
+        try {
+            DB::transaction(function () {
+                $st = SerahTerimaHp::lockForUpdate()->findOrFail($this->tolakId);
+
+                if ($st->diterima_gudang_at || $st->ditolak_oleh || $st->diterima_oleh !== '-') {
+                    throw new \RuntimeException('Barang ini sudah diproses (diterima/ditolak) sebelumnya.');
+                }
+
+                $st->update([
+                    'ditolak_oleh' => Auth::user()->name,
+                    'alasan_tolak' => $this->alasanTolak,
+                    'ditolak_at' => now(),
+                    'status' => 'Ditolak',
+                ]);
+            });
+
+            $this->batalTolak();
+            unset($this->menungguTerima, $this->menungguGraji, $this->riwayatTerima, $this->menungguDariJadi, $this->riwayatDariJadi, $this->stokList);
+
+            Notification::make()->warning()
+                ->title('Barang Ditolak')
+                ->body('Serah terima barang telah ditolak.')
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()->danger()
+                ->title('Gagal Menolak')
                 ->body($e->getMessage())
                 ->send();
         }
