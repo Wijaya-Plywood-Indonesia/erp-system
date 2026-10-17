@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ModalSandings\Schemas;
 
+use App\Models\HasilSanding;
 use App\Models\ModalSanding;
 use App\Models\SerahTerimaHp;
 use App\Support\PaletSearch;
@@ -74,12 +75,27 @@ class ModalSandingForm
         return ucwords(mb_strtolower($teks));
     }
 
+    /**
+     * Penanda tanggal untuk palet yang berasal dari produksi sanding lain
+     * (hari/shift lain). Kosong jika palet milik produksi saat ini.
+     */
+    protected static function penandaHari(SerahTerimaHp $item, $currentProduksiId): string
+    {
+        if ($currentProduksiId && (int) $item->id_produksi_sanding === (int) $currentProduksiId) {
+            return '';
+        }
+
+        $tgl = $item->created_at?->format('d/m');
+
+        return $tgl ? " · sisa {$tgl}" : ' · sisa hari lain';
+    }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
 
             Hidden::make('id_produksi_sanding')
-                ->default(fn($livewire) => $livewire->getOwnerRecord()?->id),
+                ->default(fn ($livewire) => $livewire->getOwnerRecord()?->id),
 
             Hidden::make('id_barang_setengah_jadi'),
 
@@ -88,17 +104,14 @@ class ModalSandingForm
             | PILIH PALET (SERAH TERIMA) — SUMBER: HOTPRESS, GRAJI, TRIPLEK JADI,
             | PLATFORM MENTAH, ATAU TRIPLEK MENTAH
             |--------------------------------------------------------------------------
-            */
-
+              */
             PaletSearch::configure(
                 Select::make('id_serah_terima_hp')
                     ->label('Pilih Palet (Serah Terima / Hasil Sanding)'),
                 fn (Get $get, ?ModalSanding $record) => self::getPaletEntries($get, $record),
             )
                 ->live()
-                ->required()
-                ->live()
-                ->required()
+                ->required()  
                 ->afterStateUpdated(function ($state, $set, ?ModalSanding $record) {
                     if (! $state) {
                         $set('id_barang_setengah_jadi', null);
@@ -112,7 +125,7 @@ class ModalSandingForm
                     }
 
                     if ($state < 0) {
-                        $hasilSanding = \App\Models\HasilSanding::with(['barangSetengahJadi.ukuran', 'barangSetengahJadi.grade', 'barangSetengahJadi.jenisBarang'])->find(abs($state));
+                        $hasilSanding = HasilSanding::with(['barangSetengahJadi.ukuran', 'barangSetengahJadi.grade', 'barangSetengahJadi.jenisBarang'])->find(abs($state));
                         $barang = $hasilSanding?->barangSetengahJadi;
 
                         $set('id_barang_setengah_jadi', $barang?->id);
@@ -121,6 +134,7 @@ class ModalSandingForm
                         $set('ukuran_label', $barang?->ukuran?->dimensi ?? '-');
                         $set('sisa_tersedia', $hasilSanding?->kuantitas ?? 0);
                         $set('kuantitas', $hasilSanding?->kuantitas ?? 0);
+
                         return;
                     }
 
@@ -140,7 +154,7 @@ class ModalSandingForm
                         $set('grade_label', $m?->kw_grade ?? '-');
                         $set('jenis_barang_label', $m?->jenisKayu?->nama_kayu ?? '-');
                         $set('ukuran_label', $m
-                            ? ($m->panjang + 0) . 'x' . ($m->lebar + 0) . 'x' . ($m->tebal + 0)
+                            ? ($m->panjang + 0).'x'.($m->lebar + 0).'x'.($m->tebal + 0)
                             : '-');
                         $set('sisa_tersedia', $sisa);
                         $set('kuantitas', $sisa);
@@ -157,7 +171,7 @@ class ModalSandingForm
                         $set('grade_label', $m?->kw_grade ?? '-');
                         $set('jenis_barang_label', $m?->jenisKayu?->nama_kayu ?? '-');
                         $set('ukuran_label', $m
-                            ? ($m->panjang + 0) . 'x' . ($m->lebar + 0) . 'x' . ($m->tebal + 0)
+                            ? ($m->panjang + 0).'x'.($m->lebar + 0).'x'.($m->tebal + 0)
                             : '-');
                         $set('sisa_tersedia', $sisa);
                         $set('kuantitas', $sisa);
@@ -175,7 +189,7 @@ class ModalSandingForm
                         $set('grade_label', $m?->kw_grade ?? '-');
                         $set('jenis_barang_label', $m?->jenisKayu?->nama_kayu ?? '-');
                         $set('ukuran_label', $m
-                            ? ($m->panjang + 0) . 'x' . ($m->lebar + 0) . 'x' . ($m->tebal + 0)
+                            ? ($m->panjang + 0).'x'.($m->lebar + 0).'x'.($m->tebal + 0)
                             : '-');
                         $set('sisa_tersedia', $sisa);
                         $set('kuantitas', $sisa);
@@ -284,7 +298,7 @@ class ModalSandingForm
                     if ($serah->id_triplek_mutasi_keluar !== null) {
                         $m = $serah->triplekMutasiKeluar;
                         $set('ukuran_label', $m
-                            ? ($m->panjang + 0) . 'x' . ($m->lebar + 0) . 'x' . ($m->tebal + 0)
+                            ? ($m->panjang + 0).'x'.($m->lebar + 0).'x'.($m->tebal + 0)
                             : null);
 
                         return;
@@ -293,7 +307,7 @@ class ModalSandingForm
                     if ($serah->id_platform_mth_mutasi_keluar !== null) {
                         $m = $serah->platformMthMutasiKeluar;
                         $set('ukuran_label', $m
-                            ? ($m->panjang + 0) . 'x' . ($m->lebar + 0) . 'x' . ($m->tebal + 0)
+                            ? ($m->panjang + 0).'x'.($m->lebar + 0).'x'.($m->tebal + 0)
                             : null);
 
                         return;
@@ -302,7 +316,7 @@ class ModalSandingForm
                     if ($serah->id_triplek_mth_mutasi_keluar !== null) {
                         $m = $serah->triplekMthMutasiKeluar;
                         $set('ukuran_label', $m
-                            ? ($m->panjang + 0) . 'x' . ($m->lebar + 0) . 'x' . ($m->tebal + 0)
+                            ? ($m->panjang + 0).'x'.($m->lebar + 0).'x'.($m->tebal + 0)
                             : null);
 
                         return;
@@ -322,7 +336,7 @@ class ModalSandingForm
                 ->minValue(1)
                 ->required()
                 ->rules([
-                    fn(Get $get, ?ModalSanding $record) => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                    fn (Get $get, ?ModalSanding $record) => function (string $attribute, $value, \Closure $fail) use ($get, $record) {
                         $idSerahTerima = $get('id_serah_terima_hp');
 
                         if (! $idSerahTerima) {
@@ -330,7 +344,7 @@ class ModalSandingForm
                         }
 
                         if ($idSerahTerima < 0) {
-                            $hasilSanding = \App\Models\HasilSanding::find(abs($idSerahTerima));
+                            $hasilSanding = HasilSanding::find(abs($idSerahTerima));
                             if (! $hasilSanding) {
                                 return;
                             }
@@ -338,6 +352,7 @@ class ModalSandingForm
                             if ($value > $sisa) {
                                 // $fail("Jumlah melebihi sisa yang tersedia dari Hasil Sanding ({$sisa})."); // Dibuka sementara agar bisa over qty
                             }
+
                             return;
                         }
 
@@ -411,64 +426,89 @@ class ModalSandingForm
         $serahTerimaOptions = SerahTerimaHp::query()
             ->where('diterima_oleh', '!=', '-')
             ->where('tujuan', 'sanding')
-            // 🔒 Hanya palet milik produksi sanding ini — cegah bocor ke produksi lain.
-            ->where('id_produksi_sanding', $currentProduksiId)
+            // Tidak lagi dibatasi produksi sanding ini: palet hari lain yang
+            // sisanya belum habis tetap bisa diambil (sisa > 0 difilter di bawah),
+            // tetapi hanya dari 7 hari terakhir. Palet produksi ini dan palet yang
+            // sedang dipilih di record (saat edit) selalu ikut, walau lebih lama.
+            ->where(function ($query) use ($currentProduksiId, $currentId) {
+                $query->whereDate('created_at', '>=', now()->subDays(7)->toDateString());
+
+                if ($currentProduksiId) {
+                    $query->orWhere('id_produksi_sanding', $currentProduksiId);
+                }
+
+                if ($currentId) {
+                    $query->orWhere('id', $currentId);
+                }
+            })
             ->with(self::HASIL_RELATIONS)
             ->get()
             ->map(function ($item) use ($currentId, $currentKuantitas) {
                 $sisa = $item->sisa + ($item->id === $currentId ? $currentKuantitas : 0);
+
                 return [$item, $sisa];
             })
-          
             ->filter(fn ($pair) => round($pair[1], 4) > 0)
+            // Palet produksi ini tampil paling atas, baru palet hari lain
+            ->sortBy(fn ($pair) => $currentProduksiId
+                && (int) $pair[0]->id_produksi_sanding === (int) $currentProduksiId
+                    ? 0
+                    : 1
+            )
             ->map(function ($pair) {
                 [$item, $sisa] = $pair;
 
                 $tersedia = rtrim(rtrim(number_format($sisa, 2, '.', ''), '0'), '.');
                 $kategori = self::kategoriLabel($item);
+                $hari = self::penandaHari($item, $currentProduksiId);
 
 
                 if ($item->id_triplek_mutasi_keluar !== null) {
                     $m = $item->triplekMutasiKeluar;
-                    $ukuranLabel = $m ? ($m->panjang + 0) . ' x ' . ($m->lebar + 0) . ' x ' . ($m->tebal + 0) : '-';
+                    $ukuranLabel = $m ? ($m->panjang + 0).' x '.($m->lebar + 0).' x '.($m->tebal + 0) : '-';
                     $jenis = self::rapikan($m?->jenisKayu?->nama_kayu);
                     $gradeLabel = self::rapikan($m?->kw_grade);
-                    $identitas = 'TJ' . $item->id_triplek_mutasi_keluar;
-                    $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel} · {$tersedia} lbr (triplek jadi)";
-                    return [
-                        'id' => $item->id, 'label' => $label, 'identitas' => $identitas,
-                        'no' => (string) $item->id_triplek_mutasi_keluar, 'kategori' => $kategori,
-                        'jenis' => $jenis, 'grade' => $gradeLabel, 'ukuran' => $ukuranLabel,
-                        'asal' => 'triplek jadi',
-                    ];
+                      
                 }
 
                 if ($item->id_platform_mth_mutasi_keluar !== null) {
                     $m = $item->platformMthMutasiKeluar;
-                    $ukuranLabel = $m ? ($m->panjang + 0) . ' x ' . ($m->lebar + 0) . ' x ' . ($m->tebal + 0) : '-';
+                    $ukuranLabel = $m ? ($m->panjang + 0).' x '.($m->lebar + 0).' x '.($m->tebal + 0) : '-';
                     $jenis = self::rapikan($m?->jenisKayu?->nama_kayu);
                     $gradeLabel = self::rapikan($m?->kw_grade);
                     $identitas = 'PM' . $item->id_platform_mth_mutasi_keluar;
-                    $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel} · {$tersedia} lbr (platform mentah)";
+                    $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel} · {$tersedia} lbr (platform mentah){$hari}";
+
                     return [
-                        'id' => $item->id, 'label' => $label, 'identitas' => $identitas,
-                        'no' => (string) $item->id_platform_mth_mutasi_keluar, 'kategori' => $kategori,
-                        'jenis' => $jenis, 'grade' => $gradeLabel, 'ukuran' => $ukuranLabel,
+                        'id' => $item->id,
+                        'label' => $label,
+                        'identitas' => $identitas,
+                        'no' => (string) $item->id_platform_mth_mutasi_keluar,
+                        'kategori' => $kategori,
+                        'jenis' => $jenis,
+                        'grade' => $gradeLabel,
+                        'ukuran' => $ukuranLabel,
                         'asal' => 'platform mentah',
                     ];
                 }
 
                 if ($item->id_triplek_mth_mutasi_keluar !== null) {
                     $m = $item->triplekMthMutasiKeluar;
-                    $ukuranLabel = $m ? ($m->panjang + 0) . ' x ' . ($m->lebar + 0) . ' x ' . ($m->tebal + 0) : '-';
+                    $ukuranLabel = $m ? ($m->panjang + 0).' x '.($m->lebar + 0).' x '.($m->tebal + 0) : '-';
                     $jenis = self::rapikan($m?->jenisKayu?->nama_kayu);
                     $gradeLabel = self::rapikan($m?->kw_grade);
                     $identitas = 'TM' . $item->id_triplek_mth_mutasi_keluar;
-                    $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel} · {$tersedia} lbr (triplek mentah)";
+                    $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel} · {$tersedia} lbr (triplek mentah){$hari}";
+
                     return [
-                        'id' => $item->id, 'label' => $label, 'identitas' => $identitas,
-                        'no' => (string) $item->id_triplek_mth_mutasi_keluar, 'kategori' => $kategori,
-                        'jenis' => $jenis, 'grade' => $gradeLabel, 'ukuran' => $ukuranLabel,
+                        'id' => $item->id,
+                        'label' => $label,
+                        'identitas' => $identitas,
+                        'no' => (string) $item->id_triplek_mth_mutasi_keluar,
+                        'kategori' => $kategori,
+                        'jenis' => $jenis,
+                        'grade' => $gradeLabel,
+                        'ukuran' => $ukuranLabel,
                         'asal' => 'triplek mentah',
                     ];
                 }
@@ -483,21 +523,27 @@ class ModalSandingForm
                 $identitas = $noPalet !== null && $noPalet !== '' ? "P{$noPalet}" : 'P-';
                 $asal = strtolower((string) $item->asal_label);
 
-                $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$namaJenisBarang} {$gradeLabel} · {$tersedia} lbr ({$asal})";
+                $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$namaJenisBarang} {$gradeLabel} · {$tersedia} lbr ({$asal}){$hari}";
+
                 return [
-                    'id' => $item->id, 'label' => $label, 'identitas' => $identitas,
-                    'no' => (string) ($noPalet ?? ''), 'kategori' => $kategori,
-                    'jenis' => $namaJenisBarang, 'grade' => $gradeLabel, 'ukuran' => $ukuranLabel,
+                    'id' => $item->id,
+                    'label' => $label,
+                    'identitas' => $identitas,
+                    'no' => (string) ($noPalet ?? ''),
+                    'kategori' => $kategori,
+                    'jenis' => $namaJenisBarang,
+                    'grade' => $gradeLabel,
+                    'ukuran' => $ukuranLabel,
                     'asal' => $asal,
                 ];
             })
             ->values()
             ->all();
 
-        $usedHasilSandingIds = \App\Models\SerahTerimaHp::whereNotNull('id_hasil_sanding')->pluck('id_hasil_sanding');
+        $usedHasilSandingIds = SerahTerimaHp::whereNotNull('id_hasil_sanding')->pluck('id_hasil_sanding');
 
         // Tambahkan Hasil Sanding yang BELUM DISERAH & BELUM DIBUATKAN SerahTerimaHp
-        $hasilSandingOptions = \App\Models\HasilSanding::with(['barangSetengahJadi.ukuran', 'barangSetengahJadi.grade', 'barangSetengahJadi.jenisBarang', 'barangSetengahJadi.grade.kategoriBarang', 'produksiSanding'])
+        $hasilSandingOptions = HasilSanding::with(['barangSetengahJadi.ukuran', 'barangSetengahJadi.grade', 'barangSetengahJadi.jenisBarang', 'barangSetengahJadi.grade.kategoriBarang', 'produksiSanding'])
             ->whereNull('tujuan_serah')
             ->whereNull('diserahkan_at')
             ->whereNotIn('id', $usedHasilSandingIds)
