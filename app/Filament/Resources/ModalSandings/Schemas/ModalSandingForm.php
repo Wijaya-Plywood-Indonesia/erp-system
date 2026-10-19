@@ -426,19 +426,23 @@ class ModalSandingForm
         $serahTerimaOptions = SerahTerimaHp::query()
             ->where('diterima_oleh', '!=', '-')
             ->where('tujuan', 'sanding')
-            // Palet untuk Modal Sanding hanya berasal dari Gudang atau Graji Triplek (bukan langsung dari Hotpress)
-            ->whereNull('id_platform_hasil_hp')
-            ->whereNull('id_triplek_hasil_hp')
+            ->whereNull('ditolak_oleh')
+            // Palet untuk Modal Sanding hanya berasal dari:
+            // 1. Graji Triplek
+            // 2. Gudang Triplek Jadi
+            // 3. Gudang Triplek Mentah
+            // 4. Gudang Platform Mentah (baik mutasi manual maupun HP yang sudah diterima gudang)
             ->where(function ($query) {
                 $query->whereNotNull('id_hasil_graji_triplek')
                     ->orWhereNotNull('id_triplek_mutasi_keluar')
                     ->orWhereNotNull('id_platform_mth_mutasi_keluar')
-                    ->orWhereNotNull('id_triplek_mth_mutasi_keluar');
+                    ->orWhereNotNull('id_triplek_mth_mutasi_keluar')
+                    ->orWhere(function ($q) {
+                        $q->whereNotNull('id_platform_hasil_hp')
+                            ->whereNotNull('diterima_gudang_at');
+                    });
             })
-            // Tidak lagi dibatasi produksi sanding ini: palet hari lain yang
-            // sisanya belum habis tetap bisa diambil (sisa > 0 difilter di bawah),
-            // tetapi hanya dari 7 hari terakhir. Palet produksi ini dan palet yang
-            // sedang dipilih di record (saat edit) selalu ikut, walau lebih lama.
+            // Hanya palet dari 7 hari terakhir (atau milik sesi produksi saat ini / record sedang diedit)
             ->where(function ($query) use ($currentProduksiId, $currentId) {
                 $query->whereDate('created_at', '>=', now()->subDays(7)->toDateString());
 
