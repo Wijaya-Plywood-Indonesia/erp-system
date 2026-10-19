@@ -121,8 +121,15 @@ class CoaAliasService
         // veneer kering
         '115-09' => self::AKUN_VENEER_KERING_FB,
         '1431.00' => self::AKUN_VENEER_KERING_FB,
+        '1441' => self::AKUN_VENEER_KERING_FB,
+        '1441.0' => self::AKUN_VENEER_KERING_FB,
+        '1441.00' => self::AKUN_VENEER_KERING_FB,
         '115-10' => self::AKUN_VENEER_KERING_CORE,
         '1436.00' => self::AKUN_VENEER_KERING_CORE,
+        '1446' => self::AKUN_VENEER_KERING_CORE,
+        '1446.0' => self::AKUN_VENEER_KERING_CORE,
+        '1446.00' => self::AKUN_VENEER_KERING_CORE,
+        '1447' => self::AKUN_VENEER_KERING_CORE, // core meranti
 
         // gaji
         '210-02' => self::AKUN_HUTANG_GAJI,
