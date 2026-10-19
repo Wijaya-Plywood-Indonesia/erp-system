@@ -104,14 +104,14 @@ class ModalSandingForm
             | PILIH PALET (SERAH TERIMA) — SUMBER: HOTPRESS, GRAJI, TRIPLEK JADI,
             | PLATFORM MENTAH, ATAU TRIPLEK MENTAH
             |--------------------------------------------------------------------------
-              */
+            */
             PaletSearch::configure(
                 Select::make('id_serah_terima_hp')
                     ->label('Pilih Palet (Serah Terima / Hasil Sanding)'),
                 fn (Get $get, ?ModalSanding $record) => self::getPaletEntries($get, $record),
             )
                 ->live()
-                ->required()  
+                ->required()
                 ->afterStateUpdated(function ($state, $set, ?ModalSanding $record) {
                     if (! $state) {
                         $set('id_barang_setengah_jadi', null);
@@ -426,6 +426,15 @@ class ModalSandingForm
         $serahTerimaOptions = SerahTerimaHp::query()
             ->where('diterima_oleh', '!=', '-')
             ->where('tujuan', 'sanding')
+            // Palet untuk Modal Sanding hanya berasal dari Gudang atau Graji Triplek (bukan langsung dari Hotpress)
+            ->whereNull('id_platform_hasil_hp')
+            ->whereNull('id_triplek_hasil_hp')
+            ->where(function ($query) {
+                $query->whereNotNull('id_hasil_graji_triplek')
+                    ->orWhereNotNull('id_triplek_mutasi_keluar')
+                    ->orWhereNotNull('id_platform_mth_mutasi_keluar')
+                    ->orWhereNotNull('id_triplek_mth_mutasi_keluar');
+            })
             // Tidak lagi dibatasi produksi sanding ini: palet hari lain yang
             // sisanya belum habis tetap bisa diambil (sisa > 0 difilter di bawah),
             // tetapi hanya dari 7 hari terakhir. Palet produksi ini dan palet yang
@@ -455,28 +464,43 @@ class ModalSandingForm
                     ? 0
                     : 1
             )
-            ->map(function ($pair) {
+            ->map(function ($pair) use ($currentProduksiId) {
                 [$item, $sisa] = $pair;
 
                 $tersedia = rtrim(rtrim(number_format($sisa, 2, '.', ''), '0'), '.');
                 $kategori = self::kategoriLabel($item);
                 $hari = self::penandaHari($item, $currentProduksiId);
 
-
+                // Gudang Triplek Jadi — tidak punya barangSetengahJadi / hasil,
+                // label langsung dari mutasi keluar.
                 if ($item->id_triplek_mutasi_keluar !== null) {
                     $m = $item->triplekMutasiKeluar;
                     $ukuranLabel = $m ? ($m->panjang + 0).' x '.($m->lebar + 0).' x '.($m->tebal + 0) : '-';
                     $jenis = self::rapikan($m?->jenisKayu?->nama_kayu);
                     $gradeLabel = self::rapikan($m?->kw_grade);
-                      
+                    $identitas = 'TJ'.$item->id_triplek_mutasi_keluar;
+                    $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel} · {$tersedia} lbr (triplek jadi){$hari}";
+
+                    return [
+                        'id' => $item->id,
+                        'label' => $label,
+                        'identitas' => $identitas,
+                        'no' => (string) $item->id_triplek_mutasi_keluar,
+                        'kategori' => $kategori,
+                        'jenis' => $jenis,
+                        'grade' => $gradeLabel,
+                        'ukuran' => $ukuranLabel,
+                        'asal' => 'triplek jadi',
+                    ];
                 }
 
+                // Gudang Platform Mentah
                 if ($item->id_platform_mth_mutasi_keluar !== null) {
                     $m = $item->platformMthMutasiKeluar;
                     $ukuranLabel = $m ? ($m->panjang + 0).' x '.($m->lebar + 0).' x '.($m->tebal + 0) : '-';
                     $jenis = self::rapikan($m?->jenisKayu?->nama_kayu);
                     $gradeLabel = self::rapikan($m?->kw_grade);
-                    $identitas = 'PM' . $item->id_platform_mth_mutasi_keluar;
+                    $identitas = 'PM'.$item->id_platform_mth_mutasi_keluar;
                     $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel} · {$tersedia} lbr (platform mentah){$hari}";
 
                     return [
@@ -492,12 +516,13 @@ class ModalSandingForm
                     ];
                 }
 
+                // Gudang Triplek Mentah
                 if ($item->id_triplek_mth_mutasi_keluar !== null) {
                     $m = $item->triplekMthMutasiKeluar;
                     $ukuranLabel = $m ? ($m->panjang + 0).' x '.($m->lebar + 0).' x '.($m->tebal + 0) : '-';
                     $jenis = self::rapikan($m?->jenisKayu?->nama_kayu);
                     $gradeLabel = self::rapikan($m?->kw_grade);
-                    $identitas = 'TM' . $item->id_triplek_mth_mutasi_keluar;
+                    $identitas = 'TM'.$item->id_triplek_mth_mutasi_keluar;
                     $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel} · {$tersedia} lbr (triplek mentah){$hari}";
 
                     return [
@@ -513,6 +538,7 @@ class ModalSandingForm
                     ];
                 }
 
+                // Sumber WIP: Hotpress / Graji / Sanding
                 $hasil = $item->hasil;
                 $barang = $item->barangSetengahJadi;
                 $ukuran = $barang?->ukuran;
@@ -567,7 +593,6 @@ class ModalSandingForm
                 if ($produksi && $produksi->tanggal) {
                     $tgl = $produksi->tanggal->format('d/m');
                     $shift = strtolower(trim($produksi->shift ?? ''));
-                    $shiftChar = '';
                     if ($shift === 'pagi') {
                         $shiftChar = 'p';
                     } elseif ($shift === 'malam') {
@@ -588,9 +613,14 @@ class ModalSandingForm
 
                 // Gunakan ID negatif agar bisa dibedakan dengan SerahTerimaHp
                 return [
-                    'id' => -$hs->id, 'label' => $label, 'identitas' => $identitas,
-                    'no' => (string) ($hs->no_palet ?? ''), 'kategori' => $kategori,
-                    'jenis' => $namaJenisBarang, 'grade' => $gradeLabel, 'ukuran' => $ukuranLabel,
+                    'id' => -$hs->id,
+                    'label' => $label,
+                    'identitas' => $identitas,
+                    'no' => (string) ($hs->no_palet ?? ''),
+                    'kategori' => $kategori,
+                    'jenis' => $namaJenisBarang,
+                    'grade' => $gradeLabel,
+                    'ukuran' => $ukuranLabel,
                     'asal' => 'hasil sanding '.strtolower((string) $status),
                 ];
             })
