@@ -102,6 +102,8 @@ class PaletSearch
         $q = preg_replace('/(\d)\s*x\s*(?=\d)/', '$1x', $q);
         // "kw 1" -> "kw1"
         $q = preg_replace('/\bkw\s+(\d)/', 'kw$1', $q);
+        // "9 mm" / "9 m" -> "9mm"
+        $q = preg_replace('/(\d)\s+(mm|m)\b/', '$1$2', $q);
 
         $tokens = preg_split('/\s+/', $q, -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
@@ -151,13 +153,22 @@ class PaletSearch
                 continue;
             }
 
-            // 2) Ukuran: 122x244, 244x9, 122x244x9 (batas awal harus di tepi angka)
+            // 2) Ukuran: urutan bebas (1220x2440x9 = 9x2440x1220 = 2440x9)
             if (preg_match('/^\d+(?:\.\d+)?(?:x\d+(?:\.\d+)?)+$/', $t)) {
-                if ($dimStr !== '' && preg_match('/(?:^|x)'.preg_quote($t, '/').'(?:$|x)/', $dimStr)) {
-                    continue;
+                $sisaSisi = $dims;
+
+                foreach (explode('x', $t) as $angka) {
+                    $angka = rtrim(rtrim(number_format((float) $angka, 2, '.', ''), '0'), '.');
+                    $idx = array_search($angka, $sisaSisi, true);
+
+                    if ($idx === false) {
+                        return false;
+                    }
+
+                    unset($sisaSisi[$idx]);
                 }
 
-                return false;
+                continue;
             }
 
             // 3) Angka polos: nomor palet atau salah satu sisi ukuran
@@ -172,6 +183,15 @@ class PaletSearch
 
                 if (preg_match('/^[a-z]*'.preg_quote($t, '/').'/', $identitas)) {
                     continue;
+                }
+
+                // 122 / 244 (>= 3 digit) cocok dengan awal 1220 / 2440
+                if (strlen($t) >= 3 && ! str_contains($t, '.')) {
+                    foreach ($dims as $d) {
+                        if (str_starts_with($d, $t)) {
+                            continue 2;
+                        }
+                    }
                 }
 
                 return false;

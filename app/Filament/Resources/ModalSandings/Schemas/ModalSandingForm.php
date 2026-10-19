@@ -495,6 +495,8 @@ class ModalSandingForm
                         'grade' => $gradeLabel,
                         'ukuran' => $ukuranLabel,
                         'asal' => 'triplek jadi',
+                        'pin' => $hari === '',
+                        'extra' => trim(str_replace('·', '', $hari)),
                     ];
                 }
 
@@ -517,6 +519,8 @@ class ModalSandingForm
                         'grade' => $gradeLabel,
                         'ukuran' => $ukuranLabel,
                         'asal' => 'platform mentah',
+                        'pin' => $hari === '',
+                        'extra' => trim(str_replace('·', '', $hari)),
                     ];
                 }
 
@@ -539,6 +543,8 @@ class ModalSandingForm
                         'grade' => $gradeLabel,
                         'ukuran' => $ukuranLabel,
                         'asal' => 'triplek mentah',
+                        'pin' => $hari === '',
+                        'extra' => trim(str_replace('·', '', $hari)),
                     ];
                 }
 
@@ -565,6 +571,8 @@ class ModalSandingForm
                     'grade' => $gradeLabel,
                     'ukuran' => $ukuranLabel,
                     'asal' => $asal,
+                    'pin' => $hari === '',
+                    'extra' => trim(str_replace('·', '', $hari)),
                 ];
             })
             ->values()
