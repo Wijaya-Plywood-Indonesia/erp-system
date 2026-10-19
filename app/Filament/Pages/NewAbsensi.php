@@ -411,6 +411,21 @@ class NewAbsensi extends Page implements HasForms
             }
         }
 
+        // Terapkan pencarian nama / kode pegawai (case-insensitive, partial match).
+        // String kosong = tidak ada filter. Bisa dikombinasikan dengan filter
+        // sumber di atas dan sorting potongan di bawah.
+        $keyword = trim($this->search);
+
+        if ($keyword !== '') {
+            $rekap = $rekap->filter(function ($row) use ($keyword) {
+                $nama = (string) ($row['nama_pegawai'] ?? '');
+                $kode = (string) ($row['kode_pegawai'] ?? '');
+
+                return mb_stripos($nama, $keyword) !== false
+                    || mb_stripos($kode, $keyword) !== false;
+            })->values();
+        }
+
         // Terapkan sorting potongan kalau user mengklik header kolom Potongan
         if ($this->sortPotongan === 'asc') {
             $rekap = $rekap->sortBy(fn ($row) => $row['potongan'] ?? 0)->values();
@@ -736,6 +751,17 @@ class NewAbsensi extends Page implements HasForms
      * ketika baris yang tampil di tabel berubah karena filter diganti.
      */
     public function updatedFilterSumber(): void
+    {
+        $this->expandedRows = [];
+    }
+
+    /**
+     * Dipanggil otomatis oleh Livewire setiap kali property $search
+     * berubah (wire:model.live.debounce di blade). Reset expandedRows
+     * supaya state expand/collapse tidak kacau ketika baris yang tampil
+     * di tabel berubah karena pencarian.
+     */
+    public function updatedSearch(): void
     {
         $this->expandedRows = [];
     }

@@ -429,12 +429,18 @@
                                     class="px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/60 border-t border-gray-200 dark:border-gray-700">
                                     <p class="text-xs font-medium uppercase tracking-wide text-gray-400 mb-2">Raw
                                         finger</p>
-                                    <div class="space-y-1 text-xs">
+                                    <div class="text-xs"
+                                        style="display: flex; flex-direction: column; row-gap: 0.5rem;">
                                         @foreach ($groups2 as $tgl => $times)
-                                            <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                                            <div class="flex flex-wrap items-center"
+                                                style="column-gap: 0.625rem; row-gap: 0.25rem;">
                                                 <span
-                                                    class="text-gray-400">{{ \Illuminate\Support\Carbon::parse($tgl)->format('d/m') }}</span>
+                                                    class="inline-flex w-12 shrink-0 justify-center rounded-md bg-gray-100 px-1.5 py-0.5 font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-300"
+                                                    style="margin-right: 0.375rem;">{{ \Illuminate\Support\Carbon::parse($tgl)->format('d/m') }}</span>
                                                 @forelse ($times as $t)
+                                                    @if (!$loop->first)
+                                                        <span class="text-gray-300 dark:text-gray-600">·</span>
+                                                    @endif
                                                     <span
                                                         class="font-mono {{ $loop->first || $loop->last ? 'font-bold text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400' }}">{{ $t }}</span>
                                                 @empty
@@ -748,24 +754,26 @@
                                         <tr wire:key="row-preview-{{ $rowKey }}"
                                             class="bg-gray-50/70 dark:bg-gray-800/40">
                                             <td colspan="12" class="px-6 py-3">
-                                                <div class="flex flex-col gap-3 text-sm">
+                                                <div class="flex items-start text-sm" style="column-gap: 1rem;">
+                                                    <span
+                                                        class="w-20 shrink-0 pt-0.5 text-xs font-medium uppercase tracking-wide text-gray-400">
+                                                        Raw finger
+                                                    </span>
                                                     <div
-                                                        class="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-6">
-                                                        <span
-                                                            class="shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">
-                                                            Raw finger
-                                                        </span>
-
+                                                        style="display: flex; flex-direction: column; row-gap: 0.5rem;">
                                                         @foreach ($groups as $tgl => $times)
-                                                            @if (!$loop->first)
+                                                            <div class="flex flex-wrap items-center"
+                                                                style="column-gap: 0.75rem; row-gap: 0.25rem;">
                                                                 <span
-                                                                    class="hidden h-4 w-px bg-gray-200 dark:bg-gray-700 lg:block"></span>
-                                                            @endif
-                                                            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                                                <span class="text-xs text-gray-400">
+                                                                    class="inline-flex w-14 shrink-0 justify-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-300"
+                                                                    style="margin-right: 0.5rem;">
                                                                     {{ \Illuminate\Support\Carbon::parse($tgl)->format('d/m') }}
                                                                 </span>
                                                                 @forelse ($times as $t)
+                                                                    @if (!$loop->first)
+                                                                        <span class="text-gray-300 dark:text-gray-600"
+                                                                            style="padding: 0 0.125rem;">·</span>
+                                                                    @endif
                                                                     <span
                                                                         class="font-mono {{ $loop->first || $loop->last ? 'font-bold text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400' }}">{{ $t }}</span>
                                                                 @empty
