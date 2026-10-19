@@ -5,6 +5,7 @@ namespace App\Services\Akuntansi;
 use App\Models\JurnalProduksiKirimLog;
 use App\Models\User;
 use App\Services\Akuntansi\Produksi\JurnalProduksiRegistry;
+use App\Support\ResolveBarangCache;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -26,11 +27,17 @@ class JurnalProduksiSender
      * Status per jurnal:
      *   belum_dikirim | terkirim (data sama dg yg terakhir dikirim) | berubah (data ERP berbeda sejak dikirim)
      *
+     * Untuk tampilan layar ($denganIdBarang = false) pencarian id_barang ke
+     * server akuntansi dilewati supaya cepat; id_barang tidak ikut dihitung
+     * di hash. Saat kirim ($denganIdBarang = true) id_barang dicari sungguhan.
+     *
      * @return array<int, array>
      */
-    public function preview(string $jenis, string $tanggal): array
+    public function preview(string $jenis, string $tanggal, bool $denganIdBarang = false): array
     {
-        $jurnals = $this->registry->get($jenis)->build($tanggal);
+        $jurnals = $denganIdBarang
+            ? $this->registry->get($jenis)->build($tanggal)
+            : ResolveBarangCache::tanpaIdBarang(fn () => $this->registry->get($jenis)->build($tanggal));
 
         foreach ($jurnals as &$j) {
             $rows = $j['rows'];
@@ -38,7 +45,11 @@ class JurnalProduksiSender
             $j['total_debit'] = (float) collect($rows)->where('map', 'd')->sum('total');
             $j['total_kredit'] = (float) collect($rows)->where('map', 'k')->sum('total');
             $j['is_balance'] = abs($j['total_debit'] - $j['total_kredit']) <= 1;
-            $j['hash'] = sha1(json_encode($rows));
+            $j['hash'] = sha1(json_encode(array_map(function ($r) {
+                unset($r['id_barang']); // id_barang tidak ikut hash (tidak dicari saat tampilan)
+
+                return $r;
+            }, $rows)));
 
             $terakhir = JurnalProduksiKirimLog::where('no_dokumen', $j['no_dokumen'])
                 ->whereIn('status', JurnalProduksiKirimLog::STATUS_BERHASIL)
@@ -73,7 +84,7 @@ class JurnalProduksiSender
             return $this->gagal('Konfigurasi AKUNTANSI_URL / AKUNTANSI_API_KEY belum diisi di .env ERP.');
         }
 
-        $jurnals = $this->preview($jenis, $tanggal);
+        $jurnals = $this->preview($jenis, $tanggal, true);
 
         if (! $jurnals) {
             return $this->gagal('Belum ada data produksi pada tanggal ini.');
