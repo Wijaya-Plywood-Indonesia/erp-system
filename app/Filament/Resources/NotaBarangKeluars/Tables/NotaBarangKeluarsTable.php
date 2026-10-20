@@ -9,6 +9,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 
 class NotaBarangKeluarsTable
@@ -48,6 +49,15 @@ class NotaBarangKeluarsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->groups([
+                Group::make('tanggal')
+                    ->label('Tanggal')
+                    ->date()
+                    ->orderQueryUsing(fn ($query) => $query->orderBy('tanggal', 'desc'))
+                    ->collapsible(),
+            ])
+            ->defaultGroup('tanggal')
+            ->groupingSettingsHidden()
             ->filters([
                 //
             ])
