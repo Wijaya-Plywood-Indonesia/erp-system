@@ -93,7 +93,7 @@ class TransferPlatformJadiKeMthService
                 ]);
 
             $user = Auth::user()?->name ?? 'System';
-            $keterangan = "Mutasi Platform Jadi -> Platform Mentah (serah terima #{$st->id}, mutasi #{$mutasi->id}), diterima oleh {$user}";
+            $keterangan = "Mutasi Platform Jadi -> Platform Mentah (serah terima #{$st->id}, mutasi #{$mutasi->id}), diserahkan oleh ".($st->diserahkan_oleh ?: '-').", diterima oleh {$user}";
 
             // ── SUMBER (Platform Jadi): keluar ──
             $sBefore = [(int) $sumber->stok_lembar, (float) $sumber->stok_kubikasi, (float) $sumber->nilai_stok];

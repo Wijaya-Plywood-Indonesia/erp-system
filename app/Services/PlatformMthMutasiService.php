@@ -126,8 +126,18 @@ class PlatformMthMutasiService
             ? User::find($nota->divalidasi_oleh)?->name
             : auth()->user()?->name;
 
+        // Akun yang membuat nota = yang menyerahkan (masuk) / mengeluarkan (keluar).
+        $pembuat = $nota->dibuat_oleh
+            ? User::find($nota->dibuat_oleh)?->name
+            : null;
+
+        $labelPembuat = $mutasi->tipe_transaksi === 'keluar'
+            ? 'DIKELUARKAN OLEH: '
+            : 'DISERAHKAN OLEH: ';
+
         $parts = [
             'NO NOTA: ' . ($mutasi->no_nota ?? '-'),
+            $labelPembuat . ($pembuat ?? '-'),
             'DIVALIDASI: ' . ($validator ?? '-'),
         ];
 
