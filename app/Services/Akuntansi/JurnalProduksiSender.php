@@ -163,11 +163,17 @@ class JurnalProduksiSender
             ? "Berhasil: {$ok} jurnal terkirim ke akuntansi."
             : "{$ok} dari {$ada} jurnal terkirim. Lihat rincian di bawah.";
 
+                // Peringatan dari akuntansi (mis. pengirim tidak ditemukan) hanya dicatat
+        // di log, tidak ditampilkan ke admin.
+        if (! empty($body['warnings'])) {
+            Log::info('[JurnalProduksi] Peringatan dari akuntansi', ['jenis' => $jenis, 'warnings' => $body['warnings']]);
+        }
+
         return [
             'success' => $ok === $ada,
             'message' => $pesan,
             'dokumen' => $ringkas,
-            'peringatan' => $body['warnings'] ?? [],
+            'peringatan' => [],
         ];
     }
 

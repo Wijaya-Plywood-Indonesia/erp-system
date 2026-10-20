@@ -61,6 +61,7 @@
                                             <th class="p-2">Status</th>
                                             <th class="p-2">Terakhir dikirim</th>
                                             <th class="p-2">Dikirim oleh</th>
+                                            <th class="p-2"></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -83,18 +84,22 @@
                                                 </td>
                                                 <td class="p-2">{{ $j['terakhir_dikirim'] ?? '-' }}</td>
                                                 <td class="p-2">{{ $j['terakhir_oleh'] ?? '-' }}</td>
+                                                <td class="p-2 text-right">
+                                                    <x-filament::button
+                                                        size="xs"
+                                                        color="gray"
+                                                        icon="heroicon-o-eye"
+                                                        wire:click="lihat('{{ $jenis }}', '{{ $j['no_dokumen'] }}')"
+                                                        wire:loading.attr="disabled"
+                                                        wire:target="lihat"
+                                                    >
+                                                        Lihat
+                                                    </x-filament::button>
+                                                </td>
                                             </tr>
                                         @endforeach
                                     </tbody>
                                 </table>
-                            </div>
-                        @endif
-
-                        @if (! empty($hasilKirim[$jenis]['peringatan'] ?? []))
-                            <div class="mt-4 text-sm text-amber-600 space-y-1">
-                                @foreach ($hasilKirim[$jenis]['peringatan'] as $w)
-                                    <p>⚠ {{ $w }}</p>
-                                @endforeach
                             </div>
                         @endif
 
@@ -114,4 +119,84 @@
             @endforeach
         </div>
     </div>
+
+    {{-- Rincian jurnal (hanya melihat, tidak mengirim) --}}
+    <x-filament::modal id="detail-jurnal" width="5xl">
+        <x-slot name="heading">
+            {{ $detail['label'] ?? 'Rincian jurnal' }}
+        </x-slot>
+
+        <x-slot name="description">
+            <span class="font-mono">{{ $detail['no_dokumen'] ?? '' }}</span>
+        </x-slot>
+
+        @if ($detail)
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-3">
+                    <p class="text-xs text-zinc-500">Jumlah baris</p>
+                    <p class="text-lg font-semibold">{{ $detail['jumlah_baris'] }}</p>
+                </div>
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-3">
+                    <p class="text-xs text-zinc-500">Total debit</p>
+                    <p class="text-lg font-semibold">{{ number_format($detail['total_debit'], 0, ',', '.') }}</p>
+                </div>
+                <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-3">
+                    <p class="text-xs text-zinc-500">Total kredit</p>
+                    <p class="text-lg font-semibold">{{ number_format($detail['total_kredit'], 0, ',', '.') }}</p>
+                </div>
+            </div>
+
+            @unless ($detail['is_balance'])
+                <div class="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700 dark:text-red-300">
+                    Debit dan kredit tidak sama (selisih {{ number_format(abs($detail['total_debit'] - $detail['total_kredit']), 0, ',', '.') }}).
+                    Jurnal ini tidak akan dikirim sampai datanya diperbaiki.
+                </div>
+            @endunless
+
+            <div class="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <table class="w-full text-sm border-collapse">
+                    <thead>
+                        <tr class="bg-zinc-100 dark:bg-zinc-800 text-left text-xs uppercase tracking-wide text-zinc-500">
+                            <th class="px-3 py-2">Akun</th>
+                            <th class="px-3 py-2">Keterangan</th>
+                            <th class="px-3 py-2 text-right">Banyak</th>
+                            <th class="px-3 py-2 text-right">M3</th>
+                            <th class="px-3 py-2 text-right">Harga</th>
+                            <th class="px-3 py-2 text-right">Debit</th>
+                            <th class="px-3 py-2 text-right">Kredit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($detail['rows'] as $r)
+                            <tr class="border-t border-zinc-200 dark:border-zinc-700 even:bg-zinc-50/70 dark:even:bg-zinc-800/40">
+                                <td class="px-3 py-2">
+                                    <div class="font-medium">{{ $r['nama_akun'] }}</div>
+                                    <div class="font-mono text-xs text-zinc-500">{{ $r['no_akun'] }}</div>
+                                </td>
+                                <td class="px-3 py-2 text-zinc-600 dark:text-zinc-300">{{ trim(($r['nama'] ?? '').' '.($r['keterangan'] ?? '')) }}</td>
+                                <td class="px-3 py-2 text-right">{{ filled($r['banyak'] ?? null) ? number_format($r['banyak'], 0, ',', '.') : '' }}</td>
+                                <td class="px-3 py-2 text-right">{{ filled($r['m3'] ?? null) ? number_format($r['m3'], 4, ',', '.') : '' }}</td>
+                                <td class="px-3 py-2 text-right">{{ filled($r['harga'] ?? null) ? number_format($r['harga'], 0, ',', '.') : '' }}</td>
+                                <td class="px-3 py-2 text-right font-medium">{{ $r['map'] === 'd' ? number_format($r['total'], 0, ',', '.') : '' }}</td>
+                                <td class="px-3 py-2 text-right font-medium">{{ $r['map'] === 'k' ? number_format($r['total'], 0, ',', '.') : '' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t-2 border-zinc-300 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-800 font-bold">
+                            <td class="px-3 py-2" colspan="5">Total</td>
+                            <td class="px-3 py-2 text-right">{{ number_format($detail['total_debit'], 0, ',', '.') }}</td>
+                            <td class="px-3 py-2 text-right">{{ number_format($detail['total_kredit'], 0, ',', '.') }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        @endif
+
+        <x-slot name="footer">
+            <x-filament::button color="gray" x-on:click="$dispatch('close-modal', { id: 'detail-jurnal' })">
+                Tutup
+            </x-filament::button>
+        </x-slot>
+    </x-filament::modal>
 </x-filament-panels::page>
