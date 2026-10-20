@@ -405,304 +405,304 @@
                                 @endif
                             </div>
 
-                            {{-- Raw finger preview (expandable) --}}
+                            {{-- Raw finger preview (expandable) — SEMUA tap per tanggal,
+                                 tap paling awal (min) & paling akhir (max) di-bold. --}}
                             @if ($adaPreview && $isExpanded)
                                 @php
                                     $hi2 = $preview['hari_ini'] ?? null;
-                                    $simPagi2 = $preview['simulasi_pagi'] ?? null;
-                                    $hiMasuk2 = $simPagi2['jam_masuk_finger'] ?? null;
-                                    $hiPulang2 = $simPagi2['jam_pulang_finger'] ?? null;
                                     $besok2 = $preview['besok'] ?? null;
-                                    $simBesok2 = $preview['simulasi_pagi_besok'] ?? null;
-                                    $besokMasuk2 = $simBesok2['jam_masuk_finger'] ?? null;
-                                    $besokPulang2 = $simBesok2['jam_pulang_finger'] ?? null;
+                                    // 'tanggal' di model bisa berupa Carbon (cast date) -> paksa
+                                    // jadi string Y-m-d supaya aman dipakai sebagai key array.
+                                    $tglKey2 = \Illuminate\Support\Carbon::parse(
+                                        $hi2['tanggal'] ?? $this->tanggal,
+                                    )->format('Y-m-d');
+                                    $groups2 = [
+                                        $tglKey2 => $preview['raw_hari_ini'] ?? [],
+                                    ];
+                                    if ($besok2) {
+                                        $groups2[
+                                            \Illuminate\Support\Carbon::parse($besok2['tanggal'])->format('Y-m-d')
+                                        ] = $preview['raw_besok'] ?? [];
+                                    }
                                 @endphp
                                 <div
                                     class="px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/60 border-t border-gray-200 dark:border-gray-700">
                                     <p class="text-xs font-medium uppercase tracking-wide text-gray-400 mb-2">Raw
                                         finger</p>
-                                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                                        <div>
-                                            <span
-                                                class="text-gray-400">{{ $hi2['tanggal'] ?? null ? \Illuminate\Support\Carbon::parse($hi2['tanggal'])->format('d/m') : '-' }}
-                                                Masuk</span>
-                                            <span
-                                                class="font-mono text-gray-600 dark:text-gray-400 ml-1">{{ $hiMasuk2 ?? '-' }}</span>
-                                        </div>
-                                        <div>
-                                            <span class="text-gray-400">Pulang</span>
-                                            <span
-                                                class="font-mono text-gray-600 dark:text-gray-400 ml-1">{{ $hiPulang2 ?? '-' }}</span>
-                                        </div>
-                                        @if ($besok2)
-                                            <div>
+                                    <div class="text-xs"
+                                        style="display: flex; flex-direction: column; row-gap: 0.5rem;">
+                                        @foreach ($groups2 as $tgl => $times)
+                                            <div class="flex flex-wrap items-center"
+                                                style="column-gap: 0.625rem; row-gap: 0.25rem;">
                                                 <span
-                                                    class="text-gray-400">{{ $besok2['tanggal'] ?? null ? \Illuminate\Support\Carbon::parse($besok2['tanggal'])->format('d/m') : '-' }}
-                                                    Masuk</span>
-                                                <span
-                                                    class="font-mono text-gray-600 dark:text-gray-400 ml-1">{{ $besokMasuk2 ?? '-' }}</span>
+                                                    class="inline-flex w-12 shrink-0 justify-center rounded-md bg-gray-100 px-1.5 py-0.5 font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-300"
+                                                    style="margin-right: 0.375rem;">{{ \Illuminate\Support\Carbon::parse($tgl)->format('d/m') }}</span>
+                                                @forelse ($times as $t)
+                                                    @if (!$loop->first)
+                                                        <span class="text-gray-300 dark:text-gray-600">·</span>
+                                                    @endif
+                                                    <span
+                                                        class="font-mono {{ $loop->first || $loop->last ? 'font-bold text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400' }}">{{ $t }}</span>
+                                                @empty
+                                                    <span class="text-gray-400">-</span>
+                                                @endforelse
                                             </div>
-                                            <div>
-                                                <span class="text-gray-400">Pulang</span>
-                                                <span
-                                                    class="font-mono text-gray-600 dark:text-gray-400 ml-1">{{ $besokPulang2 ?? '-' }}</span>
-                                            </div>
-                                        @endif
+                                        @endforeach
                                     </div>
                                 </div>
                             @endif
                         </div>
-                        @empty
-                            <div
-                                class="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-10 text-center text-gray-400 dark:text-gray-500">
-                                <div class="flex flex-col items-center gap-2">
-                                    <x-heroicon-o-inbox class="h-8 w-8 text-gray-300 dark:text-gray-600" />
-                                    @if ($search !== '')
-                                        <span>Tidak ada pegawai yang cocok dengan pencarian "{{ $search }}".</span>
-                                    @else
-                                        <span>Tidak ada data absensi pada tanggal ini.</span>
-                                    @endif
-                                </div>
+                    @empty
+                        <div
+                            class="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-10 text-center text-gray-400 dark:text-gray-500">
+                            <div class="flex flex-col items-center gap-2">
+                                <x-heroicon-o-inbox class="h-8 w-8 text-gray-300 dark:text-gray-600" />
+                                @if ($search !== '')
+                                    <span>Tidak ada pegawai yang cocok dengan pencarian "{{ $search }}".</span>
+                                @else
+                                    <span>Tidak ada data absensi pada tanggal ini.</span>
+                                @endif
                             </div>
-                        @endforelse
-                    </div>
+                        </div>
+                    @endforelse
+                </div>
 
-                    {{-- ===== TABLE VIEW (desktop, >= sm) =====
+                {{-- ===== TABLE VIEW (desktop, >= sm) =====
                      Sticky header pakai CSS murni: tabel scroll di dalam kotaknya sendiri
                      (overflow-auto + max-h), <th> dibuat sticky top-0. Tidak butuh JS dan
                      tidak bentrok dengan topbar Filament. --}}
-                    @php
-                        $thClass =
-                            'sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 px-4 py-3 shadow-[inset_0_-1px_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#374151]';
-                    @endphp
+                @php
+                    $thClass =
+                        'sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 px-4 py-3 shadow-[inset_0_-1px_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#374151]';
+                @endphp
 
-                    {{-- Wrapper fullscreen: full=true -> menutupi seluruh layar (fixed inset-0).
+                {{-- Wrapper fullscreen: full=true -> menutupi seluruh layar (fixed inset-0).
                      Tekan Esc atau klik tombol lagi untuk keluar. Scroll halaman di belakang
                      dikunci selama fullscreen aktif. --}}
-                    <div x-data="{ full: false }" x-on:keydown.escape.window="full = false"
-                        x-effect="document.body.style.overflow = full ? 'hidden' : ''"
-                        x-on:beforeunload.window="document.body.style.overflow = ''" class="hidden sm:block"
-                        :class="full ? 'fixed inset-0 z-[60] bg-white p-4 dark:bg-gray-900' : ''">
+                <div x-data="{ full: false }" x-on:keydown.escape.window="full = false"
+                    x-effect="document.body.style.overflow = full ? 'hidden' : ''"
+                    x-on:beforeunload.window="document.body.style.overflow = ''" class="hidden sm:block"
+                    :class="full ? 'fixed inset-0 z-[60] bg-white p-4 dark:bg-gray-900' : ''">
 
-                        <div class="mb-2 flex items-center justify-between gap-3">
-                            <span class="text-sm text-gray-500 dark:text-gray-400">
-                                <span x-show="full" x-cloak class="font-semibold text-gray-900 dark:text-gray-100">
-                                    Data Absensi ·
-                                </span>
-                                {{ $rekapData->count() }} pegawai
+                    <div class="mb-2 flex items-center justify-between gap-3">
+                        <span class="text-sm text-gray-500 dark:text-gray-400">
+                            <span x-show="full" x-cloak class="font-semibold text-gray-900 dark:text-gray-100">
+                                Data Absensi ·
                             </span>
+                            {{ $rekapData->count() }} pegawai
+                        </span>
 
-                            <button type="button" x-on:click="full = !full"
-                                class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                                :title="full ? 'Keluar fullscreen (Esc)' : 'Fullscreen'">
-                                <x-heroicon-o-arrows-pointing-out class="h-4 w-4" x-show="!full" />
-                                <x-heroicon-o-arrows-pointing-in class="h-4 w-4" x-show="full" x-cloak />
-                                <span x-text="full ? 'Keluar Fullscreen' : 'Fullscreen'"></span>
-                            </button>
-                        </div>
+                        <button type="button" x-on:click="full = !full"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                            :title="full ? 'Keluar fullscreen (Esc)' : 'Fullscreen'">
+                            <x-heroicon-o-arrows-pointing-out class="h-4 w-4" x-show="!full" />
+                            <x-heroicon-o-arrows-pointing-in class="h-4 w-4" x-show="full" x-cloak />
+                            <span x-text="full ? 'Keluar Fullscreen' : 'Fullscreen'"></span>
+                        </button>
+                    </div>
 
-                        <div class="overflow-auto rounded-xl border border-gray-200 shadow-sm dark:border-gray-700"
-                            :class="full ? 'max-h-[calc(100vh-6rem)]' : 'max-h-[calc(100vh-14rem)]'">
-                            <table class="w-full text-sm text-left border-collapse">
-                                <thead
-                                    class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
-                                    <tr>
-                                        <th class="{{ $thClass }} w-8 !px-2"></th>
-                                        <th class="{{ $thClass }}">Sumber</th>
-                                        <th class="{{ $thClass }}">Kode Pegawai</th>
-                                        <th class="{{ $thClass }}">Nama Pegawai</th>
-                                        <th class="{{ $thClass }}">Shift</th>
-                                        <th class="{{ $thClass }}">Jam Kerja (Masuk)</th>
-                                        <th class="{{ $thClass }}">Jam Kerja (Pulang)</th>
-                                        <th class="{{ $thClass }}">Jam Masuk (Finger)</th>
-                                        <th class="{{ $thClass }}">Jam Pulang (Finger)</th>
-                                        <th class="{{ $thClass }}">Izin</th>
-                                        <th class="{{ $thClass }} text-right">
-                                            <button wire:click="sortByPotongan"
-                                                class="inline-flex items-center gap-1 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
-                                                Potongan
-                                                @if ($sortPotongan === 'desc')
-                                                    <svg xmlns="http://www.w3.org/2000/svg"
-                                                        class="w-3.5 h-3.5 text-primary-500" viewBox="0 0 20 20"
-                                                        fill="currentColor">
-                                                        <path fill-rule="evenodd"
-                                                            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                                            clip-rule="evenodd" />
-                                                    </svg>
-                                                @elseif ($sortPotongan === 'asc')
-                                                    <svg xmlns="http://www.w3.org/2000/svg"
-                                                        class="w-3.5 h-3.5 text-primary-500" viewBox="0 0 20 20"
-                                                        fill="currentColor">
-                                                        <path fill-rule="evenodd"
-                                                            d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"
-                                                            clip-rule="evenodd" />
-                                                    </svg>
-                                                @else
-                                                    <svg xmlns="http://www.w3.org/2000/svg"
-                                                        class="w-3.5 h-3.5 text-gray-400" viewBox="0 0 20 20"
-                                                        fill="currentColor">
-                                                        <path
-                                                            d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1zM3 6a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM7 14a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" />
-                                                    </svg>
-                                                @endif
-                                            </button>
-                                        </th>
-                                        <th class="{{ $thClass }}">Keterangan</th>
-                                    </tr>
-                                </thead>
+                    <div class="overflow-auto rounded-xl border border-gray-200 shadow-sm dark:border-gray-700"
+                        :class="full ? 'max-h-[calc(100vh-6rem)]' : 'max-h-[calc(100vh-14rem)]'">
+                        <table class="w-full text-sm text-left border-collapse">
+                            <thead
+                                class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
+                                <tr>
+                                    <th class="{{ $thClass }} w-8 !px-2"></th>
+                                    <th class="{{ $thClass }}">Sumber</th>
+                                    <th class="{{ $thClass }}">Kode Pegawai</th>
+                                    <th class="{{ $thClass }}">Nama Pegawai</th>
+                                    <th class="{{ $thClass }}">Shift</th>
+                                    <th class="{{ $thClass }}">Jam Kerja (Masuk)</th>
+                                    <th class="{{ $thClass }}">Jam Kerja (Pulang)</th>
+                                    <th class="{{ $thClass }}">Jam Masuk (Finger)</th>
+                                    <th class="{{ $thClass }}">Jam Pulang (Finger)</th>
+                                    <th class="{{ $thClass }}">Izin</th>
+                                    <th class="{{ $thClass }} text-right">
+                                        <button wire:click="sortByPotongan"
+                                            class="inline-flex items-center gap-1 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                                            Potongan
+                                            @if ($sortPotongan === 'desc')
+                                                <svg xmlns="http://www.w3.org/2000/svg"
+                                                    class="w-3.5 h-3.5 text-primary-500" viewBox="0 0 20 20"
+                                                    fill="currentColor">
+                                                    <path fill-rule="evenodd"
+                                                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                                                        clip-rule="evenodd" />
+                                                </svg>
+                                            @elseif ($sortPotongan === 'asc')
+                                                <svg xmlns="http://www.w3.org/2000/svg"
+                                                    class="w-3.5 h-3.5 text-primary-500" viewBox="0 0 20 20"
+                                                    fill="currentColor">
+                                                    <path fill-rule="evenodd"
+                                                        d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"
+                                                        clip-rule="evenodd" />
+                                                </svg>
+                                            @else
+                                                <svg xmlns="http://www.w3.org/2000/svg"
+                                                    class="w-3.5 h-3.5 text-gray-400" viewBox="0 0 20 20"
+                                                    fill="currentColor">
+                                                    <path
+                                                        d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1zM3 6a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM7 14a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" />
+                                                </svg>
+                                            @endif
+                                        </button>
+                                    </th>
+                                    <th class="{{ $thClass }}">Keterangan</th>
+                                </tr>
+                            </thead>
 
-                                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                                    @forelse ($rekapData as $row)
-                                        @php
-                                            // Key yang sama dengan yang dipakai groupBy() di
-                                            // gabungkanMultiSumber() service: id_pegawai, fallback
-                                            // nama_pegawai kalau id kosong. Dipakai sebagai wire:key
-                                            // & identifier expand/collapse (toggleRow).
-                                            $rowKey = (string) ($row['id_pegawai'] ?? $row['nama_pegawai']);
-                                            $preview = $row['_finger_preview'] ?? null;
-                                            $adaPreview =
-                                                $canViewRawFinger &&
-                                                $preview &&
-                                                ($preview['hari_ini'] || $preview['besok']);
-                                            $isMalam = strtolower($row['shift'] ?? '') === 'malam';
-                                            // Default expand true (row otomatis terbuka), kecuali user
-                                            // sudah pernah toggle row ini secara eksplisit.
-                                            $isExpanded = array_key_exists($rowKey, $this->expandedRows)
-                                                ? $this->expandedRows[$rowKey]
-                                                : true;
-                                            // Nilai FINAL yang beneran dipakai di kolom "Jam Masuk
+                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                @forelse ($rekapData as $row)
+                                    @php
+                                        // Key yang sama dengan yang dipakai groupBy() di
+                                        // gabungkanMultiSumber() service: id_pegawai, fallback
+                                        // nama_pegawai kalau id kosong. Dipakai sebagai wire:key
+                                        // & identifier expand/collapse (toggleRow).
+                                        $rowKey = (string) ($row['id_pegawai'] ?? $row['nama_pegawai']);
+                                        $preview = $row['_finger_preview'] ?? null;
+                                        $adaPreview =
+                                            $canViewRawFinger &&
+                                            $preview &&
+                                            ($preview['hari_ini'] || $preview['besok']);
+                                        $isMalam = strtolower($row['shift'] ?? '') === 'malam';
+                                        // Default expand true (row otomatis terbuka), kecuali user
+                                        // sudah pernah toggle row ini secara eksplisit.
+                                        $isExpanded = array_key_exists($rowKey, $this->expandedRows)
+                                            ? $this->expandedRows[$rowKey]
+                                            : true;
+                                        // Nilai FINAL yang beneran dipakai di kolom "Jam Masuk
 // (Finger)" / "Jam Pulang (Finger)" tabel utama — hasil
-                                            // enrichWithFinger() di service.
-                                            $masukFingerDipakai = $row['jam_masuk_finger'] ?? null;
-                                            $pulangFingerDipakai = $row['jam_pulang_finger'] ?? null;
-                                            // Status telat: bandingkan jam_masuk_finger FINAL ke
-                                            // jam_masuk jadwal produksi. Purely tampilan.
-                                            $telatMenit = null;
-                                            $jamMasukProduksi = $row['jam_masuk'] ?? null;
-                                            if (
-                                                !empty($jamMasukProduksi) &&
-                                                $jamMasukProduksi !== '-' &&
-                                                !empty($masukFingerDipakai) &&
-                                                $masukFingerDipakai !== '-'
-                                            ) {
-                                                try {
-                                                    $tProduksi = \Illuminate\Support\Carbon::parse($jamMasukProduksi);
-                                                    $tFinger = \Illuminate\Support\Carbon::parse($masukFingerDipakai);
-                                                    if ($tFinger->gt($tProduksi)) {
-                                                        $telatMenit = (int) $tProduksi->diffInMinutes($tFinger);
-                                                    }
-                                                } catch (\Throwable $e) {
-                                                    // gagal parse, biarkan null (gak dianggap telat)
+                                        // enrichWithFinger() di service.
+                                        $masukFingerDipakai = $row['jam_masuk_finger'] ?? null;
+                                        $pulangFingerDipakai = $row['jam_pulang_finger'] ?? null;
+                                        // Status telat: bandingkan jam_masuk_finger FINAL ke
+                                        // jam_masuk jadwal produksi. Purely tampilan.
+                                        $telatMenit = null;
+                                        $jamMasukProduksi = $row['jam_masuk'] ?? null;
+                                        if (
+                                            !empty($jamMasukProduksi) &&
+                                            $jamMasukProduksi !== '-' &&
+                                            !empty($masukFingerDipakai) &&
+                                            $masukFingerDipakai !== '-'
+                                        ) {
+                                            try {
+                                                $tProduksi = \Illuminate\Support\Carbon::parse($jamMasukProduksi);
+                                                $tFinger = \Illuminate\Support\Carbon::parse($masukFingerDipakai);
+                                                if ($tFinger->gt($tProduksi)) {
+                                                    $telatMenit = (int) $tProduksi->diffInMinutes($tFinger);
                                                 }
+                                            } catch (\Throwable $e) {
+                                                // gagal parse, biarkan null (gak dianggap telat)
                                             }
-                                        @endphp
-                                        <tr wire:key="row-{{ $rowKey }}"
-                                            class="transition-colors {{ $telatMenit ? 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 dark:hover:bg-amber-500/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50' }}">
-                                            <td class="px-2 py-2.5 text-center">
-                                                @if ($adaPreview)
-                                                    <button type="button" wire:click="toggleRow('{{ $rowKey }}')"
-                                                        title="Preview absen"
-                                                        class="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
-                                                            fill="currentColor"
-                                                            class="h-4 w-4 transition-transform duration-150 {{ $isExpanded ? 'rotate-90' : '' }}">
-                                                            <path fill-rule="evenodd"
-                                                                d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
-                                                                clip-rule="evenodd" />
-                                                        </svg>
-                                                    </button>
-                                                @endif
-                                            </td>
-                                            <td class="px-4 py-2.5">
-                                                <div class="flex flex-col gap-1">
-                                                    @forelse ((array) $row['sumber_label'] as $sumber)
-                                                        @php
-                                                            $parts = explode(':', $sumber, 2);
-                                                            $mainDiv = trim($parts[0]);
-                                                            $detailDiv = isset($parts[1]) ? trim($parts[1]) : '';
-                                                        @endphp
-                                                        <div class="flex flex-wrap items-center gap-1.5">
-                                                            <span
-                                                                class="inline-flex min-w-[64px] items-center justify-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 dark:border-primary-500/20 dark:bg-primary-500/10 dark:text-primary-400">
-                                                                {{ $mainDiv }}
+                                        }
+                                    @endphp
+                                    <tr wire:key="row-{{ $rowKey }}"
+                                        class="transition-colors {{ $telatMenit ? 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 dark:hover:bg-amber-500/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50' }}">
+                                        <td class="px-2 py-2.5 text-center">
+                                            @if ($adaPreview)
+                                                <button type="button" wire:click="toggleRow('{{ $rowKey }}')"
+                                                    title="Preview absen"
+                                                    class="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
+                                                        fill="currentColor"
+                                                        class="h-4 w-4 transition-transform duration-150 {{ $isExpanded ? 'rotate-90' : '' }}">
+                                                        <path fill-rule="evenodd"
+                                                            d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+                                                            clip-rule="evenodd" />
+                                                    </svg>
+                                                </button>
+                                            @endif
+                                        </td>
+                                        <td class="px-4 py-2.5">
+                                            <div class="flex flex-col gap-1">
+                                                @forelse ((array) $row['sumber_label'] as $sumber)
+                                                    @php
+                                                        $parts = explode(':', $sumber, 2);
+                                                        $mainDiv = trim($parts[0]);
+                                                        $detailDiv = isset($parts[1]) ? trim($parts[1]) : '';
+                                                    @endphp
+                                                    <div class="flex flex-wrap items-center gap-1.5">
+                                                        <span
+                                                            class="inline-flex min-w-[64px] items-center justify-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 dark:border-primary-500/20 dark:bg-primary-500/10 dark:text-primary-400">
+                                                            {{ $mainDiv }}
+                                                        </span>
+                                                        @if ($detailDiv !== '')
+                                                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                                                                {{ $detailDiv }}
                                                             </span>
-                                                            @if ($detailDiv !== '')
-                                                                <span class="text-xs text-gray-500 dark:text-gray-400">
-                                                                    {{ $detailDiv }}
-                                                                </span>
-                                                            @endif
-                                                        </div>
-                                                    @empty
-                                                        <span class="text-gray-400">-</span>
-                                                    @endforelse
-                                                </div>
-                                            </td>
-                                            <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
-                                                {{ $row['kode_pegawai'] ?? '-' }}
-                                            </td>
-                                            <td class="px-4 py-2.5 font-medium text-gray-900 dark:text-gray-100">
-                                                {{ $row['nama_pegawai'] }}
-                                            </td>
-                                            <td class="px-4 py-2.5">
-                                                {{-- Badge shift cuma dirender kalau shift-nya beneran ada isinya.
+                                                        @endif
+                                                    </div>
+                                                @empty
+                                                    <span class="text-gray-400">-</span>
+                                                @endforelse
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
+                                            {{ $row['kode_pegawai'] ?? '-' }}
+                                        </td>
+                                        <td class="px-4 py-2.5 font-medium text-gray-900 dark:text-gray-100">
+                                            {{ $row['nama_pegawai'] }}
+                                        </td>
+                                        <td class="px-4 py-2.5">
+                                            {{-- Badge shift cuma dirender kalau shift-nya beneran ada isinya.
                                                  Pegawai hasil lengkapiSemuaPegawai() punya shift = null
                                                  (tidak ada data source hari itu), jadi harus jatuh ke
                                                  tampilan "-" polos tanpa border/pill, bukan badge kosong. --}}
-                                                @if (!empty($row['shift']))
-                                                    @php
-                                                        $shiftColors = [
-                                                            'pagi' =>
-                                                                'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-400',
-                                                            'siang' =>
-                                                                'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400',
-                                                            'malam' =>
-                                                                'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400',
-                                                        ];
-                                                        $shiftKey = strtolower($row['shift']);
-                                                        $shiftClass =
-                                                            $shiftColors[$shiftKey] ??
-                                                            'border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-500/20 dark:bg-gray-500/10 dark:text-gray-400';
-                                                    @endphp
-                                                    <span
-                                                        class="inline-flex min-w-[64px] items-center justify-center rounded-full border px-2.5 py-1 text-xs font-medium capitalize {{ $shiftClass }}">
-                                                        {{ $row['shift'] }}
-                                                    </span>
-                                                @else
-                                                    <span class="text-gray-400">-</span>
-                                                @endif
-                                            </td>
-                                            <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
-                                                {{ $row['jam_masuk'] ?? '-' }}
-                                            </td>
-                                            <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
-                                                {{ $row['jam_pulang'] ?? '-' }}
-                                            </td>
-                                            <td
-                                                class="px-4 py-2.5 {{ $telatMenit ? 'text-amber-700 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400' }}">
+                                            @if (!empty($row['shift']))
+                                                @php
+                                                    $shiftColors = [
+                                                        'pagi' =>
+                                                            'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-400',
+                                                        'siang' =>
+                                                            'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400',
+                                                        'malam' =>
+                                                            'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400',
+                                                    ];
+                                                    $shiftKey = strtolower($row['shift']);
+                                                    $shiftClass =
+                                                        $shiftColors[$shiftKey] ??
+                                                        'border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-500/20 dark:bg-gray-500/10 dark:text-gray-400';
+                                                @endphp
                                                 <span
-                                                    class="{{ $telatMenit ? 'font-medium' : '' }}">{{ $row['jam_masuk_finger'] ?? '-' }}</span>
-                                                @if ($telatMenit)
-                                                    <span
-                                                        class="ml-1 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400"
-                                                        title="Telat {{ $telatMenit }} menit dari jadwal">
-                                                        +{{ $telatMenit }}m
-                                                    </span>
-                                                @endif
-                                            </td>
-                                            <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
-                                                {{ $row['jam_pulang_finger'] ?? '-' }}
-                                            </td>
-                                            <td class="px-4 py-2.5">
-                                                @if (!empty($row['izin']))
-                                                    <span
-                                                        class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400">
-                                                        {{ $row['izin'] }}
-                                                    </span>
-                                                @else
-                                                    <span class="text-gray-400">-</span>
-                                                @endif
-                                            </td>
-                                            {{-- Potongan target produksi, digabung dari 11 divisi
+                                                    class="inline-flex min-w-[64px] items-center justify-center rounded-full border px-2.5 py-1 text-xs font-medium capitalize {{ $shiftClass }}">
+                                                    {{ $row['shift'] }}
+                                                </span>
+                                            @else
+                                                <span class="text-gray-400">-</span>
+                                            @endif
+                                        </td>
+                                        <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
+                                            {{ $row['jam_masuk'] ?? '-' }}
+                                        </td>
+                                        <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
+                                            {{ $row['jam_pulang'] ?? '-' }}
+                                        </td>
+                                        <td
+                                            class="px-4 py-2.5 {{ $telatMenit ? 'text-amber-700 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400' }}">
+                                            <span
+                                                class="{{ $telatMenit ? 'font-medium' : '' }}">{{ $row['jam_masuk_finger'] ?? '-' }}</span>
+                                            @if ($telatMenit)
+                                                <span
+                                                    class="ml-1 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400"
+                                                    title="Telat {{ $telatMenit }} menit dari jadwal">
+                                                    +{{ $telatMenit }}m
+                                                </span>
+                                            @endif
+                                        </td>
+                                        <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
+                                            {{ $row['jam_pulang_finger'] ?? '-' }}
+                                        </td>
+                                        <td class="px-4 py-2.5">
+                                            @if (!empty($row['izin']))
+                                                <span
+                                                    class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400">
+                                                    {{ $row['izin'] }}
+                                                </span>
+                                            @else
+                                                <span class="text-gray-400">-</span>
+                                            @endif
+                                        </td>
+                                        {{-- Potongan target produksi, digabung dari 11 divisi
                                              (Rotary, Dryer, Stik, Kedi, Repair, Joint, Sanding
                                              Joint, Pot Afalan, Pot Siku, Pot Jelek, Pilih Veneer)
                                              lewat PotonganGajiService::getPotonganMap() — kalau
@@ -712,352 +712,339 @@
                                              di file "Export Format Baru" karena keduanya
                                              menghitung dari service yang sama. Murni
                                              informasional, tidak mempengaruhi kolom lain. --}}
-                                            <td class="px-4 py-2.5 text-right">
-                                                @if (!empty($row['potongan']) && $row['potongan'] > 0)
-                                                    <span class="font-medium text-red-600 dark:text-red-400">
-                                                        Rp{{ number_format($row['potongan'], 0, ',', '.') }}
+                                        <td class="px-4 py-2.5 text-right">
+                                            @if (!empty($row['potongan']) && $row['potongan'] > 0)
+                                                <span class="font-medium text-red-600 dark:text-red-400">
+                                                    Rp{{ number_format($row['potongan'], 0, ',', '.') }}
+                                                </span>
+                                            @else
+                                                <span class="text-gray-400">-</span>
+                                            @endif
+                                        </td>
+                                        <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
+                                            {{ $row['keterangan'] ?? '-' }}
+                                        </td>
+                                    </tr>
+
+                                    {{-- Expandable preview row: Raw finger — SEMUA tap per
+                                         tanggal (hari ini & besok), tap paling awal (min) &
+                                         paling akhir (max) di-bold. Datanya dari
+                                         _finger_preview['raw_hari_ini'] / ['raw_besok'] yang
+                                         diisi service. PURELY tampilan, tidak dipakai logic. --}}
+                                    @if ($adaPreview && $isExpanded)
+                                        @php
+                                            $hi = $preview['hari_ini'] ?? null;
+                                            $besok = $preview['besok'] ?? null;
+                                            // 'tanggal' di model bisa berupa Carbon (cast date) ->
+                                            // paksa jadi string Y-m-d supaya aman jadi key array.
+                                            $tglKey = \Illuminate\Support\Carbon::parse(
+                                                $hi['tanggal'] ?? $this->tanggal,
+                                            )->format('Y-m-d');
+                                            $groups = [
+                                                $tglKey => $preview['raw_hari_ini'] ?? [],
+                                            ];
+                                            if ($besok) {
+                                                $groups[
+                                                    \Illuminate\Support\Carbon::parse($besok['tanggal'])->format(
+                                                        'Y-m-d',
+                                                    )
+                                                ] = $preview['raw_besok'] ?? [];
+                                            }
+                                        @endphp
+                                        <tr wire:key="row-preview-{{ $rowKey }}"
+                                            class="bg-gray-50/70 dark:bg-gray-800/40">
+                                            <td colspan="12" class="px-6 py-3">
+                                                <div class="flex items-start text-sm" style="column-gap: 1rem;">
+                                                    <span
+                                                        class="w-20 shrink-0 pt-0.5 text-xs font-medium uppercase tracking-wide text-gray-400">
+                                                        Raw finger
                                                     </span>
-                                                @else
-                                                    <span class="text-gray-400">-</span>
-                                                @endif
-                                            </td>
-                                            <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
-                                                {{ $row['keterangan'] ?? '-' }}
-                                            </td>
-                                        </tr>
-
-                                        {{-- Expandable preview row — hanya dirender kalau ada data
-                                         finger buat dipreview & lagi di-expand. Panel "Raw finger"
-                                         menampilkan hasil simulasi_pagi (hari ini) /
-                                         simulasi_pagi_besok (besok) — resolveJamFingerNonMalam().
-                                         PURELY tampilan, tidak dipakai logic apapun. --}}
-                                        @if ($adaPreview && $isExpanded)
-                                            @php
-                                                $hi = $preview['hari_ini'] ?? null;
-                                                $simPagiHariIni = $preview['simulasi_pagi'] ?? null;
-                                                $hiMasukRaw = $simPagiHariIni['jam_masuk_finger'] ?? null;
-                                                $hiPulangRaw = $simPagiHariIni['jam_pulang_finger'] ?? null;
-
-                                                $besok = $preview['besok'] ?? null;
-                                                $simPagiBesok = $preview['simulasi_pagi_besok'] ?? null;
-                                                $besokMasukRaw = $simPagiBesok['jam_masuk_finger'] ?? null;
-                                                $besokPulangRaw = $simPagiBesok['jam_pulang_finger'] ?? null;
-                                            @endphp
-                                            <tr wire:key="row-preview-{{ $rowKey }}"
-                                                class="bg-gray-50/70 dark:bg-gray-800/40">
-                                                <td colspan="12" class="px-6 py-3">
-                                                    <div class="flex flex-col gap-3 text-sm">
-
-                                                        {{-- Panel "Raw finger" — dipisah per tanggal
-                                                         (hari ini / besok) karena scan shift malam
-                                                         nyebrang tanggal (lihat Haram #1/#2). --}}
-                                                        <div
-                                                            class="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-6">
-                                                            <span
-                                                                class="shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">
-                                                                Raw finger
-                                                            </span>
-
-                                                            <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-                                                                <span class="text-xs text-gray-400">
-                                                                    {{ $hi['tanggal'] ?? null ? \Illuminate\Support\Carbon::parse($hi['tanggal'])->format('d/m') : '-' }}
-                                                                </span>
-                                                                <div class="flex items-center gap-1.5">
-                                                                    <span class="text-gray-400">Masuk</span>
-                                                                    <span
-                                                                        class="font-mono text-gray-600 dark:text-gray-400">{{ $hiMasukRaw ?? '-' }}</span>
-                                                                </div>
-                                                                <div class="flex items-center gap-1.5">
-                                                                    <span class="text-gray-400">Pulang</span>
-                                                                    <span
-                                                                        class="font-mono text-gray-600 dark:text-gray-400">{{ $hiPulangRaw ?? '-' }}</span>
-                                                                </div>
-                                                            </div>
-
-                                                            @if ($besok)
+                                                    <div
+                                                        style="display: flex; flex-direction: column; row-gap: 0.5rem;">
+                                                        @foreach ($groups as $tgl => $times)
+                                                            <div class="flex flex-wrap items-center"
+                                                                style="column-gap: 0.75rem; row-gap: 0.25rem;">
                                                                 <span
-                                                                    class="hidden h-4 w-px bg-gray-200 dark:bg-gray-700 lg:block"></span>
-                                                                <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-                                                                    <span class="text-xs text-gray-400">
-                                                                        {{ $besok['tanggal'] ?? null ? \Illuminate\Support\Carbon::parse($besok['tanggal'])->format('d/m') : '-' }}
-                                                                    </span>
-                                                                    <div class="flex items-center gap-1.5">
-                                                                        <span class="text-gray-400">Masuk</span>
-                                                                        <span
-                                                                            class="font-mono text-gray-600 dark:text-gray-400">{{ $besokMasukRaw ?? '-' }}</span>
-                                                                    </div>
-                                                                    <div class="flex items-center gap-1.5">
-                                                                        <span class="text-gray-400">Pulang</span>
-                                                                        <span
-                                                                            class="font-mono text-gray-600 dark:text-gray-400">{{ $besokPulangRaw ?? '-' }}</span>
-                                                                    </div>
-                                                                </div>
-                                                            @endif
-                                                        </div>
-
+                                                                    class="inline-flex w-14 shrink-0 justify-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-300"
+                                                                    style="margin-right: 0.5rem;">
+                                                                    {{ \Illuminate\Support\Carbon::parse($tgl)->format('d/m') }}
+                                                                </span>
+                                                                @forelse ($times as $t)
+                                                                    @if (!$loop->first)
+                                                                        <span class="text-gray-300 dark:text-gray-600"
+                                                                            style="padding: 0 0.125rem;">·</span>
+                                                                    @endif
+                                                                    <span
+                                                                        class="font-mono {{ $loop->first || $loop->last ? 'font-bold text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400' }}">{{ $t }}</span>
+                                                                @empty
+                                                                    <span class="text-gray-400">-</span>
+                                                                @endforelse
+                                                            </div>
+                                                        @endforeach
                                                     </div>
-                                                </td>
-                                            </tr>
-                                        @endif
-                                    @empty
-                                        <tr>
-                                            <td colspan="12"
-                                                class="px-4 py-10 text-center text-gray-400 dark:text-gray-500">
-                                                <div class="flex flex-col items-center gap-2">
-                                                    <x-heroicon-o-inbox class="h-8 w-8 text-gray-300 dark:text-gray-600" />
-                                                    @if ($search !== '')
-                                                        <span>Tidak ada pegawai yang cocok dengan pencarian
-                                                            "{{ $search }}".</span>
-                                                    @else
-                                                        <span>Tidak ada data absensi pada tanggal ini.</span>
-                                                    @endif
                                                 </div>
                                             </td>
                                         </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>{{-- /table scroll box --}}
-                    </div>{{-- /fullscreen wrapper --}}
-
-                    {{-- Absensi Lain-lain — default HIDDEN, tampil kalau tombol diklik --}}
-                    <div>
-                        <div class="flex items-start justify-between gap-3 mb-1">
-                            <div>
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
-                                    Absensi Lain-lain (Checklog tanpa Data Produksi)
-                                </h3>
-                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                                    Pegawai yang tercatat absen fingerprint pada tanggal ini, Namun Tidak ada di data
-                                    Produksi.
-                                </p>
-                            </div>
-
-                            <x-filament::button wire:click="toggleAbsensiLainLain" color="primary" :icon="$showAbsensiLainLain ? 'heroicon-o-eye-slash' : 'heroicon-o-eye'"
-                                class="shrink-0">
-                                @if ($showAbsensiLainLain)
-                                    Sembunyikan
-                                @else
-                                    Tampilkan ({{ $this->getAbsensiLainLain()->count() }} pegawai)
-                                @endif
-                            </x-filament::button>
-                        </div>
-
-                        @if ($showAbsensiLainLain)
-                            {{-- Card view di mobile --}}
-                            <div class="sm:hidden mt-4 space-y-2">
-                                @forelse ($this->getAbsensiLainLain() as $row)
-                                    <div
-                                        class="rounded-xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-800/50 px-4 py-3">
-                                        <p class="font-medium text-gray-900 dark:text-gray-100">{{ $row['nama_pegawai'] }}
-                                        </p>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                            {{ $row['kode_pegawai'] }}</p>
-                                        <div class="mt-2 grid grid-cols-2 gap-x-4 text-sm">
-                                            <div>
-                                                <span class="text-xs text-gray-400 block">Masuk</span>
-                                                <span
-                                                    class="font-mono text-gray-700 dark:text-gray-300">{{ $row['jam_masuk'] ?? '-' }}</span>
-                                            </div>
-                                            <div>
-                                                <span class="text-xs text-gray-400 block">Pulang</span>
-                                                <span
-                                                    class="font-mono text-gray-700 dark:text-gray-300">{{ $row['jam_pulang'] ?? '-' }}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                @empty
-                                    <p class="text-center text-sm text-gray-400 py-6">Tidak ada checklog tanpa data
-                                        produksi.</p>
-                                @endforelse
-                            </div>
-
-                            {{-- Table view di desktop --}}
-                            <div
-                                class="hidden sm:block overflow-x-auto rounded-xl border border-amber-200 shadow-sm dark:border-amber-800 mt-4">
-                                <table class="w-full text-sm text-left border-collapse">
-                                    <thead
-                                        class="bg-amber-50 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-                                        <tr>
-                                            <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Kode
-                                                Pegawai
-                                            </th>
-                                            <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Nama
-                                                Pegawai
-                                            </th>
-                                            <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Jam Masuk
-                                            </th>
-                                            <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Jam
-                                                Pulang
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                                        @forelse ($this->getAbsensiLainLain() as $row)
-                                            <tr class="transition-colors hover:bg-amber-50/50 dark:hover:bg-amber-900/10">
-                                                <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
-                                                    {{ $row['kode_pegawai'] }}
-                                                </td>
-                                                <td class="px-4 py-2.5 font-medium text-gray-900 dark:text-gray-100">
-                                                    {{ $row['nama_pegawai'] }}</td>
-                                                <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
-                                                    {{ $row['jam_masuk'] ?? '-' }}
-                                                </td>
-                                                <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
-                                                    {{ $row['jam_pulang'] ?? '-' }}
-                                                </td>
-                                            </tr>
-                                        @empty
-                                            <tr>
-                                                <td colspan="4"
-                                                    class="px-4 py-8 text-center text-gray-400 dark:text-gray-500">
-                                                    Tidak ada checklog tanpa data produksi pada tanggal ini.
-                                                </td>
-                                            </tr>
-                                        @endforelse
-                                    </tbody>
-                                </table>
-                            </div>
-                        @endif
-                    </div>
-
-                </div>
-            </div>
-
-            {{-- ================= TAB CONTENT: UPLOAD ================= --}}
-            <div x-show="activeTab === 'upload'" x-cloak wire:key="tab-upload" class="mt-6 space-y-4">
-                @if ($this->canManageAbsensi())
-                    <form wire:submit.prevent>
-                        {{ $this->uploadForm }}
-                    </form>
-
-                    <div class="grid grid-cols-1 sm:flex sm:flex-wrap sm:items-center gap-2 sm:gap-3">
-                        <x-filament::button wire:click="uploadFinger" icon="heroicon-o-arrow-up-tray"
-                            class="w-full sm:w-auto justify-center">
-                            Proses Upload Finger
-                        </x-filament::button>
-
-                        <x-filament::button wire:click="downloadFingerForSelectedDate" color="gray"
-                            icon="heroicon-o-arrow-down-tray" class="w-full sm:w-auto justify-center">
-                            Download Finger Tanggal Ini
-                        </x-filament::button>
-                    </div>
-                @else
-                    <div
-                        class="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800/30 dark:text-gray-400">
-                        <x-heroicon-o-lock-closed class="mx-auto mb-2 h-8 w-8 text-gray-300 dark:text-gray-600" />
-                        Anda tidak memiliki akses ke fitur Upload Finger.
-                    </div>
-                @endif
-            </div>
-
-            {{-- ================= TAB CONTENT: RIWAYAT UPLOAD ================= --}}
-            <div x-show="activeTab === 'riwayat'" x-cloak wire:key="tab-riwayat" class="mt-6">
-                @if ($this->canManageAbsensi())
-                    <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                        Riwayat Upload Finger
-                    </h3>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                        20 upload terakhir dari semua tanggal.
-                    </p>
-
-                    {{-- Card view di mobile --}}
-                    <div class="sm:hidden space-y-3">
-                        @forelse ($this->getUploadHistory() as $item)
-                            <div
-                                class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 px-4 py-3">
-                                <div class="flex items-start justify-between gap-2">
-                                    <div class="min-w-0">
-                                        <p class="font-semibold text-gray-900 dark:text-gray-100 text-sm">
-                                            #{{ $item->id }}
-                                            <span class="font-normal text-gray-500 dark:text-gray-400 ml-1">
-                                                {{ \Illuminate\Support\Carbon::parse($item->tanggal)->format('d/m/Y') }}
-                                            </span>
-                                        </p>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                            {{ $item->uploaded_by }} · {{ $item->created_at->format('d/m H:i') }}
-                                        </p>
-                                        <div class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                                            @foreach ($item->file_names as $fileName)
-                                                <div>{{ $fileName }}</div>
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                    <x-filament::button size="sm" color="gray"
-                                        wire:click="downloadUpload({{ $item->id }})"
-                                        icon="heroicon-o-arrow-down-tray" class="shrink-0">
-                                        Unduh
-                                    </x-filament::button>
-                                </div>
-                            </div>
-                        @empty
-                            <div
-                                class="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-8 text-center text-gray-400 dark:text-gray-500 text-sm">
-                                Belum ada riwayat upload.
-                            </div>
-                        @endforelse
-                    </div>
-
-                    {{-- Table view di desktop --}}
-                    <div
-                        class="hidden sm:block overflow-x-auto rounded-xl border border-gray-200 shadow-sm dark:border-gray-700">
-                        <table class="w-full text-sm text-left border-collapse">
-                            <thead
-                                class="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                                <tr>
-                                    <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Batch #</th>
-                                    <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Tanggal</th>
-                                    <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">File</th>
-                                    <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Diupload Oleh</th>
-                                    <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Waktu Upload</th>
-                                    <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 text-right">Aksi
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                                @forelse ($this->getUploadHistory() as $item)
-                                    <tr class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                                        <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">#{{ $item->id }}</td>
-                                        <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
-                                            {{ \Illuminate\Support\Carbon::parse($item->tanggal)->format('d/m/Y') }}
-                                        </td>
-                                        <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
-                                            @foreach ($item->file_names as $fileName)
-                                                <div>{{ $fileName }}</div>
-                                            @endforeach
-                                        </td>
-                                        <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">{{ $item->uploaded_by }}
-                                        </td>
-                                        <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
-                                            {{ $item->created_at->format('d/m/Y H:i') }}
-                                        </td>
-                                        <td class="px-4 py-2.5 text-right">
-                                            <x-filament::button size="sm" color="gray"
-                                                wire:click="downloadUpload({{ $item->id }})"
-                                                icon="heroicon-o-arrow-down-tray">
-                                                Download
-                                            </x-filament::button>
-                                        </td>
-                                    </tr>
+                                    @endif
                                 @empty
                                     <tr>
-                                        <td colspan="6" class="px-4 py-8 text-center text-gray-400 dark:text-gray-500">
-                                            Belum ada riwayat upload.
+                                        <td colspan="12"
+                                            class="px-4 py-10 text-center text-gray-400 dark:text-gray-500">
+                                            <div class="flex flex-col items-center gap-2">
+                                                <x-heroicon-o-inbox class="h-8 w-8 text-gray-300 dark:text-gray-600" />
+                                                @if ($search !== '')
+                                                    <span>Tidak ada pegawai yang cocok dengan pencarian
+                                                        "{{ $search }}".</span>
+                                                @else
+                                                    <span>Tidak ada data absensi pada tanggal ini.</span>
+                                                @endif
+                                            </div>
                                         </td>
                                     </tr>
                                 @endforelse
                             </tbody>
                         </table>
-                    </div>
-                @else
-                    <div
-                        class="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800/30 dark:text-gray-400">
-                        <x-heroicon-o-lock-closed class="mx-auto mb-2 h-8 w-8 text-gray-300 dark:text-gray-600" />
-                        Anda tidak memiliki akses ke Riwayat Upload.
-                    </div>
-                @endif
-            </div>
+                    </div>{{-- /table scroll box --}}
+                </div>{{-- /fullscreen wrapper --}}
 
+                {{-- Absensi Lain-lain — default HIDDEN, tampil kalau tombol diklik --}}
+                <div>
+                    <div class="flex items-start justify-between gap-3 mb-1">
+                        <div>
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                                Absensi Lain-lain (Checklog tanpa Data Produksi)
+                            </h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                Pegawai yang tercatat absen fingerprint pada tanggal ini, Namun Tidak ada di data
+                                Produksi.
+                            </p>
+                        </div>
+
+                        <x-filament::button wire:click="toggleAbsensiLainLain" color="primary" :icon="$showAbsensiLainLain ? 'heroicon-o-eye-slash' : 'heroicon-o-eye'"
+                            class="shrink-0">
+                            @if ($showAbsensiLainLain)
+                                Sembunyikan
+                            @else
+                                Tampilkan ({{ $this->getAbsensiLainLain()->count() }} pegawai)
+                            @endif
+                        </x-filament::button>
+                    </div>
+
+                    @if ($showAbsensiLainLain)
+                        {{-- Card view di mobile --}}
+                        <div class="sm:hidden mt-4 space-y-2">
+                            @forelse ($this->getAbsensiLainLain() as $row)
+                                <div
+                                    class="rounded-xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-800/50 px-4 py-3">
+                                    <p class="font-medium text-gray-900 dark:text-gray-100">{{ $row['nama_pegawai'] }}
+                                    </p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                        {{ $row['kode_pegawai'] }}</p>
+                                    <div class="mt-2 grid grid-cols-2 gap-x-4 text-sm">
+                                        <div>
+                                            <span class="text-xs text-gray-400 block">Masuk</span>
+                                            <span
+                                                class="font-mono text-gray-700 dark:text-gray-300">{{ $row['jam_masuk'] ?? '-' }}</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs text-gray-400 block">Pulang</span>
+                                            <span
+                                                class="font-mono text-gray-700 dark:text-gray-300">{{ $row['jam_pulang'] ?? '-' }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            @empty
+                                <p class="text-center text-sm text-gray-400 py-6">Tidak ada checklog tanpa data
+                                    produksi.</p>
+                            @endforelse
+                        </div>
+
+                        {{-- Table view di desktop --}}
+                        <div
+                            class="hidden sm:block overflow-x-auto rounded-xl border border-amber-200 shadow-sm dark:border-amber-800 mt-4">
+                            <table class="w-full text-sm text-left border-collapse">
+                                <thead
+                                    class="bg-amber-50 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Kode
+                                            Pegawai
+                                        </th>
+                                        <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Nama
+                                            Pegawai
+                                        </th>
+                                        <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Jam Masuk
+                                        </th>
+                                        <th class="px-4 py-3 border-b border-amber-200 dark:border-amber-800">Jam
+                                            Pulang
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                    @forelse ($this->getAbsensiLainLain() as $row)
+                                        <tr class="transition-colors hover:bg-amber-50/50 dark:hover:bg-amber-900/10">
+                                            <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
+                                                {{ $row['kode_pegawai'] }}
+                                            </td>
+                                            <td class="px-4 py-2.5 font-medium text-gray-900 dark:text-gray-100">
+                                                {{ $row['nama_pegawai'] }}</td>
+                                            <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
+                                                {{ $row['jam_masuk'] ?? '-' }}
+                                            </td>
+                                            <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
+                                                {{ $row['jam_pulang'] ?? '-' }}
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="4"
+                                                class="px-4 py-8 text-center text-gray-400 dark:text-gray-500">
+                                                Tidak ada checklog tanpa data produksi pada tanggal ini.
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+                </div>
+
+            </div>
         </div>
 
-    </x-filament-panels::page>
+        {{-- ================= TAB CONTENT: UPLOAD ================= --}}
+        <div x-show="activeTab === 'upload'" x-cloak wire:key="tab-upload" class="mt-6 space-y-4">
+            @if ($this->canManageAbsensi())
+                <form wire:submit.prevent>
+                    {{ $this->uploadForm }}
+                </form>
+
+                <div class="grid grid-cols-1 sm:flex sm:flex-wrap sm:items-center gap-2 sm:gap-3">
+                    <x-filament::button wire:click="uploadFinger" icon="heroicon-o-arrow-up-tray"
+                        class="w-full sm:w-auto justify-center">
+                        Proses Upload Finger
+                    </x-filament::button>
+
+                    <x-filament::button wire:click="downloadFingerForSelectedDate" color="gray"
+                        icon="heroicon-o-arrow-down-tray" class="w-full sm:w-auto justify-center">
+                        Download Finger Tanggal Ini
+                    </x-filament::button>
+                </div>
+            @else
+                <div
+                    class="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800/30 dark:text-gray-400">
+                    <x-heroicon-o-lock-closed class="mx-auto mb-2 h-8 w-8 text-gray-300 dark:text-gray-600" />
+                    Anda tidak memiliki akses ke fitur Upload Finger.
+                </div>
+            @endif
+        </div>
+
+        {{-- ================= TAB CONTENT: RIWAYAT UPLOAD ================= --}}
+        <div x-show="activeTab === 'riwayat'" x-cloak wire:key="tab-riwayat" class="mt-6">
+            @if ($this->canManageAbsensi())
+                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                    Riwayat Upload Finger
+                </h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    20 upload terakhir dari semua tanggal.
+                </p>
+
+                {{-- Card view di mobile --}}
+                <div class="sm:hidden space-y-3">
+                    @forelse ($this->getUploadHistory() as $item)
+                        <div
+                            class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 px-4 py-3">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <p class="font-semibold text-gray-900 dark:text-gray-100 text-sm">
+                                        #{{ $item->id }}
+                                        <span class="font-normal text-gray-500 dark:text-gray-400 ml-1">
+                                            {{ \Illuminate\Support\Carbon::parse($item->tanggal)->format('d/m/Y') }}
+                                        </span>
+                                    </p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                        {{ $item->uploaded_by }} · {{ $item->created_at->format('d/m H:i') }}
+                                    </p>
+                                    <div class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                        @foreach ($item->file_names as $fileName)
+                                            <div>{{ $fileName }}</div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                                <x-filament::button size="sm" color="gray"
+                                    wire:click="downloadUpload({{ $item->id }})"
+                                    icon="heroicon-o-arrow-down-tray" class="shrink-0">
+                                    Unduh
+                                </x-filament::button>
+                            </div>
+                        </div>
+                    @empty
+                        <div
+                            class="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-8 text-center text-gray-400 dark:text-gray-500 text-sm">
+                            Belum ada riwayat upload.
+                        </div>
+                    @endforelse
+                </div>
+
+                {{-- Table view di desktop --}}
+                <div
+                    class="hidden sm:block overflow-x-auto rounded-xl border border-gray-200 shadow-sm dark:border-gray-700">
+                    <table class="w-full text-sm text-left border-collapse">
+                        <thead
+                            class="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                            <tr>
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Batch #</th>
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Tanggal</th>
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">File</th>
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Diupload Oleh</th>
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Waktu Upload</th>
+                                <th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 text-right">Aksi
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                            @forelse ($this->getUploadHistory() as $item)
+                                <tr class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                    <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">#{{ $item->id }}</td>
+                                    <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">
+                                        {{ \Illuminate\Support\Carbon::parse($item->tanggal)->format('d/m/Y') }}
+                                    </td>
+                                    <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
+                                        @foreach ($item->file_names as $fileName)
+                                            <div>{{ $fileName }}</div>
+                                        @endforeach
+                                    </td>
+                                    <td class="px-4 py-2.5 text-gray-700 dark:text-gray-300">{{ $item->uploaded_by }}
+                                    </td>
+                                    <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400">
+                                        {{ $item->created_at->format('d/m/Y H:i') }}
+                                    </td>
+                                    <td class="px-4 py-2.5 text-right">
+                                        <x-filament::button size="sm" color="gray"
+                                            wire:click="downloadUpload({{ $item->id }})"
+                                            icon="heroicon-o-arrow-down-tray">
+                                            Download
+                                        </x-filament::button>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="6" class="px-4 py-8 text-center text-gray-400 dark:text-gray-500">
+                                        Belum ada riwayat upload.
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            @else
+                <div
+                    class="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800/30 dark:text-gray-400">
+                    <x-heroicon-o-lock-closed class="mx-auto mb-2 h-8 w-8 text-gray-300 dark:text-gray-600" />
+                    Anda tidak memiliki akses ke Riwayat Upload.
+                </div>
+            @endif
+        </div>
+
+    </div>
+
+</x-filament-panels::page>

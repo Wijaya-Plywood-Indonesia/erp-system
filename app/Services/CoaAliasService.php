@@ -21,9 +21,9 @@ class CoaAliasService
     // ---------------------------------------------------------------------
 
     /** Persediaan kayu bulat */
-    public const AKUN_KAYU_130 = ['no' => '1402.1', 'nama' => 'Persediaan Kayu 130'];
+    public const AKUN_KAYU_130 = ['no' => '1402.1', 'nama' => 'Persediaan kayu 130'];
 
-    public const AKUN_KAYU_260 = ['no' => '1402.2', 'nama' => 'Persediaan Kayu 260'];
+    public const AKUN_KAYU_260 = ['no' => '1402.2', 'nama' => 'Persediaan kayu 260'];
 
     /** Persediaan logcore / kayu sambungan */
     public const AKUN_LOGCORE_130 = ['no' => '1402.21', 'nama' => 'Persediaan Logcore 130'];
@@ -35,15 +35,28 @@ class CoaAliasService
 
     public const AKUN_VENEER_BASAH_CORE = ['no' => '1402.4', 'nama' => 'Persediaan Veneer Basah Core'];
 
-    /** Veneer kering (BARU – sebelumnya belum ada di alias) */
+    /** Veneer kering */
     public const AKUN_VENEER_KERING_FB = ['no' => '1402.5', 'nama' => 'Persediaan Veneer Kering Face Back'];
 
     public const AKUN_VENEER_KERING_CORE = ['no' => '1402.6', 'nama' => 'Persediaan Veneer Kering Core'];
 
-    /** Barang setengah jadi / jadi (BARU) */
-    public const AKUN_BARANG_SETENGAH_JADI = ['no' => '1402.7', 'nama' => 'Persediaan Barang Dalam Proses'];
+    /** Veneer jadi (COA baru punya akun sendiri: 1402.7 FB, 1402.8 Core) */
+    public const AKUN_VENEER_JADI_FB = ['no' => '1402.7', 'nama' => 'Persediaan Veneer Jadi Face Back'];
 
-    public const AKUN_BARANG_JADI = ['no' => '1402.8', 'nama' => 'Persediaan Barang Jadi'];
+    public const AKUN_VENEER_JADI_CORE = ['no' => '1402.8', 'nama' => 'Persediaan Veneer Jadi Core'];
+
+    /** Veneer PPC (dipakai untuk veneer AF / afalan) */
+    public const AKUN_VENEER_BASAH_PPC = ['no' => '1402.16', 'nama' => 'Persediaan Veneer Basah PPC'];
+
+    public const AKUN_VENEER_KERING_PPC = ['no' => '1402.17', 'nama' => 'Persediaan Veneer Kering PPC'];
+
+    public const AKUN_VENEER_JADI_PPC = ['no' => '1402.18', 'nama' => 'Persediaan Veneer Jadi PPC'];
+
+    /** Barang dalam proses (kelompok 1403) */
+    public const AKUN_BARANG_SETENGAH_JADI = ['no' => '1403.0', 'nama' => 'Persediaan Barang Dalam Proses'];
+
+    /** Barang jadi (kelompok 1404) */
+    public const AKUN_BARANG_JADI = ['no' => '1404.0', 'nama' => 'Persediaan Barang Jadi'];
 
     /** Gaji */
     public const AKUN_BEBAN_GAJI_HARIAN = ['no' => '5311.0', 'nama' => 'Gaji, Tunjangan, Bonus, Honorarium, THR, dsb'];
@@ -108,8 +121,15 @@ class CoaAliasService
         // veneer kering
         '115-09' => self::AKUN_VENEER_KERING_FB,
         '1431.00' => self::AKUN_VENEER_KERING_FB,
+        '1441' => self::AKUN_VENEER_KERING_FB,
+        '1441.0' => self::AKUN_VENEER_KERING_FB,
+        '1441.00' => self::AKUN_VENEER_KERING_FB,
         '115-10' => self::AKUN_VENEER_KERING_CORE,
         '1436.00' => self::AKUN_VENEER_KERING_CORE,
+        '1446' => self::AKUN_VENEER_KERING_CORE,
+        '1446.0' => self::AKUN_VENEER_KERING_CORE,
+        '1446.00' => self::AKUN_VENEER_KERING_CORE,
+        '1447' => self::AKUN_VENEER_KERING_CORE, // core meranti
 
         // gaji
         '210-02' => self::AKUN_HUTANG_GAJI,
@@ -193,7 +213,6 @@ class CoaAliasService
         return self::AKUN_KAS_MUT;
     }
 
-
     // ---------------------------------------------------------------------
 
     /**
@@ -217,6 +236,14 @@ class CoaAliasService
         return [$akun['no'], $akun['nama']];
     }
 
+    /** @return array{0:string,1:string} */
+    public function getAkunVeneerJadi(bool $isCore): array
+    {
+        $akun = $isCore ? self::AKUN_VENEER_JADI_CORE : self::AKUN_VENEER_JADI_FB;
+
+        return [$akun['no'], $akun['nama']];
+    }
+
     /** @return string[] */
     public function nomorAkunVeneerBasah(): array
     {
@@ -229,6 +256,12 @@ class CoaAliasService
         return [self::AKUN_VENEER_KERING_FB['no'], self::AKUN_VENEER_KERING_CORE['no']];
     }
 
+    /** @return string[] */
+    public function nomorAkunVeneerJadi(): array
+    {
+        return [self::AKUN_VENEER_JADI_FB['no'], self::AKUN_VENEER_JADI_CORE['no']];
+    }
+
     // ---------------------------------------------------------------------
     // GAJI
     // ---------------------------------------------------------------------
@@ -239,7 +272,7 @@ class CoaAliasService
     public function getAkunGaji(bool $isBorongan = false): array
     {
         return [
-            'beban'  => $isBorongan ? self::AKUN_BEBAN_GAJI_BORONGAN : self::AKUN_BEBAN_GAJI_HARIAN,
+            'beban' => $isBorongan ? self::AKUN_BEBAN_GAJI_BORONGAN : self::AKUN_BEBAN_GAJI_HARIAN,
             // Borongan & harian sama-sama hutang ke 2195.1; 2195.2 khusus ongkos turun kayu.
             'hutang' => self::AKUN_HUTANG_GAJI,
         ];
@@ -251,12 +284,16 @@ class CoaAliasService
         return [self::AKUN_HUTANG_GAJI['no']];
     }
 
-
     // ---------------------------------------------------------------------
     // HPP / SELISIH / BEBAN
     // ---------------------------------------------------------------------
 
-    /** @return array{no:string,nama:string} */
+    /**
+     * Nama method historis "Hpp", tapi yang dikembalikan akun
+     * Selisih harga patok produksi (5069.2), bukan HPP (5069.1).
+     *
+     * @return array{no:string,nama:string}
+     */
     public function getAkunHpp(): array
     {
         return self::AKUN_SELISIH_HPP;
@@ -292,6 +329,57 @@ class CoaAliasService
     public function isAkunLamaDikenal(string $noAkunLama): bool
     {
         return isset(self::MAP_AKUN_LAMA[trim($noAkunLama)]);
+    }
+
+    // ---------------------------------------------------------------------
+    // VENEER REPAIR (sheet jurnal repair V2)
+    // ---------------------------------------------------------------------
+
+    /**
+     * Akun veneer untuk sheet repair V2, ditentukan dari tipe + tebal
+     * (+ status AF), BUKAN dari kode di sub_anak_akuns. Hasilnya sama di
+     * semua web (kayu / wahana); jenis kayu tidak membedakan akun.
+     *
+     * - AF (afalan) -> akun PPC (1402.17 kering / 1402.18 jadi)
+     * - selain AF   -> split face-back / core
+     *
+     * @param  string  $tipe  'jadi' | 'kering'
+     * @param  bool  $isCore  tebal >= 1 → core, selain itu face/back
+     * @param  bool  $isAf  veneer afalan → akun PPC
+     * @return array{no:string,nama:string}
+     */
+    public function getAkunVeneerRepair(string $tipe, bool $isCore, bool $isAf = false): array
+    {
+        $tipe = strtolower($tipe);
+
+        if ($isAf) {
+            return match ($tipe) {
+                'jadi' => self::AKUN_VENEER_JADI_PPC,
+                'kering' => self::AKUN_VENEER_KERING_PPC,
+                default => ['no' => 'UNKNOWN', 'nama' => 'UNKNOWN'],
+            };
+        }
+
+        return match ($tipe) {
+            'jadi' => $isCore ? self::AKUN_VENEER_JADI_CORE : self::AKUN_VENEER_JADI_FB,
+            'kering' => $isCore ? self::AKUN_VENEER_KERING_CORE : self::AKUN_VENEER_KERING_FB,
+            default => ['no' => 'UNKNOWN', 'nama' => 'UNKNOWN'],
+        };
+    }
+
+    /**
+     * Pengganti extractAkunVeneer() khusus sheet repair V2.
+     * Akun dari COA baru; harga tetap dari referensi_harga_produksi.
+     * Kalau referensi tidak ditemukan, akun tetap terisi dan harga 0
+     * (penanda [UNKNOWN] di keterangan diatur di sheet).
+     *
+     * @return array{0:string,1:string,2:float} [nama, no, harga]
+     */
+    public function extractAkunVeneerRepair($ref, string $tipe, float $tebal, bool $isAf = false): array
+    {
+        $akun = $this->getAkunVeneerRepair($tipe, $tebal >= 1, $isAf);
+
+        return [$akun['nama'], $akun['no'], (float) ($ref?->harga ?? 0)];
     }
 
     // ---------------------------------------------------------------------
