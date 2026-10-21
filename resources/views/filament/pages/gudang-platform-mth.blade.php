@@ -3,8 +3,109 @@
 
     @include('filament.pages.partials.serah-terima-hotpress')
 
+    {{-- ═══ TERIMA DARI GUDANG PLATFORM JADI ═══ --}}
+    <div class="mb-6">
+        <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">
+            Terima dari Gudang Platform Jadi
+        </span>
+
+        <div
+            class="mt-3 bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+            <div class="divide-y divide-gray-100 dark:divide-gray-800 max-h-[320px] overflow-y-auto">
+                @forelse($this->menungguDariJadi as $st)
+                    @php $mj = $st->platformJadiMutasiKeluar; @endphp
+                    @if ($mj)
+                        <div wire:key="pjadi-st-{{ $st->id }}"
+                            class="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 flex-wrap">
+                            <span
+                                class="font-mono text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap">
+                                {{ $mj->panjang + 0 }}×{{ $mj->lebar + 0 }}×{{ $mj->tebal + 0 }}
+                            </span>
+                            <span
+                                class="px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                {{ $mj->kw_grade ?? '-' }}
+                            </span>
+                            <span
+                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[9px] font-black uppercase bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 whitespace-nowrap">
+                                Dari Gudang Platform Jadi
+                            </span>
+                            <span
+                                class="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase truncate min-w-0 flex-1">
+                                {{ $mj->jenisBarang?->nama_jenis_barang ?? '-' }}
+                            </span>
+                            <span class="font-black text-sm text-amber-500 tabular-nums whitespace-nowrap">
+                                {{ number_format($mj->stok_lembar) }} <span
+                                    class="text-[10px] font-semibold text-gray-400">Lbr</span>
+                            </span>
+                            <div class="shrink-0 flex items-center gap-1.5">
+                                <button type="button" wire:click="bukaModalTolak({{ $st->id }}, 'jadi')"
+                                    wire:loading.attr="disabled"
+                                    class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-sm text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 dark:text-rose-400 dark:bg-rose-950/40 dark:border-rose-900/50 dark:hover:bg-rose-900/60 disabled:opacity-50 transition-colors">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                    <span>Tolak</span>
+                                </button>
+                                <button type="button" wire:click="terimaDariJadi({{ $st->id }})"
+                                    wire:confirm="Terima platform ini ke stok Gudang Platform Mentah?"
+                                    wire:loading.attr="disabled" wire:target="terimaDariJadi({{ $st->id }})"
+                                    class="px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
+                                    Terima
+                                </button>
+                            </div>
+                        </div>
+                    @endif
+                @empty
+                    <div class="px-5 py-6 text-center text-xs text-gray-400 dark:text-gray-600">
+                        Tidak ada kiriman dari Gudang Platform Jadi yang menunggu
+                    </div>
+                @endforelse
+            </div>
+        </div>
+
+        @if ($this->riwayatDariJadi->isNotEmpty())
+            <details class="mt-3">
+                <summary
+                    class="cursor-pointer text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">
+                    Riwayat diterima ({{ $this->riwayatDariJadi->count() }})
+                </summary>
+                <div
+                    class="mt-2 bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800 max-h-[240px] overflow-y-auto">
+                    @foreach ($this->riwayatDariJadi as $st)
+                        @php $mj = $st->platformJadiMutasiKeluar; @endphp
+                        @if ($mj)
+                            <div wire:key="pjadi-rst-{{ $st->id }}"
+                                class="px-3 sm:px-5 py-2.5 text-[11px] flex items-center gap-2 flex-wrap">
+                                <span class="font-mono text-gray-500 dark:text-gray-400 tabular-nums">
+                                    {{ $mj->panjang + 0 }}×{{ $mj->lebar + 0 }}×{{ $mj->tebal + 0 }}
+                                </span>
+                                <span
+                                    class="font-black uppercase text-amber-600 dark:text-amber-400">{{ $mj->kw_grade ?? '-' }}</span>
+                                <span
+                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[9px] font-black uppercase bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 whitespace-nowrap">
+                                    Dari Gudang Platform Jadi
+                                </span>
+                                <span
+                                    class="font-bold uppercase text-gray-700 dark:text-gray-300 truncate flex-1 min-w-0">
+                                    {{ $mj->jenisBarang?->nama_jenis_barang ?? '-' }}
+                                </span>
+                                <span
+                                    class="font-black text-emerald-500 tabular-nums">+{{ number_format($mj->stok_lembar) }}
+                                    Lbr</span>
+                                <span class="text-gray-400 dark:text-gray-500">
+                                    {{ $st->diterima_gudang_oleh ?? '-' }} ·
+                                    {{ optional($st->diterima_gudang_at)->translatedFormat('d M Y H:i') }}
+                                </span>
+                            </div>
+                        @endif
+                    @endforeach
+                </div>
+            </details>
+        @endif
+    </div>
+
     {{-- ══════════════════════════════════════════════════════════════════════
-         BARANG KELUAR (menuju Produksi Sanding)
+         BARANG KELUAR (menuju Produksi Sanding / Gudang Platform Jadi)
     ═══════════════════════════════════════════════════════════════════════ --}}
     <div>
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
@@ -36,6 +137,7 @@
             class="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
             <div class="divide-y divide-gray-100 dark:divide-gray-800 max-h-[640px] overflow-y-auto">
                 @forelse($this->riwayatKeluar as $mk)
+                    @php $tujuanGudang = $mk->tujuan === 'Platform Jadi'; @endphp
                     <div wire:key="mk-{{ $mk->id }}"
                         class="px-4 sm:px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
                         <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -53,8 +155,8 @@
                                         {{ $mk->jenisKayu?->nama_kayu ?? '-' }}
                                     </span>
                                     <span
-                                        class="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 whitespace-nowrap">
-                                        {{ $mk->tujuan }}
+                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[9px] font-black uppercase whitespace-nowrap {{ $tujuanGudang ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' : 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' }}">
+                                        {{ $opsiTujuan[$mk->tujuan] ?? $mk->tujuan }}
                                     </span>
                                     @if ($mk->status_label === 'Diterima')
                                         <span
@@ -101,7 +203,7 @@
                                     </button>
                                 @else
                                     <span class="text-[9px] text-gray-300 dark:text-gray-700 font-bold uppercase"
-                                        title="Sudah diterima/terpakai di Sanding">🔒 Terkunci</span>
+                                        title="Sudah diterima/terpakai di tujuan">🔒 Terkunci</span>
                                 @endif
                             </div>
                         </div>
@@ -126,78 +228,13 @@
                 <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
                     <span class="inline-block w-1.5 h-4 bg-amber-500 rounded-sm"></span>
                     <span class="text-sm font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Form
-                        Barang Keluar ke Sanding</span>
+                        Barang Keluar</span>
                 </div>
 
                 <form wire:submit.prevent="prosesKeluar" class="p-5 space-y-4 text-xs">
 
                     {{-- 1. PILIH BARANG (search dropdown dari stok) --}}
-                    <div class="space-y-1.5 relative" x-data="{
-                        isDropdownOpen: false,
-                        searchTerm: '',
-                        selectedStokId: @entangle('selectedStokId'),
-                        options: [
-                            @foreach ($this->stokList as $s)
-                        {
-                            id: '{{ $s->id }}',
-                            nama: '{{ $s->jenisKayu?->nama_kayu }} ({{ $s->kw_grade }}) - Sisa: {{ number_format((int) $s->stok_lembar) }} lbr',
-                            no: '{{ $s->panjang + 0 }}x{{ $s->lebar + 0 }}x{{ $s->tebal + 0 }}'
-                        }, @endforeach
-                        ],
-                        get filteredOptions() {
-                            if (this.searchTerm === '') return this.options;
-                            return this.options.filter(o =>
-                                o.nama.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-                                o.no.toLowerCase().includes(this.searchTerm.toLowerCase())
-                            );
-                        },
-                        selectItem(item) {
-                            this.selectedStokId = item.id;
-                            this.searchTerm = item.no + ' | ' + item.nama;
-                            this.isDropdownOpen = false;
-                        },
-                        clearItem() {
-                            this.selectedStokId = null;
-                            this.searchTerm = '';
-                        },
-                        init() {
-                            let found = this.options.find(o => o.id == this.selectedStokId);
-                            if (found) this.searchTerm = found.no + ' | ' + found.nama;
-                        }
-                    }" @click.away="isDropdownOpen = false">
-                        <label
-                            class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">Pilih
-                            Barang</label>
-                        <div class="relative flex items-center">
-                            <input type="text" x-model="searchTerm" @focus="isDropdownOpen = true"
-                                placeholder="Ketik ukuran, grade, atau jenis kayu..."
-                                class="w-full px-3 py-2 bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-700 rounded-sm font-bold text-gray-900 dark:text-gray-100 outline-none pr-10 focus:border-amber-500 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-600 placeholder:font-normal placeholder:text-xs">
-                            <button type="button" x-show="searchTerm.length > 0 || selectedStokId" @click="clearItem()"
-                                class="absolute right-3 text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                                        d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-                        <div x-show="isDropdownOpen" x-cloak
-                            class="absolute z-50 w-full mt-1 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-sm shadow-2xl max-h-48 overflow-y-auto p-1 divide-y divide-gray-100 dark:divide-gray-900/60">
-                            <template x-for="item in filteredOptions" :key="item.id">
-                                <button type="button" @click="selectItem(item)"
-                                    class="w-full text-left px-3 py-2 hover:bg-amber-500 hover:text-gray-950 flex flex-col transition-colors group">
-                                    <span
-                                        class="text-[11px] text-gray-500 dark:text-gray-400 group-hover:text-gray-900 font-medium"
-                                        x-text="item.nama"></span>
-                                    <span
-                                        class="font-bold text-gray-800 dark:text-gray-200 group-hover:text-gray-950 text-xs"
-                                        x-text="item.no"></span>
-                                </button>
-                            </template>
-                            <div x-show="filteredOptions.length === 0"
-                                class="text-gray-400 dark:text-gray-600 p-3 text-center italic text-[11px]">Barang
-                                tidak ditemukan</div>
-                        </div>
-                    </div>
+                    <x-pilih-stok model="selectedStokId" label="Pilih Barang" :items="$this->stokOpsiKeluar" />
 
                     {{-- 2. KUANTITAS --}}
                     <div class="space-y-1.5">
@@ -212,15 +249,17 @@
                         </div>
                     </div>
 
-                    {{-- 3. TUJUAN (fix ke Sanding) --}}
+                    {{-- 3. TUJUAN --}}
                     <div class="space-y-1.5">
                         <label
                             class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">Tujuan
                             Keluar</label>
-                        <div
-                            class="w-full text-sm p-2 border border-gray-200 dark:border-gray-800 rounded-sm bg-gray-50 dark:bg-gray-950/40 text-gray-500 dark:text-gray-400 font-bold">
-                            Produksi Sanding
-                        </div>
+                        <select wire:model="tujuanKeluar"
+                            class="w-full text-sm p-2 bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-700 rounded-sm text-gray-900 dark:text-gray-100 focus:border-amber-500 focus:outline-none font-bold">
+                            @foreach ($opsiTujuan as $key => $label)
+                                <option value="{{ $key }}">{{ $label }}</option>
+                            @endforeach
+                        </select>
                     </div>
 
                     {{-- 4. KETERANGAN --}}
@@ -290,5 +329,7 @@
             </div>
         </div>
     @endif
+ 
+    @include('filament.pages.partials.modal-tolak')
 
 </x-filament-panels::page>

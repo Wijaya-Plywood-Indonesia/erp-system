@@ -241,6 +241,7 @@ class ProduksiInflowService
         });
 
         return [
+            'ids_penggunaan_lahan' => $batch['ids_penggunaan_lahan'] ?? [],
             'batch_info' => $batchInfo,
             'inflow' => $dataMasuk,
             'outflow' => $batch['outflow_detail'],
@@ -271,6 +272,57 @@ class ProduksiInflowService
                 'total_ongkos_pkj' => (float) $batch['grand_total_outflow_ongkos_pkj'],
                 'total_penyusutan' => (float) $batch['grand_total_outflow_penyusutan'],
             ],
+        ];
+    }
+
+    /**
+     * HPP VENEER BASAH — komponen per m³ veneer untuk SATU batch lahan.
+     *
+     * Memakai rumus yang SAMA PERSIS dengan kolom Persentase Kayu
+     * (buildLaporanItemForClosure), jadi angkanya otomatis sama:
+     *
+     *   hpp_kayu           = total poin kayu batch   ÷ m³ veneer   (= "Veneer")
+     *   hpp_pekerja        = total ongkos pekerja    ÷ m³ veneer
+     *   hpp_mesin          = total penyusutan mesin  ÷ m³ veneer
+     *   hpp_bahan_penolong = total bahan penolong    ÷ m³ veneer
+     *   hpp_total          = jumlah keempatnya       (= "Veneer+Ongkos+Susut+Bahan")
+     *
+     * @param  PenggunaanLahanRotary  $closure  baris lahan yang sudah "Selesai" (jumlah_batang > 0)
+     */
+    public function hitungKomponenHppBatch(PenggunaanLahanRotary $closure): array
+    {
+        $closure->loadMissing(['lahan:id,nama_lahan,kode_lahan', 'jenisKayu:id,nama_kayu']);
+
+        $item = $this->buildLaporanItemForClosure($closure);
+        $s = $item['summary'];
+
+        $m3Veneer = (float) $s['total_keluar_m3'];
+        $poin = (float) $s['total_poin_raw'];
+        $upah = (float) $s['total_ongkos_pkj'];
+        $susut = (float) $s['total_penyusutan'];
+        $bahan = (float) $s['total_bahan_penolong'];
+
+        $perM3 = fn (float $nominal) => $m3Veneer > 0 ? round($nominal / $m3Veneer, 2) : 0.0;
+
+        $kayu = $perM3($poin);
+        $pekerja = $perM3($upah);
+        $mesin = $perM3($susut);
+        $bahanM3 = $perM3($bahan);
+
+        return [
+            'id_closure' => $closure->id,
+            'id_lahan' => $closure->id_lahan,
+            'ids_penggunaan_lahan' => $item['ids_penggunaan_lahan'],
+            'm3_kayu' => (float) $s['total_masuk_m3'],
+            'm3_veneer' => $m3Veneer,
+            'total_poin' => $poin,
+            'hpp_kayu' => $kayu,
+            'hpp_pekerja' => $pekerja,
+            'hpp_mesin' => $mesin,
+            'hpp_bahan_penolong' => $bahanM3,
+            'hpp_total' => round($kayu + $pekerja + $mesin + $bahanM3, 2),
+            // false = batch ini tidak punya inflow kayu (poin 0) → angkanya tidak bisa dipercaya
+            'punya_poin' => $poin > 0,
         ];
     }
 
@@ -644,6 +696,7 @@ class ProduksiInflowService
 
         return [
             'id_lahan' => $first->id_lahan,
+            'ids_penggunaan_lahan' => $idsPenggunaanLahan,
             'tgl_buka_raw' => $first->created_at,
             'status' => $last ? 'SELESAI' : 'PROSES',
             'grand_total_outflow_m3' => collect($groupedOutflow)->sum('total_kubikasi'),

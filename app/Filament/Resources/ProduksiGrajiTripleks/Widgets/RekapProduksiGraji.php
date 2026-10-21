@@ -6,6 +6,7 @@ use App\Models\ProduksiGrajitriplek;
 use App\Models\HasilGrajiTriplek;
 use App\Models\PegawaiGrajiTriplek;
 use App\Services\ProductionAccessService;
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
@@ -17,7 +18,7 @@ use Illuminate\Support\Facades\DB;
 
 class RekapProduksiGraji extends Widget implements HasSchemas
 {
-    use InteractsWithSchemas;
+    use InteractsWithSchemas, HasWidgetShield;
 
     protected string $view = 'filament.resources.produksi-graji-tripleks.widgets.rekap-produksi-graji';
     protected int|string|array $columnSpan = 'full';

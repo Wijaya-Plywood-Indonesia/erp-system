@@ -234,20 +234,34 @@ class DetailHasilsRelationManager extends RelationManager
     </div>
 HTML);
                     })
-                    ->visible(fn (DetailHasil $record) => ! $record->serahTerimaVeneerKering)
+                    ->visible(fn (DetailHasil $record) => ! $record->serahTerimaVeneerKering || $record->serahTerimaVeneerKering->isDitolak())
                     ->action(function (DetailHasil $record, array $data) {
                         try {
                             DB::transaction(function () use ($record, $data) {
-                                SerahTerimaVeneerKering::create([
-                                    'id_detail_hasil' => $record->id,
-                                    'id_detail_bongkar_kedi' => null,
-                                    'tipe_sumber' => 'dryer',
-                                    'id_produksi_repair' => null,
-                                    'diserahkan_oleh' => Auth::user()->name,
-                                    'diterima_oleh' => '-',
-                                    'jenis_terima' => $data['jenis_terima'],
-                                    'status' => 'Serah Veneer',
-                                ]);
+                                if ($record->serahTerimaVeneerKering) {
+                                    $record->serahTerimaVeneerKering->update([
+                                        'id_produksi_repair' => null,
+                                        'diserahkan_oleh' => Auth::user()->name,
+                                        'diterima_oleh' => '-',
+                                        'jenis_terima' => $data['jenis_terima'],
+                                        'status' => 'Serah Veneer',
+                                        'ditolak_oleh' => null,
+                                        'alasan_tolak' => null,
+                                        'ditolak_at' => null,
+                                        'created_at' => now(),
+                                    ]);
+                                } else {
+                                    SerahTerimaVeneerKering::create([
+                                        'id_detail_hasil' => $record->id,
+                                        'id_detail_bongkar_kedi' => null,
+                                        'tipe_sumber' => 'dryer',
+                                        'id_produksi_repair' => null,
+                                        'diserahkan_oleh' => Auth::user()->name,
+                                        'diterima_oleh' => '-',
+                                        'jenis_terima' => $data['jenis_terima'],
+                                        'status' => 'Serah Veneer',
+                                    ]);
+                                }
                             });
 
                             $record->unsetRelation('serahTerimaVeneerKering');
@@ -271,15 +285,21 @@ HTML);
                     ->hidden(function ($record) {
                         $serahTerima = $record->serahTerimaVeneerKering;
                         $sudahDiterima = $serahTerima && $serahTerima->diterima_oleh !== '-';
+                        $sedangMenunggu = $serahTerima && $serahTerima->diterima_oleh === '-' && ! $serahTerima->isDitolak();
 
-                        return $sudahDiterima || $this->terkunci();
+                        return $sudahDiterima || $sedangMenunggu || $this->terkunci();
                     }),
 
                 DeleteAction::make()
                     ->hidden(
-                        fn ($record) => $record->serahTerimaVeneerKering
+                        fn ($record) => ($record->serahTerimaVeneerKering && ! $record->serahTerimaVeneerKering->isDitolak())
                             || $this->terkunci()
-                    ),
+                    )
+                    ->before(function (DetailHasil $record) {
+                        if ($record->serahTerimaVeneerKering) {
+                            $record->serahTerimaVeneerKering->delete();
+                        }
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

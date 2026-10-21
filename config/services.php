@@ -41,7 +41,12 @@ return [
     // Testing API Akuntansi 
     'akuntansi' => [
         'url' => env('AKUNTANSI_URL'),
-        'token' => env('AKUNTANSI_API_TOKEN')
+        'token' => env('AKUNTANSI_API_TOKEN'),
+        // API jurnal produksi (POST /api/jurnal/produksi). Harus SAMA dengan
+        // ERP_API_KEY di .env web akuntansi.
+        'key' => env('AKUNTANSI_API_KEY'),
+        // set false hanya bila akuntansi memakai HTTPS self-signed di jaringan lokal
+        'verify_ssl' => env('AKUNTANSI_VERIFY_SSL', true),
     ],
 
     // 'akuntansi' => [

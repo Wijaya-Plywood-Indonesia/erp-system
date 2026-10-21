@@ -24,15 +24,17 @@ class SerahTerimaVeneerKering extends Model
         'jenis_terima',
         'tujuan',
         'status',
+        'ditolak_oleh',
+        'alasan_tolak',
+        'ditolak_at',
     ];
 
     protected $casts = [
         'tipe_sumber' => 'string',
+        'ditolak_at' => 'datetime',
     ];
 
-    // ─────────────────────────────────────────────
-    // Relations
-    // ─────────────────────────────────────────────
+    // ───────────── Relations ─────────────
 
     public function detailHasil(): BelongsTo
     {
@@ -44,27 +46,13 @@ class SerahTerimaVeneerKering extends Model
         return $this->belongsTo(DetailBongkarKedi::class, 'id_detail_bongkar_kedi');
     }
 
-    /**
-     * Sumber dari Produksi Joint (tabel: hasil_joint).
-     *
-     * ⚠️ PENTING: kolom id_hasil_joint SELALU berisi hasil_joint.id —
-     * BUKAN hasil_sanding_joint.id. Sanding Joint tidak pernah melewati
-     * alur serah terima ini. Sebelumnya relasi ini salah menunjuk ke
-     * HasilSandingJoint sehingga id 147 dari hasil_joint dibaca sebagai
-     * baris 147 di hasil_sanding_joint → jenis kayu & jumlah lembar acak.
-     */
+    /** Sumber Produksi Joint (tabel: hasil_joint). */
     public function hasilJoint(): BelongsTo
     {
         return $this->belongsTo(HasilJoint::class, 'id_hasil_joint');
     }
 
-    /**
-     * @deprecated Nama lama peninggalan era "Sanding Joint" dan targetnya salah.
-     *             Sudah diarahkan ulang ke hasilJoint() supaya kode/Blade lama
-     *             tidak error dan langsung menampilkan data yang benar.
-     *             Hapus method ini setelah `grep -rn "hasilSandingJoint" app/ resources/`
-     *             bersih.
-     */
+    /** @deprecated Alias lama, hapus setelah grep "hasilSandingJoint" bersih. */
     public function hasilSandingJoint(): BelongsTo
     {
         return $this->hasilJoint();
@@ -90,16 +78,24 @@ class SerahTerimaVeneerKering extends Model
         return $this->hasMany(ModalRepair::class, 'id_serah_terima_veneer_kering');
     }
 
-    // ─────────────────────────────────────────────
-    // Helpers
-    // ─────────────────────────────────────────────
+    public function modalJoints(): HasMany
+    {
+        return $this->hasMany(ModalJoint::class, 'id_serah_terima_veneer_kering');
+    }
+
+    // ───────────── Helpers ─────────────
 
     public function isMenunggu(): bool
     {
         return $this->diterima_oleh === '-';
     }
 
-    public function getSumberAttribute(): DetailHasil|DetailBongkarKedi|HasilJoint|HasilSandingJoint|VeneerKeringMutasiKeluarPalet|VeneerJadiMutasiKeluarPalet|null
+    public function isDitolak(): bool
+    {
+        return $this->ditolak_oleh !== null;
+    }
+
+    public function getSumberAttribute(): DetailHasil|DetailBongkarKedi|HasilJoint|VeneerKeringMutasiKeluarPalet|VeneerJadiMutasiKeluarPalet|null
     {
         return match ($this->tipe_sumber) {
             'dryer' => $this->detailHasil,
@@ -116,7 +112,7 @@ class SerahTerimaVeneerKering extends Model
         return match ($this->tipe_sumber) {
             'dryer' => 'Press Dryer',
             'kedi' => 'Kedi',
-            'joint' => 'Sanding Joint',
+            'joint' => 'Joint',
             'gudang' => 'Gudang Kering',
             'gudang_jadi' => 'Gudang Jadi',
             default => '-',
@@ -132,17 +128,11 @@ class SerahTerimaVeneerKering extends Model
         };
     }
 
-    /**
-     * ✅ FIX: qty asli sekarang di-resolve EKSPLISIT per tipe_sumber,
-     * bukan lagi rantai `??` yang bisa berhenti di kolom `0`/'' sebelum
-     * mencapai `jumlah_lembar` (kasus gudang_jadi).
-     */
     public function getQtyAsliAttribute(): float
     {
         return (float) match ($this->tipe_sumber) {
             'dryer' => $this->sumber?->isi ?? 0,
-            'kedi',
-            'joint' => $this->sumber?->jumlah ?? 0,
+            'kedi', 'joint' => $this->sumber?->jumlah ?? 0,
             'gudang' => $this->sumber?->qty ?? 0,
             'gudang_jadi' => $this->sumber?->jumlah_lembar ?? 0,
             default => 0,
@@ -151,15 +141,20 @@ class SerahTerimaVeneerKering extends Model
 
     public function getTotalDigunakanAttribute(): float
     {
-        $totalRepair = (float) $this->modalRepairs()->sum('jumlah');
-        $totalJoint = (float) $this->modalJoints()->sum('jumlah');
-
-        return $totalRepair + $totalJoint;
+        return (float) $this->modalRepairs()->sum('jumlah')
+            + (float) $this->modalJoints()->sum('jumlah');
     }
 
     public function getSisaAttribute(): float
     {
         return $this->qty_asli - $this->total_digunakan;
+    }
+
+    protected static function formatDimensi($p, $l, $t): string
+    {
+        return collect([$p, $l, $t])
+            ->map(fn ($v) => rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.'))
+            ->implode('x');
     }
 
     public function getTampilanAttribute(): array
@@ -168,9 +163,7 @@ class SerahTerimaVeneerKering extends Model
             'dryer', 'kedi', 'joint' => [
                 'no_palet' => $this->sumber?->no_palet ?? '-',
                 'dimensi' => $this->sumber?->ukuran
-                    ? collect([$this->sumber->ukuran->panjang, $this->sumber->ukuran->lebar, $this->sumber->ukuran->tebal])
-                        ->map(fn ($v) => rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.'))
-                        ->implode('x')
+                    ? self::formatDimensi($this->sumber->ukuran->panjang, $this->sumber->ukuran->lebar, $this->sumber->ukuran->tebal)
                     : '-',
                 'jenis_kayu' => $this->sumber?->jenisKayu?->nama_kayu ?? '-',
                 'kw' => $this->sumber?->kw ?? '-',
@@ -178,12 +171,11 @@ class SerahTerimaVeneerKering extends Model
             'gudang' => [
                 'no_palet' => $this->mutasiKeluarPalet?->no_palet ?? '-',
                 'dimensi' => $this->mutasiKeluarPalet?->mutasiKeluar?->ukuran
-                    ? collect([
+                    ? self::formatDimensi(
                         $this->mutasiKeluarPalet->mutasiKeluar->ukuran->panjang,
                         $this->mutasiKeluarPalet->mutasiKeluar->ukuran->lebar,
-                        $this->mutasiKeluarPalet->mutasiKeluar->ukuran->tebal,
-                    ])->map(fn ($v) => rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.'))
-                        ->implode('x')
+                        $this->mutasiKeluarPalet->mutasiKeluar->ukuran->tebal
+                    )
                     : '-',
                 'jenis_kayu' => $this->mutasiKeluarPalet?->mutasiKeluar?->jenisKayu?->nama_kayu ?? '-',
                 'kw' => $this->mutasiKeluarPalet?->mutasiKeluar?->kw ?? '-',
@@ -193,12 +185,11 @@ class SerahTerimaVeneerKering extends Model
                     ? 'jd-'.$this->mutasiKeluarPaletJadi->nomor_palet
                     : '-',
                 'dimensi' => $this->mutasiKeluarPaletJadi?->mutasiKeluar
-                    ? collect([
+                    ? self::formatDimensi(
                         $this->mutasiKeluarPaletJadi->mutasiKeluar->panjang,
                         $this->mutasiKeluarPaletJadi->mutasiKeluar->lebar,
-                        $this->mutasiKeluarPaletJadi->mutasiKeluar->tebal,
-                    ])->map(fn ($v) => rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.'))
-                        ->implode('x')
+                        $this->mutasiKeluarPaletJadi->mutasiKeluar->tebal
+                    )
                     : '-',
                 'jenis_kayu' => $this->mutasiKeluarPaletJadi?->mutasiKeluar?->jenisKayu?->nama_kayu ?? '-',
                 'kw' => $this->mutasiKeluarPaletJadi?->mutasiKeluar?->kw_grade ?? '-',
@@ -218,15 +209,8 @@ class SerahTerimaVeneerKering extends Model
         $t = round((float) $tebal, 2);
 
         return Ukuran::all()
-            ->first(function ($u) use ($p, $l, $t) {
-                return round((float) $u->panjang, 2) === $p
-                    && round((float) $u->lebar, 2) === $l
-                    && round((float) $u->tebal, 2) === $t;
-            })?->id;
-    }
-
-    public function modalJoints(): HasMany
-    {
-        return $this->hasMany(ModalJoint::class, 'id_serah_terima_veneer_kering');
+            ->first(fn ($u) => round((float) $u->panjang, 2) === $p
+                && round((float) $u->lebar, 2) === $l
+                && round((float) $u->tebal, 2) === $t)?->id;
     }
 }

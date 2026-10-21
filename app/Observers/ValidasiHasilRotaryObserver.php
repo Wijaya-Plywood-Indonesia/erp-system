@@ -67,8 +67,13 @@ class ValidasiHasilRotaryObserver
                 'detailKayuPecah.penggunaanLahan',
             ])->whereDate('tgl_produksi', $tanggal)->get();
 
-            // ── Hitung HPP veneer basah langsung (tidak bergantung jurnal) ──────
-            $service->hitungHppVeneerBasah($produksiList, $tanggal);
+            // HPP veneer basah:
+            //  - saklar MATI  → alur LAMA (dihitung di sini saat validasi, bergantung validasi)
+            //  - saklar NYALA → alur BARU: diisi saat palet diterima gudang & difinalkan saat
+            //    "Selesaikan Lahan" lewat HppVeneerBasahIsiService (sumber: Persentase Kayu).
+            if (! config('hpp.veneer_basah_baru')) {
+                $service->hitungHppVeneerBasah($produksiList, $tanggal);
+            }
 
             // ── Kirim ke web akuntansi ────────────────────────────────────────
             $this->sendToAkuntansi($payload, $tanggal, $produksiList, $service);

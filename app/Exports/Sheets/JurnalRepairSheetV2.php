@@ -23,55 +23,28 @@ use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 // ============================================================
-// FILE INI TIDAK MENGUBAH JurnalSheet (di LaporanRepairExport.php)
-// SAMA SEKALI. Ini COPY dengan:
-// - Nama class: JurnalRepairSheetV2
-// - Judul sheet baru: 'jurnal repair v2'
+// COPY dari JurnalSheet (LaporanRepairExport.php) dengan:
+// - Nama class: JurnalRepairSheetV2, judul sheet 'jurnal repair v2'
 // - Akun Hutang Gaji: 2231.00 -> 2195.1
 // - Akun hpp/selisih: 6111.00 "hpp triplek" -> 5069.2 "Selisih harga patok produksi"
-// - Akun veneer (jadi/kering, face-back/core, ppc) di-alias dinamis ke
-//   COA baru lewat CoaAliasService::aliasAkunBaru(), berdasarkan
-//   nama_sub_anak_akun dari DB (bukan hardcode statis tanpa hubungan ke
-//   data referensi).
-// - Akun bahan penolong SEKARANG DI-ALIAS ke COA baru lewat
-//   CoaAliasService::extractAkunPenolong() (dicocokkan dari nama bahan
-//   asli), sama seperti LaporanProduksiHotPressJurnalSheetV2.
-// - Kolom "No Akun" (D) TIDAK diformat numerik. Kalau diformat numerik
-//   (mis. '0.00'), Excel akan memaksa semua kode akun tampil 2 digit di
-//   belakang titik dan pakai koma sebagai pemisah desimal (locale ID),
-//   sehingga "1402.5" jadi "1402,50". Kolom D sekarang diformat TEKS,
-//   dan nilainya dipaksa jadi string eksplisit lewat registerEvents()
-//   supaya titik tetap titik dan jumlah digit di belakang titik apa
-//   adanya (1 digit / 2 digit, tidak dipaksa seragam).
-// - NEW: Kolom "ID Barang" (O) sekarang diisi dengan hasil resolve dari
-//   API eksternal /api/barang/resolve-veneer, sama seperti pola yang
-//   dipakai JurnalSheetV2 (dryer). Setiap baris veneer (jadi/kering,
-//   baik dari STEP C maupun STEP 2 ukuran manual) memanggil resolver
-//   ini. Hasil di-cache per kombinasi parameter (jenis_veneer, bagian,
-//   jenis_kayu, ketebalan, ukuran, kw) supaya tidak memanggil API
-//   berkali-kali untuk kombinasi yang identik dalam satu laporan.
-//   Baris bahan penolong & gaji tidak relevan dengan ID Barang veneer,
-//   jadi tetap dibiarkan null.
+// - Akun veneer (jadi/kering) SEKARANG dipetakan langsung dari COA baru
+//   lewat CoaAliasService::extractAkunVeneerRepair() berdasarkan tipe
+//   (jadi/kering) + tebal (face-back / core). TIDAK lagi membaca kode dari
+//   sub_anak_akuns, sehingga hasilnya sama di semua web (kayu / wahana).
+//   Harga tetap diambil dari referensi_harga_produksi.
+// - Akun bahan penolong tetap lewat CoaAliasService::extractAkunPenolong().
+// - Kolom "ID Barang" (O) diisi dari API /api/barang/resolve-veneer
+//   (di-cache per kombinasi parameter).
 //
-// NOTE REFACTOR: Logic ALIAS AKUN COA BARU (aliasAkunBaru,
-// extractAkunVeneer, extractAkunPenolong, getAkunHpp, getAkunGaji) sudah
-// DIPINDAH ke App\Services\CoaAliasService supaya bisa dipakai bersama
-// oleh LaporanProduksiHotPressJurnalSheetV2 (hotpress) & JurnalSheetV2
-// (dryer). Sheet ini sekarang hanya memanggil service tsb lewat
-// $this->coaAlias.
-//
-// Cara pakai: daftarkan class ini di sheets() milik LaporanRepairExport
-// TANPA menghapus sheet lama, misalnya:
-//
-//     public function sheets(): array
-//     {
-//         return [
-//             new LaporanRepairDetailSheet($this->detailData, $this->tanggal),
-//             new LaporanRepairSummarySheet($rawCollection),
-//             new JurnalSheet($rawCollection),          // lama, tidak diubah
-//             new JurnalRepairSheetV2($rawCollection),  // baru
-//         ];
-//     }
+// REVISI (samakan dengan JurnalSheet v1):
+// - Baris AF (afalan) sekarang memakai akun yang SAMA di sisi debit (jadi)
+//   dan kredit (kering), persis seperti v1 yang memakai satu referensi
+//   "veneer afalan" untuk kedua sisi. Sebelumnya AF dipetakan lewat
+//   extractAkunVeneerRepair() berdasarkan tebal saja, sehingga debit masuk
+//   1402.8 (Jadi Core) dan kredit masuk 1402.6 (Kering Core) -> saldo
+//   antar akun bergeser walau total debit/kredit sama.
+//   Lihat akunVeneerRepair().
+// - Dibersihkan: elemen `null` nyasar di array $hasilPerGroup/$modalPerGroup.
 // ============================================================
 class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths, WithEvents, WithStyles, WithTitle
 {
@@ -173,15 +146,8 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
 
     /**
      * Paksa kolom "No Akun" (D) disimpan sebagai STRING eksplisit di level
-     * cell, bukan cuma diformat tampilan sebagai teks. Ini perlu karena
-     * PhpSpreadsheet otomatis mendeteksi nilai seperti "1402.5" sebagai
-     * angka (float) saat FromArray menulisnya. Kalau dibiarkan jadi angka,
-     * Excel akan menampilkannya memakai koma sebagai pemisah desimal pada
-     * locale Indonesia (mis. "1402,50"), walaupun format cell-nya "Text".
-     * Dengan setCellValueExplicit(..., TYPE_STRING), nilainya benar-benar
-     * jadi teks "1402.5" apa adanya, titik tidak pernah berubah jadi koma,
-     * dan jumlah digit di belakang titik tidak dipaksa seragam (1 digit
-     * atau 2 digit sama-sama tampil apa adanya).
+     * cell, bukan cuma diformat tampilan sebagai teks, supaya titik tidak
+     * berubah jadi koma pada locale Indonesia.
      */
     public function registerEvents(): array
     {
@@ -291,6 +257,39 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
         );
     }
 
+    /**
+     * Akun + harga veneer untuk repair.
+     *
+     * - Reguler : lewat CoaAliasService::extractAkunVeneerRepair()
+     *             (tipe jadi/kering + tebal), seperti sebelumnya.
+     * - AF      : sama seperti v1. Jadi (debit) dan kering (kredit) memakai
+     *             referensi "veneer afalan" yang sama, jadi akunnya HARUS
+     *             sama di kedua sisi (nettonya nol). Akun diambil dari
+     *             referensi lewat CoaAliasService::extractAkunVeneer();
+     *             kalau tidak dikenali, fallback ke 1402.18
+     *             Persediaan Veneer Jadi PPC (sama dengan fallback
+     *             di JurnalSheetV2 dryer).
+     *
+     * @return array{0: string, 1: string, 2: float} [namaAkun, noAkun, harga]
+     */
+    private function akunVeneerRepair(?ReferensiHargaProduksi $ref, string $tipe, float $tebal, bool $isAf): array
+    {
+        if (! $isAf) {
+            return $this->coaAlias->extractAkunVeneerRepair($ref, $tipe, $tebal);
+        }
+
+        $harga = (float) ($ref->harga ?? 0.0);
+
+        if ($ref) {
+            [$namaAkunBaru, $noAkunBaru] = $this->coaAlias->extractAkunVeneer($ref);
+            if ($namaAkunBaru !== 'UNKNOWN') {
+                return [$namaAkunBaru, $noAkunBaru, $harga];
+            }
+        }
+
+        return ['Persediaan Veneer Jadi PPC', '1402.18', $harga];
+    }
+
     private function fetchReferensiBahan(string $namaBahan): ?ReferensiHargaProduksi
     {
         $key = strtolower(trim($namaBahan));
@@ -318,11 +317,9 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
 
     /**
      * Resolve id_barang dari API eksternal /api/barang/resolve-veneer,
-     * dengan cache per kombinasi parameter supaya tidak memanggil API
-     * berkali-kali untuk kombinasi ukuran/jenis/kw yang identik dalam
-     * satu laporan. Mengembalikan null (bukan melempar exception) kalau
-     * API gagal/timeout, supaya proses export tidak gagal total hanya
-     * karena resolver down.
+     * dengan cache per kombinasi parameter. Mengembalikan null (bukan
+     * melempar exception) kalau API gagal/timeout, supaya proses export
+     * tidak gagal total hanya karena resolver down.
      *
      * @param  string  $jenisVeneer  'Veneer Jadi' atau 'Veneer Kering'
      */
@@ -462,7 +459,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                     'kwRaw' => $kwRaw,
                     'isAf' => $isAf,
                     'totalBanyak' => $totalBanyak,
-                    'totalM3' => $totalM3, null,
+                    'totalM3' => $totalM3,
                 ];
             }
 
@@ -510,7 +507,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                     'kwRaw' => $kwRaw,
                     'isAf' => $isAf,
                     'totalBanyak' => $totalBanyak,
-                    'totalM3' => $totalM3, null,
+                    'totalM3' => $totalM3,
                 ];
             }
 
@@ -543,10 +540,12 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                 $refJadi = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'jadi');
                 $refKering = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'kering');
 
-                [$namaAkunJadi,   $noAkunJadi,   $hargaJadi] = $this->coaAlias->extractAkunVeneer($refJadi);
-                [$namaAkunKering, $noAkunKering, $hargaKering] = $this->coaAlias->extractAkunVeneer($refKering);
+                // Akun dari COA baru (tipe + tebal); harga dari referensi.
+                // AF: akun jadi & kering SAMA (sama seperti v1).
+                [$namaAkunJadi,   $noAkunJadi,   $hargaJadi] = $this->akunVeneerRepair($refJadi, 'jadi', $tebal, $isAf);
+                [$namaAkunKering, $noAkunKering, $hargaKering] = $this->akunVeneerRepair($refKering, 'kering', $tebal, $isAf);
 
-                // NEW: resolve id_barang untuk sisi "jadi" (debit) dan
+                // Resolve id_barang untuk sisi "jadi" (debit) dan
                 // "kering" (kredit) — di-cache per kombinasi parameter.
                 $idBarangJadi = $this->resolveIdBarang('Veneer Jadi', $isAf, $tebal, $jnsNorm, $panjang, $lebar, $kwRaw);
                 $idBarangKering = $this->resolveIdBarang('Veneer Kering', $isAf, $tebal, $jnsNorm, $panjang, $lebar, $kwRaw);
@@ -639,9 +638,9 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                 $m3 = ($panjang * $lebar * $tebal * $banyak) / 10000000;
 
                 $refJadi = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'jadi');
-                [$namaAkun, $noAkun, $harga] = $this->coaAlias->extractAkunVeneer($refJadi);
+                [$namaAkun, $noAkun, $harga] = $this->akunVeneerRepair($refJadi, 'jadi', $tebal, $isAf);
 
-                // NEW: resolve id_barang untuk baris hasil manual (selalu "jadi")
+                // Resolve id_barang untuk baris hasil manual (selalu "jadi")
                 $idBarang = $this->resolveIdBarang('Veneer Jadi', $isAf, $tebal, $jnsNorm, $panjang, $lebar, $kwRaw);
 
                 $keterangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw).(! $refJadi ? ' [UNKNOWN]' : '');
@@ -651,11 +650,9 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
             }
 
             // ============================================================
-            // STEP 3: KREDIT BAHAN PENOLONG — SEKARANG DI-ALIAS ke COA
-            // baru lewat CoaAliasService::extractAkunPenolong() (dicocokkan
-            // dari nama bahan asli: lem/hardner/staples/pewarna/tepung/
-            // solasi coklat/solasi putih). ID Barang tidak relevan untuk
-            // bahan penolong, jadi dibiarkan null.
+            // STEP 3: KREDIT BAHAN PENOLONG — lewat
+            // CoaAliasService::extractAkunPenolong(). ID Barang tidak
+            // relevan untuk bahan penolong, jadi dibiarkan null.
             // ============================================================
             if (! empty($produksi->bahanPenolongRepair)) {
                 foreach ($produksi->bahanPenolongRepair as $bahan) {

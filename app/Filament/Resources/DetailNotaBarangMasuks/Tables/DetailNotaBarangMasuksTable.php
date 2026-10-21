@@ -373,7 +373,7 @@ class DetailNotaBarangMasuksTable
     } 
  
     /** 
-     * Form Log Core untuk NOTA MASUK — jenis kayu dari master, panjang berupa input bebas. 
+     * Form Log Core untuk NOTA MASUK — jenis kayu dari master, panjang pilihan tetap 130 / 260 cm (tidak tergantung stok). 
      */ 
     protected static function logCoreFormSchema(): array 
     { 
@@ -387,23 +387,11 @@ class DetailNotaBarangMasuksTable
  
             Select::make('panjang') 
                 ->label('Panjang') 
-                ->options(function (callable $get) { 
-                    $idJenisKayu = $get('id_jenis_kayu'); 
-                    if (! $idJenisKayu) { 
-                        return []; 
-                    } 
- 
-                    return StokLogCore::where('id_jenis_kayu', $idJenisKayu) 
-                        ->where('stok_qty', '>', 0) 
-                        ->get() 
-                        ->mapWithKeys(fn($s) => [ 
-                            (string) $s->panjang => $s->panjang . ' cm (' 
-                                . static::formatQty($s->stok_qty) . ' batang)', 
-                        ]) 
-                        ->all(); 
-                }) 
-                ->placeholder('Pilih jenis kayu dulu') 
-                ->searchable() 
+                ->options([ 
+                    '130' => '130 cm', 
+                    '260' => '260 cm', 
+                ]) 
+                ->placeholder('Pilih panjang') 
                 ->required() 
                 ->live(), 
  

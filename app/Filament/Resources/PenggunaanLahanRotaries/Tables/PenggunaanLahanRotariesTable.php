@@ -235,8 +235,9 @@ class PenggunaanLahanRotariesTable
                                 $catatanUser
                             );
 
+                            // Reset SEMUA kombinasi jenis_kayu + panjang di lahan ini, tanpa peduli jenis kayu.
+                            // Satu lahan selalu hanya satu jenis kayu, tapi ini memastikan tidak ada sisa stok.
                             $summariesBerstok = HppAverageSummarie::where('id_lahan', $idLahan)
-                                ->where('id_jenis_kayu', $idJenisKayu)
                                 ->where('stok_batang', '>', 0)
                                 ->get();
 
@@ -248,7 +249,7 @@ class PenggunaanLahanRotariesTable
 
                                 $log = HppAverageLog::create([
                                     'id_lahan'             => $idLahan,
-                                    'id_jenis_kayu'        => $idJenisKayu,
+                                    'id_jenis_kayu'        => $item->id_jenis_kayu, // pakai dari item, bukan dari record penggunaan
                                     'panjang'              => $item->panjang,
                                     'tanggal'              => $tglProduksi,
                                     'tipe_transaksi'       => 'keluar',
@@ -304,6 +305,19 @@ class PenggunaanLahanRotariesTable
                                     'updated_at'      => now(),
                                 ]);
                         });
+
+                        // HPP veneer basah: finalkan semua palet milik batch lahan ini.
+                        // Kegagalan di sini tidak boleh membatalkan penyelesaian lahan.
+                        if (config('hpp.veneer_basah_baru')) {
+                            try {
+                                app(\App\Services\HppVeneerBasahIsiService::class)
+                                    ->finalisasiBatchLahan($record->fresh());
+                            } catch (\Throwable $e) {
+                                \Illuminate\Support\Facades\Log::error(
+                                    '[VeneerBasah] Gagal finalisasi HPP lahan #'.$record->id.': '.$e->getMessage()
+                                );
+                            }
+                        }
 
                         Notification::make()
                             ->title('✅ Lahan Berhasil Diselesaikan')
