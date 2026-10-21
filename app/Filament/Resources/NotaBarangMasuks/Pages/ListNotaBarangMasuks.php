@@ -2,10 +2,11 @@
 
 namespace App\Filament\Resources\NotaBarangMasuks\Pages;
 
+use App\Filament\Actions\ExportRekapAction;
 use App\Filament\Resources\NotaBarangMasuks\NotaBarangMasukResource;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
-use Filament\Actions\Action;
 
 class ListNotaBarangMasuks extends ListRecords
 {
@@ -14,12 +15,11 @@ class ListNotaBarangMasuks extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('rekap_nota_bm')
+            Action::make('rekap')
                 ->label('Rekap Nota Barang Masuk')
-                ->icon('heroicon-o-document-text')
-                ->color('info')
-                ->url(route('nota-bm.rekap'))
-                ->openUrlInNewTab(),
+                ->url('/nota-barang-masuk/rekap'),
+
+            ExportRekapAction::make('bm'),
 
             CreateAction::make()
                 ->label('Buat Nota BM'),

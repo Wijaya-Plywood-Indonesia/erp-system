@@ -6,11 +6,14 @@ use Filament\Pages\Page;
 use App\Models\Target;
 use Filament\Actions\Action;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 use Livewire\Attributes\Url;
 
 class PantauTarget extends Page
 {
+    use HasPageShield;
+
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
     protected static string|UnitEnum|null $navigationGroup = 'Master';
     protected static ?string $title = 'Pantau Target';
