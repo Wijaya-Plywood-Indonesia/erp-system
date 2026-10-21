@@ -63,6 +63,12 @@ class HasilSandingsTable
                 'barangSetengahJadi.grade.kategoriBarang',
                 'barangSetengahJadi.ukuran',
                 'barangSetengahJadi.jenisBarang',
+                'serahTerimaHp.triplekMutasiKeluar.jenisKayu',
+                'serahTerimaHp.platformMthMutasiKeluar.jenisKayu',
+                'serahTerimaHp.triplekMthMutasiKeluar.jenisKayu',
+                'modalSanding.barangSetengahJadi.grade.kategoriBarang',
+                'modalSanding.barangSetengahJadi.ukuran',
+                'modalSanding.barangSetengahJadi.jenisBarang',
                 'modalSandings.barangSetengahJadi.grade.kategoriBarang',
                 'modalSandings.barangSetengahJadi.ukuran',
                 'modalSandings.barangSetengahJadi.jenisBarang',
@@ -85,7 +91,44 @@ class HasilSandingsTable
                             return "{$kategori} — {$ukuran} - {$jenis} - {$grade}";
                         }
 
-                        // 2. Jika null, ambil dari ModalSanding (via matching no_palet & id_produksi_sanding)
+                        // 2. Cek jika dari serahTerimaHp di record ini langsung
+                        $serah = $record->serahTerimaHp;
+                        if ($serah) {
+                            if ($serah->id_triplek_mutasi_keluar !== null) {
+                                $m = $serah->triplekMutasiKeluar;
+                                if ($m) {
+                                    $ukuran = ($m->panjang + 0) . ' x ' . ($m->lebar + 0) . ' x ' . ($m->tebal + 0);
+                                    return "Plywood — {$ukuran} - "
+                                        . ($m->jenisKayu?->nama_kayu ?? '-') . ' - '
+                                        . ($m->kw_grade ?? '-');
+                                }
+                                return 'Triplek Jadi — -';
+                            }
+
+                            if ($serah->id_platform_mth_mutasi_keluar !== null) {
+                                $m = $serah->platformMthMutasiKeluar;
+                                if ($m) {
+                                    $ukuran = ($m->panjang + 0) . ' x ' . ($m->lebar + 0) . ' x ' . ($m->tebal + 0);
+                                    return "Platform — {$ukuran} - "
+                                        . ($m->jenisKayu?->nama_kayu ?? '-') . ' - '
+                                        . ($m->kw_grade ?? '-');
+                                }
+                                return 'Platform Mentah — -';
+                            }
+
+                            if ($serah->id_triplek_mth_mutasi_keluar !== null) {
+                                $m = $serah->triplekMthMutasiKeluar;
+                                if ($m) {
+                                    $ukuran = ($m->panjang + 0) . ' x ' . ($m->lebar + 0) . ' x ' . ($m->tebal + 0);
+                                    return "Plywood — {$ukuran} - "
+                                        . ($m->jenisKayu?->nama_kayu ?? '-') . ' - '
+                                        . ($m->kw_grade ?? '-');
+                                }
+                                return 'Triplek Mentah — -';
+                            }
+                        }
+
+                        // 3. Fallback: ambil dari ModalSanding
                         $modal = $record->modalSanding;
                         if ($modal) {
                             $bsj = $modal->barangSetengahJadi;
@@ -98,7 +141,6 @@ class HasilSandingsTable
                                 return "{$kategori} — {$ukuran} - {$jenis} - {$grade}";
                             }
 
-                            // Cek jika dari serahTerimaHp (Triplek Jadi, Platform Mentah, Triplek Mentah)
                             $serah = $modal->serahTerimaHp;
                             if ($serah) {
                                 if ($serah->id_triplek_mutasi_keluar !== null) {

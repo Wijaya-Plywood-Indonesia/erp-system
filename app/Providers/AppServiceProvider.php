@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\HasilSanding;
 use App\Models\ModalSanding;
 use App\Models\NotaKayu;
 use App\Models\PenggunaanLahanRotary;
@@ -12,6 +13,7 @@ use App\Models\ValidasiNyusup;
 use App\Models\ValidasiPilihPlywood;
 use App\Models\ValidasiPressDryer;
 use App\Models\ValidasiStik;
+use App\Observers\HasilSandingObserver;
 use App\Observers\ModalSandingObserver;
 use App\Observers\NotaKayuObserver;
 use App\Observers\ProductionValidationObserver;
@@ -161,6 +163,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // ⬆⬆⬆  WAJIB: supaya MySQL ikut Asia/Jakarta
+        HasilSanding::observe(HasilSandingObserver::class);
         ModalSanding::observe(ModalSandingObserver::class);
         RencanaKerjaHp::observe(RencanaKerjaHpObserver::class);
         // ValidasiHasilRotary::observe(ValidasiHasilRotaryObserver::class);
