@@ -10,8 +10,7 @@ use App\Models\PengaturanAbsensi;
 use App\Services\DownloadAbsensiUploadService;
 use App\Services\NewRekapAbsensiPegawaiService;
 use App\Services\PotonganGajiService;
-// HasPageShield sengaja dilepas — halaman ini harus tampil untuk semua role.
-// Pembatasan akses ke tab Upload & Riwayat diatur secara manual di blade.
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use App\Services\UploadFingerService;
 use App\Services\ValidasiTargetProduksiService;
 use Filament\Actions\Action;
@@ -37,6 +36,7 @@ use Maatwebsite\Excel\Facades\Excel;
 class NewAbsensi extends Page implements HasForms
 {
     use InteractsWithForms;
+    use HasPageShield;
 
     protected function getHeaderActions(): array
     {
@@ -141,12 +141,7 @@ class NewAbsensi extends Page implements HasForms
         return Width::Full;
     }
 
-    public static function canAccess(): bool
-    {
-        return true;
-    }
-
-    public function canManageAbsensi(): bool
+public function canManageAbsensi(): bool
     {
         $user = auth()->user();
 
