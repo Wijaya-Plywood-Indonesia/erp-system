@@ -53,8 +53,8 @@ class ProduksiSandingResource extends Resource
     {
         return [
             SerahTerimaHpRelationManager::class,
-            HasilSandingRelationManager::class,
             ModalSandingRelationManager::class,
+            HasilSandingRelationManager::class,
             PegawaiSandingRelationManager::class,
             ValidasiSandingRelationManager::class,
             RelationManagers\KendalaSandingRelationManager::class,
