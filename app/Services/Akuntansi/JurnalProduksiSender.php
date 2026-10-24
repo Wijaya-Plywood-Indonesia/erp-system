@@ -4,6 +4,7 @@ namespace App\Services\Akuntansi;
 
 use App\Models\JurnalProduksiKirimLog;
 use App\Models\User;
+use App\Services\CoaAliasService;
 use App\Services\Akuntansi\Produksi\JurnalProduksiRegistry;
 use App\Support\ResolveBarangCache;
 use Illuminate\Http\Client\ConnectionException;
@@ -19,7 +20,10 @@ use Illuminate\Support\Facades\Log;
  */
 class JurnalProduksiSender
 {
-    public function __construct(private readonly JurnalProduksiRegistry $registry) {}
+    public function __construct(
+        private readonly JurnalProduksiRegistry $registry,
+        private readonly CoaAliasService $coaAlias,
+    ) {}
 
     /**
      * Jurnal yang akan dikirim + status terhadap pengiriman sebelumnya.
@@ -47,8 +51,14 @@ class JurnalProduksiSender
             $j['total_debit'] = (float) collect($rows)->where('map', 'd')->sum('total');
             $j['total_kredit'] = (float) collect($rows)->where('map', 'k')->sum('total');
             $j['is_balance'] = abs($j['total_debit'] - $j['total_kredit']) <= 1;
+
+            // Akun yang tidak terdaftar di COA baru: hanya peringatan, TIDAK memblokir pengiriman.
+            $j['akun_tidak_dikenal'] = $this->akunTidakDikenal($rows);
+
+            // Akun tidak valid dari builder (UNKNOWN / akun lama tidak dikenal): MEMBLOKIR pengiriman.
             $j['has_akun_tidak_valid'] = count($akunTidakValid) > 0;
             $j['akun_tidak_valid'] = $akunTidakValid;
+
             $j['hash'] = sha1(json_encode(array_map(function ($r) {
                 unset($r['id_barang']); // id_barang tidak ikut hash (tidak dicari saat tampilan)
 
@@ -77,7 +87,7 @@ class JurnalProduksiSender
     /**
      * Bangun ulang jurnal dari data ERP saat ini, lalu kirim.
      *
-     * @return array{success:bool, message:string, dokumen:array}
+     * @return array{success:bool, message:string, dokumen:array, peringatan:array}
      */
     public function kirim(string $jenis, string $tanggal, ?int $userId = null): array
     {
@@ -183,6 +193,21 @@ class JurnalProduksiSender
             ? "Berhasil: {$ok} jurnal terkirim ke akuntansi."
             : "{$ok} dari {$ada} jurnal terkirim. Lihat rincian di bawah.";
 
+        // Baris persediaan (akun 14xx) bermuatan banyak tetapi tanpa id_barang:
+        // di akuntansi stok dihitung dari jurnal umum per id_barang, jadi stok
+        // barang itu TIDAK akan bertambah/berkurang. Hanya peringatan, tidak memblokir.
+        $tanpaIdBarang = [];
+        foreach ($jurnals as $j) {
+            foreach ($this->barisTanpaIdBarang($j['rows']) as $b) {
+                $tanpaIdBarang[] = $j['no_dokumen'].': '.$b;
+            }
+        }
+        if ($tanpaIdBarang) {
+            Log::warning('[JurnalProduksi] Baris persediaan tanpa id_barang', ['jenis' => $jenis, 'tanggal' => $tanggal, 'baris' => $tanpaIdBarang]);
+            $pesan .= ' PERINGATAN: '.count($tanpaIdBarang).' baris persediaan tanpa id_barang (stok barang tidak akan berubah di akuntansi), contoh: '
+                .implode('; ', array_slice($tanpaIdBarang, 0, 3)).(count($tanpaIdBarang) > 3 ? '; ...' : '');
+        }
+
         // Peringatan dari akuntansi (mis. pengirim tidak ditemukan) hanya dicatat
         // di log, tidak ditampilkan ke admin.
         if (! empty($body['warnings'])) {
@@ -193,8 +218,50 @@ class JurnalProduksiSender
             'success' => $ok === $ada,
             'message' => $pesan,
             'dokumen' => $ringkas,
-            'peringatan' => [],
+            'peringatan' => $tanpaIdBarang,
         ];
+    }
+
+    /**
+     * Baris akun persediaan (14xx) dengan banyak > 0 tetapi id_barang kosong.
+     *
+     * @return array<int, string> "no_akun (keterangan)"
+     */
+    private function barisTanpaIdBarang(array $rows): array
+    {
+        $hasil = [];
+        foreach ($rows as $r) {
+            if (! str_starts_with(trim((string) ($r['no_akun'] ?? '')), '14')) {
+                continue;
+            }
+            if ((float) ($r['banyak'] ?? 0) <= 0 || ! empty($r['id_barang'])) {
+                continue;
+            }
+            $hasil[] = trim($r['no_akun'].' ('.trim(($r['nama'] ?? '').' '.($r['keterangan'] ?? '')).')');
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * Daftar akun pada baris jurnal yang tidak terdaftar di COA baru,
+     * format "no_akun (keterangan)", unik.
+     *
+     * @return array<int, string>
+     */
+    private function akunTidakDikenal(array $rows): array
+    {
+        $hasil = [];
+        foreach ($rows as $r) {
+            $no = trim((string) ($r['no_akun'] ?? ''));
+            if ($this->coaAlias->isNomorAkunValid($no)) {
+                continue;
+            }
+            $ket = trim(($r['nama'] ?? '').' '.($r['keterangan'] ?? ''));
+            $hasil[] = ($no !== '' ? $no : '(kosong)').($ket !== '' ? " ({$ket})" : '');
+        }
+
+        return array_values(array_unique($hasil));
     }
 
     private function catat(string $jenis, string $tanggal, array $j, string $status, ?string $pesan, ?int $userId): void

@@ -43,6 +43,9 @@ class KirimJurnalAkuntansi extends Page
     /** @var array<string, array> hasil kirim terakhir per jenis (untuk ditampilkan) */
     public array $hasilKirim = [];
 
+    /** Jenis produksi yang sedang menunggu konfirmasi kirim. */
+    public ?string $konfirmasiJenis = null;
+
     /** @var array|null jurnal yang sedang dilihat di jendela rincian */
     public ?array $detail = null;
 
@@ -78,6 +81,8 @@ class KirimJurnalAkuntansi extends Page
                     'total_debit' => $j['total_debit'],
                     'total_kredit' => $j['total_kredit'],
                     'is_balance' => $j['is_balance'],
+                    'has_akun_tidak_valid' => $j['has_akun_tidak_valid'] ?? false,
+                    'akun_tidak_valid' => $j['akun_tidak_valid'] ?? [],
                 ];
 
                 $this->dispatch('open-modal', id: 'detail-jurnal');
@@ -105,16 +110,19 @@ class KirimJurnalAkuntansi extends Page
             try {
                 foreach ($sender->preview($key, $this->tanggal) as $j) {
                     $item['jurnals'][] = [
-                        'no_dokumen'        => $j['no_dokumen'],
-                        'jumlah_baris'      => $j['jumlah_baris'],
-                        'total_debit'       => $j['total_debit'],
-                        'total_kredit'      => $j['total_kredit'],
-                        'is_balance'        => $j['is_balance'],
-                        'has_akun_tidak_valid' => $j['has_akun_tidak_valid'],
-                        'akun_tidak_valid'  => $j['akun_tidak_valid'],
-                        'status'            => $j['status'],
-                        'terakhir_dikirim'  => $j['terakhir_dikirim']?->timezone('Asia/Jakarta')->format('d/m/Y H:i'),
-                        'terakhir_oleh'     => $j['terakhir_oleh'],
+                        'no_dokumen' => $j['no_dokumen'],
+                        'jumlah_baris' => $j['jumlah_baris'],
+                        'total_debit' => $j['total_debit'],
+                        'total_kredit' => $j['total_kredit'],
+                        'is_balance' => $j['is_balance'],
+                        // Peringatan: akun tidak terdaftar di COA baru (tidak memblokir).
+                        'akun_tidak_dikenal' => $j['akun_tidak_dikenal'] ?? [],
+                        // Pemblokir: akun UNKNOWN / akun lama tidak dikenal dari builder.
+                        'akun_tidak_valid' => $j['akun_tidak_valid'] ?? [],
+                        'has_akun_tidak_valid' => $j['has_akun_tidak_valid'] ?? false,
+                        'status' => $j['status'],
+                        'terakhir_dikirim' => $j['terakhir_dikirim']?->timezone('Asia/Jakarta')->format('d/m/Y H:i'),
+                        'terakhir_oleh' => $j['terakhir_oleh'],
                     ];
                 }
             } catch (\Throwable $e) {
@@ -123,6 +131,29 @@ class KirimJurnalAkuntansi extends Page
             }
 
             $this->ringkasan[$key] = $item;
+        }
+    }
+
+    /**
+     * Dipanggil tombol Kirim. Selalu membuka modal konfirmasi: isinya berisi
+     * peringatan jika ada akun tidak dikenal di COA, atau konfirmasi biasa jika tidak ada.
+     * Akun tidak valid (has_akun_tidak_valid) memblokir: tombol nonaktif di view
+     * dan ditolak lagi di JurnalProduksiSender::kirim().
+     */
+    public function mintaKirim(string $jenis): void
+    {
+        $this->konfirmasiJenis = $jenis;
+        $this->dispatch('open-modal', id: 'konfirmasi-akun');
+    }
+
+    public function kirimMeski(): void
+    {
+        $jenis = $this->konfirmasiJenis;
+        $this->konfirmasiJenis = null;
+        $this->dispatch('close-modal', id: 'konfirmasi-akun');
+
+        if ($jenis) {
+            $this->kirim($jenis);
         }
     }
 
