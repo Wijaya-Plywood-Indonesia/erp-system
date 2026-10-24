@@ -127,4 +127,5 @@ return [
         'Excel' => Maatwebsite\Excel\Facades\Excel::class,
     ],
 
+    'tkinter_api_key' => env('TKINTER_API_KEY'),
 ];

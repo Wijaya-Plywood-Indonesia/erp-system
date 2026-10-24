@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use App\Http\Controllers\ProduksiPressDryerController;
+use App\Models\HasilSanding;
 
 Route::get(
     '/produksi-dryer/{id}/preview',
@@ -286,10 +287,9 @@ Route::get('/external/rekap-stok-veneer', function (Request $request) {
                 'stok_lembar'   => (int) $b->stok_lembar,
             ];
         }
-
         // ── Kering ───────────────────────────────────────────────────────────
         $keringIds = DB::table('stok_veneer_kerings')
-            ->when($tgl, fn ($q) => $q->whereDate('tanggal_transaksi', '<=', $tgl))
+            ->when($tgl, fn($q) => $q->whereDate('tanggal_transaksi', '<=', $tgl))
             ->select(DB::raw('MAX(id) as max_id'))
             ->groupBy('id_ukuran', 'id_jenis_kayu', 'kw')
             ->pluck('max_id');
@@ -332,4 +332,95 @@ Route::get('/external/rekap-stok-veneer', function (Request $request) {
     } catch (\Exception $e) {
         return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
+});
+
+Route::middleware('tkinter.key')->prefix('sanding-besar')->group(function () {
+
+    // Daftar palet yang belum selesai, lengkap dengan riwayat putarannya
+    Route::get('/', function () {
+        $data = HasilSanding::with([
+            'barangSetengahJadi' => fn($q) => $q->select(
+                'id',
+                'id_ukuran',
+                'id_jenis_barang',
+                'id_grade',
+                'merek'
+            ),
+            'barangSetengahJadi.jenisBarang:id,nama_jenis_barang',
+            'barangSetengahJadi.grade:id,nama_grade',
+            'barangSetengahJadi.ukuran',
+            'putaran' => fn($q) => $q
+                ->select('id', 'hasil_sanding_id', 'sisi', 'putaran_ke', 'modal', 'hasil')
+                ->orderBy('id'),
+        ])
+            ->where('status', 'Belum Sanding')
+            ->orderBy('id')
+            ->get();
+
+        return response()->json(['status' => 'success', 'data' => $data]);
+    });
+
+    // Simpan SATU putaran (face atau back)
+    Route::post('/{hasilSanding}/putaran', function (Request $request, HasilSanding $hasilSanding) {
+        $v = $request->validate([
+            'sisi'       => 'required|in:face,back',
+            'putaran_ke' => 'required|integer|min:1|max:2',
+            'modal'      => 'required|integer|min:0',
+            'hasil'      => 'required|integer|min:0',
+            'selisih'    => 'required|integer',
+            'status_cek' => 'required|in:sesuai,tidak_sesuai',
+            'catatan'    => 'nullable|string|max:500',
+            'waktu'      => 'nullable|date',
+            'machine_id' => 'nullable|string|max:100',
+        ]);
+
+        return DB::transaction(function () use ($hasilSanding, $v) {
+            // Kunci baris palet agar dua request bersamaan tidak saling menimpa
+            $palet = HasilSanding::lockForUpdate()->findOrFail($hasilSanding->id);
+
+            // Palet partial tetap berstatus "Belum Sanding" (lihat catatan di bawah)
+            if ($palet->status !== 'Belum Sanding') {
+                return response()->json(['message' => 'Palet sudah selesai'], 409);
+            }
+
+            $sudahAda = $palet->putaran()
+                ->where('sisi', $v['sisi'])
+                ->where('putaran_ke', $v['putaran_ke'])
+                ->exists();
+            if ($sudahAda) {
+                return response()->json(['message' => 'Putaran sudah tercatat'], 409);
+            }
+
+            $palet->putaran()->create([
+                'sisi'        => $v['sisi'],
+                'putaran_ke'  => $v['putaran_ke'],
+                'modal'       => $v['modal'],
+                'hasil'       => $v['hasil'],
+                'selisih'     => $v['selisih'],
+                'status_cek'  => $v['status_cek'],
+                'catatan'     => $v['catatan'] ?? null,
+                'machine_id'  => $v['machine_id'] ?? null,
+                'waktu_mesin' => $v['waktu'] ?? null,
+            ]);
+
+            $face = $palet->putaran()->where('sisi', 'face')->count();
+            $back = $palet->putaran()->where('sisi', 'back')->count();
+
+            $palet->jumlah_sanding_face = $face;
+            $palet->jumlah_sanding_back = $back;
+
+            $selesai = $face >= 1 && $back >= 1;
+            if ($selesai) {
+                $palet->status = 'Selesai 2 Sisi';
+            }
+            $palet->save();
+
+            return response()->json([
+                'status'  => 'success',
+                'face'    => $face,
+                'back'    => $back,
+                'selesai' => $selesai,
+            ], 201);
+        });
+    });
 });

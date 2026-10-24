@@ -91,4 +91,9 @@ class HasilSanding extends Model
             }
         });
     }
+
+    public function putaran()
+    {
+        return $this->hasMany(HasilSandingPutaran::class, 'hasil_sanding_id');
+    }
 }
