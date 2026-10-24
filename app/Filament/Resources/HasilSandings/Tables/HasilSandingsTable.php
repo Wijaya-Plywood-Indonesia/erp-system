@@ -21,6 +21,41 @@ use Illuminate\Support\HtmlString;
 class HasilSandingsTable
 {
     /**
+     * Label semua tujuan serah yang dikenal sistem.
+     */
+    protected const TUJUAN_LABEL = [
+        'platform_jadi' => 'Gudang Platform Jadi',
+        'triplek_jadi'  => 'Gudang Triplek Jadi',
+    ];
+
+    /**
+     * Tujuan serah yang BOLEH dipilih untuk palet ini, berdasarkan kategori
+     * barang hasil sanding:
+     *  - kategori mengandung "platform"          -> hanya Gudang Platform Jadi
+     *  - kategori mengandung "plywood"/"triplek" -> hanya Gudang Triplek Jadi
+     *  - kategori tidak dikenal / data kosong    -> kedua pilihan tetap tersedia
+     *    (supaya tidak menghalangi kalau datanya memang belum lengkap)
+     *
+     * @return array<string, string>  [kode_tujuan => label]
+     */
+    protected static function tujuanTersedia($record): array
+    {
+        $record->loadMissing('barangSetengahJadi.grade.kategoriBarang');
+
+        $kategori = strtolower((string) ($record->barangSetengahJadi?->grade?->kategoriBarang?->nama_kategori ?? ''));
+
+        if ($kategori !== '' && str_contains($kategori, 'platform')) {
+            return ['platform_jadi' => self::TUJUAN_LABEL['platform_jadi']];
+        }
+
+        if ($kategori !== '' && (str_contains($kategori, 'plywood') || str_contains($kategori, 'triplek'))) {
+            return ['triplek_jadi' => self::TUJUAN_LABEL['triplek_jadi']];
+        }
+
+        return self::TUJUAN_LABEL;
+    }
+
+    /**
      * Apakah palet hasil sanding ini SUDAH DITERIMA di gudang tujuan?
      *
      * "Diterima" letaknya di tabel berbeda tergantung tujuan serah:
@@ -216,7 +251,7 @@ class HasilSandingsTable
                     ->color('success')
                     ->visible(fn ($record) => $record->diserahkan_at === null)
                     ->schema(function ($record) {
-                        $record->loadMissing(['barangSetengahJadi.ukuran', 'barangSetengahJadi.jenisBarang', 'barangSetengahJadi.grade']);
+                        $record->loadMissing(['barangSetengahJadi.ukuran', 'barangSetengahJadi.jenisBarang', 'barangSetengahJadi.grade.kategoriBarang']);
 
                         $bsj    = $record->barangSetengahJadi;
                         $ukuran = $bsj?->ukuran;
@@ -224,6 +259,10 @@ class HasilSandingsTable
                         $dimensi = $ukuran
                             ? ($ukuran->panjang + 0) . ' × ' . ($ukuran->lebar + 0) . ' × ' . ($ukuran->tebal + 0)
                             : '-';
+
+                        // Pilihan tujuan dibatasi sesuai kategori barang (platform / plywood).
+                        $tujuan = self::tujuanTersedia($record);
+                        $hanyaSatu = count($tujuan) === 1;
 
                         return [
                             Grid::make(2)->schema([
@@ -249,11 +288,11 @@ class HasilSandingsTable
 
                             Radio::make('tujuan_serah')
                                 ->label('Serahkan ke')
-                                ->options([
-                                    'platform_jadi' => 'Gudang Platform Jadi',
-                                    'triplek_jadi'  => 'Gudang Triplek Jadi',
-                                ])
-                                ->default('platform_jadi')
+                                ->options($tujuan)
+                                ->default(array_key_first($tujuan))
+                                ->helperText($hanyaSatu
+                                    ? 'Tujuan ditentukan otomatis sesuai jenis barang (' . ($bsj?->grade?->kategoriBarang?->nama_kategori ?? '-') . ').'
+                                    : null)
                                 ->required(),
                         ];
                     })
@@ -263,7 +302,7 @@ class HasilSandingsTable
                     ->requiresConfirmation(false)
                     ->action(function ($record, array $data) {
                         // 1. Ambil ulang dari DB (hindari race condition)
-                        $fresh = $record->fresh(['barangSetengahJadi.ukuran']);
+                        $fresh = $record->fresh(['barangSetengahJadi.ukuran', 'barangSetengahJadi.grade.kategoriBarang']);
 
                         if ($fresh->diserahkan_at !== null) {
                             Notification::make()->warning()
@@ -296,6 +335,17 @@ class HasilSandingsTable
                             return;
                         }
 
+                        // 4. Tujuan harus sesuai jenis barang (validasi ulang di server,
+                        //    jangan hanya mengandalkan pilihan di form).
+                        $diperbolehkan = self::tujuanTersedia($fresh);
+                        if (! array_key_exists($data['tujuan_serah'], $diperbolehkan)) {
+                            Notification::make()->danger()
+                                ->title('Tujuan serah tidak sesuai jenis barang')
+                                ->body('Barang ini hanya bisa diserahkan ke ' . implode(' / ', $diperbolehkan) . '.')
+                                ->send();
+                            return;
+                        }
+
                         // ── SIMPAN PERUBAHAN DI HASIL SANDING ────────
                         $fresh->update([
                             'tujuan_serah'    => $data['tujuan_serah'],
@@ -317,7 +367,7 @@ class HasilSandingsTable
                         Notification::make()->success()
                             ->title('Palet ' . $fresh->no_palet . ' diserahkan')
                             ->body(number_format((float) $fresh->kuantitas) . ' lembar → '
-                                . ($data['tujuan_serah'] === 'platform_jadi' ? 'Gudang Platform Jadi' : 'Gudang Triplek Jadi'))
+                                . self::TUJUAN_LABEL[$data['tujuan_serah']])
                             ->send();
                     }),
 
