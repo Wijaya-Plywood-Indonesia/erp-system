@@ -4,7 +4,10 @@ namespace App\Filament\Resources\HasilSandings\Schemas;
 
 use App\Models\BarangSetengahJadiHp;
 use App\Models\Grade;
+use App\Models\HasilSanding;
 use App\Models\JenisBarang;
+use App\Models\ModalSanding;
+use App\Models\ProduksiSanding;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
@@ -64,7 +67,7 @@ class HasilSandingForm
                     ->required()
 
                     // OPTIONS SAAT CREATE
-                    ->options(function (callable $get, $livewire, ?\App\Models\HasilSanding $record) {
+                    ->options(function (callable $get, $livewire, ?HasilSanding $record) {
 
                         $query = BarangSetengahJadiHp::query()
                             ->with(['ukuran', 'jenisBarang', 'grade.kategoriBarang'])
@@ -76,19 +79,19 @@ class HasilSandingForm
 
                         // 🔒 HANYA YANG DI INPUT DI MODAL SANDING (DAN SISANYA > 0)
                         $ownerRecord = method_exists($livewire, 'getOwnerRecord') ? $livewire->getOwnerRecord() : null;
-                        
+
                         $sisaPerBarang = [];
 
-                        if ($ownerRecord && $ownerRecord instanceof \App\Models\ProduksiSanding) {
-                            $modalBarang = \App\Models\ModalSanding::where('id_produksi_sanding', $ownerRecord->id)
+                        if ($ownerRecord && $ownerRecord instanceof ProduksiSanding) {
+                            $modalBarang = ModalSanding::where('id_produksi_sanding', $ownerRecord->id)
                                 ->whereNotNull('id_barang_setengah_jadi')
                                 ->selectRaw('id_barang_setengah_jadi, sum(kuantitas) as total_modal')
                                 ->groupBy('id_barang_setengah_jadi')
                                 ->get();
 
-                            $hasilBarangQuery = \App\Models\HasilSanding::where('id_produksi_sanding', $ownerRecord->id)
+                            $hasilBarangQuery = HasilSanding::where('id_produksi_sanding', $ownerRecord->id)
                                 ->whereNotNull('id_barang_setengah_jadi');
-                            
+
                             if ($record) {
                                 $hasilBarangQuery->where('id', '!=', $record->id);
                             }
@@ -107,18 +110,18 @@ class HasilSandingForm
                                     $sisaPerBarang[$mb->id_barang_setengah_jadi] = $sisa;
                                 }
                             }
-                            
+
                             // Pastikan record yang sedang diedit tetap muncul di opsi
-                            if ($record && $record->id_barang_setengah_jadi && !in_array($record->id_barang_setengah_jadi, $availableIds)) {
+                            if ($record && $record->id_barang_setengah_jadi && ! in_array($record->id_barang_setengah_jadi, $availableIds)) {
                                 $availableIds[] = $record->id_barang_setengah_jadi;
                                 // Hitung sisa khusus untuk record yang sedang diedit
-                                $totalModalEdit = \App\Models\ModalSanding::where('id_produksi_sanding', $ownerRecord->id)
+                                $totalModalEdit = ModalSanding::where('id_produksi_sanding', $ownerRecord->id)
                                     ->where('id_barang_setengah_jadi', $record->id_barang_setengah_jadi)
                                     ->sum('kuantitas');
                                 $totalHasilEdit = $hasilBarang[$record->id_barang_setengah_jadi] ?? 0;
                                 $sisaPerBarang[$record->id_barang_setengah_jadi] = max(0, $totalModalEdit - $totalHasilEdit);
                             }
-                            
+
                             $query->whereIn('id', $availableIds);
                         }
 
@@ -140,14 +143,14 @@ class HasilSandingForm
                             ->mapWithKeys(function ($b) use ($sisaPerBarang) {
 
                                 $kategori = $b->grade?->kategoriBarang?->nama_kategori ?? '-';
-                                $ukuran   = $b->ukuran?->dimensi ?? '-';
-                                $grade    = $b->grade?->nama_grade ?? '-';
-                                $jenis    = $b->jenisBarang?->nama_jenis_barang ?? '-';
-                                
+                                $ukuran = $b->ukuran?->dimensi ?? '-';
+                                $grade = $b->grade?->nama_grade ?? '-';
+                                $jenis = $b->jenisBarang?->nama_jenis_barang ?? '-';
+
                                 $sisaInfo = isset($sisaPerBarang[$b->id]) ? " · {$sisaPerBarang[$b->id]} lbr" : '';
 
                                 return [
-                                    $b->id => "{$kategori} · {$ukuran} · {$grade} · {$jenis}{$sisaInfo}"
+                                    $b->id => "{$kategori} · {$ukuran} · {$grade} · {$jenis}{$sisaInfo}",
                                 ];
                             });
                     })
@@ -158,38 +161,40 @@ class HasilSandingForm
                         $b = BarangSetengahJadiHp::with([
                             'ukuran',
                             'jenisBarang',
-                            'grade.kategoriBarang'
+                            'grade.kategoriBarang',
                         ])->find($value);
 
-                        if (!$b) {
+                        if (! $b) {
                             return $value;
                         }
 
                         $kategori = $b->grade?->kategoriBarang?->nama_kategori ?? '-';
-                        $ukuran   = $b->ukuran?->dimensi ?? '-';
-                        $grade    = $b->grade?->nama_grade ?? '-';
-                        $jenis    = $b->jenisBarang?->nama_jenis_barang ?? '-';
+                        $ukuran = $b->ukuran?->dimensi ?? '-';
+                        $grade = $b->grade?->nama_grade ?? '-';
+                        $jenis = $b->jenisBarang?->nama_jenis_barang ?? '-';
 
                         return "{$kategori} — {$ukuran} — {$grade} — {$jenis}";
                     })
 
                     ->searchable()
+                    ->optionsLimit(1000) // default Filament = 50
                     ->live()
-                    ->afterStateUpdated(function ($state, callable $set, $livewire, ?\App\Models\HasilSanding $record) {
-                        if (!$state) {
+                    ->afterStateUpdated(function ($state, callable $set, $livewire, ?HasilSanding $record) {
+                        if (! $state) {
                             $set('kuantitas', null);
+
                             return;
                         }
 
                         $ownerRecord = method_exists($livewire, 'getOwnerRecord') ? $livewire->getOwnerRecord() : null;
-                        if ($ownerRecord && $ownerRecord instanceof \App\Models\ProduksiSanding) {
-                            $modalTotal = \App\Models\ModalSanding::where('id_produksi_sanding', $ownerRecord->id)
+                        if ($ownerRecord && $ownerRecord instanceof ProduksiSanding) {
+                            $modalTotal = ModalSanding::where('id_produksi_sanding', $ownerRecord->id)
                                 ->where('id_barang_setengah_jadi', $state)
                                 ->sum('kuantitas');
 
-                            $hasilTotalQuery = \App\Models\HasilSanding::where('id_produksi_sanding', $ownerRecord->id)
+                            $hasilTotalQuery = HasilSanding::where('id_produksi_sanding', $ownerRecord->id)
                                 ->where('id_barang_setengah_jadi', $state);
-                            
+
                             if ($record) {
                                 $hasilTotalQuery->where('id', '!=', $record->id);
                             }
@@ -211,19 +216,21 @@ class HasilSandingForm
                     ->numeric()
                     ->required()
                     ->rules([
-                        fn (callable $get, $livewire, ?\App\Models\HasilSanding $record) => function (string $attribute, $value, \Closure $fail) use ($get, $livewire, $record) {
+                        fn (callable $get, $livewire, ?HasilSanding $record) => function (string $attribute, $value, \Closure $fail) use ($get, $livewire, $record) {
                             $idBarang = $get('id_barang_setengah_jadi');
-                            if (!$idBarang) return;
+                            if (! $idBarang) {
+                                return;
+                            }
 
                             $ownerRecord = method_exists($livewire, 'getOwnerRecord') ? $livewire->getOwnerRecord() : null;
-                            if ($ownerRecord && $ownerRecord instanceof \App\Models\ProduksiSanding) {
-                                $modalTotal = \App\Models\ModalSanding::where('id_produksi_sanding', $ownerRecord->id)
+                            if ($ownerRecord && $ownerRecord instanceof ProduksiSanding) {
+                                $modalTotal = ModalSanding::where('id_produksi_sanding', $ownerRecord->id)
                                     ->where('id_barang_setengah_jadi', $idBarang)
                                     ->sum('kuantitas');
 
-                                $hasilTotalQuery = \App\Models\HasilSanding::where('id_produksi_sanding', $ownerRecord->id)
+                                $hasilTotalQuery = HasilSanding::where('id_produksi_sanding', $ownerRecord->id)
                                     ->where('id_barang_setengah_jadi', $idBarang);
-                                
+
                                 if ($record) {
                                     $hasilTotalQuery->where('id', '!=', $record->id);
                                 }
@@ -259,7 +266,7 @@ class HasilSandingForm
                     ->options([
                         'Selesai 1 Sisi' => 'Selesai 1 Sisi',
                         'Selesai 2 Sisi' => 'Selesai 2 Sisi',
-                        'Belum Selesai'  => 'Belum Selesai',
+                        'Belum Selesai' => 'Belum Selesai',
                     ])
                     ->default('Belum Selesai')
                     ->required(),
