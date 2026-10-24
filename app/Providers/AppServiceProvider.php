@@ -53,9 +53,11 @@ use App\Services\FingerParsers\MesinZkParser;
 use App\Services\NewRekapAbsensiPegawaiService;
 use App\Services\Payroll\WeeklyRekapPotonganGajiService;
 use App\Services\RekapPotonganGajiService;
+use App\Support\ResolveBarangCache;
 use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\ServiceProvider;
 
@@ -162,6 +164,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Http::globalMiddleware(ResolveBarangCache::middleware());
         // ⬆⬆⬆  WAJIB: supaya MySQL ikut Asia/Jakarta
         HasilSanding::observe(HasilSandingObserver::class);
         ModalSanding::observe(ModalSandingObserver::class);

@@ -5,6 +5,7 @@ namespace App\Services\Akuntansi;
 use App\Models\JurnalProduksiKirimLog;
 use App\Models\User;
 use App\Services\Akuntansi\Produksi\JurnalProduksiRegistry;
+use App\Support\ResolveBarangCache;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -26,19 +27,33 @@ class JurnalProduksiSender
      * Status per jurnal:
      *   belum_dikirim | terkirim (data sama dg yg terakhir dikirim) | berubah (data ERP berbeda sejak dikirim)
      *
+     * Untuk tampilan layar ($denganIdBarang = false) pencarian id_barang ke
+     * server akuntansi dilewati supaya cepat; id_barang tidak ikut dihitung
+     * di hash. Saat kirim ($denganIdBarang = true) id_barang dicari sungguhan.
+     *
      * @return array<int, array>
      */
-    public function preview(string $jenis, string $tanggal): array
+    public function preview(string $jenis, string $tanggal, bool $denganIdBarang = false): array
     {
-        $jurnals = $this->registry->get($jenis)->build($tanggal);
+        $jurnals = $denganIdBarang
+            ? $this->registry->get($jenis)->build($tanggal)
+            : ResolveBarangCache::tanpaIdBarang(fn () => $this->registry->get($jenis)->build($tanggal));
 
         foreach ($jurnals as &$j) {
             $rows = $j['rows'];
+            $akunTidakValid = $j['akun_tidak_valid'] ?? [];
+
             $j['jumlah_baris'] = count($rows);
             $j['total_debit'] = (float) collect($rows)->where('map', 'd')->sum('total');
             $j['total_kredit'] = (float) collect($rows)->where('map', 'k')->sum('total');
             $j['is_balance'] = abs($j['total_debit'] - $j['total_kredit']) <= 1;
-            $j['hash'] = sha1(json_encode($rows));
+            $j['has_akun_tidak_valid'] = count($akunTidakValid) > 0;
+            $j['akun_tidak_valid'] = $akunTidakValid;
+            $j['hash'] = sha1(json_encode(array_map(function ($r) {
+                unset($r['id_barang']); // id_barang tidak ikut hash (tidak dicari saat tampilan)
+
+                return $r;
+            }, $rows)));
 
             $terakhir = JurnalProduksiKirimLog::where('no_dokumen', $j['no_dokumen'])
                 ->whereIn('status', JurnalProduksiKirimLog::STATUS_BERHASIL)
@@ -73,7 +88,7 @@ class JurnalProduksiSender
             return $this->gagal('Konfigurasi AKUNTANSI_URL / AKUNTANSI_API_KEY belum diisi di .env ERP.');
         }
 
-        $jurnals = $this->preview($jenis, $tanggal);
+        $jurnals = $this->preview($jenis, $tanggal, true);
 
         if (! $jurnals) {
             return $this->gagal('Belum ada data produksi pada tanggal ini.');
@@ -82,6 +97,22 @@ class JurnalProduksiSender
         $tidakBalance = collect($jurnals)->where('is_balance', false)->pluck('no_dokumen')->all();
         if ($tidakBalance) {
             $pesan = 'Jurnal tidak balance (debit != kredit): '.implode(', ', $tidakBalance).'. Tidak dikirim.';
+            foreach ($jurnals as $j) {
+                $this->catat($jenis, $tanggal, $j, 'gagal', $pesan, $userId);
+            }
+
+            return $this->gagal($pesan);
+        }
+
+        // Blokir jika ada akun yang belum terpetakan ke COA (UNKNOWN atau akun lama tidak dikenal)
+        $adaAkunTidakValid = collect($jurnals)->where('has_akun_tidak_valid', true);
+        if ($adaAkunTidakValid->isNotEmpty()) {
+            $detail = $adaAkunTidakValid->map(function ($j) {
+                $akun = implode(', ', $j['akun_tidak_valid']);
+
+                return "{$j['no_dokumen']}: {$akun}";
+            })->implode('; ');
+            $pesan = "Akun tidak dikenal di COA pada: {$detail}. Lengkapi referensi harga/COA terlebih dahulu.";
             foreach ($jurnals as $j) {
                 $this->catat($jenis, $tanggal, $j, 'gagal', $pesan, $userId);
             }
@@ -152,11 +183,17 @@ class JurnalProduksiSender
             ? "Berhasil: {$ok} jurnal terkirim ke akuntansi."
             : "{$ok} dari {$ada} jurnal terkirim. Lihat rincian di bawah.";
 
+        // Peringatan dari akuntansi (mis. pengirim tidak ditemukan) hanya dicatat
+        // di log, tidak ditampilkan ke admin.
+        if (! empty($body['warnings'])) {
+            Log::info('[JurnalProduksi] Peringatan dari akuntansi', ['jenis' => $jenis, 'warnings' => $body['warnings']]);
+        }
+
         return [
             'success' => $ok === $ada,
             'message' => $pesan,
             'dokumen' => $ringkas,
-            'peringatan' => $body['warnings'] ?? [],
+            'peringatan' => [],
         ];
     }
 
