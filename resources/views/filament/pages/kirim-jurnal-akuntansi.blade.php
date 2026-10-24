@@ -30,9 +30,6 @@
 
         <div class="space-y-6" wire:loading.class="opacity-40" wire:target="tanggal, kirim">
             @foreach ($ringkasan as $jenis => $item)
-                @php
-                    $adaAkunTidakValid = collect($item['jurnals'] ?? [])->contains('has_akun_tidak_valid', true);
-                @endphp
                 <div
                     class="bg-white dark:bg-zinc-900 rounded-lg shadow border border-zinc-200 dark:border-zinc-700 overflow-hidden">
                     <div class="flex items-center justify-between p-4 bg-zinc-800 text-white">
@@ -43,7 +40,7 @@
                             wire:loading.attr="disabled"
                             wire:target="mintaKirim('{{ $jenis }}'), kirim"
                             icon="heroicon-o-paper-airplane"
-                            :disabled="empty($item['jurnals']) || filled($item['error']) || $adaAkunTidakValid"
+                            :disabled="empty($item['jurnals']) || filled($item['error'])"
                         >
                             Kirim
                         </x-filament::button>
@@ -55,27 +52,18 @@
                         @elseif (empty($item['jurnals']))
                             <p class="text-sm text-zinc-500">Belum ada data produksi pada tanggal ini.</p>
                         @else
-                            {{-- PEMBLOKIR: akun tidak valid dari builder (UNKNOWN / akun lama tidak dikenal) --}}
-                            @if ($adaAkunTidakValid)
-                                <div
-                                    class="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-400 space-y-1">
-                                    <p class="font-semibold">⛔ Jurnal tidak dapat dikirim: ada akun yang belum
-                                        terpetakan ke COA.</p>
-                                    <p>Lengkapi referensi harga / mapping COA, lalu muat ulang halaman ini.</p>
-                                    @foreach ($item['jurnals'] as $j)
-                                        @if ($j['has_akun_tidak_valid'])
-                                            <p class="font-mono text-xs">{{ $j['no_dokumen'] }}:
-                                                {{ implode(', ', $j['akun_tidak_valid']) }}</p>
-                                        @endif
-                                    @endforeach
-                                </div>
-                            @endif
-
-                            {{-- PERINGATAN: akun tidak terdaftar di COA baru (tetap bisa dikirim) --}}
+                            {{-- PERINGATAN (1 kotak): akun belum terpetakan / tidak dikenal di COA. Tetap bisa dikirim. --}}
                             @php
                                 $peringatanAkun = collect($item['jurnals'])
-                                    ->filter(fn ($x) => ! empty($x['akun_tidak_dikenal']))
-                                    ->mapWithKeys(fn ($x) => [$x['no_dokumen'] => $x['akun_tidak_dikenal']]);
+                                    ->mapWithKeys(function ($x) {
+                                        $akuns = collect(array_merge($x['akun_tidak_valid'] ?? [], $x['akun_tidak_dikenal'] ?? []))
+                                            ->unique(fn ($a) => trim(explode(' (', $a, 2)[0])) // satu baris per nomor akun
+                                            ->values()
+                                            ->all();
+
+                                        return [$x['no_dokumen'] => $akuns];
+                                    })
+                                    ->filter();
                             @endphp
                             @if ($peringatanAkun->isNotEmpty())
                                 <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 p-3 text-sm text-amber-800 dark:text-amber-200">
@@ -103,8 +91,11 @@
                                     </thead>
                                     <tbody>
                                         @foreach ($item['jurnals'] as $j)
+                                            @php
+                                                $adaAkunBermasalahBaris = $j['has_akun_tidak_valid'] || ! empty($j['akun_tidak_dikenal']);
+                                            @endphp
                                             <tr
-                                                class="border-t border-zinc-200 dark:border-zinc-700 {{ $j['has_akun_tidak_valid'] ? 'bg-red-50 dark:bg-red-900/10' : '' }}">
+                                                class="border-t border-zinc-200 dark:border-zinc-700 {{ $adaAkunBermasalahBaris ? 'bg-amber-50 dark:bg-amber-900/10' : '' }}">
                                                 <td class="p-2 font-mono">{{ $j['no_dokumen'] }}</td>
                                                 <td class="p-2 text-right">{{ $j['jumlah_baris'] }}</td>
                                                 <td class="p-2 text-right">
@@ -112,18 +103,14 @@
                                                 <td class="p-2 text-right">
                                                     {{ number_format($j['total_kredit'], 0, ',', '.') }}</td>
                                                 <td class="p-2 space-y-1">
-                                                    @if ($j['has_akun_tidak_valid'])
-                                                        <div><x-filament::badge color="danger">Akun tidak
-                                                                valid</x-filament::badge></div>
-                                                    @endif
-                                                    @if (! empty($j['akun_tidak_dikenal']))
+                                                    @if ($adaAkunBermasalahBaris)
                                                         <div><x-filament::badge color="warning">Akun tidak
                                                                 dikenal</x-filament::badge></div>
                                                     @endif
                                                     @if (! $j['is_balance'])
                                                         <div><x-filament::badge color="danger">Tidak
                                                                 balance</x-filament::badge></div>
-                                                    @elseif ($j['status'] === 'terkirim' && empty($j['akun_tidak_dikenal']))
+                                                    @elseif ($j['status'] === 'terkirim' && ! $adaAkunBermasalahBaris)
                                                         <div><x-filament::badge
                                                                 color="success">Terkirim</x-filament::badge></div>
                                                     @elseif ($j['status'] === 'berubah')
@@ -170,19 +157,21 @@
         </div>
     </div>
 
-    {{-- Konfirmasi kirim (dengan peringatan jika ada akun tidak dikenal) --}}
+    {{-- Konfirmasi kirim (dengan peringatan jika ada akun bermasalah) --}}
     <x-filament::modal id="konfirmasi-akun" width="lg">
         @php
             $jurnalKonfirmasi = $konfirmasiJenis ? ($ringkasan[$konfirmasiJenis]['jurnals'] ?? []) : [];
-            $adaAkunBermasalah = collect($jurnalKonfirmasi)->contains(fn ($x) => ! empty($x['akun_tidak_dikenal']));
+            $adaAkunBermasalah = collect($jurnalKonfirmasi)->contains(
+                fn ($x) => ! empty($x['akun_tidak_dikenal']) || ! empty($x['akun_tidak_valid'])
+            );
         @endphp
 
         <x-slot name="heading">
-            {{ $adaAkunBermasalah ? 'Ada akun yang tidak dikenal di COA' : 'Kirim jurnal ke akuntansi?' }}
+            {{ $adaAkunBermasalah ? 'Jangan lupa ganti nomor akun' : 'Kirim jurnal ke akuntansi?' }}
         </x-slot>
         <x-slot name="description">
             @if ($adaAkunBermasalah)
-                Jurnal akan tetap dikirim ke web akuntansi. Setelah terkirim, jangan lupa mengganti nomor akun berikut di web akuntansi.
+                Ada akun yang tidak dikenal di COA. Jurnal akan tetap dikirim ke web akuntansi. Setelah terkirim, jangan lupa mengganti nomor akun berikut di web akuntansi.
             @elseif ($konfirmasiJenis)
                 Kirim jurnal {{ $ringkasan[$konfirmasiJenis]['label'] ?? '' }} tanggal {{ \Carbon\Carbon::parse($tanggal)->format('d/m/Y') }} ke akuntansi?
             @endif
@@ -191,7 +180,7 @@
         @if ($adaAkunBermasalah)
             <div class="space-y-1 text-sm">
                 @foreach ($jurnalKonfirmasi as $x)
-                    @foreach ($x['akun_tidak_dikenal'] ?? [] as $akun)
+                    @foreach (collect(array_merge($x['akun_tidak_valid'] ?? [], $x['akun_tidak_dikenal'] ?? []))->unique(fn ($a) => trim(explode(' (', $a, 2)[0]))->values() as $akun)
                         <p><span class="font-mono text-xs">{{ $x['no_dokumen'] }}</span>: <span class="font-mono">{{ $akun }}</span></p>
                     @endforeach
                 @endforeach
@@ -236,9 +225,9 @@
 
             @if (!empty($detail['has_akun_tidak_valid']))
                 <div
-                    class="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700 dark:text-red-300">
-                    Ada akun yang tidak dikenal di COA: {{ implode(', ', $detail['akun_tidak_valid'] ?? []) }}.
-                    Jurnal ini tidak akan dikirim sampai referensi harga / mapping COA dilengkapi.
+                    class="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 p-3 text-sm text-amber-800 dark:text-amber-200">
+                    Ada akun yang belum terpetakan ke COA: {{ implode(', ', $detail['akun_tidak_valid'] ?? []) }}.
+                    Jurnal tetap bisa dikirim, tetapi ganti nomor akunnya di web akuntansi.
                 </div>
             @endif
 
