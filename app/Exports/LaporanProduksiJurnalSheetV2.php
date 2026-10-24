@@ -35,6 +35,9 @@ use Throwable;
 //   mapAkunLama). Tidak ada lagi '1402.3', '2195.1', '5069.2' hardcode.
 // - Nomor akun lama yang tidak dikenali dilewatkan ke mapAkunLama()
 //   sebagai jaring pengaman.
+// - Nomor akun yang masih belum berformat COA baru (mis. '115-13') ditulis
+//   'UNKNOWN' dan di-highlight merah supaya data yang belum dipetakan terlihat.
+// - Reeling tape (115-13 / 1507.41) -> 1402.23 lewat CoaAliasService::MAP_AKUN_LAMA.
 //
 // REVISI (samakan angka dengan JurnalSheet v1):
 // - Harga veneer basah kembali dibedakan per jenis kayu
@@ -68,6 +71,9 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
     protected $headerRows = [];
 
     protected $dataRanges = [];
+
+    // Baris yang nomor akunnya belum ada di COA baru (untuk di-highlight)
+    protected $unknownRows = [];
 
     protected CoaAliasService $coaAlias;
 
@@ -498,11 +504,17 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
 
                 $totalVal = "=ROUND(IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow})), 0)";
 
+                // Nomor akun belum ada di COA baru -> tulis UNKNOWN + highlight merah
+                $noAkunTampil = $this->coaAlias->isNomorAkunValid($g['no_akun']) ? $g['no_akun'] : 'UNKNOWN';
+                if ($noAkunTampil === 'UNKNOWN') {
+                    $this->unknownRows[] = $currentRow;
+                }
+
                 $rows->push([
                     $g['nama_akun'],
                     $tglVal,
                     '',
-                    $g['no_akun'],
+                    $noAkunTampil,
                     '',
                     '',
                     $namaVal,
@@ -585,6 +597,13 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                     $sheet->getStyle("L{$start}:L{$end}")->getNumberFormat()->setFormatCode('#,##0.0000');
                     $sheet->getStyle("M{$start}:M{$end}")->getNumberFormat()->setFormatCode('#,##0');
                     $sheet->getStyle("N{$start}:N{$end}")->getNumberFormat()->setFormatCode('#,##0');
+                }
+
+                foreach ($this->unknownRows as $row) {
+                    $sheet->getStyle("D{$row}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['argb' => 'FF9C0006']],
+                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFC7CE']],
+                    ]);
                 }
 
                 $sheet->getColumnDimension('A')->setWidth(30);
