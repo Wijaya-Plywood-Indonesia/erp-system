@@ -260,34 +260,25 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
     /**
      * Akun + harga veneer untuk repair.
      *
-     * - Reguler : lewat CoaAliasService::extractAkunVeneerRepair()
-     *             (tipe jadi/kering + tebal), seperti sebelumnya.
-     * - AF      : sama seperti v1. Jadi (debit) dan kering (kredit) memakai
-     *             referensi "veneer afalan" yang sama, jadi akunnya HARUS
-     *             sama di kedua sisi (nettonya nol). Akun diambil dari
-     *             referensi lewat CoaAliasService::extractAkunVeneer();
-     *             kalau tidak dikenali, fallback ke 1402.18
-     *             Persediaan Veneer Jadi PPC (sama dengan fallback
-     *             di JurnalSheetV2 dryer).
+     * Selalu lewat CoaAliasService::extractAkunVeneerRepair() yang sudah
+     * support parameter $isAf. Akun ditentukan dari COA baru berdasarkan
+     * tipe (jadi/kering) + tebal + isAf, TIDAK membaca sub_anak_akuns
+     * sehingga nomor akun lama (mis. 1429.00 WJY) tidak akan bocor masuk.
+     *
+     * - isAf=false, tipe='jadi',   tebal< 1 → 1402.7  Veneer Jadi Face Back
+     * - isAf=false, tipe='jadi',   tebal>=1 → 1402.8  Veneer Jadi Core
+     * - isAf=false, tipe='kering', tebal< 1 → 1402.5  Veneer Kering Face Back
+     * - isAf=false, tipe='kering', tebal>=1 → 1402.6  Veneer Kering Core
+     * - isAf=true,  tipe='jadi'             → 1402.18 Veneer Jadi PPC
+     * - isAf=true,  tipe='kering'           → 1402.17 Veneer Kering PPC
+     *
+     * Harga tetap diambil dari referensi_harga_produksi.
      *
      * @return array{0: string, 1: string, 2: float} [namaAkun, noAkun, harga]
      */
     private function akunVeneerRepair(?ReferensiHargaProduksi $ref, string $tipe, float $tebal, bool $isAf): array
     {
-        if (! $isAf) {
-            return $this->coaAlias->extractAkunVeneerRepair($ref, $tipe, $tebal);
-        }
-
-        $harga = (float) ($ref->harga ?? 0.0);
-
-        if ($ref) {
-            [$namaAkunBaru, $noAkunBaru] = $this->coaAlias->extractAkunVeneer($ref);
-            if ($namaAkunBaru !== 'UNKNOWN') {
-                return [$namaAkunBaru, $noAkunBaru, $harga];
-            }
-        }
-
-        return ['Persediaan Veneer Jadi PPC', '1402.18', $harga];
+        return $this->coaAlias->extractAkunVeneerRepair($ref, $tipe, $tebal, $isAf);
     }
 
     private function fetchReferensiBahan(string $namaBahan): ?ReferensiHargaProduksi

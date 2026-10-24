@@ -43,7 +43,7 @@ class KirimJurnalAkuntansi extends Page
     /** @var array<string, array> hasil kirim terakhir per jenis (untuk ditampilkan) */
     public array $hasilKirim = [];
 
-    /** Jenis produksi yang sedang menunggu konfirmasi kirim (ada akun tidak dikenal). */
+    /** Jenis produksi yang sedang menunggu konfirmasi kirim. */
     public ?string $konfirmasiJenis = null;
 
     /** @var array|null jurnal yang sedang dilihat di jendela rincian */
@@ -81,6 +81,8 @@ class KirimJurnalAkuntansi extends Page
                     'total_debit' => $j['total_debit'],
                     'total_kredit' => $j['total_kredit'],
                     'is_balance' => $j['is_balance'],
+                    'has_akun_tidak_valid' => $j['has_akun_tidak_valid'] ?? false,
+                    'akun_tidak_valid' => $j['akun_tidak_valid'] ?? [],
                 ];
 
                 $this->dispatch('open-modal', id: 'detail-jurnal');
@@ -113,7 +115,11 @@ class KirimJurnalAkuntansi extends Page
                         'total_debit' => $j['total_debit'],
                         'total_kredit' => $j['total_kredit'],
                         'is_balance' => $j['is_balance'],
-                        'akun_tidak_dikenal' => $j['akun_tidak_dikenal'],
+                        // Peringatan: akun tidak terdaftar di COA baru (tidak memblokir).
+                        'akun_tidak_dikenal' => $j['akun_tidak_dikenal'] ?? [],
+                        // Pemblokir: akun UNKNOWN / akun lama tidak dikenal dari builder.
+                        'akun_tidak_valid' => $j['akun_tidak_valid'] ?? [],
+                        'has_akun_tidak_valid' => $j['has_akun_tidak_valid'] ?? false,
                         'status' => $j['status'],
                         'terakhir_dikirim' => $j['terakhir_dikirim']?->timezone('Asia/Jakarta')->format('d/m/Y H:i'),
                         'terakhir_oleh' => $j['terakhir_oleh'],
@@ -129,20 +135,13 @@ class KirimJurnalAkuntansi extends Page
     }
 
     /**
-     * Dipanggil tombol Kirim. Jika ada akun yang tidak dikenal di COA,
-     * tampilkan konfirmasi (pengingat ganti nomor akun) dulu; kalau tidak, langsung kirim.
+     * Dipanggil tombol Kirim. Selalu membuka modal konfirmasi: isinya berisi
+     * peringatan jika ada akun tidak dikenal di COA, atau konfirmasi biasa jika tidak ada.
+     * Akun tidak valid (has_akun_tidak_valid) memblokir: tombol nonaktif di view
+     * dan ditolak lagi di JurnalProduksiSender::kirim().
      */
     public function mintaKirim(string $jenis): void
     {
-        $adaAkunBermasalah = collect($this->ringkasan[$jenis]['jurnals'] ?? [])
-            ->contains(fn ($j) => ! empty($j['akun_tidak_dikenal']));
-
-        if (! $adaAkunBermasalah) {
-            $this->kirim($jenis);
-
-            return;
-        }
-
         $this->konfirmasiJenis = $jenis;
         $this->dispatch('open-modal', id: 'konfirmasi-akun');
     }
