@@ -491,9 +491,72 @@ class CoaAliasService
         return $this->extractAkunLama($ref);
     }
 
+    /**
+     * Akun bahan penolong (lem, hardner, staples, pewarna, tepung, solasi, reeling tape).
+     *
+     * Urutan:
+     * 1. Ambil dari sub_anak_akuns + MAP_AKUN_LAMA (extractAkunLama).
+     * 2. Kalau hasilnya BUKAN akun spesifik (masih 1402.0 induk, UNKNOWN,
+     *    atau kode lama yang belum terpetakan), tentukan akun dari NAMA bahan
+     *    (+ nama sub akun) lewat akunPenolongDariNama().
+     * 3. Kalau nama juga tidak dikenal, kembalikan hasil langkah 1.
+     *
+     * @param  mixed  $ref  baris referensi_harga_produksi
+     * @param  string|null  $namaBahan  nama bahan dari sheet, mis. "Lem pai", "Tepung"
+     * @return array{0:string,1:string,2:float} [nama, no, harga]
+     */
     public function extractAkunPenolong($ref, $namaBahan = null): array
     {
-        return $this->extractAkunLama($ref);
+        [$nama, $no, $harga] = $this->extractAkunLama($ref);
+
+        if ($this->perluDeteksiAkunPenolong($no)) {
+            $namaSub = $ref?->subAnakAkun?->nama_sub_anak_akun ?? '';
+            $akun = $this->akunPenolongDariNama(trim((string) $namaBahan.' '.$namaSub));
+
+            if ($akun) {
+                return [$akun['nama'], $akun['no'], $harga];
+            }
+        }
+
+        return [$nama, $no, $harga];
+    }
+
+    /**
+     * True kalau nomor akun hasil map belum spesifik untuk bahan penolong:
+     * akun induk 1402.0, UNKNOWN/kosong, atau tidak terdaftar di COA baru.
+     */
+    private function perluDeteksiAkunPenolong(?string $no): bool
+    {
+        $no = trim((string) $no);
+
+        return $no === '' || $no === 'UNKNOWN' || $no === '1402.0' || ! $this->isNomorAkunValid($no);
+    }
+
+    /**
+     * Tentukan akun bahan penolong dari teks nama bahan.
+     *
+     * @return array{no:string,nama:string}|null
+     */
+    private function akunPenolongDariNama(string $teks): ?array
+    {
+        $n = strtolower($teks);
+
+        if ($n === '') {
+            return null;
+        }
+
+        return match (true) {
+            preg_match('/\blem\b/', $n) === 1 => self::AKUN_LEM,
+            str_contains($n, 'hardner'), str_contains($n, 'hadner') => self::AKUN_HARDNER,
+            str_contains($n, 'staples'), str_contains($n, 'staple') => self::AKUN_ISI_STAPLES,
+            str_contains($n, 'pewarna') => self::AKUN_PEWARNA,
+            str_contains($n, 'tepung') => self::AKUN_TEPUNG,
+            str_contains($n, 'reeling') => self::AKUN_REELING_TAPE,
+            str_contains($n, 'solasi'), str_contains($n, 'isolasi') => str_contains($n, 'putih')
+                ? self::AKUN_SOLASI_PUTIH
+                : self::AKUN_SOLASI_COKLAT,
+            default => null,
+        };
     }
 
     private function extractAkunLama($ref): array
