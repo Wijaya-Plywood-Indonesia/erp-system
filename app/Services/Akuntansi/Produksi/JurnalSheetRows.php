@@ -49,8 +49,8 @@ final class JurnalSheetRows
                 ));
 
                 $jurnals[] = [
-                    'no_dokumen'      => $noDokumenFor($grup[0], count($jurnals)),
-                    'rows'            => $rows,
+                    'no_dokumen' => $noDokumenFor($grup[0], count($jurnals)),
+                    'rows' => $rows,
                     'akun_tidak_valid' => $akunTidakValid,
                 ];
                 $grup = [];
@@ -86,20 +86,29 @@ final class JurnalSheetRows
             $idBarang = $row[14] ?? null;
             $idBarang = (is_numeric($idBarang) && (int) $idBarang > 0) ? (int) $idBarang : null;
 
-            $grup[] = [
-                'no_akun'    => $noAkun,
-                'nama_akun'  => trim((string) ($row[0] ?? '')),
-                'tgl'        => self::tanggal($row[1] ?? null, $tanggal),
-                'map'        => $map,
-                'nama'       => trim((string) ($row[6] ?? '')),
+            // Kolom "No" (mis. no seri kayu masuk). Hanya ikut kalau terisi.
+            $no = trim((string) ($row[4] ?? ''));
+
+            $baris = [
+                'no_akun' => $noAkun,
+                'nama_akun' => trim((string) ($row[0] ?? '')),
+                'tgl' => self::tanggal($row[1] ?? null, $tanggal),
+                'map' => $map,
+                'nama' => trim((string) ($row[6] ?? '')),
                 'keterangan' => trim((string) ($row[7] ?? '')),
-                'hit_kbk'    => $hit,
-                'banyak'     => $banyak,
-                'm3'         => $m3,
-                'harga'      => $harga,
-                'total'      => self::total($hit, $banyak, $m3, $harga),
-                'id_barang'  => $idBarang,
+                'hit_kbk' => $hit,
+                'banyak' => $banyak,
+                'm3' => $m3,
+                'harga' => $harga,
+                'total' => self::total($hit, $banyak, $m3, $harga),
+                'id_barang' => $idBarang,
             ];
+
+            if ($no !== '' && $no !== '-') {
+                $baris['no'] = $no;
+            }
+
+            $grup[] = $baris;
         }
 
         $tutup();
