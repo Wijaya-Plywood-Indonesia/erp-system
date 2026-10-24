@@ -28,6 +28,7 @@ class ModalSandingsTable
                 'barangSetengahJadi.grade.kategoriBarang',
                 'barangSetengahJadi.ukuran',
                 'barangSetengahJadi.jenisBarang',
+                'hasilSanding',
                 'serahTerimaHp.triplekMutasiKeluar.jenisKayu',
                 'serahTerimaHp.platformMthMutasiKeluar.jenisKayu',
                 'serahTerimaHp.triplekMthMutasiKeluar.jenisKayu',
@@ -300,34 +301,9 @@ class ModalSandingsTable
                                 ->send();
                         }
                     }),
-
-                CreateAction::make()
-                    ->label('+ Tambah Modal')
-                    ->hidden(
-                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
-
             ])
-            ->recordActions([
-                EditAction::make()
-                    ->label('')
-                    ->hidden(
-                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
-                DeleteAction::make()
-                    ->label('')
-                    ->hidden(
-                        fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
-            ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make()
-                        ->hidden(
-                            fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                        ),
-                ]),
-            ]);
+            ->recordActions([])
+            ->toolbarActions([]);
     }
 
     /**

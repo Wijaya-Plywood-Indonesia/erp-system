@@ -2,8 +2,7 @@
 
 namespace App\Providers;
 
-use App\Support\ResolveBarangCache;
-use Illuminate\Support\Facades\Http;
+use App\Models\HasilSanding;
 use App\Models\ModalSanding;
 use App\Models\NotaKayu;
 use App\Models\PenggunaanLahanRotary;
@@ -14,6 +13,7 @@ use App\Models\ValidasiNyusup;
 use App\Models\ValidasiPilihPlywood;
 use App\Models\ValidasiPressDryer;
 use App\Models\ValidasiStik;
+use App\Observers\HasilSandingObserver;
 use App\Observers\ModalSandingObserver;
 use App\Observers\NotaKayuObserver;
 use App\Observers\ProductionValidationObserver;
@@ -53,9 +53,11 @@ use App\Services\FingerParsers\MesinZkParser;
 use App\Services\NewRekapAbsensiPegawaiService;
 use App\Services\Payroll\WeeklyRekapPotonganGajiService;
 use App\Services\RekapPotonganGajiService;
+use App\Support\ResolveBarangCache;
 use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\ServiceProvider;
 
@@ -164,6 +166,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Http::globalMiddleware(ResolveBarangCache::middleware());
         // ⬆⬆⬆  WAJIB: supaya MySQL ikut Asia/Jakarta
+        HasilSanding::observe(HasilSandingObserver::class);
         ModalSanding::observe(ModalSandingObserver::class);
         RencanaKerjaHp::observe(RencanaKerjaHpObserver::class);
         // ValidasiHasilRotary::observe(ValidasiHasilRotaryObserver::class);
