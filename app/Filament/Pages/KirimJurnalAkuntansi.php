@@ -43,6 +43,9 @@ class KirimJurnalAkuntansi extends Page
     /** @var array<string, array> hasil kirim terakhir per jenis (untuk ditampilkan) */
     public array $hasilKirim = [];
 
+    /** Jenis produksi yang sedang menunggu konfirmasi kirim (ada akun tidak dikenal). */
+    public ?string $konfirmasiJenis = null;
+
     /** @var array|null jurnal yang sedang dilihat di jendela rincian */
     public ?array $detail = null;
 
@@ -110,6 +113,7 @@ class KirimJurnalAkuntansi extends Page
                         'total_debit' => $j['total_debit'],
                         'total_kredit' => $j['total_kredit'],
                         'is_balance' => $j['is_balance'],
+                        'akun_tidak_dikenal' => $j['akun_tidak_dikenal'],
                         'status' => $j['status'],
                         'terakhir_dikirim' => $j['terakhir_dikirim']?->timezone('Asia/Jakarta')->format('d/m/Y H:i'),
                         'terakhir_oleh' => $j['terakhir_oleh'],
@@ -121,6 +125,36 @@ class KirimJurnalAkuntansi extends Page
             }
 
             $this->ringkasan[$key] = $item;
+        }
+    }
+
+    /**
+     * Dipanggil tombol Kirim. Jika ada akun yang tidak dikenal di COA,
+     * tampilkan konfirmasi (pengingat ganti nomor akun) dulu; kalau tidak, langsung kirim.
+     */
+    public function mintaKirim(string $jenis): void
+    {
+        $adaAkunBermasalah = collect($this->ringkasan[$jenis]['jurnals'] ?? [])
+            ->contains(fn ($j) => ! empty($j['akun_tidak_dikenal']));
+
+        if (! $adaAkunBermasalah) {
+            $this->kirim($jenis);
+
+            return;
+        }
+
+        $this->konfirmasiJenis = $jenis;
+        $this->dispatch('open-modal', id: 'konfirmasi-akun');
+    }
+
+    public function kirimMeski(): void
+    {
+        $jenis = $this->konfirmasiJenis;
+        $this->konfirmasiJenis = null;
+        $this->dispatch('close-modal', id: 'konfirmasi-akun');
+
+        if ($jenis) {
+            $this->kirim($jenis);
         }
     }
 

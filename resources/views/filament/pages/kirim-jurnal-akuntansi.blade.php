@@ -15,13 +15,13 @@
 
     <div class="relative mt-6">
         {{-- Animasi loading saat ganti tanggal atau saat mengirim --}}
-        <div wire:loading.flex wire:target="tanggal, kirim"
+        <div wire:loading.flex wire:target="tanggal, kirim, kirimMeski"
             class="absolute inset-0 z-10 items-start justify-center rounded-lg bg-white/70 dark:bg-zinc-900/70 pt-24">
             <div class="flex items-center gap-3 rounded-lg bg-white dark:bg-zinc-800 px-5 py-3 shadow border border-zinc-200 dark:border-zinc-700">
                 <x-filament::loading-indicator class="h-6 w-6" />
                 <span class="text-sm font-medium">
                     <span wire:loading wire:target="tanggal">Memuat jurnal...</span>
-                    <span wire:loading wire:target="kirim">Mengirim ke akuntansi...</span>
+                    <span wire:loading wire:target="kirim, kirimMeski">Mengirim ke akuntansi...</span>
                 </span>
             </div>
         </div>
@@ -33,10 +33,9 @@
                         <h2 class="text-lg font-bold">{{ $item['label'] }}</h2>
 
                         <x-filament::button
-                            wire:click="kirim('{{ $jenis }}')"
+                            wire:click="mintaKirim('{{ $jenis }}')"
                             wire:loading.attr="disabled"
-                            wire:target="kirim('{{ $jenis }}')"
-                            wire:confirm="Kirim jurnal {{ $item['label'] }} tanggal {{ \Carbon\Carbon::parse($tanggal)->format('d/m/Y') }} ke akuntansi?"
+                            wire:target="mintaKirim('{{ $jenis }}'), kirim"
                             icon="heroicon-o-paper-airplane"
                             :disabled="empty($item['jurnals']) || filled($item['error'])"
                         >
@@ -50,6 +49,20 @@
                         @elseif (empty($item['jurnals']))
                             <p class="text-sm text-zinc-500">Belum ada data produksi pada tanggal ini.</p>
                         @else
+                            @php
+                                $peringatanAkun = collect($item['jurnals'])
+                                    ->filter(fn ($x) => ! empty($x['akun_tidak_dikenal']))
+                                    ->mapWithKeys(fn ($x) => [$x['no_dokumen'] => $x['akun_tidak_dikenal']]);
+                            @endphp
+                            @if ($peringatanAkun->isNotEmpty())
+                                <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 p-3 text-sm text-amber-800 dark:text-amber-200">
+                                    <p class="font-semibold">Perhatian: ada akun yang tidak dikenal di COA.</p>
+                                    <p>Jurnal tetap bisa dikirim, tetapi jangan lupa mengganti nomor akunnya di web akuntansi.</p>
+                                    @foreach ($peringatanAkun as $noDok => $akuns)
+                                        <p class="font-mono text-xs mt-1">{{ $noDok }}: {{ implode(', ', $akuns) }}</p>
+                                    @endforeach
+                                </div>
+                            @endif
                             <div class="overflow-x-auto">
                                 <table class="w-full text-sm border-collapse">
                                     <thead>
@@ -72,9 +85,12 @@
                                                 <td class="p-2 text-right">{{ number_format($j['total_debit'], 0, ',', '.') }}</td>
                                                 <td class="p-2 text-right">{{ number_format($j['total_kredit'], 0, ',', '.') }}</td>
                                                 <td class="p-2">
+                                                    @if (! empty($j['akun_tidak_dikenal']))
+                                                        <x-filament::badge color="warning" class="mb-1">Akun tidak dikenal</x-filament::badge>
+                                                    @endif
                                                     @if (! $j['is_balance'])
                                                         <x-filament::badge color="danger">Tidak balance</x-filament::badge>
-                                                    @elseif ($j['status'] === 'terkirim')
+                                                    @elseif ($j['status'] === 'terkirim' && empty($j['akun_tidak_dikenal']))
                                                         <x-filament::badge color="success">Terkirim</x-filament::badge>
                                                     @elseif ($j['status'] === 'berubah')
                                                         <x-filament::badge color="warning">Data berubah, kirim ulang</x-filament::badge>
@@ -119,6 +135,44 @@
             @endforeach
         </div>
     </div>
+
+    {{-- Konfirmasi kirim saat ada akun tidak dikenal --}}
+    <x-filament::modal id="konfirmasi-akun" width="lg">
+        @php
+            $jurnalKonfirmasi = $konfirmasiJenis ? ($ringkasan[$konfirmasiJenis]['jurnals'] ?? []) : [];
+            $adaAkunBermasalah = collect($jurnalKonfirmasi)->contains(fn ($x) => ! empty($x['akun_tidak_dikenal']));
+        @endphp
+
+        <x-slot name="heading">
+            {{ $adaAkunBermasalah ? 'Ada akun yang tidak dikenal di COA' : 'Kirim jurnal ke akuntansi?' }}
+        </x-slot>
+        <x-slot name="description">
+            @if ($adaAkunBermasalah)
+                Jurnal akan tetap dikirim ke web akuntansi. Setelah terkirim, jangan lupa mengganti nomor akun berikut di web akuntansi.
+            @elseif ($konfirmasiJenis)
+                Kirim jurnal {{ $ringkasan[$konfirmasiJenis]['label'] ?? '' }} tanggal {{ \Carbon\Carbon::parse($tanggal)->format('d/m/Y') }} ke akuntansi?
+            @endif
+        </x-slot>
+
+        @if ($adaAkunBermasalah)
+            <div class="space-y-1 text-sm">
+                @foreach ($jurnalKonfirmasi as $x)
+                    @foreach ($x['akun_tidak_dikenal'] ?? [] as $akun)
+                        <p><span class="font-mono text-xs">{{ $x['no_dokumen'] }}</span>: <span class="font-mono">{{ $akun }}</span></p>
+                    @endforeach
+                @endforeach
+            </div>
+        @endif
+
+        <x-slot name="footer">
+            <x-filament::button color="{{ $adaAkunBermasalah ? 'warning' : 'primary' }}" wire:click="kirimMeski" wire:loading.attr="disabled">
+                {{ $adaAkunBermasalah ? 'Tetap kirim' : 'Kirim' }}
+            </x-filament::button>
+            <x-filament::button color="gray" x-on:click="$dispatch('close-modal', { id: 'konfirmasi-akun' })">
+                Batal
+            </x-filament::button>
+        </x-slot>
+    </x-filament::modal>
 
     {{-- Rincian jurnal (hanya melihat, tidak mengirim) --}}
     <x-filament::modal id="detail-jurnal" width="5xl">
