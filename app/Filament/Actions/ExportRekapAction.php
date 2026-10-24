@@ -29,7 +29,8 @@ class ExportRekapAction
                     ->label('Nomor jurnal awal')
                     ->numeric()
                     ->minValue(1)
-                    ->placeholder('Kosongkan untuk mulai dari 1'),
+                    ->placeholder('Kosongkan untuk mulai dari 1')
+                    ->helperText('Nomor jurnal berjalan per bulan di sheet jurnal, dipakai bersama sj/bkl/bm/bml. Isi dengan nomor bk pertama pada tanggal ini.'),
             ])
             ->action(fn (array $data) => Excel::download(
                 new RekapNotaExport(

@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Services\DashboardPengawas\DashboardPengawasService;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
@@ -14,6 +15,7 @@ use Livewire\Attributes\Url;
 
 class DashboardPengawas extends Page implements HasForms
 {
+    use HasPageShield;
     use InteractsWithForms;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-presentation-chart-line';

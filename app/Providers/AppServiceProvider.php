@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Support\ResolveBarangCache;
+use Illuminate\Support\Facades\Http;
 use App\Models\ModalSanding;
 use App\Models\NotaKayu;
 use App\Models\PenggunaanLahanRotary;
@@ -160,6 +162,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Http::globalMiddleware(ResolveBarangCache::middleware());
         // ⬆⬆⬆  WAJIB: supaya MySQL ikut Asia/Jakarta
         ModalSanding::observe(ModalSandingObserver::class);
         RencanaKerjaHp::observe(RencanaKerjaHpObserver::class);
