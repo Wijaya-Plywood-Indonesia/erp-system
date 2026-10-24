@@ -17,6 +17,9 @@ use Carbon\Carbon;
  * Tanggal yang dipilih = tanggal nota dilunasi ("Lunas - dd/mm/yyyy"),
  * sama dengan halaman laporannya. Satu jurnal per nota:
  * MASUK/{Ymd}/{no_nota}.
+ *
+ * Di akuntansi jurnal ini disimpan sebagai pembelian (modul 'pembelian_kayu'),
+ * bukan produksi, dan no seri nota ikut dikirim di kolom "No".
  */
 class KayuMasukJurnalSource implements JurnalProduksiSource
 {
@@ -27,7 +30,7 @@ class KayuMasukJurnalSource implements JurnalProduksiSource
 
     public function label(): string
     {
-        return 'Kayu Masuk';
+        return 'Pembelian Kayu (Kayu Masuk)';
     }
 
     public function build(string $tanggal): array

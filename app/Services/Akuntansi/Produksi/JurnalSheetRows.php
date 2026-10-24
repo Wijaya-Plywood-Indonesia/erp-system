@@ -69,7 +69,10 @@ final class JurnalSheetRows
             $idBarang = $row[14] ?? null;
             $idBarang = (is_numeric($idBarang) && (int) $idBarang > 0) ? (int) $idBarang : null;
 
-            $grup[] = [
+            // Kolom "No" (mis. no seri kayu masuk). Hanya ikut kalau terisi.
+            $no = trim((string) ($row[4] ?? ''));
+
+            $baris = [
                 'no_akun' => $noAkun,
                 'nama_akun' => trim((string) ($row[0] ?? '')),
                 'tgl' => self::tanggal($row[1] ?? null, $tanggal),
@@ -83,6 +86,12 @@ final class JurnalSheetRows
                 'total' => self::total($hit, $banyak, $m3, $harga),
                 'id_barang' => $idBarang,
             ];
+
+            if ($no !== '' && $no !== '-') {
+                $baris['no'] = $no;
+            }
+
+            $grup[] = $baris;
         }
 
         $tutup();
