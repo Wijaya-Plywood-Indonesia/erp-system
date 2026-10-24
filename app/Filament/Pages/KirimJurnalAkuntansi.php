@@ -71,14 +71,16 @@ class KirimJurnalAkuntansi extends Page
             try {
                 foreach ($sender->preview($key, $this->tanggal) as $j) {
                     $item['jurnals'][] = [
-                        'no_dokumen' => $j['no_dokumen'],
-                        'jumlah_baris' => $j['jumlah_baris'],
-                        'total_debit' => $j['total_debit'],
-                        'total_kredit' => $j['total_kredit'],
-                        'is_balance' => $j['is_balance'],
-                        'status' => $j['status'],
-                        'terakhir_dikirim' => $j['terakhir_dikirim']?->timezone('Asia/Jakarta')->format('d/m/Y H:i'),
-                        'terakhir_oleh' => $j['terakhir_oleh'],
+                        'no_dokumen'        => $j['no_dokumen'],
+                        'jumlah_baris'      => $j['jumlah_baris'],
+                        'total_debit'       => $j['total_debit'],
+                        'total_kredit'      => $j['total_kredit'],
+                        'is_balance'        => $j['is_balance'],
+                        'has_akun_tidak_valid' => $j['has_akun_tidak_valid'],
+                        'akun_tidak_valid'  => $j['akun_tidak_valid'],
+                        'status'            => $j['status'],
+                        'terakhir_dikirim'  => $j['terakhir_dikirim']?->timezone('Asia/Jakarta')->format('d/m/Y H:i'),
+                        'terakhir_oleh'     => $j['terakhir_oleh'],
                     ];
                 }
             } catch (\Throwable $e) {

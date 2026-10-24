@@ -34,10 +34,14 @@ class JurnalProduksiSender
 
         foreach ($jurnals as &$j) {
             $rows = $j['rows'];
+            $akunTidakValid = $j['akun_tidak_valid'] ?? [];
+
             $j['jumlah_baris'] = count($rows);
             $j['total_debit'] = (float) collect($rows)->where('map', 'd')->sum('total');
             $j['total_kredit'] = (float) collect($rows)->where('map', 'k')->sum('total');
             $j['is_balance'] = abs($j['total_debit'] - $j['total_kredit']) <= 1;
+            $j['has_akun_tidak_valid'] = count($akunTidakValid) > 0;
+            $j['akun_tidak_valid'] = $akunTidakValid;
             $j['hash'] = sha1(json_encode($rows));
 
             $terakhir = JurnalProduksiKirimLog::where('no_dokumen', $j['no_dokumen'])
@@ -82,6 +86,22 @@ class JurnalProduksiSender
         $tidakBalance = collect($jurnals)->where('is_balance', false)->pluck('no_dokumen')->all();
         if ($tidakBalance) {
             $pesan = 'Jurnal tidak balance (debit != kredit): '.implode(', ', $tidakBalance).'. Tidak dikirim.';
+            foreach ($jurnals as $j) {
+                $this->catat($jenis, $tanggal, $j, 'gagal', $pesan, $userId);
+            }
+
+            return $this->gagal($pesan);
+        }
+
+        // Blokir jika ada akun yang belum terpetakan ke COA (UNKNOWN atau akun lama tidak dikenal)
+        $adaAkunTidakValid = collect($jurnals)->where('has_akun_tidak_valid', true);
+        if ($adaAkunTidakValid->isNotEmpty()) {
+            $detail = $adaAkunTidakValid->map(function ($j) {
+                $akun = implode(', ', $j['akun_tidak_valid']);
+
+                return "{$j['no_dokumen']}: {$akun}";
+            })->implode('; ');
+            $pesan = "Akun tidak dikenal di COA pada: {$detail}. Lengkapi referensi harga/COA terlebih dahulu.";
             foreach ($jurnals as $j) {
                 $this->catat($jenis, $tanggal, $j, 'gagal', $pesan, $userId);
             }
