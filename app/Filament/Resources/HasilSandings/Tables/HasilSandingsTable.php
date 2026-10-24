@@ -23,6 +23,70 @@ use Illuminate\Support\HtmlString;
 class HasilSandingsTable
 {
     /**
+     * Label semua tujuan serah yang dikenal sistem.
+     */
+    protected const TUJUAN_LABEL = [
+        'platform_jadi' => 'Gudang Platform Jadi',
+        'triplek_jadi' => 'Gudang Triplek Jadi',
+    ];
+
+    /**
+     * Kategori barang (huruf kecil) untuk palet ini:
+     *  1. dari BarangSetengahJadi -> grade -> kategoriBarang -> nama_kategori
+     *  2. fallback dari serahTerimaHp: platform mentah => "platform",
+     *     triplek jadi / triplek mentah => "plywood"
+     */
+    protected static function kategoriBarang($record): string
+    {
+        $bsj = self::resolveBsj($record);
+        $kategori = strtolower((string) ($bsj?->grade?->kategoriBarang?->nama_kategori ?? ''));
+
+        if ($kategori !== '') {
+            return $kategori;
+        }
+
+        $serah = $record->serahTerimaHp ?? $record->modalSanding?->serahTerimaHp;
+        if ($serah) {
+            if ($serah->id_platform_mth_mutasi_keluar !== null) {
+                return 'platform';
+            }
+            if ($serah->id_triplek_mutasi_keluar !== null || $serah->id_triplek_mth_mutasi_keluar !== null) {
+                return 'plywood';
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Tujuan serah yang BOLEH dipilih untuk palet ini:
+     *  - kategori mengandung "platform"          -> hanya Gudang Platform Jadi
+     *  - kategori mengandung "plywood"/"triplek" -> hanya Gudang Triplek Jadi
+     *  - kategori tidak dikenal / data kosong    -> kedua pilihan tetap tersedia
+     *
+     * @return array<string, string>  [kode_tujuan => label]
+     */
+    protected static function tujuanTersedia($record): array
+    {
+        $record->loadMissing([
+            'barangSetengahJadi.grade.kategoriBarang',
+            'modalSandings.barangSetengahJadi.grade.kategoriBarang',
+        ]);
+
+        $kategori = self::kategoriBarang($record);
+
+        if ($kategori !== '' && str_contains($kategori, 'platform')) {
+            return ['platform_jadi' => self::TUJUAN_LABEL['platform_jadi']];
+        }
+
+        if ($kategori !== '' && (str_contains($kategori, 'plywood') || str_contains($kategori, 'triplek'))) {
+            return ['triplek_jadi' => self::TUJUAN_LABEL['triplek_jadi']];
+        }
+
+        return self::TUJUAN_LABEL;
+    }
+
+    /**
      * Apakah palet hasil sanding ini SUDAH DITERIMA di gudang tujuan?
      *
      *  - triplek_jadi  -> SerahTerimaTriplekJadi (diterima_oleh != '-')
@@ -327,10 +391,10 @@ class HasilSandingsTable
                         $record->loadMissing([
                             'barangSetengahJadi.ukuran',
                             'barangSetengahJadi.jenisBarang',
-                            'barangSetengahJadi.grade',
+                            'barangSetengahJadi.grade.kategoriBarang',
                             'modalSandings.barangSetengahJadi.ukuran',
                             'modalSandings.barangSetengahJadi.jenisBarang',
-                            'modalSandings.barangSetengahJadi.grade',
+                            'modalSandings.barangSetengahJadi.grade.kategoriBarang',
                         ]);
 
                         $bsj = self::resolveBsj($record);
@@ -352,6 +416,10 @@ class HasilSandingsTable
                         $namaGrade = $bsj?->grade?->nama_grade
                             ?? $mutasi?->kw_grade
                             ?? '-';
+
+                        // Pilihan tujuan dibatasi sesuai kategori barang (platform / plywood).
+                        $tujuan = self::tujuanTersedia($record);
+                        $hanyaSatu = count($tujuan) === 1;
 
                         return [
                             Grid::make(2)->schema([
@@ -377,11 +445,11 @@ class HasilSandingsTable
 
                             Radio::make('tujuan_serah')
                                 ->label('Serahkan ke')
-                                ->options([
-                                    'platform_jadi' => 'Gudang Platform Jadi',
-                                    'triplek_jadi' => 'Gudang Triplek Jadi',
-                                ])
-                                ->default('platform_jadi')
+                                ->options($tujuan)
+                                ->default(array_key_first($tujuan))
+                                ->helperText($hanyaSatu
+                                    ? 'Tujuan ditentukan otomatis sesuai jenis barang.'
+                                    : null)
                                 ->required(),
                         ];
                     })
@@ -393,7 +461,9 @@ class HasilSandingsTable
                         // 1. Ambil ulang dari DB (hindari race condition)
                         $fresh = $record->fresh([
                             'barangSetengahJadi.ukuran',
+                            'barangSetengahJadi.grade.kategoriBarang',
                             'modalSandings.barangSetengahJadi.ukuran',
+                            'modalSandings.barangSetengahJadi.grade.kategoriBarang',
                         ]);
 
                         if ($fresh->diserahkan_at !== null) {
@@ -422,7 +492,19 @@ class HasilSandingsTable
                             return;
                         }
 
-                        // 4. Satu transaksi: pastikan ukuran (buat baru jika perlu),
+                        // 4. Tujuan harus sesuai jenis barang (validasi ulang di server,
+                        //    jangan hanya mengandalkan pilihan di form).
+                        $diperbolehkan = self::tujuanTersedia($fresh);
+                        if (! array_key_exists($data['tujuan_serah'], $diperbolehkan)) {
+                            Notification::make()->danger()
+                                ->title('Tujuan serah tidak sesuai jenis barang')
+                                ->body('Barang ini hanya bisa diserahkan ke '.implode(' / ', $diperbolehkan).'.')
+                                ->send();
+
+                            return;
+                        }
+
+                        // 5. Satu transaksi: pastikan ukuran (buat baru jika perlu),
                         //    update hasil sanding, insert serah terima.
                         $berhasil = DB::transaction(function () use ($fresh, $data) {
                             if (! self::pastikanUkuran($fresh)) {
@@ -460,7 +542,7 @@ class HasilSandingsTable
                         Notification::make()->success()
                             ->title('Palet '.$fresh->no_palet.' diserahkan')
                             ->body(number_format((float) $fresh->kuantitas).' lembar → '
-                                .($data['tujuan_serah'] === 'platform_jadi' ? 'Gudang Platform Jadi' : 'Gudang Triplek Jadi'))
+                                .self::TUJUAN_LABEL[$data['tujuan_serah']])
                             ->send();
                     }),
 

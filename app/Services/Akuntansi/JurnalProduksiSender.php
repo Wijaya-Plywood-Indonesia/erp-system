@@ -55,7 +55,8 @@ class JurnalProduksiSender
             // Akun yang tidak terdaftar di COA baru: hanya peringatan, TIDAK memblokir pengiriman.
             $j['akun_tidak_dikenal'] = $this->akunTidakDikenal($rows);
 
-            // Akun tidak valid dari builder (UNKNOWN / akun lama tidak dikenal): MEMBLOKIR pengiriman.
+            // Akun tidak valid dari builder (UNKNOWN / akun lama tidak dikenal):
+            // hanya peringatan, TIDAK memblokir pengiriman.
             $j['has_akun_tidak_valid'] = count($akunTidakValid) > 0;
             $j['akun_tidak_valid'] = $akunTidakValid;
 
@@ -114,21 +115,8 @@ class JurnalProduksiSender
             return $this->gagal($pesan);
         }
 
-        // Blokir jika ada akun yang belum terpetakan ke COA (UNKNOWN atau akun lama tidak dikenal)
-        $adaAkunTidakValid = collect($jurnals)->where('has_akun_tidak_valid', true);
-        if ($adaAkunTidakValid->isNotEmpty()) {
-            $detail = $adaAkunTidakValid->map(function ($j) {
-                $akun = implode(', ', $j['akun_tidak_valid']);
-
-                return "{$j['no_dokumen']}: {$akun}";
-            })->implode('; ');
-            $pesan = "Akun tidak dikenal di COA pada: {$detail}. Lengkapi referensi harga/COA terlebih dahulu.";
-            foreach ($jurnals as $j) {
-                $this->catat($jenis, $tanggal, $j, 'gagal', $pesan, $userId);
-            }
-
-            return $this->gagal($pesan);
-        }
+        // Akun tidak dikenal / tidak valid TIDAK memblokir: admin sudah diberi
+        // peringatan + konfirmasi di layar, nomor akunnya diganti di web akuntansi.
 
         // Pengirim: dicatat di akuntansi sebagai pembuat jurnal (dicocokkan lewat email/nama).
         $pengirim = $userId ? User::find($userId) : null;
