@@ -346,6 +346,7 @@ class GudangVeneerJadi extends Page
 
         $this->showConfirmModal = false;
         $this->selectedItemId = null;
+        unset($this->splitStok, $this->antreanFiltered);
         $this->dispatch('$refresh');
     }
 
@@ -576,6 +577,8 @@ class GudangVeneerJadi extends Page
 
     /**
      * Sumber 1: tabel GudangVeneerJadi (Produksi/Repair).
+     * Dibatasi ke item 'belum diterima' ditambah riwayat terbatas (50) agar tidak
+     * memuat ribuan row dan menyebabkan DOM browser/HP lag atau crash.
      */
     protected function ambilAntreanDariGudang(): Collection
     {
@@ -598,9 +601,47 @@ class GudangVeneerJadi extends Page
                     (gudang_veneer_jadis.tebal + 0)
                 )) LIKE ?', ["%{$q}%"]);
             });
+        } else {
+            // Ambil semua yang belum diterima, dan batasi yang sudah diterima ke 50 data terbaru
+            $belumDiterima = (clone $query)
+                ->where('gudang_veneer_jadis.status_gudang', 'belum diterima')
+                ->get();
+
+            $sudahDiterima = (clone $query)
+                ->where('gudang_veneer_jadis.status_gudang', '!=', 'belum diterima')
+                ->orderByDesc('gudang_veneer_jadis.updated_at')
+                ->limit(50)
+                ->get();
+
+            $records = $belumDiterima->concat($sudahDiterima);
+
+            return $records->map(fn ($item) => [
+                'id' => 'gudang-'.$item->id,
+                'source' => 'gudang',
+                'jenis_kayu' => $item->jenis_kayu_nama,
+                'panjang' => $item->panjang,
+                'lebar' => $item->lebar,
+                'tebal' => $item->tebal,
+                'kw' => $item->kw_grade,
+                'jumlah' => $item->stok_lembar,
+                'stok_kubikasi' => $item->stok_kubikasi,
+                'created_at' => $item->created_at,
+                'created_at_ts' => $item->created_at?->timestamp ?? 0,
+                'status_gudang' => $item->status_gudang ?? 'belum diterima',
+                'diterima_at' => $item->diterima_at,
+                'diterima_by' => $item->diterima_by,
+                'penerima_name' => $item->penerima?->name ?? 'N/A',
+                'keterangan' => $item->keterangan,
+                'sumber_label' => $item->id_produksi_repair ? 'Repair' : 'Produksi',
+            ])
+                ->sortBy([
+                    fn ($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
+                    fn ($item) => -$item['created_at_ts'],
+                ])
+                ->values();
         }
 
-        return $query->get()->map(fn ($item) => [
+        return $query->limit(100)->get()->map(fn ($item) => [
             'id' => 'gudang-'.$item->id,
             'source' => 'gudang',
             'jenis_kayu' => $item->jenis_kayu_nama,
@@ -828,6 +869,7 @@ class GudangVeneerJadi extends Page
 
     /**
      * RIWAYAT MUTASI KELUAR
+     * Dibatasi 50 terbaru untuk menghindari beban DOM di HP/mobile.
      */
     public function getRiwayatKeluarFilteredProperty(): Collection
     {
@@ -846,7 +888,7 @@ class GudangVeneerJadi extends Page
             });
         }
 
-        return $query->get()->map(fn ($item) => [
+        return $query->limit(50)->get()->map(fn ($item) => [
             'id' => $item->id,
             'bisa_diedit' => $this->mutasiKeluarBisaDiedit($item),
             'created_at' => $item->created_at->format('d/m/Y H:i'),
@@ -902,6 +944,7 @@ class GudangVeneerJadi extends Page
 
     /**
      * Riwayat veneer (jenis_terima = 'jadi') yang SUDAH diterima.
+     * Dibatasi 50 terakhir agar tidak crash/force close di perangkat mobile.
      */
     public function getRiwayatSerahTerimaProperty(): Collection
     {
@@ -926,6 +969,7 @@ class GudangVeneerJadi extends Page
                 'mutasiKeluarPalet.mutasiKeluar.jenisKayu',
             ])
             ->orderByDesc('updated_at')
+            ->limit(50)
             ->get();
     }
 
@@ -1065,6 +1109,8 @@ class GudangVeneerJadi extends Page
                     'status' => 'Terima Veneer',
                 ]);
             });
+
+            unset($this->serahTerima, $this->riwayatSerahTerima, $this->splitStok);
 
             Notification::make()
                 ->title('Veneer jadi berhasil diterima ke Gudang.')
