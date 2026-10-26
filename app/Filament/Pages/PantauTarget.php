@@ -53,8 +53,10 @@ class PantauTarget extends Page
                       });
                 });
             })
+            ->orderBy('id_mesin')
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            ->groupBy(fn($target) => $target->mesin?->nama_mesin ?? 'Tanpa Mesin');
     }
     
     public function getMesinsProperty()

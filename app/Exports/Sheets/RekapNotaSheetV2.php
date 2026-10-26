@@ -144,7 +144,8 @@ class RekapNotaSheetV2 extends DefaultValueBinder implements FromArray, WithColu
     public function array(): array
     {
         $isBk = $this->jenis === 'bk';
-        $prefixes = $isBk ? ['BK'] : ['BM', 'BML'];
+        // Menyertakan BK, BKL (Barang Keluar Lainnya), dan SJ / DY (Surat Jalan Penjualan)
+        $prefixes = $isBk ? ['BK', 'BKL', 'SJ', 'DY'] : ['BM', 'BML'];
 
         $query = $isBk ? NotaBarangKeluar::query() : NotaBarangMasuk::query();
 
@@ -159,17 +160,43 @@ class RekapNotaSheetV2 extends DefaultValueBinder implements FromArray, WithColu
         $rows = [];
 
         foreach ($notas as $nota) {
+            $prefix = strtoupper($this->prefix($nota));
             $items = $this->items($nota);
             if ($items === []) {
                 continue;
             }
 
-            // Pola: Baris Debit dulu, lalu baris Kredit
-            foreach ($items as $item) {
-                $rows[] = $this->row($nota, $noJurnal, $this->akunV2($item, 'd', $isBk), 'd', $item);
-            }
-            foreach ($items as $item) {
-                $rows[] = $this->row($nota, $noJurnal, $this->akunV2($item, 'k', $isBk), 'k', $item);
+            // Jika transaksi Penjualan (SJ / DY):
+            // Pasangan 1 (Beban Pokok & Pengurangan Stok):
+            //   Debit:  5069.1 (Harga Pokok Penjualan)
+            //   Kredit: 1404.2 (Persediaan Triplek Siap Jual)
+            // Pasangan 2 (Piutang & Pendapatan Penjualan):
+            //   Debit:  1122.1 (Piutang Usaha - Pihak Ketiga)
+            //   Kredit: 4002.1 (Penjualan Domestik)
+            if (in_array($prefix, ['SJ', 'DY'], true)) {
+                // Pasangan 1: HPP (D) vs Persediaan Triplek (K)
+                foreach ($items as $item) {
+                    $rows[] = $this->row($nota, $noJurnal, BkbmCoaService::AKUN_HPP, 'd', $item);
+                }
+                foreach ($items as $item) {
+                    $rows[] = $this->row($nota, $noJurnal, BkbmCoaService::AKUN_TRIPLEK_SIAP_JUAL, 'k', $item);
+                }
+
+                // Pasangan 2: Piutang Usaha (D) vs Penjualan Domestik (K)
+                foreach ($items as $item) {
+                    $rows[] = $this->row($nota, $noJurnal, BkbmCoaService::AKUN_PIUTANG_USAHA, 'd', $item);
+                }
+                foreach ($items as $item) {
+                    $rows[] = $this->row($nota, $noJurnal, BkbmCoaService::AKUN_PENJUALAN_DOMESTIK, 'k', $item);
+                }
+            } else {
+                // Transaksi BK & BKL biasa: Baris Debit dulu, lalu baris Kredit
+                foreach ($items as $item) {
+                    $rows[] = $this->row($nota, $noJurnal, $this->akunV2($item, 'd', $isBk, $prefix), 'd', $item);
+                }
+                foreach ($items as $item) {
+                    $rows[] = $this->row($nota, $noJurnal, $this->akunV2($item, 'k', $isBk, $prefix), 'k', $item);
+                }
             }
 
             $noJurnal++;
@@ -269,9 +296,58 @@ class RekapNotaSheetV2 extends DefaultValueBinder implements FromArray, WithColu
     /**
      * Resolusi akun COA baru (V2) tanpa akun .0
      */
-    protected function akunV2(array $item, string $sisi, bool $isBk): array
+    protected function akunV2(array $item, string $sisi, bool $isBk, string $prefix = 'BK'): array
     {
-        // 1. Jika item Veneer dari mutasi palet
+        // 1. Transaksi Penjualan: Surat Jalan (SJ) & DY
+        if (in_array($prefix, ['SJ', 'DY'], true)) {
+            if ($sisi === 'd') {
+                return [
+                    'nama' => BkbmCoaService::AKUN_PIUTANG_USAHA['nama'],
+                    'kode' => BkbmCoaService::AKUN_PIUTANG_USAHA['no'],
+                ];
+            } else {
+                return [
+                    'nama' => BkbmCoaService::AKUN_PENJUALAN_DOMESTIK['nama'],
+                    'kode' => BkbmCoaService::AKUN_PENJUALAN_DOMESTIK['no'],
+                ];
+            }
+        }
+
+        // 2. Transaksi Barang Keluar Lainnya (BKL)
+        if ($prefix === 'BKL') {
+            $akunBarang = $this->coaService->getAkunBarang(
+                $item['nama'] ?? '',
+                $item['keterangan'] ?? ''
+            );
+
+            if ($sisi === 'd') {
+                // Sisi Debit BKL: Jika sebetan/limbah -> Beban Operasional Pabrik, jika bukan -> Piutang Lainnya
+                if (str_contains(strtolower($item['nama'] ?? ''), 'sebetan') || str_contains(strtolower($item['keterangan'] ?? ''), 'sebetan')) {
+                    return [
+                        'nama' => BkbmCoaService::AKUN_BIAYA_OPERASIONAL_PABRIK['nama'],
+                        'kode' => BkbmCoaService::AKUN_BIAYA_OPERASIONAL_PABRIK['no'],
+                    ];
+                }
+                return [
+                    'nama' => BkbmCoaService::AKUN_PIUTANG_LAINNYA['nama'],
+                    'kode' => BkbmCoaService::AKUN_PIUTANG_LAINNYA['no'],
+                ];
+            } else {
+                // Sisi Kredit BKL: Akun persediaan barang asal
+                if ($akunBarang) {
+                    return [
+                        'nama' => $akunBarang['nama'],
+                        'kode' => $akunBarang['no'],
+                    ];
+                }
+                return [
+                    'nama' => BkbmCoaService::AKUN_PERLENGKAPAN_PABRIK['nama'],
+                    'kode' => BkbmCoaService::AKUN_PERLENGKAPAN_PABRIK['no'],
+                ];
+            }
+        }
+
+        // 3. Jika item Veneer dari mutasi palet (BK Transfer)
         if (($item['tipe'] ?? '') === 'veneer' && !empty($item['tipe_veneer'])) {
             $akunPersediaan = $this->coaService->getAkunVeneer(
                 $item['tipe_veneer'] ?? 'jadi',
@@ -285,14 +361,14 @@ class RekapNotaSheetV2 extends DefaultValueBinder implements FromArray, WithColu
             ];
         }
 
-        // 2. Jika item Barang Umum / Non-Veneer / Veneer Manual
+        // 4. Jika item Barang Umum / Non-Veneer / Veneer Manual
         $akunBarang = $this->coaService->getAkunBarang(
             $item['nama'] ?? '',
             $item['keterangan'] ?? ''
         );
 
         if ($isBk) {
-            // Pengeluaran Barang (BK)
+            // Pengeluaran Barang (BK Transfer)
             if ($akunBarang) {
                 return [
                     'nama' => $akunBarang['nama'],
@@ -307,7 +383,6 @@ class RekapNotaSheetV2 extends DefaultValueBinder implements FromArray, WithColu
         } else {
             // Penerimaan Barang (BM)
             if ($sisi === 'd') {
-                // Sisi Debit: Persediaan / Beban yang dibeli
                 if ($akunBarang) {
                     return [
                         'nama' => $akunBarang['nama'],
@@ -319,7 +394,6 @@ class RekapNotaSheetV2 extends DefaultValueBinder implements FromArray, WithColu
                     'kode' => BkbmCoaService::AKUN_PERLENGKAPAN_PABRIK['no'],
                 ];
             } else {
-                // Sisi Kredit: Kas Utama (1101.1)
                 return [
                     'nama' => BkbmCoaService::AKUN_KAS_UTAMA['nama'],
                     'kode' => BkbmCoaService::AKUN_KAS_UTAMA['no'],
@@ -419,7 +493,13 @@ class RekapNotaSheetV2 extends DefaultValueBinder implements FromArray, WithColu
 
     protected function row($nota, int $noJurnal, array $akun, string $map, array $item): array
     {
-        $kode = $akun['kode'] ?? null;
+        $kode = $akun['no'] ?? ($akun['kode'] ?? null);
+
+        // Jika transaksi Penjualan (SJ/DY), kolom "Nama" mencatat Nama Customer/Tujuan Nota
+        $prefix = strtoupper($this->prefix($nota));
+        $namaCol = in_array($prefix, ['SJ', 'DY'], true)
+            ? $nota->tujuan_nota
+            : (($this->jenis === 'bk' ? config('akun_jurnal.bk.nama') : null) ?: $nota->tujuan_nota);
 
         return [
             $akun['nama'] ?? null,
@@ -428,7 +508,7 @@ class RekapNotaSheetV2 extends DefaultValueBinder implements FromArray, WithColu
             (string) $kode,
             $nota->no_nota,
             $item['mm'],
-            ($this->jenis === 'bk' ? config('akun_jurnal.bk.nama') : null) ?: $nota->tujuan_nota,
+            $namaCol,
             $item['keterangan'] ?: $item['nama'],
             $map,
             $item['hit'],
