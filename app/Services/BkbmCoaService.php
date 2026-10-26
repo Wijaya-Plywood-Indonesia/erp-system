@@ -61,6 +61,16 @@ class BkbmCoaService
     public const AKUN_HUTANG_GAJI = ['no' => '2195.1', 'nama' => 'Hutang Gaji'];
     public const AKUN_HUTANG_ONGKOS_TURUN_KAYU = ['no' => '2195.2', 'nama' => 'Hutang ongkos turun kayu'];
 
+    // Piutang Usaha
+    public const AKUN_PIUTANG_USAHA = ['no' => '1122.1', 'nama' => 'Piutang Usaha - Pihak Ketiga'];
+    public const AKUN_PIUTANG_HUB_ISTIMEWA = ['no' => '1123.1', 'nama' => 'Piutang Usaha - Pihak yang Mempunyai Hubungan Istimewa'];
+    public const AKUN_PIUTANG_LAINNYA = ['no' => '1124.1', 'nama' => 'Piutang Lainnya - Pihak Ketiga'];
+
+    // Pendapatan (4000)
+    public const AKUN_PENJUALAN_DOMESTIK = ['no' => '4002.1', 'nama' => 'Penjualan Domestik'];
+    public const AKUN_PENJUALAN_EKSPOR = ['no' => '4003.1', 'nama' => 'Penjualan Ekspor'];
+    public const AKUN_PENDAPATAN_LAINNYA = ['no' => '4199.1', 'nama' => 'Pendapatan Usaha Lainnya'];
+
     // Biaya & Beban (5000)
     public const AKUN_BIAYA_OPERASIONAL_PABRIK = ['no' => '5069.3', 'nama' => 'Biaya Operasional Pabrik'];
     public const AKUN_SELISIH_HARGA_PATOK = ['no' => '5069.2', 'nama' => 'Selisih harga patok produksi'];

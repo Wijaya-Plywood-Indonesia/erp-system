@@ -127,7 +127,7 @@ class RekapNotaSheetV1 implements FromArray, WithColumnFormatting, WithColumnWid
     public function array(): array
     {
         $isBk = $this->jenis === 'bk';
-        $prefixes = $isBk ? ['BK'] : ['BM', 'BML'];
+        $prefixes = $isBk ? ['BK', 'BKL', 'SJ', 'DY'] : ['BM', 'BML'];
 
         $query = $isBk ? NotaBarangKeluar::query() : NotaBarangMasuk::query();
 
@@ -386,6 +386,14 @@ class RekapNotaSheetV1 implements FromArray, WithColumnFormatting, WithColumnWid
                     'nama' => $v['nama'].' '.($map === 'd' ? 'WHN' : 'WJY'),
                     'kode' => round((float) $v['kode'] + ($map === 'd' ? 0.01 : 0), 2),
                 ];
+            }
+        }
+
+        if (in_array($prefix, ['sj', 'dy'], true)) {
+            if ($sisi === 'debit') {
+                return ['nama' => 'Piutang ', 'kode' => 1300];
+            } else {
+                return ['nama' => 'pendapatan penjualan triplek', 'kode' => 4111];
             }
         }
 
