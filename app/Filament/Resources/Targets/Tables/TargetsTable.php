@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Targets\Tables;
 
+use App\Exports\TargetExport;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -10,6 +12,8 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
+use Maatwebsite\Excel\Facades\Excel;
 
 class TargetsTable
 {
@@ -207,6 +211,19 @@ class TargetsTable
             ])
             ->bulkActions([
                 BulkActionGroup::make([
+                    BulkAction::make('exportExcel')
+                        ->label('Export Excel (terpilih)')
+                        ->icon('heroicon-o-arrow-down-tray')
+                        ->color('success')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records) {
+                            $records->load(['mesin', 'ukuranModel', 'jenisKayu', 'kategoriBarang']);
+
+                            return Excel::download(
+                                new TargetExport($records),
+                                'target-terpilih-' . now()->format('Y-m-d_His') . '.xlsx'
+                            );
+                        }),
                     DeleteBulkAction::make(),
                 ]),
             ]);
