@@ -51,6 +51,7 @@ use App\Services\FingerParsers\FingerParserManager;
 use App\Services\FingerParsers\KantorDatParser;
 use App\Services\FingerParsers\MesinZkParser;
 use App\Services\NewRekapAbsensiPegawaiService;
+use App\Services\ValidasiOtomatisProduksiService;
 use App\Services\Payroll\WeeklyRekapPotonganGajiService;
 use App\Services\RekapPotonganGajiService;
 use App\Support\ResolveBarangCache;
@@ -164,7 +165,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Http::globalMiddleware(ResolveBarangCache::middleware());
         // ⬆⬆⬆  WAJIB: supaya MySQL ikut Asia/Jakarta
         HasilSanding::observe(HasilSandingObserver::class);
         ModalSanding::observe(ModalSandingObserver::class);
@@ -177,6 +177,9 @@ class AppServiceProvider extends ServiceProvider
         ValidasiKedi::observe(ProductionValidationObserver::class);
         ValidasiPilihPlywood::observe(ValidasiPilihPlywoodObserver::class);
         ValidasiNyusup::observe(ValidasiNyusupObserver::class);
+        // Validasi otomatis semua produksi (jam 11 hari berikutnya) + kunci role selain super admin
+        ValidasiOtomatisProduksiService::boot();
+
         // PlatformHasilHp::observe(PlatformHasilHpObserver::class);
         // TriplekHasilHp::observe(TriplekHasilHpObserver::class);
 

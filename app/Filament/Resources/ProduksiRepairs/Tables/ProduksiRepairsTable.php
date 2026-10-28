@@ -42,7 +42,7 @@ class ProduksiRepairsTable
                     ->label(fn($record) => $record->kendala ? 'Edit Kendala' : 'Tambah Kendala')
                     ->icon('heroicon-m-chat-bubble-left-right')
                     ->color(fn($record) => $record->kendala ? 'info' : 'gray')
-                    ->visible(fn($record) => ! $record->validasiRepairs()->exists())
+                    ->visible(fn($record) => \App\Services\ProduksiLockService::isSuperAdmin() || ! $record->validasiRepairs()->exists())
                     ->schema([
                         Textarea::make('kendala')
                             ->label('Catatan Kendala')
@@ -67,13 +67,13 @@ class ProduksiRepairsTable
                     ->modalWidth('lg'),
 
                 EditAction::make()
-                    ->visible(fn($record) => ! $record->validasiRepairs()->exists()),
+                    ->visible(fn($record) => \App\Services\ProduksiLockService::isSuperAdmin() || ! $record->validasiRepairs()->exists()),
 
                 ViewAction::make(),
 
                 /* ================= DELETE ================= */
                 DeleteAction::make()
-                    ->visible(fn($record) => ! $record->validasiRepairs()->exists())
+                    ->visible(fn($record) => \App\Services\ProduksiLockService::isSuperAdmin() || ! $record->validasiRepairs()->exists())
                     ->before(function ($record) {
 
                         $hasRelation =

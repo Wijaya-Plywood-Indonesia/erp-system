@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use App\Services\DailyScheduler;
+use App\Services\ValidasiOtomatisProduksiService;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\DB;
@@ -50,5 +51,15 @@ class RunDailyScheduler
         });
 
         return $next($request);
+    }
+
+    /**
+     * Cadangan bila server tidak punya cron `schedule:run`:
+     * setelah respon terkirim, cek & jalankan validasi otomatis produksi
+     * (dibatasi 1x per JEDA_CEK_MENIT, jadi tidak membebani).
+     */
+    public function terminate(Request $request, Response $response): void
+    {
+        ValidasiOtomatisProduksiService::jalankanBilaPerlu();
     }
 }
