@@ -50,4 +50,34 @@ return [
         'Terima Gudang Satu' => ['ViewAny:ProduksiTerimaGudangSatu'],
         'Turun Kayu' => ['ViewAny:TurunKayu'],
     ],
+
+    /*
+    | Banner peringatan potongan gaji di Dashboard Pengawas.
+    | Tampil di paling atas pada hari Jumat sebelum `jam_akhir`, berisi
+    | rekap potongan per orang untuk siklus Jumat-Kamis yang baru selesai.
+    */
+    'peringatan_potongan' => [
+        'aktif' => env('DASHBOARD_POTONGAN_AKTIF', true),
+        // true = tampil kapan saja (untuk testing di local), jangan aktif di produksi
+        'paksa_tampil' => env('DASHBOARD_POTONGAN_PAKSA', false),
+        'batas' => 50000,   // warning jika total potongan per orang > batas
+        'jam_akhir' => 12,  // "pagi" = sebelum jam ini (waktu Asia/Jakarta)
+        'cache_menit' => 10,
+
+        // Label section dashboard => key lini potongan (LiniProduksiResolver).
+        // Section yang tidak ada di sini tidak menampilkan banner.
+        'divisi_lini' => [
+            'Rotary' => 'Rotary',
+            'Press Dryer' => 'Dryer',
+            'Stik' => 'Stik',
+            'Kedi' => 'Kedi',
+            'Repair' => 'Repair',
+            'Joint' => 'Joint',
+            'Sanding Joint' => 'Sanding Joint',
+            'Pot AF Joint' => 'Pot Afalan Joint',
+            'Pot Siku' => 'Pot Siku',
+            'Pot Jelek' => 'Pot Jelek',
+            'Pilih Veneer' => 'Pilih Veneer',
+        ],
+    ],
 ];
