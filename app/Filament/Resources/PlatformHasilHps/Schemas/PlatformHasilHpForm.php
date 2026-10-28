@@ -5,6 +5,7 @@ namespace App\Filament\Resources\PlatformHasilHps\Schemas;
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Hidden;
 use App\Models\BarangSetengahJadiHp;
 use App\Models\JenisBarang;
@@ -144,6 +145,11 @@ class PlatformHasilHpForm
                     ->label('Nomor Palet')
                     ->numeric()
                     ->required(),
+
+                Textarea::make('keterangan')
+                    ->label('Keterangan')
+                    ->nullable()
+                    ->columnSpanFull(),
             ]);
     }
 }

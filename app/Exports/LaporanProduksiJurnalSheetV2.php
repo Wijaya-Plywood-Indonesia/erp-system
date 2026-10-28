@@ -9,6 +9,8 @@ use App\Models\ReferensiHargaProduksi;
 use App\Services\Akuntansi\RotaryJurnalService;
 use App\Services\CoaAliasService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -31,16 +33,37 @@ use Throwable;
 // - Semua nomor & nama akun diambil dari App\Services\CoaAliasService
 //   (getAkunVeneerBasah / getAkunGaji / getAkunHpp / getAkunKayuMasuk /
 //   mapAkunLama). Tidak ada lagi '1402.3', '2195.1', '5069.2' hardcode.
-// - Item pemasok (kayu) tidak lagi di-skip: dipetakan lewat
-//   getAkunKayuMasuk(), sesuai TODO lama.
 // - Nomor akun lama yang tidak dikenali dilewatkan ke mapAkunLama()
 //   sebagai jaring pengaman.
+// - Nomor akun yang masih belum berformat COA baru (mis. '115-13') ditulis
+//   'UNKNOWN' dan di-highlight merah supaya data yang belum dipetakan terlihat.
+// - Reeling tape (115-13 / 1507.41) -> 1402.23 lewat CoaAliasService::MAP_AKUN_LAMA.
+//
+// REVISI (samakan angka dengan JurnalSheet v1):
+// - Harga veneer basah kembali dibedakan per jenis kayu
+//   (sengon core 1.700.000 / meranti core 2.100.000, dst), sama seperti v1.
+//   Sebelumnya semua dipaksa "Meranti" sehingga sengon ikut 2.100.000.
+//   Hanya AKUN yang digabung (COA baru), HARGA tetap per jenis kayu.
+// - Item pemasok (kayu keluar) kembali TIDAK ikut jurnal rotary,
+//   sama seperti v1. Bisa diaktifkan lagi lewat INCLUDE_KAYU_KELUAR.
+// - Harga veneer dihitung sekali per baris (di tahap pembentukan baris),
+//   lalu dipakai ulang di perhitungan total & penulisan sheet, supaya
+//   tidak ada dua sumber harga yang bisa berbeda.
 //
 // Daftarkan di LaporanProduksiExport::sheets():
 //     new LaporanProduksiJurnalSheetV2($this->tanggal),
 // ============================================================
 class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCollection, WithCustomValueBinder, WithEvents, WithStyles, WithTitle
 {
+    /**
+     * false = sama seperti v1 (kayu keluar tidak ikut jurnal rotary).
+     * true  = kayu keluar dikredit ke akun persediaan kayu (COA baru).
+     *
+     * Kalau false, pastikan pemakaian kayu diposting dari modul lain
+     * supaya persediaan kayu tetap berkurang.
+     */
+    private const INCLUDE_KAYU_KELUAR = false;
+
     protected $tanggal;
 
     protected $titleRows = [];
@@ -48,6 +71,9 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
     protected $headerRows = [];
 
     protected $dataRanges = [];
+
+    // Baris yang nomor akunnya belum ada di COA baru (untuk di-highlight)
+    protected $unknownRows = [];
 
     protected CoaAliasService $coaAlias;
 
@@ -125,13 +151,28 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
         return (float) ($ref->harga ?? 0.0);
     }
 
-    private function hargaVeneerBasah(bool $isCore): float
+    /**
+     * Harga veneer basah per jenis kayu (sama seperti JurnalSheet v1).
+     * Akun boleh digabung di COA baru, tapi harga patok tetap dibedakan
+     * antara sengon dan meranti.
+     *
+     * Urutan: referensi DB -> fallback hardcode.
+     */
+    private function hargaVeneerBasah(string $namaKayu, bool $isCore): float
     {
-        // Sengon/meranti sudah digabung di COA baru -> pakai "Meranti"
-        // sebagai jenis representatif untuk cari referensi harga.
-        $dbHarga = $this->getHargaVeneerBasahDb('Meranti', $isCore);
+        $jenis = stripos($namaKayu, 'sengon') !== false ? 'Sengon' : 'Meranti';
 
-        return $dbHarga > 0 ? $dbHarga : ($isCore ? 2100000.0 : 8000000.0);
+        $dbHarga = $this->getHargaVeneerBasahDb($jenis, $isCore);
+        if ($dbHarga > 0) {
+            return $dbHarga;
+        }
+
+        // Fallback hardcode jika referensi belum diisi di DB (sama dengan v1)
+        if ($isCore) {
+            return $jenis === 'Sengon' ? 1700000.0 : 2100000.0;
+        }
+
+        return $jenis === 'Sengon' ? 2700000.0 : 8000000.0;
     }
 
     // =========================================================================
@@ -141,13 +182,6 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
     private function isVeneerBasah(string $noAkun): bool
     {
         return in_array($noAkun, $this->coaAlias->nomorAkunVeneerBasah(), true);
-    }
-
-    private function isVeneerCore(string $noAkun): bool
-    {
-        [$noCore] = $this->coaAlias->getAkunVeneerBasah(true);
-
-        return $noAkun === $noCore;
     }
 
     private function isHutangGaji(string $noAkun): bool
@@ -215,7 +249,13 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                     $bagian = count($parts) > 1 ? trim($parts[1]) : '-';
                     $keteranganSpesifikasi = '';
                 } elseif ($jenisPihak === 'pemasok') {
-                    // Dulu di-skip. Sekarang dipetakan ke akun kayu COA baru.
+                    // Sama seperti v1: kayu keluar tidak ikut jurnal rotary.
+                    // Ubah INCLUDE_KAYU_KELUAR menjadi true kalau ingin diaktifkan lagi.
+                    if (! self::INCLUDE_KAYU_KELUAR) {
+                        continue;
+                    }
+
+                    // Dipetakan ke akun kayu COA baru.
                     $parts = explode(' - ', $subItem['keterangan'] ?? '');
                     $bagian = count($parts) > 1 ? trim($parts[1]) : '-';
 
@@ -233,16 +273,16 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
 
                     if (empty($subItem['id_barang'])) {
                         try {
-                            $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/') . '/api/barang/resolve-kayu';
-                            $responseApi = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(5)->get($urlApi, [
+                            $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-kayu';
+                            $responseApi = Http::withoutVerifying()->timeout(5)->get($urlApi, [
                                 'ukuran' => $panjang,
                                 'jenis_kayu' => $jenisKayu,
                             ]);
                             if ($responseApi->successful()) {
                                 $subItem['id_barang'] = $responseApi->json('id_barang');
                             }
-                        } catch (\Throwable $e) {
-                            \Illuminate\Support\Facades\Log::warning("Gagal resolve id_barang kayu: " . $e->getMessage());
+                        } catch (Throwable $e) {
+                            Log::warning('Gagal resolve id_barang kayu: '.$e->getMessage());
                         }
                     }
                 } else {
@@ -266,23 +306,15 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                     $jenisHasil = isset($mesins[$namaM]) ? $mesins[$namaM]->jenis_hasil : 'core';
                     $isCore = strtolower($jenisHasil) !== 'f/b';
 
+                    // Jenis kayu dari keterangan ("KW 3 - lahan MC - Sengon")
                     $keterangan = $subItem['keterangan'] ?? '';
                     $partsK = explode(' - ', $keterangan);
                     $namaKayu = count($partsK) > 2 ? trim($partsK[2]) : '';
 
-                    $ongkos = $namaKayu !== ''
-                        ? $this->getHargaVeneerBasahDb($namaKayu, $isCore)
-                        : 0.0;
-
-                    if ($ongkos === 0.0) {
-                        $ongkos = $this->getHargaVeneerBasahDb('Meranti', $isCore);
-                    }
-                    if ($ongkos === 0.0) {
-                        $ongkos = isset($mesins[$namaM]) ? (float) ($mesins[$namaM]->ongkos_mesin ?? 0) : 0;
-                    }
-
-                    $harga = $ongkos;
-                    $jumlah = $volume !== null ? round((float) $volume * $ongkos, 4) : null;
+                    // Harga dibedakan per jenis kayu (sama seperti v1),
+                    // dihitung sekali di sini lalu dipakai ulang di bawah.
+                    $harga = $this->hargaVeneerBasah($namaKayu, $isCore);
+                    $jumlah = $volume !== null ? round((float) $volume * $harga, 4) : null;
 
                     [$mappedNoAkun, $mappedNamaAkun] = $this->coaAlias->getAkunVeneerBasah($isCore);
                 }
@@ -332,7 +364,7 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
 
             foreach ($rowsOfMachine as $row) {
                 $key = implode('|', [
-                    $row['no_akun'], $row['keterangan'], $row['dk'], $row['tipe'], $row['nama_akun'], $row['id_barang'] ?? ''
+                    $row['no_akun'], $row['keterangan'], $row['dk'], $row['tipe'], $row['nama_akun'], $row['id_barang'] ?? '',
                 ]);
 
                 if (! isset($grouped[$key])) {
@@ -368,16 +400,13 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
 
             foreach ($grouped as $g) {
                 $noAkunG = (string) $g['no_akun'];
-                $isVeneer = $this->isVeneerBasah($noAkunG);
                 $isHutangGaji = $this->isHutangGaji($noAkunG);
                 $isKayu = $this->isKayu($noAkunG);
 
-                if ($isVeneer) {
-                    $rowHarga = $this->hargaVeneerBasah($this->isVeneerCore($noAkunG));
-                } elseif ($isHutangGaji) {
+                // Veneer: harga sudah dihitung per jenis kayu saat baris dibentuk
+                // (tersimpan di $g['harga']). Gaji di-hardcode 150.000.
+                if ($isHutangGaji) {
                     $rowHarga = 150000.0;
-                } elseif ($isKayu) {
-                    $rowHarga = (float) ($g['harga'] ?? 0.0);
                 } else {
                     $rowHarga = (float) ($g['harga'] ?? 0.0);
                 }
@@ -461,7 +490,8 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                 }
 
                 if ($isVeneer) {
-                    $hargaVal = $this->hargaVeneerBasah($this->isVeneerCore($noAkunG));
+                    // Harga per jenis kayu, sudah dihitung saat baris dibentuk
+                    $hargaVal = $g['harga'];
                 } elseif ($isHutangGaji) {
                     $hargaVal = 150000;
                 } elseif ($isKayu) {
@@ -474,11 +504,17 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
 
                 $totalVal = "=ROUND(IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow})), 0)";
 
+                // Nomor akun belum ada di COA baru -> tulis UNKNOWN + highlight merah
+                $noAkunTampil = $this->coaAlias->isNomorAkunValid($g['no_akun']) ? $g['no_akun'] : 'UNKNOWN';
+                if ($noAkunTampil === 'UNKNOWN') {
+                    $this->unknownRows[] = $currentRow;
+                }
+
                 $rows->push([
                     $g['nama_akun'],
                     $tglVal,
                     '',
-                    $g['no_akun'],
+                    $noAkunTampil,
                     '',
                     '',
                     $namaVal,
@@ -561,6 +597,13 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                     $sheet->getStyle("L{$start}:L{$end}")->getNumberFormat()->setFormatCode('#,##0.0000');
                     $sheet->getStyle("M{$start}:M{$end}")->getNumberFormat()->setFormatCode('#,##0');
                     $sheet->getStyle("N{$start}:N{$end}")->getNumberFormat()->setFormatCode('#,##0');
+                }
+
+                foreach ($this->unknownRows as $row) {
+                    $sheet->getStyle("D{$row}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['argb' => 'FF9C0006']],
+                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFC7CE']],
+                    ]);
                 }
 
                 $sheet->getColumnDimension('A')->setWidth(30);

@@ -95,6 +95,11 @@ class TriplekHasilHpsTable
                 TextColumn::make('isi')
                     ->label('Jumlah Lembar'),
 
+                TextColumn::make('keterangan')
+                    ->label('Keterangan')
+                    ->searchable()
+                    ->placeholder('-'),
+
                 /*
                  * STATUS SERAH — toggleable, default hidden
                  */

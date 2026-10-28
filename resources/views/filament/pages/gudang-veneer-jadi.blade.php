@@ -251,7 +251,7 @@
                 $item['jumlah'],
                 );
                 @endphp
-                <div
+                <div wire:key="antrean-mob-{{ $item['id'] }}"
                     class="border p-4 space-y-3 bg-white border-zinc-200 dark:bg-zinc-950 dark:border-zinc-800 shadow-sm transition-all {{ $item['status_gudang'] !== 'belum diterima' ? 'opacity-70 bg-zinc-50/50 dark:bg-zinc-900/20' : '' }}">
                     <div class="flex justify-between items-start gap-2">
                         <div>
@@ -374,7 +374,7 @@
                         $item['jumlah'],
                         );
                         @endphp
-                        <tr
+                        <tr wire:key="antrean-dsk-{{ $item['id'] }}"
                             class="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-colors text-zinc-800 dark:text-zinc-100">
                             <td class="py-3 px-4 text-center">
                                 @if (($item['status_gudang'] ?? 'belum diterima') === 'belum diterima')
@@ -504,7 +504,7 @@
             {{-- 📱 VIEW HP / MOBILE (MUTASI KELUAR) --}}
             <div class="block md:hidden space-y-3 max-h-[500px] overflow-y-auto pr-1">
                 @forelse($this->riwayatKeluarFiltered as $item)
-                <div
+                <div wire:key="keluar-mob-{{ $item['id'] }}"
                     class="border p-4 space-y-3 bg-white border-zinc-200 dark:bg-zinc-950 dark:border-zinc-800 shadow-sm transition-all">
                     <div class="flex justify-between items-start gap-2">
                         <div>
@@ -611,7 +611,7 @@
                     </thead>
 
                     @forelse($this->riwayatKeluarFiltered as $item)
-                    <tbody x-data="{ open: false }"
+                    <tbody wire:key="keluar-dsk-{{ $item['id'] }}" x-data="{ open: false }"
                         class="divide-y divide-zinc-200 dark:divide-zinc-800 text-zinc-800 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-800">
 
                         {{-- BARIS UTAMA: seluruh baris jadi trigger accordion --}}

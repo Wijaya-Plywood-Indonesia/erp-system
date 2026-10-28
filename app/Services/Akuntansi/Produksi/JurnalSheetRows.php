@@ -2,6 +2,8 @@
 
 namespace App\Services\Akuntansi\Produksi;
 
+use App\Services\CoaAliasService;
+
 /**
  * Mengubah baris sheet "jurnal produksi v2" (hasil ->array() class *SheetV2)
  * menjadi struktur jurnal untuk API akuntansi.
@@ -23,18 +25,33 @@ final class JurnalSheetRows
      * @param  array<int, array>  $sheetRows  hasil ->array() sheet V2 (termasuk baris header)
      * @param  string  $tanggal  Y-m-d, dipakai kalau kolom tgl kosong
      * @param  callable  $noDokumenFor  fn(array $barisPertama, int $urutan): string
-     * @return array<int, array{no_dokumen:string, rows:array}>
+     * @return array<int, array{no_dokumen:string, rows:array, akun_tidak_valid:array}>
      */
     public static function toJurnals(array $sheetRows, string $tanggal, callable $noDokumenFor): array
     {
+        $coa = app(CoaAliasService::class);
         $jurnals = [];
         $grup = [];
 
-        $tutup = function () use (&$grup, &$jurnals, $noDokumenFor) {
+        $tutup = function () use (&$grup, &$jurnals, $noDokumenFor, $coa) {
             if ($grup) {
+                $rows = self::seimbangkan($grup);
+
+                // Kumpulkan semua akun yang tidak dikenali COA baru:
+                // mencakup 'UNKNOWN' dan nomor akun lama yang tidak termapping.
+                $akunTidakValid = array_values(array_unique(
+                    array_map(
+                        fn ($r) => $r['keterangan'] !== ''
+                            ? "{$r['no_akun']} ({$r['keterangan']})"
+                            : $r['no_akun'],
+                        array_filter($rows, fn ($r) => ! $coa->isNomorAkunValid($r['no_akun']))
+                    )
+                ));
+
                 $jurnals[] = [
                     'no_dokumen' => $noDokumenFor($grup[0], count($jurnals)),
-                    'rows' => self::seimbangkan($grup),
+                    'rows' => $rows,
+                    'akun_tidak_valid' => $akunTidakValid,
                 ];
                 $grup = [];
             }
@@ -69,7 +86,10 @@ final class JurnalSheetRows
             $idBarang = $row[14] ?? null;
             $idBarang = (is_numeric($idBarang) && (int) $idBarang > 0) ? (int) $idBarang : null;
 
-            $grup[] = [
+            // Kolom "No" (mis. no seri kayu masuk). Hanya ikut kalau terisi.
+            $no = trim((string) ($row[4] ?? ''));
+
+            $baris = [
                 'no_akun' => $noAkun,
                 'nama_akun' => trim((string) ($row[0] ?? '')),
                 'tgl' => self::tanggal($row[1] ?? null, $tanggal),
@@ -83,6 +103,12 @@ final class JurnalSheetRows
                 'total' => self::total($hit, $banyak, $m3, $harga),
                 'id_barang' => $idBarang,
             ];
+
+            if ($no !== '' && $no !== '-') {
+                $baris['no'] = $no;
+            }
+
+            $grup[] = $baris;
         }
 
         $tutup();

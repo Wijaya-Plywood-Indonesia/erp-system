@@ -10,11 +10,11 @@ class HasilSanding extends Model
 
     protected $fillable = [
         'id_produksi_sanding',
+        'id_serah_terima_hp',
         'id_barang_setengah_jadi',
         'kuantitas',
         'jumlah_sanding_face',
         'jumlah_sanding_back',
-        'id_mesin',
         'no_palet',
         'status',
         // ─── Serah hasil sanding (arah gudang) ───
@@ -37,6 +37,11 @@ class HasilSanding extends Model
         return $this->belongsTo(BarangSetengahJadiHp::class, 'id_barang_setengah_jadi');
     }
 
+    public function serahTerimaHp()
+    {
+        return $this->belongsTo(SerahTerimaHp::class, 'id_serah_terima_hp');
+    }
+
     public function mesin()
     {
         return $this->belongsTo(Mesin::class, 'id_mesin');
@@ -48,16 +53,25 @@ class HasilSanding extends Model
         return $this->belongsTo(User::class, 'diserahkan_oleh');
     }
 
+    /** Relasi 1-to-1 ke ModalSanding yang sinkron otomatis */
+    public function modalSanding()
+    {
+        return $this->hasOne(ModalSanding::class, 'id_hasil_sanding');
+    }
+
     /** Relasi ke ModalSanding berdasarkan id_produksi_sanding untuk eager loading */
     public function modalSandings()
     {
         return $this->hasMany(ModalSanding::class, 'id_produksi_sanding', 'id_produksi_sanding');
     }
 
-    /** Accessor untuk mengambil ModalSanding yang sesuai dengan no_palet */
+    /** Accessor untuk mengambil ModalSanding yang sesuai */
     public function getModalSandingAttribute()
     {
-        return $this->modalSandings->firstWhere('no_palet', $this->no_palet);
+        return $this->relationLoaded('modalSanding') && $this->getRelation('modalSanding')
+            ? $this->getRelation('modalSanding')
+            : ($this->modalSandings->firstWhere('id_hasil_sanding', $this->id)
+                ?? $this->modalSandings->firstWhere('no_palet', $this->no_palet));
     }
 
     // ─── Helper serah ─────────────────────────────────────────────
@@ -74,21 +88,5 @@ class HasilSanding extends Model
             'triplek_jadi'  => 'Gudang Triplek Jadi',
             default         => '-',
         };
-    }
-
-    protected static function booted()
-    {
-        // Menggunakan static::saved mencakup Created dan Updated
-        static::saved(function ($model) {
-            if ($model->id_produksi_sanding) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_sanding, 'sanding');
-            }
-        });
-
-        static::deleted(function ($model) {
-            if ($model->id_produksi_sanding) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_sanding, 'sanding');
-            }
-        });
     }
 }
