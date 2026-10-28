@@ -137,6 +137,10 @@ class CoaAliasService
         '1426.01' => self::AKUN_VENEER_BASAH_CORE,
         '1427.00' => self::AKUN_VENEER_BASAH_CORE,
         '1427.01' => self::AKUN_VENEER_BASAH_CORE,
+        '1428.00' => self::AKUN_VENEER_KERING_PPC, // Veneer Basah ppc meranti WJY -> Veneer Kering PPC (1402.17)
+        '1428.01' => self::AKUN_VENEER_KERING_PPC, // Veneer Basah ppc meranti WHN -> Veneer Kering PPC (1402.17)
+        '1429.00' => self::AKUN_VENEER_KERING_PPC, // Veneer Basah ppc sengon WJY -> Veneer Kering PPC (1402.17)
+        '1429.01' => self::AKUN_VENEER_KERING_PPC, // Veneer Basah ppc sengon WHN -> Veneer Kering PPC (1402.17)
 
         // veneer kering
         '115-09' => self::AKUN_VENEER_KERING_FB,
@@ -149,7 +153,9 @@ class CoaAliasService
         '1446' => self::AKUN_VENEER_KERING_CORE,
         '1446.0' => self::AKUN_VENEER_KERING_CORE,
         '1446.00' => self::AKUN_VENEER_KERING_CORE,
-        '1447' => self::AKUN_VENEER_KERING_CORE, // core meranti
+        '1447' => self::AKUN_VENEER_KERING_PPC, // core meranti -> Veneer Kering PPC (1402.17)
+        '1447.00' => self::AKUN_VENEER_KERING_PPC, // Veneer Kering 130 core meranti WJY -> Veneer Kering PPC (1402.17)
+        '1447.01' => self::AKUN_VENEER_KERING_PPC, // Veneer Kering 130 core meranti WHN -> Veneer Kering PPC (1402.17)
 
         // gaji
         '210-02' => self::AKUN_HUTANG_GAJI,
