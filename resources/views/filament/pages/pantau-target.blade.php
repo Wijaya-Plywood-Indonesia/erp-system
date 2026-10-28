@@ -20,66 +20,104 @@
         </div>
     </div>
 
-    {{-- Cards Grid --}}
-    <div class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-        @forelse($this->targets as $record)
-            @php
-                $mesin = $record->mesin?->nama_mesin ?? '-';
-                $ukuran = $record->ukuranModel?->dimensi ?? '-';
-                $kayu = $record->jenisKayu?->kode_kayu ?? $record->jenisKayu?->nama_kayu ?? '-';
-                $grade = $record->grade ? 'KW ' . $record->grade : null;
-                $target = rtrim(rtrim(number_format($record->target, 4, ',', '.'), '0'), ',');
-                if (str_ends_with($target, ',')) $target = rtrim($target, ',');
-            @endphp
-            <div class="bg-white dark:bg-gray-900 rounded-lg ring-1 ring-gray-950/5 dark:ring-white/10 overflow-hidden flex flex-col h-full hover:shadow-sm transition-shadow duration-200">
-                <div class="p-3 flex flex-col gap-2">
-                    {{-- Baris 1: Mesin & Tombol Edit --}}
-                    <div class="flex justify-between items-start gap-2">
-                        <h3 class="font-semibold text-sm text-gray-950 dark:text-white truncate" title="{{ $mesin }}">
-                            {{ $mesin }}
-                        </h3>
-                        <a href="{{ route('filament.admin.resources.targets.edit', ['record' => $record]) }}" class="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors shrink-0">
-                            <x-heroicon-m-pencil-square class="w-4 h-4" />
-                        </a>
-                    </div>
-
-                    {{-- Baris 2: Detail (Ukuran, Kayu, Grade) --}}
-                    <div class="flex flex-wrap items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
-                        <span class="font-bold bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-white/10">
-                            {{ $ukuran }}
-                        </span>
-                        <span class="text-gray-300 dark:text-gray-600">&bull;</span>
-                        <span class="font-semibold text-gray-800 dark:text-gray-200">{{ $kayu }}</span>
-                        @if($grade)
-                            <span class="text-gray-300 dark:text-gray-600">&bull;</span>
-                            <span class="text-info-600 dark:text-info-400 font-bold">{{ $grade }}</span>
-                        @endif
-                    </div>
-
-                    {{-- Baris 3: Target Besar & Info Pekerja --}}
-                    <div class="mt-1 flex items-end justify-between border-t border-gray-100 dark:border-white/5 pt-2">
+    {{-- Grouped by Mesin --}}
+    <div class="space-y-6">
+        @forelse($this->targets as $namaMesin => $groupedTargets)
+            <div x-data="{ open: true }" class="bg-white dark:bg-gray-900 rounded-xl shadow-sm ring-1 ring-gray-950/5 dark:ring-white/10 overflow-hidden">
+                {{-- Group Header --}}
+                <div @click="open = !open" class="flex items-center justify-between px-5 py-3.5 bg-gray-50/75 dark:bg-white/[0.03] border-b border-gray-100 dark:border-white/5 cursor-pointer select-none hover:bg-gray-100/70 dark:hover:bg-white/[0.05] transition-colors">
+                    <div class="flex items-center gap-3">
+                        <div class="p-1.5 rounded-lg bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400">
+                            <x-heroicon-m-cog-6-tooth class="w-5 h-5" />
+                        </div>
                         <div>
-                            <div class="text-[10px] uppercase font-semibold text-gray-400 dark:text-gray-500 tracking-wider">Target</div>
-                            <div class="text-lg font-bold text-success-600 dark:text-success-400 leading-none mt-0.5">
-                                {{ $target }}
-                            </div>
+                            <h2 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                {{ $namaMesin }}
+                                <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                                    {{ $groupedTargets->count() }} Target
+                                </span>
+                            </h2>
                         </div>
-                        
-                        <div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300 font-semibold">
-                            <div class="flex items-center gap-1" title="Jumlah Orang">
-                                <x-heroicon-m-users class="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                                <span>{{ $record->orang ?? 0 }} Org</span>
-                            </div>
-                            <div class="flex items-center gap-1" title="Jam Kerja">
-                                <x-heroicon-m-clock class="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                                <span>{{ $record->jam ?? 0 }} Jam</span>
-                            </div>
-                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 text-gray-400">
+                        <span class="text-xs font-medium hidden sm:inline" x-text="open ? 'Sembunyikan' : 'Tampilkan'"></span>
+                        <x-heroicon-m-chevron-down class="w-5 h-5 transform transition-transform duration-200" ::class="open ? 'rotate-180' : ''" />
+                    </div>
+                </div>
+
+                {{-- Table Inside Group --}}
+                <div x-show="open" x-collapse>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300 divide-y divide-gray-200 dark:divide-white/5">
+                            <thead class="bg-gray-50/50 dark:bg-white/[0.02] text-xs uppercase font-semibold text-gray-500 dark:text-gray-400">
+                                <tr>
+                                    <th scope="col" class="px-5 py-3">Ukuran (P x L x T)</th>
+                                    <th scope="col" class="px-5 py-3">Jenis Kayu</th>
+                                    <th scope="col" class="px-5 py-3 text-center">Grade / KW</th>
+                                    <th scope="col" class="px-5 py-3 text-right">Target</th>
+                                    <th scope="col" class="px-5 py-3 text-center">Pekerja</th>
+                                    <th scope="col" class="px-5 py-3 text-center">Jam Kerja</th>
+                                    <th scope="col" class="px-5 py-3 text-center w-16">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-white/5 bg-white dark:bg-gray-900">
+                                @foreach($groupedTargets as $record)
+                                    @php
+                                        $ukuran = $record->ukuranModel?->dimensi ?? '-';
+                                        $kayu = $record->jenisKayu?->nama_kayu ?? $record->jenisKayu?->kode_kayu ?? '-';
+                                        $grade = $record->grade ? 'KW ' . $record->grade : '-';
+                                        $target = rtrim(rtrim(number_format($record->target, 4, ',', '.'), '0'), ',');
+                                        if (str_ends_with($target, ',')) $target = rtrim($target, ',');
+                                    @endphp
+                                    <tr class="hover:bg-gray-50/70 dark:hover:bg-white/[0.02] transition-colors">
+                                        <td class="px-5 py-3 font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                                            <span class="bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded border border-gray-200 dark:border-white/10 font-mono text-xs">
+                                                {{ $ukuran }}
+                                            </span>
+                                        </td>
+                                        <td class="px-5 py-3 font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">
+                                            {{ $kayu }}
+                                        </td>
+                                        <td class="px-5 py-3 text-center whitespace-nowrap">
+                                            @if($record->grade)
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-info-50 dark:bg-info-950/40 text-info-700 dark:text-info-400 border border-info-200 dark:border-info-800/40">
+                                                    {{ $grade }}
+                                                </span>
+                                            @else
+                                                <span class="text-gray-400">-</span>
+                                            @endif
+                                        </td>
+                                        <td class="px-5 py-3 text-right whitespace-nowrap">
+                                            <span class="text-base font-bold text-success-600 dark:text-success-400">
+                                                {{ $target }}
+                                            </span>
+                                        </td>
+                                        <td class="px-5 py-3 text-center whitespace-nowrap font-medium text-gray-700 dark:text-gray-300">
+                                            <div class="inline-flex items-center gap-1">
+                                                <x-heroicon-m-users class="w-4 h-4 text-gray-400" />
+                                                <span>{{ $record->orang ?? 0 }} Org</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-5 py-3 text-center whitespace-nowrap font-medium text-gray-700 dark:text-gray-300">
+                                            <div class="inline-flex items-center gap-1">
+                                                <x-heroicon-m-clock class="w-4 h-4 text-gray-400" />
+                                                <span>{{ $record->jam ?? 0 }} Jam</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-5 py-3 text-center whitespace-nowrap">
+                                            <a href="{{ route('filament.admin.resources.targets.edit', ['record' => $record]) }}" class="inline-flex items-center justify-center p-1 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors" title="Edit Target">
+                                                <x-heroicon-m-pencil-square class="w-4 h-4" />
+                                            </a>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         @empty
-            <div class="col-span-full py-12 flex flex-col items-center justify-center text-gray-400 bg-white dark:bg-gray-900 rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10">
+            <div class="py-12 flex flex-col items-center justify-center text-gray-400 bg-white dark:bg-gray-900 rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10">
                 <x-heroicon-o-x-circle class="w-12 h-12 mb-3 text-gray-300 dark:text-gray-600" />
                 <p class="text-sm font-medium">Tidak ada target yang sesuai kriteria pencarian.</p>
             </div>

@@ -461,19 +461,9 @@ class ModalSandingForm
                     $identitas = 'TJ'.$item->id_triplek_mutasi_keluar;
                     $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel} · {$tersedia} lbr (triplek jadi){$hari}";
 
-                    return [
-                        'id' => $item->id,
-                        'label' => $label,
-                        'identitas' => $identitas,
-                        'no' => (string) $item->id_triplek_mutasi_keluar,
-                        'kategori' => $kategori,
-                        'jenis' => $jenis,
-                        'grade' => $gradeLabel,
-                        'ukuran' => $ukuranLabel,
-                        'asal' => 'triplek jadi',
-                        'pin' => $hari === '',
-                        'extra' => trim(str_replace('·', '', $hari)),
-                    ];
+
+                    return [$item->id => $label];
+
                 }
 
                 // Gudang Platform Mentah
@@ -485,19 +475,8 @@ class ModalSandingForm
                     $identitas = 'PM'.$item->id_platform_mth_mutasi_keluar;
                     $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel} · {$tersedia} lbr (platform mentah){$hari}";
 
-                    return [
-                        'id' => $item->id,
-                        'label' => $label,
-                        'identitas' => $identitas,
-                        'no' => (string) $item->id_platform_mth_mutasi_keluar,
-                        'kategori' => $kategori,
-                        'jenis' => $jenis,
-                        'grade' => $gradeLabel,
-                        'ukuran' => $ukuranLabel,
-                        'asal' => 'platform mentah',
-                        'pin' => $hari === '',
-                        'extra' => trim(str_replace('·', '', $hari)),
-                    ];
+
+                    return [$item->id => $label];
                 }
 
                 // Gudang Triplek Mentah
@@ -509,19 +488,8 @@ class ModalSandingForm
                     $identitas = 'TM'.$item->id_triplek_mth_mutasi_keluar;
                     $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel} · {$tersedia} lbr (triplek mentah){$hari}";
 
-                    return [
-                        'id' => $item->id,
-                        'label' => $label,
-                        'identitas' => $identitas,
-                        'no' => (string) $item->id_triplek_mth_mutasi_keluar,
-                        'kategori' => $kategori,
-                        'jenis' => $jenis,
-                        'grade' => $gradeLabel,
-                        'ukuran' => $ukuranLabel,
-                        'asal' => 'triplek mentah',
-                        'pin' => $hari === '',
-                        'extra' => trim(str_replace('·', '', $hari)),
-                    ];
+
+                    return [$item->id => $label];
                 }
 
                 // Bypass Graji Triplek (sumber WIP)
@@ -537,19 +505,8 @@ class ModalSandingForm
 
                 $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$namaJenisBarang} {$gradeLabel} · {$tersedia} lbr ({$asal}){$hari}";
 
-                return [
-                    'id' => $item->id,
-                    'label' => $label,
-                    'identitas' => $identitas,
-                    'no' => (string) ($noPalet ?? ''),
-                    'kategori' => $kategori,
-                    'jenis' => $namaJenisBarang,
-                    'grade' => $gradeLabel,
-                    'ukuran' => $ukuranLabel,
-                    'asal' => $asal,
-                    'pin' => $hari === '',
-                    'extra' => trim(str_replace('·', '', $hari)),
-                ];
+
+                return [$item->id => $label];
             })
             ->toArray();
 

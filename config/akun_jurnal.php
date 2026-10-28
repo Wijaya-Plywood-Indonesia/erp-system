@@ -57,6 +57,14 @@ return [
         // Barang non-veneer: kunci = nama_barang huruf kecil (persis seperti di nota).
         // Contoh dari data bk 2026; lengkapi sesuai master barang.
         'barang' => [
+            'isi staples' => [
+                'debit' => ['nama' => 'Isi Staples', 'kode' => 1507.13],
+                'kredit' => ['nama' => 'Isi Staples WJY', 'kode' => 1507.61],
+            ],
+            'staples' => [
+                'debit' => ['nama' => 'Isi Staples', 'kode' => 1507.13],
+                'kredit' => ['nama' => 'Isi Staples WJY', 'kode' => 1507.61],
+            ],
             'isolasi coklat' => [
                 'debit' => ['nama' => 'isolasi coklat WHN', 'kode' => 1507.35],
                 'kredit' => ['nama' => 'isolasi coklat WJY', 'kode' => 1507.67],
