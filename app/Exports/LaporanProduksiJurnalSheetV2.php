@@ -487,6 +487,9 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                     $hitKbkVal = 'm';
                 } elseif ($isHutangGaji) {
                     $hitKbkVal = 'b';
+                } elseif ($g['has_qty'] && ! $g['has_vol']) {
+                    // Bahan penolong dengan kuantitas (misal reeling tape) -> hit_kbk='b' agar Excel hitung M*K
+                    $hitKbkVal = 'b';
                 }
 
                 if ($isVeneer) {
@@ -499,7 +502,12 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                 } elseif ($isHpp) {
                     $hargaVal = $g['jumlah'];
                 } else {
-                    $hargaVal = $g['jumlah'];
+                    // Bahan penolong (reeling tape, solasi, dll):
+                    // Jika ada kuantitas -> harga satuan dari BahanPenolongProduksi
+                    // Jika tidak ada qty/vol -> gunakan jumlah langsung (selisih, dll)
+                    $hargaVal = ($g['has_qty'] && ($g['harga'] ?? 0) > 0)
+                        ? $g['harga']
+                        : $g['jumlah'];
                 }
 
                 $totalVal = "=ROUND(IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow})), 0)";
