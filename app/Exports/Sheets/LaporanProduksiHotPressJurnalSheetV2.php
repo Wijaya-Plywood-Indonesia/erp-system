@@ -68,6 +68,10 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 //   dikonfirmasi. Kalau nanti ada endpoint resolve-triplek atau
 //   resolve-platform, tinggal tambahkan pemanggilan serupa di titik
 //   yang ditandai "// TODO: resolver triplek/platform" di bawah.
+// - NEW: Bahan platform yang diambil dari gudang platform jadi
+//   (bahan_hotpress.sumber = 'platform', relasi mutasiKeluarPlatform)
+//   sekarang ikut dibaca. Sebelumnya baris ini dilewati sehingga tidak
+//   muncul di jurnal.
 //
 // NOTE REFACTOR: Logic ALIAS AKUN COA BARU (aliasAkunBaru, extractAkunVeneer,
 // extractAkunPlatform, extractAkunTriplek, extractAkunPenolong, extractAkunRaw,
@@ -110,6 +114,10 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
     private array $kategoriCache = [];
 
     private array $gradeCache = [];
+
+    private array $gradePlatformCache = [];
+
+    private array $ukuranDimCache = [];
 
     /**
      * Cache hasil resolve id_barang dari API eksternal, dikunci per
@@ -341,6 +349,69 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
         }
 
         return $this->getIdKayuByNama(strtolower(trim($namaJenisBarang)));
+    }
+
+    /**
+     * Cari id grade milik kategori Platform berdasarkan NAMA grade.
+     * Dipakai untuk bahan platform dari gudang platform jadi, karena di sana
+     * grade hanya berupa teks (kw_grade), bukan id. Tanpa ini, getIdGrade()
+     * bisa mengembalikan id grade kategori lain yang namanya sama.
+     */
+    private function getIdGradePlatform(string $namaGrade): ?int
+    {
+        $key = strtolower(trim($namaGrade));
+        if ($key === '') {
+            return null;
+        }
+        if (array_key_exists($key, $this->gradePlatformCache)) {
+            return $this->gradePlatformCache[$key];
+        }
+
+        try {
+            $idKategori = $this->getIdKategoriBarang('Platform');
+            if (! $idKategori) {
+                return $this->gradePlatformCache[$key] = null;
+            }
+
+            $keyLocal = str_replace('lokal', 'local', $key);
+            $keyLokal = str_replace('local', 'lokal', $key);
+
+            $grade = Grade::where('id_kategori_barang', $idKategori)
+                ->where(function ($q) use ($key, $keyLocal, $keyLokal) {
+                    $q->whereRaw('LOWER(nama_grade) = ?', [$key])
+                        ->orWhereRaw('LOWER(nama_grade) = ?', [$keyLocal])
+                        ->orWhereRaw('LOWER(nama_grade) = ?', [$keyLokal]);
+                })->first();
+
+            return $this->gradePlatformCache[$key] = $grade?->id;
+        } catch (\Throwable $e) {
+            return $this->gradePlatformCache[$key] = null;
+        }
+    }
+
+    /**
+     * Cari id ukuran dari panjang x lebar x tebal (urutan panjang/lebar
+     * boleh tertukar).
+     */
+    private function resolveIdUkuranByDimensi(float $p, float $l, float $t): ?int
+    {
+        if ($p <= 0 || $l <= 0 || $t <= 0) {
+            return null;
+        }
+
+        $key = "{$p}x{$l}x{$t}";
+        if (array_key_exists($key, $this->ukuranDimCache)) {
+            return $this->ukuranDimCache[$key];
+        }
+
+        try {
+            $u = Ukuran::where('panjang', $p)->where('lebar', $l)->where('tebal', $t)->first()
+                ?? Ukuran::where('panjang', $l)->where('lebar', $p)->where('tebal', $t)->first();
+
+            return $this->ukuranDimCache[$key] = $u?->id;
+        } catch (\Throwable $e) {
+            return $this->ukuranDimCache[$key] = null;
+        }
     }
 
     private function getIdKategoriBarang(string $namaKategori): ?int
@@ -824,6 +895,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
             'platformHasilHp.barangSetengahJadi.ukuran',
             'platformHasilHp.barangSetengahJadi.grade',
             'bahanHotpress.mutasiKeluarPalet.mutasiKeluar.jenisKayu',
+            'bahanHotpress.mutasiKeluarPlatform.mutasiKeluar.jenisBarang',
             'bahanHotpress.barangSetengahJadi.jenisBarang',
             'bahanHotpress.barangSetengahJadi.ukuran',
             'bahanHotpress.barangSetengahJadi.grade',
@@ -943,7 +1015,9 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
 
                     foreach ($prod->bahanHotpress as $bahan) {
                         $mutasiHeader = $bahan->mutasiKeluarPalet?->mutasiKeluar;
+                        $mutasiPlatformHeader = $bahan->mutasiKeluarPlatform?->mutasiKeluar;
                         $bsj = $bahan->barangSetengahJadi ?? null;
+                        $idGradePlatform = null;
 
                         if ($mutasiHeader) {
                             $p = (float) ($mutasiHeader->panjang ?? 0);
@@ -953,6 +1027,17 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                             $jkAsli = $mutasiHeader->jenisKayu?->nama_kayu ?? 'sengon';
                             $grAsli = (string) ($mutasiHeader->kw_grade ?? '');
                             $idUkuran = null;
+                        } elseif ($mutasiPlatformHeader) {
+                            // Bahan platform dari gudang platform jadi
+                            // (sumber = platform).
+                            $p = (float) ($mutasiPlatformHeader->panjang ?? 0);
+                            $l = (float) ($mutasiPlatformHeader->lebar ?? 0);
+                            $tebal = (float) ($mutasiPlatformHeader->tebal ?? 0);
+                            $jkAsli = $mutasiPlatformHeader->jenisBarang?->nama_jenis_barang ?? 'sengon';
+                            $idJenisKayu = $this->resolveIdJenisKayu($jkAsli);
+                            $grAsli = (string) ($mutasiPlatformHeader->kw_grade ?? '');
+                            $idUkuran = $this->resolveIdUkuranByDimensi($p, $l, $tebal);
+                            $idGradePlatform = $this->getIdGradePlatform($grAsli);
                         } elseif ($bsj) {
                             $u = $bsj->ukuran ?? null;
                             $idUkuran = $u?->id;
@@ -1011,7 +1096,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                         $isPlatform = ! $isAf && $this->isPlatformGrade($grAsli);
 
                         $ref = $isPlatform
-                            ? $this->fetchReferensi('platform', $idUkuran, $idJenisKayu, $grAsli)
+                            ? $this->fetchReferensi('platform', $idUkuran, $idJenisKayu, $grAsli, $idGradePlatform)
                             : $this->resolveRefBahan($idUkuran, $idJenisKayu, $grAsli);
 
                         // Platform: akun DI-ALIAS ke COA baru -> Platform Mentah (bahan masuk).
