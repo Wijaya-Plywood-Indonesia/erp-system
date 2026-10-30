@@ -347,6 +347,63 @@ class TempatKayusTable
             ->values();
     }
 
+    /**
+     * Nama jenis kayu untuk satu baris tabel.
+     *
+     * 1) Utama   : DetailTurusanKayu -> jenisKayu (dari kayu aktif lahan).
+     * 2) Fallback: HppAverageLog -> jenisKayu, hanya log TERAKHIR per jenis kayu
+     *              dan hanya jika stok_batang_after > 0.
+     */
+    private static function resolveJenisKayu($record): string
+    {
+        $lahanId = (int) $record->id_lahan;
+        $aktif = self::getKayuAktif($lahanId);
+
+        // Cari data kayu aktif yang panjangnya sesuai group_panjang (fallback ke semua)
+        $matching = $aktif->where('is_opname', false)->filter(function ($item) use ($record) {
+            $panjangs = array_map('trim', explode(',', $item['Panjang'] ?? ''));
+
+            return in_array((string) $record->group_panjang, $panjangs);
+        });
+
+        if ($matching->isEmpty()) {
+            $matching = $aktif->where('is_opname', false);
+        }
+
+        $idKayuMasuks = $matching->pluck('ID Kayu')->filter()->unique();
+
+        // 1) Utama: dari DetailTurusanKayu
+        if ($idKayuMasuks->isNotEmpty()) {
+            $turusan = DetailTurusanKayu::with('jenisKayu')
+                ->where('lahan_id', $lahanId)
+                ->whereIn('id_kayu_masuk', $idKayuMasuks)
+                ->first();
+
+            $nama = $turusan?->jenisKayu?->nama_kayu;
+
+            if ($nama) {
+                return $nama;
+            }
+        }
+
+        // 2) Fallback: dari HppAverageLog (log terakhir per jenis kayu, stok harus > 0)
+        $namaJenis = HppAverageLog::with('jenisKayu')
+            ->where('id_lahan', $lahanId)
+            ->where('panjang', $record->group_panjang)
+            ->whereNotNull('id_jenis_kayu')
+            ->orderByDesc('id')
+            ->get()
+            ->groupBy('id_jenis_kayu')
+            ->map(fn ($logs) => $logs->first()) // log terakhir tiap jenis
+            ->filter(fn ($log) => (int) $log->stok_batang_after > 0) // stok harus > 0
+            ->map(fn ($log) => $log->jenisKayu?->nama_kayu)
+            ->filter()
+            ->unique()
+            ->implode(', ');
+
+        return $namaJenis !== '' ? $namaJenis : '-';
+    }
+
     public static function configure(Table $table): Table
     {
         // ✅ AUTO-SYNC: siapa pun yang membuka Tempat Kayu otomatis memicu
@@ -448,33 +505,7 @@ class TempatKayusTable
 
                 TextColumn::make('jenis_kayu')
                     ->label('Jenis Kayu')
-                    ->getStateUsing(function ($record) {
-                        $aktif = self::getKayuAktif((int) $record->id_lahan);
-
-                        // Cari data kayu aktif yang panjangnya sesuai group_panjang (fallback ke semua)
-                        $matching = $aktif->where('is_opname', false)->filter(function ($item) use ($record) {
-                            $panjangs = array_map('trim', explode(',', $item['Panjang'] ?? ''));
-
-                            return in_array((string) $record->group_panjang, $panjangs);
-                        });
-
-                        if ($matching->isEmpty()) {
-                            $matching = $aktif->where('is_opname', false);
-                        }
-
-                        $idKayuMasuks = $matching->pluck('ID Kayu')->filter()->unique();
-
-                        if ($idKayuMasuks->isEmpty()) {
-                            return '-';
-                        }
-
-                        $turusan = DetailTurusanKayu::with('jenisKayu')
-                            ->where('lahan_id', $record->id_lahan)
-                            ->whereIn('id_kayu_masuk', $idKayuMasuks)
-                            ->first();
-
-                        return $turusan?->jenisKayu?->nama_kayu ?: '-';
-                    })
+                    ->getStateUsing(fn ($record) => self::resolveJenisKayu($record))
                     ->toggleable(),
 
                 TextColumn::make('total_batang_riil')
