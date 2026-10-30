@@ -2,12 +2,14 @@
 
 namespace App\Exports\Sheets;
 
+use App\Models\BahanPenolongProduksi;
 use App\Models\JenisKayu;
 use App\Models\KategoriBarang;
 use App\Models\ReferensiHargaProduksi;
 use App\Services\CoaAliasService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
@@ -27,24 +29,23 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 // - Nama class: JurnalRepairSheetV2, judul sheet 'jurnal repair v2'
 // - Akun Hutang Gaji: 2231.00 -> 2195.1
 // - Akun hpp/selisih: 6111.00 "hpp triplek" -> 5069.2 "Selisih harga patok produksi"
-// - Akun veneer (jadi/kering) SEKARANG dipetakan langsung dari COA baru
-//   lewat CoaAliasService::extractAkunVeneerRepair() berdasarkan tipe
-//   (jadi/kering) + tebal (face-back / core). TIDAK lagi membaca kode dari
-//   sub_anak_akuns, sehingga hasilnya sama di semua web (kayu / wahana).
-//   Harga tetap diambil dari referensi_harga_produksi.
-// - Akun bahan penolong tetap lewat CoaAliasService::extractAkunPenolong().
+// - Akun veneer (jadi/kering) dipetakan langsung dari COA baru lewat
+//   CoaAliasService::extractAkunVeneerRepair() berdasarkan tipe
+//   (jadi/kering) + tebal (face-back / core) + isAf. Harga tetap dari
+//   referensi_harga_produksi.
+// - Akun bahan penolong lewat CoaAliasService::extractAkunPenolong().
 // - Kolom "ID Barang" (O) diisi dari API /api/barang/resolve-veneer
 //   (di-cache per kombinasi parameter).
+// - Baris AF memakai akun yang SAMA di sisi debit (jadi) dan kredit
+//   (kering), seperti v1.
 //
-// REVISI (samakan dengan JurnalSheet v1):
-// - Baris AF (afalan) sekarang memakai akun yang SAMA di sisi debit (jadi)
-//   dan kredit (kering), persis seperti v1 yang memakai satu referensi
-//   "veneer afalan" untuk kedua sisi. Sebelumnya AF dipetakan lewat
-//   extractAkunVeneerRepair() berdasarkan tebal saja, sehingga debit masuk
-//   1402.8 (Jadi Core) dan kredit masuk 1402.6 (Kering Core) -> saldo
-//   antar akun bergeser walau total debit/kredit sama.
-//   Lihat akunVeneerRepair().
-// - Dibersihkan: elemen `null` nyasar di array $hasilPerGroup/$modalPerGroup.
+// REVISI (bahan penolong, samakan dengan Join V2):
+// - HARGA bahan penolong dibaca dari master BahanPenolongProduksi
+//   (kategori repair), exact match dulu lalu fuzzy. Fallback ke harga
+//   referensi_harga_produksi kalau master kosong/0.
+// - Label [UNKNOWN] hanya muncul kalau AKUN benar-benar tidak ter-resolve
+//   (namaAkun === 'UNKNOWN'), bukan karena referensi harga tidak ada.
+// - Keterangan bahan penolong diisi nama bahan asli (seperti Join V2).
 // ============================================================
 class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths, WithEvents, WithStyles, WithTitle
 {
@@ -53,6 +54,14 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
     public function __construct(protected $rawCollection, ?CoaAliasService $coaAlias = null)
     {
         $this->coaAlias = $coaAlias ?? app(CoaAliasService::class);
+
+        // Cache harga bahan penolong kategori repair dari master,
+        // key = lowercase nama. LOWER() supaya "Repair"/"repair" sama saja.
+        BahanPenolongProduksi::whereRaw('LOWER(kategori_produksi) = ?', ['repair'])
+            ->get()
+            ->each(function (BahanPenolongProduksi $b) {
+                $this->bahanHargaCache[strtolower(trim($b->nama_bahan_penolong))] = (float) ($b->harga ?? 0);
+            });
     }
 
     private array $kayuCache = [];
@@ -60,6 +69,9 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
     private array $kategoriCache = [];
 
     private array $bahanRefCache = [];
+
+    /** @var array<string, float> nama_bahan_penolong (lowercase) => harga dari master BahanPenolongProduksi */
+    private array $bahanHargaCache = [];
 
     /**
      * Cache hasil resolve id_barang dari API eksternal, dikunci per
@@ -307,6 +319,34 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
     }
 
     /**
+     * Cari harga bahan dari cache master BahanPenolongProduksi (kategori repair).
+     * Exact match dulu, lalu fuzzy (nama mengandung kunci master, atau sebaliknya).
+     * Return 0 kalau tidak ada / harga belum diisi, dan catat ke log supaya
+     * master bisa dilengkapi.
+     */
+    private function lookupHargaBahan(string $namaBahan): float
+    {
+        $nama = strtolower(trim($namaBahan));
+
+        // 1. Exact match
+        if (($this->bahanHargaCache[$nama] ?? 0) > 0) {
+            return $this->bahanHargaCache[$nama];
+        }
+
+        // 2. Fuzzy match
+        foreach ($this->bahanHargaCache as $kunci => $harga) {
+            if ($harga > 0 && $kunci !== '' && $nama !== ''
+                && (str_contains($nama, $kunci) || str_contains($kunci, $nama))) {
+                return $harga;
+            }
+        }
+
+        Log::warning('[JurnalRepair] Harga bahan penolong tidak ditemukan di master', ['bahan' => $namaBahan]);
+
+        return 0;
+    }
+
+    /**
      * Resolve id_barang dari API eksternal /api/barang/resolve-veneer,
      * dengan cache per kombinasi parameter. Mengembalikan null (bukan
      * melempar exception) kalau API gagal/timeout, supaya proses export
@@ -523,9 +563,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                 $kwRaw = $meta['kwRaw'];
                 $isAf = $meta['isAf'];
 
-                $hasilM3 = $hasil['totalM3'] ?? 0.0;
                 $hasilBanyak = $hasil['totalBanyak'] ?? 0;
-                $modalM3 = $modal['totalM3'] ?? 0.0;
                 $modalBanyak = $modal['totalBanyak'] ?? 0;
 
                 $refJadi = $this->fetchReferensiVeneer($jnsNorm, $tebal, $isAf, 'jadi');
@@ -641,9 +679,12 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
             }
 
             // ============================================================
-            // STEP 3: KREDIT BAHAN PENOLONG — lewat
-            // CoaAliasService::extractAkunPenolong(). ID Barang tidak
-            // relevan untuk bahan penolong, jadi dibiarkan null.
+            // STEP 3: KREDIT BAHAN PENOLONG
+            // - Akun (nama & nomor) lewat CoaAliasService::extractAkunPenolong().
+            // - Harga dari master BahanPenolongProduksi (kategori repair),
+            //   fallback ke harga referensi kalau master kosong/0.
+            // - [UNKNOWN] hanya kalau akun tidak ter-resolve.
+            // - ID Barang tidak relevan untuk bahan penolong (null).
             // ============================================================
             if (! empty($produksi->bahanPenolongRepair)) {
                 foreach ($produksi->bahanPenolongRepair as $bahan) {
@@ -653,10 +694,21 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                     }
 
                     $namaBahanRaw = $bahan->bahanPenolong->nama_bahan_penolong ?? 'Bahan';
-                    $refBahan = $this->fetchReferensiBahan($namaBahanRaw);
-                    [$namaAkun, $noAkun, $harga] = $this->coaAlias->extractAkunPenolong($refBahan, $namaBahanRaw);
 
-                    $keteranganBahan = ! $refBahan ? "{$namaBahanRaw} [UNKNOWN]" : '';
+                    $refBahan = $this->fetchReferensiBahan($namaBahanRaw);
+                    [$namaAkun, $noAkun, $hargaRef] = $this->coaAlias->extractAkunPenolong($refBahan, $namaBahanRaw);
+
+                    // Harga utama dari master BahanPenolongProduksi
+                    $harga = $this->lookupHargaBahan($namaBahanRaw);
+                    if ($harga <= 0) {
+                        $harga = (float) $hargaRef;
+                    }
+
+                    // Nama bahan asli di Keterangan; [UNKNOWN] hanya kalau akun tidak ketemu
+                    $keteranganBahan = $namaAkun === 'UNKNOWN'
+                        ? "{$namaBahanRaw} [UNKNOWN]"
+                        : ucfirst(strtolower(trim($namaBahanRaw)));
+
                     $jurnalBlockKredit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keteranganBahan, 'k', $jumlah, '', $harga, 'b');
                     $totalKredit += ($jumlah * $harga);
                 }
