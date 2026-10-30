@@ -69,6 +69,53 @@ class PengajuanBarangService
         });
     }
 
+    /**
+     * Khusus super admin (bulk action): setujui SEMUA kolom persetujuan yang masih 'menunggu'
+     * pada satu pengajuan. Kolom yang sudah disetujui/ditolak dilewati (tidak ditimpa).
+     *
+     * Berjalan lewat approve() biasa, jadi alur sama persis seperti persetujuan manual:
+     * kalau ketiganya sudah 'disetujui', stok otomatis terpotong. Semua dalam satu transaksi
+     * per pengajuan — kalau stok tidak cukup, persetujuan pengajuan ini dibatalkan semua
+     * (RuntimeException dilempar ke pemanggil).
+     *
+     * @param  array<int,string>  $roles  role yang boleh disetujui; default ketiganya
+     * @return array<int,string>  daftar role yang benar-benar disetujui di panggilan ini
+     */
+    public function approveSemuaMenunggu(
+        PengajuanBarang $pengajuan,
+        int $userId,
+        array $roles = ['pengawas_produksi', 'kepala_produksi', 'admin_barang_umum'],
+    ): array {
+        return DB::transaction(function () use ($pengajuan, $userId, $roles) {
+            $pengajuan = PengajuanBarang::lockForUpdate()->findOrFail($pengajuan->id);
+
+            $kolomStatus = [
+                'pengawas_produksi' => 'status_pengawas_produksi',
+                'kepala_produksi'   => 'status_kepala_produksi',
+                'admin_barang_umum' => 'status_admin_barang',
+            ];
+
+            $disetujui = [];
+
+            foreach ($roles as $role) {
+                if (!isset($kolomStatus[$role])) {
+                    continue;
+                }
+
+                // Hanya yang masih 'menunggu'. 'ditolak' sengaja tidak diubah.
+                if ($pengajuan->{$kolomStatus[$role]} !== 'menunggu') {
+                    continue;
+                }
+
+                $this->approve($pengajuan, $role, 'disetujui', $userId);
+                $pengajuan->refresh();
+                $disetujui[] = $role;
+            }
+
+            return $disetujui;
+        });
+    }
+
     protected function prosesPotongStok(PengajuanBarang $pengajuan): void
     {
         $items = $pengajuan->items()->with('barangUmum.stok')->get();

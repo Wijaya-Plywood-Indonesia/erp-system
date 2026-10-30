@@ -93,7 +93,9 @@ class TransferPlatformMthKeJadiService
                 ]);
 
             $user = Auth::user()?->name ?? 'System';
-            $keterangan = "Mutasi Platform Mentah -> Platform Jadi (serah terima #{$st->id}, mutasi #{$mutasi->id}), diterima oleh {$user}";
+            // Akun yang mencatat barang keluar (platform_mth_mutasi_keluars.dikeluarkan_by).
+            $pengeluar = $mutasi->operator?->name ?? ($st->diserahkan_oleh ?: '-');
+            $keterangan = "Mutasi Platform Mentah -> Platform Jadi (serah terima #{$st->id}, mutasi #{$mutasi->id}), dikeluarkan oleh {$pengeluar}, diterima oleh {$user}";
 
             // ── SUMBER (Platform Mentah): keluar ──
             $sBefore = [(int) $sumber->stok_lembar, (float) $sumber->stok_kubikasi, (float) $sumber->nilai_stok];

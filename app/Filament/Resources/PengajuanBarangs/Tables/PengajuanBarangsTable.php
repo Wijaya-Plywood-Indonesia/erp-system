@@ -4,7 +4,10 @@ namespace App\Filament\Resources\PengajuanBarangs\Tables;
 
 use App\Services\PengajuanBarangService;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
+use Illuminate\Support\Collection;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Radio;
@@ -440,6 +443,55 @@ class PengajuanBarangsTable
                             Notification::make()->danger()->title('Gagal')->body($e->getMessage())->send();
                         }
                     }),
+            ])
+            // ── Bulk action: hanya super admin. Checkbox pilih baris otomatis tersembunyi untuk role lain. ──
+            ->toolbarActions([
+                    BulkAction::make('setujuiTerpilih')
+                        ->label('Validasi Terpilih')
+                        ->icon('heroicon-o-check-badge')
+                        ->color('success')
+                        ->visible(fn() => Auth::user()?->hasRole('super_admin'))
+                        ->requiresConfirmation()
+                        ->modalHeading('Validasi Pengajuan Terpilih')
+                        ->modalDescription('Kolom persetujuan yang masih "Menunggu" pada baris terpilih akan disetujui atas nama Anda. Kolom yang sudah disetujui/ditolak tidak diubah. Jika ketiganya sudah disetujui, stok otomatis terpotong seperti biasa.')
+                        ->modalSubmitActionLabel('Ya, Validasi')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records) {
+                            if (!Auth::user()?->hasRole('super_admin')) {
+                                Notification::make()->danger()->title('Tidak diizinkan')->send();
+                                return;
+                            }
+
+                            $service = app(PengajuanBarangService::class);
+                            $berhasil = 0;
+                            $dilewati = 0;
+                            $gagal    = [];
+
+                            foreach ($records as $record) {
+                                try {
+                                    $roles = $service->approveSemuaMenunggu($record, Auth::id());
+                                    count($roles) > 0 ? $berhasil++ : $dilewati++;
+                                } catch (\RuntimeException $e) {
+                                    $gagal[] = "#{$record->id} ({$record->lokasi_penggunaan}): " . $e->getMessage();
+                                }
+                            }
+
+                            $ringkas = "{$berhasil} pengajuan disetujui";
+                            if ($dilewati) {
+                                $ringkas .= ", {$dilewati} dilewati (tidak ada kolom yang menunggu)";
+                            }
+
+                            if (empty($gagal)) {
+                                Notification::make()->success()->title('Selesai')->body($ringkas . '.')->send();
+                                return;
+                            }
+
+                            Notification::make()->warning()
+                                ->title(count($gagal) . ' pengajuan gagal')
+                                ->body($ringkas . ".\n" . implode("\n", $gagal))
+                                ->persistent()
+                                ->send();
+                        }),
             ]);
     }
 

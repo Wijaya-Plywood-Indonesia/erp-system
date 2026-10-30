@@ -32,6 +32,9 @@ use Illuminate\Support\Collection;
  */
 class WeeklyRekapPotonganGajiService
 {
+    /** Batas total potongan per orang per siklus yang memicu warning (Rp). */
+    public const BATAS_WARNING = 50000;
+
     public function __construct(
         protected RekapPotonganGajiService $harian,
     ) {}
@@ -70,6 +73,66 @@ class WeeklyRekapPotonganGajiService
             // requirement #9: default hanya yang benar-benar menghasilkan potongan
             ->filter(fn (array $row) => $row['potongan'] > 0)
             ->sortByDesc('potongan')
+            ->values();
+    }
+
+    /**
+     * Rekap potongan PER ORANG untuk 1 siklus gaji (lintas semua lini).
+     *
+     * Dibangun di atas getRekap() (yang per kodep+lini). Per hari, potongan
+     * seorang pegawai di beberapa lini digabung mengikuti aturan yang sama
+     * dengan kolom "Potongan" di absensi/gaji:
+     *   RekapPotonganGajiService::POTONGAN_AMBIL_TERKECIL
+     *   true  -> ambil yang TERKECIL per hari
+     *   false -> dijumlah per hari
+     * Lalu total siklus = jumlah semua hari.
+     *
+     * @return Collection<int, array{
+     *     kodep: string,
+     *     nama_pegawai: string,
+     *     total_potongan: int,
+     *     melebihi_batas: bool,
+     *     hari_kena: int,
+     *     per_lini: array<int, array{lini: string, label: string, potongan: int}>,
+     * }>
+     */
+    public function getRekapPerOrang(
+        string $tanggalMulai,
+        string $tanggalAkhir,
+        array $liniTerpilih = [],
+        int $batas = self::BATAS_WARNING,
+    ): Collection {
+        return $this->getRekap($tanggalMulai, $tanggalAkhir, $liniTerpilih)
+            ->groupBy(fn (array $row) => (string) $row['kodep'])
+            ->map(function (Collection $rows, $kodep) use ($batas) {
+                $perHari = $rows
+                    ->flatMap(fn (array $r) => $r['detail'])
+                    ->groupBy('tanggal')
+                    ->map(fn (Collection $h) => RekapPotonganGajiService::POTONGAN_AMBIL_TERKECIL
+                        ? (int) $h->min('potongan')
+                        : (int) $h->sum('potongan'));
+
+                $total = (int) $perHari->sum();
+
+                return [
+                    'kodep' => (string) $kodep,
+                    'nama_pegawai' => $rows->first()['nama_pegawai'],
+                    'total_potongan' => $total,
+                    'melebihi_batas' => $total > $batas,
+                    'hari_kena' => $perHari->count(),
+                    'per_lini' => $rows
+                        ->map(fn (array $r) => [
+                            'lini' => $r['lini'],
+                            'label' => LiniProduksiResolver::label($r['lini']),
+                            'potongan' => (int) $r['potongan'],
+                        ])
+                        ->sortByDesc('potongan')
+                        ->values()
+                        ->all(),
+                ];
+            })
+            ->filter(fn (array $o) => $o['total_potongan'] > 0)
+            ->sortByDesc('total_potongan')
             ->values();
     }
 

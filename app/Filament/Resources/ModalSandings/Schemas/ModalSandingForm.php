@@ -461,7 +461,9 @@ class ModalSandingForm
                     $identitas = 'TJ'.$item->id_triplek_mutasi_keluar;
                     $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel} · {$tersedia} lbr (triplek jadi){$hari}";
 
+
                     return [$item->id => $label];
+
                 }
 
                 // Gudang Platform Mentah
@@ -472,6 +474,7 @@ class ModalSandingForm
                     $gradeLabel = self::rapikan($m?->kw_grade);
                     $identitas = 'PM'.$item->id_platform_mth_mutasi_keluar;
                     $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel} · {$tersedia} lbr (platform mentah){$hari}";
+
 
                     return [$item->id => $label];
                 }
@@ -484,6 +487,7 @@ class ModalSandingForm
                     $gradeLabel = self::rapikan($m?->kw_grade);
                     $identitas = 'TM'.$item->id_triplek_mth_mutasi_keluar;
                     $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$jenis} {$gradeLabel} · {$tersedia} lbr (triplek mentah){$hari}";
+
 
                     return [$item->id => $label];
                 }
@@ -500,6 +504,7 @@ class ModalSandingForm
                 $asal = strtolower((string) $item->asal_label);
 
                 $label = "{$identitas} · {$kategori} · {$ukuranLabel} {$namaJenisBarang} {$gradeLabel} · {$tersedia} lbr ({$asal}){$hari}";
+
 
                 return [$item->id => $label];
             })
