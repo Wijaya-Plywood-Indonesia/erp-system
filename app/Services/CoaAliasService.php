@@ -55,6 +55,19 @@ class CoaAliasService
     /** Barang dalam proses (kelompok 1403) */
     public const AKUN_BARANG_SETENGAH_JADI = ['no' => '1403.0', 'nama' => 'Persediaan Barang Dalam Proses'];
 
+    /**
+     * Platform & triplek (kelompok 1403) — dipakai jurnal Hot Press.
+     * - Platform bahan masuk HP (belum diproses)  -> 1403.1
+     * - Triplek hasil produksi HP                 -> 1403.2
+     * - Platform hasil produksi HP                -> 1403.3
+     * Akun ditentukan dari JENIS barang, bukan dari kode sub_anak_akuns.
+     */
+    public const AKUN_PLATFORM_MENTAH = ['no' => '1403.1', 'nama' => 'Persediaan Platform Mentah'];
+
+    public const AKUN_TRIPLEK_MENTAH = ['no' => '1403.2', 'nama' => 'Persediaan Triplek Mentah'];
+
+    public const AKUN_PLATFORM_JADI = ['no' => '1403.3', 'nama' => 'Persediaan Platform Jadi'];
+
     /** Barang jadi (kelompok 1404) */
     public const AKUN_BARANG_JADI = ['no' => '1404.0', 'nama' => 'Persediaan Barang Jadi'];
 
@@ -487,14 +500,43 @@ class CoaAliasService
         return $this->extractAkunLama($ref);
     }
 
+    /**
+     * Akun platform untuk jurnal Hot Press, ditentukan dari JENIS barang
+     * (bukan dari kode sub_anak_akuns):
+     * - hasil produksi HP -> Platform Jadi   (1403.3)
+     * - bahan masuk HP    -> Platform Mentah (1403.1)
+     *
+     * Kalau referensi tidak ditemukan -> UNKNOWN (tetap memblokir pengiriman
+     * jurnal, supaya master data yang kurang ketahuan).
+     *
+     * @return array{0:string,1:string,2:float} [nama, no, harga]
+     */
     public function extractAkunPlatform($ref, bool $isHasil = false): array
     {
-        return $this->extractAkunLama($ref);
+        if (! $ref) {
+            return ['UNKNOWN', 'UNKNOWN', 0.0];
+        }
+
+        $akun = $isHasil ? self::AKUN_PLATFORM_JADI : self::AKUN_PLATFORM_MENTAH;
+
+        return [$akun['nama'], $akun['no'], (float) $ref->harga];
     }
 
+    /**
+     * Akun triplek hasil produksi Hot Press -> Triplek Mentah (1403.2) untuk
+     * semua ukuran/grade. Referensi tidak ketemu -> UNKNOWN.
+     *
+     * @return array{0:string,1:string,2:float} [nama, no, harga]
+     */
     public function extractAkunTriplek($ref): array
     {
-        return $this->extractAkunLama($ref);
+        if (! $ref) {
+            return ['UNKNOWN', 'UNKNOWN', 0.0];
+        }
+
+        $akun = self::AKUN_TRIPLEK_MENTAH;
+
+        return [$akun['nama'], $akun['no'], (float) $ref->harga];
     }
 
     /**
