@@ -6,7 +6,6 @@ use App\Exports\RekapStokVeneerExport;
 use App\Models\HppVeneerBasahSummary;
 use App\Models\JenisKayu;
 use App\Models\StokVeneerJadi;
-use App\Models\StokVeneerKering;
 use App\Models\Ukuran;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -291,15 +290,31 @@ class RekapStokVeneer extends Page implements HasForms
             $allKws[$kw] = true;
         }
 
-        // 3. Lokal Kering (ambil baris terbaru per ukuran + jenis kayu + KW)
+        // 3. Lokal Kering
+        //
+        // Saldo dihitung dari SUM(masuk) − SUM(keluar) per ukuran + jenis kayu + KW,
+        // BUKAN dari kolom stok_lembar_sesudah di baris MAX(id).
+        //
+        // Alasannya: ledger kering di-replay berdasarkan tanggal_transaksi (lihat
+        // VeneerMutasiService::recalculateStokKering), sedangkan baris dengan id terbesar
+        // belum tentu transaksi terakhir secara tanggal. Contoh: nota keluar bertanggal
+        // 20 Okt divalidasi tanggal 28 Okt → id-nya paling besar, tapi posisinya di
+        // tengah riwayat; saldo tengah itu bisa negatif walau saldo akhirnya aman.
+        // Cara hitung ini sama dengan StokVeneerKering::saldoLembarTerakhir() yang
+        // dipakai Gudang Veneer Kering dan Opname Stok, dan tidak bergantung pada urutan id.
         $ukurans = Ukuran::all()->keyBy('id');
-        $keringIds = DB::table('stok_veneer_kerings')
+        $keringRows = DB::table('stok_veneer_kerings')
             ->when($tgl, fn ($q) => $q->whereDate('tanggal_transaksi', '<=', $tgl))
-            ->select(DB::raw('MAX(id) as max_id'))
+            ->select(
+                'id_ukuran',
+                'id_jenis_kayu',
+                'kw',
+                DB::raw("SUM(CASE WHEN jenis_transaksi = 'masuk' THEN qty WHEN jenis_transaksi = 'keluar' THEN -qty ELSE 0 END) as stok_lembar")
+            )
             ->groupBy('id_ukuran', 'id_jenis_kayu', 'kw')
-            ->pluck('max_id');
+            ->get();
 
-        foreach (StokVeneerKering::whereIn('id', $keringIds)->get() as $k) {
+        foreach ($keringRows as $k) {
             $kw = $this->normalizeKw($k->kw);
             if ($kw === null) {
                 continue;
@@ -311,7 +326,7 @@ class RekapStokVeneer extends Page implements HasForms
             $namaKayu = $jenisKayus[$k->id_jenis_kayu] ?? 'Unknown';
             $key = $getGroupKey($k->id_jenis_kayu, $ukuran->panjang, $ukuran->lebar, $ukuran->tebal);
             $initGroup($key, $k->id_jenis_kayu, $namaKayu, $ukuran->panjang, $ukuran->lebar, $ukuran->tebal);
-            $allStocks[$key]['localKering'][$kw] = ($allStocks[$key]['localKering'][$kw] ?? 0) + $k->stok_lembar_sesudah;
+            $allStocks[$key]['localKering'][$kw] = ($allStocks[$key]['localKering'][$kw] ?? 0) + (int) round((float) $k->stok_lembar);
             $allKws[$kw] = true;
         }
 

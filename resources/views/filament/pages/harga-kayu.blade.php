@@ -14,6 +14,12 @@
             <p class="text-sm font-bold text-zinc-500 dark:text-zinc-400 uppercase mt-1">
                 ( DOKUMEN LENGKAP / LETTER C )
             </p>
+            <p class="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mt-2">
+                Harga terakhir diperbarui:
+                <span class="font-black text-zinc-900 dark:text-white">
+                    {{ $this->lastUpdatedAt ? $this->lastUpdatedAt->translatedFormat('d F Y') : '-' }}
+                </span>
+            </p>
         </div>
 
         {{-- Filter Tanggal --}}
@@ -54,6 +60,8 @@
             @php
                 $headerMatrix = $this->matrixHeader;
                 $diameterRanges = $this->diameterRanges;
+                // Kayu pertama dari kelompok "kayu lain" diberi garis pemisah tebal
+                $kayuLainPertama = $headerMatrix->keys()->first(fn ($n) => \App\Filament\Pages\HargaKayu::kayuLain($n));
             @endphp
 
             <table class="w-full border-collapse text-xs">
@@ -69,7 +77,10 @@
                                 $totalCols = $lengths->sum(fn($grades) => $grades->count());
                             @endphp
                             <th colspan="{{ $totalCols }}"
-                                class="border border-zinc-300 dark:border-zinc-700 p-3 text-lg uppercase bg-zinc-50 dark:bg-white/5">
+                                @class([
+                                    'border border-zinc-300 dark:border-zinc-700 p-3 text-lg uppercase',
+                                    'bg-zinc-50 dark:bg-white/5' => ! \App\Filament\Pages\HargaKayu::kayuLain($woodName),
+                                ])>
                                 {{ $woodName }}
                             </th>
                         @endforeach
@@ -80,7 +91,10 @@
                         @foreach ($headerMatrix as $woodName => $lengths)
                             @foreach ($lengths as $length => $grades)
                                 <th colspan="{{ $grades->count() }}"
-                                    class="border border-zinc-300 dark:border-zinc-700 p-2 text-base">
+                                    @class([
+                                        'border border-zinc-300 dark:border-zinc-700 p-2 text-base',
+                                        'border-l-4 border-l-amber-400' => $woodName === $kayuLainPertama && $loop->first,
+                                    ])>
                                     {{ $length }}
                                 </th>
                             @endforeach
@@ -97,8 +111,12 @@
                         @foreach ($headerMatrix as $woodName => $lengths)
                             @foreach ($lengths as $length => $grades)
                                 @foreach ($grades as $grade)
-                                    <th
-                                        class="border border-zinc-300 dark:border-zinc-700 p-1 w-16 {{ $grade == 1 ? 'text-zinc-900 dark:text-white' : 'text-zinc-800 dark:text-zinc-100' }}">
+                                    <th @class([
+                                        'border border-zinc-300 dark:border-zinc-700 p-1 w-16',
+                                        'text-zinc-900 dark:text-white' => $grade == 1,
+                                        'text-zinc-800 dark:text-zinc-100' => $grade != 1,
+                                        'border-l-4 border-l-amber-400' => $woodName === $kayuLainPertama && $loop->parent->first && $loop->first,
+                                    ])>
                                         {{ $grade == 1 ? 'A' : 'B' }}
                                     </th>
                                 @endforeach
@@ -128,6 +146,7 @@
                                             'text-zinc-500 dark:text-zinc-400' => $grade != 1,
                                             'bg-zinc-50/50 dark:bg-white/5' =>
                                                 $loop->parent->parent->iteration % 2 == 0,
+                                            'border-l-4 border-l-amber-400' => $woodName === $kayuLainPertama && $loop->parent->first && $loop->first,
                                         ])>
                                             {{ $this->getPriceMatrix($woodName, $length, $grade, $range->min, $range->max) }}
                                         </td>
