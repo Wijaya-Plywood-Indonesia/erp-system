@@ -68,6 +68,34 @@
                 </div>
             </div>
         </div>
+
+        {{-- Filter Tanggal --}}
+        <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-[10px] font-medium text-gray-400 uppercase">Tgl:</span>
+            <input type="date"
+                wire:model.live="filterTanggalMulai"
+                title="Tanggal Mulai"
+                placeholder="Dari Tanggal"
+                class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-2.5 py-1.5 outline-none focus:border-primary-500 transition-all">
+            <span class="text-xs text-gray-400 font-bold">-</span>
+            <input type="date"
+                wire:model.live="filterTanggalSelesai"
+                title="Tanggal Selesai"
+                placeholder="Sampai Tanggal"
+                class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-2.5 py-1.5 outline-none focus:border-primary-500 transition-all">
+
+            @if($filterTanggalMulai || $filterTanggalSelesai)
+            <button type="button"
+                wire:click="resetFilterTanggal"
+                title="Reset Tanggal"
+                class="text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 border border-rose-200 dark:border-rose-900/50 rounded-sm px-2 py-1.5 font-bold transition flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                <span>Reset Tgl</span>
+            </button>
+            @endif
+        </div>
     </div>
 
     {{-- LOOPING LOG PER LAHAN (Gaya Meja) --}}
