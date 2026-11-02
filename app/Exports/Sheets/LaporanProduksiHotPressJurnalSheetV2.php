@@ -2,6 +2,7 @@
 
 namespace App\Exports\Sheets;
 
+use App\Models\BahanPenolongProduksi;
 use App\Models\Grade;
 use App\Models\JenisKayu;
 use App\Models\KategoriBarang;
@@ -51,33 +52,35 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 //   asli): Lem->1402.9, Hardner->1402.10, Isi Staples->1402.11,
 //   Pewarna->1402.12, Tepung->1402.13, Solasi Coklat->1402.14,
 //   Solasi Putih->1402.15.
+// - NEW: HARGA Bahan Penolong sekarang diambil dari model
+//   BahanPenolongProduksi (kategori_produksi = 'hot_press'), BUKAN dari
+//   ReferensiHargaProduksi / hardcode. Akun & nama akun tetap dari
+//   CoaAliasService::extractAkunPenolong(); hanya harganya yang diganti.
+//   Kalau harga di model belum diisi (0 / tidak ketemu), fallback ke harga
+//   dari alias referensi dan keterangan diberi penanda.
 // - Kolom "No Akun" (D) dipaksa jadi TEKS eksplisit (bukan numerik),
 //   supaya kode akun seperti "1402.5" tidak pernah dipaksa 2 digit /
 //   diubah titik jadi koma oleh Excel.
-// - NEW: Kolom "ID Barang" (O) sekarang diisi dengan hasil resolve dari
-//   API eksternal /api/barang/resolve-veneer, MENGIKUTI POLA yang sama
-//   dipakai di JurnalSheetV2 (dryer) & JurnalRepairSheetV2 (repair).
+// - Kolom "ID Barang" (O) diisi dengan hasil resolve dari API eksternal
+//   /api/barang/resolve-veneer, MENGIKUTI POLA yang sama dipakai di
+//   JurnalSheetV2 (dryer) & JurnalRepairSheetV2 (repair).
 //   PENTING — resolver ini HANYA diterapkan untuk baris BAHAN VENEER
 //   (veneer masuk sebagai bahan hotpress, bukan platform) karena
 //   endpoint /api/barang/resolve-veneer secara kontrak hanya mengenal
 //   parameter veneer (jenis_veneer, bagian, jenis_kayu, ketebalan,
 //   ukuran, kw). Baris TRIPLEK dan PLATFORM (baik sebagai hasil
 //   produksi maupun sebagai bahan masuk) TIDAK di-resolve di sini dan
-//   ID Barang-nya dibiarkan null, karena keduanya bukan item veneer dan
-//   belum ada endpoint resolver terpisah untuk triplek/platform yang
-//   dikonfirmasi. Kalau nanti ada endpoint resolve-triplek atau
-//   resolve-platform, tinggal tambahkan pemanggilan serupa di titik
-//   yang ditandai "// TODO: resolver triplek/platform" di bawah.
-// - NEW: Bahan platform yang diambil dari gudang platform jadi
+//   ID Barang-nya dibiarkan null. Kalau nanti ada endpoint
+//   resolve-triplek atau resolve-platform, tinggal tambahkan pemanggilan
+//   serupa di titik yang ditandai "// TODO: resolver triplek/platform".
+// - Bahan platform yang diambil dari gudang platform jadi
 //   (bahan_hotpress.sumber = 'platform', relasi mutasiKeluarPlatform)
-//   sekarang ikut dibaca. Sebelumnya baris ini dilewati sehingga tidak
-//   muncul di jurnal.
+//   ikut dibaca.
 //
 // NOTE REFACTOR: Logic ALIAS AKUN COA BARU (aliasAkunBaru, extractAkunVeneer,
 // extractAkunPlatform, extractAkunTriplek, extractAkunPenolong, extractAkunRaw,
-// getAkunHpp, getAkunGaji) sudah
-// DIPINDAH ke App\Services\CoaAliasService supaya bisa dipakai bersama oleh
-// JurnalSheetV2 (dryer) & JurnalRepairSheetV2. Sheet ini sekarang hanya
+// getAkunHpp, getAkunGaji) ada di App\Services\CoaAliasService supaya bisa
+// dipakai bersama oleh JurnalSheetV2 (dryer) & JurnalRepairSheetV2. Sheet ini
 // memanggil service tsb lewat $this->coaAlias.
 //
 // Cara pakai: daftarkan class ini di sheets() milik
@@ -120,6 +123,14 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
     private array $ukuranDimCache = [];
 
     /**
+     * Cache harga bahan penolong dari model BahanPenolongProduksi
+     * (kategori_produksi = 'hot_press'). Key = nama_bahan_penolong lowercase.
+     *
+     * @var array<string, float>
+     */
+    private array $bahanPenolongCache = [];
+
+    /**
      * Cache hasil resolve id_barang dari API eksternal, dikunci per
      * kombinasi parameter (jenis_veneer|bagian|jenis_kayu|ketebalan|
      * ukuran|kw) supaya tidak memanggil API berkali-kali untuk
@@ -132,6 +143,13 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
         $this->tanggal = $tanggal;
         $this->domain = $domain;
         $this->coaAlias = $coaAlias ?? app(CoaAliasService::class);
+
+        // Cache semua bahan penolong kategori hot_press dari DB, key = lowercase nama
+        BahanPenolongProduksi::where('kategori_produksi', 'hot_press')
+            ->get()
+            ->each(function (BahanPenolongProduksi $b) {
+                $this->bahanPenolongCache[strtolower(trim($b->nama_bahan_penolong))] = (float) ($b->harga ?? 0);
+            });
     }
 
     public function title(): string
@@ -452,6 +470,32 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
         } catch (\Throwable $e) {
             return $this->gradeCache[$cacheKey] = null;
         }
+    }
+
+    /**
+     * Ambil harga bahan penolong dari model BahanPenolongProduksi
+     * (kategori hot_press). Exact match dulu, lalu fuzzy (saling mengandung).
+     * Return null jika tidak ketemu atau harga belum diisi (0).
+     */
+    private function getHargaBahanPenolong(string $namaBahan): ?float
+    {
+        $nama = strtolower(trim($namaBahan));
+
+        if ($nama === '') {
+            return null;
+        }
+
+        if (isset($this->bahanPenolongCache[$nama]) && $this->bahanPenolongCache[$nama] > 0) {
+            return $this->bahanPenolongCache[$nama];
+        }
+
+        foreach ($this->bahanPenolongCache as $key => $harga) {
+            if ($harga > 0 && $key !== '' && (str_contains($nama, $key) || str_contains($key, $nama))) {
+                return $harga;
+            }
+        }
+
+        return null;
     }
 
     // =========================================================================
@@ -954,7 +998,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
 
                 // =======================================================
                 // 1. HASIL PRODUKSI (DEBIT)
-                //    - Triplek: akun RAW (belum ada mapping COA baru)
+                //    - Triplek: akun DI-ALIAS ke COA baru (Triplek Mentah)
                 //    - Platform: akun DI-ALIAS ke COA baru (Platform Jadi)
                 //    ID Barang: TIDAK di-resolve di sini — lihat catatan
                 //    header file (resolver hanya untuk bahan veneer).
@@ -1115,9 +1159,9 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
 
                         $katGrade = $this->kategoriGrade($grAsli);
 
-                        // NEW: resolve id_barang untuk bahan VENEER (bukan
-                        // platform). Parameter "bagian" mengikuti pola yang
-                        // sama seperti JurnalSheetV2/JurnalRepairSheetV2:
+                        // Resolve id_barang untuk bahan VENEER (bukan
+                        // platform). Parameter "bagian" mengikuti pola
+                        // yang sama seperti JurnalSheetV2/JurnalRepairSheetV2:
                         // AF -> PPC, tebal < 1 -> Face Back, selain itu Core.
                         $idBarangBahan = null;
                         if (! $isPlatform) {
@@ -1199,7 +1243,9 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                         );
                     }
 
-                    // --- BAHAN PENOLONG (akun RAW, tidak diubah; ID Barang null) ---
+                    // --- BAHAN PENOLONG ---
+                    // Akun & nama akun dari CoaAliasService; HARGA dari model
+                    // BahanPenolongProduksi (kategori hot_press). ID Barang null.
                     foreach ($prod->bahanPenolongHp as $penolong) {
                         $namaBahanLower = strtolower(trim($penolong->nama_bahan));
 
@@ -1213,9 +1259,17 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
 
                         $banyak = $penolong->jumlah;
                         $ref = $this->fetchReferensiPenolong($penolong->nama_bahan);
-                        [$akunNama, $akunNo, $hargaPenolong] = $this->coaAlias->extractAkunPenolong($ref, $penolong->nama_bahan);
+                        [$akunNama, $akunNo, $hargaAlias] = $this->coaAlias->extractAkunPenolong($ref, $penolong->nama_bahan);
+
+                        // Harga dari model BahanPenolongProduksi; fallback ke harga
+                        // alias/referensi hanya jika harga di model belum diisi.
+                        $hargaModel = $this->getHargaBahanPenolong($penolong->nama_bahan);
+                        $hargaPenolong = $hargaModel ?? (float) $hargaAlias;
 
                         $ketPenolong = $ref?->nama ?? "{$penolong->nama_bahan} [UNKNOWN - cek master data]";
+                        if ($hargaModel === null) {
+                            $ketPenolong .= ' [harga bahan penolong belum diisi]';
+                        }
 
                         $totalHargaBahanGlobal += round($banyak * $hargaPenolong, 0);
                         $rows[] = $this->makeRow($akunNama, $akunNo, $tglStr, $namaMesinSingkat, $ketPenolong, 'k', 'b', $banyak, '', $hargaPenolong);

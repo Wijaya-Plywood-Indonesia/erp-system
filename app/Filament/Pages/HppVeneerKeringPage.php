@@ -44,6 +44,8 @@ class HppVeneerKeringPage extends Page
     public string $filterTebal     = '';
     public string $filterKw        = '';
     public string $filterBulan     = '';     // format YYYY-MM, kosong = semua bulan
+    public string $filterTanggalMulai = '';
+    public string $filterTanggalSelesai = '';
     public bool   $tampilNilaiStok = false;  // kolom Nilai Stok disembunyikan secara bawaan
 
     /**
@@ -123,6 +125,8 @@ class HppVeneerKeringPage extends Page
                 $awal = Carbon::createFromFormat('Y-m-d', $this->filterBulan . '-01')->startOfMonth();
                 $q->whereBetween('tanggal_transaksi', [$awal->toDateString(), $awal->copy()->endOfMonth()->toDateString()]);
             })
+            ->when($this->filterTanggalMulai, fn ($q) => $q->whereDate('tanggal_transaksi', '>=', $this->filterTanggalMulai))
+            ->when($this->filterTanggalSelesai, fn ($q) => $q->whereDate('tanggal_transaksi', '<=', $this->filterTanggalSelesai))
             ->when($this->filterJenisKayu, fn ($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->when($this->filterPanjang, fn ($q) => $q->whereHas('ukuran', fn ($u) => $u->where('panjang', $this->filterPanjang)))
             ->when($this->filterLebar,   fn ($q) => $q->whereHas('ukuran', fn ($u) => $u->where('lebar', $this->filterLebar)))
@@ -207,6 +211,8 @@ class HppVeneerKeringPage extends Page
         $this->filterTebal     = '';
         $this->filterKw        = '';
         $this->filterBulan     = '';
+        $this->filterTanggalMulai = '';
+        $this->filterTanggalSelesai = '';
         $this->resetPage();
     }
 

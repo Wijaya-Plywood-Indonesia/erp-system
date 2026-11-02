@@ -55,11 +55,25 @@
                 <option value="{{ $bln }}">{{ \Carbon\Carbon::createFromFormat('Y-m', $bln)->locale('id')->translatedFormat('F Y') }}</option>
             @endforeach
         </select>
+
+        {{-- Filter Rentang Tanggal --}}
+        <div class="flex items-center gap-1">
+            <input type="date"
+                wire:model.live="filterTanggalMulai"
+                title="Tanggal Mulai"
+                class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-2 py-1.5 outline-none focus:border-primary-500">
+            <span class="text-xs text-gray-400 font-bold">-</span>
+            <input type="date"
+                wire:model.live="filterTanggalSelesai"
+                title="Tanggal Selesai"
+                class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-2 py-1.5 outline-none focus:border-primary-500">
+        </div>
+
         <input wire:model.live.debounce.400ms="filterKw" placeholder="Cari kayu/ukuran/KW"
             class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500 w-36" />
 
         <div class="ml-auto flex items-center gap-3">
-            @if($filterJenisKayu !== '' || $filterPanjang !== '' || $filterLebar !== '' || $filterTebal !== '' || $filterBulan !== '' || trim($filterKw) !== '')
+            @if($filterJenisKayu !== '' || $filterPanjang !== '' || $filterLebar !== '' || $filterTebal !== '' || $filterBulan !== '' || $filterTanggalMulai !== '' || $filterTanggalSelesai !== '' || trim($filterKw) !== '')
                 <button type="button" wire:click="resetFilter"
                     class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-amber-400 hover:text-amber-600">
                     ✕ Reset
