@@ -15,12 +15,22 @@ class ModalSanding extends Model
     protected $fillable = [
         'id_produksi_sanding',
         'id_serah_terima_hp',
+        'id_hasil_sanding',
         'id_barang_setengah_jadi',
         'kuantitas',
         'jumlah_sanding_face',
         'jumlah_sanding_back',
         'no_palet',
     ];
+
+    /**
+     * Relasi ke HasilSanding
+     * modal_sandings.id_hasil_sanding -> hasil_sandings.id
+     */
+    public function hasilSanding(): BelongsTo
+    {
+        return $this->belongsTo(HasilSanding::class, 'id_hasil_sanding');
+    }
 
     /**
      * Relasi ke ProduksiSanding

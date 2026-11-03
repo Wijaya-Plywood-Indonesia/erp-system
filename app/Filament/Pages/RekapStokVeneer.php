@@ -9,6 +9,7 @@ use App\Models\StokVeneerJadi;
 use App\Models\StokVeneerKering;
 use App\Models\Ukuran;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
@@ -26,6 +27,7 @@ use UnitEnum;
 class RekapStokVeneer extends Page implements HasForms
 {
     use InteractsWithForms;
+    use HasPageShield;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
 

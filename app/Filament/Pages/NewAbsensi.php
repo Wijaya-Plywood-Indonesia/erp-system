@@ -6,18 +6,25 @@ use App\Exports\NewRekapAbsensiExport;
 use App\Exports\RumusGajiWijayaExport;
 use App\Exports\RumusGajiWijayaMingguanExport;
 use App\Models\NewAbsensiUpload;
+use App\Models\PengaturanAbsensi;
 use App\Services\DownloadAbsensiUploadService;
 use App\Services\NewRekapAbsensiPegawaiService;
 use App\Services\PotonganGajiService;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use App\Services\UploadFingerService;
-// HasPageShield sengaja dilepas — halaman ini harus tampil untuk semua role.
-// Pembatasan akses ke tab Upload & Riwayat diatur secara manual di blade.
 use App\Services\ValidasiTargetProduksiService;
+use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\TimePicker;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Carbon;
@@ -26,18 +33,10 @@ use Livewire\Attributes\Url;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
 
-use Filament\Actions\Action;
-use Filament\Schemas\Components\Section;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\TimePicker;
-use Filament\Forms\Components\Toggle;
-use Filament\Forms\Components\Slider;
-use App\Models\PengaturanAbsensi;
-
 class NewAbsensi extends Page implements HasForms
 {
     use InteractsWithForms;
+    use HasPageShield;
 
     protected function getHeaderActions(): array
     {
@@ -110,7 +109,7 @@ class NewAbsensi extends Page implements HasForms
                     Section::make('Panduan Pengaturan')
                         ->description('Penjelasan cara kerja pengaturan absensi')
                         ->schema([
-                            \Filament\Forms\Components\Placeholder::make('bantuan_pengaturan')
+                            Placeholder::make('bantuan_pengaturan')
                                 ->hiddenLabel()
                                 ->content(view('filament.pages.bantuan-pengaturan-absensi')),
                         ])->collapsed(),
@@ -142,16 +141,21 @@ class NewAbsensi extends Page implements HasForms
         return Width::Full;
     }
 
-    public static function canAccess(): bool
-    {
-        return true;
-    }
-
-    public function canManageAbsensi(): bool
+public function canManageAbsensi(): bool
     {
         $user = auth()->user();
 
         return $user && ($user->hasRole('super_admin') || $user->hasRole('Absen'));
+    }
+
+    /**
+     * Tanggal default halaman ini = KEMARIN (bukan hari ini).
+     * Dipakai di mount() dan sebagai fallback di semua method lain,
+     * supaya cukup diubah di satu tempat kalau default-nya berubah lagi.
+     */
+    protected function defaultTanggal(): string
+    {
+        return now()->subDay()->format('Y-m-d');
     }
 
     public bool $showAbsensiLainLain = false;
@@ -164,7 +168,7 @@ class NewAbsensi extends Page implements HasForms
     /**
      * Disinkronkan ke query string URL (?tanggal=YYYY-MM-DD) supaya kalau
      * halaman di-refresh atau link-nya dibagikan/dibuka ulang, tanggal yang
-     * lagi dipilih user tetap sama (tidak balik ke tanggal hari ini).
+     * lagi dipilih user tetap sama (tidak balik ke tanggal default).
      * keep: true supaya parameter tetap muncul di URL walau nilainya
      * balik ke default.
      */
@@ -217,8 +221,6 @@ class NewAbsensi extends Page implements HasForms
      * Arah sorting kolom Potongan di tabel Data Absensi.
      * null = tidak diurutkan, 'asc' = terkecil ke terbesar,
      * 'desc' = terbesar ke terkecil.
-     *
-     * @var string|null
      */
     public ?string $sortPotongan = null;
 
@@ -265,12 +267,12 @@ class NewAbsensi extends Page implements HasForms
     {
         // Pakai ??= (bukan langsung assign) supaya nilai yang sudah datang
         // dari query string URL (?tanggal=...) lewat atribut #[Url] di atas
-        // tidak ketimpa balik ke tanggal hari ini. Livewire mengisi
+        // tidak ketimpa balik ke tanggal default. Livewire mengisi
         // property dari query string SEBELUM mount() dipanggil, jadi kalau
         // $this->tanggal sudah ada isinya, biarkan seperti itu — hanya
-        // fallback ke hari ini kalau memang belum ada tanggal sama sekali
+        // fallback ke KEMARIN kalau memang belum ada tanggal sama sekali
         // (misal pertama kali buka halaman tanpa query string).
-        $this->tanggal ??= now()->format('Y-m-d');
+        $this->tanggal ??= $this->defaultTanggal();
         $this->uploadForm->fill();
 
         // Langsung jalankan pengecekan target saat halaman pertama kali
@@ -328,7 +330,7 @@ class NewAbsensi extends Page implements HasForms
             $upload = app(UploadFingerService::class)->handle(
                 $data['fingerFiles'],
                 auth()->user()?->name ?? 'system',
-                $this->tanggal ?? now()->format('Y-m-d'), // tanggal dari datepicker di UI
+                $this->tanggal ?? $this->defaultTanggal(), // tanggal dari datepicker di UI
             );
 
             Notification::make()
@@ -359,7 +361,7 @@ class NewAbsensi extends Page implements HasForms
      */
     public function getRekap(): Collection
     {
-        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+        $tanggal = $this->tanggal ?? $this->defaultTanggal();
 
         $rekap = app(NewRekapAbsensiPegawaiService::class)->getRekap($tanggal);
 
@@ -404,6 +406,21 @@ class NewAbsensi extends Page implements HasForms
             }
         }
 
+        // Terapkan pencarian nama / kode pegawai (case-insensitive, partial match).
+        // String kosong = tidak ada filter. Bisa dikombinasikan dengan filter
+        // sumber di atas dan sorting potongan di bawah.
+        $keyword = trim($this->search);
+
+        if ($keyword !== '') {
+            $rekap = $rekap->filter(function ($row) use ($keyword) {
+                $nama = (string) ($row['nama_pegawai'] ?? '');
+                $kode = (string) ($row['kode_pegawai'] ?? '');
+
+                return mb_stripos($nama, $keyword) !== false
+                    || mb_stripos($kode, $keyword) !== false;
+            })->values();
+        }
+
         // Terapkan sorting potongan kalau user mengklik header kolom Potongan
         if ($this->sortPotongan === 'asc') {
             $rekap = $rekap->sortBy(fn ($row) => $row['potongan'] ?? 0)->values();
@@ -433,7 +450,7 @@ class NewAbsensi extends Page implements HasForms
 
     public function getAbsensiLainLain(): Collection
     {
-        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+        $tanggal = $this->tanggal ?? $this->defaultTanggal();
 
         return app(NewRekapAbsensiPegawaiService::class)->getAbsensiLainLain($tanggal);
     }
@@ -443,7 +460,7 @@ class NewAbsensi extends Page implements HasForms
      */
     public function exportExcel()
     {
-        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+        $tanggal = $this->tanggal ?? $this->defaultTanggal();
 
         $rekap = app(NewRekapAbsensiPegawaiService::class)->getRekap($tanggal);
 
@@ -468,7 +485,7 @@ class NewAbsensi extends Page implements HasForms
      */
     public function cekTargetProduksi(): void
     {
-        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+        $tanggal = $this->tanggal ?? $this->defaultTanggal();
 
         $this->missingTargetItems = app(ValidasiTargetProduksiService::class)
             ->cekMissingTarget($tanggal);
@@ -530,7 +547,7 @@ class NewAbsensi extends Page implements HasForms
      */
     public function exportRumusGajiWijaya()
     {
-        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+        $tanggal = $this->tanggal ?? $this->defaultTanggal();
 
         $this->missingTargetItems = app(ValidasiTargetProduksiService::class)
             ->cekMissingTarget($tanggal);
@@ -569,7 +586,7 @@ class NewAbsensi extends Page implements HasForms
 
     public function exportRumusGajiWijayaMingguan()
     {
-        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+        $tanggal = $this->tanggal ?? $this->defaultTanggal();
 
         // Cek missing target
         $this->missingTargetItems = app(ValidasiTargetProduksiService::class)
@@ -636,7 +653,7 @@ class NewAbsensi extends Page implements HasForms
      */
     public function getUploadForSelectedDate(): Collection
     {
-        $tanggal = $this->tanggal ?? now()->format('Y-m-d');
+        $tanggal = $this->tanggal ?? $this->defaultTanggal();
 
         return NewAbsensiUpload::query()
             ->whereDate('tanggal', $tanggal)
@@ -729,6 +746,17 @@ class NewAbsensi extends Page implements HasForms
      * ketika baris yang tampil di tabel berubah karena filter diganti.
      */
     public function updatedFilterSumber(): void
+    {
+        $this->expandedRows = [];
+    }
+
+    /**
+     * Dipanggil otomatis oleh Livewire setiap kali property $search
+     * berubah (wire:model.live.debounce di blade). Reset expandedRows
+     * supaya state expand/collapse tidak kacau ketika baris yang tampil
+     * di tabel berubah karena pencarian.
+     */
+    public function updatedSearch(): void
     {
         $this->expandedRows = [];
     }

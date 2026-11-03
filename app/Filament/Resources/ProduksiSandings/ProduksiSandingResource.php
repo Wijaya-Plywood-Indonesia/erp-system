@@ -52,7 +52,6 @@ class ProduksiSandingResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
             SerahTerimaHpRelationManager::class,
             ModalSandingRelationManager::class,
             HasilSandingRelationManager::class,

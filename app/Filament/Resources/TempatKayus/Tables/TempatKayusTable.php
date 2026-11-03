@@ -5,7 +5,10 @@ namespace App\Filament\Resources\TempatKayus\Tables;
 use App\Models\DetailTurusanKayu;
 use App\Models\HppAverageLog;
 use App\Models\HppAverageSummarie;
+use App\Models\KayuMasuk;
+use App\Models\Lahan;
 use App\Models\NotaKayu;
+use App\Models\TempatKayu;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -37,28 +40,147 @@ class TempatKayusTable
     /** @var array<int, Collection> */
     private static array $snapshot = [];
 
+    /** Penanda agar auto-sync hanya jalan sekali per request. */
+    private static bool $autoSyncSudahJalan = false;
+
+    /**
+     * Sinkronisasi semua lahan baru: buat HppAverageSummarie & TempatKayu
+     * untuk lahan yang belum punya. Idempotent (aman dipanggil berulang).
+     *
+     * @return array{summary: int, tempat_kayu: int}
+     */
+    public static function sinkronisasiLahanBaru(): array
+    {
+        $lahanIdsTanpaSummary = Lahan::whereHas('detailTurusanKayus')
+            ->whereDoesntHave('summaries')
+            ->pluck('id');
+
+        $lahanIdsTanpaTempatKayu = Lahan::whereHas('detailTurusanKayus')
+            ->whereDoesntHave('tempatKayu')
+            ->pluck('id');
+
+        $semuaLahanIds = $lahanIdsTanpaSummary
+            ->merge($lahanIdsTanpaTempatKayu)
+            ->unique()
+            ->values();
+
+        // Early exit: kasus paling umum, hanya 2 query ringan.
+        if ($semuaLahanIds->isEmpty()) {
+            return ['summary' => 0, 'tempat_kayu' => 0];
+        }
+
+        $summaryCount = 0;
+        $tempatKayuCount = 0;
+
+        DB::transaction(function () use ($lahanIdsTanpaSummary, $semuaLahanIds, &$summaryCount, &$tempatKayuCount) {
+            // ── Summaries ────────────────────────────────────────────────
+            if ($lahanIdsTanpaSummary->isNotEmpty()) {
+                $details = DetailTurusanKayu::whereIn('lahan_id', $lahanIdsTanpaSummary)->get();
+
+                $grouped = $details->groupBy(
+                    fn ($d) => "{$d->lahan_id}_{$d->jenis_kayu_id}_{$d->panjang}"
+                );
+
+                foreach ($grouped as $rows) {
+                    HppAverageSummarie::firstOrCreate([
+                        'id_lahan' => (int) $rows->first()->lahan_id,
+                        'id_jenis_kayu' => (int) $rows->first()->jenis_kayu_id,
+                        'panjang' => (int) $rows->first()->panjang,
+                        'grade' => null,
+                    ], [
+                        'stok_batang' => 0,
+                        'stok_kubikasi' => 0.0,
+                        'nilai_stok' => 0.0,
+                        'hpp_average' => 0.0,
+                    ]);
+                    $summaryCount++;
+                }
+            }
+
+            // ── Tempat Kayu ──────────────────────────────────────────────
+            foreach ($semuaLahanIds as $lahanId) {
+                if (TempatKayu::where('id_lahan', $lahanId)->exists()) {
+                    continue;
+                }
+
+                $kayuMasuk = KayuMasuk::whereHas('detailTurusanKayus', function ($q) use ($lahanId) {
+                    $q->where('lahan_id', $lahanId);
+                })->latest()->first();
+
+                if ($kayuMasuk) {
+                    // firstOrCreate untuk mengurangi risiko duplikat jika 2 user membuka bersamaan
+                    TempatKayu::firstOrCreate(
+                        ['id_lahan' => $lahanId],
+                        [
+                            'id_kayu_masuk' => $kayuMasuk->id,
+                            'jumlah_batang' => 0,
+                        ]
+                    );
+                    $tempatKayuCount++;
+                }
+            }
+        });
+
+        return ['summary' => $summaryCount, 'tempat_kayu' => $tempatKayuCount];
+    }
+
+    /**
+     * Jalankan sinkronisasi otomatis (maksimal sekali per request).
+     * Kegagalan sinkronisasi tidak menghentikan halaman.
+     */
+    private static function autoSinkronisasi(): void
+    {
+        if (self::$autoSyncSudahJalan) {
+            return;
+        }
+
+        self::$autoSyncSudahJalan = true;
+
+        try {
+            $hasil = self::sinkronisasiLahanBaru();
+
+            Log::channel('single')->info('Auto Sync Lahan Baru jalan', $hasil);
+
+            if ($hasil['summary'] > 0 || $hasil['tempat_kayu'] > 0) {
+                self::forgetSnapshot(); // data berubah, buang cache snapshot
+
+                Notification::make()
+                    ->title('Sinkronisasi otomatis berhasil')
+                    ->body("Summary dibuat: {$hasil['summary']} | Tempat Kayu dibuat: {$hasil['tempat_kayu']} lahan")
+                    ->success()
+                    ->send();
+            } else {
+                // Tetap beri status agar jelas sinkronisasi sudah berjalan
+                Notification::make()
+                    ->title('Sinkronisasi otomatis selesai')
+                    ->body('Tidak ada lahan baru yang perlu disinkronkan.')
+                    ->info()
+                    ->send();
+            }
+        } catch (\Throwable $e) {
+            Log::channel('single')->error('Auto Sync Lahan Baru FAILED', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            Notification::make()
+                ->title('Sinkronisasi otomatis gagal')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
     /**
      * ✅ DISESUAIKAN AGAR SAMA PERSIS DENGAN LOGIKA `php artisan test3 {id}`
      * (App\Console\Commands\Test3Command).
      *
-     * Perubahan dari versi lama:
-     * 1) Cutoff dihitung dengan 3 skenario fallback yang sama seperti test3:
-     *    - Tidak ada reset -> tidak ada cutoff, tampilkan semua data lahan.
-     *    - Reset ada, tapi log 'masuk' sebelum reset tidak ketemu
-     *      -> cutoff = created_at reset itu sendiri (fallback).
-     *    - Log sebelum reset adalah OPNAME (referensi_type null)
-     *      -> cutoff = created_at log opname tsb.
-     *    - Log sebelum reset adalah NotaKayu asli
-     *      -> cutoff = updated_at NotaKayu tsb (fallback ke created_at reset
-     *         kalau NotaKayu-nya sudah tidak ada / terhapus).
-     * 2) Filter DetailTurusanKayu sekarang pakai kombinasi status pelunasan:
+     * 1) Cutoff dihitung dengan 3 skenario fallback yang sama seperti test3.
+     * 2) Filter DetailTurusanKayu memakai kombinasi status pelunasan:
      *      - Belum lunas -> aktif jika created_at nota > cutoff
      *      - Sudah lunas -> aktif jika updated_at nota > cutoff
-     *    (bukan lagi "ID Nota >= startNotaId" seperti sebelumnya).
-     * 3) Opname yang terjadi SETELAH reset (referensi_id null, id > lastReset->id)
-     *    sekarang ikut dihitung sebagai baris tambahan bertipe 'OPNAME', dengan
-     *    delta batang/kubikasi (after - before) yang BISA MINUS, sehingga otomatis
-     *    mengurangi total pada kolom "Batang" dan "Kubikasi" di tabel/modal.
+     * 3) Opname SETELAH reset ikut dihitung sebagai baris 'OPNAME' dengan
+     *    delta yang BISA MINUS.
      */
     public static function getKayuAktif(int $lahanId): Collection
     {
@@ -66,9 +188,7 @@ class TempatKayusTable
             return self::$snapshot[$lahanId];
         }
 
-        // ------------------------------------------------------------------
         // 1) Cari reset terakhir (log 'keluar' dengan stok_batang_after = 0)
-        // ------------------------------------------------------------------
         $lastReset = HppAverageLog::where('id_lahan', $lahanId)
             ->where('tipe_transaksi', 'keluar')
             ->where('stok_batang_after', 0)
@@ -78,9 +198,7 @@ class TempatKayusTable
         $cutoff = null;
 
         if ($lastReset) {
-            // ----------------------------------------------------------
             // 2) Cari log 'masuk' terakhir SEBELUM reset
-            // ----------------------------------------------------------
             $lastNotaBeforeReset = HppAverageLog::where('id_lahan', $lahanId)
                 ->where('tipe_transaksi', 'masuk')
                 ->where('id', '<', $lastReset->id)
@@ -88,11 +206,9 @@ class TempatKayusTable
                 ->first();
 
             if (! $lastNotaBeforeReset) {
-                // Reset ada, tapi tidak ada log acuan sebelumnya.
-                // Fallback aman: created_at reset itu sendiri.
                 $cutoff = $lastReset->created_at;
             } elseif (is_null($lastNotaBeforeReset->referensi_type)) {
-                // Log sebelum reset berasal dari OPNAME STOK KAYU, bukan NotaKayu.
+                // Log sebelum reset berasal dari OPNAME STOK KAYU
                 $cutoff = $lastNotaBeforeReset->created_at;
             } else {
                 $referensiNota = $lastNotaBeforeReset->referensi_id
@@ -101,14 +217,11 @@ class TempatKayusTable
 
                 $cutoff = $referensiNota
                     ? $referensiNota->updated_at
-                    : $lastReset->created_at; // fallback kalau nota sudah tidak ada
+                    : $lastReset->created_at;
             }
         }
 
-        // ------------------------------------------------------------------
         // 3) Ambil data DetailTurusanKayu aktif berdasarkan cutoff
-        //    (belum lunas -> pakai created_at nota, sudah lunas -> updated_at nota)
-        // ------------------------------------------------------------------
         $data = DetailTurusanKayu::with([
             'lahan',
             'kayuMasuk.penggunaanSupplier',
@@ -146,7 +259,7 @@ class TempatKayusTable
                     'Status Pelunasan' => $statusPelunasan,
                     'Batang' => (int) $rows->sum('kuantitas'),
                     // round-then-sum per item (4 desimal), konsisten dengan NotaKayuController.
-                    'Kubikasi' => (float) $rows->sum(fn($r) => round($r->kubikasi, 4)),
+                    'Kubikasi' => (float) $rows->sum(fn ($r) => round($r->kubikasi, 4)),
                     'Panjang' => $rows->pluck('panjang')->unique()->sort()->implode(', '),
                     'Grade' => $rows->pluck('grade')->unique()->sort()->implode(', '),
                     'is_lunas' => $isLunas,
@@ -156,10 +269,7 @@ class TempatKayusTable
             ->sortBy('ID Nota')
             ->values();
 
-        // ------------------------------------------------------------------
         // 4) Opname SETELAH reset (referensi_id null, id > lastReset->id)
-        //    Ini bisa MINUS, jadi harus ikut mengurangi total Batang/Kubikasi.
-        // ------------------------------------------------------------------
         if ($lastReset) {
             $opnameSetelahReset = HppAverageLog::where('id_lahan', $lahanId)
                 ->where('id', '>', $lastReset->id)
@@ -168,9 +278,6 @@ class TempatKayusTable
                 ->get();
 
             foreach ($opnameSetelahReset as $log) {
-                // Opname baru menyimpan selisih khusus tempat kayu (tk_delta_*),
-                // dihitung dari total tempat kayu saat opname, bukan dari stok lahan.
-                // Log lama (kolom null) memakai rumus lama: after - before.
                 $deltaBatang = $log->tk_delta_batang !== null
                     ? (int) $log->tk_delta_batang
                     : (int) $log->stok_batang_after - (int) $log->stok_batang_before;
@@ -189,7 +296,7 @@ class TempatKayusTable
                 $data->push([
                     'ID Kayu' => null,
                     'ID Nota' => null,
-                    'No Nota' => 'OPNAME #' . $log->id,
+                    'No Nota' => 'OPNAME #'.$log->id,
                     'Seri' => 'OPNAME',
                     'Supplier' => $log->keterangan ?? '-',
                     'Status Pelunasan' => null,
@@ -228,13 +335,13 @@ class TempatKayusTable
             return true;
         }
 
-        return $data->every(fn($row) => $row['is_lunas']);
+        return $data->every(fn ($row) => $row['is_lunas']);
     }
 
     private static function seriiBelumLunas(int $lahanId): Collection
     {
         return self::getKayuAktif($lahanId)
-            ->filter(fn($row) => ! $row['is_lunas'])
+            ->filter(fn ($row) => ! $row['is_lunas'])
             ->pluck('Seri')
             ->filter()
             ->values();
@@ -242,6 +349,10 @@ class TempatKayusTable
 
     public static function configure(Table $table): Table
     {
+        // ✅ AUTO-SYNC: siapa pun yang membuka Tempat Kayu otomatis memicu
+        // "Sinkronasi Semua Lahan Baru" (sekali per request, sebelum query tabel dibentuk).
+        self::autoSinkronisasi();
+
         $user = Auth::user();
 
         $isGrader = $user->hasAnyRole(self::ROLE_GRADER);
@@ -317,9 +428,10 @@ class TempatKayusTable
                     ->label('Lahan')
                     ->sortable(query: function (Builder $query, string $direction) {
                         $joins = collect($query->getQuery()->joins)->pluck('table');
-                        if (!$joins->contains('lahans')) {
+                        if (! $joins->contains('lahans')) {
                             $query->join('lahans', 'tempat_kayus.id_lahan', '=', 'lahans.id');
                         }
+
                         return $query->reorder('lahans.kode_lahan', $direction);
                     })
                     ->searchable()
@@ -331,31 +443,32 @@ class TempatKayusTable
                         return $query->reorder('hpp_average_summaries.panjang', $direction);
                     })
                     ->badge()
-                    ->color(fn($state) => $state == 260 ? 'success' : 'info')
+                    ->color(fn ($state) => $state == 260 ? 'success' : 'info')
                     ->toggleable(),
 
                 TextColumn::make('jenis_kayu')
                     ->label('Jenis Kayu')
                     ->getStateUsing(function ($record) {
                         $aktif = self::getKayuAktif((int) $record->id_lahan);
-                        
-                        // Cari data kayu aktif yang panjangnya sesuai dengan group_panjang (bisa juga fallback ke semua)
-                        $matching = $aktif->where('is_opname', false)->filter(function($item) use ($record) {
+
+                        // Cari data kayu aktif yang panjangnya sesuai group_panjang (fallback ke semua)
+                        $matching = $aktif->where('is_opname', false)->filter(function ($item) use ($record) {
                             $panjangs = array_map('trim', explode(',', $item['Panjang'] ?? ''));
+
                             return in_array((string) $record->group_panjang, $panjangs);
                         });
-                        
+
                         if ($matching->isEmpty()) {
                             $matching = $aktif->where('is_opname', false);
                         }
-                        
+
                         $idKayuMasuks = $matching->pluck('ID Kayu')->filter()->unique();
-                        
+
                         if ($idKayuMasuks->isEmpty()) {
                             return '-';
                         }
-                        
-                        $turusan = \App\Models\DetailTurusanKayu::with('jenisKayu')
+
+                        $turusan = DetailTurusanKayu::with('jenisKayu')
                             ->where('lahan_id', $record->id_lahan)
                             ->whereIn('id_kayu_masuk', $idKayuMasuks)
                             ->first();
@@ -376,9 +489,8 @@ class TempatKayusTable
                 TextColumn::make('kubikasi_riil')
                     ->label('Volume (m³)')
                     ->getStateUsing(function ($record) {
-                        // 'Kubikasi' di getKayuAktif() sudah hasil round-then-sum
-                        // per item (4 desimal), termasuk delta opname yang bisa minus.
-                        // Tidak perlu round lagi di sini agar tidak dobel pembulatan.
+                        // 'Kubikasi' sudah hasil round-then-sum per item (4 desimal),
+                        // termasuk delta opname yang bisa minus.
                         $total = self::getKayuAktif((int) $record->id_lahan)->sum('Kubikasi');
 
                         return number_format((float) $total, 4, '.', ',');
@@ -408,12 +520,12 @@ class TempatKayusTable
                     })
                     ->label('Status')
                     ->badge()
-                    ->formatStateUsing(fn($state) => match ($state) {
+                    ->formatStateUsing(fn ($state) => match ($state) {
                         'sudah diserahkan' => 'Diserahkan',
                         'sudah diterima' => 'Diterima',
                         default => 'Belum Diserahkan',
                     })
-                    ->color(fn($state) => match ($state) {
+                    ->color(fn ($state) => match ($state) {
                         'sudah diterima' => 'success',
                         'sudah diserahkan' => 'warning',
                         default => 'gray',
@@ -427,12 +539,12 @@ class TempatKayusTable
                     ->trueLabel('Sudah Diserahkan')
                     ->falseLabel('Belum Diserahkan')
                     ->queries(
-                        true: fn(Builder $query) => $query->where('tempat_kayus.status', 'sudah diserahkan'),
-                        false: fn(Builder $query) => $query->where(function ($q) {
+                        true: fn (Builder $query) => $query->where('tempat_kayus.status', 'sudah diserahkan'),
+                        false: fn (Builder $query) => $query->where(function ($q) {
                             $q->whereNull('tempat_kayus.status')
                                 ->orWhere('tempat_kayus.status', '!=', 'sudah diserahkan');
                         }),
-                        blank: fn(Builder $query) => $query,
+                        blank: fn (Builder $query) => $query,
                     ),
             ], layout: FiltersLayout::AboveContent)
             ->filtersFormColumns(1)
@@ -453,8 +565,7 @@ class TempatKayusTable
 
                         $totalStokRiil = (int) $kayuAktif->sum('Batang');
 
-                        // 'Kubikasi' sudah round-then-sum per item (termasuk opname) di getKayuAktif().
-                        // Tidak perlu round lagi di sini (hindari dobel pembulatan).
+                        // 'Kubikasi' sudah round-then-sum per item (termasuk opname).
                         $totalKubikasiRiil = (float) $kayuAktif->sum('Kubikasi');
 
                         return view('filament.components.detail-kayu-modal', [
@@ -479,28 +590,28 @@ class TempatKayusTable
                             ->where('referensi_type', NotaKayu::class)
                             ->with('referensi.kayuMasuk')
                             ->get()
-                            ->map(fn($log) => (string) ($log->referensi?->kayuMasuk?->seri ?? null))
+                            ->map(fn ($log) => (string) ($log->referensi?->kayuMasuk?->seri ?? null))
                             ->filter()
                             ->unique()
                             ->values();
 
                         $belumLunas = NotaKayu::whereHas(
                             'kayuMasuk',
-                            fn($q) => $q->whereIn('seri', $semuaSeri)
+                            fn ($q) => $q->whereIn('seri', $semuaSeri)
                         )
                             ->with('kayuMasuk')
                             ->get()
-                            ->groupBy(fn($nota) => (string) $nota->kayuMasuk?->seri)     // ✅ Group by seri
-                            ->map(fn($group) => $group->sortByDesc('id')->first())         // ✅ Ambil terbaru
+                            ->groupBy(fn ($nota) => (string) $nota->kayuMasuk?->seri)
+                            ->map(fn ($group) => $group->sortByDesc('id')->first())
                             ->filter(
-                                fn($nota) => ! str_starts_with(strtolower(trim($nota->status_pelunasan ?? '')), 'lunas')
+                                fn ($nota) => ! str_starts_with(strtolower(trim($nota->status_pelunasan ?? '')), 'lunas')
                             )
-                            ->map(fn($nota) => (string) $nota->kayuMasuk?->seri)
+                            ->map(fn ($nota) => (string) $nota->kayuMasuk?->seri)
                             ->filter()
                             ->values();
 
                         if ($belumLunas->isNotEmpty()) {
-                            return '⚠️ Seri berikut belum lunas: ' . $belumLunas->implode(', ') . '. Tidak dapat diserahkan.';
+                            return '⚠️ Seri berikut belum lunas: '.$belumLunas->implode(', ').'. Tidak dapat diserahkan.';
                         }
 
                         return "Kayu dari lahan {$record->lahan?->kode_lahan} akan diserahkan ke rotary. Semua seri sudah lunas.";
@@ -511,13 +622,13 @@ class TempatKayusTable
                             return false;
                         }
 
-                        // Tombol disembunyikan untuk SEMUA role jika batang = 0
+                        // Disembunyikan untuk SEMUA role jika batang = 0
                         $totalBatangRiil = (int) self::getKayuAktif((int) $record->id_lahan)->sum('Batang');
                         if ($totalBatangRiil <= 0) {
                             return false;
                         }
 
-                        // Tombol disembunyikan untuk SEMUA role jika ada seri belum lunas
+                        // Disembunyikan untuk SEMUA role jika ada seri belum lunas
                         if (! self::semuaLunas((int) $record->id_lahan)) {
                             return false;
                         }
@@ -529,6 +640,7 @@ class TempatKayusTable
                         if ($record->status !== 'belum serah' && $record->status !== null) {
                             return false;
                         }
+
                         $totalBatang = HppAverageSummarie::where('id_lahan', $record->id_lahan)
                             ->where('panjang', $record->group_panjang)
                             ->where('grade', $record->group_grade)
@@ -542,13 +654,13 @@ class TempatKayusTable
                     })
                     ->action(function ($record) {
 
-                        // Server-side guard (tetap ada sebagai double-check)
+                        // Server-side guard (double-check)
                         $belumLunas = self::seriiBelumLunas((int) $record->id_lahan);
 
                         if ($belumLunas->isNotEmpty()) {
                             Notification::make()
                                 ->title('Tidak dapat diserahkan!')
-                                ->body('Seri ' . $belumLunas->implode(', ') . ' belum lunas. Selesaikan pembayaran terlebih dahulu.')
+                                ->body('Seri '.$belumLunas->implode(', ').' belum lunas. Selesaikan pembayaran terlebih dahulu.')
                                 ->danger()
                                 ->persistent()
                                 ->send();
@@ -642,8 +754,8 @@ class TempatKayusTable
                     ->requiresConfirmation()
                     ->modalHeading('Terima Kayu dari Grader?')
                     ->modalDescription(
-                        fn($record) => "Kayu dari lahan {$record->lahan?->kode_lahan} akan diterima atas nama " .
-                            Auth::user()->name . '.'
+                        fn ($record) => "Kayu dari lahan {$record->lahan?->kode_lahan} akan diterima atas nama ".
+                            Auth::user()->name.'.'
                     )
                     ->modalSubmitActionLabel('Ya, Terima')
                     ->visible(function ($record) use ($bisaTerima) {
@@ -702,16 +814,16 @@ class TempatKayusTable
                     ->requiresConfirmation()
                     ->modalHeading('Batalkan Serah Kayu?')
                     ->modalDescription(
-                        fn($record) => "Status lahan {$record->lahan?->kode_lahan} akan dikembalikan menjadi Belum Diserahkan."
+                        fn ($record) => "Status lahan {$record->lahan?->kode_lahan} akan dikembalikan menjadi Belum Diserahkan."
                     )
                     ->modalSubmitActionLabel('Ya, Batalkan')
                     ->visible(function ($record) use ($isAdmin) {
-                        // Hanya izinkan jika pengguna adalah Admin/Super Admin
+                        // Hanya Admin/Super Admin
                         if (! $isAdmin) {
                             return false;
                         }
 
-                        // Tombol muncul hanya saat status 'sudah diserahkan'
+                        // Muncul hanya saat status 'sudah diserahkan'
                         return $record->status === 'sudah diserahkan';
                     })
                     ->action(function ($record) {
@@ -759,7 +871,8 @@ class TempatKayusTable
                 ]),
             ])
             ->headerActions([
-                \Filament\Actions\Action::make('sync_lahan_baru')
+                // Tombol manual tetap dipertahankan (memakai method yang sama dengan auto-sync).
+                Action::make('sync_lahan_baru')
                     ->label('Sinkronasi Semua Lahan Baru')
                     ->icon('heroicon-o-arrow-path')
                     ->color('warning')
@@ -768,84 +881,22 @@ class TempatKayusTable
                     ->modalDescription('Apakah Anda yakin ingin memproses dan mensinkronisasikan semua data lahan baru (yang belum disinkronisasi) ke HPP Average Log dan Tempat Kayu?')
                     ->modalSubmitActionLabel('Ya, Sinkronisasi')
                     ->action(function () {
-                        // ── 1) Lahan yang belum punya summaries ──────────────────────────
-                        $lahanIdsTanpaSummary = \App\Models\Lahan::whereHas('detailTurusanKayus')
-                            ->whereDoesntHave('summaries')
-                            ->pluck('id');
+                        $hasil = self::sinkronisasiLahanBaru();
 
-                        // ── 2) Lahan yang belum punya tempat_kayu (cek independen) ──────
-                        $lahanIdsTanpaTempatKayu = \App\Models\Lahan::whereHas('detailTurusanKayus')
-                            ->whereDoesntHave('tempatKayu')
-                            ->pluck('id');
-
-                        // Gabungkan untuk cek apakah ada yang perlu disinkronisasi
-                        $semuaLahanIds = $lahanIdsTanpaSummary
-                            ->merge($lahanIdsTanpaTempatKayu)
-                            ->unique()
-                            ->values();
-
-                        if ($semuaLahanIds->isEmpty()) {
-                            \Filament\Notifications\Notification::make()
+                        if ($hasil['summary'] === 0 && $hasil['tempat_kayu'] === 0) {
+                            Notification::make()
                                 ->title('Semua lahan sudah tersinkronisasi.')
                                 ->info()
                                 ->send();
+
                             return;
                         }
 
-                        // ── 3) Buat HppAverageSummarie untuk lahan yang belum punya ──────
-                        $summaryCount = 0;
-                        if ($lahanIdsTanpaSummary->isNotEmpty()) {
-                            $details = \App\Models\DetailTurusanKayu::whereIn('lahan_id', $lahanIdsTanpaSummary)->get();
+                        self::forgetSnapshot();
 
-                            $grouped = $details->groupBy(
-                                fn($d) => "{$d->lahan_id}_{$d->jenis_kayu_id}_{$d->panjang}"
-                            );
-
-                            foreach ($grouped as $rows) {
-                                $lahanId     = (int) $rows->first()->lahan_id;
-                                $jenisKayuId = (int) $rows->first()->jenis_kayu_id;
-                                $panjang     = (int) $rows->first()->panjang;
-
-                                \App\Models\HppAverageSummarie::firstOrCreate([
-                                    'id_lahan'      => $lahanId,
-                                    'id_jenis_kayu' => $jenisKayuId,
-                                    'panjang'       => $panjang,
-                                    'grade'         => null,
-                                ], [
-                                    'stok_batang'   => 0,
-                                    'stok_kubikasi' => 0.0,
-                                    'nilai_stok'    => 0.0,
-                                    'hpp_average'   => 0.0,
-                                ]);
-                                $summaryCount++;
-                            }
-                        }
-
-                        // ── 4) Buat TempatKayu untuk semua lahan yang belum punya ────────
-                        $tempatKayuCount = 0;
-                        foreach ($semuaLahanIds as $lahanId) {
-                            // Skip jika sudah punya tempat_kayu
-                            if (\App\Models\TempatKayu::where('id_lahan', $lahanId)->exists()) {
-                                continue;
-                            }
-
-                            $kayuMasuk = \App\Models\KayuMasuk::whereHas('detailTurusanKayus', function ($q) use ($lahanId) {
-                                $q->where('lahan_id', $lahanId);
-                            })->latest()->first();
-
-                            if ($kayuMasuk) {
-                                \App\Models\TempatKayu::create([
-                                    'id_lahan'      => $lahanId,
-                                    'id_kayu_masuk' => $kayuMasuk->id,
-                                    'jumlah_batang' => 0,
-                                ]);
-                                $tempatKayuCount++;
-                            }
-                        }
-
-                        \Filament\Notifications\Notification::make()
+                        Notification::make()
                             ->title('Sinkronasi Berhasil')
-                            ->body("Summary dibuat: {$summaryCount} | Tempat Kayu dibuat: {$tempatKayuCount} lahan")
+                            ->body("Summary dibuat: {$hasil['summary']} | Tempat Kayu dibuat: {$hasil['tempat_kayu']} lahan")
                             ->success()
                             ->send();
                     }),

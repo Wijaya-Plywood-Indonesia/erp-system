@@ -5,6 +5,7 @@ namespace App\Filament\Resources\BahanPilihPlywoods\Schemas;
 use App\Models\BarangSetengahJadiHp;
 use App\Models\Grade;
 use App\Models\JenisBarang;
+use App\Support\PaletSearch;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
@@ -56,11 +57,10 @@ class BahanPilihPlywoodForm
                 | BARANG SETENGAH JADI (BEBAS DIPILIH, TIDAK TERGANTUNG PALET)
                 |--------------------------------------------------------------------------
                 */
-                Select::make('id_barang_setengah_jadi_hp')
-                    ->label('Barang Setengah Jadi (Plywood)')
-                    ->required()
-                    ->searchable()
-                    ->options(function (callable $get) {
+                PaletSearch::configure(
+                    Select::make('id_barang_setengah_jadi_hp')
+                        ->label('Barang Setengah Jadi (Plywood)'),
+                    function (callable $get) {
                         $query = BarangSetengahJadiHp::query()
                             ->with(['ukuran', 'jenisBarang', 'grade.kategoriBarang'])
                             ->whereHas('grade.kategoriBarang', function ($q) {
@@ -75,27 +75,28 @@ class BahanPilihPlywoodForm
                             $query->where('id_jenis_barang', $get('jenis_barang_id_filter'));
                         }
 
-                        return $query->get()->mapWithKeys(function ($b) {
+                        return $query->get()->map(function ($b) {
+                            $u = $b->ukuran;
+
                             return [
-                                $b->id => ($b->grade?->kategoriBarang?->nama_kategori ?? '-').' | '.
-                                    ($b->ukuran?->nama_ukuran ?? '-').' | '.
-                                    ($b->grade?->nama_grade ?? '-').' | '.
-                                    ($b->jenisBarang?->nama_jenis_barang ?? '-'),
+                                'id' => $b->id,
+                                'label' => self::labelBarang($b),
+                                'kategori' => $b->grade?->kategoriBarang?->nama_kategori ?? '',
+                                'jenis' => $b->jenisBarang?->nama_jenis_barang ?? '',
+                                'grade' => $b->grade?->nama_grade ?? '',
+                                'ukuran' => $u ? ($u->panjang + 0).'x'.($u->lebar + 0).'x'.($u->tebal + 0) : ($b->ukuran?->nama_ukuran ?? ''),
                             ];
-                        });
-                    })
-                    ->getOptionLabelUsing(function ($value) {
+                        })->values()->all();
+                    },
+                    100,
+                    // Barang terpilih yang tidak ikut daftar (mis. kena filter) tetap tampil namanya.
+                    function ($value) {
                         $b = BarangSetengahJadiHp::with(['ukuran', 'jenisBarang', 'grade.kategoriBarang'])->find($value);
 
-                        if (! $b) {
-                            return '-';
-                        }
-
-                        return ($b->grade?->kategoriBarang?->nama_kategori ?? '-').' | '.
-                               ($b->ukuran?->nama_ukuran ?? '-').' | '.
-                               ($b->grade?->nama_grade ?? '-').' | '.
-                               ($b->jenisBarang?->nama_jenis_barang ?? '-');
-                    })
+                        return $b ? self::labelBarang($b) : '-';
+                    },
+                )
+                    ->required()
                     ->columnSpanFull(),
 
                 /*
@@ -114,5 +115,13 @@ class BahanPilihPlywoodForm
                     ->numeric()
                     ->required(),
             ]);
+    }
+
+    protected static function labelBarang(BarangSetengahJadiHp $b): string
+    {
+        return ($b->grade?->kategoriBarang?->nama_kategori ?? '-').' | '.
+            ($b->ukuran?->nama_ukuran ?? '-').' | '.
+            ($b->grade?->nama_grade ?? '-').' | '.
+            ($b->jenisBarang?->nama_jenis_barang ?? '-');
     }
 }

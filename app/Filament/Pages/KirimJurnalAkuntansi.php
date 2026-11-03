@@ -1,0 +1,190 @@
+<?php
+
+namespace App\Filament\Pages;
+
+use App\Services\Akuntansi\JurnalProduksiSender;
+use App\Services\Akuntansi\Produksi\JurnalProduksiRegistry;
+use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Carbon\Carbon;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use UnitEnum;
+
+/**
+ * Menu "Kirim Jurnal ke Akuntansi": satu baris per jenis produksi, satu tombol
+ * Kirim per baris. Jurnal dibangun dari data ERP pada saat tombol ditekan,
+ * jadi boleh ditekan kapan saja dan ditekan ulang setelah hasil produksi
+ * dilengkapi (selama jurnal di akuntansi masih draft).
+ */
+class KirimJurnalAkuntansi extends Page
+{
+    use HasPageShield;
+
+    protected string $view = 'filament.pages.kirim-jurnal-akuntansi';
+
+    protected static UnitEnum|string|null $navigationGroup = 'Laporan';
+
+    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-paper-airplane';
+
+    protected static ?string $navigationLabel = 'Kirim Jurnal ke Akuntansi';
+
+    protected static ?string $title = 'Kirim Jurnal ke Akuntansi';
+
+    protected static ?string $slug = 'kirim-jurnal-akuntansi';
+
+    protected static ?int $navigationSort = 10;
+
+    public string $tanggal = '';
+
+    /** @var array<string, array> keyed by jenis: label, error, jurnals[] */
+    public array $ringkasan = [];
+
+    /** @var array<string, array> hasil kirim terakhir per jenis (untuk ditampilkan) */
+    public array $hasilKirim = [];
+
+    /** Jenis produksi yang sedang menunggu konfirmasi kirim. */
+    public ?string $konfirmasiJenis = null;
+
+    /** @var array|null jurnal yang sedang dilihat di jendela rincian */
+    public ?array $detail = null;
+
+    public function mount(): void
+    {
+        $this->tanggal = now()->subDay()->format('Y-m-d'); // umumnya yang dikirim = produksi kemarin
+        $this->muat();
+    }
+
+    public function updatedTanggal(): void
+    {
+        $this->hasilKirim = [];
+        $this->detail = null;
+        $this->muat();
+    }
+
+    /** Buka rincian baris sebuah jurnal (tidak mengirim apa pun). */
+    public function lihat(string $jenis, string $noDokumen): void
+    {
+        if (! $this->tanggalValid()) {
+            return;
+        }
+
+        $label = app(JurnalProduksiRegistry::class)->get($jenis)->label();
+
+        foreach (app(JurnalProduksiSender::class)->preview($jenis, $this->tanggal) as $j) {
+            if ($j['no_dokumen'] === $noDokumen) {
+                $this->detail = [
+                    'label' => $label,
+                    'no_dokumen' => $j['no_dokumen'],
+                    'rows' => $j['rows'],
+                    'jumlah_baris' => $j['jumlah_baris'],
+                    'total_debit' => $j['total_debit'],
+                    'total_kredit' => $j['total_kredit'],
+                    'is_balance' => $j['is_balance'],
+                    'has_akun_tidak_valid' => $j['has_akun_tidak_valid'] ?? false,
+                    'akun_tidak_valid' => $j['akun_tidak_valid'] ?? [],
+                ];
+
+                $this->dispatch('open-modal', id: 'detail-jurnal');
+
+                return;
+            }
+        }
+
+        Notification::make()->warning()->title('Jurnal tidak ditemukan')->send();
+    }
+
+    public function muat(): void
+    {
+        $this->ringkasan = [];
+
+        if (! $this->tanggalValid()) {
+            return;
+        }
+
+        $sender = app(JurnalProduksiSender::class);
+
+        foreach (app(JurnalProduksiRegistry::class)->all() as $key => $source) {
+            $item = ['label' => $source->label(), 'error' => null, 'jurnals' => []];
+
+            try {
+                foreach ($sender->preview($key, $this->tanggal) as $j) {
+                    $item['jurnals'][] = [
+                        'no_dokumen' => $j['no_dokumen'],
+                        'jumlah_baris' => $j['jumlah_baris'],
+                        'total_debit' => $j['total_debit'],
+                        'total_kredit' => $j['total_kredit'],
+                        'is_balance' => $j['is_balance'],
+                        // Peringatan: akun tidak terdaftar di COA baru (tidak memblokir).
+                        'akun_tidak_dikenal' => $j['akun_tidak_dikenal'] ?? [],
+                        // Pemblokir: akun UNKNOWN / akun lama tidak dikenal dari builder.
+                        'akun_tidak_valid' => $j['akun_tidak_valid'] ?? [],
+                        'has_akun_tidak_valid' => $j['has_akun_tidak_valid'] ?? false,
+                        'status' => $j['status'],
+                        'terakhir_dikirim' => $j['terakhir_dikirim']?->timezone('Asia/Jakarta')->format('d/m/Y H:i'),
+                        'terakhir_oleh' => $j['terakhir_oleh'],
+                    ];
+                }
+            } catch (\Throwable $e) {
+                report($e);
+                $item['error'] = 'Gagal menyiapkan jurnal: '.$e->getMessage();
+            }
+
+            $this->ringkasan[$key] = $item;
+        }
+    }
+
+    /**
+     * Dipanggil tombol Kirim. Selalu membuka modal konfirmasi: isinya berisi
+     * peringatan jika ada akun tidak dikenal di COA, atau konfirmasi biasa jika tidak ada.
+     * Akun tidak valid (has_akun_tidak_valid) memblokir: tombol nonaktif di view
+     * dan ditolak lagi di JurnalProduksiSender::kirim().
+     */
+    public function mintaKirim(string $jenis): void
+    {
+        $this->konfirmasiJenis = $jenis;
+        $this->dispatch('open-modal', id: 'konfirmasi-akun');
+    }
+
+    public function kirimMeski(): void
+    {
+        $jenis = $this->konfirmasiJenis;
+        $this->konfirmasiJenis = null;
+        $this->dispatch('close-modal', id: 'konfirmasi-akun');
+
+        if ($jenis) {
+            $this->kirim($jenis);
+        }
+    }
+
+    public function kirim(string $jenis): void
+    {
+        if (! $this->tanggalValid()) {
+            Notification::make()->danger()->title('Tanggal tidak valid')->send();
+
+            return;
+        }
+
+        $hasil = app(JurnalProduksiSender::class)->kirim($jenis, $this->tanggal, auth()->id());
+
+        $this->hasilKirim[$jenis] = $hasil;
+
+        Notification::make()
+            ->title($hasil['success'] ? 'Jurnal terkirim' : 'Jurnal belum terkirim')
+            ->body($hasil['message'])
+            ->color($hasil['success'] ? 'success' : 'danger')
+            ->send();
+
+        $this->muat();
+    }
+
+    private function tanggalValid(): bool
+    {
+        try {
+            return $this->tanggal !== ''
+                && Carbon::createFromFormat('Y-m-d', $this->tanggal)->format('Y-m-d') === $this->tanggal;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+}

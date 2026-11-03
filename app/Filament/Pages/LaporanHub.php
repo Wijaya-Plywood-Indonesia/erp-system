@@ -4,11 +4,14 @@ namespace App\Filament\Pages;
 
 use Filament\Pages\Page;
 use Filament\Facades\Filament;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 use BackedEnum;
 
 class LaporanHub extends Page
 {
+    use HasPageShield;
+
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-squares-2x2';
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
     protected static ?string $navigationLabel = 'Pusat Laporan';

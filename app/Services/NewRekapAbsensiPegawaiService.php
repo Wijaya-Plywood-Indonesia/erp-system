@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\NewDataFinger;
 use App\Models\Pegawai;
+use App\Models\PengaturanAbsensi;
 use App\Services\AbsensiSources\AbsensiSourceInterface;
 use Filament\Facades\Filament;
 use Illuminate\Support\Carbon;
@@ -12,15 +13,25 @@ use Illuminate\Support\Collection;
 class NewRekapAbsensiPegawaiService
 {
     protected string $jamMasukShiftPagiDefault;
+
     protected string $jamPulangShiftPagiDefault;
+
     protected string $jamMasukShiftMalamDefault;
+
     protected string $jamPulangShiftMalamDefault;
+
     protected int $toleransiSesiTunggalMenit;
+
     protected int $batasTotalDurasiMenit;
+
     protected int $toleransiMasukLebihCepatMalamMenit;
+
     protected int $toleransiPulangLebihLambatMalamMenit;
+
     protected string $metodeShiftMalam;
+
     protected bool $autoFixEnabled;
+
     protected int $autoFixBatasSelisihMenit;
 
     /** @var AbsensiSourceInterface[] */
@@ -29,21 +40,21 @@ class NewRekapAbsensiPegawaiService
     public function __construct(array $sources)
     {
         $this->sources = $sources;
-        
-        $settings = \App\Models\PengaturanAbsensi::getSettings();
-        
+
+        $settings = PengaturanAbsensi::getSettings();
+
         $this->jamMasukShiftPagiDefault = $settings->jam_masuk_shift_pagi_default ?? '06:00:00';
         $this->jamPulangShiftPagiDefault = $settings->jam_pulang_shift_pagi_default ?? '20:00:00';
         $this->jamMasukShiftMalamDefault = $settings->jam_masuk_shift_malam_default ?? '16:00:00';
         $this->jamPulangShiftMalamDefault = $settings->jam_pulang_shift_malam_default ?? '06:00:00';
-        
+
         $this->toleransiSesiTunggalMenit = $settings->toleransi_sesi_tunggal_menit ?? 15;
         $this->batasTotalDurasiMenit = $settings->batas_total_durasi_menit ?? 60;
         $this->toleransiMasukLebihCepatMalamMenit = $settings->toleransi_masuk_lebih_cepat_malam_menit ?? 300;
         $this->toleransiPulangLebihLambatMalamMenit = $settings->toleransi_pulang_lebih_lambat_malam_menit ?? 300;
-        
+
         $this->metodeShiftMalam = $settings->metode_shift_malam ?? 'full_shift';
-        
+
         $this->autoFixEnabled = (bool) ($settings->auto_fix_enabled ?? true);
         $this->autoFixBatasSelisihMenit = $settings->auto_fix_batas_selisih_menit ?? 60;
     }
@@ -339,6 +350,8 @@ class NewRekapAbsensiPegawaiService
             'shift' => null,
             'jam_masuk' => null,
             'jam_pulang' => null,
+            'izin' => null,
+            'keterangan' => null,
             'sumber_label' => [],
         ]);
 
@@ -491,46 +504,46 @@ class NewRekapAbsensiPegawaiService
             // AUTO FIX: post-processing koreksi jam_masuk_finger / jam_pulang_finger
             // menggunakan kombinasi raw_finger hari ini dan besok, dengan full Y-m-d H:i:s
             // agar perbandingan waktu (terutama lintas hari / shift malam) akurat.
-            
+
             $allRawFinger = [];
-            if ($recordHariIni && !empty($recordHariIni->raw_finger)) {
+            if ($recordHariIni && ! empty($recordHariIni->raw_finger)) {
                 $arr = is_string($recordHariIni->raw_finger) ? json_decode($recordHariIni->raw_finger, true) : $recordHariIni->raw_finger;
-                foreach ((array)$arr as $scan) {
-                    if (!empty($scan['waktu'])) {
-                        $allRawFinger[] = ['waktu' => $tanggal . ' ' . $scan['waktu']];
+                foreach ((array) $arr as $scan) {
+                    if (! empty($scan['waktu'])) {
+                        $allRawFinger[] = ['waktu' => $tanggal.' '.$scan['waktu']];
                     }
                 }
             }
-            if ($recordBesok && !empty($recordBesok->raw_finger)) {
+            if ($recordBesok && ! empty($recordBesok->raw_finger)) {
                 $arr = is_string($recordBesok->raw_finger) ? json_decode($recordBesok->raw_finger, true) : $recordBesok->raw_finger;
-                foreach ((array)$arr as $scan) {
-                    if (!empty($scan['waktu'])) {
-                        $allRawFinger[] = ['waktu' => $tanggalBerikutnya . ' ' . $scan['waktu']];
+                foreach ((array) $arr as $scan) {
+                    if (! empty($scan['waktu'])) {
+                        $allRawFinger[] = ['waktu' => $tanggalBerikutnya.' '.$scan['waktu']];
                     }
                 }
             }
 
             $fullJamMasukProduksi = null;
-            if (!empty($row['jam_masuk']) && $row['jam_masuk'] !== '-') {
-                $fullJamMasukProduksi = $tanggal . ' ' . $row['jam_masuk'];
+            if (! empty($row['jam_masuk']) && $row['jam_masuk'] !== '-') {
+                $fullJamMasukProduksi = $tanggal.' '.$row['jam_masuk'];
             }
             $fullJamPulangProduksi = null;
-            if (!empty($row['jam_pulang']) && $row['jam_pulang'] !== '-') {
+            if (! empty($row['jam_pulang']) && $row['jam_pulang'] !== '-') {
                 $tglPulang = $tanggal;
                 if ($row['jam_pulang'] < $row['jam_masuk']) {
                     $tglPulang = $tanggalBerikutnya;
                 }
-                $fullJamPulangProduksi = $tglPulang . ' ' . $row['jam_pulang'];
+                $fullJamPulangProduksi = $tglPulang.' '.$row['jam_pulang'];
             }
 
             $fullJamMasukFinger = null;
-            if (!empty($row['jam_masuk_finger']) && $row['jam_masuk_finger'] !== '-') {
-                $fullJamMasukFinger = $tanggal . ' ' . $row['jam_masuk_finger'];
+            if (! empty($row['jam_masuk_finger']) && $row['jam_masuk_finger'] !== '-') {
+                $fullJamMasukFinger = $tanggal.' '.$row['jam_masuk_finger'];
             }
             $fullJamPulangFinger = null;
-            if (!empty($row['jam_pulang_finger']) && $row['jam_pulang_finger'] !== '-') {
+            if (! empty($row['jam_pulang_finger']) && $row['jam_pulang_finger'] !== '-') {
                 $tglPulangFinger = ($shift === 'malam') ? $tanggalBerikutnya : $tanggal;
-                $fullJamPulangFinger = $tglPulangFinger . ' ' . $row['jam_pulang_finger'];
+                $fullJamPulangFinger = $tglPulangFinger.' '.$row['jam_pulang_finger'];
             }
 
             [$fixMasuk, $fixPulang] = $this->autoFixJamFingerDariRaw(
@@ -542,10 +555,16 @@ class NewRekapAbsensiPegawaiService
             );
 
             if ($fixMasuk && $fixMasuk !== '-') {
-                try { $row['jam_masuk_finger'] = Carbon::parse($fixMasuk)->format('H:i:s'); } catch (\Throwable $e) {}
+                try {
+                    $row['jam_masuk_finger'] = Carbon::parse($fixMasuk)->format('H:i:s');
+                } catch (\Throwable $e) {
+                }
             }
             if ($fixPulang && $fixPulang !== '-') {
-                try { $row['jam_pulang_finger'] = Carbon::parse($fixPulang)->format('H:i:s'); } catch (\Throwable $e) {}
+                try {
+                    $row['jam_pulang_finger'] = Carbon::parse($fixPulang)->format('H:i:s');
+                } catch (\Throwable $e) {
+                }
             }
             // NEW: preview data mentah finger untuk expandable row di UI —
             // supaya user bisa lihat raw scan yang jadi dasar
@@ -573,6 +592,14 @@ class NewRekapAbsensiPegawaiService
                     'jam_masuk' => $recordBesok->jam_masuk,
                     'jam_pulang' => $recordBesok->jam_pulang,
                 ] : null,
+
+                // NEW: SEMUA tap mentah (unik, urut naik) per tanggal,
+                // dipakai panel "Raw finger" di blade (tap paling awal &
+                // paling akhir di-bold). PURELY ADDITIVE untuk tampilan —
+                // tidak dipakai logic manapun, Haram #1/#2/#6 tidak tersentuh.
+                'raw_hari_ini' => $this->ekstrakRawWaktu($recordHariIni),
+                'raw_besok' => $this->ekstrakRawWaktu($recordBesok),
+
                 // NEW: simulasi HASIL HITUNGAN (bukan cuma raw) seandainya
                 // row ini diperlakukan lewat cabang shift malam (Haram
                 // #1): jam_masuk_finger diambil dari jam_pulang hari ini,
@@ -701,6 +728,32 @@ class NewRekapAbsensiPegawaiService
     }
 
     /**
+     * NEW: Ambil semua waktu scan mentah dari satu record NewDataFinger,
+     * unik & urut naik. Return [] kalau record null / raw_finger kosong.
+     * Dipakai untuk panel "Raw finger" di blade (min & max di-bold).
+     *
+     * @return array<int, string> ['06:03:57', '17:21:55', ...]
+     */
+    protected function ekstrakRawWaktu($record): array
+    {
+        if (! $record || empty($record->raw_finger)) {
+            return [];
+        }
+
+        $arr = is_string($record->raw_finger)
+            ? json_decode($record->raw_finger, true)
+            : $record->raw_finger;
+
+        return collect((array) $arr)
+            ->pluck('waktu')
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
      * Khusus shift NON-malam. Kalau finger cuma di-upload untuk satu sesi
      * scan (mis. upload pagi doang), raw jam_masuk & jam_pulang dari mesin
      * finger jadi hampir sama persis (selisih beberapa detik), karena
@@ -821,13 +874,13 @@ class NewRekapAbsensiPegawaiService
      * pakai getTimestamp() — konsisten dengan Haram #7, tidak pakai
      * diffInMinutes(..., false) yang ambigu arahnya.
      *
-     * @param  string|null  $jamMasukFinger    Hasil kalkulasi normal jam_masuk_finger
-     * @param  string|null  $jamPulangFinger   Hasil kalkulasi normal jam_pulang_finger
+     * @param  string|null  $jamMasukFinger  Hasil kalkulasi normal jam_masuk_finger
+     * @param  string|null  $jamPulangFinger  Hasil kalkulasi normal jam_pulang_finger
      * @param  string|null  $jamMasukProduksi  Jam kerja masuk dari produksi (acuan)
-     * @param  string|null  $jamPulangProduksi Jam kerja pulang dari produksi (acuan)
-     * @param  array|null   $rawFinger         Isi kolom raw_finger dari NewDataFinger
-     *                                         ([{"waktu":"HH:MM:SS"}, ...])
-     * @return array{0: ?string, 1: ?string}   [jam_masuk_finger, jam_pulang_finger]
+     * @param  string|null  $jamPulangProduksi  Jam kerja pulang dari produksi (acuan)
+     * @param  array|null  $rawFinger  Isi kolom raw_finger dari NewDataFinger
+     *                                 ([{"waktu":"HH:MM:SS"}, ...])
+     * @return array{0: ?string, 1: ?string} [jam_masuk_finger, jam_pulang_finger]
      */
     protected function autoFixJamFingerDariRaw(
         ?string $jamMasukFinger,
@@ -858,7 +911,7 @@ class NewRekapAbsensiPegawaiService
             try {
                 $t = Carbon::parse($waktu);
                 $waktuParsed[] = [
-                    'ts'    => $t->getTimestamp(),
+                    'ts' => $t->getTimestamp(),
                     'waktu' => $t->format('H:i:s'),
                 ];
             } catch (\Throwable $e) {
@@ -896,7 +949,7 @@ class NewRekapAbsensiPegawaiService
             ! empty($jamMasukProduksi) && $jamMasukProduksi !== '-'
         ) {
             try {
-                $tFinger   = Carbon::parse($jamMasukFinger);
+                $tFinger = Carbon::parse($jamMasukFinger);
                 $tProduksi = Carbon::parse($jamMasukProduksi);
                 $selisihMenit = abs($tFinger->getTimestamp() - $tProduksi->getTimestamp()) / 60;
                 if ($selisihMenit > $this->autoFixBatasSelisihMenit) {
@@ -915,7 +968,7 @@ class NewRekapAbsensiPegawaiService
             ! empty($jamPulangProduksi) && $jamPulangProduksi !== '-'
         ) {
             try {
-                $tFinger   = Carbon::parse($jamPulangFinger);
+                $tFinger = Carbon::parse($jamPulangFinger);
                 $tProduksi = Carbon::parse($jamPulangProduksi);
                 $selisihMenit = abs($tFinger->getTimestamp() - $tProduksi->getTimestamp()) / 60;
                 if ($selisihMenit > $this->autoFixBatasSelisihMenit) {
@@ -929,7 +982,6 @@ class NewRekapAbsensiPegawaiService
 
         return [$fixMasuk, $fixPulang];
     }
-
 
     public function availableSources(): Collection
     {
@@ -1083,6 +1135,23 @@ class NewRekapAbsensiPegawaiService
                 // mis. izin di semua lini), jam_masuk/jam_pulang/shift
                 // dibiarkan apa adanya dari $utama (row pertama, perilaku
                 // lama) — tidak ada base yang valid untuk dihitung.
+
+                $keteranganGabungan = $rowsWithDurasi
+                    ->pluck('keterangan')
+                    ->filter(fn ($k) => ! empty($k) && trim((string) $k) !== '' && trim((string) $k) !== '-')
+                    ->map(fn ($k) => trim((string) $k))
+                    ->unique()
+                    ->implode('; ');
+
+                $izinGabungan = $rowsWithDurasi
+                    ->pluck('izin')
+                    ->filter(fn ($i) => ! empty($i) && trim((string) $i) !== '' && trim((string) $i) !== '-')
+                    ->map(fn ($i) => trim((string) $i))
+                    ->unique()
+                    ->implode(', ');
+
+                $utama['keterangan'] = ! empty($keteranganGabungan) ? $keteranganGabungan : ($utama['keterangan'] ?? null);
+                $utama['izin'] = ! empty($izinGabungan) ? $izinGabungan : ($utama['izin'] ?? null);
 
                 $utama['sumber_label'] = $rowsWithDurasi
                     ->pluck('sumber_label')
@@ -1262,5 +1331,3 @@ class NewRekapAbsensiPegawaiService
             ->pluck('kode_pegawai');
     }
 }
-
-

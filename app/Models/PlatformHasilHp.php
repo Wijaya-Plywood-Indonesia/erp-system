@@ -15,6 +15,7 @@ class PlatformHasilHp extends Model
         'no_palet',
         'id_barang_setengah_jadi',
         'isi',
+        'keterangan',
     ];
 
     public function mesin()

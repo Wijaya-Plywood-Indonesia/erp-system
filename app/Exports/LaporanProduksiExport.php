@@ -417,6 +417,11 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
 
     protected $dataRanges = [];
 
+    // Baris yang nomor akunnya tidak ada di COA (untuk di-highlight)
+    protected $unknownRows = [];
+
+    const NO_AKUN_TIDAK_TERSEDIA = 'TIDAK TERSEDIA';
+
     // Cache agar tidak query DB berulang
     private array $kayuCache = [];
 
@@ -516,6 +521,18 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
         );
 
         return (float) ($ref->harga ?? 0.0);
+    }
+
+    /**
+     * Nomor akun valid mengikuti format COA baru: 4 digit, opsional .NN (mis. 1421.00, 1507.41, 2231.00).
+     * Kode lama berformat '115-13' / '510-01' / '520-09' (atau kosong) berarti belum
+     * dipetakan ke COA baru -> tampilkan 'TIDAK TERSEDIA' agar data yang belum diisi terlihat.
+     */
+    private function displayNoAkun($noAkun): string
+    {
+        $kode = trim((string) $noAkun);
+
+        return preg_match('/^\d{4}(\.\d{1,2})?$/', $kode) ? $kode : self::NO_AKUN_TIDAK_TERSEDIA;
     }
 
     public function collection()
@@ -659,6 +676,10 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     // Hutang Gaji
                     $mappedNoAkun = '2231.00';
                     $mappedNamaAkun = 'Hutang Gaji';
+                } elseif ($noAkun === '115-13') {
+                    // Persediaan Reeling Tape -> COA baru: 1507.41 (STOK GUDANG)
+                    $mappedNoAkun = '1507.41';
+                    $mappedNamaAkun = 'reeling tape';
                 }
 
                 $rawRows[] = [
@@ -926,11 +947,16 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                 // Calculate Total as an Excel formula referencing 'hit kbk' (Col J), Harga (Col M), M3 (Col L), and Banyak (Col K)
                 $totalVal = "=IF(J{$currentRow}=\"m\",M{$currentRow}*L{$currentRow},IF(J{$currentRow}=\"b\",M{$currentRow}*K{$currentRow},M{$currentRow}))";
 
+                $noAkunTampil = $this->displayNoAkun($g['no_akun']);
+                if ($noAkunTampil === self::NO_AKUN_TIDAK_TERSEDIA) {
+                    $this->unknownRows[] = $currentRow;
+                }
+
                 $rows->push([
                     $g['nama_akun'],                                    // 1. Nama Akun
                     $tglVal,                                            // 2. tgl
                     '',                                                 // 3. jurnal
-                    $g['no_akun'],                                      // 4. No Akun
+                    $noAkunTampil,                                      // 4. No Akun
                     '',                                                 // 5. No
                     '',                                                 // 6. mm
                     $namaVal,                                           // 7. Nama
@@ -1027,11 +1053,22 @@ class LaporanProduksiJurnalSheet extends DefaultValueBinder implements FromColle
                     $sheet->getStyle("N{$start}:N{$end}")->getNumberFormat()->setFormatCode('#,##0');
                 }
 
+                // Highlight nomor akun yang tidak tersedia di COA
+                foreach ($this->unknownRows as $row) {
+                    $sheet->getStyle("D{$row}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['argb' => 'FF9C0006']],
+                        'fill' => [
+                            'fillType' => Fill::FILL_SOLID,
+                            'startColor' => ['argb' => 'FFFFC7CE'],
+                        ],
+                    ]);
+                }
+
                 // Column Widths
                 $sheet->getColumnDimension('A')->setWidth(25); // Nama Akun
                 $sheet->getColumnDimension('B')->setWidth(15); // tgl
                 $sheet->getColumnDimension('C')->setWidth(12); // jurnal
-                $sheet->getColumnDimension('D')->setWidth(15); // No Akun
+                $sheet->getColumnDimension('D')->setWidth(18); // No Akun
                 $sheet->getColumnDimension('E')->setWidth(10); // No
                 $sheet->getColumnDimension('F')->setWidth(10); // mm
                 $sheet->getColumnDimension('G')->setWidth(30); // Nama

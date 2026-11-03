@@ -6,11 +6,14 @@ use Filament\Pages\Page;
 use App\Models\Target;
 use Filament\Actions\Action;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use UnitEnum;
 use Livewire\Attributes\Url;
 
 class PantauTarget extends Page
 {
+    use HasPageShield;
+
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
     protected static string|UnitEnum|null $navigationGroup = 'Master';
     protected static ?string $title = 'Pantau Target';
@@ -50,8 +53,10 @@ class PantauTarget extends Page
                       });
                 });
             })
+            ->orderBy('id_mesin')
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            ->groupBy(fn($target) => $target->mesin?->nama_mesin ?? 'Tanpa Mesin');
     }
     
     public function getMesinsProperty()

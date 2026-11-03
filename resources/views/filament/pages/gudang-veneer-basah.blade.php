@@ -74,15 +74,25 @@
                                 <div class="text-[10px] text-zinc-400 whitespace-nowrap">
                                     Diserahkan: {{ $st->diserahkan_oleh }}
                                 </div>
-                                <button type="button" wire:click="terimaRotary({{ $st->id }})"
-                                    wire:confirm="Terima palet ini ke stok Gudang Veneer Basah?"
-                                    wire:loading.attr="disabled" wire:target="terimaRotary({{ $st->id }})"
-                                    class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    <span>Terima</span>
-                                </button>
+                                <div class="shrink-0 flex items-center gap-1.5">
+                                    <button type="button" wire:click="bukaModalTolak({{ $st->id }}, 'rotary')"
+                                        wire:loading.attr="disabled"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-sm text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 dark:text-rose-400 dark:bg-rose-950/40 dark:border-rose-900/50 dark:hover:bg-rose-900/60 disabled:opacity-50 transition-colors">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                        <span>Tolak</span>
+                                    </button>
+                                    <button type="button" wire:click="terimaRotary({{ $st->id }})"
+                                        wire:confirm="Terima palet ini ke stok Gudang Veneer Basah?"
+                                        wire:loading.attr="disabled" wire:target="terimaRotary({{ $st->id }})"
+                                        class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span>Terima</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     @empty
@@ -243,66 +253,7 @@
             <form wire:submit.prevent="prosesKeluar" class="p-5 space-y-4 text-xs">
 
                 {{-- PILIH VENEER — 100% client-side (Alpine), tanpa round-trip server --}}
-                <div class="space-y-1.5 relative" x-data="{
-                        isDropdownOpen: false,
-                        searchTerm: '',
-                        selectedSummaryId: @entangle('selectedSummaryId'),
-                        options: [
-                            @foreach ($this->veneerStokAll as $s)
-                        {
-                            id: '{{ $s->id }}',
-                            nama: '{{ $s->jenisKayu?->nama_kayu }} (KW {{ $s->kw }}) - Sisa: {{ number_format((float) $s->stok_lembar) }} lbr',
-                            no: '{{ number_format((float) $s->panjang, 2) }}x{{ number_format((float) $s->lebar, 2) }}x{{ number_format((float) $s->tebal, 2) }}'
-                        }, @endforeach
-                        ],
-                        get filteredOptions() {
-                            if (this.searchTerm === '') return this.options;
-                            return this.options.filter(o =>
-                                o.nama.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-                                o.no.toLowerCase().includes(this.searchTerm.toLowerCase())
-                            );
-                        },
-                        selectVeneer(item) {
-                            this.selectedSummaryId = item.id;
-                            this.searchTerm = item.no + ' | ' + item.nama;
-                            this.isDropdownOpen = false;
-                        },
-                        clearVeneer() {
-                            this.selectedSummaryId = null;
-                            this.searchTerm = '';
-                        },
-                        init() {
-                            let found = this.options.find(o => o.id == this.selectedSummaryId);
-                            if (found) this.searchTerm = found.no + ' | ' + found.nama;
-                        }
-                    }" @click.away="isDropdownOpen = false">
-                    <label class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">Pilih Veneer</label>
-                    <div class="relative flex items-center">
-                        <input type="text" x-model="searchTerm" @focus="isDropdownOpen = true"
-                            placeholder="Ketik dimensi ukuran atau KW..."
-                            autocomplete="off"
-                            class="w-full px-3 py-2 bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-700 rounded-sm font-bold text-gray-900 dark:text-gray-100 outline-none pr-10 focus:border-amber-500 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-600 placeholder:font-normal placeholder:text-xs">
-                        <button type="button" x-show="searchTerm.length > 0 || selectedSummaryId"
-                            @click="clearVeneer()"
-                            class="absolute right-3 text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-                    <div x-show="isDropdownOpen" x-cloak
-                        class="absolute z-50 w-full mt-1 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-sm shadow-2xl max-h-48 overflow-y-auto p-1 divide-y divide-gray-100 dark:divide-gray-900/60">
-                        <template x-for="item in filteredOptions" :key="item.id">
-                            <button type="button" @click="selectVeneer(item)"
-                                class="w-full text-left px-3 py-2 hover:bg-amber-500 hover:text-gray-950 flex flex-col transition-colors group">
-                                <span class="text-[11px] text-gray-500 dark:text-gray-400 group-hover:text-gray-900 font-medium" x-text="item.nama"></span>
-                                <span class="font-bold text-gray-800 dark:text-gray-200 group-hover:text-gray-950 text-xs" x-text="item.no"></span>
-                            </button>
-                        </template>
-                        <div x-show="filteredOptions.length === 0"
-                            class="text-gray-400 dark:text-gray-600 p-3 text-center italic text-[11px]">Veneer tidak ditemukan</div>
-                    </div>
-                </div>
+                <x-pilih-stok model="selectedSummaryId" label="Pilih Veneer" :items="$this->stokOpsiKeluar" />
 
                 {{-- JUMLAH PALET --}}
                 <div class="space-y-1.5">
@@ -433,4 +384,6 @@
         </div>
     </div>
     @endif
+
+    @include('filament.pages.partials.modal-tolak')
 </x-filament-panels::page>

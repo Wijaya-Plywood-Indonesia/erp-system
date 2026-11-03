@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Services\Payroll\LiniProduksiResolver;
 use App\Services\Payroll\PeriodeJumatKamisResolver;
 use App\Services\Payroll\WeeklyRekapPotonganGajiService;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Schemas\Schema;
@@ -17,6 +18,7 @@ use Livewire\Attributes\Computed;
 class PengawasRekapPotonganGaji extends Page implements HasForms
 {
     use InteractsWithForms;
+    use HasPageShield;
 
     protected string $view = 'filament.pages.pengawas-rekap-potongan-gaji';
 

@@ -440,7 +440,9 @@ class OpnameStokTable extends Component
             }
 
             $stok = (float) $row['stok_fisik'];
-            $this->rows[$i]['kubikasi_fisik'] = round(($p * $l * $t * $stok) / self::PEMBAGI_KUBIKASI, 6);
+            $this->rows[$i]['kubikasi_fisik'] = floor(
+                (($p * $l * $t * $stok) / self::PEMBAGI_KUBIKASI) * 10000
+            ) / 10000;
             $dihitung++;
         }
 

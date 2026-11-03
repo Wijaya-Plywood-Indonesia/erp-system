@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BarangSetengahJadiHp;
+use App\Models\Grade;
 use App\Models\NotaBarangKeluar;
+use App\Models\Ukuran;
 
 class SuratJalanController extends Controller
 {
@@ -15,6 +18,11 @@ class SuratJalanController extends Controller
 
         $details = $nota->detail->map(function ($d) use ($nota, $jenis) {
             if ($jenis === null) {
+                // OVERRIDE: nama custom dari nota selalu menang
+                if (! empty(trim($d->custom_nama ?? ''))) {
+                    $d->nama_barang = trim($d->custom_nama);
+                }
+
                 return $d;
             }
 
@@ -24,7 +32,9 @@ class SuratJalanController extends Controller
                     foreach ($nota->plywoodMutasi->details as $mutasiDetail) {
                         $ukuran = $mutasiDetail->ukuran;
                         $jenisKayu = $mutasiDetail->jenisKayu;
-                        if (!$ukuran || !$jenisKayu) continue;
+                        if (! $ukuran || ! $jenisKayu) {
+                            continue;
+                        }
 
                         $expectedName = 'Plywood - '.$ukuran->nama_ukuran
                             .' - '.$jenisKayu->nama_kayu
@@ -58,13 +68,13 @@ class SuratJalanController extends Controller
                     $d->nama_barang = $tebalStr !== null ? "{$tebalStr} {$merek}" : $merek;
                 } else {
                     $bshp = $d->barang ?? null;
-                    $gradeModel = $bshp?->grade ?? ($bshp?->id_grade ? \App\Models\Grade::find($bshp->id_grade) : null);
+                    $gradeModel = $bshp?->grade ?? ($bshp?->id_grade ? Grade::find($bshp->id_grade) : null);
                     $gradeName = ! empty(trim($gradeModel?->nama_grade ?? '')) ? trim($gradeModel->nama_grade) : null;
-                    
+
                     if (! $gradeName && $matchedDetail && ! empty(trim($matchedDetail->kw_grade ?? ''))) {
                         $gradeName = trim($matchedDetail->kw_grade);
                     }
-                    
+
                     if ($tebalStr !== null && $gradeName !== null) {
                         $d->nama_barang = "{$tebalStr} {$gradeName}";
                     } elseif ($tebalStr !== null) {
@@ -89,19 +99,19 @@ class SuratJalanController extends Controller
                 $kw = null;
                 $merek = null;
                 $tebalValForVeneer = null;
-                
+
                 if ($matchedMutasiDetail) {
                     $kw = $matchedMutasiDetail->kw;
                     $ukuranId = $matchedMutasiDetail->id_ukuran;
                     if ($ukuranId) {
-                        $ukuranObjForVeneer = \App\Models\Ukuran::find($ukuranId);
+                        $ukuranObjForVeneer = Ukuran::find($ukuranId);
                         if ($ukuranObjForVeneer && filled($ukuranObjForVeneer->tebal)) {
                             $tebalValForVeneer = $ukuranObjForVeneer->tebal;
                         }
-                        
-                        $grade = \App\Models\Grade::whereRaw('LOWER(TRIM(nama_grade)) = ?', [strtolower(trim($kw))])->first();
-                        $bshp = \App\Models\BarangSetengahJadiHp::where('id_ukuran', $ukuranId)
-                            ->when($grade, fn($q) => $q->where('id_grade', $grade->id))
+
+                        $grade = Grade::whereRaw('LOWER(TRIM(nama_grade)) = ?', [strtolower(trim($kw))])->first();
+                        $bshp = BarangSetengahJadiHp::where('id_ukuran', $ukuranId)
+                            ->when($grade, fn ($q) => $q->where('id_grade', $grade->id))
                             ->first();
                         $merek = $bshp?->merek;
                     }
@@ -130,13 +140,19 @@ class SuratJalanController extends Controller
                     $d->nama_barang = trim("{$tebalForVeneerStr} {$kwStr}");
                 }
             }
-            
+
+            // OVERRIDE: nama custom dari nota selalu menang
+            if (! empty(trim($d->custom_nama ?? ''))) {
+                $d->nama_barang = trim($d->custom_nama);
+            }
+
             return $d;
         });
 
         $view = $jenis === 'sales' ? 'surat-jalan.cetak-sales' : 'surat-jalan.cetak-kantor';
+
         return view($view, [
-            'nota'    => $nota,
+            'nota' => $nota,
             'details' => $details,
         ]);
     }

@@ -9,6 +9,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 
 class NotaBarangMasuksTable
@@ -32,7 +33,7 @@ class NotaBarangMasuksTable
                     ->label('Divalidasi Oleh')
                     ->placeholder('Belum divalidasi')
                     ->badge()
-                    ->color(fn($state) => filled($state) ? 'success' : 'danger')
+                    ->color(fn ($state) => filled($state) ? 'success' : 'danger')
                     ->sortable()
                     ->searchable(),
                 TextColumn::make('created_at')
@@ -45,6 +46,15 @@ class NotaBarangMasuksTable
                     ->toggleable(isToggledHiddenByDefault: true),
 
             ])
+            ->groups([
+                Group::make('tanggal')
+                    ->label('Tanggal')
+                    ->date()
+                    ->orderQueryUsing(fn ($query) => $query->orderBy('tanggal', 'desc'))
+                    ->collapsible(),
+            ])
+            ->defaultGroup('tanggal')
+            ->groupingSettingsHidden()
             ->filters([
                 //
             ])
@@ -53,16 +63,16 @@ class NotaBarangMasuksTable
                     ->label('Cetak Nota')
                     ->icon('heroicon-o-printer')
                     ->color('info')
-                    ->url(fn($record) => route('nota-bm.print', $record))
+                    ->url(fn ($record) => route('nota-bm.print', $record))
                     ->openUrlInNewTab()
-                    ->visible(fn($record) => $record->divalidasi_oleh !== null),
+                    ->visible(fn ($record) => $record->divalidasi_oleh !== null),
                 ViewAction::make(),
 
                 EditAction::make()
-                    ->visible(fn($record) => $record->divalidasi_oleh === null || auth()->user()?->hasRole('super_admin')),
+                    ->visible(fn ($record) => $record->divalidasi_oleh === null || auth()->user()?->hasRole('super_admin')),
 
                 DeleteAction::make()
-                    ->visible(fn($record) => $record->divalidasi_oleh === null || auth()->user()?->hasRole('super_admin'))
+                    ->visible(fn ($record) => $record->divalidasi_oleh === null || auth()->user()?->hasRole('super_admin'))
                     ->before(function ($record) {
                         if ($record->mutasi) {
                             $record->mutasi->details()->delete();

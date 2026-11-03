@@ -13,6 +13,7 @@ use App\Models\PlatformJadiMutasiKeluar;
 use App\Models\PlatformJadiMutasiKeluarPalet;
 use App\Models\TriplekJadiMutasiKeluarPalet;
 use App\Models\VeneerJadiMutasiKeluarPalet;
+use App\Support\PaletSearch;
 use Filament\Forms\Components\Hidden;
 use Filament\Schemas\Components\Utilities\Get;
 
@@ -64,23 +65,22 @@ class BahanHotPressForm
                 // =========================================================================
                 // 3. BARANG SETENGAH JADI (SELECT UTAMA) - DEHYDRATED (Disimpan)
                 // =========================================================================
-                Select::make('barang_setengah_jadi_selector') // ganti nama, bukan lagi id_mutasi_keluar_palet
-                    ->label('Barang Setengah Jadi')
-                    ->required()
-                    ->searchable()
-                    ->reactive()
-                    ->dehydrated(false)   // <-- tidak disimpan langsung, cuma UI selector
-                    ->options(function (?BahanHotpress $record, $livewire, Get $get) {
+                PaletSearch::configure(
+                    Select::make('barang_setengah_jadi_selector') // ganti nama, bukan lagi id_mutasi_keluar_palet
+                        ->label('Barang Setengah Jadi'),
+                    function (?BahanHotpress $record, $livewire, Get $get) {
                         $ownerId    = $livewire->ownerRecord?->id;
                         $gradeId    = $get('grade_id');
                         $jenisId    = $get('jenis_barang_id_filter');
 
                         $namaGrade = $gradeId ? Grade::find($gradeId)?->nama_grade : null;
 
-                        return self::getPaletOptions($record, $ownerId, $namaGrade, $jenisId)
-                            + self::getPlatformOptions($record, $ownerId, $namaGrade, $jenisId)
-                            + self::getTriplekOptions($record, $ownerId, $namaGrade, $jenisId);
-                    })
+                        return self::getPaletEntries($record, $ownerId, $namaGrade, $jenisId);
+                    },
+                )
+                    ->required()
+                    ->reactive()
+                    ->dehydrated(false)   // <-- tidak disimpan langsung, cuma UI selector
                     ->afterStateHydrated(function ($set, ?BahanHotpress $record) {
                         if ($record?->sumber === 'veneer' && $record->id_mutasi_keluar_palet) {
                             $set('barang_setengah_jadi_selector', "veneer:{$record->id_mutasi_keluar_palet}");
@@ -231,6 +231,18 @@ class BahanHotPressForm
 
     public static function getPaletOptions(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
     {
+        return collect(self::getPaletEntriesVeneer($record, $ownerRecordId, $namaGrade, $jenisId))
+            ->pluck('label', 'id')
+            ->all();
+    }
+
+    /**
+     * Data palet + bahan pencarian fleksibel (App\Support\PaletSearch).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function getPaletEntriesVeneer(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
+    {
         $currentId = $record?->sumber === 'veneer' ? $record?->id_mutasi_keluar_palet : null;
         $currentIsi = (float) ($record?->isi ?? 0);
 
@@ -255,7 +267,7 @@ class BahanHotPressForm
                 return [$palet, $sisa];
             })
             ->filter(fn($pair) => $pair[1] > 0)
-            ->mapWithKeys(function ($pair) {
+            ->map(function ($pair) {
                 [$palet, $sisa] = $pair;
                 $mk = $palet->mutasiKeluar;
 
@@ -269,12 +281,34 @@ class BahanHotPressForm
                 $label = "Veneer | {$panjang}mm x {$lebar}mm x {$tebal}mm | {$kw} | {$kayu} "
                     . "| Palet {$noPalet} | Sisa {$sisa} Lbr";
 
-                return ["veneer:{$palet->id}" => $label];
+                return [
+                    'id' => "veneer:{$palet->id}",
+                    'label' => $label,
+                    'no' => (string) $noPalet,
+                    'kategori' => 'Veneer',
+                    'jenis' => $kayu,
+                    'grade' => $kw,
+                    'ukuran' => "{$panjang}x{$lebar}x{$tebal}",
+                    'asal' => 'veneer',
+                ];
             })
-            ->toArray();
+            ->values()
+            ->all();
     }
 
     public static function getPlatformOptions(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
+    {
+        return collect(self::getPlatformEntries($record, $ownerRecordId, $namaGrade, $jenisId))
+            ->pluck('label', 'id')
+            ->all();
+    }
+
+    /**
+     * Data palet + bahan pencarian fleksibel (App\Support\PaletSearch).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function getPlatformEntries(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
     {
         $currentId = $record?->sumber === 'platform' ? $record?->id_mutasi_keluar_platform : null;
         $currentIsi = (float) ($record?->isi ?? 0);
@@ -300,7 +334,7 @@ class BahanHotPressForm
                 return [$palet, $sisa];
             })
             ->filter(fn($pair) => $pair[1] > 0)
-            ->mapWithKeys(function ($pair) {
+            ->map(function ($pair) {
                 [$palet, $sisa] = $pair;
                 $mk = $palet->mutasiKeluar;
 
@@ -314,12 +348,34 @@ class BahanHotPressForm
                 $label = "Platform | {$panjang}mm x {$lebar}mm x {$tebal}mm | {$kw} | {$jenisBarang} "
                     . "| Palet {$noPalet} | Sisa {$sisa} Lbr";
 
-                return ["platform:{$palet->id}" => $label];
+                return [
+                    'id' => "platform:{$palet->id}",
+                    'label' => $label,
+                    'no' => (string) $noPalet,
+                    'kategori' => 'Platform',
+                    'jenis' => $jenisBarang,
+                    'grade' => $kw,
+                    'ukuran' => "{$panjang}x{$lebar}x{$tebal}",
+                    'asal' => 'platform',
+                ];
             })
-            ->toArray();
+            ->values()
+            ->all();
     }
 
     public static function getTriplekOptions(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
+    {
+        return collect(self::getTriplekEntries($record, $ownerRecordId, $namaGrade, $jenisId))
+            ->pluck('label', 'id')
+            ->all();
+    }
+
+    /**
+     * Data palet + bahan pencarian fleksibel (App\Support\PaletSearch).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function getTriplekEntries(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
     {
         $currentId = $record?->sumber === 'triplek' ? $record?->id_mutasi_keluar_triplek : null;
         $currentIsi = (float) ($record?->isi ?? 0);
@@ -342,7 +398,7 @@ class BahanHotPressForm
                 return [$palet, $sisa];
             })
             ->filter(fn($pair) => $pair[1] > 0)
-            ->mapWithKeys(function ($pair) {
+            ->map(function ($pair) {
                 [$palet, $sisa] = $pair;
                 $mk = $palet->mutasiKeluar;
 
@@ -356,8 +412,33 @@ class BahanHotPressForm
                 $label = "Triplek Jadi | {$panjang}mm x {$lebar}mm x {$tebal}mm | {$kw} | {$kayu} "
                     . "| Palet {$noPalet} | Sisa {$sisa} Lbr";
 
-                return ["triplek:{$palet->id}" => $label];
+                return [
+                    'id' => "triplek:{$palet->id}",
+                    'label' => $label,
+                    'no' => (string) $noPalet,
+                    'kategori' => 'Triplek Jadi',
+                    'jenis' => $kayu,
+                    'grade' => $kw,
+                    'ukuran' => "{$panjang}x{$lebar}x{$tebal}",
+                    'asal' => 'triplek',
+                ];
             })
-            ->toArray();
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Gabungan veneer + platform + triplek untuk dropdown "Barang Setengah Jadi"
+     * (dan "Kembalikan ke Gudang"), siap dipakai PaletSearch::configure().
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function getPaletEntries(?BahanHotpress $record, $ownerRecordId = null, ?string $namaGrade = null, $jenisId = null): array
+    {
+        return array_merge(
+            self::getPaletEntriesVeneer($record, $ownerRecordId, $namaGrade, $jenisId),
+            self::getPlatformEntries($record, $ownerRecordId, $namaGrade, $jenisId),
+            self::getTriplekEntries($record, $ownerRecordId, $namaGrade, $jenisId),
+        );
     }
 }

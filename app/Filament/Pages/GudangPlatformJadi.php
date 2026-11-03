@@ -4,13 +4,13 @@ namespace App\Filament\Pages;
 
 use App\Models\HasilSanding;
 use App\Models\HppPlatformJadiLog;
-use App\Models\HppPlatformMthLog;
-use App\Models\JenisKayu;
 use App\Models\PlatformJadiMutasiKeluar;
 use App\Models\PlatformJadiMutasiKeluarPalet;
+use App\Models\SerahTerimaHp;
 use App\Models\SerahTerimaPlatformJadi;
 use App\Models\StokPlatformJadi;
-use App\Models\StokPlatformMth;
+use App\Services\TransferPlatformJadiKeMthService;
+use App\Services\TransferPlatformMthKeJadiService;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -33,6 +33,19 @@ class GudangPlatformJadi extends Page
 
     protected static ?int $navigationSort = 22;
 
+    // Tujuan keluar yang diizinkan — SATU sumber kebenaran.
+    public const TUJUAN_HOTPRESS = 'Hotpress';
+
+    public const TUJUAN_JUAL = 'Jual';
+
+    public const TUJUAN_MTH = 'Gudang Platform Mentah';
+
+    public const TUJUAN_OPTIONS = [
+        self::TUJUAN_HOTPRESS,
+        self::TUJUAN_JUAL,
+        self::TUJUAN_MTH,
+    ];
+
     // Tab aktif: 'masuk' (Serah Terima) / 'keluar'
     public string $activeTab = 'masuk';
 
@@ -51,18 +64,11 @@ class GudangPlatformJadi extends Page
 
     public array $paletQuantities = [0 => ''];
 
-    public string $tujuanKeluar = 'Hotpress';
+    public string $tujuanKeluar = self::TUJUAN_HOTPRESS;
 
     public string $keteranganKeluar = '';
 
-    protected $queryString = ['activeTab'];
-
-    public function hitungKubikasi(float $p, float $l, float $t, ?int $lembar): float
-    {
-        return ($p * $l * $t * ($lembar ?? 0)) / 10000000;
-    }
-
-    // Modal Edit Riwayat Keluar
+    // ── Modal Edit Riwayat Keluar ──
     public bool $showEditKeluarModal = false;
 
     public ?int $editKeluarId = null;
@@ -71,6 +77,79 @@ class GudangPlatformJadi extends Page
 
     public array $editPaletQuantities = [0 => ''];
 
+    // ── Modal Tolak Serah Terima ──
+    public bool $showTolakModal = false;
+
+    public ?int $tolakId = null;
+
+    public string $tolakTipe = '';
+
+    public string $alasanTolak = '';
+
+    public string $tolakModalTitle = 'Tolak Kiriman Platform';
+
+    public string $tolakModalDescription = 'Kiriman ini akan ditolak dan tidak dimasukkan ke stok Gudang Platform Jadi.';
+
+    protected $queryString = ['activeTab'];
+
+    public function hitungKubikasi(float $p, float $l, float $t, ?int $lembar): float
+    {
+        return ($p * $l * $t * ($lembar ?? 0)) / 10000000;
+    }
+
+    /**
+     * Lembar yang sudah dicatat keluar ke Gudang Platform Mentah tetapi belum
+     * diterima/ditolak. Stok fisik baru dipotong saat diterima, jadi angka ini
+     * dikurangkan dari stok agar barang yang sama tidak bisa dikirim dua kali.
+     */
+    protected function pendingLembarMth(StokPlatformJadi $stok, ?int $kecualiMutasiId = null): int
+    {
+        $idMutasiPending = SerahTerimaHp::query()
+            ->where('tujuan', TransferPlatformJadiKeMthService::TUJUAN)
+            ->whereNotNull('id_platform_jadi_mutasi_keluar')
+            ->where('diterima_oleh', '-')
+            ->whereNull('ditolak_oleh')
+            ->whereNull('diterima_gudang_at')
+            ->select('id_platform_jadi_mutasi_keluar');
+
+        return (int) PlatformJadiMutasiKeluar::query()
+            ->whereIn('id', $idMutasiPending)
+            ->where('id_jenis_barang', $stok->id_jenis_barang)
+            ->where('panjang', $stok->panjang)
+            ->where('lebar', $stok->lebar)
+            ->where('tebal', $stok->tebal)
+            ->where('kw_grade', $stok->kw_grade)
+            ->when($kecualiMutasiId, fn ($q) => $q->where('id', '!=', $kecualiMutasiId))
+            ->sum('stok_lembar');
+    }
+
+    /**
+     * Satu sumber kebenaran untuk "boleh diedit"
+     * (dipakai editKeluar, updateKeluar, dan riwayat keluar).
+     */
+    protected function bisaDiedit(PlatformJadiMutasiKeluar $mutasi): bool
+    {
+        if (! is_null($mutasi->id_produksi_hp) || ! is_null($mutasi->diterima_by)) {
+            return false;
+        }
+
+        $sudahAdaYangTerserap = $mutasi->palets->contains(
+            fn ($p) => ! is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0
+        );
+
+        if ($sudahAdaYangTerserap) {
+            return false;
+        }
+
+        $sudahDiterimaMth = SerahTerimaHp::where('id_platform_jadi_mutasi_keluar', $mutasi->id)
+            ->where('tujuan', TransferPlatformJadiKeMthService::TUJUAN)
+            ->where('diterima_oleh', '!=', '-')
+            ->exists();
+
+        return ! $sudahDiterimaMth;
+    }
+
+    // ─── EDIT RIWAYAT KELUAR ─────────────────────────────────────────────────
 
     public function editKeluar(int $id): void
     {
@@ -82,25 +161,11 @@ class GudangPlatformJadi extends Page
             return;
         }
 
-        if (! is_null($mutasi->id_produksi_hp) || ! is_null($mutasi->diterima_by)) {
+        if (! $this->bisaDiedit($mutasi)) {
             Notification::make()
                 ->danger()
                 ->title('Tidak Bisa Diedit')
-                ->body('Mutasi ini sudah diterima di sisi tujuan, rincian tidak bisa diubah lagi.')
-                ->send();
-
-            return;
-        }
-
-        $sudahAdaYangTerserap = $mutasi->palets->contains(
-            fn($p) => ! is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0
-        );
-
-        if ($sudahAdaYangTerserap) {
-            Notification::make()
-                ->danger()
-                ->title('Tidak Bisa Diedit')
-                ->body('Sebagian palet pada mutasi ini sudah mulai dipakai di produksi Hotpress, rincian tidak bisa diubah lagi.')
+                ->body('Mutasi ini sudah diterima/dipakai di sisi tujuan, rincian tidak bisa diubah lagi.')
                 ->send();
 
             return;
@@ -172,20 +237,11 @@ class GudangPlatformJadi extends Page
                     throw new \Exception('Data tidak ditemukan.');
                 }
 
-                // 🔒 Re-cek race condition
-                if (! is_null($mutasi->id_produksi_hp) || ! is_null($mutasi->diterima_by)) {
-                    throw new \Exception('Mutasi ini sudah diterima di sisi tujuan, tidak bisa diedit lagi.');
+                // Re-cek race condition
+                if (! $this->bisaDiedit($mutasi)) {
+                    throw new \Exception('Mutasi ini sudah diterima/dipakai di sisi tujuan, tidak bisa diedit lagi.');
                 }
 
-                $sudahAdaYangTerserap = $mutasi->palets->contains(
-                    fn($p) => ! is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0
-                );
-
-                if ($sudahAdaYangTerserap) {
-                    throw new \Exception('Sebagian palet sudah mulai dipakai di produksi, tidak bisa diedit lagi.');
-                }
-
-                // Validasi sisa stok fisik masih cukup untuk kuantitas baru
                 $stok = StokPlatformJadi::where('id_jenis_barang', $mutasi->id_jenis_barang)
                     ->where('panjang', $mutasi->panjang)
                     ->where('lebar', $mutasi->lebar)
@@ -194,7 +250,9 @@ class GudangPlatformJadi extends Page
                     ->lockForUpdate()
                     ->first();
 
-                if (! $stok || $totalLembar > (int) $stok->stok_lembar) {
+                // Stok belum dipotong untuk mutasi ini, jadi bandingkan dengan stok fisik
+                // dikurangi kiriman LAIN ke Platform Mentah yang masih menunggu.
+                if (! $stok || $totalLembar > ((int) $stok->stok_lembar - $this->pendingLembarMth($stok, $mutasi->id))) {
                     throw new \Exception('Sisa stok fisik di gudang tidak mencukupi untuk kuantitas baru.');
                 }
 
@@ -205,8 +263,7 @@ class GudangPlatformJadi extends Page
                 ]);
 
                 // Aman dihapus & dibuat ulang karena sudah dipastikan tidak ada
-                // satu pun palet yang punya BahanHotpress (FK id_mutasi_keluar_platform)
-                // atau diterima_by terisi — lihat guard di atas.
+                // satu pun palet yang punya BahanHotpress atau diterima_by terisi.
                 $mutasi->palets()->delete();
 
                 foreach ($this->editPaletQuantities as $index => $qty) {
@@ -252,7 +309,7 @@ class GudangPlatformJadi extends Page
                 $q = strtolower(trim($this->search));
                 $barang = strtolower((string) $item->jenisBarang?->nama_jenis_barang);
                 $grade = strtolower((string) $item->kw_grade);
-                $dimensi = strtolower(($item->panjang + 0) . 'x' . ($item->lebar + 0) . 'x' . ($item->tebal + 0));
+                $dimensi = strtolower(($item->panjang + 0).'x'.($item->lebar + 0).'x'.($item->tebal + 0));
 
                 return str_contains($barang, $q)
                     || str_contains($grade, $q)
@@ -266,6 +323,175 @@ class GudangPlatformJadi extends Page
                 ['kw_grade', 'asc'],
             ])
             ->values();
+    }
+
+
+    /**
+     * Opsi stok untuk pop up "Catat Barang Keluar" (komponen x-gudang.pilih-stok).
+     * Sengaja TIDAK difilter oleh kolom search halaman — pencarian di pop up
+     * dilakukan di sisi client (Alpine) per kata kunci: ukuran, jenis kayu, KW.
+     */
+    public function getStokOpsiKeluarProperty(): array
+    {
+        return StokPlatformJadi::with(['jenisBarang'])
+            ->where('stok_lembar', '>', 0)
+            ->get()
+            ->sortBy([
+                ['id_jenis_barang', 'asc'],
+                ['tebal', 'asc'],
+                ['panjang', 'asc'],
+                ['lebar', 'asc'],
+                ['kw_grade', 'asc'],
+            ])
+            ->map(fn ($s) => [
+                'id'   => (string) $s->id,
+                'kayu' => (string) $s->jenisBarang?->nama_jenis_barang,
+                'kw'   => (string) $s->kw_grade,
+                'p'    => (float) $s->panjang,
+                'l'    => (float) $s->lebar,
+                't'    => (float) $s->tebal,
+                'sisa' => (int) $s->stok_lembar,
+            ])
+            ->values()
+            ->all();
+    }
+
+    // ─── TERIMA DARI GUDANG PLATFORM MENTAH ──────────────────────────────────
+
+    public function getMenungguDariMthProperty(): Collection
+    {
+        return SerahTerimaHp::with('platformMthMutasiKeluar.jenisKayu')
+            ->where('tujuan', TransferPlatformMthKeJadiService::TUJUAN)
+            ->whereNotNull('id_platform_mth_mutasi_keluar')
+            ->where('diterima_oleh', '-')
+            ->whereNull('ditolak_oleh')
+            ->whereNull('diterima_gudang_at')
+            ->latest()
+            ->get();
+    }
+
+    public function getRiwayatDariMthProperty(): Collection
+    {
+        return SerahTerimaHp::with('platformMthMutasiKeluar.jenisKayu')
+            ->where('tujuan', TransferPlatformMthKeJadiService::TUJUAN)
+            ->whereNotNull('diterima_gudang_at')
+            ->orderByDesc('diterima_gudang_at')
+            ->limit(50)
+            ->get();
+    }
+
+    public function terimaDariMth(int $id): void
+    {
+        try {
+            app(TransferPlatformMthKeJadiService::class)->terima($id);
+
+            unset($this->menungguDariMth, $this->riwayatDariMth, $this->stokList);
+
+            Notification::make()->success()
+                ->title('Stok Bertambah')
+                ->body('Platform dari Gudang Platform Mentah diterima di Gudang Platform Jadi.')
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()->danger()
+                ->title('Gagal Menerima')
+                ->body($e->getMessage())
+                ->send();
+        }
+    }
+
+    public function bukaModalTolak(int $id, string $tipe = 'mth'): void
+    {
+        $this->tolakId = $id;
+        $this->tolakTipe = $tipe;
+        $this->alasanTolak = '';
+
+        if ($tipe === 'sanding') {
+            $this->tolakModalTitle = 'Tolak Palet Hasil Sanding';
+            $this->tolakModalDescription = 'Palet ini akan ditolak dan dikembalikan ke antrean Sanding.';
+        } else {
+            $this->tolakModalTitle = 'Tolak Kiriman dari Gudang Platform Mentah';
+            $this->tolakModalDescription = 'Kiriman ini akan ditolak dan tidak akan menambah stok Gudang Platform Jadi.';
+        }
+
+        $this->showTolakModal = true;
+    }
+
+    public function batalTolak(): void
+    {
+        $this->showTolakModal = false;
+        $this->tolakId = null;
+        $this->tolakTipe = '';
+        $this->alasanTolak = '';
+    }
+
+    public function prosesTolak(): void
+    {
+        if (! $this->tolakId) {
+            return;
+        }
+
+        if (trim($this->alasanTolak) === '') {
+            Notification::make()->danger()
+                ->title('Gagal Menolak')
+                ->body('Alasan penolakan wajib diisi.')
+                ->send();
+
+            return;
+        }
+
+        try {
+            if ($this->tolakTipe === 'sanding') {
+                DB::transaction(function () {
+                    $hs = HasilSanding::lockForUpdate()->findOrFail($this->tolakId);
+
+                    if (SerahTerimaPlatformJadi::where('id_hasil_sanding', $hs->id)->exists()) {
+                        throw new \Exception('Palet ini sudah diterima, tidak bisa ditolak.');
+                    }
+
+                    $hs->update([
+                        'tujuan_serah' => null,
+                        'diserahkan_at' => null,
+                        'diserahkan_oleh' => null,
+                    ]);
+                });
+
+                $this->batalTolak();
+                unset($this->antrean);
+
+                Notification::make()->warning()
+                    ->title('Barang Ditolak')
+                    ->body('Barang berhasil dikembalikan ke antrean Sanding.')
+                    ->send();
+            } else {
+                DB::transaction(function () {
+                    $st = SerahTerimaHp::lockForUpdate()->findOrFail($this->tolakId);
+
+                    if ($st->diterima_gudang_at || $st->ditolak_oleh || $st->diterima_oleh !== '-') {
+                        throw new \RuntimeException('Barang ini sudah diproses (diterima/ditolak) sebelumnya.');
+                    }
+
+                    $st->update([
+                        'ditolak_oleh' => Auth::user()->name,
+                        'alasan_tolak' => $this->alasanTolak,
+                        'ditolak_at' => now(),
+                        'status' => 'Ditolak',
+                    ]);
+                });
+
+                $this->batalTolak();
+                unset($this->menungguDariMth, $this->riwayatDariMth, $this->stokList);
+
+                Notification::make()->warning()
+                    ->title('Barang Ditolak')
+                    ->body('Kiriman dari Gudang Platform Mentah telah ditolak.')
+                    ->send();
+            }
+        } catch (\Throwable $e) {
+            Notification::make()->danger()
+                ->title('Gagal Menolak')
+                ->body($e->getMessage())
+                ->send();
+        }
     }
 
     // ─── SERAH TERIMA (dari Hasil Sanding) ───────────────────────────────────
@@ -314,24 +540,22 @@ class GudangPlatformJadi extends Page
         if (trim($this->antreanSearch) !== '') {
             $q = strtolower(trim($this->antreanSearch));
             $rows = $rows->filter(
-                fn($r) => str_contains(strtolower((string) $r->jenis_barang), $q)
+                fn ($r) => str_contains(strtolower((string) $r->jenis_barang), $q)
                     || str_contains(strtolower((string) $r->grade), $q)
-                    || str_contains(strtolower(($r->panjang + 0) . 'x' . ($r->lebar + 0) . 'x' . ($r->tebal + 0)), $q)
-                    || str_contains(strtolower('palet ' . $r->no_palet), $q)
+                    || str_contains(strtolower(($r->panjang + 0).'x'.($r->lebar + 0).'x'.($r->tebal + 0)), $q)
+                    || str_contains(strtolower('palet '.$r->no_palet), $q)
             );
         }
 
         // Belum diterima di atas (terbaru dulu), sudah diterima di bawah.
         return $rows
             ->sortByDesc('created_at')
-            ->sortBy(fn($r) => $r->sudah ? 1 : 0)
+            ->sortBy(fn ($r) => $r->sudah ? 1 : 0)
             ->values();
     }
 
     /**
-     * Terima satu palet hasil sanding ke Gudang Platform Jadi:
-     * upsert stok jadi + tulis log + catat serah terima + KURANGI stok mentah.
-     * HPP sementara diabaikan (0).
+     * Tolak satu palet hasil sanding: kembalikan ke antrean Sanding.
      */
     public function tolak(int $idHasilSanding): void
     {
@@ -362,6 +586,11 @@ class GudangPlatformJadi extends Page
         }
     }
 
+    /**
+     * Terima satu palet hasil sanding ke Gudang Platform Jadi:
+     * upsert stok jadi + tulis log + catat serah terima.
+     * HPP sementara diabaikan (0).
+     */
     public function terima(int $idHasilSanding): void
     {
         try {
@@ -448,8 +677,8 @@ class GudangPlatformJadi extends Page
                     'stok_lembar_after' => $after['lembar'],
                     'stok_kubikasi_after' => $after['kubikasi'],
                     'nilai_stok_after' => $after['nilai'],
-                    'keterangan' => 'Serah terima Hasil Sanding Palet ' . $hs->no_palet
-                        . ' | Diterima: ' . $userName,
+                    'keterangan' => 'Serah terima Hasil Sanding Palet '.$hs->no_palet
+                        .' | Diterima: '.$userName,
                 ]);
 
                 $stok->update([
@@ -465,9 +694,8 @@ class GudangPlatformJadi extends Page
                     'diterima_at' => now(),
                 ]);
 
-                // ── KURANGI STOK PLATFORM MENTAH (boleh minus, crosscheck) ──
-                // Double cut removed: Stok platform mentah sudah dikurangi saat Mutasi Keluar
-                // $this->kurangiStokPlatformMth($bsj, $p, $l, $t, $kw, $qty, $hs);
+                // Stok platform mentah sudah dikurangi saat Mutasi Keluar / diterima Sanding
+                // (tidak ada pemotongan ganda di sini).
             });
 
             Notification::make()->success()
@@ -481,95 +709,7 @@ class GudangPlatformJadi extends Page
         }
     }
 
-    /**
-     * Kurangi Stok Platform Mentah sesuai barang & qty yang diterima.
-     * Map jenis_barang -> jenis_kayu by nama. Boleh minus (crosscheck).
-     */
-    protected function kurangiStokPlatformMth($bsj, float $p, float $l, float $t, ?string $kw, int $qty, HasilSanding $hs): void
-    {
-        $namaJenis = $bsj->jenisBarang?->nama_jenis_barang;
-
-        $jenisKayu = $namaJenis
-            ? JenisKayu::where('nama_kayu', $namaJenis)->first()
-            : null;
-
-        if (! $jenisKayu) {
-            throw new \Exception("Jenis kayu \"{$namaJenis}\" tidak ditemukan di master Jenis Kayu. Samakan namanya dulu.");
-        }
-
-        $stokMth = StokPlatformMth::where('id_jenis_kayu', $jenisKayu->id)
-            ->where('panjang', $p)->where('lebar', $l)->where('tebal', $t)
-            ->where('kw_grade', $kw)
-            ->lockForUpdate()
-            ->first();
-
-        if (! $stokMth) {
-            // baris belum ada -> buat mulai 0 supaya bisa minus
-            $stokMth = StokPlatformMth::create([
-                'id_jenis_kayu' => $jenisKayu->id,
-                'panjang' => $p,
-                'lebar' => $l,
-                'tebal' => $t,
-                'kw_grade' => $kw,
-                'stok_lembar' => 0,
-                'stok_kubikasi' => 0,
-                'nilai_stok' => 0,
-                'hpp_average' => 0,
-            ]);
-        }
-
-        // Keperluan pemakaian bahan mentah (ubah di sini bila perlu)
-        $keperluan = 'Sanding';
-        $namaPemakai = Auth::user()?->name ?? 'System';
-
-        $kubikasi = $this->hitungKubikasi($p, $l, $t, $qty);
-
-        $before = [
-            'lembar' => (float) $stokMth->stok_lembar,
-            'kubikasi' => (float) $stokMth->stok_kubikasi,
-            'nilai' => (float) $stokMth->nilai_stok,
-        ];
-
-        $after = [
-            'lembar' => $before['lembar'] - $qty,
-            'kubikasi' => round($before['kubikasi'] - $kubikasi, 6),
-            'nilai' => $before['nilai'], // HPP diabaikan
-        ];
-
-        $log = HppPlatformMthLog::create([
-            'id_jenis_kayu' => $jenisKayu->id,
-            'panjang' => $p,
-            'lebar' => $l,
-            'tebal' => $t,
-            'kw_grade' => $kw,
-            'tanggal' => now(),
-            'tipe_transaksi' => 'keluar',
-            'referensi_type' => HasilSanding::class,
-            'referensi_id' => $hs->id,
-            'keterangan' => "Dipakai produksi: {$keperluan} - Palet {$hs->no_palet} (oleh {$namaPemakai})",
-            'total_lembar' => $qty,
-            'total_kubikasi' => $kubikasi,
-            'hpp_pekerja' => 0,
-            'hpp_bahan_penolong' => 0,
-            'hpp_average' => (float) $stokMth->hpp_average,
-            'nilai_stok' => $after['nilai'],
-            'stok_lembar_before' => $before['lembar'],
-            'stok_kubikasi_before' => $before['kubikasi'],
-            'nilai_stok_before' => $before['nilai'],
-            'stok_lembar_after' => $after['lembar'],
-            'stok_kubikasi_after' => $after['kubikasi'],
-            'nilai_stok_after' => $after['nilai'],
-        ]);
-
-        $stokMth->update([
-            'stok_lembar' => $after['lembar'],
-            'stok_kubikasi' => $after['kubikasi'],
-            'nilai_stok' => $after['nilai'],
-            'id_last_log' => $log->id,
-        ]);
-    }
-
-    // ─── VENEER/PLATFORM KELUAR ──────────────────────────────────────────────
+    // ─── BARANG KELUAR ────────────────────────────────────────────────────────
 
     public function updatedJumlahPalet($value): void
     {
@@ -595,17 +735,27 @@ class GudangPlatformJadi extends Page
     }
 
     /**
-     * Keluarkan barang dari stok: header mutasi + rincian palet, lalu
-     * SATU BARIS LOG PER PALET (snapshot berantai), potong stok.
+     * Keluarkan barang dari stok: header mutasi + rincian palet.
+     * Stok TIDAK dipotong di sini; untuk tujuan Gudang Platform Mentah dipotong
+     * saat tujuan menerima (lihat TransferPlatformJadiKeMthService).
      */
     public function prosesKeluar(): void
     {
         $totalLembar = array_sum(array_map('intval', $this->paletQuantities));
 
-        if (! $this->selectedStokId || $totalLembar <= 0 || trim($this->tujuanKeluar) === '') {
+        if (! $this->selectedStokId || $totalLembar <= 0) {
             Notification::make()->danger()
                 ->title('Input Gagal')
-                ->body('Pilih stok, isi kuantitas palet, dan tujuan keluar wajib diisi.')
+                ->body('Pilih stok dan isi kuantitas palet.')
+                ->send();
+
+            return;
+        }
+
+        if (! in_array($this->tujuanKeluar, self::TUJUAN_OPTIONS, true)) {
+            Notification::make()->danger()
+                ->title('Input Gagal')
+                ->body('Tujuan keluar tidak valid. Pilih Hotpress, Jual, atau Gudang Platform Mentah.')
                 ->send();
 
             return;
@@ -615,8 +765,10 @@ class GudangPlatformJadi extends Page
             DB::transaction(function () use ($totalLembar) {
                 $stok = StokPlatformJadi::lockForUpdate()->findOrFail($this->selectedStokId);
 
-                if ($totalLembar > (int) $stok->stok_lembar) {
-                    throw new \Exception('Sisa stok tidak mencukupi. Tersedia: ' . $stok->stok_lembar . ' lembar.');
+                $tersedia = (int) $stok->stok_lembar - $this->pendingLembarMth($stok);
+
+                if ($totalLembar > $tersedia) {
+                    throw new \Exception("Sisa stok tidak mencukupi. Tersedia (setelah dikurangi kiriman ke Gudang Platform Mentah yang menunggu diterima): {$tersedia} lembar.");
                 }
 
                 $user = Auth::user();
@@ -635,16 +787,21 @@ class GudangPlatformJadi extends Page
                     'keterangan' => trim($this->keteranganKeluar) !== '' ? trim($this->keteranganKeluar) : null,
                 ]);
 
-                // Catatan: stok TIDAK dipotong di sini. Baris palet di bawah ini
-                // hanya mencatat "niat kirim" per palet — angka jumlah_lembar
-                // inilah yang nanti dipakai untuk memotong stok saat diterima.
                 foreach ($this->paletQuantities as $index => $qtyRaw) {
-                    $qty = intval($qtyRaw);
-
                     PlatformJadiMutasiKeluarPalet::create([
                         'id_mutasi_keluar' => $mutasi->id,
                         'nomor_palet' => $index + 1,
-                        'jumlah_lembar' => $qty,
+                        'jumlah_lembar' => intval($qtyRaw),
+                    ]);
+                }
+
+                if ($this->tujuanKeluar === self::TUJUAN_MTH) {
+                    SerahTerimaHp::create([
+                        'id_platform_jadi_mutasi_keluar' => $mutasi->id,
+                        'tujuan' => TransferPlatformJadiKeMthService::TUJUAN,
+                        'diserahkan_oleh' => $user?->name ?? 'System',
+                        'diterima_oleh' => '-',
+                        'status' => 'Serah ke Gudang Platform Mentah',
                     ]);
                 }
             });
@@ -653,9 +810,11 @@ class GudangPlatformJadi extends Page
             $this->selectedStokId = null;
             $this->jumlahPalet = 1;
             $this->paletQuantities = [0 => ''];
-            $this->tujuanKeluar = 'Hotpress';
+            $this->tujuanKeluar = self::TUJUAN_HOTPRESS;
             $this->keteranganKeluar = '';
             $this->showFormKeluarModal = false;
+
+            unset($this->riwayatKeluar);
 
             Notification::make()->success()
                 ->title('Mutasi Keluar Dicatat')
@@ -677,7 +836,7 @@ class GudangPlatformJadi extends Page
         if (trim($this->keluarSearchQuery) !== '') {
             $q = strtolower(trim($this->keluarSearchQuery));
             $query->where(function ($query) use ($q) {
-                $query->whereHas('jenisBarang', fn($qr) => $qr->whereRaw('LOWER(nama_jenis_barang) LIKE ?', ["%{$q}%"]))
+                $query->whereHas('jenisBarang', fn ($qr) => $qr->whereRaw('LOWER(nama_jenis_barang) LIKE ?', ["%{$q}%"]))
                     ->orWhereRaw('LOWER(kw_grade) LIKE ?', ["%{$q}%"])
                     ->orWhereRaw('LOWER(tujuan) LIKE ?', ["%{$q}%"])
                     ->orWhereRaw('LOWER(keterangan) LIKE ?', ["%{$q}%"]);
@@ -685,9 +844,7 @@ class GudangPlatformJadi extends Page
         }
 
         return $query->get()->map(function ($rk) {
-            $rk->bisa_diedit = is_null($rk->id_produksi_hp)
-                && is_null($rk->diterima_by)
-                && ! $rk->palets->contains(fn($p) => ! is_null($p->diterima_by) || $p->bahanHotpress->sum('isi') > 0);
+            $rk->bisa_diedit = $this->bisaDiedit($rk);
 
             return $rk;
         });

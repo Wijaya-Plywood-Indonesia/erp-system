@@ -23,12 +23,35 @@ class HasilGrajiTripleksTable
 {
     /**
      * Ambil record serah-terima yang aktif untuk satu HasilGrajiTriplek,
-     * apapun sumbernya (SerahTerimaHp untuk Sanding, SerahTerimaTriplekJadi
-     * untuk Gudang). Return null kalau belum pernah diserahkan sama sekali.
+     * apapun sumbernya (SerahTerimaHp untuk Sanding / Gudang Triplek Mentah,
+     * SerahTerimaTriplekJadi untuk Gudang Triplek Jadi).
+     *
+     * Jika record pernah ditolak, dianggap TIDAK AKTIF (null) agar tombol serah muncul kembali.
      *
      * @return array{record: SerahTerimaHp|SerahTerimaTriplekJadi, tujuan: string}|null
      */
     protected static function resolveSerahTerima(HasilGrajiTriplek $record): ?array
+    {
+        $info = static::resolveSerahTerimaRaw($record);
+
+        if (! $info) {
+            return null;
+        }
+
+        // Jika ditolak, anggap belum serah (tombol Serah akan muncul lagi)
+        if ($info['record'] instanceof SerahTerimaHp && $info['record']->isDitolak()) {
+            return null;
+        }
+
+        return $info;
+    }
+
+    /**
+     * Ambil record serah terima terbaru termasuk yang berstatus ditolak (untuk keperluan tampilan status/history).
+     *
+     * @return array{record: SerahTerimaHp|SerahTerimaTriplekJadi, tujuan: string}|null
+     */
+    protected static function resolveSerahTerimaRaw(HasilGrajiTriplek $record): ?array
     {
         if ($record->serahTerimaHp) {
             $tujuan = match ($record->serahTerimaHp->tujuan) {
@@ -47,7 +70,7 @@ class HasilGrajiTripleksTable
         if ($record->serahTerimaTriplekJadi) {
             return [
                 'record' => $record->serahTerimaTriplekJadi,
-                'tujuan' => 'Gudang',
+                'tujuan' => 'Gudang Triplek Jadi',
             ];
         }
 
@@ -71,22 +94,31 @@ class HasilGrajiTripleksTable
                     ->searchable()
                     ->badge()
                     ->color(function (HasilGrajiTriplek $record) {
-                        $info = static::resolveSerahTerima($record);
+                        $info = static::resolveSerahTerimaRaw($record);
 
                         if (! $info) {
                             return 'gray';
                         }
 
+                        if ($info['record'] instanceof SerahTerimaHp && $info['record']->isDitolak()) {
+                            return 'danger';
+                        }
+
                         return $info['record']->diterima_oleh === '-' ? 'warning' : 'success';
                     })
                     ->description(function (HasilGrajiTriplek $record) {
-                        $info = static::resolveSerahTerima($record);
+                        $info = static::resolveSerahTerimaRaw($record);
 
                         if (! $info) {
                             return 'Belum Serah';
                         }
 
                         $tujuan = $info['tujuan'];
+
+                        if ($info['record'] instanceof SerahTerimaHp && $info['record']->isDitolak()) {
+                            $alasan = $info['record']->alasan_tolak ? ": {$info['record']->alasan_tolak}" : '';
+                            return "Ditolak {$tujuan}{$alasan}";
+                        }
 
                         return $info['record']->diterima_oleh === '-'
                             ? "Diserahkan ke {$tujuan} — Menunggu Diterima"
@@ -116,14 +148,14 @@ class HasilGrajiTripleksTable
 
                 /*
                  * STATUS SERAH — toggleable, default hidden
-                 * Mencerminkan status gabungan dari serahTerimaHp (Sanding)
-                 * ATAU serahTerimaTriplekJadi (Gudang), mana yang terisi.
+                 * Mencerminkan status gabungan dari serahTerimaHp (Sanding / Gudang Mth)
+                 * ATAU serahTerimaTriplekJadi (Gudang Jadi), mana yang terisi.
                  */
                 TextColumn::make('status_serah')
                     ->label('Status')
                     ->badge()
                     ->getStateUsing(function (HasilGrajiTriplek $record) {
-                        $info = static::resolveSerahTerima($record);
+                        $info = static::resolveSerahTerimaRaw($record);
 
                         if (! $info) {
                             return 'Belum Diserahkan';
@@ -131,11 +163,16 @@ class HasilGrajiTripleksTable
 
                         $tujuan = $info['tujuan'];
 
+                        if ($info['record'] instanceof SerahTerimaHp && $info['record']->isDitolak()) {
+                            return "Ditolak {$tujuan}";
+                        }
+
                         return $info['record']->diterima_oleh === '-'
                             ? "Menunggu Diterima {$tujuan}"
                             : "Sudah Diterima {$tujuan}";
                     })
                     ->color(fn ($state) => match (true) {
+                        str_contains($state, 'Ditolak') => 'danger',
                         str_contains($state, 'Sudah Diterima') => 'success',
                         str_contains($state, 'Menunggu Diterima') => 'warning',
                         default => 'gray',
@@ -147,7 +184,7 @@ class HasilGrajiTripleksTable
                  */
                 TextColumn::make('tujuan_serah')
                     ->label('Diserahkan Ke')
-                    ->getStateUsing(fn (HasilGrajiTriplek $record) => static::resolveSerahTerima($record)['tujuan'] ?? '-')
+                    ->getStateUsing(fn (HasilGrajiTriplek $record) => static::resolveSerahTerimaRaw($record)['tujuan'] ?? '-')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 /*
@@ -155,7 +192,7 @@ class HasilGrajiTripleksTable
                  */
                 TextColumn::make('diserahkan_oleh_display')
                     ->label('Diserahkan Oleh')
-                    ->getStateUsing(fn (HasilGrajiTriplek $record) => static::resolveSerahTerima($record)['record']->diserahkan_oleh ?? '-')
+                    ->getStateUsing(fn (HasilGrajiTriplek $record) => static::resolveSerahTerimaRaw($record)['record']->diserahkan_oleh ?? '-')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 /*
@@ -163,7 +200,16 @@ class HasilGrajiTripleksTable
                  */
                 TextColumn::make('diterima_oleh_display')
                     ->label('Diterima Oleh')
-                    ->getStateUsing(fn (HasilGrajiTriplek $record) => static::resolveSerahTerima($record)['record']->diterima_oleh ?? '-')
+                    ->getStateUsing(function (HasilGrajiTriplek $record) {
+                        $info = static::resolveSerahTerimaRaw($record);
+                        if (! $info) {
+                            return '-';
+                        }
+                        if ($info['record'] instanceof SerahTerimaHp && $info['record']->isDitolak()) {
+                            return 'Ditolak: ' . ($info['record']->ditolak_oleh ?? '-');
+                        }
+                        return $info['record']->diterima_oleh ?? '-';
+                    })
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 /*
@@ -229,10 +275,11 @@ class HasilGrajiTripleksTable
                         Radio::make('tujuan')
                             ->label('Diterima Di Mana')
                             ->options([
+                                'sanding' => 'Sanding',
                                 'gudang_triplek_mth' => 'Gudang Triplek Mentah',
                                 'gudang_triplek_jadi' => 'Gudang Triplek Jadi',
                             ])
-                            ->default('gudang_triplek_mth')
+                            ->default('sanding')
                             ->required()
                             ->inline(false)
                             ->extraFieldWrapperAttributes(['class' => 'flex flex-col gap-2']),
@@ -241,6 +288,11 @@ class HasilGrajiTripleksTable
                         try {
                             DB::transaction(function () use ($record, $data) {
                                 if ($data['tujuan'] === 'gudang_triplek_jadi') {
+                                    // Jika sebelumnya ada SerahTerimaHp (misal bekas ditolak), hapus agar bersih
+                                    if ($record->serahTerimaHp) {
+                                        $record->serahTerimaHp->delete();
+                                    }
+
                                     // Gudang Triplek Jadi: catat SerahTerimaTriplekJadi,
                                     // stok ditambah saat operator gudang menerima.
                                     SerahTerimaTriplekJadi::create([
@@ -253,25 +305,50 @@ class HasilGrajiTripleksTable
                                     return;
                                 }
 
-                                // Gudang Triplek Mentah: buat SerahTerimaHp pending —
-                                // gudang harus terima dulu, baru stok +tambah dan
-                                // bisa dikeluarkan ke Sanding dari halaman gudang.
-                                SerahTerimaHp::create([
-                                    'id_hasil_graji_triplek' => $record->id,
-                                    'tujuan'                 => 'gudang_triplek_mth',
-                                    'diserahkan_oleh'        => Auth::user()->name,
-                                    'diterima_oleh'          => '-',
-                                    'status'                 => 'Serah Graji ke Gudang Triplek Mentah',
-                                ]);
+                                // Jika sebelumnya ada SerahTerimaTriplekJadi, hapus agar bersih
+                                if ($record->serahTerimaTriplekJadi) {
+                                    $record->serahTerimaTriplekJadi->delete();
+                                }
+
+                                $isSanding = $data['tujuan'] === 'sanding';
+                                $statusLabel = $isSanding ? 'Serah ke Sanding' : 'Serah Graji ke Gudang Triplek Mentah';
+
+                                if ($record->serahTerimaHp) {
+                                    // Update record yang ada (misal sebelumnya ditolak, reset status penolakan)
+                                    $record->serahTerimaHp->update([
+                                        'id_produksi_sanding' => null,
+                                        'tujuan' => $data['tujuan'],
+                                        'diserahkan_oleh' => Auth::user()->name,
+                                        'diterima_oleh' => '-',
+                                        'status' => $statusLabel,
+                                        'ditolak_oleh' => null,
+                                        'alasan_tolak' => null,
+                                        'ditolak_at' => null,
+                                        'diterima_gudang_at' => null,
+                                        'diterima_gudang_oleh' => null,
+                                        'created_at' => now(),
+                                    ]);
+                                } else {
+                                    SerahTerimaHp::create([
+                                        'id_hasil_graji_triplek' => $record->id,
+                                        'id_produksi_sanding' => null,
+                                        'tujuan' => $data['tujuan'],
+                                        'diserahkan_oleh' => Auth::user()->name,
+                                        'diterima_oleh' => '-',
+                                        'status' => $statusLabel,
+                                    ]);
+                                }
                             });
 
                             $record->unsetRelation('serahTerimaHp');
                             $record->unsetRelation('serahTerimaTriplekJadi');
                             $record->refresh();
 
-                            $tujuanLabel = $data['tujuan'] === 'gudang_triplek_jadi'
-                                ? 'Gudang Triplek Jadi'
-                                : 'Gudang Triplek Mentah (menuju Sanding)';
+                            $tujuanLabel = match ($data['tujuan']) {
+                                'sanding' => 'Sanding',
+                                'gudang_triplek_jadi' => 'Gudang Triplek Jadi',
+                                default => 'Gudang Triplek Mentah',
+                            };
 
                             Notification::make()
                                 ->title('Penyerahan Berhasil')

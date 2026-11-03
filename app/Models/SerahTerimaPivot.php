@@ -15,6 +15,13 @@ class SerahTerimaPivot extends Model
         'diterima_oleh',
         'tipe',
         'status',
+        'ditolak_oleh',
+        'alasan_tolak',
+        'ditolak_at',
+    ];
+
+    protected $casts = [
+        'ditolak_at' => 'datetime',
     ];
 
     public function detailHasilPalet(): BelongsTo

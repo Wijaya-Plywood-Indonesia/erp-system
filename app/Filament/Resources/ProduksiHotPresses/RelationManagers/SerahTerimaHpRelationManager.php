@@ -281,7 +281,8 @@ class SerahTerimaHpRelationManager extends RelationManager
                             //   1. Dari Gudang Platform Mentah (mutasi manual)
                             //   2. Dari Gudang Triplek Mentah (mutasi manual, tujuan sanding)
                             //   3. Dari Gudang Triplek Jadi
-                            //   4. Dari Hotpress yang SUDAH diterima Gudang Platform Mentah
+                            //   4. Serah langsung dari Graji Triplek (id_hasil_graji_triplek IS NOT NULL)
+                            //   5. Dari Hotpress yang SUDAH diterima Gudang Platform Mentah
                             //      (diterima_gudang_at terisi) — flow baru HP → Gudang → Sanding
                             $q->where(fn ($w) => $w
                                 ->where('diterima_oleh', '-')
@@ -289,6 +290,7 @@ class SerahTerimaHpRelationManager extends RelationManager
                                     ->whereNotNull('id_platform_mth_mutasi_keluar')
                                     ->orWhereNotNull('id_triplek_mth_mutasi_keluar')
                                     ->orWhereNotNull('id_triplek_mutasi_keluar')
+                                    ->orWhereNotNull('id_hasil_graji_triplek')
                                     ->orWhere(fn ($hp) => $hp
                                         ->whereNotNull('id_platform_hasil_hp')
                                         ->whereNotNull('diterima_gudang_at'))

@@ -132,27 +132,38 @@ class HasilJointsTable
     </div>
 HTML);
                     })
-                    ->visible(fn ($record) => ! $record->serahTerimaVeneerKering)
+                    ->visible(fn ($record) => ! $record->serahTerimaVeneerKering || $record->serahTerimaVeneerKering->isDitolak())
                     ->action(function ($record) {
                         try {
                             DB::transaction(function () use ($record) {
-                                SerahTerimaVeneerKering::create([
-                                    'id_detail_hasil' => null,
-                                    'id_detail_bongkar_kedi' => null,
-                                    'id_hasil_joint' => $record->id,
-                                    // ✅ FIX: harus 'joint', bukan 'hasil_joint'.
-                                    // Query di GudangVeneerJadi::getSerahTerimaProperty()
-                                    // memfilter whereIn('tipe_sumber', ['dryer','kedi','joint']),
-                                    // dan semua match() di model SerahTerimaVeneerKering juga
-                                    // memakai key 'joint'. Nilai 'hasil_joint' membuat baris ini
-                                    // tak pernah lolos filter sehingga tidak muncul di Gudang.
-                                    'tipe_sumber' => 'joint',
-                                    'id_produksi_repair' => null,
-                                    'diserahkan_oleh' => Auth::user()->name,
-                                    'diterima_oleh' => '-',
-                                    'jenis_terima' => 'jadi',
-                                    'status' => 'Serah Veneer',
-                                ]);
+                                if ($record->serahTerimaVeneerKering) {
+                                    $record->serahTerimaVeneerKering->update([
+                                        'id_detail_hasil' => null,
+                                        'id_detail_bongkar_kedi' => null,
+                                        'tipe_sumber' => 'joint',
+                                        'id_produksi_repair' => null,
+                                        'diserahkan_oleh' => Auth::user()->name,
+                                        'diterima_oleh' => '-',
+                                        'jenis_terima' => 'jadi',
+                                        'status' => 'Serah Veneer',
+                                        'ditolak_oleh' => null,
+                                        'alasan_tolak' => null,
+                                        'ditolak_at' => null,
+                                        'created_at' => now(),
+                                    ]);
+                                } else {
+                                    SerahTerimaVeneerKering::create([
+                                        'id_detail_hasil' => null,
+                                        'id_detail_bongkar_kedi' => null,
+                                        'id_hasil_joint' => $record->id,
+                                        'tipe_sumber' => 'joint',
+                                        'id_produksi_repair' => null,
+                                        'diserahkan_oleh' => Auth::user()->name,
+                                        'diterima_oleh' => '-',
+                                        'jenis_terima' => 'jadi',
+                                        'status' => 'Serah Veneer',
+                                    ]);
+                                }
                             });
 
                             $record->unsetRelation('serahTerimaVeneerKering');
@@ -172,22 +183,29 @@ HTML);
                         }
                     }),
 
-                // Edit Action — HILANG jika sudah diterima atau sudah divalidasi
+                // Edit Action — HILANG jika sudah diterima atau sedang menunggu atau sudah divalidasi
                 EditAction::make()
                     ->hidden(function ($livewire, $record) {
                         $serahTerima = $record->serahTerimaVeneerKering;
                         $sudahDiterima = $serahTerima && $serahTerima->diterima_oleh !== '-';
+                        $sedangMenunggu = $serahTerima && $serahTerima->diterima_oleh === '-' && ! $serahTerima->isDitolak();
 
                         return $sudahDiterima
+                            || $sedangMenunggu
                             || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi';
                     }),
 
-                // Delete Action — HILANG jika sudah diserahkan atau sudah divalidasi
+                // Delete Action — HILANG jika sedang diserahkan (tidak ditolak) atau sudah divalidasi
                 DeleteAction::make()
                     ->hidden(
-                        fn ($livewire, $record) => $record->serahTerimaVeneerKering
+                        fn ($livewire, $record) => ($record->serahTerimaVeneerKering && ! $record->serahTerimaVeneerKering->isDitolak())
                             || $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'
-                    ),
+                    )
+                    ->before(function ($record) {
+                        if ($record->serahTerimaVeneerKering) {
+                            $record->serahTerimaVeneerKering->delete();
+                        }
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

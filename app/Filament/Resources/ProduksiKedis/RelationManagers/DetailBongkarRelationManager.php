@@ -245,20 +245,34 @@ class DetailBongkarRelationManager extends RelationManager
     </div>
 HTML);
                     })
-                    ->visible(fn ($record) => ! $record->serahTerimaVeneerKering)
+                    ->visible(fn ($record) => ! $record->serahTerimaVeneerKering || $record->serahTerimaVeneerKering->isDitolak())
                     ->action(function ($record, array $data) {
                         try {
                             DB::transaction(function () use ($record, $data) {
-                                SerahTerimaVeneerKering::create([
-                                    'id_detail_hasil' => null,
-                                    'id_detail_bongkar_kedi' => $record->id,
-                                    'tipe_sumber' => 'kedi',
-                                    'id_produksi_repair' => null,
-                                    'diserahkan_oleh' => Auth::user()->name,
-                                    'diterima_oleh' => '-',
-                                    'jenis_terima' => $data['jenis_terima'],
-                                    'status' => 'Serah Veneer',
-                                ]);
+                                if ($record->serahTerimaVeneerKering) {
+                                    $record->serahTerimaVeneerKering->update([
+                                        'id_produksi_repair' => null,
+                                        'diserahkan_oleh' => Auth::user()->name,
+                                        'diterima_oleh' => '-',
+                                        'jenis_terima' => $data['jenis_terima'],
+                                        'status' => 'Serah Veneer',
+                                        'ditolak_oleh' => null,
+                                        'alasan_tolak' => null,
+                                        'ditolak_at' => null,
+                                        'created_at' => now(),
+                                    ]);
+                                } else {
+                                    SerahTerimaVeneerKering::create([
+                                        'id_detail_hasil' => null,
+                                        'id_detail_bongkar_kedi' => $record->id,
+                                        'tipe_sumber' => 'kedi',
+                                        'id_produksi_repair' => null,
+                                        'diserahkan_oleh' => Auth::user()->name,
+                                        'diterima_oleh' => '-',
+                                        'jenis_terima' => $data['jenis_terima'],
+                                        'status' => 'Serah Veneer',
+                                    ]);
+                                }
                             });
 
                             $record->unsetRelation('serahTerimaVeneerKering');
@@ -282,16 +296,23 @@ HTML);
                     ->hidden(function ($livewire, $record) {
                         $serahTerima = $record->serahTerimaVeneerKering;
                         $sudahDiterima = $serahTerima && $serahTerima->diterima_oleh !== '-';
+                        $sedangMenunggu = $serahTerima && $serahTerima->diterima_oleh === '-' && ! $serahTerima->isDitolak();
 
                         return $sudahDiterima
+                            || $sedangMenunggu
                             || (! $this->isSuperAdmin() && $livewire->ownerRecord?->isBongkarDivalidasi());
                     }),
 
                 DeleteAction::make()
                     ->hidden(
-                        fn ($livewire, $record) => $record->serahTerimaVeneerKering
+                        fn ($livewire, $record) => ($record->serahTerimaVeneerKering && ! $record->serahTerimaVeneerKering->isDitolak())
                             || (! $this->isSuperAdmin() && $livewire->ownerRecord?->isBongkarDivalidasi())
-                    ),
+                    )
+                    ->before(function ($record) {
+                        if ($record->serahTerimaVeneerKering) {
+                            $record->serahTerimaVeneerKering->delete();
+                        }
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

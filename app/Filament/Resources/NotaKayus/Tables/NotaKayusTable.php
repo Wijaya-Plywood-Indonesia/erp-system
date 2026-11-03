@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\NotaKayus\Tables;
 
 use App\Models\DetailKayuMasuk;
+use App\Models\DetailTurunKayu;
 use App\Models\DetailTurusanKayu;
 use App\Models\HppAverageLog;
 use App\Models\NotaKayu;
@@ -246,8 +247,9 @@ class NotaKayusTable
 
                         $total1 = DetailTurusanKayu::hitungTotalByKayuMasuk($record->kayuMasuk->id);
                         $total2 = DetailKayuMasuk::hitungTotalByKayuMasuk($record->kayuMasuk->id);
+                        $totalTurunKayu = (int) DetailTurunKayu::where('id_kayu_masuk', $record->kayuMasuk->id)->sum('jumlah_kayu');
 
-                        $batangSama = $total1['total_batang'] == $total2['total_batang'];
+                        $batangSama = ($total1['total_batang'] == $total2['total_batang']) && ($total1['total_batang'] == $totalTurunKayu);
                         $kubikasiSama = abs($total1['total_kubikasi'] - $total2['total_kubikasi']) < 0.0001;
 
                         return $batangSama && $kubikasiSama;

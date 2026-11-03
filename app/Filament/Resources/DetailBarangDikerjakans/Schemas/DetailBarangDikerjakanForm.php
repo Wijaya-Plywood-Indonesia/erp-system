@@ -40,10 +40,14 @@ class DetailBarangDikerjakanForm
 
                 \Filament\Forms\Components\Hidden::make('id_barang_setengah_jadi_hp'),
 
-                Select::make('id_serah_terima_gudang_satu')
-                    ->label('Pilih Palet Modal (Dari Serah Terima)')
+                \App\Support\PaletSearch::configure(
+                    Select::make('id_serah_terima_gudang_satu')
+                        ->label('Pilih Palet Modal (Dari Serah Terima)'),
+                    function (callable $get, ?\App\Models\DetailBarangDikerjakan $record) {
+                        return self::getPaletEntries($record);
+                    },
+                )
                     ->required()
-                    ->searchable()
                     ->live()
                     ->afterStateUpdated(function ($state, callable $set) {
                         if (!$state) {
@@ -69,45 +73,6 @@ class DetailBarangDikerjakanForm
                                 $set('hasil', $sisa);
                             }
                         }
-                    })
-                    ->options(function (callable $get, ?\App\Models\DetailBarangDikerjakan $record) {
-                        $currentId = $record?->id_serah_terima_gudang_satu;
-                        $currentModal = (float) ($record?->modal ?? 0);
-
-                        return \App\Models\SerahTerimaGudangSatu::query()
-                            ->where('diterima_oleh', '!=', '-')
-                            ->where('tujuan', 'nyusup')
-                            ->with([
-                                'hasilPilihPlywood.barangSetengahJadiHp',
-                                'hasilTerimaGudangSatu',
-                                'hasilNyusup',
-                                'triplekMutasiKeluar'
-                            ])
-                            ->get()
-                            ->map(function ($item) use ($currentId, $currentModal) {
-                                $sisa = $item->sisa + ($item->id === $currentId ? $currentModal : 0);
-                                return [$item, $sisa];
-                            })
-                            ->filter(fn ($pair) => $pair[1] > 0)
-                            ->mapWithKeys(function ($pair) {
-                                [$item, $sisa] = $pair;
-                                $sisaLabel = rtrim(rtrim(number_format($sisa, 2, '.', ''), '0'), '.');
-                                
-                                $b = $item->barangSetengahJadi;
-                                $ukuran = $b?->ukuran?->nama_ukuran ?? ($b?->tebal ? $b->panjang . 'x' . $b->lebar . 'x' . $b->tebal : '-');
-                                $grade = $b?->grade?->nama_grade ?? ($b?->kw_grade ?? '-');
-                                $jenis = $b?->jenisBarang?->nama_jenis_barang ?? ($b?->jenisKayu?->nama_kayu ?? '-');
-                                $kategori = $b?->grade?->kategoriBarang?->nama_kategori ?? 'Plywood';
-                                
-                                // Ambil no_palet HANYA dari relasi sumber yang terbukti memiliki kolom no_palet
-                                $noPalet = $item->hasilNyusup?->no_palet;
-                                $paletPrefix = $noPalet ? "Palet {$noPalet} - " : "";
-
-                                $label = "{$paletPrefix}{$kategori} | {$ukuran} | {$grade} | {$jenis} — Sisa: {$sisaLabel} lbr";
-
-                                return [$item->id => $label];
-                            })
-                            ->toArray();
                     })
                     ->columnSpanFull(),
 
@@ -147,5 +112,61 @@ class DetailBarangDikerjakanForm
                     ->numeric()
                     ->required(),
             ]);
+    }
+
+    /**
+     * Data palet untuk dropdown "Pilih Palet Modal" + bahan pencarian fleksibel
+     * (App\Support\PaletSearch).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected static function getPaletEntries(?\App\Models\DetailBarangDikerjakan $record): array
+    {
+        $currentId = $record?->id_serah_terima_gudang_satu;
+        $currentModal = (float) ($record?->modal ?? 0);
+
+        return \App\Models\SerahTerimaGudangSatu::query()
+            ->where('diterima_oleh', '!=', '-')
+            ->where('tujuan', 'nyusup')
+            ->with([
+                'hasilPilihPlywood.barangSetengahJadiHp',
+                'hasilTerimaGudangSatu',
+                'hasilNyusup',
+                'triplekMutasiKeluar'
+            ])
+            ->get()
+            ->map(function ($item) use ($currentId, $currentModal) {
+                $sisa = $item->sisa + ($item->id === $currentId ? $currentModal : 0);
+                return [$item, $sisa];
+            })
+            ->filter(fn ($pair) => $pair[1] > 0)
+            ->map(function ($pair) {
+                [$item, $sisa] = $pair;
+                $sisaLabel = rtrim(rtrim(number_format($sisa, 2, '.', ''), '0'), '.');
+
+                $b = $item->barangSetengahJadi;
+                $ukuran = $b?->ukuran?->nama_ukuran ?? ($b?->tebal ? $b->panjang . 'x' . $b->lebar . 'x' . $b->tebal : '-');
+                $grade = $b?->grade?->nama_grade ?? ($b?->kw_grade ?? '-');
+                $jenis = $b?->jenisBarang?->nama_jenis_barang ?? ($b?->jenisKayu?->nama_kayu ?? '-');
+                $kategori = $b?->grade?->kategoriBarang?->nama_kategori ?? 'Plywood';
+
+                // Ambil no_palet HANYA dari relasi sumber yang terbukti memiliki kolom no_palet
+                $noPalet = $item->hasilNyusup?->no_palet;
+                $paletPrefix = $noPalet ? "Palet {$noPalet} - " : "";
+
+                $label = "{$paletPrefix}{$kategori} | {$ukuran} | {$grade} | {$jenis} — Sisa: {$sisaLabel} lbr";
+
+                return [
+                    'id' => $item->id,
+                    'label' => $label,
+                    'no' => (string) ($noPalet ?? ''),
+                    'kategori' => $kategori,
+                    'jenis' => $jenis,
+                    'grade' => $grade,
+                    'ukuran' => $ukuran,
+                ];
+            })
+            ->values()
+            ->all();
     }
 }
