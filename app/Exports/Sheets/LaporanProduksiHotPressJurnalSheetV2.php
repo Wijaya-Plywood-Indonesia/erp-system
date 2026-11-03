@@ -912,6 +912,34 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
     }
 
     /**
+     * Resolve id_barang untuk Bahan Penolong dari API akuntansi /api/barang/resolve-penolong
+     */
+    private function resolveIdBarangPenolong(string $namaBahan): ?int
+    {
+        $domainStr = $this->isWhn() ? 'whn' : 'wjy';
+        $cacheKey = 'penolong|'.strtolower(trim($namaBahan)).'|'.$domainStr;
+
+        if (array_key_exists($cacheKey, $this->idBarangCache)) {
+            return $this->idBarangCache[$cacheKey];
+        }
+
+        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-penolong';
+
+        try {
+            $response = Http::withoutVerifying()->timeout(10)->get($urlApi, [
+                'nama' => $namaBahan,
+                'domain' => $domainStr,
+            ]);
+
+            $idBarang = $response->json('id_barang');
+        } catch (\Throwable $e) {
+            $idBarang = null;
+        }
+
+        return $this->idBarangCache[$cacheKey] = $idBarang;
+    }
+
+    /**
      * Menentukan nama kategori "jenis_veneer" untuk dikirim ke resolver,
      * berdasarkan status AF dan grade bahan veneer. Mengikuti pola
      * kategori yang sudah dipakai baseQuery('bahan') / fetchReferensiAfalan().
@@ -1327,8 +1355,10 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                             $ketPenolong .= ' [harga bahan penolong belum diisi]';
                         }
 
+                        $idBarangPenolong = $this->resolveIdBarangPenolong($penolong->nama_bahan);
+
                         $totalHargaBahanGlobal += round($banyak * $hargaPenolong, 0);
-                        $rows[] = $this->makeRow($akunNama, $akunNo, $tglStr, $namaMesinSingkat, $ketPenolong, 'k', 'b', $banyak, '', $hargaPenolong);
+                        $rows[] = $this->makeRow($akunNama, $akunNo, $tglStr, $namaMesinSingkat, $ketPenolong, 'k', 'b', $banyak, '', $hargaPenolong, null, $idBarangPenolong);
                     }
 
                     // --- HUTANG GAJI — 2231.00 -> 2195.1 (ID Barang null) ---
