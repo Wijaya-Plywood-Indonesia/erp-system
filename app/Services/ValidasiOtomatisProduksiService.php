@@ -51,6 +51,12 @@ use App\Models\ValidasiSandingJoint;
 use App\Models\ValidasiStik;
 use App\Models\ValidasiTembeltriplek;
 use App\Models\ValidasiTerimaGudangSatu;
+use Filament\Actions\Action;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOneOrMany;
@@ -110,11 +116,39 @@ class ValidasiOtomatisProduksiService
 
     protected const ROLE_SUPER_ADMIN = ['super_admin', 'Super Admin', 'super-admin'];
 
+    /**
+     * Aksi KUSTOM (Action::make('...')) yang menulis data di tab / halaman produksi.
+     * Tombol ini ikut disembunyikan untuk selain super admin bila produksinya sudah divalidasi.
+     * Aksi bawaan (Tambah, Edit, Hapus, Hapus Massal, dll.) dikenali dari kelasnya, bukan dari daftar ini.
+     * Menu / aksi baru yang menulis data cukup ditambahkan namanya di sini.
+     */
+    protected const AKSI_TULIS = [
+        'aturIjin', 'ijin_keterangan', 'serah', 'serahkan', 'serah_ke_gudang', 'serah_ke_gudang_satuan',
+        'batalServah', 'batal_serah', 'kembalikanKeGudang', 'kirimUlangKeGudang', 'lahan_selesai',
+        'selesai_ganti', 'selesaikanKendala', 'validasiBahanPenolong', 'delete_hasil', 'delete_rencana',
+        'edit_hasil', 'edit_keterangan', 'tambah', 'terima', 'tolak', 'terimaGudang', 'terimaGudangJadi',
+        'terima_material', 'tolak_material',
+    ];
+
+    /** Kelas aksi bawaan Filament yang menulis data. */
+    protected const KELAS_AKSI_TULIS = [
+        CreateAction::class, EditAction::class, DeleteAction::class, DeleteBulkAction::class,
+        'Filament\Actions\DissociateAction', 'Filament\Actions\DissociateBulkAction',
+        'Filament\Actions\AssociateAction', 'Filament\Actions\AttachAction',
+        'Filament\Actions\DetachAction', 'Filament\Actions\DetachBulkAction',
+        'Filament\Actions\ReplicateAction',
+    ];
+
     // ───────────────────────── STATE INTERNAL ─────────────────────────
 
     protected static bool $sistemBerjalan = false;
 
     protected static ?array $peta = null;
+
+    /** Cache hasil idTerkunci() — hanya berlaku dalam satu request. */
+    protected static array $cacheKunci = [];
+
+    protected static ?int $cacheReq = null;
 
     // ───────────────────────── DAFTAR SEMUA PRODUKSI ─────────────────────────
 
@@ -335,15 +369,32 @@ class ValidasiOtomatisProduksiService
                 $vm::retrieved(fn (Model $m) => self::samarkan($m));
             }
 
-            // Baris validasi otomatis tidak boleh diedit / dihapus sembarang orang
+            // Status samaran 'otomatis' tidak boleh pernah tertulis ke database.
+            $vm::saving(fn (Model $m) => self::pulihkanStatusSamaran($m));
+
+            // Kunci keras baris validasi untuk selain super admin: setelah produksi
+            // final (otomatis maupun manual), tab Validasi tidak bisa diubah lewat jalur apa pun.
+            $vm::creating(fn (Model $m) => self::kunciBarisValidasi($m, $c));
+            $vm::updating(fn (Model $m) => self::kunciBarisValidasi($m, $c));
+            $vm::deleting(fn (Model $m) => self::kunciBarisValidasi($m, $c));
+
+            // Baris validasi otomatis: selain super admin tidak boleh diedit / dihapus
             // (mengedit status-nya bisa memicu potong stok ganda).
             $vm::updating(fn (Model $m) => self::cegahUbahOtomatis($m));
+            $vm::updating(fn (Model $m) => self::alihkanKeManual($m)); 
             $vm::deleting(fn (Model $m) => self::cegahHapusOtomatis($m));
+
+            // Status validasi berubah -> buang cache pengecekan kunci.
+            $vm::saved(function () { self::$cacheKunci = []; });
+            $vm::deleted(function () { self::$cacheKunci = []; });
 
             if ($c['ganda'] ?? true) {
                 $vm::creating(fn (Model $m) => self::cegahValidasiGanda($m, $c));
             }
         }
+
+        // Tombol tab Validasi (Tambah / Edit / Hapus / Hapus Massal) untuk SEMUA produksi sekaligus.
+        self::daftarkanAksiTab();
 
         // (1) Kunci keras untuk selain super admin.
         if (self::KUNCI_KERAS) {
@@ -612,7 +663,13 @@ class ValidasiOtomatisProduksiService
     /**
      * Super admin melihat baris otomatis berstatus 'otomatis' (bukan 'divalidasi')
      * → semua pengecekan lock di Filament menganggap produksi belum divalidasi.
-     * Hanya di memori: tidak pernah ditulis ke database (original ikut disinkronkan).
+     * Hanya di memori: tidak pernah ditulis ke database.
+     *
+     * PENTING: `original` sengaja TIDAK disinkronkan (sync = false), jadi
+     * getOriginal('status') tetap status asli di database. Akibatnya:
+     *  - menyimpan ulang status yang sama bukan perubahan → observer tidak memotong stok lagi;
+     *  - hanya status yang benar-benar diganti super admin yang dianggap perubahan.
+     * Hanya baris yang statusnya final yang disamarkan.
      */
     protected static function samarkan(Model $m): void
     {
@@ -620,7 +677,22 @@ class ValidasiOtomatisProduksiService
             return;
         }
 
-        $m->setRawAttributes(array_merge($m->getAttributes(), ['status' => 'otomatis']), true);
+        $asli = strtolower(trim((string) $m->getRawOriginal('status')));
+        if (! in_array($asli, self::STATUS_FINAL, true)) {
+            return;
+        }
+
+        $m->setRawAttributes(array_merge($m->getAttributes(), ['status' => 'otomatis']), false);
+    }
+
+    /** Jaga-jaga: status samaran 'otomatis' tidak boleh sampai tersimpan ke database. */
+    protected static function pulihkanStatusSamaran(Model $m): void
+    {
+        if ($m->exists
+            && $m->getAttribute('status') === 'otomatis'
+            && $m->getRawOriginal('status') !== 'otomatis') {
+            $m->setAttribute('status', $m->getRawOriginal('status'));
+        }
     }
 
     // ───────────────────────── KONDISI 1: SELAIN SUPER ADMIN ─────────────────────────
@@ -708,15 +780,302 @@ class ValidasiOtomatisProduksiService
 
     // ───────────────────────── PENJAGA BARIS VALIDASI ─────────────────────────
 
+    /**
+     * Kunci keras baris validasi (create / update / delete) untuk selain super admin
+     * bila produksinya sudah punya validasi final.
+     */
+    protected static function kunciBarisValidasi(Model $m, array $c)
+    {
+        if (! self::KUNCI_KERAS || self::$sistemBerjalan || ! Auth::check() || self::adalahSuperAdmin()) {
+            return null;
+        }
+
+        $id = $m->getAttribute($c['fk']) ?? $m->getOriginal($c['fk']);
+
+        if ($id === null || ! self::sudahValidasi($c, $id)) {
+            return null;
+        }
+
+        return self::tolak(
+            'Produksi sudah divalidasi',
+            'Validasi yang sudah final (otomatis maupun manual) hanya dapat diubah atau dihapus oleh Super Admin.'
+        );
+    }
+
+    // ───────────────────────── DIPAKAI TAB VALIDASI (Filament) ─────────────────────────
+
+    /**
+     * Atur tombol semua tab / halaman produksi SEKALIGUS (tanpa mengubah file Table / RelationManager / Page).
+     *
+     * Berlaku untuk: tab Validasi, tab anak (Modal, Pegawai, Hasil, Bahan, Kendala, Serah Terima, dst.),
+     * header halaman View / Edit produksi, dan baris tabel daftar produksi.
+     *
+     *  - Selain super admin: Tambah / Edit / Hapus / Hapus Massal + aksi tulis kustom (AKSI_TULIS)
+     *    hilang bila produksinya sudah divalidasi (otomatis maupun manual).
+     *  - Super admin: semua tetap tampil. Menu yang tabel validasinya belum punya tombol Hapus per baris
+     *    mendapat tombol "Hapus" di dalam pop-up Edit (khusus super admin).
+     *  - Form Edit memakai status ASLI dari database (bukan status samaran 'otomatis').
+     *
+     * Dipasang pada kelas dasar Action (berlaku untuk semua turunannya). Memakai hidden() DAN visible()
+     * sekaligus: bila satu tabel memanggil ->visible() / ->hidden() sendiri, yang satunya tetap menahan.
+     */
+    protected static function daftarkanAksiTab(): void
+    {
+        Action::configureUsing(function (Action $a): void {
+            if (! self::aksiPerluDikunci($a)) {
+                return;
+            }
+
+            $a->hidden(fn ($livewire, ?Model $record = null) => self::aksiTabTerkunci($livewire, $record))
+                ->visible(fn ($livewire, ?Model $record = null) => ! self::aksiTabTerkunci($livewire, $record));
+        });
+
+        EditAction::configureUsing(function (EditAction $a): void {
+            $a->mutateRecordDataUsing(function (array $data, ?Model $record = null): array {
+                    $asli = $record?->getRawOriginal('status');
+
+                    if (($data['status'] ?? null) === 'otomatis' && $asli !== null) {
+                        $data['status'] = $asli;
+                    }
+
+                    return $data;
+                })
+                ->extraModalFooterActions(function ($livewire): array {
+                    if (! self::adalahSuperAdmin() || ! self::tabValidasiDari($livewire)) {
+                        return [];
+                    }
+
+                    // Tabel yang sudah punya tombol Hapus per baris tidak perlu tombol tambahan.
+                    foreach ($livewire->getTable()->getFlatRecordActions() as $aksi) {
+                        if ($aksi instanceof DeleteAction) {
+                            return [];
+                        }
+                    }
+
+                    return [DeleteAction::make()->cancelParentActions()];
+                });
+        });
+    }
+
+    /** Aksi ini menulis data (dan karenanya ikut terkunci)? ViewAction tidak pernah dikunci. */
+    protected static function aksiPerluDikunci(Action $a): bool
+    {
+        if ($a instanceof ViewAction) {
+            return false;
+        }
+
+        foreach (self::KELAS_AKSI_TULIS as $kelas) {
+            if (is_a($a, $kelas)) {
+                return true;
+            }
+        }
+
+        return in_array($a->getName(), self::AKSI_TULIS, true);
+    }
+
+    /** @return array{owner:Model,kelas:string}|null  bila $livewire adalah RelationManager tab Validasi */
+    protected static function tabValidasiDari($livewire): ?array
+    {
+        if (! is_object($livewire) || ! method_exists($livewire, 'getOwnerRecord') || ! method_exists($livewire, 'getRelationship')) {
+            return null;
+        }
+
+        try {
+            $kelas = get_class($livewire->getRelationship()->getRelated());
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return self::konfigDariValidasi($kelas) ? ['owner' => $livewire->getOwnerRecord(), 'kelas' => $kelas] : null;
+    }
+
+    /** Daftar class model produksi (kunci = nama class) untuk pengecekan cepat. */
+    protected static function kelasProduksi(): array
+    {
+        static $k = null;
+
+        return $k ??= array_flip(array_column(self::daftar(), 'produksi'));
+    }
+
+    /** Bila $livewire adalah RelationManager di bawah satu produksi (tab apa pun), kembalikan produksinya. */
+    protected static function produksiDariLivewire($livewire): ?Model
+    {
+        if (! is_object($livewire) || ! method_exists($livewire, 'getOwnerRecord')) {
+            return null;
+        }
+
+        try {
+            $owner = $livewire->getOwnerRecord();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $owner instanceof Model && isset(self::kelasProduksi()[get_class($owner)]) ? $owner : null;
+    }
+
+    /** Record anak produksi (Modal, Pegawai, Hasil, dst.) milik produksi yang sudah divalidasi? */
+    protected static function anakTerkunci(Model $record): bool
+    {
+        $peta = self::petaKunci();
+        $kelas = get_class($record);
+
+        foreach ($peta[$kelas] ?? [] as [$kunci, $fk]) {
+            if ($fk === null) {
+                continue;
+            }
+
+            $id = $record->getAttribute($fk);
+
+            if ($id !== null && self::idTerkunci(self::daftar()[$kunci]['produksi'], $id)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Tombol ini terkunci untuk user saat ini? (super admin selalu false)
+     *
+     *  1) di dalam RelationManager sebuah produksi (tab apa pun)  -> ikut status validasi produksi itu
+     *  2) record = baris validasi / produksi / anak produksi      -> ikut status validasi produksinya
+     */
+    protected static function aksiTabTerkunci($livewire, ?Model $record = null): bool
+    {
+        if (self::adalahSuperAdmin()) {
+            return false;
+        }
+
+        if ($owner = self::produksiDariLivewire($livewire)) {
+            return self::produksiTerkunci($owner);
+        }
+
+        if (! $record) {
+            return false;
+        }
+
+        return self::barisValidasiTerkunci($record)
+            || self::produksiTerkunci($record)
+            || self::anakTerkunci($record);
+    }
+
+    /** Konfigurasi menu berdasarkan class model validasi. */
+    protected static function konfigDariValidasi(string $kelasValidasi): ?array
+    {
+        foreach (self::daftar() as $c) {
+            if ($c['validasi'] === $kelasValidasi) {
+                return $c;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Apakah tab Validasi dari produksi ini terkunci untuk user yang sedang login?
+     * Super admin selalu false. Dicek langsung ke database (bukan status samaran).
+     */
+    public static function tabValidasiTerkunci(?Model $produksi, string $kelasValidasi): bool
+    {
+        if (! $produksi || self::adalahSuperAdmin()) {
+            return false;
+        }
+
+        $c = self::konfigDariValidasi($kelasValidasi);
+
+        return $c !== null && self::sudahValidasi($c, $produksi->getKey());
+    }
+
+    /** Sama seperti di atas, tetapi dari satu baris validasi (untuk tabel di luar relation manager). */
+    public static function barisValidasiTerkunci(Model $baris): bool
+    {
+        if (self::adalahSuperAdmin()) {
+            return false;
+        }
+
+        $c = self::konfigDariValidasi(get_class($baris));
+        $id = $c ? ($baris->getAttribute($c['fk']) ?? $baris->getOriginal($c['fk'])) : null;
+
+        return $c !== null && $id !== null && self::sudahValidasi($c, $id);
+    }
+
+    // ───────────────────────── DIPAKAI TAB / AKSI YANG TIDAK TERJANGKAU KUNCI KERAS ─────────────────────────
+
+    /**
+     * Produksi ini terkunci untuk user yang sedang login? (super admin selalu false)
+     *
+     * Untuk tab/aksi yang lolos dari kunci keras: relasi hasManyThrough (Serah Terima),
+     * tulis massal (`whereIn()->delete()/update()`), dan tulis langsung `DB::table()`
+     * — semuanya tidak memicu event model, jadi harus dicek manual.
+     */
+    public static function produksiTerkunci(?Model $produksi): bool
+    {
+        if (! $produksi || ! $produksi->exists) {
+            return false;
+        }
+
+        return self::idTerkunci(get_class($produksi), $produksi->getKey());
+    }
+
+    /** Sama seperti produksiTerkunci(), tetapi dari class model produksi + id-nya. */
+    public static function idTerkunci(string $kelasProduksi, $id): bool
+    {
+        if ($id === null || self::adalahSuperAdmin()) {
+            return false;
+        }
+
+        $req = spl_object_id(request());
+        if (self::$cacheReq !== $req) {
+            self::$cacheReq = $req;
+            self::$cacheKunci = [];
+        }
+
+        $kunci = $kelasProduksi . '#' . $id;
+        if (array_key_exists($kunci, self::$cacheKunci)) {
+            return self::$cacheKunci[$kunci];
+        }
+
+        $terkunci = false;
+        foreach (self::daftar() as $c) {
+            if ($c['produksi'] === $kelasProduksi) {
+                $terkunci = self::sudahValidasi($c, $id);
+                break;
+            }
+        }
+
+        return self::$cacheKunci[$kunci] = $terkunci;
+    }
+
+    /**
+     * Penjaga di sisi server untuk aksi yang tombolnya sudah disembunyikan:
+     * hentikan proses bila produksi terkunci. Panggil SEBELUM `try {}` / transaksi.
+     */
+    public static function pastikanBolehUbah(?Model $produksi): void
+    {
+        if (! self::produksiTerkunci($produksi)) {
+            return;
+        }
+
+        self::tolak(
+            'Produksi sudah divalidasi',
+            'Data produksi yang sudah divalidasi (otomatis maupun manual) hanya dapat diubah oleh Super Admin.'
+        );
+
+        // Di luar Livewire tolak() hanya mengembalikan false, jadi hentikan secara paksa.
+        throw new \RuntimeException('Produksi sudah divalidasi: hanya Super Admin yang dapat mengubah.');
+    }
+
     protected static function cegahUbahOtomatis(Model $m)
     {
-        if (self::$sistemBerjalan || ! self::barisOtomatis($m, true)) {
+        // Super admin boleh mengubah baris otomatis (status asli dilacak lewat original,
+        // lihat samarkan()); selain super admin tetap ditolak.
+        if (self::$sistemBerjalan || ! self::barisOtomatis($m, true) || self::adalahSuperAdmin()) {
             return null;
         }
 
         return self::tolak(
             'Validasi otomatis tidak bisa diubah',
-            'Mengubah status baris ini bisa memotong stok dua kali. Hapus baris ini bila memang perlu dibatalkan (hanya Super Admin).'
+            'Baris validasi otomatis hanya dapat diubah atau dihapus oleh Super Admin.'
         );
     }
 
@@ -727,6 +1086,20 @@ class ValidasiOtomatisProduksiService
         }
 
         return self::tolak('Validasi otomatis tidak bisa dihapus', 'Hanya Super Admin yang dapat menghapus validasi otomatis.');
+    }
+
+        /** Super admin mengubah status baris otomatis → baris itu jadi validasi manual (tidak disamarkan lagi). */
+    protected static function alihkanKeManual(Model $m): void
+    {
+        if (self::$sistemBerjalan || ! self::adalahSuperAdmin() || ! self::barisOtomatis($m, true)) {
+            return;
+        }
+
+        if (! $m->isDirty('status')) {
+            return;
+        }
+
+        $m->setAttribute('role', str_replace(self::ROLE_SISTEM, 'super_admin', (string) $m->getOriginal('role')));
     }
 
     /** Super admin melihat tombol "buat validasi" (karena disamarkan) — cegah validasi manual kedua. */

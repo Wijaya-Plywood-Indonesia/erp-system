@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiRotaries\RelationManagers;
 
+use App\Services\ValidasiOtomatisProduksiService;
 use App\Models\DetailHasilPaletRotary;
 use App\Models\ProduksiPressDryer;
 use App\Models\ProduksiRotary;
@@ -271,17 +272,21 @@ class SerahTerimaRelationManager extends RelationManager
                 CreateAction::make()
                     ->label('Serahkan Palet')
                     ->visible(fn () => $this->getTipePenerima() === 'rotary')
+                    ->hidden(fn () => ValidasiOtomatisProduksiService::produksiTerkunci($this->getOwnerRecord()))
+                    ->before(fn () => ValidasiOtomatisProduksiService::pastikanBolehUbah($this->getOwnerRecord()))
                     // Logic stok TIDAK ADA di sini agar tidak otomatis masuk saat serah
                     ->after(fn () => Notification::make()->title('Palet Berhasil Diserahkan')->info()->send()),
             ])
             ->actions([
                 Action::make('terima')
+                    ->hidden(fn () => ValidasiOtomatisProduksiService::produksiTerkunci($this->getOwnerRecord()))
                     ->label('Terima')
                     ->color('success')
                     ->icon('heroicon-o-check-circle')
                     ->requiresConfirmation()
                     ->visible(fn ($record) => $tipe !== 'rotary' && $record?->diterima_oleh === '-')
                     ->action(function ($record) use ($tipe) {
+                        ValidasiOtomatisProduksiService::pastikanBolehUbah($this->getOwnerRecord());
                         DB::transaction(function () use ($record, $tipe) {
                             $unitAsal = 'ROTARY';
                             $unitTujuan = match ($tipe) {
@@ -326,6 +331,7 @@ class SerahTerimaRelationManager extends RelationManager
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
+                        ->hidden(fn () => ValidasiOtomatisProduksiService::produksiTerkunci($this->getOwnerRecord()))
                         ->label('Hapus Terpilih')
                         ->visible(fn () => Auth::user()->hasAnyRole(self::ROLE_ADMIN)),
                 ]),
