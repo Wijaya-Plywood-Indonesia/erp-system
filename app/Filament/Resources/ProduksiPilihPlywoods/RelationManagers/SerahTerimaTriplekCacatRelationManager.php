@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiPilihPlywoods\RelationManagers;
 
+use App\Services\ValidasiOtomatisProduksiService;
 use App\Models\HasilPilihPlywood;
 use App\Models\ProduksiDempul;
 use App\Models\ProduksiPilihPlywood;
@@ -170,6 +171,7 @@ class SerahTerimaTriplekCacatRelationManager extends RelationManager
 
             ->actions([
                 Action::make('terima')
+                    ->hidden(fn () => ValidasiOtomatisProduksiService::produksiTerkunci($this->getOwnerRecord()))
                     ->label('Terima')
                     ->color('success')
                     ->icon('heroicon-o-check-circle')
@@ -212,6 +214,7 @@ class SerahTerimaTriplekCacatRelationManager extends RelationManager
                     // Tidak lagi dibatasi oleh kolom `tujuan` karena tujuan baru ditentukan saat diterima.
                     ->visible(fn ($record) => $record->diterima_oleh === '-')
                     ->action(function ($record) use ($ownerId, $tipe) {
+                        ValidasiOtomatisProduksiService::pastikanBolehUbah($this->getOwnerRecord());
                         try {
                             DB::transaction(function () use ($record, $ownerId, $tipe) {
                                 // Lock row: siapa yang sampai transaksi ini duluan, dia yang menang.
@@ -259,6 +262,7 @@ class SerahTerimaTriplekCacatRelationManager extends RelationManager
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
+                        ->hidden(fn () => ValidasiOtomatisProduksiService::produksiTerkunci($this->getOwnerRecord()))
                         ->visible(fn () => Auth::user()->hasAnyRole(self::ROLE_ADMIN)),
                 ]),
             ]);

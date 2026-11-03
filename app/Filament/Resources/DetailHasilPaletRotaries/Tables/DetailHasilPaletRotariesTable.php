@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\DetailHasilPaletRotaries\Tables;
 
+use App\Models\ProduksiRotary;
+use App\Services\ValidasiOtomatisProduksiService;
 use App\Filament\Resources\ProduksiRotaries\ProduksiRotaryResource;
 use App\Services\Akuntansi\RotaryJurnalService;
 use Filament\Actions\Action;
@@ -100,6 +102,7 @@ class DetailHasilPaletRotariesTable
             ])
             ->recordActions([
                 Action::make('serah')
+                    ->hidden(fn ($record) => ValidasiOtomatisProduksiService::idTerkunci(ProduksiRotary::class, $record->id_produksi))
                     ->label('Serah')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('warning')
@@ -116,6 +119,7 @@ class DetailHasilPaletRotariesTable
                             ->exists()
                     )
                     ->action(function ($record) {
+                        ValidasiOtomatisProduksiService::pastikanBolehUbah($record->produksi);
                         // 1. Catat serah terima (jika sebelumnya ada row ditolak, update atau re-insert)
                         $existing = DB::table('detail_hasil_palet_rotary_serah_terima_pivot')
                             ->where('id_detail_hasil_palet_rotary', $record->id)
