@@ -868,6 +868,50 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
     }
 
     /**
+     * Resolve id_barang untuk Triplek / Platform mentah dari API akuntansi /api/barang/resolve-plywood
+     *
+     * @param string $tipe 'triplek' | 'platform'
+     * @param string|null $namaKeterangan nama barang / referensi lengkap (e.g. "12m better MTH", "platform 12 better MTH")
+     */
+    private function resolveIdBarangPlywood(
+        string $tipe,
+        ?string $namaKeterangan,
+        float $tebal,
+        string $jenisKayu = '',
+        string $grade = ''
+    ): ?int {
+        $cacheKey = implode('|', [
+            $tipe,
+            strtolower(trim((string) $namaKeterangan)),
+            $tebal,
+            strtolower(trim($jenisKayu)),
+            strtolower(trim($grade)),
+        ]);
+
+        if (array_key_exists($cacheKey, $this->idBarangCache)) {
+            return $this->idBarangCache[$cacheKey];
+        }
+
+        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-plywood';
+
+        try {
+            $response = Http::withoutVerifying()->timeout(10)->get($urlApi, [
+                'tipe' => $tipe,
+                'nama' => $namaKeterangan,
+                'tebal' => $tebal,
+                'jenis_kayu' => $jenisKayu,
+                'grade' => $grade,
+            ]);
+
+            $idBarang = $response->json('id_barang');
+        } catch (\Throwable $e) {
+            $idBarang = null;
+        }
+
+        return $this->idBarangCache[$cacheKey] = $idBarang;
+    }
+
+    /**
      * Menentukan nama kategori "jenis_veneer" untuk dikirim ke resolver,
      * berdasarkan status AF dan grade bahan veneer. Mengikuti pola
      * kategori yang sudah dipakai baseQuery('bahan') / fetchReferensiAfalan().
@@ -1031,10 +1075,16 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                         $keterangan = "{$tebalInt}{$jkSingkat} {$kwStr} MTH [UNKNOWN - cek master data]";
                     }
 
-                    // TODO: resolver triplek/platform — belum ada endpoint
-                    // resolve-triplek / resolve-platform yang dikonfirmasi,
-                    // jadi ID Barang dibiarkan null untuk baris hasil produksi.
-                    $rows[] = $this->makeRow($akunNama, $akunNo, $tglStr, $namaMesinSingkat, $keterangan, 'd', 'b', $banyak, $m3Round, $hargaHpp, null, null);
+                    // Resolver ID Barang untuk hasil produksi (Triplek Mentah / Platform Jadi)
+                    $idBarangProduksi = $this->resolveIdBarangPlywood(
+                        $tipe,
+                        $keterangan,
+                        $tebal,
+                        $jk,
+                        $grStr
+                    );
+
+                    $rows[] = $this->makeRow($akunNama, $akunNo, $tglStr, $namaMesinSingkat, $keterangan, 'd', 'b', $banyak, $m3Round, $hargaHpp, null, $idBarangProduksi);
 
                     $totalProdValue = round($banyak * $hargaHpp, 0);
                     if ($mId != $hp3Id) {
@@ -1159,10 +1209,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
 
                         $katGrade = $this->kategoriGrade($grAsli);
 
-                        // Resolve id_barang untuk bahan VENEER (bukan
-                        // platform). Parameter "bagian" mengikuti pola
-                        // yang sama seperti JurnalSheetV2/JurnalRepairSheetV2:
-                        // AF -> PPC, tebal < 1 -> Face Back, selain itu Core.
+                        // Resolve id_barang untuk bahan VENEER atau PLATFORM
                         $idBarangBahan = null;
                         if (! $isPlatform) {
                             $bagianResolver = $isAf ? 'PPC' : (($tebal < 1) ? 'Face Back' : 'Core');
@@ -1174,6 +1221,15 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                                 $tebal,
                                 $p,
                                 $l,
+                                $grAsli
+                            );
+                        } else {
+                            // Bahan masuk: Platform Mentah
+                            $idBarangBahan = $this->resolveIdBarangPlywood(
+                                'platform',
+                                $ketDasar,
+                                $tebal,
+                                $jkAsli,
                                 $grAsli
                             );
                         }
