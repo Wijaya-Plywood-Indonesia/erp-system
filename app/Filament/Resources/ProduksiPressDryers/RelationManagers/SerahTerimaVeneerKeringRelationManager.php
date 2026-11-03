@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiPressDryers\RelationManagers;
 
+use App\Services\ValidasiOtomatisProduksiService;
 use App\Models\ProduksiJoint;
 use App\Models\ProduksiKedi;
 use App\Models\ProduksiPressDryer;
@@ -396,6 +397,7 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
             ->actions([
                 // ── Terima dari Dryer / Kedi: pakai modal (pilih Kering/Jadi) ──
                 Action::make('terima')
+                    ->hidden(fn () => ValidasiOtomatisProduksiService::produksiTerkunci($this->getOwnerRecord()))
                     ->label('Terima')
                     ->color('success')
                     ->icon('heroicon-o-check-circle')
@@ -452,6 +454,7 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                         && $record->diterima_oleh === '-'
                         && ! in_array($record->tipe_sumber, ['gudang', 'gudang_jadi'], true))
                     ->action(function ($record, array $data) {
+                        ValidasiOtomatisProduksiService::pastikanBolehUbah($this->getOwnerRecord());
                         try {
                             [$kolomProduksi, $ownerId] = $this->pastikanKonteksProduksi();
 
@@ -492,6 +495,7 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
 
                 // ── Terima dari Gudang Veneer Kering: langsung, tanpa modal ──
                 Action::make('terimaGudang')
+                    ->hidden(fn () => ValidasiOtomatisProduksiService::produksiTerkunci($this->getOwnerRecord()))
                     ->label('Terima')
                     ->color('success')
                     ->icon('heroicon-o-check-circle')
@@ -499,6 +503,7 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                         && $record->diterima_oleh === '-'
                         && $record->tipe_sumber === 'gudang')
                     ->action(function ($record) {
+                        ValidasiOtomatisProduksiService::pastikanBolehUbah($this->getOwnerRecord());
                         try {
                             [$kolomProduksi, $ownerId] = $this->pastikanKonteksProduksi();
 
@@ -536,6 +541,7 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                 // ── Terima dari Gudang Veneer JADI: langsung, tanpa modal ──
                 //    Dipakai bersama oleh Repair & Joint.
                 Action::make('terimaGudangJadi')
+                    ->hidden(fn () => ValidasiOtomatisProduksiService::produksiTerkunci($this->getOwnerRecord()))
                     ->label('Terima')
                     ->color('success')
                     ->icon('heroicon-o-check-circle')
@@ -543,6 +549,7 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
                         && $record->diterima_oleh === '-'
                         && $record->tipe_sumber === 'gudang_jadi')
                     ->action(function ($record) {
+                        ValidasiOtomatisProduksiService::pastikanBolehUbah($this->getOwnerRecord());
                         try {
                             [$kolomProduksi, $ownerId] = $this->pastikanKonteksProduksi();
 
@@ -592,6 +599,7 @@ class SerahTerimaVeneerKeringRelationManager extends RelationManager
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
+                        ->hidden(fn () => ValidasiOtomatisProduksiService::produksiTerkunci($this->getOwnerRecord()))
                         ->visible(fn () => Auth::user()->hasAnyRole(self::ROLE_ADMIN)),
                 ]),
             ]);

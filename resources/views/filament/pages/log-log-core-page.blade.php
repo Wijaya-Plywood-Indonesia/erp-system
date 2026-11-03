@@ -25,6 +25,20 @@
             <option value="masuk">Masuk</option>
             <option value="keluar">Keluar</option>
         </select>
+
+        {{-- Filter Rentang Tanggal --}}
+        <div class="flex items-center gap-1.5">
+            <span class="text-[10px] font-medium text-gray-400 uppercase">Tgl:</span>
+            <input type="date"
+                wire:model.live="filterTanggalMulai"
+                title="Tanggal Mulai"
+                class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-2.5 py-1.5 outline-none focus:border-primary-500">
+            <span class="text-xs text-gray-400 font-bold">-</span>
+            <input type="date"
+                wire:model.live="filterTanggalSelesai"
+                title="Tanggal Selesai"
+                class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-2.5 py-1.5 outline-none focus:border-primary-500">
+        </div>
     </div>
 
     <div class="space-y-8">
