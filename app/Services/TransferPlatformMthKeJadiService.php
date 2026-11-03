@@ -72,7 +72,7 @@ class TransferPlatformMthKeJadiService
 
             if (! $sumber || (int) $sumber->stok_lembar < $qty) {
                 throw new \RuntimeException(
-                    'Stok Platform Mentah tidak cukup. Tersedia: '.($sumber?->stok_lembar ?? 0)." lembar, diminta: {$qty}."
+                    'Stok Platform Mentah tidak cukup. Tersedia: ' . ($sumber?->stok_lembar ?? 0) . " lembar, diminta: {$qty}."
                 );
             }
 
@@ -93,7 +93,9 @@ class TransferPlatformMthKeJadiService
                 ]);
 
             $user = Auth::user()?->name ?? 'System';
-            $keterangan = "Mutasi Platform Mentah -> Platform Jadi (serah terima #{$st->id}, mutasi #{$mutasi->id}), diterima oleh {$user}";
+            // Akun yang mencatat barang keluar (platform_mth_mutasi_keluars.dikeluarkan_by).
+            $pengeluar = $mutasi->operator?->name ?? ($st->diserahkan_oleh ?: '-');
+            $keterangan = "Mutasi Platform Mentah -> Platform Jadi (serah terima #{$st->id}, mutasi #{$mutasi->id}), dikeluarkan oleh {$pengeluar}, diterima oleh {$user}";
 
             // ── SUMBER (Platform Mentah): keluar ──
             $sBefore = [(int) $sumber->stok_lembar, (float) $sumber->stok_kubikasi, (float) $sumber->nilai_stok];
@@ -161,7 +163,7 @@ class TransferPlatformMthKeJadiService
 
             // 6. Tandai diterima (di transaksi yang sama).
             $st->update([
-                'diterima_oleh' => $user.' - Gudang Platform Jadi',
+                'diterima_oleh' => $user . ' - Gudang Platform Jadi',
                 'status' => 'Terima Gudang Platform Jadi',
                 'diterima_gudang_at' => now(),
                 'diterima_gudang_oleh' => $user,

@@ -26,11 +26,15 @@ class HppPlatformMthPage extends Page
     public string $filterLebar     = '';
     public string $filterTebal     = '';
     public string $filterKw        = '';
+    public string $filterTanggalMulai = '';
+    public string $filterTanggalSelesai = '';
 
     // ── Computed: log transaksi ────────────────────────────────
     public function getLogsProperty()
     {
         return HppPlatformMthLog::with('jenisKayu')
+            ->when($this->filterTanggalMulai, fn($q) => $q->whereDate('tanggal', '>=', $this->filterTanggalMulai))
+            ->when($this->filterTanggalSelesai, fn($q) => $q->whereDate('tanggal', '<=', $this->filterTanggalSelesai))
             ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
             ->when($this->filterPanjang,   fn($q) => $q->where('panjang', $this->filterPanjang))
             ->when($this->filterLebar,     fn($q) => $q->where('lebar',   $this->filterLebar))

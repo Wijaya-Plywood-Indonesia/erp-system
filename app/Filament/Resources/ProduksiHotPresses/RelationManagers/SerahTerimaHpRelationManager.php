@@ -725,7 +725,7 @@ class SerahTerimaHpRelationManager extends RelationManager
             kwGrade: $mutasi->kw_grade,
             lembar: $mutasi->stok_lembar,
             kubikasi: $mutasi->stok_kubikasi,
-            keterangan: "Diterima oleh Sanding (Dari Mutasi Keluar Gudang)",
+            keterangan: "Diterima oleh Sanding (Dari Mutasi Keluar Gudang), dikeluarkan oleh ".($mutasi->operator?->name ?? '-'),
             referensi: $mutasi
         );
     }

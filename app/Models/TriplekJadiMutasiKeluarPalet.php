@@ -24,6 +24,7 @@ class TriplekJadiMutasiKeluarPalet extends Model
         'nomor_palet'   => 'integer',
         'jumlah_lembar' => 'integer',
         'diterima_at'   => 'datetime',
+        'ditolak_at'    => 'datetime',
     ];
 
     public function mutasiKeluar()

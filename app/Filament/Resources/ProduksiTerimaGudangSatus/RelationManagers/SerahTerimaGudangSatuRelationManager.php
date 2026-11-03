@@ -654,7 +654,21 @@ class SerahTerimaGudangSatuRelationManager extends RelationManager
 
                                 // Hapus record SerahTerimaGudangSatu
                                 // Tombol serah di penyerah otomatis akan muncul kembali karena bergantung pada eksistensi data ini
+                                $idMutasi = $fresh->id_triplek_mutasi_keluar;
                                 $fresh->delete();
+
+                                // Kiriman dari Gudang Triplek Jadi: hapus juga mutasi keluarnya
+                                // supaya hilang dari riwayat keluar gudang asal. Stok belum
+                                // terpotong (baru dipotong saat dikonfirmasi diterima), jadi
+                                // tidak ada stok/log yang perlu dikembalikan.
+                                if ($idMutasi) {
+                                    $mutasi = \App\Models\TriplekJadiMutasiKeluar::lockForUpdate()->find($idMutasi);
+
+                                    if ($mutasi && $mutasi->status === \App\Models\TriplekJadiMutasiKeluar::STATUS_DIKIRIM) {
+                                        $mutasi->palets()->delete();
+                                        $mutasi->delete();
+                                    }
+                                }
                             });
 
                             Notification::make()

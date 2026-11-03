@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\HasilRepairs\Tables;
 
+use App\Models\ProduksiRepair;
+use App\Services\ValidasiOtomatisProduksiService;
 use App\Models\GudangVeneerJadi;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
@@ -21,6 +23,13 @@ use Illuminate\Support\Facades\Auth;
 
 class HasilRepairsTable
 {
+    /** Produksi Repair ini sudah divalidasi & user bukan super admin? */
+    protected static function terkunci($idProduksiRepair): bool
+    {
+        return $idProduksiRepair !== null
+            && ValidasiOtomatisProduksiService::idTerkunci(ProduksiRepair::class, $idProduksiRepair);
+    }
+
     /**
      * Helper: Mengambil ID Rencana KHUSUS untuk ID Produksi ini saja.
      */
@@ -205,8 +214,9 @@ class HasilRepairsTable
                     ->icon('heroicon-s-arrow-right-end-on-rectangle')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->hidden(fn($record) => !empty($record->status_diserahkan_at))
+                    ->hidden(fn($record) => !empty($record->status_diserahkan_at) || self::terkunci($idProduksiRepair))
                     ->action(function ($record) use ($idProduksiRepair, $tanggalProduksi) {
+                        ValidasiOtomatisProduksiService::pastikanBolehUbah(ProduksiRepair::find($idProduksiRepair));
                         $rencanaIds = self::getGroupRencanaIds($record, $idProduksiRepair);
                         $totalHasilMeja = \App\Models\HasilRepair::whereIn('id_rencana_repair', $rencanaIds)->sum('jumlah');
 
@@ -245,6 +255,7 @@ class HasilRepairsTable
                     }),
                 // ACTION TAMBAH (Sudah disesuaikan untuk membagi rata inputan)
                 Action::make('tambah')
+                    ->hidden(fn () => self::terkunci($idProduksiRepair))
                     ->label('Tambah')
                     ->icon('heroicon-o-plus-circle')
                     ->color('success')
@@ -310,6 +321,7 @@ class HasilRepairsTable
 
                 // ACTION EDIT (Sudah disesuaikan agar yang diedit adalah Total Meja)
                 Action::make('edit_hasil')
+                    ->hidden(fn () => self::terkunci($idProduksiRepair))
                     ->label('Edit Hasil')
                     ->icon('heroicon-o-pencil-square')
                     ->color('primary')
@@ -381,6 +393,7 @@ class HasilRepairsTable
 
                 // ACTION EDIT KETERANGAN (Tidak perlu ubah logic, hanya format)
                 Action::make('edit_keterangan')
+                    ->hidden(fn () => self::terkunci($idProduksiRepair))
                     ->label('Keterangan')
                     ->icon('heroicon-o-chat-bubble-left-ellipsis')
                     ->color('warning')
@@ -434,12 +447,14 @@ class HasilRepairsTable
 
                 // ACTION DELETE (Hapus per Meja)
                 Action::make('delete_hasil')
+                    ->hidden(fn () => self::terkunci($idProduksiRepair))
                     ->label('Hapus')
                     ->icon('heroicon-o-trash')
                     ->color('danger')
                     ->requiresConfirmation()
                     ->modalDescription(fn($record) => "Hapus semua hasil untuk Meja {$record->nomor_meja}?")
                     ->action(function ($record) use ($idProduksiRepair) {
+                        ValidasiOtomatisProduksiService::pastikanBolehUbah(ProduksiRepair::find($idProduksiRepair));
                         $rencanaIds = self::getGroupRencanaIds($record, $idProduksiRepair);
                         $deleted = HasilRepair::whereIn('id_rencana_repair', $rencanaIds)->delete();
 
@@ -456,7 +471,9 @@ class HasilRepairsTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
+                        ->hidden(fn () => self::terkunci($idProduksiRepair))
                         ->action(function ($records) use ($idProduksiRepair) {
+                            ValidasiOtomatisProduksiService::pastikanBolehUbah(ProduksiRepair::find($idProduksiRepair));
                             foreach ($records as $record) {
                                 $rencanaIds = self::getGroupRencanaIds($record, $idProduksiRepair);
                                 HasilRepair::whereIn('id_rencana_repair', $rencanaIds)->delete();

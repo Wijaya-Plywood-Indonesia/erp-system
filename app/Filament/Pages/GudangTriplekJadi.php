@@ -631,7 +631,15 @@ class GudangTriplekJadi extends Page
 
     public function getRiwayatKeluarFilteredProperty(): Collection
     {
-        $query = TriplekJadiMutasiKeluar::with(['jenisKayu', 'palets', 'operator'])
+        // Mutasi yang ditolak tujuan (Sanding / Mentah / Hotpress) tidak ditampilkan
+        // lagi di riwayat. Untuk Hotpress yang baru sebagian palet ditolak, hanya
+        // palet yang belum ditolak yang dimuat.
+        $query = TriplekJadiMutasiKeluar::with([
+                'jenisKayu',
+                'palets' => fn ($q) => $q->whereNull('ditolak_by'),
+                'operator',
+            ])
+            ->tidakDitolak()
             ->orderByDesc('created_at');
 
         if (trim($this->keluarSearchQuery) !== '') {
@@ -646,6 +654,15 @@ class GudangTriplekJadi extends Page
 
         return $query->get()->map(function ($rk) {
             $rk->bisa_diedit = $this->bisaDiedit($rk);
+
+            // Kalau ada palet yang sudah ditolak (Hotpress), tampilkan total
+            // sesuai palet yang masih berlaku — hanya untuk tampilan, tidak disimpan.
+            if ($rk->palets->isNotEmpty() && $rk->palets->sum('jumlah_lembar') != $rk->stok_lembar) {
+                $lembar = (int) $rk->palets->sum('jumlah_lembar');
+                $rk->stok_lembar = $lembar;
+                $rk->stok_kubikasi = $this->hitungKubikasi((float) $rk->panjang, (float) $rk->lebar, (float) $rk->tebal, $lembar);
+                $rk->jumlah_palet = $rk->palets->count();
+            }
 
             return $rk;
         });

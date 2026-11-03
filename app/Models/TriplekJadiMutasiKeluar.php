@@ -54,4 +54,28 @@ class TriplekJadiMutasiKeluar extends Model
     {
         return $this->hasMany(TriplekJadiMutasiKeluarPalet::class, 'id_mutasi_keluar');
     }
+
+    /** Antrean serah terima Sanding / Gudang Triplek Mentah yang tertaut ke mutasi ini. */
+    public function serahTerimaHp(): HasMany
+    {
+        return $this->hasMany(SerahTerimaHp::class, 'id_triplek_mutasi_keluar');
+    }
+
+    /**
+     * Sembunyikan mutasi yang sudah ditolak tujuan:
+     *  - Sanding / Gudang Triplek Mentah: baris serah_terima_hp ditandai ditolak_oleh.
+     *  - Hotpress: SEMUA palet ditandai ditolak_by (kalau baru sebagian palet
+     *    yang ditolak, mutasi tetap tampil; palet yang ditolak disaring terpisah).
+     * Penolakan dari Gudang Satu / Nyusup langsung menghapus mutasinya,
+     * jadi tidak perlu ditangani di sini.
+     */
+    public function scopeTidakDitolak($query)
+    {
+        return $query
+            ->whereDoesntHave('serahTerimaHp', fn ($q) => $q->whereNotNull('ditolak_oleh'))
+            ->where(function ($q) {
+                $q->whereDoesntHave('palets')
+                    ->orWhereHas('palets', fn ($p) => $p->whereNull('ditolak_by'));
+            });
+    }
 }

@@ -128,6 +128,10 @@ class TerimaGudangHpService
             $lembar = (float) $hasil->isi;
             $kubikasi = $lembar * (float) $ukuran->kubikasi / 10000000;
 
+            // Nama akun yang menyerahkan barang dari Hotpress (sudah tersimpan
+            // di serah_terima_hp.diserahkan_oleh), jadi tidak perlu migration.
+            $penyerah = $st->diserahkan_oleh ?: '-';
+
             $service = $tipe === 'triplek'
                 ? app(StokTriplekMthService::class)
                 : app(StokPlatformMthService::class);
@@ -143,7 +147,9 @@ class TerimaGudangHpService
                 keterangan: ($tipe === 'triplek'
                     ? 'Masuk Gudang Triplek Mentah — dari hotpress'
                     : 'Masuk Gudang Platform Mentah — dari hotpress')
-                    .' (via serah terima #'.$st->id.')',
+                    .' (via serah terima #'.$st->id.')'
+                    // Khusus Platform Mentah: catat siapa yang menyerahkan.
+                    .($tipe === 'platform' ? ', diserahkan oleh '.$penyerah : ''),
                 referensi: $st,
             );
 

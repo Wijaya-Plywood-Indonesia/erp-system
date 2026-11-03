@@ -2,15 +2,15 @@
 <x-filament-panels::page>
 
     @php
-        $logs        = $this->logs;      // paginator, 50 baris per halaman
-        $r           = $this->ringkasan; // total seluruh hasil filter (dihitung di database)
-        $totalMasuk  = $r['masuk_lbr'];
-        $totalKeluar = $r['keluar_lbr'];
-        $saldoLembar = $totalMasuk - $totalKeluar;
-        $lastLog     = $r['last'];       // log terbaru dari seluruh hasil filter
-        $komp        = $this->komponenBaris($logs->items()); // rincian basah + pegawai + mesin per baris
-        $ringkas     = $this->hppRingkas;     // angka utama (jika ukuran sudah lengkap)
-        $perUkuran   = $this->hppPerUkuran;   // rekap per ukuran (jika belum lengkap)
+    $logs = $this->logs; // paginator, 50 baris per halaman
+    $r = $this->ringkasan; // total seluruh hasil filter (dihitung di database)
+    $totalMasuk = $r['masuk_lbr'];
+    $totalKeluar = $r['keluar_lbr'];
+    $saldoLembar = $totalMasuk - $totalKeluar;
+    $lastLog = $r['last']; // log terbaru dari seluruh hasil filter
+    $komp = $this->komponenBaris($logs->items()); // rincian basah + pegawai + mesin per baris
+    $ringkas = $this->hppRingkas; // angka utama (jika ukuran sudah lengkap)
+    $perUkuran = $this->hppPerUkuran; // rekap per ukuran (jika belum lengkap)
     @endphp
 
     {{-- Filter bar --}}
@@ -21,7 +21,7 @@
             class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
             <option value="">Semua Jenis Kayu</option>
             @foreach(\App\Models\JenisKayu::orderBy('nama_kayu')->pluck('nama_kayu', 'id') as $id => $nama)
-                <option value="{{ $id }}">{{ $nama }}</option>
+            <option value="{{ $id }}">{{ $nama }}</option>
             @endforeach
         </select>
 
@@ -29,7 +29,7 @@
             class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
             <option value="">Semua Panjang</option>
             @foreach($this->ukuranList->pluck('panjang')->unique()->sort() as $p)
-                <option value="{{ $p }}">{{ $p }} cm</option>
+            <option value="{{ $p }}">{{ $p }} cm</option>
             @endforeach
         </select>
 
@@ -37,7 +37,7 @@
             class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
             <option value="">Semua Lebar</option>
             @foreach($this->ukuranList->pluck('lebar')->unique()->sort() as $l)
-                <option value="{{ $l }}">{{ $l }} cm</option>
+            <option value="{{ $l }}">{{ $l }} cm</option>
             @endforeach
         </select>
 
@@ -45,7 +45,7 @@
             class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
             <option value="">Semua Tebal</option>
             @foreach($this->ukuranList->pluck('tebal')->unique()->sort() as $t)
-                <option value="{{ $t }}">{{ $t }} mm</option>
+            <option value="{{ $t }}">{{ $t }} mm</option>
             @endforeach
         </select>
 
@@ -53,7 +53,7 @@
             class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
             <option value="">Semua Bulan</option>
             @foreach($this->bulanList as $bln)
-                <option value="{{ $bln }}">{{ \Carbon\Carbon::createFromFormat('Y-m', $bln)->locale('id')->translatedFormat('F Y') }}</option>
+            <option value="{{ $bln }}">{{ \Carbon\Carbon::createFromFormat('Y-m', $bln)->locale('id')->translatedFormat('F Y') }}</option>
             @endforeach
         </select>
 
@@ -61,11 +61,11 @@
             class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500 w-36" />
 
         <div class="ml-auto flex items-center gap-3">
-            @if($filterJenisKayu !== '' || $filterPanjang !== '' || $filterLebar !== '' || $filterTebal !== '' || $filterBulan !== '' || trim($filterKw) !== '')
-                <button type="button" wire:click="resetFilter"
-                    class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-amber-400 hover:text-amber-600">
-                    ✕ Reset
-                </button>
+            @if($filterJenisKayu !== '' || $filterPanjang !== '' || $filterLebar !== '' || $filterTebal !== '' || $filterBulan !== '' || $filterTanggalMulai !== '' || $filterTanggalSelesai !== '' || trim($filterKw) !== '')
+            <button type="button" wire:click="resetFilter"
+                class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-amber-400 hover:text-amber-600">
+                ✕ Reset
+            </button>
             @endif
 
             <label class="flex items-center gap-1.5 cursor-pointer select-none text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">
@@ -81,10 +81,10 @@
 
         {{-- Popup: cara membaca halaman --}}
         <div x-show="info" x-cloak x-transition.opacity
-             @keydown.escape.window="info = false" @click.self="info = false"
-             style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:60;background:rgba(0,0,0,.6);overflow-y:auto;padding:16px;">
+            @keydown.escape.window="info = false" @click.self="info = false"
+            style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:60;background:rgba(0,0,0,.6);overflow-y:auto;padding:16px;">
             <div class="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl"
-                 style="max-width:600px;margin:5vh auto;padding:22px 24px;">
+                style="max-width:600px;margin:5vh auto;padding:22px 24px;">
                 <div class="flex items-center justify-between mb-2">
                     <h3 class="text-sm font-black uppercase tracking-widest">Cara membaca halaman ini</h3>
                     <button type="button" @click="info = false" class="text-gray-400 hover:text-gray-200 text-lg leading-none">✕</button>
@@ -150,84 +150,84 @@
 
     {{-- Rekap HPP: satu angka untuk satu ukuran, atau daftar ukuran dengan HPP-nya --}}
     @php
-        $d = $ringkas['data'];
-        $labelBulan = $ringkas['bulan']
-            ? \Carbon\Carbon::createFromFormat('Y-m', $ringkas['bulan'])->locale('id')->translatedFormat('F Y')
-            : '-';
+    $d = $ringkas['data'];
+    $labelBulan = $ringkas['bulan']
+    ? \Carbon\Carbon::createFromFormat('Y-m', $ringkas['bulan'])->locale('id')->translatedFormat('F Y')
+    : '-';
     @endphp
     <div class="bg-white dark:bg-gray-800 rounded-sm border border-gray-200 dark:border-gray-700 shadow-sm mb-5 overflow-hidden">
         <div class="px-5 py-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center gap-2 flex-wrap">
             <span class="text-[11px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-200">HPP Veneer Kering · {{ $labelBulan }}</span>
             @if($ringkas['otomatis'])
-                <span class="text-[10px] text-gray-400">bulan terbaru · ganti lewat filter Bulan</span>
+            <span class="text-[10px] text-gray-400">bulan terbaru · ganti lewat filter Bulan</span>
             @endif
 
         </div>
 
         @if($ringkas['lengkap'])
-            {{-- Satu ukuran: satu angka besar --}}
-            <div class="px-5 py-4">
-                <div class="text-sm font-bold text-gray-700 dark:text-gray-200">{{ $ringkas['jenis'] }} {{ $ringkas['ukuran'] }}</div>
-                @if($d)
-                    <div class="mt-1 flex items-baseline gap-2">
-                        <span class="text-3xl font-black text-amber-600 dark:text-amber-400 tabular-nums">Rp {{ number_format($d['total'], 0, ',', '.') }}</span>
-                        <span class="text-sm text-gray-400">per m³</span>
-                    </div>
-                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-                        {{ number_format($d['palet']) }} palet · {{ number_format($d['m3'], 2, ',', '.') }} m³ masuk
-                        · Basah {{ number_format($d['basah'], 0, ',', '.') }}
-                        + Pegawai {{ number_format($d['pegawai'], 0, ',', '.') }}
-                        + Mesin {{ number_format($d['mesin'], 0, ',', '.') }}
-                    </div>
-                    <div class="mt-1 text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
-                        Lebih besar <b class="text-emerald-600 dark:text-emerald-400">Rp {{ number_format($d['pegawai'] + $d['mesin'], 0, ',', '.') }}</b>
-                        dari HPP veneer basahnya (Rp {{ number_format($d['basah'], 0, ',', '.') }}).
-                    </div>
-                    @if($d['sementara'] > 0)
-                        <div class="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
-                            {{ $d['sementara'] }} dari {{ $d['palet'] }} palet masih estimasi (produksi dryer belum divalidasi).
-                        </div>
-                    @endif
-                    @if($d['kurang'] > 0)
-                        <div class="mt-1 text-[11px] text-red-600 dark:text-red-400">
-                            {{ $d['kurang'] }} dari {{ $d['palet'] }} palet ongkos pegawai atau mesinnya masih 0 — lengkapi data pegawai / mesin produksi dryer-nya.
-                        </div>
-                    @endif
-                @else
-                    <div class="mt-2 text-sm text-gray-400">Tidak ada palet masuk dari dryer di bulan ini untuk ukuran ini.</div>
-                @endif
+        {{-- Satu ukuran: satu angka besar --}}
+        <div class="px-5 py-4">
+            <div class="text-sm font-bold text-gray-700 dark:text-gray-200">{{ $ringkas['jenis'] }} {{ $ringkas['ukuran'] }}</div>
+            @if($d)
+            <div class="mt-1 flex items-baseline gap-2">
+                <span class="text-3xl font-black text-amber-600 dark:text-amber-400 tabular-nums">Rp {{ number_format($d['total'], 0, ',', '.') }}</span>
+                <span class="text-sm text-gray-400">per m³</span>
             </div>
+            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+                {{ number_format($d['palet']) }} palet · {{ number_format($d['m3'], 2, ',', '.') }} m³ masuk
+                · Basah {{ number_format($d['basah'], 0, ',', '.') }}
+                + Pegawai {{ number_format($d['pegawai'], 0, ',', '.') }}
+                + Mesin {{ number_format($d['mesin'], 0, ',', '.') }}
+            </div>
+            <div class="mt-1 text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
+                Lebih besar <b class="text-emerald-600 dark:text-emerald-400">Rp {{ number_format($d['pegawai'] + $d['mesin'], 0, ',', '.') }}</b>
+                dari HPP veneer basahnya (Rp {{ number_format($d['basah'], 0, ',', '.') }}).
+            </div>
+            @if($d['sementara'] > 0)
+            <div class="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                {{ $d['sementara'] }} dari {{ $d['palet'] }} palet masih estimasi (produksi dryer belum divalidasi).
+            </div>
+            @endif
+            @if($d['kurang'] > 0)
+            <div class="mt-1 text-[11px] text-red-600 dark:text-red-400">
+                {{ $d['kurang'] }} dari {{ $d['palet'] }} palet ongkos pegawai atau mesinnya masih 0 — lengkapi data pegawai / mesin produksi dryer-nya.
+            </div>
+            @endif
+            @else
+            <div class="mt-2 text-sm text-gray-400">Tidak ada palet masuk dari dryer di bulan ini untuk ukuran ini.</div>
+            @endif
+        </div>
         @elseif(count($perUkuran))
-            {{-- Ukuran belum dipilih: daftar ukuran + HPP-nya, klik untuk memfilter --}}
-            <table class="w-full text-xs">
-                <thead>
-                    <tr class="text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 dark:border-gray-700">
-                        <th class="px-5 py-2 text-left">Jenis</th>
-                        <th class="px-5 py-2 text-left">Ukuran</th>
-                        <th class="px-5 py-2 text-right">m³ masuk</th>
-                        <th class="px-5 py-2 text-right bg-amber-50/50 dark:bg-amber-900/10">HPP kering per m³</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                    @foreach($perUkuran as $u)
-                        <tr wire:click="pilihUkuran('{{ $u['jenis_id'] }}', '{{ $u['panjang'] }}', '{{ $u['lebar'] }}', '{{ $u['tebal'] }}')"
-                            class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/40 tabular-nums">
-                            <td class="px-5 py-2 font-bold text-gray-800 dark:text-gray-200">{{ $u['jenis'] }}</td>
-                            <td class="px-5 py-2 text-gray-600 dark:text-gray-300">{{ $u['ukuran'] }}</td>
-                            <td class="px-5 py-2 text-right text-gray-500">{{ number_format($u['m3'], 2, ',', '.') }}</td>
-                            <td class="px-5 py-2 text-right font-black text-amber-700 dark:text-amber-400 bg-amber-50/30 dark:bg-amber-900/5">
-                                {{ number_format($u['total'], 0, ',', '.') }}{{ $u['sementara'] > 0 ? ' *' : '' }}
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-            <div class="px-5 py-2 text-[10px] text-gray-400 border-t border-gray-100 dark:border-gray-700">
-                Klik satu baris untuk melihat log ukuran itu.
-                @if(collect($perUkuran)->sum('sementara') > 0) &nbsp;* sebagian palet masih estimasi (produksi dryer belum divalidasi). @endif
-            </div>
+        {{-- Ukuran belum dipilih: daftar ukuran + HPP-nya, klik untuk memfilter --}}
+        <table class="w-full text-xs">
+            <thead>
+                <tr class="text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 dark:border-gray-700">
+                    <th class="px-5 py-2 text-left">Jenis</th>
+                    <th class="px-5 py-2 text-left">Ukuran</th>
+                    <th class="px-5 py-2 text-right">m³ masuk</th>
+                    <th class="px-5 py-2 text-right bg-amber-50/50 dark:bg-amber-900/10">HPP kering per m³</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                @foreach($perUkuran as $u)
+                <tr wire:click="pilihUkuran('{{ $u['jenis_id'] }}', '{{ $u['panjang'] }}', '{{ $u['lebar'] }}', '{{ $u['tebal'] }}')"
+                    class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/40 tabular-nums">
+                    <td class="px-5 py-2 font-bold text-gray-800 dark:text-gray-200">{{ $u['jenis'] }}</td>
+                    <td class="px-5 py-2 text-gray-600 dark:text-gray-300">{{ $u['ukuran'] }}</td>
+                    <td class="px-5 py-2 text-right text-gray-500">{{ number_format($u['m3'], 2, ',', '.') }}</td>
+                    <td class="px-5 py-2 text-right font-black text-amber-700 dark:text-amber-400 bg-amber-50/30 dark:bg-amber-900/5">
+                        {{ number_format($u['total'], 0, ',', '.') }}{{ $u['sementara'] > 0 ? ' *' : '' }}
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+        <div class="px-5 py-2 text-[10px] text-gray-400 border-t border-gray-100 dark:border-gray-700">
+            Klik satu baris untuk melihat log ukuran itu.
+            @if(collect($perUkuran)->sum('sementara') > 0) &nbsp;* sebagian palet masih estimasi (produksi dryer belum divalidasi). @endif
+        </div>
         @else
-            <div class="px-5 py-5 text-sm text-gray-400">Belum ada palet masuk dari dryer berHPP di bulan ini untuk filter ini.</div>
+        <div class="px-5 py-5 text-sm text-gray-400">Belum ada palet masuk dari dryer berHPP di bulan ini untuk filter ini.</div>
         @endif
     </div>
 
@@ -245,9 +245,9 @@
                 = {{ number_format($saldoLembar) }} saldo
             </span>
             @if($lastLog)
-                <span class="ml-auto inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300 text-[10px] font-black px-3 py-1 rounded-sm uppercase tracking-tight">
-                    HPP terakhir: Rp {{ number_format($lastLog->hpp_average, 0, ',', '.') }}/m³
-                </span>
+            <span class="ml-auto inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300 text-[10px] font-black px-3 py-1 rounded-sm uppercase tracking-tight">
+                HPP terakhir: Rp {{ number_format($lastLog->hpp_average, 0, ',', '.') }}/m³
+            </span>
             @endif
         </div>
 
@@ -290,9 +290,8 @@
                 <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                     @forelse($logs as $log)
                     @php $isM = strtolower((string) $log->jenis_transaksi) === 'masuk'; @endphp
-                    <tr @class(['transition',
-                        'hover:bg-green-50/30 dark:hover:bg-green-900/10' => $isM,
-                        'hover:bg-red-50/30 dark:hover:bg-red-900/10'     => !$isM])>
+                    <tr @class(['transition', 'hover:bg-green-50/30 dark:hover:bg-green-900/10'=> $isM,
+                        'hover:bg-red-50/30 dark:hover:bg-red-900/10' => !$isM])>
 
                         <td class="px-4 py-2 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                             {{ $log->tanggal_transaksi ? \Carbon\Carbon::parse($log->tanggal_transaksi)->format('d/m/Y') : '-' }}
@@ -313,16 +312,14 @@
                         </td>
 
                         <td class="px-4 py-2 whitespace-nowrap">
-                            <span @class(['inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight',
-                                'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' => $isM,
-                                'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'         => !$isM])>
+                            <span @class(['inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-tight', 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'=> $isM,
+                                'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' => !$isM])>
                                 {{ $isM ? '↑ Masuk' : '↓ Keluar' }}
                             </span>
                         </td>
 
-                        <td @class(['px-4 py-2 text-right font-black text-sm border-l border-gray-50 dark:border-gray-800 whitespace-nowrap tabular-nums',
-                            'text-green-600 dark:text-green-400' => $isM,
-                            'text-red-600 dark:text-red-400'     => !$isM])>
+                        <td @class(['px-4 py-2 text-right font-black text-sm border-l border-gray-50 dark:border-gray-800 whitespace-nowrap tabular-nums', 'text-green-600 dark:text-green-400'=> $isM,
+                            'text-red-600 dark:text-red-400' => !$isM])>
                             {{ $isM ? '+' : '-' }}{{ number_format($log->qty) }}
                         </td>
 
@@ -332,9 +329,8 @@
                                     {{ $log->stok_lembar_sebelum !== null ? number_format($log->stok_lembar_sebelum) : '-' }}
                                 </span>
                                 <span class="text-gray-300 dark:text-gray-700 text-[10px]">→</span>
-                                <span @class(['font-black',
-                                    'text-green-600 dark:text-green-400' => $isM,
-                                    'text-red-600 dark:text-red-400'     => !$isM])>
+                                <span @class(['font-black', 'text-green-600 dark:text-green-400'=> $isM,
+                                    'text-red-600 dark:text-red-400' => !$isM])>
                                     {{ $log->stok_lembar_sesudah !== null ? number_format($log->stok_lembar_sesudah) : '-' }}
                                 </span>
                             </div>
@@ -342,8 +338,7 @@
 
                         <td class="px-4 py-2 border-l border-gray-50 dark:border-gray-800 whitespace-nowrap tabular-nums">
                             <div class="flex flex-col items-end">
-                                <span @class(['font-semibold text-xs',
-                                    'text-blue-600 dark:text-blue-400'     => $isM,
+                                <span @class(['font-semibold text-xs', 'text-blue-600 dark:text-blue-400'=> $isM,
                                     'text-orange-600 dark:text-orange-400' => !$isM])>
                                     {{ number_format($log->m3, 4) }}
                                 </span>
@@ -355,8 +350,7 @@
                             <div class="flex items-center justify-end gap-1.5 font-mono text-xs">
                                 <span class="text-gray-400 dark:text-gray-500">{{ number_format($log->stok_m3_sebelum, 4) }}</span>
                                 <span class="text-gray-300 dark:text-gray-700 text-[10px]">→</span>
-                                <span @class(['font-black',
-                                    'text-blue-600 dark:text-blue-400'     => $isM,
+                                <span @class(['font-black', 'text-blue-600 dark:text-blue-400'=> $isM,
                                     'text-orange-600 dark:text-orange-400' => !$isM])>
                                     {{ number_format($log->stok_m3_sesudah, 4) }}
                                 </span>
@@ -366,9 +360,9 @@
                         @if($tampilNilaiStok)
                         {{-- Nilai stok (Rp): sebelum → sesudah, dan selisihnya --}}
                         @php
-                            $nilaiB  = (float) $log->nilai_stok_sebelum;
-                            $nilaiA  = (float) $log->nilai_stok_sesudah;
-                            $selisih = $nilaiA - $nilaiB;
+                        $nilaiB = (float) $log->nilai_stok_sebelum;
+                        $nilaiA = (float) $log->nilai_stok_sesudah;
+                        $selisih = $nilaiA - $nilaiB;
                         @endphp
                         <td class="px-4 py-2 border-l border-gray-50 dark:border-gray-800 whitespace-nowrap tabular-nums">
                             <div class="flex items-center justify-end gap-1.5 font-mono text-xs">
@@ -377,11 +371,10 @@
                                 <span class="font-black text-gray-800 dark:text-gray-100">{{ number_format($nilaiA, 0, ',', '.') }}</span>
                             </div>
                             @if(abs($selisih) >= 1)
-                                <div @class(['text-right text-[10px] font-mono',
-                                    'text-emerald-600 dark:text-emerald-400' => $selisih > 0,
-                                    'text-red-500 dark:text-red-400'         => $selisih < 0])>
+                            <div @class(['text-right text-[10px] font-mono', 'text-emerald-600 dark:text-emerald-400'=> $selisih > 0,
+                                'text-red-500 dark:text-red-400' => $selisih < 0])>
                                     {{ $selisih > 0 ? '+' : '−' }}{{ number_format(abs($selisih), 0, ',', '.') }}
-                                </div>
+                            </div>
                             @endif
                         </td>
                         @endif
@@ -390,27 +383,27 @@
                         @php $k = $komp[$log->id] ?? null; @endphp
                         <td class="px-4 py-2 border-l border-gray-50 dark:border-gray-800 bg-blue-50/10 dark:bg-blue-900/5 whitespace-nowrap">
                             @if($isM && $k && $k['total'] > 0)
-                                <div class="flex items-center gap-1.5 text-xs tabular-nums">
-                                    <span class="font-black text-gray-800 dark:text-gray-100">{{ number_format($k['total'], 0, ',', '.') }}</span>
-                                    @if($k['final'])
-                                        <span title="{{ $k['turunan'] ? 'Sumber: '.$k['sumber'].'. Komponen dihitung dari palet Press Dryer yang sudah FINAL.' : 'Produksi dryer sudah divalidasi. Ongkos pegawai & mesin sudah pasti.' }}"
-                                            class="px-1.5 py-0.5 rounded-sm bg-emerald-100 dark:bg-emerald-900/30 text-[9px] font-black uppercase text-emerald-600 dark:text-emerald-400">final</span>
-                                    @else
-                                        <span title="{{ $k['turunan'] ? 'Sumber: '.$k['sumber'].'. Komponen dihitung dari palet Press Dryer yang masih estimasi.' : 'Produksi dryer belum divalidasi. Angka sementara dan menjadi FINAL saat produksi divalidasi.' }}"
-                                            class="px-1.5 py-0.5 rounded-sm bg-amber-100 dark:bg-amber-900/30 text-[9px] font-black uppercase text-amber-600 dark:text-amber-400">estimasi</span>
-                                    @endif
-                                </div>
-                                <div class="mt-0.5 text-[10px] tabular-nums text-gray-400">
-                                    <span class="text-emerald-600 dark:text-emerald-400">Bsh {{ number_format($k['basah'], 0, ',', '.') }}</span> ·
-                                    <span @class(['text-blue-600 dark:text-blue-400' => $k['pegawai'] > 0, 'text-red-500 dark:text-red-400 font-black' => $k['pegawai'] <= 0])
-                                          @if($k['pegawai'] <= 0) title="Ongkos pegawai produksi dryer ini 0: data pegawai belum diisi atau harga pegawai belum ada." @endif>
+                            <div class="flex items-center gap-1.5 text-xs tabular-nums">
+                                <span class="font-black text-gray-800 dark:text-gray-100">{{ number_format($k['total'], 0, ',', '.') }}</span>
+                                @if($k['final'])
+                                <span title="{{ $k['turunan'] ? 'Sumber: '.$k['sumber'].'. Komponen dihitung dari palet Press Dryer yang sudah FINAL.' : 'Produksi dryer sudah divalidasi. Ongkos pegawai & mesin sudah pasti.' }}"
+                                    class="px-1.5 py-0.5 rounded-sm bg-emerald-100 dark:bg-emerald-900/30 text-[9px] font-black uppercase text-emerald-600 dark:text-emerald-400">final</span>
+                                @else
+                                <span title="{{ $k['turunan'] ? 'Sumber: '.$k['sumber'].'. Komponen dihitung dari palet Press Dryer yang masih estimasi.' : 'Produksi dryer belum divalidasi. Angka sementara dan menjadi FINAL saat produksi divalidasi.' }}"
+                                    class="px-1.5 py-0.5 rounded-sm bg-amber-100 dark:bg-amber-900/30 text-[9px] font-black uppercase text-amber-600 dark:text-amber-400">estimasi</span>
+                                @endif
+                            </div>
+                            <div class="mt-0.5 text-[10px] tabular-nums text-gray-400">
+                                <span class="text-emerald-600 dark:text-emerald-400">Bsh {{ number_format($k['basah'], 0, ',', '.') }}</span> ·
+                                <span @class(['text-blue-600 dark:text-blue-400'=> $k['pegawai'] > 0, 'text-red-500 dark:text-red-400 font-black' => $k['pegawai'] <= 0])
+                                        @if($k['pegawai'] <=0) title="Ongkos pegawai produksi dryer ini 0: data pegawai belum diisi atau harga pegawai belum ada." @endif>
                                         Pgw {{ number_format($k['pegawai'], 0, ',', '.') }}</span> ·
-                                    <span @class(['text-purple-600 dark:text-purple-400' => $k['mesin'] > 0, 'text-red-500 dark:text-red-400 font-black' => $k['mesin'] <= 0])
-                                          @if($k['mesin'] <= 0) title="Ongkos mesin produksi dryer ini 0: data mesin belum diisi atau ongkos mesin di master Mesin masih 0." @endif>
+                                <span @class(['text-purple-600 dark:text-purple-400'=> $k['mesin'] > 0, 'text-red-500 dark:text-red-400 font-black' => $k['mesin'] <= 0])
+                                        @if($k['mesin'] <=0) title="Ongkos mesin produksi dryer ini 0: data mesin belum diisi atau ongkos mesin di master Mesin masih 0." @endif>
                                         Msin {{ number_format($k['mesin'], 0, ',', '.') }}</span>
-                                </div>
+                            </div>
                             @else
-                                <div class="text-[10px] text-gray-400">—</div>
+                            <div class="text-[10px] text-gray-400">—</div>
                             @endif
                         </td>
 
@@ -435,15 +428,14 @@
 
                 @if($logs->count())
                 @php
-                    $m3Saldo = $r['masuk_m3'] - $r['keluar_m3'];
+                $m3Saldo = $r['masuk_m3'] - $r['keluar_m3'];
                 @endphp
                 <tfoot>
                     <tr class="text-[10px] font-black border-t-2 bg-gray-50 dark:bg-gray-900/60 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 uppercase tracking-widest">
                         <td colspan="6" class="px-4 py-3 text-gray-500">Saldo Akhir</td>
-                        <td @class(['px-4 py-3 text-right tabular-nums',
-                            'text-green-700 dark:text-green-400' => $saldoLembar >= 0,
-                            'text-red-600 dark:text-red-400'     => $saldoLembar < 0])>
-                            {{ number_format($saldoLembar) }} lbr
+                        <td @class(['px-4 py-3 text-right tabular-nums', 'text-green-700 dark:text-green-400'=> $saldoLembar >= 0,
+                            'text-red-600 dark:text-red-400' => $saldoLembar < 0])>
+                                {{ number_format($saldoLembar) }} lbr
                         </td>
                         <td class="px-4 py-3 text-right text-gray-400">—</td>
                         <td class="px-4 py-3 text-right tabular-nums text-blue-600 dark:text-blue-400">

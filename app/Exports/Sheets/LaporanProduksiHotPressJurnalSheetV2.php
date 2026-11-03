@@ -2,6 +2,7 @@
 
 namespace App\Exports\Sheets;
 
+use App\Models\BahanPenolongProduksi;
 use App\Models\Grade;
 use App\Models\JenisKayu;
 use App\Models\KategoriBarang;
@@ -51,29 +52,35 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 //   asli): Lem->1402.9, Hardner->1402.10, Isi Staples->1402.11,
 //   Pewarna->1402.12, Tepung->1402.13, Solasi Coklat->1402.14,
 //   Solasi Putih->1402.15.
+// - NEW: HARGA Bahan Penolong sekarang diambil dari model
+//   BahanPenolongProduksi (kategori_produksi = 'hot_press'), BUKAN dari
+//   ReferensiHargaProduksi / hardcode. Akun & nama akun tetap dari
+//   CoaAliasService::extractAkunPenolong(); hanya harganya yang diganti.
+//   Kalau harga di model belum diisi (0 / tidak ketemu), fallback ke harga
+//   dari alias referensi dan keterangan diberi penanda.
 // - Kolom "No Akun" (D) dipaksa jadi TEKS eksplisit (bukan numerik),
 //   supaya kode akun seperti "1402.5" tidak pernah dipaksa 2 digit /
 //   diubah titik jadi koma oleh Excel.
-// - NEW: Kolom "ID Barang" (O) sekarang diisi dengan hasil resolve dari
-//   API eksternal /api/barang/resolve-veneer, MENGIKUTI POLA yang sama
-//   dipakai di JurnalSheetV2 (dryer) & JurnalRepairSheetV2 (repair).
+// - Kolom "ID Barang" (O) diisi dengan hasil resolve dari API eksternal
+//   /api/barang/resolve-veneer, MENGIKUTI POLA yang sama dipakai di
+//   JurnalSheetV2 (dryer) & JurnalRepairSheetV2 (repair).
 //   PENTING — resolver ini HANYA diterapkan untuk baris BAHAN VENEER
 //   (veneer masuk sebagai bahan hotpress, bukan platform) karena
 //   endpoint /api/barang/resolve-veneer secara kontrak hanya mengenal
 //   parameter veneer (jenis_veneer, bagian, jenis_kayu, ketebalan,
 //   ukuran, kw). Baris TRIPLEK dan PLATFORM (baik sebagai hasil
 //   produksi maupun sebagai bahan masuk) TIDAK di-resolve di sini dan
-//   ID Barang-nya dibiarkan null, karena keduanya bukan item veneer dan
-//   belum ada endpoint resolver terpisah untuk triplek/platform yang
-//   dikonfirmasi. Kalau nanti ada endpoint resolve-triplek atau
-//   resolve-platform, tinggal tambahkan pemanggilan serupa di titik
-//   yang ditandai "// TODO: resolver triplek/platform" di bawah.
+//   ID Barang-nya dibiarkan null. Kalau nanti ada endpoint
+//   resolve-triplek atau resolve-platform, tinggal tambahkan pemanggilan
+//   serupa di titik yang ditandai "// TODO: resolver triplek/platform".
+// - Bahan platform yang diambil dari gudang platform jadi
+//   (bahan_hotpress.sumber = 'platform', relasi mutasiKeluarPlatform)
+//   ikut dibaca.
 //
 // NOTE REFACTOR: Logic ALIAS AKUN COA BARU (aliasAkunBaru, extractAkunVeneer,
 // extractAkunPlatform, extractAkunTriplek, extractAkunPenolong, extractAkunRaw,
-// getAkunHpp, getAkunGaji) sudah
-// DIPINDAH ke App\Services\CoaAliasService supaya bisa dipakai bersama oleh
-// JurnalSheetV2 (dryer) & JurnalRepairSheetV2. Sheet ini sekarang hanya
+// getAkunHpp, getAkunGaji) ada di App\Services\CoaAliasService supaya bisa
+// dipakai bersama oleh JurnalSheetV2 (dryer) & JurnalRepairSheetV2. Sheet ini
 // memanggil service tsb lewat $this->coaAlias.
 //
 // Cara pakai: daftarkan class ini di sheets() milik
@@ -111,6 +118,18 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
 
     private array $gradeCache = [];
 
+    private array $gradePlatformCache = [];
+
+    private array $ukuranDimCache = [];
+
+    /**
+     * Cache harga bahan penolong dari model BahanPenolongProduksi
+     * (kategori_produksi = 'hot_press'). Key = nama_bahan_penolong lowercase.
+     *
+     * @var array<string, float>
+     */
+    private array $bahanPenolongCache = [];
+
     /**
      * Cache hasil resolve id_barang dari API eksternal, dikunci per
      * kombinasi parameter (jenis_veneer|bagian|jenis_kayu|ketebalan|
@@ -124,6 +143,13 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
         $this->tanggal = $tanggal;
         $this->domain = $domain;
         $this->coaAlias = $coaAlias ?? app(CoaAliasService::class);
+
+        // Cache semua bahan penolong kategori hot_press dari DB, key = lowercase nama
+        BahanPenolongProduksi::where('kategori_produksi', 'hot_press')
+            ->get()
+            ->each(function (BahanPenolongProduksi $b) {
+                $this->bahanPenolongCache[strtolower(trim($b->nama_bahan_penolong))] = (float) ($b->harga ?? 0);
+            });
     }
 
     public function title(): string
@@ -343,6 +369,69 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
         return $this->getIdKayuByNama(strtolower(trim($namaJenisBarang)));
     }
 
+    /**
+     * Cari id grade milik kategori Platform berdasarkan NAMA grade.
+     * Dipakai untuk bahan platform dari gudang platform jadi, karena di sana
+     * grade hanya berupa teks (kw_grade), bukan id. Tanpa ini, getIdGrade()
+     * bisa mengembalikan id grade kategori lain yang namanya sama.
+     */
+    private function getIdGradePlatform(string $namaGrade): ?int
+    {
+        $key = strtolower(trim($namaGrade));
+        if ($key === '') {
+            return null;
+        }
+        if (array_key_exists($key, $this->gradePlatformCache)) {
+            return $this->gradePlatformCache[$key];
+        }
+
+        try {
+            $idKategori = $this->getIdKategoriBarang('Platform');
+            if (! $idKategori) {
+                return $this->gradePlatformCache[$key] = null;
+            }
+
+            $keyLocal = str_replace('lokal', 'local', $key);
+            $keyLokal = str_replace('local', 'lokal', $key);
+
+            $grade = Grade::where('id_kategori_barang', $idKategori)
+                ->where(function ($q) use ($key, $keyLocal, $keyLokal) {
+                    $q->whereRaw('LOWER(nama_grade) = ?', [$key])
+                        ->orWhereRaw('LOWER(nama_grade) = ?', [$keyLocal])
+                        ->orWhereRaw('LOWER(nama_grade) = ?', [$keyLokal]);
+                })->first();
+
+            return $this->gradePlatformCache[$key] = $grade?->id;
+        } catch (\Throwable $e) {
+            return $this->gradePlatformCache[$key] = null;
+        }
+    }
+
+    /**
+     * Cari id ukuran dari panjang x lebar x tebal (urutan panjang/lebar
+     * boleh tertukar).
+     */
+    private function resolveIdUkuranByDimensi(float $p, float $l, float $t): ?int
+    {
+        if ($p <= 0 || $l <= 0 || $t <= 0) {
+            return null;
+        }
+
+        $key = "{$p}x{$l}x{$t}";
+        if (array_key_exists($key, $this->ukuranDimCache)) {
+            return $this->ukuranDimCache[$key];
+        }
+
+        try {
+            $u = Ukuran::where('panjang', $p)->where('lebar', $l)->where('tebal', $t)->first()
+                ?? Ukuran::where('panjang', $l)->where('lebar', $p)->where('tebal', $t)->first();
+
+            return $this->ukuranDimCache[$key] = $u?->id;
+        } catch (\Throwable $e) {
+            return $this->ukuranDimCache[$key] = null;
+        }
+    }
+
     private function getIdKategoriBarang(string $namaKategori): ?int
     {
         $key = strtolower(trim($namaKategori));
@@ -381,6 +470,32 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
         } catch (\Throwable $e) {
             return $this->gradeCache[$cacheKey] = null;
         }
+    }
+
+    /**
+     * Ambil harga bahan penolong dari model BahanPenolongProduksi
+     * (kategori hot_press). Exact match dulu, lalu fuzzy (saling mengandung).
+     * Return null jika tidak ketemu atau harga belum diisi (0).
+     */
+    private function getHargaBahanPenolong(string $namaBahan): ?float
+    {
+        $nama = strtolower(trim($namaBahan));
+
+        if ($nama === '') {
+            return null;
+        }
+
+        if (isset($this->bahanPenolongCache[$nama]) && $this->bahanPenolongCache[$nama] > 0) {
+            return $this->bahanPenolongCache[$nama];
+        }
+
+        foreach ($this->bahanPenolongCache as $key => $harga) {
+            if ($harga > 0 && $key !== '' && (str_contains($nama, $key) || str_contains($key, $nama))) {
+                return $harga;
+            }
+        }
+
+        return null;
     }
 
     // =========================================================================
@@ -753,6 +868,78 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
     }
 
     /**
+     * Resolve id_barang untuk Triplek / Platform mentah dari API akuntansi /api/barang/resolve-plywood
+     *
+     * @param string $tipe 'triplek' | 'platform'
+     * @param string|null $namaKeterangan nama barang / referensi lengkap (e.g. "12m better MTH", "platform 12 better MTH")
+     */
+    private function resolveIdBarangPlywood(
+        string $tipe,
+        ?string $namaKeterangan,
+        float $tebal,
+        string $jenisKayu = '',
+        string $grade = ''
+    ): ?int {
+        $cacheKey = implode('|', [
+            $tipe,
+            strtolower(trim((string) $namaKeterangan)),
+            $tebal,
+            strtolower(trim($jenisKayu)),
+            strtolower(trim($grade)),
+        ]);
+
+        if (array_key_exists($cacheKey, $this->idBarangCache)) {
+            return $this->idBarangCache[$cacheKey];
+        }
+
+        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-plywood';
+
+        try {
+            $response = Http::withoutVerifying()->timeout(10)->get($urlApi, [
+                'tipe' => $tipe,
+                'nama' => $namaKeterangan,
+                'tebal' => $tebal,
+                'jenis_kayu' => $jenisKayu,
+                'grade' => $grade,
+            ]);
+
+            $idBarang = $response->json('id_barang');
+        } catch (\Throwable $e) {
+            $idBarang = null;
+        }
+
+        return $this->idBarangCache[$cacheKey] = $idBarang;
+    }
+
+    /**
+     * Resolve id_barang untuk Bahan Penolong dari API akuntansi /api/barang/resolve-penolong
+     */
+    private function resolveIdBarangPenolong(string $namaBahan): ?int
+    {
+        $domainStr = $this->isWhn() ? 'whn' : 'wjy';
+        $cacheKey = 'penolong|'.strtolower(trim($namaBahan)).'|'.$domainStr;
+
+        if (array_key_exists($cacheKey, $this->idBarangCache)) {
+            return $this->idBarangCache[$cacheKey];
+        }
+
+        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-penolong';
+
+        try {
+            $response = Http::withoutVerifying()->timeout(10)->get($urlApi, [
+                'nama' => $namaBahan,
+                'domain' => $domainStr,
+            ]);
+
+            $idBarang = $response->json('id_barang');
+        } catch (\Throwable $e) {
+            $idBarang = null;
+        }
+
+        return $this->idBarangCache[$cacheKey] = $idBarang;
+    }
+
+    /**
      * Menentukan nama kategori "jenis_veneer" untuk dikirim ke resolver,
      * berdasarkan status AF dan grade bahan veneer. Mengikuti pola
      * kategori yang sudah dipakai baseQuery('bahan') / fetchReferensiAfalan().
@@ -824,6 +1011,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
             'platformHasilHp.barangSetengahJadi.ukuran',
             'platformHasilHp.barangSetengahJadi.grade',
             'bahanHotpress.mutasiKeluarPalet.mutasiKeluar.jenisKayu',
+            'bahanHotpress.mutasiKeluarPlatform.mutasiKeluar.jenisBarang',
             'bahanHotpress.barangSetengahJadi.jenisBarang',
             'bahanHotpress.barangSetengahJadi.ukuran',
             'bahanHotpress.barangSetengahJadi.grade',
@@ -882,7 +1070,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
 
                 // =======================================================
                 // 1. HASIL PRODUKSI (DEBIT)
-                //    - Triplek: akun RAW (belum ada mapping COA baru)
+                //    - Triplek: akun DI-ALIAS ke COA baru (Triplek Mentah)
                 //    - Platform: akun DI-ALIAS ke COA baru (Platform Jadi)
                 //    ID Barang: TIDAK di-resolve di sini — lihat catatan
                 //    header file (resolver hanya untuk bahan veneer).
@@ -915,10 +1103,16 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                         $keterangan = "{$tebalInt}{$jkSingkat} {$kwStr} MTH [UNKNOWN - cek master data]";
                     }
 
-                    // TODO: resolver triplek/platform — belum ada endpoint
-                    // resolve-triplek / resolve-platform yang dikonfirmasi,
-                    // jadi ID Barang dibiarkan null untuk baris hasil produksi.
-                    $rows[] = $this->makeRow($akunNama, $akunNo, $tglStr, $namaMesinSingkat, $keterangan, 'd', 'b', $banyak, $m3Round, $hargaHpp, null, null);
+                    // Resolver ID Barang untuk hasil produksi (Triplek Mentah / Platform Jadi)
+                    $idBarangProduksi = $this->resolveIdBarangPlywood(
+                        $tipe,
+                        $keterangan,
+                        $tebal,
+                        $jk,
+                        $grStr
+                    );
+
+                    $rows[] = $this->makeRow($akunNama, $akunNo, $tglStr, $namaMesinSingkat, $keterangan, 'd', 'b', $banyak, $m3Round, $hargaHpp, null, $idBarangProduksi);
 
                     $totalProdValue = round($banyak * $hargaHpp, 0);
                     if ($mId != $hp3Id) {
@@ -943,7 +1137,9 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
 
                     foreach ($prod->bahanHotpress as $bahan) {
                         $mutasiHeader = $bahan->mutasiKeluarPalet?->mutasiKeluar;
+                        $mutasiPlatformHeader = $bahan->mutasiKeluarPlatform?->mutasiKeluar;
                         $bsj = $bahan->barangSetengahJadi ?? null;
+                        $idGradePlatform = null;
 
                         if ($mutasiHeader) {
                             $p = (float) ($mutasiHeader->panjang ?? 0);
@@ -953,6 +1149,17 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                             $jkAsli = $mutasiHeader->jenisKayu?->nama_kayu ?? 'sengon';
                             $grAsli = (string) ($mutasiHeader->kw_grade ?? '');
                             $idUkuran = null;
+                        } elseif ($mutasiPlatformHeader) {
+                            // Bahan platform dari gudang platform jadi
+                            // (sumber = platform).
+                            $p = (float) ($mutasiPlatformHeader->panjang ?? 0);
+                            $l = (float) ($mutasiPlatformHeader->lebar ?? 0);
+                            $tebal = (float) ($mutasiPlatformHeader->tebal ?? 0);
+                            $jkAsli = $mutasiPlatformHeader->jenisBarang?->nama_jenis_barang ?? 'sengon';
+                            $idJenisKayu = $this->resolveIdJenisKayu($jkAsli);
+                            $grAsli = (string) ($mutasiPlatformHeader->kw_grade ?? '');
+                            $idUkuran = $this->resolveIdUkuranByDimensi($p, $l, $tebal);
+                            $idGradePlatform = $this->getIdGradePlatform($grAsli);
                         } elseif ($bsj) {
                             $u = $bsj->ukuran ?? null;
                             $idUkuran = $u?->id;
@@ -1011,7 +1218,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                         $isPlatform = ! $isAf && $this->isPlatformGrade($grAsli);
 
                         $ref = $isPlatform
-                            ? $this->fetchReferensi('platform', $idUkuran, $idJenisKayu, $grAsli)
+                            ? $this->fetchReferensi('platform', $idUkuran, $idJenisKayu, $grAsli, $idGradePlatform)
                             : $this->resolveRefBahan($idUkuran, $idJenisKayu, $grAsli);
 
                         // Platform: akun DI-ALIAS ke COA baru -> Platform Mentah (bahan masuk).
@@ -1030,10 +1237,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
 
                         $katGrade = $this->kategoriGrade($grAsli);
 
-                        // NEW: resolve id_barang untuk bahan VENEER (bukan
-                        // platform). Parameter "bagian" mengikuti pola yang
-                        // sama seperti JurnalSheetV2/JurnalRepairSheetV2:
-                        // AF -> PPC, tebal < 1 -> Face Back, selain itu Core.
+                        // Resolve id_barang untuk bahan VENEER atau PLATFORM
                         $idBarangBahan = null;
                         if (! $isPlatform) {
                             $bagianResolver = $isAf ? 'PPC' : (($tebal < 1) ? 'Face Back' : 'Core');
@@ -1045,6 +1249,15 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                                 $tebal,
                                 $p,
                                 $l,
+                                $grAsli
+                            );
+                        } else {
+                            // Bahan masuk: Platform Mentah
+                            $idBarangBahan = $this->resolveIdBarangPlywood(
+                                'platform',
+                                $ketDasar,
+                                $tebal,
+                                $jkAsli,
                                 $grAsli
                             );
                         }
@@ -1114,7 +1327,9 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                         );
                     }
 
-                    // --- BAHAN PENOLONG (akun RAW, tidak diubah; ID Barang null) ---
+                    // --- BAHAN PENOLONG ---
+                    // Akun & nama akun dari CoaAliasService; HARGA dari model
+                    // BahanPenolongProduksi (kategori hot_press). ID Barang null.
                     foreach ($prod->bahanPenolongHp as $penolong) {
                         $namaBahanLower = strtolower(trim($penolong->nama_bahan));
 
@@ -1128,12 +1343,22 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
 
                         $banyak = $penolong->jumlah;
                         $ref = $this->fetchReferensiPenolong($penolong->nama_bahan);
-                        [$akunNama, $akunNo, $hargaPenolong] = $this->coaAlias->extractAkunPenolong($ref, $penolong->nama_bahan);
+                        [$akunNama, $akunNo, $hargaAlias] = $this->coaAlias->extractAkunPenolong($ref, $penolong->nama_bahan);
+
+                        // Harga dari model BahanPenolongProduksi; fallback ke harga
+                        // alias/referensi hanya jika harga di model belum diisi.
+                        $hargaModel = $this->getHargaBahanPenolong($penolong->nama_bahan);
+                        $hargaPenolong = $hargaModel ?? (float) $hargaAlias;
 
                         $ketPenolong = $ref?->nama ?? "{$penolong->nama_bahan} [UNKNOWN - cek master data]";
+                        if ($hargaModel === null) {
+                            $ketPenolong .= ' [harga bahan penolong belum diisi]';
+                        }
+
+                        $idBarangPenolong = $this->resolveIdBarangPenolong($penolong->nama_bahan);
 
                         $totalHargaBahanGlobal += round($banyak * $hargaPenolong, 0);
-                        $rows[] = $this->makeRow($akunNama, $akunNo, $tglStr, $namaMesinSingkat, $ketPenolong, 'k', 'b', $banyak, '', $hargaPenolong);
+                        $rows[] = $this->makeRow($akunNama, $akunNo, $tglStr, $namaMesinSingkat, $ketPenolong, 'k', 'b', $banyak, '', $hargaPenolong, null, $idBarangPenolong);
                     }
 
                     // --- HUTANG GAJI — 2231.00 -> 2195.1 (ID Barang null) ---

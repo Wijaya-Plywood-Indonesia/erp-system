@@ -38,6 +38,98 @@
                 {{-- Judul Section --}}
                 <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-white">{{ $data['label'] }}</h2>
 
+                {{-- Banner potongan gaji produksi ini --}}
+                @once
+                    <style>
+                        .potongan-box {
+                            border: 1px solid #e5e7eb;
+                            border-left: 4px solid #9ca3af;
+                            border-radius: 10px;
+                            background: #f9fafb;
+                            color: #111827;
+                            margin-bottom: 20px;
+                            overflow: hidden;
+                        }
+                        .potongan-box--warn {
+                            border-color: #fecaca;
+                            border-left-color: #dc2626;
+                            background: #fef2f2;
+                        }
+                        .potongan-head { padding: 12px 16px; }
+                        .potongan-title { font-weight: 700; font-size: 15px; }
+                        .potongan-box--warn .potongan-title { color: #b91c1c; }
+                        .potongan-sub { font-size: 13px; color: #6b7280; margin-top: 2px; }
+                        .potongan-scroll { max-height: 300px; overflow: auto; border-top: 1px solid rgba(0, 0, 0, .08); }
+                        .potongan-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+                        .potongan-table th { text-align: left; padding: 8px 16px; font-weight: 600; color: #6b7280; font-size: 12px; }
+                        .potongan-table td { padding: 8px 16px; border-top: 1px solid rgba(0, 0, 0, .06); }
+                        .potongan-table .num { text-align: right; white-space: nowrap; }
+                        .potongan-table .warn { color: #b91c1c; font-weight: 700; }
+                        .potongan-kode { color: #9ca3af; font-size: 12px; margin-left: 4px; }
+                        .potongan-badge {
+                            display: inline-block; background: #dc2626; color: #fff; font-size: 10px;
+                            font-weight: 700; padding: 1px 7px; border-radius: 999px; margin-right: 6px;
+                        }
+
+                        .dark .potongan-box { border-color: #374151; border-left-color: #6b7280; background: rgba(255, 255, 255, .04); color: #f3f4f6; }
+                        .dark .potongan-box--warn { border-color: rgba(248, 113, 113, .35); border-left-color: #ef4444; background: rgba(239, 68, 68, .10); }
+                        .dark .potongan-box--warn .potongan-title { color: #fca5a5; }
+                        .dark .potongan-sub, .dark .potongan-table th { color: #9ca3af; }
+                        .dark .potongan-scroll { border-top-color: rgba(255, 255, 255, .10); }
+                        .dark .potongan-table td { border-top-color: rgba(255, 255, 255, .08); }
+                        .dark .potongan-table .warn { color: #fca5a5; }
+                    </style>
+                @endonce
+
+                @php
+                    $banner = $this->bannerPotongan($data['label']);
+                @endphp
+                @if ($banner)
+                    @php
+                        $potAda = $banner['jumlah_melebihi'] > 0;
+                        $potFmt = fn ($n) => 'Rp ' . number_format($n, 0, ',', '.');
+                        $potMulai = \Illuminate\Support\Carbon::parse($banner['mulai'])->locale('id')->translatedFormat('l, d M Y');
+                        $potAkhir = \Illuminate\Support\Carbon::parse($banner['akhir'])->locale('id')->translatedFormat('l, d M Y');
+                    @endphp
+
+                    <div class="potongan-box {{ $potAda ? 'potongan-box--warn' : '' }}">
+                        <div class="potongan-head">
+                            <div class="potongan-title">
+                                {{ $potAda ? '⚠️ ' . $banner['jumlah_melebihi'] . ' orang total potongan di atas ' . $potFmt($banner['batas']) : 'Rekap potongan gaji' }}
+                            </div>
+                            <div class="potongan-sub">Siklus gaji {{ $potMulai }} &ndash; {{ $potAkhir }}</div>
+                        </div>
+
+                        <div class="potongan-scroll">
+                            <table class="potongan-table">
+                                <thead>
+                                    <tr>
+                                        <th>Pegawai</th>
+                                        <th class="num">Potongan di sini</th>
+                                        <th class="num">Total 1 siklus</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($banner['rows'] as $potRow)
+                                        <tr>
+                                            <td>
+                                                {{ $potRow['nama_pegawai'] }}<span class="potongan-kode">{{ $potRow['kodep'] }}</span>
+                                            </td>
+                                            <td class="num">{{ $potFmt($potRow['potongan_lini']) }}</td>
+                                            <td class="num {{ $potRow['melebihi_batas'] ? 'warn' : '' }}">
+                                                @if ($potRow['melebihi_batas'])
+                                                    <span class="potongan-badge">MELEBIHI BATAS</span>
+                                                @endif
+                                                {{ $potFmt($potRow['total_potongan']) }}
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                @endif
+
                 {{-- ---- Cards Ringkasan ---- --}}
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 

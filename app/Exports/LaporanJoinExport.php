@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Filament\Pages\LaporanJoin\Queries\LoadLaporanJoin;
+use App\Models\BahanPenolongProduksi;
 use App\Models\JenisKayu;
 use App\Models\ReferensiHargaProduksi;
 use Carbon\Carbon;
@@ -348,7 +349,18 @@ class LaporanJoinSummarySheet implements FromCollection, WithEvents, WithHeading
 // ============================================================
 class JurnalSheet implements FromArray, WithColumnFormatting, WithColumnWidths, WithStyles, WithTitle
 {
-    public function __construct(protected $rawCollection) {}
+    /** @var array<string, float> nama_bahan_penolong (lowercase) => harga */
+    private array $bahanCache = [];
+
+    public function __construct(protected $rawCollection)
+    {
+        // Cache semua bahan penolong kategori joint dari DB, key = lowercase nama
+        BahanPenolongProduksi::where('kategori_produksi', 'joint')
+            ->get()
+            ->each(function (BahanPenolongProduksi $b) {
+                $this->bahanCache[strtolower(trim($b->nama_bahan_penolong))] = (float) ($b->harga ?? 0);
+            });
+    }
 
     public function title(): string
     {
@@ -470,6 +482,27 @@ class JurnalSheet implements FromArray, WithColumnFormatting, WithColumnWidths, 
         return (int) $hargaVeneer->harga;
     }
 
+    /**
+     * Cari harga bahan dari cache BahanPenolongProduksi (kategori joint).
+     * Cocokkan dengan fuzzy keyword. Fallback ke 0 jika tidak ada / harga belum diisi.
+     */
+    private function lookupHargaBahan(string $namaLower): float
+    {
+        // 1. Coba exact match
+        if (isset($this->bahanCache[$namaLower]) && $this->bahanCache[$namaLower] > 0) {
+            return $this->bahanCache[$namaLower];
+        }
+
+        // 2. Fuzzy: cari entry yang nama-nya mengandung keyword atau sebaliknya
+        foreach ($this->bahanCache as $cacheKey => $harga) {
+            if ($harga > 0 && (str_contains($namaLower, $cacheKey) || str_contains($cacheKey, $namaLower))) {
+                return $harga;
+            }
+        }
+
+        return 0;
+    }
+
     private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $total, $hitKbk = 'm', $idBarang = null): array
     {
         return [
@@ -482,7 +515,6 @@ class JurnalSheet implements FromArray, WithColumnFormatting, WithColumnWidths, 
     {
         $rows = [];
         $rows[] = ['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total'];
-
         foreach ($this->rawCollection as $produksi) {
             $tglFormat = Carbon::parse($produksi->tanggal_produksi)->format('d-m-Y');
             $totalDebit = 0;
@@ -528,26 +560,39 @@ class JurnalSheet implements FromArray, WithColumnFormatting, WithColumnWidths, 
                     $namaBahanRaw = $bahan->nama_bahan ?? $bahan->nama_bahan_penolong ?? 'bahan';
                     $nama = strtolower(trim($namaBahanRaw));
 
-                    $hargaH = 15000;
-                    $akun = '1481.00';
-                    $prefix = '';
+                    // Cari harga dari BahanPenolongProduksi (cache), cocokkan via keyword
+                    $hargaH = $this->lookupHargaBahan($nama);
 
                     if (str_contains($nama, 'aruki')) {
-                        $hargaH = 6900;
                         $akun = '1507.63';
-                        $prefix = 'Lem ';
-                    } elseif (str_contains($nama, 'dover')) {
-                        $hargaH = 6950;
+                        $namaAkun = 'Lem Aruki WJY';
+                    } elseif (str_contains($nama, 'dover') || $nama === 'lem_dover') {
                         $akun = '1507.64';
-                        $prefix = 'Lem ';
+                        $namaAkun = 'Lem Dover WJY';
+                    } elseif (str_contains($nama, 'pai')) {
+                        $akun = '1507.65';
+                        $namaAkun = 'Lem PAI WJY';
                     } elseif (str_contains($nama, 'tepung')) {
-                        $hargaH = 4500;
                         $akun = '1507.62';
-                        $prefix = '';
+                        $namaAkun = 'Tepung WJY';
+                    } elseif (str_contains($nama, 'hardner') || str_contains($nama, 'hadner')) {
+                        $akun = '1507.59';
+                        $namaAkun = 'Hadner WJY';
+                    } elseif (str_contains($nama, 'staples')) {
+                        $akun = '1507.61';
+                        $namaAkun = 'Isi Staples WJY';
+                    } elseif (str_contains($nama, 'solasi') && str_contains($nama, 'putih')) {
+                        $akun = '1507.66';
+                        $namaAkun = 'Isolasi Putih WJY';
+                    } elseif (str_contains($nama, 'solasi') && str_contains($nama, 'coklat')) {
+                        $akun = '1507.67';
+                        $namaAkun = 'Isolasi Coklat WJY';
+                    } else {
+                        $akun = '1481.00';
+                        $namaAkun = ucfirst($namaBahanRaw).' WJY';
                     }
 
                     $total = $hargaH * $jumlah;
-                    $namaAkun = $prefix.ucfirst($nama).' WJY';
 
                     $jurnalBlock[] = $this->makeRow($namaAkun, $tglFormat, $akun, '', 'k', $jumlah, 0, $hargaH, $total, 'b');
                     $totalKredit += $total;
@@ -591,7 +636,18 @@ class JurnalSheet implements FromArray, WithColumnFormatting, WithColumnWidths, 
 // ============================================================
 class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths, WithStyles, WithTitle
 {
-    public function __construct(protected $rawCollection) {}
+    /** @var array<string, float> nama_bahan_penolong (lowercase) => harga */
+    private array $bahanCache = [];
+
+    public function __construct(protected $rawCollection)
+    {
+        // Cache semua bahan penolong kategori joint dari DB, key = lowercase nama
+        BahanPenolongProduksi::where('kategori_produksi', 'joint')
+            ->get()
+            ->each(function (BahanPenolongProduksi $b) {
+                $this->bahanCache[strtolower(trim($b->nama_bahan_penolong))] = (float) ($b->harga ?? 0);
+            });
+    }
 
     public function title(): string
     {
@@ -760,24 +816,27 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
         };
     }
 
-    // Harga satuan per bahan tetap sama seperti sebelumnya (default 15000,
-    // override untuk aruki/dover/tepung). Silakan sesuaikan bila ada
-    // harga bahan lain yang perlu di-hardcode juga.
-    private function getHargaBahan(string $namaBahan): int
+    /**
+     * Ambil harga bahan dari cache BahanPenolongProduksi (kategori joint).
+     * Cocokkan dengan fuzzy keyword. Fallback 0 jika harga belum diisi di DB.
+     */
+    private function getHargaBahan(string $namaBahan): float
     {
         $nama = strtolower(trim($namaBahan));
 
-        if (str_contains($nama, 'aruki')) {
-            return 6900;
-        }
-        if (str_contains($nama, 'dover')) {
-            return 6950;
-        }
-        if (str_contains($nama, 'tepung')) {
-            return 4500;
+        // 1. Exact match
+        if (isset($this->bahanCache[$nama]) && $this->bahanCache[$nama] > 0) {
+            return $this->bahanCache[$nama];
         }
 
-        return 15000;
+        // 2. Fuzzy: nama bahan mengandung cache key, atau sebaliknya
+        foreach ($this->bahanCache as $cacheKey => $harga) {
+            if ($harga > 0 && (str_contains($nama, $cacheKey) || str_contains($cacheKey, $nama))) {
+                return $harga;
+            }
+        }
+
+        return 0;
     }
 
     private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $total, $hitKbk = 'm', $idBarang = null): array

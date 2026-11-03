@@ -67,6 +67,19 @@ class ReferensiHargaProduksiForm
                     ->options(function ($get) {
                         $idKategori = $get('id_kategori_barang');
 
+                        // Plywood Mentah memakai grade milik kategori Plywood,
+                        // karena barang produksi (barang_setengah_jadi_hp) memakai
+                        // grade Plywood. Kalau tidak disamakan, referensi tidak
+                        // ketemu di jurnal dan tampil UNKNOWN.
+                        $namaKategori = $idKategori
+                            ? strtolower((string) KategoriBarang::find($idKategori)?->nama_kategori)
+                            : null;
+
+                        if ($namaKategori === 'plywood mentah') {
+                            $idKategori = KategoriBarang::whereRaw('LOWER(nama_kategori) = ?', ['plywood'])->value('id')
+                                ?? $idKategori;
+                        }
+
                         return Grade::query()
                             ->when($idKategori, fn($q) => $q->where('id_kategori_barang', $idKategori))
                             ->get()

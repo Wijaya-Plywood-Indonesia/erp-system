@@ -44,6 +44,8 @@ class HppVeneerKeringPage extends Page
     public string $filterTebal     = '';
     public string $filterKw        = '';
     public string $filterBulan     = '';     // format YYYY-MM, kosong = semua bulan
+    public string $filterTanggalMulai = '';
+    public string $filterTanggalSelesai = '';
     public bool   $tampilNilaiStok = false;  // kolom Nilai Stok disembunyikan secara bawaan
 
     /**
@@ -89,7 +91,7 @@ class HppVeneerKeringPage extends Page
                     ->orderBy('detail_hasils.id_produksi_dryer')
                     ->limit(60 - count($idProduksi))
                     ->pluck('detail_hasils.id_produksi_dryer')
-                    ->map(fn ($v) => (int) $v)
+                    ->map(fn($v) => (int) $v)
                     ->all();
 
                 if ($semua) {
@@ -123,11 +125,13 @@ class HppVeneerKeringPage extends Page
                 $awal = Carbon::createFromFormat('Y-m-d', $this->filterBulan . '-01')->startOfMonth();
                 $q->whereBetween('tanggal_transaksi', [$awal->toDateString(), $awal->copy()->endOfMonth()->toDateString()]);
             })
-            ->when($this->filterJenisKayu, fn ($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
-            ->when($this->filterPanjang, fn ($q) => $q->whereHas('ukuran', fn ($u) => $u->where('panjang', $this->filterPanjang)))
-            ->when($this->filterLebar,   fn ($q) => $q->whereHas('ukuran', fn ($u) => $u->where('lebar', $this->filterLebar)))
-            ->when($this->filterTebal,   fn ($q) => $q->whereHas('ukuran', fn ($u) => $u->where('tebal', $this->filterTebal)))
-            ->when(trim($this->filterKw) !== '', fn ($q) => $this->flexibleSearch($q, $this->filterKw, $this->logSearchConfig()));
+            ->when($this->filterTanggalMulai, fn($q) => $q->whereDate('tanggal_transaksi', '>=', $this->filterTanggalMulai))
+            ->when($this->filterTanggalSelesai, fn($q) => $q->whereDate('tanggal_transaksi', '<=', $this->filterTanggalSelesai))
+            ->when($this->filterJenisKayu, fn($q) => $q->where('id_jenis_kayu', $this->filterJenisKayu))
+            ->when($this->filterPanjang, fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('panjang', $this->filterPanjang)))
+            ->when($this->filterLebar,   fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('lebar', $this->filterLebar)))
+            ->when($this->filterTebal,   fn($q) => $q->whereHas('ukuran', fn($u) => $u->where('tebal', $this->filterTebal)))
+            ->when(trim($this->filterKw) !== '', fn($q) => $this->flexibleSearch($q, $this->filterKw, $this->logSearchConfig()));
     }
 
     // ── Computed: log transaksi (50 baris per halaman) ─────────
@@ -169,12 +173,30 @@ class HppVeneerKeringPage extends Page
     }
 
     // ── Kembali ke halaman 1 setiap filter berubah ─────────────
-    public function updatedFilterJenisKayu(): void { $this->resetPage(); }
-    public function updatedFilterPanjang(): void   { $this->resetPage(); }
-    public function updatedFilterLebar(): void     { $this->resetPage(); }
-    public function updatedFilterTebal(): void     { $this->resetPage(); }
-    public function updatedFilterKw(): void        { $this->resetPage(); }
-    public function updatedFilterBulan(): void     { $this->resetPage(); }
+    public function updatedFilterJenisKayu(): void
+    {
+        $this->resetPage();
+    }
+    public function updatedFilterPanjang(): void
+    {
+        $this->resetPage();
+    }
+    public function updatedFilterLebar(): void
+    {
+        $this->resetPage();
+    }
+    public function updatedFilterTebal(): void
+    {
+        $this->resetPage();
+    }
+    public function updatedFilterKw(): void
+    {
+        $this->resetPage();
+    }
+    public function updatedFilterBulan(): void
+    {
+        $this->resetPage();
+    }
 
     // ── Computed: daftar bulan yang punya log (untuk filter) ───
     public function getBulanListProperty()
@@ -207,6 +229,8 @@ class HppVeneerKeringPage extends Page
         $this->filterTebal     = '';
         $this->filterKw        = '';
         $this->filterBulan     = '';
+        $this->filterTanggalMulai = '';
+        $this->filterTanggalSelesai = '';
         $this->resetPage();
     }
 
@@ -251,9 +275,21 @@ class HppVeneerKeringPage extends Page
             ->whereBetween('tanggal_transaksi', [$awal->toDateString(), $awal->copy()->endOfMonth()->toDateString()])
             ->with(['ukuran:id,panjang,lebar,tebal'])
             ->reorder()
-            ->get(['id', 'id_ukuran', 'id_jenis_kayu', 'kw', 'tanggal_transaksi', 'keterangan', 'id_veneer_mutasi',
-                'id_detail_hasil_dryer', 'jenis_transaksi', 'm3',
-                'hpp_veneer_basah_per_m3', 'ongkos_dryer_per_m3', 'hpp_kering_per_m3']);
+            ->get([
+                'id',
+                'id_ukuran',
+                'id_jenis_kayu',
+                'kw',
+                'tanggal_transaksi',
+                'keterangan',
+                'id_veneer_mutasi',
+                'id_detail_hasil_dryer',
+                'jenis_transaksi',
+                'm3',
+                'hpp_veneer_basah_per_m3',
+                'ongkos_dryer_per_m3',
+                'hpp_kering_per_m3'
+            ]);
 
         $komp = $this->komponenBaris($rows);
 
@@ -261,15 +297,15 @@ class HppVeneerKeringPage extends Page
             $r->komp = $komp[$r->id] ?? null;
 
             return $r;
-        })->filter(fn ($r) => $r->komp !== null)->values();
+        })->filter(fn($r) => $r->komp !== null)->values();
     }
 
     /** Hitung rata-rata tertimbang m³ dari sekumpulan baris (hasil barisHppBulan). */
     protected function petaHpp(Collection $rows, ?string $bulan = null): array
     {
-        $m3 = (float) $rows->sum(fn ($r) => (float) $r->m3);
-        $per = fn (string $k) => $m3 > 0
-            ? (float) $rows->sum(fn ($r) => $r->komp[$k] * (float) $r->m3) / $m3
+        $m3 = (float) $rows->sum(fn($r) => (float) $r->m3);
+        $per = fn(string $k) => $m3 > 0
+            ? (float) $rows->sum(fn($r) => $r->komp[$k] * (float) $r->m3) / $m3
             : 0.0;
 
         return [
@@ -280,9 +316,9 @@ class HppVeneerKeringPage extends Page
             'pegawai'   => $per('pegawai'),
             'mesin'     => $per('mesin'),
             'total'     => $per('total'),
-            'sementara' => $rows->filter(fn ($r) => ! $r->komp['final'])->count(),
+            'sementara' => $rows->filter(fn($r) => ! $r->komp['final'])->count(),
             // palet yang ongkos pegawai atau mesinnya masih 0 (belum diinput) → angkanya belum lengkap
-            'kurang'    => $rows->filter(fn ($r) => $r->komp['pegawai'] <= 0 || $r->komp['mesin'] <= 0)->count(),
+            'kurang'    => $rows->filter(fn($r) => $r->komp['pegawai'] <= 0 || $r->komp['mesin'] <= 0)->count(),
         ];
     }
 
@@ -337,8 +373,8 @@ class HppVeneerKeringPage extends Page
         $nama = JenisKayu::pluck('nama_kayu', 'id');
 
         return $this->barisHppBulan($r['bulan'])
-            ->filter(fn ($row) => $row->ukuran)
-            ->groupBy(fn ($row) => $row->id_jenis_kayu . '|' . (float) $row->ukuran->panjang . '|' . (float) $row->ukuran->lebar . '|' . (float) $row->ukuran->tebal)
+            ->filter(fn($row) => $row->ukuran)
+            ->groupBy(fn($row) => $row->id_jenis_kayu . '|' . (float) $row->ukuran->panjang . '|' . (float) $row->ukuran->lebar . '|' . (float) $row->ukuran->tebal)
             ->map(function (Collection $g) use ($nama) {
                 $first = $g->first();
                 $p = $this->petaHpp($g);

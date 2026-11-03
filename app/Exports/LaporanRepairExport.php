@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Exports\Sheets\JurnalRepairSheetV2;
 use App\Filament\Pages\LaporanRepairs\Queries\LoadLaporanRepairs;
+use App\Models\BahanPenolongProduksi;
 use App\Models\JenisKayu;
 use App\Models\KategoriBarang;
 use App\Models\ReferensiHargaProduksi;
@@ -570,13 +571,25 @@ class LaporanRepairSummarySheet implements FromCollection, WithEvents, WithHeadi
 // ============================================================
 class JurnalSheet implements FromArray, WithColumnFormatting, WithColumnWidths, WithStyles, WithTitle
 {
-    public function __construct(protected $rawCollection) {}
-
     private array $kayuCache = [];
 
     private array $kategoriCache = [];
 
     private array $bahanRefCache = [];
+
+    /** @var array<string, float> nama_bahan_penolong (lowercase) => harga dari model BahanPenolongProduksi */
+    private array $bahanHargaCache = [];
+
+    public function __construct(protected $rawCollection)
+    {
+        // Cache semua bahan penolong kategori repair dari DB, key = lowercase nama
+        // (sesuaikan nilai 'repair' dengan isi kolom kategori_produksi di database)
+        BahanPenolongProduksi::where('kategori_produksi', 'repair')
+            ->get()
+            ->each(function (BahanPenolongProduksi $b) {
+                $this->bahanHargaCache[strtolower(trim($b->nama_bahan_penolong))] = (float) ($b->harga ?? 0);
+            });
+    }
 
     public function title(): string
     {
@@ -773,6 +786,30 @@ class JurnalSheet implements FromArray, WithColumnFormatting, WithColumnWidths, 
             ->first();
 
         return $this->bahanRefCache[$key] = $ref;
+    }
+
+    /**
+     * Cari harga bahan dari cache BahanPenolongProduksi (kategori repair).
+     * Exact match dulu, lalu fuzzy keyword. Return 0 jika tidak ada / harga belum diisi.
+     */
+    private function lookupHargaBahan(string $namaBahan): float
+    {
+        $nama = strtolower(trim($namaBahan));
+
+        // 1. Exact match
+        if (isset($this->bahanHargaCache[$nama]) && $this->bahanHargaCache[$nama] > 0) {
+            return $this->bahanHargaCache[$nama];
+        }
+
+        // 2. Fuzzy match: nama mengandung cache key, atau sebaliknya
+        foreach ($this->bahanHargaCache as $cacheKey => $harga) {
+            if ($harga > 0 && $cacheKey !== '' && $nama !== ''
+                && (str_contains($nama, $cacheKey) || str_contains($cacheKey, $nama))) {
+                return $harga;
+            }
+        }
+
+        return 0;
     }
 
     private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $hitKbk = 'm'): array
@@ -1047,6 +1084,8 @@ class JurnalSheet implements FromArray, WithColumnFormatting, WithColumnWidths, 
 
             // ============================================================
             // STEP 3: KREDIT BAHAN PENOLONG
+            // Akun (nama & nomor) tetap dari ReferensiHargaProduksi (COA),
+            // harga diambil dari model BahanPenolongProduksi (seperti Join).
             // ============================================================
             if (! empty($produksi->bahanPenolongRepair)) {
                 foreach ($produksi->bahanPenolongRepair as $bahan) {
@@ -1056,8 +1095,17 @@ class JurnalSheet implements FromArray, WithColumnFormatting, WithColumnWidths, 
                     }
 
                     $namaBahanRaw = $bahan->bahanPenolong->nama_bahan_penolong ?? 'Bahan';
+
                     $refBahan = $this->fetchReferensiBahan($namaBahanRaw);
-                    [$namaAkun, $noAkun, $harga] = $this->extractAkunVeneer($refBahan);
+                    [$namaAkun, $noAkun, $hargaRef] = $this->extractAkunVeneer($refBahan);
+
+                    // Harga utama dari model BahanPenolongProduksi
+                    $harga = $this->lookupHargaBahan($namaBahanRaw);
+                    if ($harga <= 0) {
+                        // Fallback ke harga referensi kalau di model belum diisi.
+                        // Hapus blok ini kalau mau persis seperti Join (harga 0 bila kosong).
+                        $harga = $hargaRef;
+                    }
 
                     $keteranganBahan = ! $refBahan ? "{$namaBahanRaw} [UNKNOWN]" : '';
                     $jurnalBlockKredit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keteranganBahan, 'k', $jumlah, '', $harga, 'b');

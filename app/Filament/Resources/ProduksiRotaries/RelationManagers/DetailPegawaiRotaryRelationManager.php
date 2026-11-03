@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiRotaries\RelationManagers;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use App\Models\Pegawai;
 use App\Models\PegawaiRotary;
 use App\Models\ValidasiHasilRotary;
@@ -136,6 +137,9 @@ class DetailPegawaiRotaryRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
+        // Tanggal produksi Rotary yang sedang dibuka
+        $tanggalRotary = fn ($livewire) => $livewire->getOwnerRecord()->tgl_produksi;
+
         return $table
             ->recordTitleAttribute('id_pegawai')
             ->columns([
@@ -222,10 +226,13 @@ class DetailPegawaiRotaryRelationManager extends RelationManager
                             ->send();
                     }),
                 EditAction::make(),
+                PindahPegawaiTableActions::recordAction('rotary', $tanggalRotary),
+                PindahPegawaiTableActions::batalAction('rotary'),
                 DeleteAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('rotary', $tanggalRotary),
                     DeleteBulkAction::make(),
                 ]),
             ]);

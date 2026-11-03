@@ -20,6 +20,8 @@ class LogLogCorePage extends Page
     public string $filterPanjang = '';
     public string $filterJenisKayu = '';
     public string $filterTipeTransaksi = '';
+    public string $filterTanggalMulai = '';
+    public string $filterTanggalSelesai = '';
     public string $limitPerJenis = '15';
 
     // ── Computed: log transaksi (buku besar per jenis+panjang) ──
@@ -37,6 +39,14 @@ class LogLogCorePage extends Page
 
         if ($this->filterTipeTransaksi) {
             $query->where('tipe_transaksi', $this->filterTipeTransaksi);
+        }
+
+        if ($this->filterTanggalMulai) {
+            $query->whereDate('tanggal', '>=', $this->filterTanggalMulai);
+        }
+
+        if ($this->filterTanggalSelesai) {
+            $query->whereDate('tanggal', '<=', $this->filterTanggalSelesai);
         }
 
         return $query->orderByDesc('created_at')->orderByDesc('id')->get();

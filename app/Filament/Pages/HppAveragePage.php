@@ -25,6 +25,8 @@ class HppAveragePage extends Page
     public string $filterJenisKayu = '';
     public string $filterLahan = '';
     public string $filterTipeTransaksi = ''; // ✅ Tambahan filter tipe transaksi
+    public string $filterTanggalMulai = '';
+    public string $filterTanggalSelesai = '';
     public string $limitPerLahan = '15';
 
     /**
@@ -67,6 +69,15 @@ class HppAveragePage extends Page
             $query->where('tipe_transaksi', $this->filterTipeTransaksi);
         }
 
+        // ✅ Filter tanggal
+        if ($this->filterTanggalMulai) {
+            $query->whereDate('tanggal', '>=', $this->filterTanggalMulai);
+        }
+
+        if ($this->filterTanggalSelesai) {
+            $query->whereDate('tanggal', '<=', $this->filterTanggalSelesai);
+        }
+
         // return $query->orderByDesc('tanggal')
         //     ->orderByDesc('id')
         //     ->get();
@@ -74,6 +85,12 @@ class HppAveragePage extends Page
         return $query->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
+    }
+
+    public function resetFilterTanggal(): void
+    {
+        $this->filterTanggalMulai = '';
+        $this->filterTanggalSelesai = '';
     }
 
     // ── Statistik lengkap ─────────────────────────────────

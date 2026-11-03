@@ -75,7 +75,7 @@ class RekapPotonganGajiService
      * TODO: ini masih ASUMSI SEMENTARA — konfirmasi rumus yang benar
      * ke pemilik proses payroll, lalu hapus toggle ini kalau sudah pasti.
      */
-    protected const POTONGAN_AMBIL_TERKECIL = true;
+    public const POTONGAN_AMBIL_TERKECIL = true;
 
     protected string $tanggal;
 

@@ -2,11 +2,13 @@
 
 namespace App\Exports\Sheets;
 
+use App\Models\BahanPenolongProduksi;
 use App\Models\JenisKayu;
 use App\Models\ReferensiHargaProduksi;
 use App\Services\CoaAliasService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
@@ -27,39 +29,40 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 // - Nomor & nama akun mengikuti daftar COA baru (1402.x, 2195.x, 5069.x),
 //   diambil lewat CoaAliasService (fallback ke mapping manual kalau
 //   data ReferensiHargaProduksi/subAnakAkun tidak ditemukan).
-// - Bahan penolong yang tidak dikenali (bukan lem/tepung/hardner/dst)
-//   fallback ke akun umum 1402.0 Persediaan Bahan Baku.
+// - Bahan penolong yang tidak dikenali fallback ke akun umum
+//   1402.0 Persediaan Bahan Baku.
 // - Baris selisih debit-kredit pakai 5069.2 Selisih harga patok produksi.
-// - Perhitungan harga patok / harga bahan / m3 tetap memakai logic yang
-//   sama seperti JurnalSheet (tidak diubah), hanya akun & nama akun yang
-//   di-general-kan lewat CoaAliasService.
-// - NEW: Kolom "ID Barang" (O) diisi dengan hasil resolve dari API
-//   eksternal /api/barang/resolve-veneer, mengikuti pola yang sama
-//   dipakai di JurnalRepairSheetV2 & LaporanProduksiHotPressJurnalSheetV2.
-//   Resolver dipanggil untuk baris HASIL (debit, selalu "Veneer Jadi")
-//   dan baris MODAL (kredit, dianggap "Veneer Kering" — bahan mentah
-//   sebelum diproses jadi veneer jadi), sesuai peran masing-masing di
-//   proses dryer/join. Baris bahan penolong, gaji, dan selisih HPP
-//   tidak relevan dengan ID Barang veneer, jadi tetap null. Hasil
-//   di-cache per kombinasi parameter supaya tidak memanggil API
-//   berkali-kali untuk kombinasi ukuran/jenis/kw yang identik.
+//   Arah selisih dihitung: debit > kredit => kredit, sebaliknya => debit.
+// - Harga bahan penolong dibaca dari master BahanPenolongProduksi
+//   (kategori joint), TIDAK di-hardcode.
+// - Kolom "ID Barang" (O) diisi hasil resolve API eksternal
+//   /api/barang/resolve-veneer (HASIL = Veneer Jadi, MODAL = Veneer Kering),
+//   di-cache per kombinasi parameter.
 // ============================================================
 class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths, WithStyles, WithTitle
 {
     protected CoaAliasService $coaAlias;
 
+    /**
+     * Cache harga bahan penolong dari master: nama (lowercase) => harga.
+     * Static karena JoinJurnalSource membuat objek sheet baru per produksi;
+     * hanya hidup selama satu request, jadi perubahan master langsung terbaca
+     * saat halaman dimuat ulang.
+     *
+     * @var array<string, float>|null
+     */
+    private static ?array $bahanCache = null;
+
+    /**
+     * Cache hasil resolve id_barang, dikunci per kombinasi parameter
+     * (jenis_veneer|bagian|jenis_kayu|ketebalan|ukuran|kw).
+     */
+    private array $idBarangCache = [];
+
     public function __construct(protected $rawCollection, ?CoaAliasService $coaAlias = null)
     {
         $this->coaAlias = $coaAlias ?? new CoaAliasService;
     }
-
-    /**
-     * Cache hasil resolve id_barang dari API eksternal, dikunci per
-     * kombinasi parameter (jenis_veneer|bagian|jenis_kayu|ketebalan|
-     * ukuran|kw) supaya tidak memanggil API berkali-kali untuk
-     * kombinasi yang sama dalam satu laporan.
-     */
-    private array $idBarangCache = [];
 
     public function title(): string
     {
@@ -111,8 +114,9 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
 
                 $namaAkunVal = $sheet->getCell("A{$row}")->getValue();
                 if ($namaAkunVal !== '' && $namaAkunVal !== null) {
+                    // Rumus sama dengan JurnalSheetRows::total() (dibulatkan ke rupiah).
                     $sheet->getCell("N{$row}")->setValue(
-                        "=IF(J{$row}=\"m\",M{$row}*L{$row},IF(J{$row}=\"b\",M{$row}*K{$row},M{$row}))"
+                        "=ROUND(IF(J{$row}=\"m\",M{$row}*L{$row},IF(J{$row}=\"b\",M{$row}*K{$row},M{$row})), 0)"
                     );
                 }
             }
@@ -125,9 +129,8 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
     }
 
     /**
-     * Ambil $ref ReferensiHargaProduksi utuh (bukan cuma harga int),
+     * Ambil ReferensiHargaProduksi utuh (bukan cuma harga int),
      * supaya bisa dialiaskan lewat CoaAliasService::extractAkunVeneer().
-     * Logic pencarian tetap sama seperti versi lama (getHargaVeneerDb).
      */
     private function getRefVeneerDb(string $jenis, float $tebal, bool $isAf): ?ReferensiHargaProduksi
     {
@@ -158,7 +161,7 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
     }
 
     /**
-     * Harga patok tetap pakai logic lama (DB dulu, fallback hardcode).
+     * Harga patok: DB dulu, fallback hardcode.
      */
     private function getHargaPatok(?ReferensiHargaProduksi $ref, string $jenis, float $tebal, bool $isAf = false): int
     {
@@ -223,33 +226,47 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
         return [$noAkun, $namaAkun];
     }
 
-    // Harga satuan per bahan tetap sama seperti sebelumnya (default 15000,
-    // override untuk aruki/dover/tepung). Silakan sesuaikan bila ada
-    // harga bahan lain yang perlu di-hardcode juga.
-    private function getHargaBahan(string $namaBahan): int
+    /**
+     * Harga satuan bahan penolong dari master BahanPenolongProduksi
+     * (kategori joint). Cocok persis dulu, lalu cocok sebagian.
+     * Kalau tidak ada harga di master, kembalikan 0 (tidak mengarang angka)
+     * dan catat ke log supaya master bisa dilengkapi.
+     */
+    private function getHargaBahan(string $namaBahan): float
     {
+        if (self::$bahanCache === null) {
+            self::$bahanCache = [];
+            BahanPenolongProduksi::where('kategori_produksi', 'joint')
+                ->get()
+                ->each(function (BahanPenolongProduksi $b) {
+                    self::$bahanCache[strtolower(trim($b->nama_bahan_penolong))] = (float) ($b->harga ?? 0);
+                });
+        }
+
         $nama = strtolower(trim($namaBahan));
 
-        if (str_contains($nama, 'aruki')) {
-            return 6900;
-        }
-        if (str_contains($nama, 'dover')) {
-            return 6950;
-        }
-        if (str_contains($nama, 'tepung')) {
-            return 4500;
+        // 1. Cocok persis
+        $persis = self::$bahanCache[$nama] ?? 0;
+        if ($persis > 0) {
+            return $persis;
         }
 
-        return 15000;
+        // 2. Cocok sebagian (nama mengandung kunci master, atau sebaliknya)
+        foreach (self::$bahanCache as $kunci => $harga) {
+            if ($harga > 0 && $kunci !== '' && $nama !== '' && (str_contains($nama, $kunci) || str_contains($kunci, $nama))) {
+                return $harga;
+            }
+        }
+
+        Log::warning('[JurnalJoin] Harga bahan penolong tidak ditemukan di master', ['bahan' => $namaBahan]);
+
+        return 0;
     }
 
     /**
      * Resolve id_barang dari API eksternal /api/barang/resolve-veneer,
-     * dengan cache per kombinasi parameter supaya tidak memanggil API
-     * berkali-kali untuk kombinasi ukuran/jenis/kw yang identik dalam
-     * satu laporan. Mengembalikan null (bukan melempar exception) kalau
-     * API gagal/timeout, supaya proses export tidak gagal total hanya
-     * karena resolver down.
+     * dengan cache per kombinasi parameter. Mengembalikan null (bukan
+     * melempar exception) kalau API gagal/timeout.
      *
      * @param  string  $jenisVeneer  'Veneer Jadi' atau 'Veneer Kering'
      */
@@ -312,7 +329,8 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
         $rows = [];
         $rows[] = ['Nama Akun', 'tgl', 'jurnal', 'No Akun', 'No', 'mm', 'Nama', 'Keterangan', 'map', 'hit kbk', 'Banyak', 'M3', 'Harga', 'Total', 'ID Barang'];
 
-        $akunGaji = $this->coaAlias->getAkunGaji(false); // dryer = domain WJY -> ext 00
+        // Periksa: parameter false = domain WJY (ext 00). Pastikan sesuai untuk Join.
+        $akunGaji = $this->coaAlias->getAkunGaji(false);
         $akunHpp = $this->coaAlias->getAkunHpp();
 
         foreach ($this->rawCollection as $produksi) {
@@ -333,9 +351,9 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
 
                 $m3 = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $hasil->jumlah) / 10000000;
                 $hargaPatok = $this->getHargaPatok($ref, $jnsNorm, (float) $ukuran->tebal, $isAf);
-                $totalValue = $m3 * $hargaPatok;
+                $totalValue = round($m3 * $hargaPatok, 0);
 
-                // NEW: resolve id_barang — hasil selalu "Veneer Jadi"
+                // Hasil selalu "Veneer Jadi"
                 $idBarang = $this->resolveIdBarang(
                     'Veneer Jadi',
                     $isAf,
@@ -350,7 +368,7 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
                 $totalDebit += $totalValue;
             }
 
-            // 2. KREDIT: Modal (sama seperti hasil, akun digabung)
+            // 2. KREDIT: Modal (akun digabung, id_barang dianggap "Veneer Kering")
             foreach ($produksi->modalJoint as $modal) {
                 $ukuran = $modal->ukuran;
                 $jnsNorm = $this->normalizeJenis($modal->jenisKayu->nama_kayu ?? '');
@@ -362,11 +380,8 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
 
                 $m3 = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $modal->jumlah) / 10000000;
                 $hargaPatok = $this->getHargaPatok($ref, $jnsNorm, (float) $ukuran->tebal, $isAf);
-                $totalValue = $m3 * $hargaPatok;
+                $totalValue = round($m3 * $hargaPatok, 0);
 
-                // NEW: resolve id_barang — modal dianggap "Veneer Kering"
-                // (bahan mentah sebelum diproses jadi veneer jadi), sama
-                // seperti pola peran modal/hasil di JurnalRepairSheetV2.
                 $idBarang = $this->resolveIdBarang(
                     'Veneer Kering',
                     $isAf,
@@ -381,8 +396,7 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
                 $totalKredit += $totalValue;
             }
 
-            // 3. KREDIT: Bahan penolong (akun sesuai COA baru, fallback 1402.0)
-            // ID Barang tidak relevan untuk bahan penolong -> null.
+            // 3. KREDIT: Bahan penolong (harga dari master, akun COA baru, fallback 1402.0)
             foreach ($produksi->bahanProduksi as $bahan) {
                 $jumlah = (float) ($bahan->jumlah ?? 0);
                 if ($jumlah > 0) {
@@ -390,7 +404,7 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
 
                     [$akun, $namaAkun] = $this->getAkunBahan($namaBahanRaw);
                     $hargaH = $this->getHargaBahan($namaBahanRaw);
-                    $total = $hargaH * $jumlah;
+                    $total = round($hargaH * $jumlah, 0);
 
                     // Nama akun persis sama dengan COA; nama bahan asli ditaruh di Keterangan
                     $keterangan = ucfirst(strtolower(trim($namaBahanRaw)));
@@ -400,17 +414,19 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
                 }
             }
 
-            // 4. KREDIT: Gaji -> 2195.1 Hutang Gaji (ID Barang null)
+            // 4. KREDIT: Gaji -> Hutang Gaji
             $jmlPekerja = (int) $produksi->pegawaiJoint->count();
             if ($jmlPekerja > 0) {
                 $jurnalBlock[] = $this->makeRow($akunGaji['hutang']['nama'], $tglFormat, $akunGaji['hutang']['no'], '', 'k', $jmlPekerja, 0, 150000, ($jmlPekerja * 150000), 'b');
                 $totalKredit += ($jmlPekerja * 150000);
             }
 
-            // 5. Selisih debit-kredit -> 5069.2 Selisih harga patok produksi (ID Barang null)
+            // 5. Selisih debit-kredit -> 5069.2 Selisih harga patok produksi
+            //    debit > kredit => selisih di kredit; kredit > debit => selisih di debit.
             $selisih = $totalDebit - $totalKredit;
             if (round($selisih, 2) != 0) {
-                $jurnalBlock[] = $this->makeRow($akunHpp['nama'], $tglFormat, $akunHpp['no'], '', 'd', 0, 0, abs($selisih), abs($selisih), '');
+                $dkSelisih = $selisih > 0 ? 'k' : 'd';
+                $jurnalBlock[] = $this->makeRow($akunHpp['nama'], $tglFormat, $akunHpp['no'], '', $dkSelisih, 0, 0, abs($selisih), abs($selisih), '');
             }
 
             foreach ($jurnalBlock as $row) {
