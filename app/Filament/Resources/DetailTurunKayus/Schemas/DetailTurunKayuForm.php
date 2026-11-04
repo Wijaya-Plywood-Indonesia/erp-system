@@ -2,21 +2,27 @@
 
 namespace App\Filament\Resources\DetailTurunKayus\Schemas;
 
-use App\Models\Pegawai;
-use App\Models\KayuMasuk;
-use App\Models\DetailTurunKayu;
-use Filament\Schemas\Schema;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\TextInput;
-use Illuminate\Support\Facades\Log;
-use App\Services\WatermarkService;
-use Filament\Schemas\Components\Utilities\Get; // Import Get
 use App\Forms\Components\CompressedFileUpload;
+use App\Models\DetailTurunKayu;
+use App\Models\KayuMasuk;
 use Carbon\Carbon;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Auth;
 
 class DetailTurunKayuForm
 {
+    protected const PRIVILEGED_ROLES = ['super_admin', 'Super Admin', 'admin_kayu'];
+
+    protected static function isPrivileged(): bool
+    {
+        $user = Auth::user();
+
+        return $user && $user->hasAnyRole(self::PRIVILEGED_ROLES);
+    }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -46,52 +52,50 @@ class DetailTurunKayuForm
                                 $seri = $kayu->seri ?? '—';
 
                                 return [
-                                    $kayu->id => "$supplier | $nopol ($jenis) | Seri: $seri"
+                                    $kayu->id => "$supplier | $nopol ($jenis) | Seri: $seri",
                                 ];
                             })
                             ->toArray();
                     })
                     ->searchable()
                     ->preload()
+                    ->live() // agar opsi status ikut ter-refresh saat kayu masuk diganti
                     ->required()
                     ->placeholder('Pilih kayu masuk'),
 
                 // STATUS
                 Select::make('status')
                     ->label('Status')
-                    ->options(function (callable $get) {
-                        $kayuMasukId = $get('id_kayu_masuk');
-
-                        if (!$kayuMasukId) {
-                            return [
-                                'menunggu' => 'Menunggu',
-                                'selesai' => 'Selesai',
-                            ];
-                        }
-
-                        $kayuMasuk = KayuMasuk::with('penggunaanKendaraanSupplier')
-                            ->find($kayuMasukId);
-
-                        $jenis = $kayuMasuk?->penggunaanKendaraanSupplier?->jenis_kendaraan;
-
-                        // Jika kendaraan Fuso → dua status
-                        if ($jenis === 'Fuso') {
-                            return [
-                                'menunggu' => 'Menunggu',
-                                'selesai' => 'Selesai',
-                            ];
-                        }
-
-                        // Selain Fuso → hanya selesai
-                        return [
+                    ->options(function (Get $get) {
+                        $semua = [
+                            'menunggu' => 'Menunggu',
                             'selesai' => 'Selesai',
                         ];
+
+                        // Role istimewa: bebas pilih status untuk semua kendaraan
+                        if (self::isPrivileged()) {
+                            return $semua;
+                        }
+
+                        $kayuMasukId = $get('id_kayu_masuk');
+
+                        if (! $kayuMasukId) {
+                            return $semua;
+                        }
+
+                        $jenis = KayuMasuk::with('penggunaanKendaraanSupplier')
+                            ->find($kayuMasukId)
+                            ?->penggunaanKendaraanSupplier
+                            ?->jenis_kendaraan;
+
+                        // Fuso → dua status, selain Fuso → hanya selesai
+                        return $jenis === 'Fuso'
+                            ? $semua
+                            : ['selesai' => 'Selesai'];
                     })
-                    ->reactive()
+                    ->live()
                     ->native(false)
                     ->required(),
-
-
 
                 TextInput::make('nama_supir')
                     ->label('Nama Supir')
@@ -116,24 +120,22 @@ class DetailTurunKayuForm
                         // 2. Ambil Data dari Kayu Masuk (Seri & Tanggal)
                         $kayuMasukId = $get('id_kayu_masuk');
 
-                        // Default value
                         $noSeri = 'Tanpa-Seri';
-                        $tanggalTurun = now()->format('Y-m-d'); // Default hari ini jika data tidak ketemu
+                        $tanggalTurun = now()->format('Y-m-d');
 
                         if ($kayuMasukId) {
                             $kayu = KayuMasuk::find($kayuMasukId);
+
                             if ($kayu) {
-                                // Ambil Seri
                                 $noSeri = "Seri-{$kayu->seri}";
 
-                                // Ambil Tanggal Kayu Masuk (Produksi)
-                                if (!empty($kayu->tgl_kayu_masuk)) {
+                                if (! empty($kayu->tgl_kayu_masuk)) {
                                     $tanggalTurun = Carbon::parse($kayu->tgl_kayu_masuk)->format('Y-m-d');
                                 }
                             }
                         }
 
-                        // 3. Gabungkan: "2026-01-19_Supir-Budi_Seri-105.webp"
+                        // Contoh hasil: "2026-01-19_Supir-Budi_Seri-105"
                         return "{$tanggalTurun}_Supir-{$namaSupir}_{$noSeri}";
                     }),
             ]);
