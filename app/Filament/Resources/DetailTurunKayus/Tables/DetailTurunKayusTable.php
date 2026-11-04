@@ -2,55 +2,64 @@
 
 namespace App\Filament\Resources\DetailTurunKayus\Tables;
 
-use Filament\Tables\Table;
-use Filament\Tables\Columns\TextColumn;
 use App\Models\DetailTurunKayu;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 
 class DetailTurunKayusTable
 {
+    protected const PRIVILEGED_ROLES = ['super_admin', 'Super Admin', 'admin_kayu'];
+
+    protected static function isPrivileged(): bool
+    {
+        $user = Auth::user();
+
+        return $user && $user->hasAnyRole(self::PRIVILEGED_ROLES);
+    }
+
+    protected static function canModify(DetailTurunKayu $record): bool
+    {
+        return $record->status !== 'selesai' || self::isPrivileged();
+    }
+
     public static function configure(Table $table): Table
     {
         return $table
-            /** * MENGGUNAKAN modifyQueryUsing
-             * Ini memastikan filter relasi (berdasarkan record induk/tanggal) tetap terjaga
-             * sambil tetap melakukan eager loading untuk performa.
-             */
             ->modifyQueryUsing(
-                fn($query) =>
-                $query->with([
+                fn ($query) => $query->with([
                     'kayuMasuk.penggunaanSupplier',
-                    'kayuMasuk.penggunaanKendaraanSupplier'
+                    'kayuMasuk.penggunaanKendaraanSupplier',
                 ])
             )
             ->columns([
-                // 1. SUPPLIER
                 TextColumn::make('kayuMasuk.penggunaanSupplier.nama_supplier')
                     ->label('Supplier')
                     ->default('—')
                     ->searchable()
                     ->sortable(),
 
-                // 2. NAMA SUPIR
                 TextColumn::make('nama_supir')
                     ->label('Nama Supir')
                     ->searchable()
                     ->sortable(),
 
-                // 3. JUMLAH KAYU
                 TextColumn::make('jumlah_kayu')
                     ->label('Jumlah Kayu')
                     ->sortable(),
 
-                // 4. NOPOL + JENIS
                 TextColumn::make('kayuMasuk.penggunaanKendaraanSupplier.nopol_kendaraan')
                     ->label('Nopol & Jenis')
                     ->formatStateUsing(function ($record) {
                         $kendaraan = $record?->kayuMasuk?->penggunaanKendaraanSupplier;
+
                         return $kendaraan
                             ? "{$kendaraan->nopol_kendaraan} ({$kendaraan->jenis_kendaraan})"
                             : '—';
@@ -58,47 +67,56 @@ class DetailTurunKayusTable
                     ->searchable()
                     ->sortable(),
 
-                // 5. SERI
                 TextColumn::make('kayuMasuk.seri')
                     ->label('Seri')
                     ->default('—')
                     ->searchable()
                     ->sortable(),
 
-                // 6. STATUS
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge()
-                    ->color(fn(string $state): string => match ($state) {
+                    ->color(fn (string $state): string => match ($state) {
                         'selesai' => 'success',
                         'menunggu' => 'gray',
                         default => 'warning',
                     })
                     ->sortable(),
 
-                // 7. FOTO
                 TextColumn::make('foto')
                     ->label('Foto')
                     ->badge()
-                    ->formatStateUsing(fn($state) => $state ? 'Ada File' : 'Kosong')
-                    ->color(fn($state) => $state ? 'success' : 'danger')
-                    ->url(function ($state): ?string {
-                        return $state ? Storage::url($state) : null;
-                    })
+                    ->formatStateUsing(fn ($state) => $state ? 'Ada File' : 'Kosong')
+                    ->color(fn ($state) => $state ? 'success' : 'danger')
+                    ->url(fn ($state): ?string => $state ? Storage::url($state) : null)
                     ->openUrlInNewTab(),
             ])
             ->headerActions([
                 CreateAction::make(),
             ])
             ->filters([
-                // Tambahkan filter jika diperlukan
+                //
             ])
             ->actions([
-                EditAction::make(),
-                DeleteAction::make(),
+                EditAction::make()
+                    ->visible(fn (DetailTurunKayu $record): bool => self::canModify($record)),
+
+                DeleteAction::make()
+                    ->visible(fn (DetailTurunKayu $record): bool => self::canModify($record)),
             ])
             ->bulkActions([
-                DeleteBulkAction::make(),
+                DeleteBulkAction::make()
+                    ->before(function (DeleteBulkAction $action, Collection $records) {
+                        if (! self::isPrivileged() && $records->contains('status', 'selesai')) {
+                            Notification::make()
+                                ->title('Gagal menghapus')
+                                ->body('Data berstatus "selesai" hanya bisa dihapus oleh admin.')
+                                ->danger()
+                                ->send();
+
+                            $action->cancel();
+                        }
+                    }),
             ])
             ->defaultSort('created_at', 'desc');
     }
