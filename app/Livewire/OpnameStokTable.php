@@ -408,6 +408,18 @@ class OpnameStokTable extends Component
         return $value !== null && $value !== '';
     }
 
+    /**
+     * Stok Fisik kosong (null / '') = stok TIDAK berubah, jadi pakai stok sistem.
+     * Tanpa ini, (int) null = 0 menimpa stok sistem menjadi 0 saat user
+     * hanya mengisi Kbk Fisik. Angka 0 yang diketik user tetap dianggap 0.
+     */
+    private function stokFisikEfektif(array $row, int $stokSistem): int
+    {
+        return $this->terisi($row['stok_fisik'] ?? null)
+            ? (int) $row['stok_fisik']
+            : $stokSistem;
+    }
+
     /** Baris yang stok fisiknya terisi tapi kubikasi fisiknya belum dihitung */
     public function jumlahBelumDihitung(): int
     {
@@ -863,7 +875,7 @@ class OpnameStokTable extends Component
         string $idField = 'id_jenis_kayu'
     ): bool {
         $stokSistem      = (int) $summary->stok_lembar;
-        $stokFisik       = (int) ($row['stok_fisik'] ?? 0);
+        $stokFisik       = $this->stokFisikEfektif($row, $stokSistem);
         $kubikasiFisik   = (float) ($row['kubikasi_fisik'] ?? 0);
         $kubikasiSistem  = (float) $summary->stok_kubikasi;
         $selisihLembar   = $stokFisik - $stokSistem;
@@ -937,7 +949,7 @@ class OpnameStokTable extends Component
             if (!$summary) return false;
 
             $stokSistem      = (int) $summary->stok_lembar;
-            $stokFisik       = (int) ($row['stok_fisik'] ?? 0);
+            $stokFisik       = $this->stokFisikEfektif($row, $stokSistem);
             $kubikasiFisik   = (float) ($row['kubikasi_fisik'] ?? 0);
             $kubikasiSistem  = (float) $summary->stok_kubikasi;
             $selisihLembar   = $stokFisik - $stokSistem;
@@ -1019,7 +1031,7 @@ class OpnameStokTable extends Component
 
             $stokSistem      = StokVeneerKering::saldoLembarTerakhir($idUkuran, $idJenisKayu, $kw);
             $snapshot        = StokVeneerKering::snapshotTerakhir($idUkuran, $idJenisKayu, $kw);
-            $stokFisik       = (int) ($row['stok_fisik'] ?? 0);
+            $stokFisik       = $this->stokFisikEfektif($row, $stokSistem);
             $kubikasiFisik   = (float) ($row['kubikasi_fisik'] ?? 0);
             $kubikasiSistem  = (float) $snapshot['stok_m3'];
             $hppAverage      = (float) $snapshot['hpp_average'];
@@ -1125,7 +1137,7 @@ class OpnameStokTable extends Component
             if (!$summary) return false;
 
             $stokSistem      = (int) $summary->stok_lembar;
-            $stokFisik       = (int) ($row['stok_fisik'] ?? 0);
+            $stokFisik       = $this->stokFisikEfektif($row, $stokSistem);
             $kubikasiFisik   = (float) ($row['kubikasi_fisik'] ?? 0);
             $kubikasiSistem  = (float) $summary->stok_kubikasi;
             $selisihLembar   = $stokFisik - $stokSistem;
