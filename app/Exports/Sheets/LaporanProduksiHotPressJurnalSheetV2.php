@@ -14,6 +14,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -36,69 +37,49 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 // - Akun Hutang Gaji: 2231.00 -> 2195.1
 // - Akun HPP/selisih penyeimbang: 6111.00 / 6111.01 (whn) ->
 //   DISATUKAN jadi 5069.2 "Selisih harga patok produksi" untuk semua domain
-//   (COA baru tidak membedakan wjy/whn untuk akun ini).
-// - Akun veneer yang dipakai sebagai BAHAN hotpress (bukan platform, bukan
-//   hasil produksi/triplek) di-alias dinamis ke COA baru lewat
-//   CoaAliasService, sama seperti JurnalSheetV2 (dryer) & JurnalRepairSheetV2.
-// - Akun Platform SEKARANG DI-ALIAS ke COA baru lewat CoaAliasService:
-//     * Platform hasil produksi HP (output)                    -> Platform Jadi   (1403.3)
-//     * Platform sebagai bahan masuk HP (input, belum diproses) -> Platform Mentah (1403.1)
-// - Akun Triplek HASIL PRODUKSI SEKARANG DI-ALIAS ke COA baru lewat
-//   CoaAliasService::extractAkunTriplek() -> disatukan jadi satu akun
-//   "Persediaan Triplek Mentah" (1403.2) untuk semua ukuran/grade (kode
-//   lama beda-beda per varian, mis. 1506.32 / 1506.33).
-// - Akun Bahan Penolong SEKARANG DI-ALIAS ke COA baru lewat
-//   CoaAliasService::extractAkunPenolong() (dicocokkan dari nama bahan
-//   asli): Lem->1402.9, Hardner->1402.10, Isi Staples->1402.11,
-//   Pewarna->1402.12, Tepung->1402.13, Solasi Coklat->1402.14,
-//   Solasi Putih->1402.15.
-// - NEW: HARGA Bahan Penolong sekarang diambil dari model
-//   BahanPenolongProduksi (kategori_produksi = 'hot_press'), BUKAN dari
-//   ReferensiHargaProduksi / hardcode. Akun & nama akun tetap dari
-//   CoaAliasService::extractAkunPenolong(); hanya harganya yang diganti.
-//   Kalau harga di model belum diisi (0 / tidak ketemu), fallback ke harga
-//   dari alias referensi dan keterangan diberi penanda.
-// - Kolom "No Akun" (D) dipaksa jadi TEKS eksplisit (bukan numerik),
-//   supaya kode akun seperti "1402.5" tidak pernah dipaksa 2 digit /
-//   diubah titik jadi koma oleh Excel.
-// - Kolom "ID Barang" (O) diisi dengan hasil resolve dari API eksternal
-//   /api/barang/resolve-veneer, MENGIKUTI POLA yang sama dipakai di
-//   JurnalSheetV2 (dryer) & JurnalRepairSheetV2 (repair).
-//   PENTING — resolver ini HANYA diterapkan untuk baris BAHAN VENEER
-//   (veneer masuk sebagai bahan hotpress, bukan platform) karena
-//   endpoint /api/barang/resolve-veneer secara kontrak hanya mengenal
-//   parameter veneer (jenis_veneer, bagian, jenis_kayu, ketebalan,
-//   ukuran, kw). Baris TRIPLEK dan PLATFORM (baik sebagai hasil
-//   produksi maupun sebagai bahan masuk) TIDAK di-resolve di sini dan
-//   ID Barang-nya dibiarkan null. Kalau nanti ada endpoint
-//   resolve-triplek atau resolve-platform, tinggal tambahkan pemanggilan
-//   serupa di titik yang ditandai "// TODO: resolver triplek/platform".
-// - Bahan platform yang diambil dari gudang platform jadi
-//   (bahan_hotpress.sumber = 'platform', relasi mutasiKeluarPlatform)
-//   ikut dibaca.
+// - Akun veneer bahan hotpress, platform (hasil & bahan), triplek hasil
+//   produksi, dan bahan penolong di-alias ke COA baru lewat
+//   App\Services\CoaAliasService.
+// - HARGA bahan penolong diambil dari model BahanPenolongProduksi
+//   (kategori_produksi = 'hot_press'); fallback ke harga alias referensi.
+// - Kolom "No Akun" (D) dipaksa TEKS eksplisit.
+// - Kolom "ID Barang" (O) diisi dari API akuntansi:
+//     * Bahan veneer          -> /api/barang/resolve-veneer
+//     * Triplek / Platform    -> /api/barang/resolve-plywood
+//     * Bahan penolong        -> /api/barang/resolve-penolong
+//   Baris tanpa barang (Hutang Gaji, Selisih/HPP) = null (memang tidak
+//   punya ID barang).
 //
-// NOTE REFACTOR: Logic ALIAS AKUN COA BARU (aliasAkunBaru, extractAkunVeneer,
-// extractAkunPlatform, extractAkunTriplek, extractAkunPenolong, extractAkunRaw,
-// getAkunHpp, getAkunGaji) ada di App\Services\CoaAliasService supaya bisa
-// dipakai bersama oleh JurnalSheetV2 (dryer) & JurnalRepairSheetV2. Sheet ini
-// memanggil service tsb lewat $this->coaAlias.
-//
-// Cara pakai: daftarkan class ini di sheets() milik
-// LaporanProduksiHotPressExport TANPA menghapus sheet lama, misalnya:
-//
-//     public function sheets(): array
-//     {
-//         return [
-//             new LaporanProduksiHotPressSheetPekerja($this->tanggal),
-//             new LaporanProduksiHotPressRekapSheet($this->tanggal),
-//             new LaporanProduksiHotPressDetailSheet($this->data),
-//             new LaporanProduksiHotPressJurnalSheet($this->tanggal, $this->domain),   // lama, tidak diubah
-//             new LaporanProduksiHotPressJurnalSheetV2($this->tanggal, $this->domain), // baru
-//         ];
-//     }
+// PERUBAHAN TERBARU:
+// - FIX Repair: di master JenisKayu, "Repair" tercatat sebagai JENIS KAYU,
+//   padahal di master barang akuntansi "Repair" adalah GRADE
+//   (mis. "... M 244x122x0.3mm grade Repair"). Sebelum memanggil resolver,
+//   bahan veneer yang jenis kayunya "Repair" dinormalisasi lewat
+//   normalisasiParamVeneerResolver(): jenis_kayu -> REPAIR_KAYU_DASAR,
+//   kw -> 'Repair'. Keterangan jurnal TIDAK berubah.
+// - Jenis veneer untuk Repair diatur konstanta JENIS_VENEER_REPAIR.
+// - Semua resolver API sekarang mencatat Log::warning kalau id_barang
+//   tidak ketemu (berisi nama_barang_format yang dicari + parameter),
+//   supaya kegagalan tidak lagi senyap.
 // ============================================================
 class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidths, WithEvents, WithMapping, WithStyles, WithTitle
 {
+    /**
+     * Kayu dasar untuk veneer Repair saat dikirim ke resolver.
+     * Di master barang, Repair yang ada memakai kode 'M' (Meranti).
+     * Ubah jika ada Repair dari kayu lain.
+     */
+    private const REPAIR_KAYU_DASAR = 'Meranti';
+
+    /**
+     * Jenis veneer untuk Repair saat dikirim ke resolver.
+     * Stok veneer Repair di hotpress berasal dari tabel veneer_jadi_mutasi_keluars
+     * (hasil proses repair yang sudah selesai), sehingga akunnya adalah Veneer Jadi.
+     * Barang yang dipakai: id 1858 =
+     * 'Veneer Jadi Face Back M 244x122x0.3mm grade Repair' di akuntansi.
+     */
+    private const JENIS_VENEER_REPAIR = 'Veneer Jadi';
+
     protected string $tanggal;
 
     protected string $domain;
@@ -131,10 +112,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
     private array $bahanPenolongCache = [];
 
     /**
-     * Cache hasil resolve id_barang dari API eksternal, dikunci per
-     * kombinasi parameter (jenis_veneer|bagian|jenis_kayu|ketebalan|
-     * ukuran|kw) supaya tidak memanggil API berkali-kali untuk
-     * kombinasi yang sama dalam satu laporan.
+     * Cache hasil resolve id_barang dari API eksternal.
      */
     private array $idBarangCache = [];
 
@@ -190,9 +168,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
         ]);
 
-        // Kolom D (No Akun) diformat sebagai TEKS, bukan numerik — supaya
-        // kode akun seperti "1402.5" tidak dipaksa 2 digit di belakang
-        // titik / diubah jadi koma oleh Excel locale Indonesia.
+        // Kolom D (No Akun) diformat sebagai TEKS, bukan numerik.
         $sheet->getStyle("D2:D{$lastRow}")->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
 
         $sheet->getStyle("L2:L{$lastRow}")->getNumberFormat()->setFormatCode('0.0000');
@@ -205,16 +181,8 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
 
     /**
      * Paksa kolom "No Akun" (D) disimpan sebagai STRING eksplisit di level
-     * cell, bukan cuma diformat tampilan sebagai teks. Sama seperti
-     * JurnalSheetV2 (dryer) & JurnalRepairSheetV2 — mencegah PhpSpreadsheet
-     * auto-detect nilai seperti "1402.5" sebagai float, yang akan membuat
-     * Excel menampilkannya dengan koma sebagai pemisah desimal & dipaksa
-     * 2 digit di belakang titik.
-     *
-     * Catatan: kode akun di file ini ditulis dengan prefix "\t" (tab) di
-     * makeRow() untuk mencegah Excel auto-format sebagai angka — tab
-     * tersebut kita hapus di sini sebelum menyimpan ulang sebagai string
-     * eksplisit, supaya nilai yang tampil bersih (tanpa tab).
+     * cell. Prefix "\t" dari makeRow() dihapus di sini sebelum disimpan
+     * ulang sebagai string eksplisit.
      */
     public function registerEvents(): array
     {
@@ -272,6 +240,11 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
     private function isAf(string $grade): bool
     {
         return str_contains(strtolower(trim($grade)), 'af');
+    }
+
+    private function isRepair(string $jenisKayu): bool
+    {
+        return str_contains(strtolower(trim($jenisKayu)), 'repair');
     }
 
     private function isPlatformGrade(string $grade): bool
@@ -371,9 +344,6 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
 
     /**
      * Cari id grade milik kategori Platform berdasarkan NAMA grade.
-     * Dipakai untuk bahan platform dari gudang platform jadi, karena di sana
-     * grade hanya berupa teks (kw_grade), bukan id. Tanpa ini, getIdGrade()
-     * bisa mengembalikan id grade kategori lain yang namanya sama.
      */
     private function getIdGradePlatform(string $namaGrade): ?int
     {
@@ -808,17 +778,69 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
         return null;
     }
 
+    // =========================================================================
+    // RESOLVER ID BARANG (API akuntansi)
+    // =========================================================================
+
     /**
-     * Resolve id_barang dari API eksternal /api/barang/resolve-veneer,
-     * dengan cache per kombinasi parameter supaya tidak memanggil API
-     * berkali-kali untuk kombinasi ukuran/jenis/kw yang identik dalam
-     * satu laporan. Mengembalikan null (bukan melempar exception) kalau
-     * API gagal/timeout, supaya proses export tidak gagal total hanya
-     * karena resolver down.
+     * Panggil endpoint resolver akuntansi dan kembalikan id_barang (atau null).
+     * Kalau id_barang tidak ketemu / request gagal, dicatat ke log beserta
+     * nama_barang_format yang dicari server, supaya mudah ditelusuri.
+     */
+    private function callResolver(string $endpoint, array $params): ?int
+    {
+        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/'.$endpoint;
+
+        try {
+            $response = Http::withoutVerifying()->timeout(10)->get($urlApi, $params);
+            $idBarang = $response->json('id_barang');
+
+            if (! $idBarang) {
+                Log::warning("HotPress V2: resolver {$endpoint} tidak menemukan barang", [
+                    'tanggal' => $this->tanggal,
+                    'params' => $params,
+                    'status' => $response->status(),
+                    'nama_barang_format' => $response->json('nama_barang_format'),
+                    'message' => $response->json('message'),
+                ]);
+            }
+
+            return $idBarang ? (int) $idBarang : null;
+        } catch (\Throwable $e) {
+            Log::warning("HotPress V2: resolver {$endpoint} gagal dipanggil", [
+                'tanggal' => $this->tanggal,
+                'params' => $params,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * Normalisasi parameter veneer sebelum dikirim ke resolver.
      *
-     * HANYA dipakai untuk baris VENEER (bahan masuk hotpress). Triplek
-     * dan Platform tidak memakai resolver ini — lihat catatan di header
-     * file.
+     * Di master JenisKayu, "Repair" tercatat sebagai jenis kayu, sedangkan
+     * di master barang akuntansi "Repair" adalah GRADE (mis.
+     * "Veneer Basah Face Back M 244x122x0.3mm grade Repair").
+     *
+     * @return array{0: string, 1: string, 2: string} [jenisVeneer, jenisKayu, kw]
+     */
+    private function normalisasiParamVeneerResolver(
+        string $jenisVeneer,
+        string $jenisKayu,
+        string $kw
+    ): array {
+        if ($this->isRepair($jenisKayu)) {
+            return [self::JENIS_VENEER_REPAIR, self::REPAIR_KAYU_DASAR, 'Repair'];
+        }
+
+        return [$jenisVeneer, $jenisKayu, $kw];
+    }
+
+    /**
+     * Resolve id_barang dari API /api/barang/resolve-veneer, dengan cache
+     * per kombinasi parameter. HANYA dipakai untuk baris VENEER.
      *
      * @param  string  $jenisVeneer  'Veneer Basah' | 'Veneer Kering' | 'Veneer Jadi' | 'Veneer Afalan'
      * @param  string  $bagian  'Face Back' | 'Core' | 'PPC'
@@ -832,9 +854,12 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
         float $lebar,
         string $kw
     ): ?int {
+        [$jenisVeneer, $jenisKayu, $kw] = $this->normalisasiParamVeneerResolver($jenisVeneer, $jenisKayu, $kw);
+
         $ukuran = $panjang.'x'.$lebar;
 
         $cacheKey = implode('|', [
+            'veneer',
             $jenisVeneer,
             $bagian,
             strtolower(trim($jenisKayu)),
@@ -847,31 +872,23 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
             return $this->idBarangCache[$cacheKey];
         }
 
-        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-veneer';
-
-        try {
-            $response = Http::withoutVerifying()->timeout(10)->get($urlApi, [
-                'jenis_veneer' => $jenisVeneer,
-                'bagian' => $bagian,
-                'jenis_kayu' => $jenisKayu,
-                'ketebalan' => $tebal,
-                'ukuran' => $ukuran,
-                'kw' => $kw,
-            ]);
-
-            $idBarang = $response->json('id_barang');
-        } catch (\Throwable $e) {
-            $idBarang = null;
-        }
+        $idBarang = $this->callResolver('resolve-veneer', [
+            'jenis_veneer' => $jenisVeneer,
+            'bagian' => $bagian,
+            'jenis_kayu' => $jenisKayu,
+            'ketebalan' => $tebal,
+            'ukuran' => $ukuran,
+            'kw' => $kw,
+        ]);
 
         return $this->idBarangCache[$cacheKey] = $idBarang;
     }
 
     /**
-     * Resolve id_barang untuk Triplek / Platform mentah dari API akuntansi /api/barang/resolve-plywood
+     * Resolve id_barang untuk Triplek / Platform dari /api/barang/resolve-plywood
      *
-     * @param string $tipe 'triplek' | 'platform'
-     * @param string|null $namaKeterangan nama barang / referensi lengkap (e.g. "12m better MTH", "platform 12 better MTH")
+     * @param  string  $tipe  'triplek' | 'platform'
+     * @param  string|null  $namaKeterangan  mis. "12m better MTH", "platform 12 better MTH"
      */
     private function resolveIdBarangPlywood(
         string $tipe,
@@ -881,6 +898,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
         string $grade = ''
     ): ?int {
         $cacheKey = implode('|', [
+            'plywood',
             $tipe,
             strtolower(trim((string) $namaKeterangan)),
             $tebal,
@@ -892,27 +910,19 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
             return $this->idBarangCache[$cacheKey];
         }
 
-        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-plywood';
-
-        try {
-            $response = Http::withoutVerifying()->timeout(10)->get($urlApi, [
-                'tipe' => $tipe,
-                'nama' => $namaKeterangan,
-                'tebal' => $tebal,
-                'jenis_kayu' => $jenisKayu,
-                'grade' => $grade,
-            ]);
-
-            $idBarang = $response->json('id_barang');
-        } catch (\Throwable $e) {
-            $idBarang = null;
-        }
+        $idBarang = $this->callResolver('resolve-plywood', [
+            'tipe' => $tipe,
+            'nama' => $namaKeterangan,
+            'tebal' => $tebal,
+            'jenis_kayu' => $jenisKayu,
+            'grade' => $grade,
+        ]);
 
         return $this->idBarangCache[$cacheKey] = $idBarang;
     }
 
     /**
-     * Resolve id_barang untuk Bahan Penolong dari API akuntansi /api/barang/resolve-penolong
+     * Resolve id_barang untuk Bahan Penolong dari /api/barang/resolve-penolong
      */
     private function resolveIdBarangPenolong(string $namaBahan): ?int
     {
@@ -923,26 +933,17 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
             return $this->idBarangCache[$cacheKey];
         }
 
-        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-penolong';
-
-        try {
-            $response = Http::withoutVerifying()->timeout(10)->get($urlApi, [
-                'nama' => $namaBahan,
-                'domain' => $domainStr,
-            ]);
-
-            $idBarang = $response->json('id_barang');
-        } catch (\Throwable $e) {
-            $idBarang = null;
-        }
+        $idBarang = $this->callResolver('resolve-penolong', [
+            'nama' => $namaBahan,
+            'domain' => $domainStr,
+        ]);
 
         return $this->idBarangCache[$cacheKey] = $idBarang;
     }
 
     /**
-     * Menentukan nama kategori "jenis_veneer" untuk dikirim ke resolver,
-     * berdasarkan status AF dan grade bahan veneer. Mengikuti pola
-     * kategori yang sudah dipakai baseQuery('bahan') / fetchReferensiAfalan().
+     * Menentukan nama kategori "jenis_veneer" untuk dikirim ke resolver.
+     * (Untuk Repair, nilainya di-override di normalisasiParamVeneerResolver.)
      */
     private function jenisVeneerUntukResolver(bool $isAf, float $tebal): string
     {
@@ -950,9 +951,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
             return 'Veneer Afalan';
         }
 
-        // Bahan masuk hotpress secara umum berstatus "kering" (belum
-        // dipress jadi triplek/platform) — sama seperti asumsi yang
-        // dipakai resolveRefBahan()/fetchReferensi('bahan', ...).
+        // Bahan masuk hotpress secara umum berstatus "kering".
         return 'Veneer Kering';
     }
 
@@ -1070,10 +1069,9 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
 
                 // =======================================================
                 // 1. HASIL PRODUKSI (DEBIT)
-                //    - Triplek: akun DI-ALIAS ke COA baru (Triplek Mentah)
-                //    - Platform: akun DI-ALIAS ke COA baru (Platform Jadi)
-                //    ID Barang: TIDAK di-resolve di sini — lihat catatan
-                //    header file (resolver hanya untuk bahan veneer).
+                //    - Triplek: Triplek Mentah (1403.2)
+                //    - Platform: Platform Jadi
+                //    ID Barang via resolve-plywood.
                 // =======================================================
                 foreach ($items as $item) {
                     $tipe = $item['tipe'];
@@ -1103,7 +1101,6 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                         $keterangan = "{$tebalInt}{$jkSingkat} {$kwStr} MTH [UNKNOWN - cek master data]";
                     }
 
-                    // Resolver ID Barang untuk hasil produksi (Triplek Mentah / Platform Jadi)
                     $idBarangProduksi = $this->resolveIdBarangPlywood(
                         $tipe,
                         $keterangan,
@@ -1132,7 +1129,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                 // =======================================================
                 if ($mId == $hp3Id) {
 
-                    // --- BAHAN HOTPRESS (veneer di-alias, platform di-alias ke Platform Mentah) ---
+                    // --- BAHAN HOTPRESS (veneer di-alias, platform -> Platform Mentah) ---
                     $veneerMap = [];
 
                     foreach ($prod->bahanHotpress as $bahan) {
@@ -1150,8 +1147,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                             $grAsli = (string) ($mutasiHeader->kw_grade ?? '');
                             $idUkuran = null;
                         } elseif ($mutasiPlatformHeader) {
-                            // Bahan platform dari gudang platform jadi
-                            // (sumber = platform).
+                            // Bahan platform dari gudang platform jadi (sumber = platform).
                             $p = (float) ($mutasiPlatformHeader->panjang ?? 0);
                             $l = (float) ($mutasiPlatformHeader->lebar ?? 0);
                             $tebal = (float) ($mutasiPlatformHeader->tebal ?? 0);
@@ -1221,10 +1217,9 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                             ? $this->fetchReferensi('platform', $idUkuran, $idJenisKayu, $grAsli, $idGradePlatform)
                             : $this->resolveRefBahan($idUkuran, $idJenisKayu, $grAsli);
 
-                        // Platform: akun DI-ALIAS ke COA baru -> Platform Mentah (bahan masuk).
-                        // Veneer (basah/kering/jadi/af): akun DI-ALIAS ke COA baru.
+                        // Platform -> Platform Mentah (bahan masuk); Veneer -> alias COA baru.
                         [$akunNama, $akunNo, $hargaBahan] = $isPlatform
-                            ? $this->coaAlias->extractAkunPlatform($ref, false)   // bahan masuk HP -> Platform Mentah
+                            ? $this->coaAlias->extractAkunPlatform($ref, false)
                             : $this->coaAlias->extractAkunVeneer($ref);
 
                         if ($isPlatform) {
@@ -1242,6 +1237,8 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                         if (! $isPlatform) {
                             $bagianResolver = $isAf ? 'PPC' : (($tebal < 1) ? 'Face Back' : 'Core');
                             $jenisVeneerResolver = $this->jenisVeneerUntukResolver($isAf, $tebal);
+                            // Normalisasi Repair (jenis kayu "Repair" -> kayu dasar + grade Repair)
+                            // terjadi di dalam resolveIdBarang().
                             $idBarangBahan = $this->resolveIdBarang(
                                 $jenisVeneerResolver,
                                 $bagianResolver,
@@ -1329,7 +1326,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
 
                     // --- BAHAN PENOLONG ---
                     // Akun & nama akun dari CoaAliasService; HARGA dari model
-                    // BahanPenolongProduksi (kategori hot_press). ID Barang null.
+                    // BahanPenolongProduksi (kategori hot_press).
                     foreach ($prod->bahanPenolongHp as $penolong) {
                         $namaBahanLower = strtolower(trim($penolong->nama_bahan));
 
@@ -1361,7 +1358,7 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                         $rows[] = $this->makeRow($akunNama, $akunNo, $tglStr, $namaMesinSingkat, $ketPenolong, 'k', 'b', $banyak, '', $hargaPenolong, null, $idBarangPenolong);
                     }
 
-                    // --- HUTANG GAJI — 2231.00 -> 2195.1 (ID Barang null) ---
+                    // --- HUTANG GAJI — 2231.00 -> 2195.1 (ID Barang null, memang tidak ada) ---
                     if ($jumlahPekerja > 0) {
                         $akunGaji = $this->coaAlias->getAkunGaji($this->isWhn());
                         $totalGaji = round($jumlahPekerja * $hargaPegawaiMaster, 0);
