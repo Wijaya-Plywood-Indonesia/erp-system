@@ -40,14 +40,41 @@ class NotaKayuForm
                             if (!$value) return;
 
                             // Cek apakah ada detail turusan yang harganya masih 0 atau null
-                            $hasEmptyPrice = DetailTurusanKayu::where('id_kayu_masuk', $value)
+                            $unpricedItems = DetailTurusanKayu::with('jenisKayu')
+                                ->where('id_kayu_masuk', $value)
                                 ->where(function ($query) {
                                     $query->whereNull('harga')->orWhere('harga', '<=', 0);
                                 })
-                                ->exists();
+                                ->get();
 
-                            if ($hasEmptyPrice) {
-                                $fail("Gagal Memilih: Seri Kayu Masuk ini memiliki batang yang harganya belum terdaftar (0). Harap periksa Master Harga atau Update data turusan terlebih dahulu.");
+                            if ($unpricedItems->isNotEmpty()) {
+                                $daftarKayu = $unpricedItems
+                                    ->map(function ($item) {
+                                        $namaKayu = $item->jenisKayu?->nama_kayu ?? 'Kayu Tidak Diketahui';
+                                        $info = "{$namaKayu} (Ø{$item->diameter} cm";
+                                        if (!empty($item->panjang)) {
+                                            $info .= ", P: {$item->panjang}";
+                                        }
+                                        if (!empty($item->grade)) {
+                                            $gradeLabel = match ((string) $item->grade) {
+                                                '1', 'A' => 'A',
+                                                '2', 'B' => 'B',
+                                                default => $item->grade,
+                                            };
+                                            $info .= ", Grd: {$gradeLabel}";
+                                        }
+                                        $info .= ')';
+
+                                        return $info;
+                                    })
+                                    ->unique()
+                                    ->take(5)
+                                    ->implode(', ');
+
+                                $totalItems = $unpricedItems->count();
+                                $more = $totalItems > 5 ? ' dan lainnya' : '';
+
+                                $fail("Gagal Memilih: Ada batang yang harganya belum terdaftar (0) pada: [{$daftarKayu}{$more}]. Harap periksa Master Harga atau Update data turusan terlebih dahulu.");
                             }
                         },
                     ])
