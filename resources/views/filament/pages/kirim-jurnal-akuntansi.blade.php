@@ -198,7 +198,7 @@
     </x-filament::modal>
 
     {{-- Rincian jurnal (hanya melihat, tidak mengirim) --}}
-    <x-filament::modal id="detail-jurnal" width="5xl">
+    <x-filament::modal id="detail-jurnal" width="6xl">
         <x-slot name="heading">
             {{ $detail['label'] ?? 'Rincian jurnal' }}
         </x-slot>
@@ -231,6 +231,14 @@
                 </div>
             @endif
 
+            @if (($detail['jumlah_tanpa_id_barang'] ?? 0) > 0)
+                <div
+                    class="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700 dark:text-red-300">
+                    Ada {{ $detail['jumlah_tanpa_id_barang'] }} baris barang yang belum punya ID barang
+                    (lihat kolom ID Barang paling kanan).
+                </div>
+            @endif
+
             @unless ($detail['is_balance'])
                 <div
                     class="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700 dark:text-red-300">
@@ -252,6 +260,7 @@
                             <th class="px-3 py-2 text-right">Harga</th>
                             <th class="px-3 py-2 text-right">Debit</th>
                             <th class="px-3 py-2 text-right">Kredit</th>
+                            <th class="px-3 py-2">ID Barang</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -276,6 +285,14 @@
                                     {{ $r['map'] === 'd' ? number_format($r['total'], 0, ',', '.') : '' }}</td>
                                 <td class="px-3 py-2 text-right font-medium">
                                     {{ $r['map'] === 'k' ? number_format($r['total'], 0, ',', '.') : '' }}</td>
+                                <td class="px-3 py-2">
+                                    @if (filled($r['id_barang'] ?? null))
+                                        <span
+                                            class="font-mono text-xs text-success-600 dark:text-success-400">{{ $r['id_barang'] }}</span>
+                                    @elseif (! empty($r['perlu_id_barang']))
+                                        <x-filament::badge color="danger">Tidak ada</x-filament::badge>
+                                    @endif
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -287,6 +304,7 @@
                             </td>
                             <td class="px-3 py-2 text-right">{{ number_format($detail['total_kredit'], 0, ',', '.') }}
                             </td>
+                            <td class="px-3 py-2"></td>
                         </tr>
                     </tfoot>
                 </table>

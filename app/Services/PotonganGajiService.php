@@ -116,7 +116,33 @@ class PotonganGajiService
         $this->loadPotonganBuatPalet();
         $this->loadPotonganGuellotine();
 
+        // Integrasi Modul Pengajuan Potongan:
+        // Nominal yang Approved menggantikan (override) potongan kalkulasi produksi.
+        // Pending dan Rejected TIDAK mempengaruhi hasil.
+        $this->applyApprovedPengajuanPotongan();
+
         return $this->potonganMap;
+    }
+
+    /**
+     * Terapkan nominal potongan final yang telah disetujui (Approved) dari PengajuanPotongan.
+     */
+    protected function applyApprovedPengajuanPotongan(): void
+    {
+        try {
+            $approved = \App\Models\PengajuanPotongan::query()
+                ->whereDate('tanggal', $this->tanggal)
+                ->where('status', 'approved')
+                ->get(['kode_pegawai', 'nominal_final']);
+
+            foreach ($approved as $row) {
+                if ($row->nominal_final !== null) {
+                    $this->potonganMap[$row->kode_pegawai] = (int) round((float) $row->nominal_final);
+                }
+            }
+        } catch (\Throwable $e) {
+            // Table might not exist yet or DB issue, log if needed
+        }
     }
 
     /**

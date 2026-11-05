@@ -132,6 +132,9 @@ class RekapPotonganGajiService
             $this->loadPotonganPilihVeneer();
         }
 
+        // Terapkan override potongan dari pengajuan yang statusnya Approved
+        $this->applyApprovedPengajuanPotongan();
+
         return $this->detailPotongan;
 
     }
@@ -189,6 +192,47 @@ class RekapPotonganGajiService
             'hasil' => $hasil,
             'selisih' => $selisih,
         ];
+    }
+
+    /**
+     * Terapkan override potongan dari pengajuan yang statusnya Approved.
+     */
+    protected function applyApprovedPengajuanPotongan(): void
+    {
+        try {
+            $approved = \App\Models\PengajuanPotongan::query()
+                ->whereDate('tanggal', $this->tanggal)
+                ->where('status', 'approved')
+                ->get();
+
+            foreach ($approved as $row) {
+                $final = (int) round((float) $row->nominal_final);
+                $found = false;
+
+                foreach ($this->detailPotongan as &$item) {
+                    if ($item['kodep'] == $row->kode_pegawai) {
+                        $item['potongan'] = $final;
+                        $found = true;
+                    }
+                }
+                unset($item);
+
+                // Jika di tabel rekap lini belum ada barisnya tapi ada potongan approved > 0, tambahkan
+                if (! $found && $final > 0) {
+                    $this->detailPotongan[] = [
+                        'tanggal' => $this->tanggal,
+                        'lini' => $row->divisi ?: 'Penyesuaian Potongan',
+                        'kodep' => (string) $row->kode_pegawai,
+                        'potongan' => $final,
+                        'target' => 0,
+                        'hasil' => 0,
+                        'selisih' => 0,
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {
+            // Abaikan jika tabel belum siap
+        }
     }
 
     /**
