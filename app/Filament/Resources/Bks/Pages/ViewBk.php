@@ -54,6 +54,7 @@ class ViewBk extends ViewRecord
                     $this->dispatch('$refresh');
                 }),
 
+            \App\Filament\Resources\Bks\Actions\CetakBkActions::make(),
             \Filament\Actions\EditAction::make()->visible(fn () => ! $this->record->terkunci()),
         ];
     }

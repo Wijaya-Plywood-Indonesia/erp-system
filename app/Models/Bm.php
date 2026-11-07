@@ -22,6 +22,9 @@ class Bm extends Model
     public function pembuat(): BelongsTo { return $this->belongsTo(User::class, 'dibuat_oleh'); }
     public function validator(): BelongsTo { return $this->belongsTo(User::class, 'divalidasi_oleh'); }
     public function divalidasiOleh(): BelongsTo { return $this->validator(); }
+    public function dibuatOleh(): BelongsTo { return $this->pembuat(); }
+    /** Cetakan BM lama memakai nama kolom tujuan_nota; di BM baru padanannya adalah "dari". */
+    public function getTujuanNotaAttribute(): ?string { return $this->dari; }
     public function bkReferensi(): BelongsTo { return $this->belongsTo(Bk::class, 'id_bk_referensi'); }
 
     // Relasi yang dipakai service stok lama (Plywood/Platform) lewat $nota->plywoodMutasi dst.

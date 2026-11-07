@@ -8,7 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class BkDetail extends Model
 {
     protected $table = 'bk_detail';
-    protected $fillable = ['id_bk', 'nama_barang', 'jumlah', 'satuan', 'keterangan', 'ref_type', 'ref_id'];
+    protected $fillable = ['id_bk', 'nama_barang', 'jumlah', 'satuan', 'keterangan', 'ref_type', 'ref_id',
+        'harga', 'potongan', 'custom_nama', 'custom_m3'];
     protected $casts = ['jumlah' => 'float'];
 
     protected static function booted(): void
@@ -31,4 +32,9 @@ class BkDetail extends Model
     }
 
     public function bk(): BelongsTo { return $this->belongsTo(Bk::class, 'id_bk'); }
+    /** Nama lain untuk relasi di atas; dipakai kode cetak yang disalin dari menu lama. */
+    public function nota(): BelongsTo { return $this->bk(); }
+
+    public function getQtyAttribute(): float { return (float) ($this->jumlah ?? 0); }
+    public function getHargaAttribute(): float { return (float) ($this->attributes['harga'] ?? 0); }
 }

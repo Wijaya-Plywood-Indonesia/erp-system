@@ -13,6 +13,7 @@ class Bk extends Model
     protected $fillable = [
         'siklus_uuid', 'kategori', 'no_nota', 'tanggal', 'tujuan_nota', 'alamat',
         'keterangan', 'status', 'dibuat_oleh', 'divalidasi_oleh', 'divalidasi_at',
+        'metode_pembayaran', 'id_rekening_perusahaan',
     ];
 
     protected $casts = ['tanggal' => 'date', 'divalidasi_at' => 'datetime'];
@@ -21,6 +22,10 @@ class Bk extends Model
     public function pembuat(): BelongsTo { return $this->belongsTo(User::class, 'dibuat_oleh'); }
     public function validator(): BelongsTo { return $this->belongsTo(User::class, 'divalidasi_oleh'); }
     public function divalidasiOleh(): BelongsTo { return $this->validator(); }
+    public function dibuatOleh(): BelongsTo { return $this->pembuat(); }
+    public function rekeningPerusahaan(): BelongsTo { return $this->belongsTo(RekeningPerusahaan::class, 'id_rekening_perusahaan'); }
+    /** Mutasi veneer milik BK ini (dipakai nota/surat jalan, sama seperti menu lama). */
+    public function mutasi(): \Illuminate\Database\Eloquent\Relations\HasOne { return $this->hasOne(VeneerMutasi::class, 'id_bk'); }
     public function bmTerkait(): HasMany { return $this->hasMany(Bm::class, 'id_bk_referensi'); }
 
     // Relasi yang dipakai service stok lama (Plywood/Platform) lewat $nota->plywoodMutasi dst.
