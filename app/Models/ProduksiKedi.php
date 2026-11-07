@@ -65,6 +65,12 @@ class ProduksiKedi extends Model
         return $this->hasMany(DetailBongkarKedi::class, 'id_produksi_kedi');
     }
 
+        /** Khusus tampilan badge: status ASLI dari database. */
+    public function isBongkarDivalidasiAsli(): bool
+    {
+        return $this->validasiBongkar?->getRawOriginal('status') === 'divalidasi';
+    }
+
     public function validasiKedi()
     {
         return $this->hasMany(ValidasiKedi::class, 'id_produksi_kedi');
