@@ -16,6 +16,17 @@
             display: none !important;
         }
 
+        /* Baris yang sedang dibuka */
+        .kayu-row.kayu-open {
+            background-color: rgba(113, 113, 122, 0.10);
+            box-shadow: inset 4px 0 0 #d97706;
+        }
+
+        .kayu-row.kayu-open .kayu-arrow {
+            transform: rotate(90deg);
+            color: #d97706;
+        }
+
         /* Animasi Transisi Halus & Tipis saat Membuka Preview Accordion */
         .accordion-row-enter {
             animation: subtleFadeDown 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -56,7 +67,7 @@
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
     <div
-        class="space-y-4 font-sans text-xs"
+        class="space-y-4 font-sans text-sm"
         x-data="{
             currentDateTime: '',
             showAdvancedFilters: false,
@@ -189,7 +200,7 @@
 
             <!-- LOADING OVERLAY -->
             <div wire:loading.delay.default
-                wire:target="search, statusLogistik, supplierId, dariTanggal, sampaiTanggal, bulan, tahun, resetFilters, toggleRow"
+                wire:target="search, statusLogistik, supplierId, dariTanggal, sampaiTanggal, bulan, tahun, resetFilters"
                 class="absolute inset-0 z-40 flex items-center justify-center bg-white/80 dark:bg-zinc-900/80 backdrop-blur-[2px] transition-all">
                 <div class="loading-card-enter flex items-center gap-3 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-5 py-3 shadow-xl">
                     <svg class="animate-spin h-6 w-6 text-amber-600 dark:text-amber-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -228,15 +239,16 @@
                         $isTurunSelesai = (bool)$item->has_turun;
                         $hasTurus = (bool)$item->has_turus;
                         $nota = $item->notaKayu;
-                        $isExpanded = $expandedRow === $item->id;
+                        $totalTurunBatang = (int) ($item->total_turun_batang ?? 0);
                         @endphp
 
                         <!-- BARIS UTAMA -->
-                        <tr wire:click="toggleRow({{ $item->id }})" wire:key="row-{{ $item->id }}"
-                            class="cursor-pointer select-none hover:bg-amber-50/60 dark:hover:bg-zinc-800/80 transition-colors duration-150 {{ $isExpanded ? 'bg-amber-50/80 dark:bg-amber-950/30 border-l-4 border-l-amber-600' : '' }}">
+                        <tr onclick="(function(r){var d=document.getElementById('detail-{{ $item->id }}');if(!d){return;}var o=(d.style.display==='none');d.style.display=o?'':'none';r.classList.toggle('kayu-open',o);})(this)"
+                            wire:key="row-{{ $item->id }}"
+                            class="kayu-row cursor-pointer select-none hover:bg-zinc-50 dark:hover:bg-zinc-800/80 transition-colors duration-150">
 
                             <td class="py-3 px-3 text-center">
-                                <span class="text-zinc-400 dark:text-zinc-500 font-bold text-[10px] transition-transform duration-200 inline-block {{ $isExpanded ? 'transform rotate-90 text-amber-600 dark:text-amber-400' : '' }}">
+                                <span class="kayu-arrow text-zinc-400 dark:text-zinc-500 font-bold text-[10px] transition-transform duration-200 inline-block">
                                     ►
                                 </span>
                             </td>
@@ -277,6 +289,9 @@
                                     <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
                                     Selesai Turun
                                 </span>
+                                <div class="text-[12px] text-zinc-500 dark:text-zinc-400 mt-0.5 pl-0.5">
+                                    {{ number_format($totalTurunBatang, 0, ',', '.') }} btg
+                                </div>
                                 @else
                                 <span class="inline-flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-0.5 font-medium">
                                     <span class="w-1.5 h-1.5 bg-zinc-400 rounded-full"></span>
@@ -342,13 +357,8 @@
                         </tr>
 
                         <!-- SUB-ROW DETAIL ACCORDION -->
-                        @if($isExpanded)
-                        @php $detail = $detailsCache[$item->id] ?? null; @endphp
-                        @if($detail)
-                        <tr x-data x-show="true"
-                            x-transition:enter="transition ease-out duration-200"
-                            x-transition:enter-start="opacity-0 -translate-y-1"
-                            x-transition:enter-end="opacity-100 translate-y-0"
+                        @php $detail = $this->buildDetail($item); @endphp
+                        <tr id="detail-{{ $item->id }}" style="display: none;"
                             wire:key="detail-{{ $item->id }}"
                             class="bg-zinc-50 dark:bg-zinc-900/90 border-b-2 border-amber-500/40">
                             <td colspan="{{ $showDokumenCol ? 8 : 7 }}" class="p-4 bg-zinc-50/60 dark:bg-zinc-950/80">
@@ -443,14 +453,6 @@
                                 </div>
                             </td>
                         </tr>
-                        @else
-                        <tr>
-                            <td colspan="{{ $showDokumenCol ? 8 : 7 }}" class="p-4 text-center text-rose-500 dark:text-rose-400 italic text-xs">
-                                Data detail tidak ditemukan (mungkin sudah dihapus).
-                            </td>
-                        </tr>
-                        @endif
-                        @endif
                         @empty
                         <tr>
                             <td colspan="{{ $showDokumenCol ? 8 : 7 }}" class="text-center py-12 text-zinc-400 dark:text-zinc-500">

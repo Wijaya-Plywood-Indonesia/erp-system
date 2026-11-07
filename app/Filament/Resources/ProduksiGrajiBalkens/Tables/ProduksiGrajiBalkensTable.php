@@ -18,6 +18,8 @@ use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
 use Filament\Forms\Components\DatePicker;
 
+use App\Support\KolomValidasi;
+
 class ProduksiGrajiBalkensTable
 {
     public static function configure(Table $table): Table
@@ -37,6 +39,8 @@ class ProduksiGrajiBalkensTable
                     ->placeholder('Tidak ada kendala')
                     ->tooltip(fn($record) => $record->kendala)
                     ->toggleable(),
+
+                KolomValidasi::make(),
 
                 TextColumn::make('created_at')
                     ->label('Dibuat Pada')
@@ -75,7 +79,8 @@ class ProduksiGrajiBalkensTable
                             ->label('Catatan Kendala Produksi')
                             ->required()
                             ->rows(4),
-                    ])
+                            ])
+                    
                     ->mountUsing(
                         fn($form, $record) =>
                         $form->fill(['kendala' => $record->kendala])

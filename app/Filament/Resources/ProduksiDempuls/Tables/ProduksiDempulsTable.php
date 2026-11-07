@@ -15,6 +15,8 @@ use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
+use App\Support\KolomValidasi;
+
 class ProduksiDempulsTable
 {
     public static function configure(Table $table): Table
@@ -59,6 +61,7 @@ class ProduksiDempulsTable
                     ->limit(50)
                     ->sortable()
                     ->searchable(),
+                KolomValidasi::make(),
             ])
             ->defaultSort($kolomTanggal, 'desc') // ⬅️ urutkan terbaru di atas secara default
             ->filters([
