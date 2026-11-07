@@ -335,8 +335,10 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
 
         // 2. Fuzzy match
         foreach ($this->bahanHargaCache as $kunci => $harga) {
-            if ($harga > 0 && $kunci !== '' && $nama !== ''
-                && (str_contains($nama, $kunci) || str_contains($kunci, $nama))) {
+            if (
+                $harga > 0 && $kunci !== '' && $nama !== ''
+                && (str_contains($nama, $kunci) || str_contains($kunci, $nama))
+            ) {
                 return $harga;
             }
         }
@@ -364,7 +366,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
         string $kw
     ): ?int {
         $bagian = $isAf ? 'PPC' : ($tebal < 1 ? 'Face Back' : 'Core');
-        $ukuran = $panjang.'x'.$lebar;
+        $ukuran = $panjang . 'x' . $lebar;
 
         $cacheKey = implode('|', [
             $jenisVeneer,
@@ -379,7 +381,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
             return $this->idBarangCache[$cacheKey];
         }
 
-        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-veneer';
+        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/') . '/api/barang/resolve-veneer';
 
         try {
             $response = Http::withoutVerifying()->timeout(10)->get($urlApi, [
@@ -618,8 +620,8 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                 $idBarangKering = $this->resolveIdBarang('Veneer Kering', $isAf, $tebal, $jnsNorm, $panjang, $lebar, $kwRaw);
 
                 $keteranganNormal = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw);
-                $keteranganJadi = $keteranganNormal.(! $refJadi ? ' [UNKNOWN]' : '');
-                $keteranganKering = $keteranganNormal.(! $refKering ? ' [UNKNOWN]' : '');
+                $keteranganJadi = $keteranganNormal . (! $refJadi ? ' [UNKNOWN]' : '');
+                $keteranganKering = $keteranganNormal . (! $refKering ? ' [UNKNOWN]' : '');
 
                 $diffBanyak = $modalBanyak - $hasilBanyak;
 
@@ -642,7 +644,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                         $totalKredit += ($m3Modal * $hargaKering);
                     }
 
-                    $keteranganKehilangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw, 'Kehilangan').(! $refKering ? ' [UNKNOWN]' : '');
+                    $keteranganKehilangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw, 'Kehilangan') . (! $refKering ? ' [UNKNOWN]' : '');
                     $jurnalBlockKredit[] = $this->makeRow($namaAkunKering, $tglFormat, $noAkunKering, $keteranganKehilangan, 'k', $kehilanganBanyak, $m3Kehilangan, $hargaKering, 'm', $idBarangKering);
                     $totalKredit += ($m3Kehilangan * $hargaKering);
                 } elseif ($diffBanyak < 0) {
@@ -657,7 +659,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                     $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganJadi, 'd', $hasilSebanding, $m3HasilUtama, $hargaJadi, 'm', $idBarangJadi);
                     $totalDebit += ($m3HasilUtama * $hargaJadi);
 
-                    $keteranganKelebihan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw, 'Kelebihan').(! $refJadi ? ' [UNKNOWN]' : '');
+                    $keteranganKelebihan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw, 'Kelebihan') . (! $refJadi ? ' [UNKNOWN]' : '');
                     $jurnalBlockDebit[] = $this->makeRow($namaAkunJadi, $tglFormat, $noAkunJadi, $keteranganKelebihan, 'd', $kelebihanBanyak, $m3Kelebihan, $hargaJadi, 'm', $idBarangJadi);
                     $totalDebit += ($m3Kelebihan * $hargaJadi);
 
@@ -710,7 +712,7 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                 // Resolve id_barang untuk baris hasil manual (selalu "jadi")
                 $idBarang = $this->resolveIdBarang('Veneer Jadi', $isAf, $tebal, $jnsNorm, $panjang, $lebar, $kwRaw);
 
-                $keterangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw).(! $refJadi ? ' [UNKNOWN]' : '');
+                $keterangan = $this->buildKeterangan($panjang, $lebar, $tebal, $jnsNorm, $statusKw, $kwRaw) . (! $refJadi ? ' [UNKNOWN]' : '');
 
                 $jurnalBlockDebit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keterangan, 'd', $banyak, $m3, $harga, 'm', $idBarang);
                 $totalDebit += ($m3 * $harga);

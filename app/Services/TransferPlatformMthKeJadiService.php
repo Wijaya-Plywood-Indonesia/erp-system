@@ -72,7 +72,7 @@ class TransferPlatformMthKeJadiService
 
             if (! $sumber || (int) $sumber->stok_lembar < $qty) {
                 throw new \RuntimeException(
-                    'Stok Platform Mentah tidak cukup. Tersedia: '.($sumber?->stok_lembar ?? 0)." lembar, diminta: {$qty}."
+                    'Stok Platform Mentah tidak cukup. Tersedia: ' . ($sumber?->stok_lembar ?? 0) . " lembar, diminta: {$qty}."
                 );
             }
 
@@ -163,7 +163,7 @@ class TransferPlatformMthKeJadiService
 
             // 6. Tandai diterima (di transaksi yang sama).
             $st->update([
-                'diterima_oleh' => $user.' - Gudang Platform Jadi',
+                'diterima_oleh' => $user . ' - Gudang Platform Jadi',
                 'status' => 'Terima Gudang Platform Jadi',
                 'diterima_gudang_at' => now(),
                 'diterima_gudang_oleh' => $user,

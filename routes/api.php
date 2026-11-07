@@ -13,6 +13,8 @@ use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use App\Http\Controllers\ProduksiPressDryerController;
+use App\Http\Controllers\SandingApiController;
+use App\Models\HasilSanding;
 
 Route::get(
     '/produksi-dryer/{id}/preview',
@@ -286,10 +288,9 @@ Route::get('/external/rekap-stok-veneer', function (Request $request) {
                 'stok_lembar'   => (int) $b->stok_lembar,
             ];
         }
-
         // ── Kering ───────────────────────────────────────────────────────────
         $keringIds = DB::table('stok_veneer_kerings')
-            ->when($tgl, fn ($q) => $q->whereDate('tanggal_transaksi', '<=', $tgl))
+            ->when($tgl, fn($q) => $q->whereDate('tanggal_transaksi', '<=', $tgl))
             ->select(DB::raw('MAX(id) as max_id'))
             ->groupBy('id_ukuran', 'id_jenis_kayu', 'kw')
             ->pluck('max_id');
@@ -332,4 +333,24 @@ Route::get('/external/rekap-stok-veneer', function (Request $request) {
     } catch (\Exception $e) {
         return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
+});
+
+
+Route::middleware(['esp.api'])->prefix('sanding')->group(function () {
+
+    // 1. Mengambil antrean palet sanding
+    Route::get('/', [SandingApiController::class, 'index'])
+        ->name('sanding.antrean');
+
+    // 2. Menyimpan data putaran Face / Back
+    Route::post('/putaran/{serahTerimaHp}', [SandingApiController::class, 'storePutaran'])
+        ->name('sanding.putaran.store');
+
+    // 3. Menutup sesi sanding secara manual
+    Route::post('/selesai/{serahTerimaHp}', [SandingApiController::class, 'selesai'])
+        ->name('sanding.selesai');
+
+    // 4. Mengambil riwayat palet yang sudah selesai
+    Route::get('/riwayat', [SandingApiController::class, 'riwayatSelesai'])
+        ->name('sanding.riwayat');
 });

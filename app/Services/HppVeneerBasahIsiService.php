@@ -62,9 +62,11 @@ class HppVeneerBasahIsiService
      */
     public function isiLogMasukPalet(HppVeneerBasahLog $log): string
     {
-        if (strtolower((string) $log->tipe_transaksi) !== 'masuk'
+        if (
+            strtolower((string) $log->tipe_transaksi) !== 'masuk'
             || $log->referensi_type !== DetailHasilPaletRotary::class
-            || ! $log->referensi_id) {
+            || ! $log->referensi_id
+        ) {
             return $this->lewati($log, 'bukan log masuk palet');
         }
 
@@ -135,7 +137,7 @@ class HppVeneerBasahIsiService
             $this->terapkan($log, $k, false);
         }
 
-        $kombinasi = $logs->unique(fn ($l) => $this->kunciKombinasi($l));
+        $kombinasi = $logs->unique(fn($l) => $this->kunciKombinasi($l));
         foreach ($kombinasi as $log) {
             $this->hitungUlangKombinasiLog($log);
         }
@@ -231,6 +233,6 @@ class HppVeneerBasahIsiService
         // kolom keterangan varchar(255)
         $dasar = mb_substr($dasar, 0, 255 - mb_strlen(self::TANDA_SEMENTARA));
 
-        return $dasar.self::TANDA_SEMENTARA;
+        return $dasar . self::TANDA_SEMENTARA;
     }
 }
