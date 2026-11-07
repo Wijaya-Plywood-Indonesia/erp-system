@@ -31,16 +31,16 @@ class BkBmService
         });
     }
 
-    public static function buatBm(array $data, string $kategori, ?Bk $bk = null): Bm
+    public static function buatBm(array $data, string $kategori, ?Bk $bk = null, bool $pakaiAuth = true): Bm
     {
-        return DB::transaction(function () use ($data, $kategori, $bk) {
+        return DB::transaction(function () use ($data, $kategori, $bk, $pakaiAuth) {
             return Bm::create(array_merge($data, [
-                'siklus_uuid' => $bk?->siklus_uuid ?? (string) Str::uuid(),
+                'siklus_uuid' => $bk?->siklus_uuid ?? ($data['siklus_uuid'] ?? (string) Str::uuid()),
                 'kategori' => $kategori,
                 'id_bk_referensi' => $bk?->id,
                 'no_nota' => filled($data['no_nota'] ?? null) ? strtoupper(trim($data['no_nota'])) : NomorBkBmService::generate($kategori, Carbon::parse($data['tanggal'])),
                 'status' => 'draft',
-                'dibuat_oleh' => auth()->id(),
+                'dibuat_oleh' => $pakaiAuth ? auth()->id() : null,
             ]));
         });
     }
@@ -83,6 +83,9 @@ class BkBmService
 
             // BKK (pinjam) memotong stok sama seperti BK. Tahap 3 menambah BMK + warna kuning.
             foreach ($bk->detail as $d) {
+                if (! str_starts_with($d->nama_barang, config('bkbm.prefix_barang_umum'))) {
+                    continue; // baris non barang umum (veneer dst.) diproses service masing-masing
+                }
                 $barang = $this->barangUmum($d->nama_barang);
                 $sisa = (float) ($barang->stok?->stok_qty ?? 0);
                 if ($sisa < (float) $d->jumlah) {
@@ -93,17 +96,23 @@ class BkBmService
                     tipeTransaksi: 'keluar',
                     qty: (float) $d->jumlah,
                     tanggal: $bk->tanggal->format('Y-m-d'),
-                    keterangan: "Nota {$bk->no_nota}" . ($d->keterangan ? " - {$d->keterangan}" : ''),
+                    keterangan: BkBmJejak::tempel("Nota {$bk->no_nota}" . ($d->keterangan ? " - {$d->keterangan}" : ''), $bk),
                     referensiType: Bk::class,
                     referensiId: $bk->id,
                 );
             }
+
+            app(BkBmVeneerService::class)->validasi($bk);
+            app(BkBmPlywoodPlatformService::class)->validasi($bk);
+            app(BkBmLogCoreService::class)->validasi($bk);
 
             $bk->update([
                 'status' => 'divalidasi',
                 'divalidasi_oleh' => auth()->id(),
                 'divalidasi_at' => now(),
             ]);
+
+            app(BkBmKirimService::class)->antriDariBk($bk->load('detail'));
         });
     }
 
@@ -121,23 +130,32 @@ class BkBmService
             }
 
             foreach ($bm->detail as $d) {
+                if (! str_starts_with($d->nama_barang, config('bkbm.prefix_barang_umum'))) {
+                    continue;
+                }
                 $barang = $this->barangUmum($d->nama_barang);
                 $this->stok->catatTransaksi(
                     idBarangUmum: $barang->id,
                     tipeTransaksi: 'masuk',
                     qty: (float) $d->jumlah,
                     tanggal: $bm->tanggal->format('Y-m-d'),
-                    keterangan: "Nota {$bm->no_nota}" . ($d->keterangan ? " - {$d->keterangan}" : ''),
+                    keterangan: BkBmJejak::tempel("Nota {$bm->no_nota}" . ($d->keterangan ? " - {$d->keterangan}" : ''), $bm),
                     referensiType: Bm::class,
                     referensiId: $bm->id,
                 );
             }
+
+            app(BkBmVeneerService::class)->validasi($bm);
+            app(BkBmPlywoodPlatformService::class)->validasi($bm);
+            app(BkBmLogCoreService::class)->validasi($bm);
 
             $bm->update([
                 'status' => 'divalidasi',
                 'divalidasi_oleh' => auth()->id(),
                 'divalidasi_at' => now(),
             ]);
+
+            app(BkBmKirimService::class)->antriDariBm($bm);
 
             if ($bm->kategori === 'bml' && $bm->id_bk_referensi) {
                 Bk::whereKey($bm->id_bk_referensi)->where('status', 'divalidasi')->update(['status' => 'selesai']);

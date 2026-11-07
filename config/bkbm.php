@@ -11,8 +11,14 @@ return [
     // Penomoran BK/BM baru mulai dari 0001, terpisah dari nota lama.
     'nomor_awal' => ['bk' => 0, 'bkl' => 0, 'bkk' => 0, 'bm' => 0, 'bml' => 0, 'bmk' => 0],
 
+    // Pengiriman antar pabrik (isi di .env, tanpa nilai bawaan untuk kunci).
+    'pabrik' => env('BKBM_PABRIK'),               // mis. Wijaya / Wahana
+    'partner_url' => env('BKBM_PARTNER_URL'),     // alamat web pabrik lawan
+    'partner_key' => env('BKBM_PARTNER_KEY'),     // kunci rahasia, sama di kedua pabrik
+    'kirim_aktif' => env('BKBM_KIRIM_AKTIF', false),
+
     'kategori_bk' => [
-        'bk'  => ['label' => 'BK – Barang Keluar',            'aktif' => true,  'kembali' => false, 'bm_lawan' => 'bm'],
+        'bk'  => ['label' => 'BK – Barang Keluar',            'aktif' => true,  'kembali' => false, 'bm_lawan' => 'bm', 'kirim' => true],
         'bkk' => ['label' => 'BKK – Barang Keluar (Pinjam)',  'aktif' => false, 'kembali' => true,  'bm_lawan' => 'bmk'],
         'bkl' => ['label' => 'BKL – Barang Kita di Luar',     'aktif' => true,  'kembali' => true,  'bm_lawan' => null, 'bm_kembali' => 'bml'],
     ],

@@ -2,14 +2,9 @@
 
 namespace App\Filament\Resources\Bks\RelationManagers;
 
-use App\Models\BarangUmum;
-use Filament\Actions\CreateAction;
+use App\Filament\Resources\Bks\Actions\TambahItemGroup;
 use Filament\Actions\DeleteAction;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
-use Filament\Schemas\Components\Utilities\Set;
-use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -23,36 +18,23 @@ class BkDetailRelationManager extends RelationManager
         return $this->getOwnerRecord()->terkunci();
     }
 
-    public function form(Schema $schema): Schema
-    {
-        return $schema->components([
-            Select::make('barang_umum_id')->label('Barang')->options(fn () => BarangUmum::orderBy('nama_barang')->pluck('nama_barang', 'id'))
-                ->searchable()->required()->live()
-                ->afterStateUpdated(fn ($state, Set $set) => $set('satuan', BarangUmum::find($state)?->satuan)),
-            TextInput::make('jumlah')->numeric()->minValue(0.001)->required(),
-            TextInput::make('satuan')->maxLength(50),
-            TextInput::make('keterangan')->maxLength(255),
-        ]);
-    }
-
     public function table(Table $table): Table
     {
-        return $table->columns([
-            TextColumn::make('nama_barang')->label('Barang'),
-            TextColumn::make('jumlah')->numeric(),
-            TextColumn::make('satuan'),
-            TextColumn::make('keterangan'),
-        ])->headerActions([
-            CreateAction::make()->label('Tambah Barang')
-                ->mutateDataUsing(function (array $data) {
-                    $nama = BarangUmum::findOrFail($data['barang_umum_id'])->nama_barang;
-                    unset($data['barang_umum_id']);
-                    $data['nama_barang'] = config('bkbm.prefix_barang_umum') . $nama;
-                    return $data;
-                })
-                ->visible(fn () => ! $this->getOwnerRecord()->terkunci()),
-        ])->recordActions([
-            DeleteAction::make()->visible(fn () => ! $this->getOwnerRecord()->terkunci()),
-        ]);
+        return $table
+            ->columns([
+                // HP: nama barang dengan jumlah dan keterangan di bawahnya (tanpa geser ke samping).
+                TextColumn::make('ringkas')->label('Barang')->hiddenFrom('md')
+                    ->getStateUsing(fn ($record) => $record?->nama_barang)->wrap()->weight('bold')
+                    ->description(fn ($record) => $record ? rtrim(rtrim(number_format((float) $record->jumlah, 3, '.', ''), '0'), '.') . ' ' . $record->satuan
+                        . ($record->keterangan ? ' · ' . $record->keterangan : '') : null),
+                TextColumn::make('nama_barang')->label('Barang')->wrap()->visibleFrom('md'),
+                TextColumn::make('jumlah')->numeric()->visibleFrom('md'),
+                TextColumn::make('satuan')->visibleFrom('md'),
+                TextColumn::make('keterangan')->wrap()->visibleFrom('md'),
+            ])
+            ->headerActions([TambahItemGroup::make(true)])
+            ->recordActions([
+                DeleteAction::make()->iconButton()->visible(fn () => ! $this->getOwnerRecord()->terkunci()),
+            ]);
     }
 }

@@ -32,6 +32,23 @@ class ViewBm extends ViewRecord
                     $this->record->refresh();
                     $this->refreshFormData(['status', 'divalidasi_oleh']);
                 }),
+            Action::make('kirim_ulang')
+                ->label('Kirim ulang kabar ke pabrik asal')
+                ->icon('heroicon-o-paper-airplane')
+                ->color('warning')
+                ->visible(fn () => \App\Models\BkbmOutbox::where('siklus_uuid', $this->record->siklus_uuid)
+                    ->where('jenis', 'status_update')->where('status', '!=', 'terkirim')->exists())
+                ->action(function () {
+                    $o = \App\Models\BkbmOutbox::where('siklus_uuid', $this->record->siklus_uuid)
+                        ->where('jenis', 'status_update')->where('status', '!=', 'terkirim')->latest('id')->first();
+                    $ok = $o && app(\App\Services\BkBm\BkBmKirimService::class)->kirim($o);
+                    $n = Notification::make()->title($ok ? 'Kabar berhasil terkirim ke pabrik asal' : 'Belum berhasil terkirim');
+                    $ok ? $n->success() : $n->body($o?->fresh()?->error ?? 'Tidak ada pesan yang perlu dikirim.')->warning();
+                    $n->send();
+                    $this->record->refresh();
+                    $this->dispatch('$refresh');
+                }),
+
             \Filament\Actions\EditAction::make()->visible(fn () => ! $this->record->terkunci()),
         ];
     }

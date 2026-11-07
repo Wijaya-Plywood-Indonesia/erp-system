@@ -23,6 +23,22 @@ class Bk extends Model
     public function divalidasiOleh(): BelongsTo { return $this->validator(); }
     public function bmTerkait(): HasMany { return $this->hasMany(Bm::class, 'id_bk_referensi'); }
 
+    // Relasi yang dipakai service stok lama (Plywood/Platform) lewat $nota->plywoodMutasi dst.
+    public function plywoodMutasi(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PlywoodMutasi::class, 'id_bk');
+    }
+
+    public function platformJadiMutasi(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PlatformJadiMutasi::class, 'id_bk');
+    }
+
+    public function platformMthMutasi(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PlatformMthMutasi::class, 'id_bk');
+    }
+
     /** Terkunci untuk edit/hapus: sudah divalidasi, kecuali untuk super_admin. */
     public function terkunci(): bool
     {

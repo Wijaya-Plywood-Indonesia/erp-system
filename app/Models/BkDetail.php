@@ -8,8 +8,27 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class BkDetail extends Model
 {
     protected $table = 'bk_detail';
-    protected $fillable = ['id_bk', 'nama_barang', 'jumlah', 'satuan', 'keterangan'];
+    protected $fillable = ['id_bk', 'nama_barang', 'jumlah', 'satuan', 'keterangan', 'ref_type', 'ref_id'];
     protected $casts = ['jumlah' => 'float'];
+
+    protected static function booted(): void
+    {
+        // Hapus baris sumbernya (veneer/plywood/platform) juga bila baris nota dihapus (sebelum validasi).
+        static::deleting(function (self $d) {
+            if (! $d->ref_id) {
+                return;
+            }
+            $sumber = [
+                'veneer' => \App\Models\VeneerMutasiDetail::class,
+                'plywood' => \App\Models\PlywoodMutasiDetail::class,
+                'platform_jadi' => \App\Models\PlatformJadiMutasiDetail::class,
+                'platform_mth' => \App\Models\PlatformMthMutasiDetail::class,
+            ][$d->ref_type] ?? null;
+            if ($sumber) {
+                $sumber::whereKey($d->ref_id)->delete();
+            }
+        });
+    }
 
     public function bk(): BelongsTo { return $this->belongsTo(Bk::class, 'id_bk'); }
 }

@@ -39,6 +39,17 @@ class BmResource extends Resource
         return config('bkbm.aktif') && parent::canAccess();
     }
 
+    public static function getNavigationBadge(): ?string
+    {
+        // BM dari pabrik lain yang belum diisi/divalidasi.
+        $n = Bm::where('status', 'draft')->whereNotNull('ref_no_bk')->count();
+        return $n ? (string) $n : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string { return 'warning'; }
+
+    public static function getNavigationBadgeTooltip(): ?string { return 'BM dari pabrik lain yang menunggu diisi'; }
+
     public static function form(Schema $schema): Schema { return BmForm::configure($schema); }
     public static function infolist(Schema $schema): Schema { return BmInfolist::configure($schema); }
     public static function table(Table $table): Table { return BmsTable::configure($table); }

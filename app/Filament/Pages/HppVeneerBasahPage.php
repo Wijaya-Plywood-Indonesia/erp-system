@@ -3,11 +3,14 @@
 namespace App\Filament\Pages;
 
 use App\Concerns\FlexibleLogSearch;
+use App\Models\DetailBongkarKedi;
+use App\Models\DetailHasil;
 use App\Models\DetailHasilPaletRotary;
 use App\Models\HppVeneerBasahLog;
 use App\Models\JenisKayu;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
+use Illuminate\Support\Facades\DB;
 use Livewire\WithPagination;
 use UnitEnum;
 use Filament\Support\Enums\Width;
@@ -288,6 +291,73 @@ class HppVeneerBasahPage extends Page
             ->mapWithKeys(fn ($p) => [$p->id => $p->penggunaanLahan?->lahan?->kode_lahan ?? $p->penggunaanLahan?->lahan?->nama_lahan])
             ->filter()
             ->all();
+    }
+
+    /**
+     * Peta "tipe:id referensi" → nama yang memvalidasi, untuk baris log yang sedang tampil.
+     * - Produksi Press Dryer (DetailHasil)      → tabel validasis
+     * - Bongkar Kedi (DetailBongkarKedi)        → tabel validasi_kedi (tipe bongkar)
+     * Kolom `role` disimpan dengan format "nama_role - Nama User"; yang ditampilkan nama user-nya.
+     * Hanya 3 query untuk seluruh halaman (tanpa N+1).
+     */
+    public function validatorUntukLogs($logs): array
+    {
+        $items = collect($logs->items());
+        $hasil = [];
+
+        // ── Press Dryer ─────────────────────────────────────────
+        $idDetail = $items->where('referensi_type', DetailHasil::class)->pluck('referensi_id')->unique()->values();
+        if ($idDetail->isNotEmpty()) {
+            $produksiPerDetail = DetailHasil::whereIn('id', $idDetail)->pluck('id_produksi_dryer', 'id');
+
+            $validator = DB::table('validasis')
+                ->whereIn('id_produksi_dryer', $produksiPerDetail->unique()->values())
+                ->where('status', 'divalidasi')
+                ->orderBy('id')                       // yang terakhir menimpa
+                ->get(['id_produksi_dryer', 'role', 'created_at'])
+                ->keyBy('id_produksi_dryer');
+
+            foreach ($produksiPerDetail as $idDet => $idProd) {
+                if ($v = $validator->get($idProd)) {
+                    $hasil[DetailHasil::class.':'.$idDet] = $this->formatValidator($v->role, $v->created_at);
+                }
+            }
+        }
+
+        // ── Kedi (bongkar) ──────────────────────────────────────
+        $idBongkar = $items->where('referensi_type', DetailBongkarKedi::class)->pluck('referensi_id')->unique()->values();
+        if ($idBongkar->isNotEmpty()) {
+            $produksiPerDetail = DetailBongkarKedi::whereIn('id', $idBongkar)->pluck('id_produksi_kedi', 'id');
+
+            $validator = DB::table('validasi_kedi')
+                ->whereIn('id_produksi_kedi', $produksiPerDetail->unique()->values())
+                ->where('tipe', 'bongkar')
+                ->where('status', 'divalidasi')
+                ->orderBy('id')
+                ->get(['id_produksi_kedi', 'role', 'created_at'])
+                ->keyBy('id_produksi_kedi');
+
+            foreach ($produksiPerDetail as $idDet => $idProd) {
+                if ($v = $validator->get($idProd)) {
+                    $hasil[DetailBongkarKedi::class.':'.$idDet] = $this->formatValidator($v->role, $v->created_at);
+                }
+            }
+        }
+
+        return $hasil;
+    }
+
+    /** "kepala_produksi_wijaya - Faris" → ['nama' => 'Faris', 'role' => 'kepala_produksi_wijaya', 'waktu' => '05/11 14:32'] */
+    private function formatValidator(?string $role, $waktu): array
+    {
+        $role  = trim((string) $role);
+        $parts = explode(' - ', $role, 2);
+
+        return [
+            'nama'  => count($parts) === 2 ? trim($parts[1]) : $role,
+            'role'  => count($parts) === 2 ? trim($parts[0]) : null,
+            'waktu' => $waktu ? \Carbon\Carbon::parse($waktu)->format('d/m H:i') : null,
+        ];
     }
 
     // ── Computed: ukuran unik untuk filter ────────────────────

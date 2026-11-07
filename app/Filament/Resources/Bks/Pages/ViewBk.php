@@ -37,6 +37,23 @@ class ViewBk extends ViewRecord
 
             \App\Filament\Resources\Bks\Actions\BarangKembaliAction::make(),
 
+            Action::make('kirim_ulang')
+                ->label('Kirim ulang ke pabrik lain')
+                ->icon('heroicon-o-paper-airplane')
+                ->color('warning')
+                ->visible(fn () => \App\Models\BkbmOutbox::where('siklus_uuid', $this->record->siklus_uuid)
+                    ->where('jenis', 'buat_bm')->where('status', '!=', 'terkirim')->exists())
+                ->action(function () {
+                    $o = \App\Models\BkbmOutbox::where('siklus_uuid', $this->record->siklus_uuid)
+                        ->where('jenis', 'buat_bm')->where('status', '!=', 'terkirim')->latest('id')->first();
+                    $ok = $o && app(\App\Services\BkBm\BkBmKirimService::class)->kirim($o);
+                    $n = Notification::make()->title($ok ? 'Berhasil terkirim ke pabrik lain' : 'Belum berhasil terkirim');
+                    $ok ? $n->success() : $n->body($o?->fresh()?->error ?? 'Tidak ada pesan yang perlu dikirim.')->warning();
+                    $n->send();
+                    $this->record->refresh();
+                    $this->dispatch('$refresh');
+                }),
+
             \Filament\Actions\EditAction::make()->visible(fn () => ! $this->record->terkunci()),
         ];
     }
