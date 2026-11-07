@@ -143,14 +143,14 @@ class TerimaGudangSatuService
              * Hitung kubikasi.
              *
              * Dimensi ukuran menggunakan satuan mm,
-             * sehingga dibagi 1.000.000.000 untuk menjadi m³.
+             * sehingga dibagi 10.000.000 (rumus kubikasi Gudang Satu).
              */
             $kubikasi = (
                 $panjang *
                 $lebar *
                 $tebal *
                 $jumlah
-            ) / 1_000_000_000;
+            ) / 10_000_000;
 
             /*
              * Grade yang digunakan oleh Stok Gudang Satu.
@@ -322,7 +322,7 @@ class TerimaGudangSatuService
                 );
             }
 
-            $kubikasi = ($panjang * $lebar * $tebal * $jumlah) / 1_000_000_000;
+            $kubikasi = ($panjang * $lebar * $tebal * $jumlah) / 10_000_000;
             $kwGrade = $grade->nama_grade;
 
             $pengembali = Auth::user()?->name ?? 'Tidak diketahui';

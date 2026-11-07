@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiRotaries\RelationManagers;
 
+use App\Services\ValidasiOtomatisProduksiService;
 use App\Models\HasilLogCore;
 use App\Models\JenisKayu;
 use App\Models\LogLogCore;
@@ -177,10 +178,13 @@ class HasilLogCoresRelationManager extends RelationManager
                 //
             ])
             ->headerActions([
-                CreateAction::make(),
+                CreateAction::make()
+                    ->hidden(fn () => ValidasiOtomatisProduksiService::produksiTerkunci($this->getOwnerRecord()))
+                    ->before(fn () => ValidasiOtomatisProduksiService::pastikanBolehUbah($this->getOwnerRecord())),
             ])
             ->recordActions([
                 Action::make('serah')
+                    ->hidden(fn () => ValidasiOtomatisProduksiService::produksiTerkunci($this->getOwnerRecord()))
                     ->label('Serah')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('success')
@@ -195,6 +199,7 @@ class HasilLogCoresRelationManager extends RelationManager
                     ))
                     ->modalSubmitActionLabel('Ya, Serahkan')
                     ->action(function ($record): void {
+                        ValidasiOtomatisProduksiService::pastikanBolehUbah($this->getOwnerRecord());
                         try {
                             app(LogCoreStokService::class)->serahHasilLogCore(
                                 hasil: $record,
@@ -222,9 +227,13 @@ class HasilLogCoresRelationManager extends RelationManager
                         }
                     }),
                 EditAction::make()
+                    ->hidden(fn () => ValidasiOtomatisProduksiService::produksiTerkunci($this->getOwnerRecord()))
+                    ->before(fn () => ValidasiOtomatisProduksiService::pastikanBolehUbah($this->getOwnerRecord()))
                     ->visible(fn($record) => ! $record->sudah_diserah),
 
                 DeleteAction::make()
+                    ->hidden(fn () => ValidasiOtomatisProduksiService::produksiTerkunci($this->getOwnerRecord()))
+                    ->before(fn () => ValidasiOtomatisProduksiService::pastikanBolehUbah($this->getOwnerRecord()))
                     ->visible(fn($record) => ! $record->sudah_diserah),
             ])
             ->toolbarActions([
@@ -286,7 +295,9 @@ class HasilLogCoresRelationManager extends RelationManager
 
                     // Bulk delete: tolak jika ada yang sudah diserah
                     DeleteBulkAction::make()
+                        ->hidden(fn () => ValidasiOtomatisProduksiService::produksiTerkunci($this->getOwnerRecord()))
                         ->before(function (Collection $records) {
+                            ValidasiOtomatisProduksiService::pastikanBolehUbah($this->getOwnerRecord());
                             if ($records->contains(fn($r) => $r->sudah_diserah)) {
                                 Notification::make()
                                     ->title('Tidak bisa dihapus')

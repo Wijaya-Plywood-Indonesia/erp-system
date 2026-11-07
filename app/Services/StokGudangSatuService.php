@@ -155,7 +155,7 @@ class StokGudangSatuService
                 throw new \RuntimeException("Jenis kayu \"{$namaJenisBarang}\" tidak ditemukan di master jenis kayu.");
             }
 
-            $kubikasi = ((float) $panjang * (float) $lebar * (float) $tebal * $jumlah) / 10_000_000_000;
+            $kubikasi = ((float) $panjang * (float) $lebar * (float) $tebal * $jumlah) / 10_000_000;
 
             $noPalet = $serahTerima->hasilNyusup?->no_palet;
             $keterangan = $noPalet
