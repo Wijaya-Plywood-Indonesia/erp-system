@@ -437,7 +437,7 @@ class DetailBarangDikerjakansTable
                                     $penyerah = auth()->user()?->name ?? '-';
                                     // Hitung kubikasi (m3). Sesuaikan rumus ini jika berbeda
                                     // dengan rumus yang dipakai di StokPlywoodSiapJualService.
-                                    $kubikasi = ($panjang * $lebar * $tebal * $lembar) / 10_000_000_000;
+                                    $kubikasi = ($panjang * $lebar * $tebal * $lembar) / 10_000_000;
 
                                     // 1. Catat serah terima dengan tujuan 'gudang'.
                                     // Belum ada fitur "terima" untuk tujuan gudang, jadi

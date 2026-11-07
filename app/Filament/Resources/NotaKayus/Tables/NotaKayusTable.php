@@ -170,14 +170,14 @@ class NotaKayusTable
 
                         return true;
                     }),
-                // --- ACTION: TANDAI LUNAS (UTAMA: UPDATE STOK, TEMPAT KAYU & JURNAL) ---
+                // --- ACTION: TANDAI LUNAS (UTAMA: UPDATE STOK & TEMPAT KAYU) ---
                 Action::make('set_lunas')
                     ->label('Tandai Lunas')
                     ->icon('heroicon-o-banknotes')
                     ->color('danger')
                     ->requiresConfirmation()
                     ->modalHeading('Konfirmasi Pelunasan & Sinkronisasi Data')
-                    ->modalDescription('Menandai nota sebagai Lunas akan memicu: 1. Penambahan Stok Lahan, 2. Update Data Tempat Kayu, dan 3. Pengiriman Jurnal ke Akuntansi. Lanjutkan?')
+                    ->modalDescription('Menandai nota sebagai Lunas akan memicu: 1. Penambahan Stok Lahan dan 2. Update Data Tempat Kayu. Jurnal TIDAK dikirim otomatis, kirim lewat menu Kirim Jurnal Akuntansi. Lanjutkan?')
                     ->action(function ($record) {
                         $user = Auth::user();
                         $timestamp = now()->format('d/m/Y H:i');
@@ -188,8 +188,10 @@ class NotaKayusTable
                         // Catatan: NotaKayuObserver::updated() otomatis dipanggil saat save()
                         // dan akan menjalankan prosesNotaKayuLunas() untuk update stok & tempat kayu.
 
-                        // TRIGGER JURNAL: Sinkronisasi data ke Perusahaan 2
-                        self::jalankanSync($record);
+                        // TRIGGER JURNAL: DINONAKTIFKAN.
+                        // Semua jurnal ke akuntansi sekarang hanya dikirim manual lewat
+                        // menu "Kirim Jurnal Akuntansi" (tidak ada kirim otomatis).
+                        // self::jalankanSync($record);
 
                         Notification::make()
                             ->title('Pelunasan Berhasil')

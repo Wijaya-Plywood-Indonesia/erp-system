@@ -195,7 +195,7 @@
                             <input
                                 type="number"
                                 wire:model.lazy="rows.{{ $i }}.stok_fisik"
-                                placeholder="-"
+                                placeholder=""
                                 class="w-24 rounded-lg border {{ $diisi
                                     ? 'border-green-400 bg-green-50 dark:border-green-500/50 dark:bg-green-900/20'
                                     : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700/80' }}
