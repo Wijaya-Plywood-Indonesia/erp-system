@@ -330,7 +330,7 @@
 
                             <td class="py-3 px-4 text-center" @click.stop>
                                 @if($nota && $this->isSudahDiperiksa($nota->status))
-                                <a href="{{ route('nota-kayu.show', $nota->id) }}" target="_blank"
+                                <a href="{{ route('nota-kayu.show', $nota->uuid) }}" target="_blank"
                                     class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition">
                                     <x-heroicon-m-arrow-top-right-on-square class="w-3.5 h-3.5" />
                                     <span>Cek Nota</span>

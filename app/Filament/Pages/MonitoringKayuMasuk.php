@@ -146,7 +146,7 @@ class MonitoringKayuMasuk extends Page
             ->with([
                 'penggunaanSupplier:id,nama_supplier',
                 'penggunaanKendaraanSupplier:id,jenis_kendaraan,nopol_kendaraan',
-                'notaKayu:id,id_kayu_masuk,no_nota,status,status_pelunasan,penanggung_jawab,penerima,satpam',
+                'notaKayu:id,uuid,id_kayu_masuk,no_nota,status,status_pelunasan,penanggung_jawab,penerima,satpam',
             ])
             ->withExists('detailTurusanKayus as has_turus')
             ->withExists('detailTurunKayus as has_turun');
