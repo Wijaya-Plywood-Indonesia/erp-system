@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProduksiStiks\RelationManagers;
 
+use App\Filament\Support\PindahPegawaiTableActions;
 use App\Models\Pegawai;
 use App\Models\DetailPegawaiStik;
 use Carbon\CarbonPeriod;
@@ -111,6 +112,9 @@ class DetailPegawaiStikRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
+        // Tanggal produksi Stik yang sedang dibuka
+        $tanggalStik = fn($livewire) => $livewire->getOwnerRecord()->tanggal_produksi;
+
         return $table
             ->columns([
                 TextColumn::make('pegawai.nama_pegawai')
@@ -164,9 +168,14 @@ class DetailPegawaiStikRelationManager extends RelationManager
                         ]);
                     })
                     ->hidden(fn() => $this->terkunci()),
+
+                PindahPegawaiTableActions::recordAction('stik', $tanggalStik)
+                    ->hidden(fn() => $this->terkunci()),
+                PindahPegawaiTableActions::batalAction('stik'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    PindahPegawaiTableActions::bulkAction('stik', $tanggalStik),
                     DeleteBulkAction::make()
                         ->hidden(fn() => $this->terkunci()),
                 ]),
