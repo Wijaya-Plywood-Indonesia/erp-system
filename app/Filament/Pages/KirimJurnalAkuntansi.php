@@ -62,6 +62,21 @@ class KirimJurnalAkuntansi extends Page
         $this->muat();
     }
 
+    /**
+     * Ambil id barang untuk sebuah baris jurnal.
+     * Pakai id_barang bawaan builder bila ada; kalau tidak, sambungkan resolver kamu di sini.
+     */
+    private function resolveIdBarang(array $row): mixed
+    {
+        if (filled($row['id_barang'] ?? null)) {
+            return $row['id_barang'];
+        }
+
+        // TODO: ganti dengan resolver id barang yang kamu pakai, contoh:
+        // return app(\App\Services\Akuntansi\ResolverIdBarang::class)->resolve($row);
+        return null;
+    }
+
     /** Buka rincian baris sebuah jurnal (tidak mengirim apa pun). */
     public function lihat(string $jenis, string $noDokumen): void
     {
@@ -73,16 +88,29 @@ class KirimJurnalAkuntansi extends Page
 
         foreach (app(JurnalProduksiSender::class)->preview($jenis, $this->tanggal) as $j) {
             if ($j['no_dokumen'] === $noDokumen) {
+                // Tambahkan id_barang per baris. Baris produk = baris yang punya "banyak".
+                $rows = collect($j['rows'])->map(function ($row) {
+                    $row['perlu_id_barang'] = filled($row['banyak'] ?? null);
+                    $row['id_barang'] = $row['perlu_id_barang'] ? $this->resolveIdBarang($row) : null;
+
+                    return $row;
+                })->all();
+
+                $tanpaId = collect($rows)
+                    ->filter(fn ($r) => $r['perlu_id_barang'] && blank($r['id_barang']))
+                    ->count();
+
                 $this->detail = [
                     'label' => $label,
                     'no_dokumen' => $j['no_dokumen'],
-                    'rows' => $j['rows'],
+                    'rows' => $rows,
                     'jumlah_baris' => $j['jumlah_baris'],
                     'total_debit' => $j['total_debit'],
                     'total_kredit' => $j['total_kredit'],
                     'is_balance' => $j['is_balance'],
                     'has_akun_tidak_valid' => $j['has_akun_tidak_valid'] ?? false,
                     'akun_tidak_valid' => $j['akun_tidak_valid'] ?? [],
+                    'jumlah_tanpa_id_barang' => $tanpaId,
                 ];
 
                 $this->dispatch('open-modal', id: 'detail-jurnal');
