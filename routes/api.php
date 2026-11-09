@@ -335,22 +335,4 @@ Route::get('/external/rekap-stok-veneer', function (Request $request) {
     }
 });
 
-
-Route::middleware(['esp.api'])->prefix('sanding')->group(function () {
-
-    // 1. Mengambil antrean palet sanding
-    Route::get('/', [SandingApiController::class, 'index'])
-        ->name('sanding.antrean');
-
-    // 2. Menyimpan data putaran Face / Back
-    Route::post('/putaran/{serahTerimaHp}', [SandingApiController::class, 'storePutaran'])
-        ->name('sanding.putaran.store');
-
-    // 3. Menutup sesi sanding secara manual
-    Route::post('/selesai/{serahTerimaHp}', [SandingApiController::class, 'selesai'])
-        ->name('sanding.selesai');
-
-    // 4. Mengambil riwayat palet yang sudah selesai
-    Route::get('/riwayat', [SandingApiController::class, 'riwayatSelesai'])
-        ->name('sanding.riwayat');
-});
+require __DIR__.'/bkbm_api.php';

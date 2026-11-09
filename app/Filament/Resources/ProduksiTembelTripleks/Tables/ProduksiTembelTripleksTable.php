@@ -14,6 +14,8 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Forms\Components\Textarea;
 
+use App\Support\KolomValidasi;
+
 class ProduksiTembelTripleksTable
 {
     public static function configure(Table $table): Table
@@ -34,7 +36,9 @@ class ProduksiTembelTripleksTable
                     ->limit(50)
                     ->sortable()
                     ->searchable(),
-            ])
+                
+                KolomValidasi::make(),
+                ])
             ->filters([
                 // Tambahkan filter jika diperlukan nanti
             ])

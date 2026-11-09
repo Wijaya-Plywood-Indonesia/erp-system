@@ -2,38 +2,46 @@
 
 namespace App\Filament\Pages;
 
-use Filament\Pages\Page;
-use Filament\Actions\Action;
-use Filament\Notifications\Notification;
-use Filament\Forms\Concerns\InteractsWithForms;
-use Filament\Forms\Contracts\HasForms;
-use Filament\Forms\Components\DatePicker;
 use App\Exports\LaporanProduksiHotPressExport;
 use App\Filament\Pages\LaporanHotpress\Queries\LoadLaporanHotpress;
 use App\Filament\Pages\LaporanHotpress\Transformers\HotpressDataMap;
-use Maatwebsite\Excel\Facades\Excel;
-use App\Models\ProduksiHp;
 use App\Models\BahanPenolongProduksi;
 use App\Models\HargaPegawai;
-use Carbon\Carbon;
+use App\Models\ProduksiHp;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Carbon\Carbon;
+use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Illuminate\Support\Facades\Log;
+use Maatwebsite\Excel\Facades\Excel;
 use UnitEnum;
 
 class LaporanProduksiHotPress extends Page implements HasForms
 {
-    use InteractsWithForms;
     use HasPageShield;
+    use InteractsWithForms;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-chart-bar';
+
     protected string $view = 'filament.pages.laporan-produksi-hot-press';
+
     protected static UnitEnum|string|null $navigationGroup = 'Laporan';
+
     protected static ?string $title = 'Laporan Produksi Hot Press';
+
     protected static ?int $navigationSort = 11;
+
     protected static bool $shouldRegisterNavigation = false;
 
     public $dataHp = [];
+
     public array $targetData = [];
+
     public $tanggal = null;
 
     public function mount(): void
@@ -50,14 +58,14 @@ class LaporanProduksiHotPress extends Page implements HasForms
                 ->label('Refresh Data')
                 ->icon('heroicon-o-arrow-path')
                 ->color('gray')
-                ->action(fn() => $this->loadAllData()),
+                ->action(fn () => $this->loadAllData()),
 
             Action::make('exportExcel')
                 ->label('Download Excel')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
-                ->action(fn() => $this->exportExcel())
-                ->visible(fn() => !empty($this->dataHp)),
+                ->action(fn () => $this->exportExcel())
+                ->visible(fn () => ! empty($this->dataHp)),
         ];
     }
 
@@ -69,9 +77,9 @@ class LaporanProduksiHotPress extends Page implements HasForms
             }
 
             $tglFile = Carbon::parse($this->tanggal)->format('d-m-Y');
-            
+
             // DETEKSI DOMAIN SAAT INI
-            $domain = request()->getHost(); 
+            $domain = request()->getHost();
 
             return Excel::download(
                 // Tambahkan parameter $domain ke dalam Export Class
@@ -112,7 +120,7 @@ class LaporanProduksiHotPress extends Page implements HasForms
             $produksiListTarget = LoadLaporanHotpress::run($this->tanggal ?? now()->format('Y-m-d'));
             $this->targetData = HotpressDataMap::make($produksiListTarget);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Error loading Target Hot Press: ' . $e->getMessage());
+            Log::error('Error loading Target Hot Press: '.$e->getMessage());
             $this->targetData = [];
         }
 
@@ -131,7 +139,7 @@ class LaporanProduksiHotPress extends Page implements HasForms
                 'platformHasilHp.barangSetengahJadi.jenisBarang',
                 'platformHasilHp.barangSetengahJadi.grade',
                 'platformHasilHp.mesin',
-                'bahanPenolongHp'
+                'bahanPenolongHp',
             ])
                 ->whereDate('tanggal_produksi', $tanggal)
                 ->get();
@@ -143,7 +151,7 @@ class LaporanProduksiHotPress extends Page implements HasForms
             $this->dataHp = [];
 
             $grouped = $produksiList->groupBy(function ($p) {
-                return 'HOTPRESS ' . strtoupper($p->shift) . ' BESAR';
+                return 'HOTPRESS '.strtoupper($p->shift).' BESAR';
             });
 
             foreach ($grouped as $machineName => $records) {
@@ -165,7 +173,7 @@ class LaporanProduksiHotPress extends Page implements HasForms
                             't' => $tebal,
                             'isi' => $banyak,
                             'jenis_kayu' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? '-',
-                            'kwalitas' => strtoupper('TRIPLEK ' . ($t->barangSetengahJadi->grade->nama_grade ?? '-')),
+                            'kwalitas' => strtoupper('TRIPLEK '.($t->barangSetengahJadi->grade->nama_grade ?? '-')),
                             'nama_barang' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? 'Plywood',
                             'kubikasi' => round($kubikasi, 4),
                             'tipe' => 'Triplek',
@@ -187,7 +195,7 @@ class LaporanProduksiHotPress extends Page implements HasForms
                             't' => $tebal,
                             'isi' => $banyak,
                             'jenis_kayu' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? '-',
-                            'kwalitas' => strtoupper('PLATFORM ' . ($t->barangSetengahJadi->grade->nama_grade ?? '-')),
+                            'kwalitas' => strtoupper('PLATFORM '.($t->barangSetengahJadi->grade->nama_grade ?? '-')),
                             'nama_barang' => $t->barangSetengahJadi->jenisBarang->nama_jenis_barang ?? 'Platform',
                             'kubikasi' => round($kubikasi, 4),
                             'tipe' => 'Platform',
@@ -236,7 +244,7 @@ class LaporanProduksiHotPress extends Page implements HasForms
                 'bulanan' => 220000,
             ];
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Error loading hot press data: ' . $e->getMessage());
+            Log::error('Error loading hot press data: '.$e->getMessage());
         }
     }
 }
