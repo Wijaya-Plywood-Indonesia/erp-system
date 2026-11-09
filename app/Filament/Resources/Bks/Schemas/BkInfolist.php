@@ -24,6 +24,14 @@ class BkInfolist
                 TextEntry::make('tujuan_nota')->label('Kepada'),
                 TextEntry::make('alamat')->placeholder('-'),
                 TextEntry::make('keterangan')->placeholder('-')->columnSpanFull(),
+                TextEntry::make('bmr_ref')->label('BMR (barang kembali)')
+                    ->getStateUsing(fn (Bk $r) => $r->bmrPengembalian()->first()?->no_nota)
+                    ->placeholder('Belum dikembalikan')
+                    ->visible(fn (Bk $r) => $r->kategori === 'bkk'),
+                TextEntry::make('bkr_asal')->label('Mengembalikan pinjaman dari BMK')
+                    ->getStateUsing(fn (Bk $r) => $r->bmkAsal?->no_nota)
+                    ->placeholder('-')
+                    ->visible(fn (Bk $r) => $r->kategori === 'bkr'),
                 TextEntry::make('bml_ref')->label('BML (barang kembali)')
                     ->getStateUsing(fn ($record) => $record->bmTerkait()->where('kategori', 'bml')->first()?->no_nota)
                     ->placeholder('-')
@@ -44,6 +52,8 @@ class BkInfolist
                     ->getStateUsing(fn (Bk $r) => $r->updated_at?->format('d M Y H:i')),
                 TextEntry::make('bm_tujuan')->label('BM di pabrik lain')
                     ->getStateUsing(fn (Bk $r) => self::bmDiPabrikLain($r))
+                    ->color('primary')->weight('bold')
+                    ->action(\App\Filament\Resources\Bks\Actions\BmDiPabrikLainAction::make())
                     ->visible(fn (Bk $r) => (bool) BkbmOutbox::untuk($r->siklus_uuid, 'buat_bm'))
                     ->columnSpanFull(),
             ])->columns(['default' => 1, 'md' => 3]),

@@ -20,7 +20,8 @@ class BkForm
         $kategori = collect(config('bkbm.kategori_bk'))->filter(fn ($k) => $k['aktif'])->map(fn ($k) => $k['label'])->all();
 
         return $schema->components([
-            Select::make('kategori')->label('Kategori')->options($kategori)->required()->native(false)->live()
+            Select::make('kategori')->label('Kategori')
+                ->options(fn ($record) => $record ? collect(config('bkbm.kategori_bk'))->map(fn ($k) => $k['label'])->all() : $kategori)->required()->native(false)->live()
                 ->afterStateUpdated(fn (Get $get, Set $set) => self::saran($get, $set))
                 ->disabled(fn ($record) => $record !== null)->dehydrated(fn ($record) => $record === null),
             DatePicker::make('tanggal')->default(today())->required()->live()

@@ -24,8 +24,8 @@ class ListBks extends ListRecords
             'draft' => Tab::make('Draft')
                 ->modifyQueryUsing(fn ($query) => $query->where('status', 'draft')),
             'di_luar' => Tab::make('Barang di luar')
-                ->modifyQueryUsing(fn ($query) => $query->where('status', 'divalidasi'))
-                ->badge(Bk::where('status', 'divalidasi')->count() ?: null)
+                ->modifyQueryUsing(fn ($query) => $query->whereIn('status', ['divalidasi', 'dipinjam']))
+                ->badge(Bk::whereIn('status', ['divalidasi', 'dipinjam'])->count() ?: null)
                 ->badgeColor('danger'),
             'selesai' => Tab::make('Selesai')
                 ->modifyQueryUsing(fn ($query) => $query->where('status', 'selesai')),

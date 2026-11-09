@@ -81,7 +81,7 @@ class BkBmService
                 throw new \RuntimeException('Nota belum berisi barang.');
             }
 
-            // BKK (pinjam) memotong stok sama seperti BK. Tahap 3 menambah BMK + warna kuning.
+            // BKK dan BKR memotong stok sama seperti BK.
             foreach ($bk->detail as $d) {
                 if (! str_starts_with($d->nama_barang, config('bkbm.prefix_barang_umum'))) {
                     continue; // baris non barang umum (veneer dst.) diproses service masing-masing
@@ -160,6 +160,36 @@ class BkBmService
             if ($bm->kategori === 'bml' && $bm->id_bk_referensi) {
                 Bk::whereKey($bm->id_bk_referensi)->where('status', 'divalidasi')->update(['status' => 'selesai']);
             }
+
+            // BMR (barang pinjaman kembali) divalidasi: BKK asalnya jadi hijau.
+            if ($bm->kategori === 'bmr' && $bm->id_bkk_asal) {
+                Bk::whereKey($bm->id_bkk_asal)->whereIn('status', ['divalidasi', 'dipinjam'])->update(['status' => 'selesai']);
+            }
+        });
+    }
+
+    /**
+     * Tombol "Kembalikan" pada BMK yang sudah divalidasi: buat BKR (isi barang manual) untuk mengembalikan pinjaman.
+     * Satu BKR per BMK. BKR yang divalidasi mengirim BMR kosong ke pabrik peminjam; BMR divalidasi = BKK hijau.
+     */
+    public static function buatBkr(Bm $bmk, string $tanggal, ?string $keterangan = null, ?string $noNota = null): Bk
+    {
+        if ($bmk->kategori !== 'bmk' || $bmk->status !== 'divalidasi') {
+            throw new \RuntimeException('Hanya BMK yang sudah divalidasi yang bisa dikembalikan.');
+        }
+        return DB::transaction(function () use ($bmk, $tanggal, $keterangan, $noNota) {
+            $bmk = Bm::whereKey($bmk->id)->lockForUpdate()->firstOrFail();
+            if (Bk::where('id_bmk_asal', $bmk->id)->exists()) {
+                throw new \RuntimeException('Pengembalian (BKR) untuk BMK ini sudah dibuat.');
+            }
+            return self::buatBk([
+                'tanggal' => $tanggal,
+                'tujuan_nota' => $bmk->ref_pabrik ?: $bmk->dari,
+                'keterangan' => $keterangan,
+                'no_nota' => $noNota,
+                'id_bmk_asal' => $bmk->id,
+                'ref_no_bkk' => $bmk->ref_no_bk,
+            ], 'bkr');
         });
     }
 

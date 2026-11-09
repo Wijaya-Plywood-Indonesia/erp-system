@@ -27,6 +27,14 @@ class BmInfolist
                     ->color('primary')->weight('bold')
                     ->action(\App\Filament\Resources\Bms\Actions\ReferensiBkAction::make()),
                 TextEntry::make('keterangan')->placeholder('-')->columnSpanFull(),
+                TextEntry::make('bkr_ref')->label('BKR (pengembalian)')
+                    ->getStateUsing(fn (Bm $r) => $r->bkrPengembalian()->first()?->no_nota)
+                    ->placeholder('Belum dikembalikan')
+                    ->visible(fn (Bm $r) => $r->kategori === 'bmk'),
+                TextEntry::make('bkk_asal')->label('Menutup BKK')
+                    ->getStateUsing(fn (Bm $r) => $r->bkkAsal?->no_nota)
+                    ->placeholder('-')
+                    ->visible(fn (Bm $r) => $r->kategori === 'bmr'),
             ])->columns(['default' => 1, 'sm' => 2, 'lg' => 3]),
 
             Section::make('Riwayat')->icon('heroicon-o-clock')->schema([

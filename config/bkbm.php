@@ -2,14 +2,14 @@
 
 /*
  * Menu BK / BM baru. Perilaku tiap kategori diatur di sini, bukan di kode.
- * Tahap 1a: hanya BKL (dan BK satu pabrik) yang aktif. BKK menyusul.
+ * BKK: BK pinjam -> BMK di pabrik lain (BKK kuning) -> tombol Kembalikan di BMK membuat BKR -> BMR di pabrik asal (BKK hijau).
  */
 return [
     'aktif' => env('BKBM_BARU_AKTIF', false),
 
     // Nomor mulai (urutan berikutnya = nilai ini + 1) bila belum ada nota sama sekali.
     // Penomoran BK/BM baru mulai dari 0001, terpisah dari nota lama.
-    'nomor_awal' => ['bk' => 0, 'bkl' => 0, 'bkk' => 0, 'bm' => 0, 'bml' => 0, 'bmk' => 0],
+    'nomor_awal' => ['bk' => 0, 'bkl' => 0, 'bkk' => 0, 'bm' => 0, 'bml' => 0, 'bmk' => 0, 'bkr' => 0, 'bmr' => 0],
 
     // Pengiriman antar pabrik (isi di .env, tanpa nilai bawaan untuk kunci).
     'pabrik' => env('BKBM_PABRIK'),               // mis. Wijaya / Wahana
@@ -19,7 +19,9 @@ return [
 
     'kategori_bk' => [
         'bk'  => ['label' => 'BK – Barang Keluar',            'aktif' => true,  'kembali' => false, 'bm_lawan' => 'bm', 'kirim' => true],
-        'bkk' => ['label' => 'BKK – Barang Keluar (Pinjam)',  'aktif' => false, 'kembali' => true,  'bm_lawan' => 'bmk'],
+        'bkk' => ['label' => 'BKK – Barang Keluar (Pinjam)',  'aktif' => true,  'kembali' => true,  'bm_lawan' => 'bmk', 'kirim' => true],
+        // BKR dibuat otomatis lewat tombol "Kembalikan" di BMK (tidak muncul di pilihan kategori biasa).
+        'bkr' => ['label' => 'BKR – Pengembalian Pinjaman',   'aktif' => false, 'kembali' => false, 'bm_lawan' => 'bmr', 'kirim' => true],
         'bkl' => ['label' => 'BKL – Barang Kita di Luar',     'aktif' => true,  'kembali' => true,  'bm_lawan' => null, 'bm_kembali' => 'bml'],
     ],
 
@@ -27,6 +29,7 @@ return [
         'bm'  => 'BM – Barang Masuk',
         'bmk' => 'BMK – Barang Masuk (Pinjam)',
         'bml' => 'BML – Barang Kembali dari Luar',
+        'bmr' => 'BMR – Barang Kembali (Pinjaman)',
     ],
 
     'prefix_barang_umum' => 'Barang Umum - ',

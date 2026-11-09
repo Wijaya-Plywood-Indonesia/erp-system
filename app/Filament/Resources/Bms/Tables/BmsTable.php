@@ -40,6 +40,7 @@ class BmsTable
                 SelectFilter::make('status')->options(['draft' => 'Draft', 'divalidasi' => 'Divalidasi']),
             ])
             ->recordActions([
+                \App\Filament\Resources\Bms\Actions\KembalikanBmkAction::make(),
                 \App\Filament\Resources\Bms\Actions\CetakBmAction::make(),
                 ActionGroup::make([
                     ViewAction::make(),

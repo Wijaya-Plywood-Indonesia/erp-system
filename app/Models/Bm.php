@@ -13,7 +13,7 @@ class Bm extends Model
     protected $fillable = [
         'siklus_uuid', 'kategori', 'no_nota', 'tanggal', 'dari', 'id_bk_referensi',
         'keterangan', 'status', 'dibuat_oleh', 'divalidasi_oleh', 'divalidasi_at',
-        'ref_no_bk', 'ref_pabrik', 'ref_snapshot',
+        'ref_no_bk', 'ref_pabrik', 'ref_snapshot', 'id_bkk_asal',
     ];
 
     protected $casts = ['tanggal' => 'date', 'divalidasi_at' => 'datetime', 'ref_snapshot' => 'array'];
@@ -26,6 +26,10 @@ class Bm extends Model
     /** Cetakan BM lama memakai nama kolom tujuan_nota; di BM baru padanannya adalah "dari". */
     public function getTujuanNotaAttribute(): ?string { return $this->dari; }
     public function bkReferensi(): BelongsTo { return $this->belongsTo(Bk::class, 'id_bk_referensi'); }
+    /** BMR: BKK (di pabrik ini) yang ditutup oleh BMR ini. */
+    public function bkkAsal(): BelongsTo { return $this->belongsTo(Bk::class, 'id_bkk_asal'); }
+    /** BMK: BKR (pengembalian) yang dibuat dari BMK ini. */
+    public function bkrPengembalian(): \Illuminate\Database\Eloquent\Relations\HasMany { return $this->hasMany(Bk::class, 'id_bmk_asal'); }
 
     // Relasi yang dipakai service stok lama (Plywood/Platform) lewat $nota->plywoodMutasi dst.
     public function plywoodMutasi(): \Illuminate\Database\Eloquent\Relations\HasOne

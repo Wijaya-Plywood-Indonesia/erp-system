@@ -54,6 +54,7 @@ class BkBmKirimService
             'no_bk' => $bk->no_nota,
             'kategori_bk' => $bk->kategori,
             'kategori_bm' => $lawan,
+            'ref_no_bkk' => $bk->kategori === 'bkr' ? $bk->ref_no_bkk : null, // BKR: nomor BKK asal di pabrik penerima
             'tanggal' => $bk->tanggal->format('Y-m-d'),
             'dari' => config('bkbm.pabrik'),
             'tujuan_nota' => $bk->tujuan_nota,
@@ -81,6 +82,15 @@ class BkBmKirimService
             'pabrik' => config('bkbm.pabrik'),
             'divalidasi_oleh' => $bm->validator?->name,
             'divalidasi_at' => $bm->divalidasi_at?->format('Y-m-d H:i:s'),
+            'tanggal' => $bm->tanggal?->format('Y-m-d'),
+            'keterangan' => $bm->keterangan,
+            // Isi BM yang sudah divalidasi, supaya pabrik asal bisa melihatnya (hanya untuk dibaca).
+            'barang' => $bm->detail()->get()->map(fn ($d) => [
+                'nama_barang' => preg_replace('/^' . preg_quote(config('bkbm.prefix_barang_umum'), '/') . '/', '', $d->nama_barang),
+                'jumlah' => (float) $d->jumlah,
+                'satuan' => $d->satuan,
+                'keterangan' => $d->keterangan,
+            ])->values()->all(),
         ]);
     }
 
@@ -192,8 +202,19 @@ class BkBmKirimService
         if (! in_array($d['kategori_bm'], array_keys(config('bkbm.kategori_bm')), true)) {
             throw new \InvalidArgumentException('Kategori BM tidak valid.');
         }
+        // BMR: cari BKK asal di pabrik ini, supaya BKK bisa jadi hijau saat BMR divalidasi.
+        $idBkkAsal = null;
+        if ($d['kategori_bm'] === 'bmr') {
+            $bkk = Bk::where('kategori', 'bkk')->where('no_nota', $d['ref_no_bkk'] ?? '')->first();
+            if (! $bkk) {
+                throw new \InvalidArgumentException('BKK asal "' . ($d['ref_no_bkk'] ?? '-') . '" tidak ditemukan di pabrik ini.');
+            }
+            $idBkkAsal = $bkk->id;
+        }
+
         // BM kosong: isi barang diisi manual oleh penerima. Salinan BK asal hanya untuk dibaca.
         $bm = BkBmService::buatBm([
+            'id_bkk_asal' => $idBkkAsal,
             'siklus_uuid' => $p['siklus_uuid'],
             'tanggal' => now()->format('Y-m-d'),
             'dari' => $p['dari_pabrik'] ?? $d['dari'] ?? null,
@@ -220,7 +241,9 @@ class BkBmKirimService
             throw new \InvalidArgumentException('BK asal tidak ditemukan.');
         }
         if ($bk->status === 'divalidasi') {
-            $bk->update(['status' => 'selesai']);
+            // BKK: BMK sudah divalidasi di sana = kuning (dipinjam). Kategori lain = selesai.
+            $baru = ($bk->kategori === 'bkk' && ($d['kategori_bm'] ?? null) === 'bmk') ? 'dipinjam' : 'selesai';
+            $bk->update(['status' => $baru]);
         }
         return [];
     }

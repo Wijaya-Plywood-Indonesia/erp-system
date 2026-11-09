@@ -49,6 +49,7 @@ class ViewBm extends ViewRecord
                     $this->dispatch('$refresh');
                 }),
 
+            \App\Filament\Resources\Bms\Actions\KembalikanBmkAction::make(),
             \App\Filament\Resources\Bms\Actions\CetakBmAction::make(),
             \Filament\Actions\EditAction::make()->visible(fn () => ! $this->record->terkunci()),
         ];

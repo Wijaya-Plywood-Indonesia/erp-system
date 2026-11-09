@@ -21,6 +21,7 @@ class BksTable
             ->recordClasses(fn (Bk $r) => match ($r->warna()) {
                 'danger' => 'bg-red-50 dark:bg-red-950/30',
                 'success' => 'bg-green-50 dark:bg-green-950/30',
+                'warning' => 'bg-yellow-50 dark:bg-yellow-950/30',
                 default => null,
             })
             ->columns([
@@ -28,16 +29,16 @@ class BksTable
                 TextColumn::make('no_nota')->label('No. Nota')->searchable()->weight('bold'),
                 TextColumn::make('kategori')->label('Kategori')->weight('bold')
                     ->formatStateUsing(fn ($state) => strtoupper((string) $state))
-                    ->color(fn ($state) => match ($state) { 'bkl' => 'info', 'bkk' => 'warning', default => 'gray' }),
+                    ->color(fn ($state) => match ($state) { 'bkl' => 'info', 'bkk' => 'warning', 'bkr' => 'primary', default => 'gray' }),
                 TextColumn::make('tujuan_nota')->label('Kepada')->searchable(),
                 TextColumn::make('status')->badge()
                     ->formatStateUsing(fn ($state, Bk $r) => $r->labelStatus())
                     ->color(fn ($state, Bk $r) => $r->warna()),
                 TextColumn::make('hari_di_luar')->label('Di luar')
-                    ->getStateUsing(fn (Bk $r) => $r->status === 'divalidasi' && $r->divalidasi_at
+                    ->getStateUsing(fn (Bk $r) => $r->masihDiLuar() && $r->divalidasi_at
                         ? (int) $r->divalidasi_at->diffInDays(now()) . ' hari' : null)
                     ->placeholder('-')
-                    ->color(fn (Bk $r) => $r->status === 'divalidasi' && $r->divalidasi_at && $r->divalidasi_at->diffInDays(now()) > 30 ? 'danger' : 'gray')
+                    ->color(fn (Bk $r) => $r->masihDiLuar() && $r->divalidasi_at && $r->divalidasi_at->diffInDays(now()) > 30 ? 'danger' : 'gray')
                     ->sortable(query: function ($query, string $direction) {
                         return $query->orderBy('divalidasi_at', $direction === 'asc' ? 'desc' : 'asc');
                     }),
@@ -46,7 +47,7 @@ class BksTable
             ])
             ->filters([
                 SelectFilter::make('kategori')->options(collect(config('bkbm.kategori_bk'))->map(fn ($k) => $k['label'])->all()),
-                SelectFilter::make('status')->options(['draft' => 'Draft', 'divalidasi' => 'Barang di luar', 'selesai' => 'Selesai']),
+                SelectFilter::make('status')->options(['draft' => 'Draft', 'divalidasi' => 'Barang di luar', 'dipinjam' => 'Dipinjam (belum kembali)', 'selesai' => 'Selesai']),
             ])
             ->recordActions([
                 \App\Filament\Resources\Bks\Actions\BarangKembaliAction::make(),

@@ -41,7 +41,7 @@ class BkResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $n = Bk::where('status', 'divalidasi')->count();
+        $n = Bk::whereIn('status', ['divalidasi', 'dipinjam'])->count();
         return $n ? (string) $n : null;
     }
 
