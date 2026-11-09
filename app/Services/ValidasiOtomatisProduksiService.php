@@ -57,6 +57,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOneOrMany;
@@ -403,6 +404,9 @@ class ValidasiOtomatisProduksiService
                 fn (string $event, array $payload) => self::kunciKeras($event, $payload)
             );
         }
+
+        self::daftarkanLabelSamaran();
+        self::daftarkanStatusAsliBadge();
     }
 
     // ───────────────────────── PROSES VALIDASI OTOMATIS ─────────────────────────
@@ -673,10 +677,6 @@ class ValidasiOtomatisProduksiService
      */
     protected static function samarkan(Model $m): void
     {
-        if (self::$sistemBerjalan || ! self::barisOtomatis($m) || ! self::adalahSuperAdmin()) {
-            return;
-        }
-
         $asli = strtolower(trim((string) $m->getRawOriginal('status')));
         if (! in_array($asli, self::STATUS_FINAL, true)) {
             return;
@@ -855,6 +855,63 @@ class ValidasiOtomatisProduksiService
                     return [DeleteAction::make()->cancelParentActions()];
                 });
         });
+    }
+
+        /**
+     * Label badge validasi: 'otomatis' bila baris dibuat sistem, selain itu status aslinya
+     * (mis. 'divalidasi' untuk validasi manual). Dibaca dari database, bukan status samaran.
+     */
+    public static function labelStatus($validasi): ?string
+    {
+        if (! $validasi instanceof Model) {
+            return null;
+        }
+
+        $status = $validasi->getRawOriginal('status');
+
+        if ($status !== null
+            && self::barisOtomatis($validasi)
+            && in_array(strtolower(trim((string) $status)), self::STATUS_FINAL, true)) {
+            return 'otomatis';
+        }
+
+        return $status;
+    }
+
+    /**
+     * Badge validasi di daftar produksi (kolom validasiTerakhir.status):
+     *  - state (dipakai warna & ikon) = status ASLI di database, jadi tetap hijau;
+     *  - teks = 'otomatis' untuk validasi otomatis, 'divalidasi' untuk validasi manual.
+     */
+    protected static function daftarkanStatusAsliBadge(): void
+    {
+        $pasang = function (TextColumn $kolom): void {
+            $nama = (string) $kolom->getName();
+
+            if (! preg_match('/^validasi\w*\.status$/', $nama)) {
+                return;
+            }
+
+            $relasi = explode('.', $nama)[0];
+
+            $kolom->getStateUsing(function ($record) use ($nama, $relasi) {
+                $validasi = $record->{$relasi};
+
+                return $validasi instanceof Model
+                    ? $validasi->getRawOriginal('status')
+                    : data_get($record, $nama);
+            });
+
+            $kolom->formatStateUsing(function ($state, ?Model $record = null) use ($relasi) {
+                return $record ? (self::labelStatus($record->{$relasi}) ?? $state) : $state;
+            });
+        };
+
+        TextColumn::configureUsing($pasang);
+
+        if (class_exists(\Filament\Tables\Columns\BadgeColumn::class)) {
+            \Filament\Tables\Columns\BadgeColumn::configureUsing($pasang);
+        }
     }
 
     /** Aksi ini menulis data (dan karenanya ikut terkunci)? ViewAction tidak pernah dikunci. */
@@ -1147,4 +1204,20 @@ class ValidasiOtomatisProduksiService
 
         return false;
     }
+
+
+protected static function daftarkanLabelSamaran(): void
+{
+    TextColumn::configureUsing(function (TextColumn $kolom): void {
+        if ($kolom->getName() !== 'status') {
+            return;
+        }
+        $kolom->formatStateUsing(function ($state, ?Model $record = null) {
+            if ($state === 'otomatis' && $record && self::konfigDariValidasi(get_class($record))) {
+                return 'divalidasi';
+            }
+            return $state;
+        });
+    });
+}
 }

@@ -18,6 +18,8 @@ use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
 use Filament\Forms\Components\DatePicker;
 
+use App\Support\KolomValidasi;
+
 class ProduksiJointsTable
 {
     public static function configure(Table $table): Table
@@ -38,6 +40,8 @@ class ProduksiJointsTable
                     ->tooltip(fn($record) => $record->kendala)
                     ->toggleable(),
 
+                KolomValidasi::make(),
+                
                 TextColumn::make('created_at')
                     ->label('Dibuat Pada')
                     ->dateTime('d/m/Y H:i')

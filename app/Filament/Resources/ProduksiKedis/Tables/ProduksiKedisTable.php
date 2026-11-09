@@ -62,8 +62,8 @@ class ProduksiKedisTable
                     ->getStateUsing(function ($record) {
                         if ($record->detailMasukKedi()->doesntExist()) return 'Belum Masuk';
                         if ($record->detailBongkarKedi()->doesntExist()) return 'Belum Bongkar';
-                        if (!$record->isBongkarDivalidasi()) return 'Belum Validasi';
-                        return 'Sudah Validasi';
+                        if (!$record->isBongkarDivalidasiAsli()) return 'Belum Validasi';
+                       return 'Sudah Validasi';
                     })
                     ->color(fn($state) => match ($state) {
                         'Belum Masuk' => 'gray',
@@ -89,7 +89,7 @@ class ProduksiKedisTable
                     ->toggleable()
                     ->toggledHiddenByDefault()
                     ->getStateUsing(function ($record) {
-                        return $record->validasiTerakhir?->status ?? 'Belum Validasi';
+                        return $record->validasiTerakhir?->getRawOriginal('status') ?? 'Belum Validasi';
                     })
                     ->color(function ($state) {
                         return match ($state) {
