@@ -354,7 +354,25 @@ class ItemBarangForms
                     return $q->filter(fn ($b) => (float) ($b->stok?->stok_qty ?? 0) > 0)
                         ->mapWithKeys(fn ($b) => [$b->id => $b->nama_barang . ' (' . self::fmt((float) $b->stok->stok_qty) . ' ' . $b->satuan . ')']);
                 })
-                ->placeholder($keluar ? 'Pilih barang yang ada stoknya' : null),
+                ->placeholder($keluar ? 'Pilih barang yang ada stoknya' : 'Pilih barang, atau ketik untuk mencari')
+                // Barang masuk (BM) yang belum ada di master bisa langsung ditambahkan dari sini.
+                ->createOptionForm($keluar ? null : [
+                    TextInput::make('nama_barang')->label('Nama Barang')->required()->maxLength(255)
+                        ->unique(table: 'barang_umum', column: 'nama_barang')
+                        ->validationMessages(['unique' => 'Barang ini sudah ada di master. Cari dengan mengetik namanya.']),
+                    TextInput::make('satuan')->label('Satuan')->required()->maxLength(50)
+                        ->regex('/^[A-Za-z][A-Za-z.\/ ]*$/')
+                        ->validationMessages(['regex' => 'Satuan harus berupa huruf, contoh: pcs, kg, liter, meter. Tidak boleh angka.'])
+                        ->datalist(fn () => BarangUmum::query()->whereNotNull('satuan')->distinct()->orderBy('satuan')->pluck('satuan')->all())
+                        ->helperText('Contoh: pcs, kg, liter, meter. Pilih dari yang sudah ada bila cocok.'),
+                    TextInput::make('kategori')->label('Kategori (opsional)')->maxLength(255),
+                ])
+                ->createOptionModalHeading('Tambah Barang Umum Baru ke Master')
+                ->createOptionUsing(fn (array $data) => BarangUmum::create([
+                    'nama_barang' => trim($data['nama_barang']),
+                    'satuan' => trim($data['satuan']),
+                    'kategori' => filled($data['kategori'] ?? null) ? trim($data['kategori']) : null,
+                ])->getKey()),
 
             Placeholder::make('stok_saat_ini')->label('Stok Saat Ini')->content(function (Get $get) use ($keluar) {
                 if (! $get('id_barang_umum')) {
