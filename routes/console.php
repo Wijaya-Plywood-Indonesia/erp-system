@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 // Validasi otomatis semua produksi (jam & aturan diatur di ValidasiOtomatisProduksiService)
 Schedule::command('produksi:validasi-otomatis')->everyFiveMinutes()->withoutOverlapping();
+Schedule::command('bkbm:kirim-outbox')->everyMinute();

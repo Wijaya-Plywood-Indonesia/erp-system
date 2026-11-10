@@ -39,7 +39,9 @@ class BkBmKirimService
             'status' => 'pending',
             'kirim_berikutnya_at' => now(),
         ]);
-        KirimBkbmOutboxJob::dispatch($row->id)->afterCommit();
+        // Dikirim langsung (sync) setelah transaksi selesai, jadi tidak bergantung pada worker antrean.
+        // Gagal kirim tidak membatalkan validasi: pesan tetap di kotak keluar dan dicoba ulang.
+        KirimBkbmOutboxJob::dispatch($row->id)->onConnection('sync')->afterCommit();
     }
 
     /** Dipanggil dalam transaksi validasi BK. */
