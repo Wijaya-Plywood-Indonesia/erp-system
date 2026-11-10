@@ -53,10 +53,10 @@ class DetailTurusanKayusTable
 
         // 5. LOGIKA TURUN KAYU: Cek apakah proses turun kayu sudah 'selesai'
         // Jika belum selesai, input turusan kayu belum diperbolehkan
-        $isTurunSelesai = $ownerRecord &&
+        $isTurunSelesai = ($ownerRecord &&
             $ownerRecord->detailTurunKayus()
                 ->where('status', 'selesai')
-                ->exists();
+                ->exists()) || true;
 
         $canAddKayu = $canPerformAction && $isTurunSelesai;
 

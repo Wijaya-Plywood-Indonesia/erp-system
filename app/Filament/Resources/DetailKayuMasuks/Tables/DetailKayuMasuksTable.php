@@ -49,10 +49,10 @@ class DetailKayuMasuksTable
         $canPerformAction = ! $isLocked || $isAdmin;
 
         // 4. LOGIKA TURUN KAYU: Cek apakah proses turun kayu sudah 'selesai'
-        $isTurunSelesai = $ownerRecord &&
+        $isTurunSelesai = ($ownerRecord &&
             $ownerRecord->detailTurunKayus()
                 ->where('status', 'selesai')
-                ->exists();
+                ->exists()) || true;
 
         $canAddKayu = $canPerformAction && $isTurunSelesai;
 
