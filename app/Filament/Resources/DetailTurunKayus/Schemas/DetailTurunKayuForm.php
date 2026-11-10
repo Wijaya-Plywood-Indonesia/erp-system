@@ -59,41 +59,17 @@ class DetailTurunKayuForm
                     })
                     ->searchable()
                     ->preload()
-                    ->live() // agar opsi status ikut ter-refresh saat kayu masuk diganti
                     ->required()
                     ->placeholder('Pilih kayu masuk'),
 
                 // STATUS
                 Select::make('status')
                     ->label('Status')
-                    ->options(function (Get $get) {
-                        $semua = [
-                            'menunggu' => 'Menunggu',
-                            'selesai' => 'Selesai',
-                        ];
-
-                        // Role istimewa: bebas pilih status untuk semua kendaraan
-                        if (self::isPrivileged()) {
-                            return $semua;
-                        }
-
-                        $kayuMasukId = $get('id_kayu_masuk');
-
-                        if (! $kayuMasukId) {
-                            return $semua;
-                        }
-
-                        $jenis = KayuMasuk::with('penggunaanKendaraanSupplier')
-                            ->find($kayuMasukId)
-                            ?->penggunaanKendaraanSupplier
-                            ?->jenis_kendaraan;
-
-                        // Fuso → dua status, selain Fuso → hanya selesai
-                        return $jenis === 'Fuso'
-                            ? $semua
-                            : ['selesai' => 'Selesai'];
-                    })
-                    ->live()
+                    ->options([
+                        'menunggu' => 'Menunggu',
+                        'selesai' => 'Selesai',
+                    ])
+                    ->default('selesai')
                     ->native(false)
                     ->required(),
 
