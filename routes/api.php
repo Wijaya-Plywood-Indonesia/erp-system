@@ -333,3 +333,5 @@ Route::get('/external/rekap-stok-veneer', function (Request $request) {
         return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
 });
+
+require __DIR__.'/bkbm_api.php';

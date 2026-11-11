@@ -137,3 +137,5 @@ Route::get('/internal/supplier-detail/{id}', function ($id) {
         'invoices'        => $invoices,
     ]);
 })->middleware(['web', 'auth'])->name('internal.supplier-detail');
+
+require __DIR__.'/bkbm_web.php';

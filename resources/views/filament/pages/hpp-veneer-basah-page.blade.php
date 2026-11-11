@@ -9,6 +9,7 @@
         $saldoLembar = $totalMasuk - $totalKeluar;
         $lastLog     = $r['last'];       // log terbaru dari seluruh hasil filter
         $lahanPalet  = $this->lahanUntukLogs($logs);
+        $validatorLog = $this->validatorUntukLogs($logs);
         $ringkas     = $this->hppRingkas;     // angka utama (jika ukuran sudah lengkap)
         $perUkuran   = $this->hppPerUkuran;   // rekap per ukuran (jika belum lengkap)
     @endphp
@@ -428,8 +429,15 @@
                                 {{ number_format($log->hpp_average, 0, ',', '.') }}
                             </span>
                         </td>
+                        @php $validator = $validatorLog[$log->referensi_type.':'.$log->referensi_id] ?? null; @endphp
                         <td class="px-4 py-2 text-[11px] font-black uppercase text-gray-700 dark:text-gray-300 whitespace-nowrap">
                             {{ trim(str_replace('[HPP SEMENTARA]', '', (string) $log->keterangan)) ?: '—' }}
+                            @if($validator)
+                                <span title="Divalidasi oleh {{ $validator['nama'] }}{{ $validator['role'] ? ' ('.$validator['role'].')' : '' }}{{ $validator['waktu'] ? ' pada '.$validator['waktu'] : '' }}"
+                                      class="ml-1.5 px-1.5 py-0.5 rounded-sm bg-sky-100 dark:bg-sky-900/30 text-[9px] font-black uppercase text-sky-600 dark:text-sky-400">
+                                    ✓ validasi: {{ $validator['nama'] }}
+                                </span>
+                            @endif
                         </td>
                     </tr>
                     @empty
