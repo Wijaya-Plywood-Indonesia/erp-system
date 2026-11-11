@@ -12,6 +12,8 @@ use App\Models\StokLogCore;
 use App\Models\StokPlatformJadi;
 use App\Models\StokPlatformMth;
 use App\Models\StokPlywoodSiapJual;
+use App\Models\StokTriplekJadi;
+use App\Models\StokTriplekMth;
 use App\Models\StokVeneerJadi;
 use App\Models\StokVeneerKering;
 use App\Models\Ukuran;
@@ -19,6 +21,7 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Facades\DB;
@@ -217,6 +220,48 @@ class ItemBarangForms
                 fn (Get $get) => self::tampilStok(self::stokPlywoodCari($get('ukuran_key'), $get('id_jenis_kayu'), $get('kw_grade')), 'Lembar', true)
             ),
             ...self::fieldsAkhir(true),
+        ];
+    }
+
+    /* ───────────── PLYWOOD: pilih tipe (Plywood Siap Jual / Triplek Jadi / Triplek Mth) ───────────── */
+
+    public static function plywoodTipe(bool $keluar): array
+    {
+        $siap = fn (Get $get) => ($get('tipe_plywood') ?? 'siap_jual') === 'siap_jual';
+        $triplek = fn (Get $get) => in_array($get('tipe_plywood'), ['triplek_jadi', 'triplek_mth'], true);
+
+        return [
+            Select::make('tipe_plywood')->label('Tipe Plywood')->required()->live()->default('siap_jual')
+                ->options([
+                    'siap_jual' => 'Plywood Siap Jual',
+                    'triplek_jadi' => 'Triplek Jadi',
+                    'triplek_mth' => 'Triplek Mentah (Mth / Setengah Jadi)',
+                ]),
+            Group::make(self::plywood($keluar))->visible($siap)->columnSpanFull(),
+            Group::make([
+                Select::make('tp_id_ukuran')->label('Ukuran')->options(fn () => Ukuran::all()->pluck('nama_ukuran', 'id'))
+                    ->searchable()->required($triplek)->live(),
+                Select::make('tp_id_jenis_kayu')->label('Jenis Kayu')->options(fn () => JenisKayu::pluck('nama_kayu', 'id'))
+                    ->searchable()->required($triplek)->live(),
+                Select::make('tp_kw_grade')->label('KW / Grade')
+                    ->options(fn () => Grade::orderBy('nama_grade')->pluck('nama_grade', 'nama_grade'))
+                    ->searchable()->required($triplek)->live(),
+                Placeholder::make('tp_stok')->label('Stok Saat Ini')->content(function (Get $get) use ($keluar) {
+                    $u = $get('tp_id_ukuran') ? Ukuran::find($get('tp_id_ukuran')) : null;
+                    if (! $u || ! $get('tp_id_jenis_kayu') || ! $get('tp_kw_grade')) {
+                        return self::belum();
+                    }
+                    $model = $get('tipe_plywood') === 'triplek_mth' ? StokTriplekMth::class : StokTriplekJadi::class;
+                    $s = $model::where('id_jenis_kayu', $get('tp_id_jenis_kayu'))->where('tebal', (float) $u->tebal)
+                        ->where('kw_grade', $get('tp_kw_grade'))
+                        ->where(fn ($q) => $q->where(fn ($x) => $x->where('panjang', $u->panjang)->where('lebar', $u->lebar))
+                            ->orWhere(fn ($x) => $x->where('panjang', $u->lebar)->where('lebar', $u->panjang)))->first();
+                    return self::tampilStok((int) ($s->stok_lembar ?? 0), 'Lembar', $keluar);
+                }),
+                TextInput::make('tp_jumlah')->label('Jumlah (Lembar)')->numeric()->minValue(1)->required($triplek)
+                    ->helperText($keluar ? 'Kecukupan stok dicek ulang saat nota divalidasi.' : null),
+                Textarea::make('tp_keterangan')->label('Keterangan')->rows(3)->required($triplek),
+            ])->visible($triplek)->columnSpanFull(),
         ];
     }
 

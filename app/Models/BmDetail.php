@@ -23,6 +23,8 @@ class BmDetail extends Model
                 'plywood' => \App\Models\PlywoodMutasiDetail::class,
                 'platform_jadi' => \App\Models\PlatformJadiMutasiDetail::class,
                 'platform_mth' => \App\Models\PlatformMthMutasiDetail::class,
+                'triplek_jadi' => \App\Models\BkbmTriplekItem::class,
+                'triplek_mth' => \App\Models\BkbmTriplekItem::class,
             ][$d->ref_type] ?? null;
             if ($sumber) {
                 $sumber::whereKey($d->ref_id)->delete();
