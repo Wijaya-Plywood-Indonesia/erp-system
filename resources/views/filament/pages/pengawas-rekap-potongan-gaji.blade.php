@@ -29,6 +29,7 @@
                         <th class="p-3 font-medium text-gray-600 dark:text-gray-300 text-right hidden md:table-cell">Kekurangan</th>
                         <th class="p-3 font-medium text-gray-600 dark:text-gray-300 text-right hidden lg:table-cell">Gaji</th>
                         <th class="p-3 font-medium text-gray-600 dark:text-gray-300 text-right">Potongan</th>
+                        <th class="p-3 font-medium text-gray-600 dark:text-gray-300 hidden md:table-cell">Keterangan</th>
                         <th class="p-3"></th>
                     </tr>
                 </thead>
@@ -45,6 +46,11 @@
                                         </x-filament::badge>
                                     </div>
                                 </div>
+                                @if (!empty($row['keterangan']))
+                                    <div class="md:hidden text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        {{ $row['keterangan'] }}
+                                    </div>
+                                @endif
                             </td>
                             <td class="p-3 hidden md:table-cell">
                                 <x-filament::badge color="info">
@@ -69,6 +75,9 @@
                             <td class="p-3 text-right font-semibold text-danger-600 dark:text-danger-400">
                                 Rp {{ number_format($row['potongan'], 0, ',', '.') }}
                             </td>
+                            <td class="p-3 text-xs text-gray-500 dark:text-gray-400 hidden md:table-cell max-w-xs truncate" title="{{ $row['keterangan'] ?? '' }}">
+                                {{ $row['keterangan'] ?? '-' }}
+                            </td>
                             <td class="p-3 text-right">
                                 <button type="button" x-on:click.stop="open = !open"
                                     class="text-primary-600 dark:text-primary-400 text-xs font-medium underline">
@@ -77,7 +86,7 @@
                             </td>
                         </tr>
                         <tr x-show="open" x-cloak>
-                            <td colspan="11" class="p-0 bg-gray-50 dark:bg-gray-800/50">
+                            <td colspan="12" class="p-0 bg-gray-50 dark:bg-gray-800/50">
                                 <div class="p-3 md:p-4">
                                     <table class="w-full text-xs">
                                         <thead>
@@ -89,6 +98,7 @@
                                                 <th class="pb-2 pr-2 md:pr-4 text-right hidden sm:table-cell">Hasil</th>
                                                 <th class="pb-2 pr-2 md:pr-4 text-right">Kurang</th>
                                                 <th class="pb-2 text-right">Potongan</th>
+                                                <th class="pb-2 pl-2 md:pl-4">Keterangan</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -112,6 +122,9 @@
                                                         class="py-2 md:py-1.5 text-right font-medium text-danger-600 dark:text-danger-400">
                                                         Rp {{ number_format($d['potongan'], 0, ',', '.') }}
                                                     </td>
+                                                    <td class="py-2 md:py-1.5 pl-2 md:pl-4 text-gray-500 dark:text-gray-400">
+                                                        {{ $d['keterangan'] ?? '-' }}
+                                                    </td>
                                                 </tr>
                                             @endforeach
                                         </tbody>
@@ -123,7 +136,7 @@
                 @empty
                     <tbody>
                         <tr>
-                            <td colspan="11" class="p-8 text-center text-gray-500 dark:text-gray-400">
+                            <td colspan="12" class="p-8 text-center text-gray-500 dark:text-gray-400">
                                 Tidak ada pegawai dengan potongan target produksi pada periode &amp; lini yang dipilih.
                             </td>
                         </tr>

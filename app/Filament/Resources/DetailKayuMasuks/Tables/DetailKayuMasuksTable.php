@@ -30,8 +30,11 @@ class DetailKayuMasuksTable
     {
         // 1. LOGIKA LOCK: Cek status Nota melalui Owner Record
         $isLocked = false;
-        if ($livewire && method_exists($livewire, 'getOwnerRecord')) {
-            $ownerRecord = $livewire->getOwnerRecord();
+        $ownerRecord = ($livewire && method_exists($livewire, 'getOwnerRecord'))
+            ? $livewire->getOwnerRecord()
+            : null;
+
+        if ($ownerRecord) {
             $nota = $ownerRecord->notakayu;
             $isLocked = $nota && $nota->status !== 'Belum Diperiksa';
         }
@@ -45,10 +48,13 @@ class DetailKayuMasuksTable
          */
         $canPerformAction = ! $isLocked || $isAdmin;
 
-        $ownerRecord = null;
-        if ($livewire && method_exists($livewire, 'getOwnerRecord')) {
-            $ownerRecord = $livewire->getOwnerRecord();
-        }
+        // 4. LOGIKA TURUN KAYU: Cek apakah proses turun kayu sudah 'selesai'
+        $isTurunSelesai = ($ownerRecord &&
+            $ownerRecord->detailTurunKayus()
+                ->where('status', 'selesai')
+                ->exists()) || true;
+
+        $canAddKayu = $canPerformAction && $isTurunSelesai;
 
         return $table
             ->striped()
@@ -176,7 +182,7 @@ class DetailKayuMasuksTable
             ->defaultSort('created_at', 'desc')
             ->headerActions([
                 CreateAction::make()
-                    ->visible($canPerformAction), // Bypass Lock jika Admin
+                    ->visible($canAddKayu), // Hanya muncul jika belum lock dan status turun kayu sudah selesai
 
                 // ✅ DIUBAH: total kubikasi diambil dari accessor model ($item->kubikasi),
                 // bukan hitung ulang manual. Konsisten dengan pola Turusan.
@@ -200,7 +206,7 @@ class DetailKayuMasuksTable
                     ->color('warning')
                     ->modalHeading('Input Kayu (Mode Offline)')
                     ->modalWidth('2xl')
-                    ->visible($canPerformAction) // Bypass Lock jika Admin
+                    ->visible($canAddKayu) // Hanya muncul jika belum lock dan status turun kayu sudah selesai
                     ->modalContent(fn() => view('filament.components.offline-detail-kayu-modal', [
                         'parentId' => $ownerRecord?->id,
                         'optionsLahan' => Lahan::all()->mapWithKeys(fn($l) => [$l->id => "{$l->kode_lahan} - {$l->nama_lahan}"]),

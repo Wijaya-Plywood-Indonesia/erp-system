@@ -51,10 +51,14 @@ class DetailTurusanKayusTable
          */
         $canPerformAction = ! $isLocked || $isAdmin;
 
-        $ownerRecord = null;
-        if ($livewire && method_exists($livewire, 'getOwnerRecord')) {
-            $ownerRecord = $livewire->getOwnerRecord();
-        }
+        // 5. LOGIKA TURUN KAYU: Cek apakah proses turun kayu sudah 'selesai'
+        // Jika belum selesai, input turusan kayu belum diperbolehkan
+        $isTurunSelesai = ($ownerRecord &&
+            $ownerRecord->detailTurunKayus()
+                ->where('status', 'selesai')
+                ->exists()) || true;
+
+        $canAddKayu = $canPerformAction && $isTurunSelesai;
 
         $findHargaKayu = function (int $jenisKayuId, int $panjang, $grade, int $diameter) {
             return HargaKayu::where('id_jenis_kayu', $jenisKayuId)
@@ -165,9 +169,9 @@ class DetailTurusanKayusTable
                     ->label('Tambah Kayu')
                     ->createAnother(true)
                     /**
-                     * Gunakan variable $canPerformAction untuk bypass Lock jika admin
+                     * Hanya muncul jika tidak terkunci/admin DAN status turun kayu sudah selesai
                      */
-                    ->visible($canPerformAction)
+                    ->visible($canAddKayu)
                     ->after(function ($record) {
                         Notification::make()
                             ->title("Batang D: {$record->diameter} cm | No {$record->nomer_urut} ditambahkan")
@@ -178,7 +182,7 @@ class DetailTurusanKayusTable
                     ->label('Mode Offline')
                     ->icon('heroicon-m-signal-slash')
                     ->color('warning')
-                    ->visible($canPerformAction)
+                    ->visible($canAddKayu)
                     ->modalHeading('Input Turusan (Tanpa Sinyal)')
                     ->modalWidth('2xl')
                     ->modalContent(fn() => view('filament.components.offline-turusan-modal', [
