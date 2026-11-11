@@ -97,7 +97,7 @@
              @keydown.escape.window="info = false" @click.self="info = false"
              style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:60;background:rgba(0,0,0,.6);overflow-y:auto;padding:16px;">
             <div class="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl"
-                 style="max-width:600px;margin:5vh auto;padding:22px 24px;">
+                 style="max-width:680px;margin:5vh auto;padding:22px 24px;">
                 <div class="flex items-center justify-between mb-2">
                     <h3 class="text-sm font-black uppercase tracking-widest">Cara membaca halaman ini</h3>
                     <button type="button" @click="info = false" class="text-gray-400 hover:text-gray-200 text-lg leading-none">✕</button>
@@ -122,6 +122,56 @@
                         <span class="text-orange-600 dark:text-orange-400 font-bold">B</span> bahan penolong.
                         Angka tebal adalah jumlah keempatnya. Huruf di kirinya (misalnya A, B, KA) adalah kode lahan asal kayu.
                         Palet dari lahan yang sama selalu punya angka yang sama, dan angkanya sama dengan halaman Persentase Kayu.
+
+                        <div class="mt-2 font-bold text-gray-800 dark:text-gray-100">Dari mana angka K, P, M, B didapat?</div>
+                        Semuanya dihitung per <b>batch lahan</b>, yaitu seluruh produksi rotary dari satu lahan sejak lahan itu terakhir diselesaikan
+                        sampai tombol <b>Selesaikan Lahan</b> ditekan. Seluruh biaya batch dijumlahkan, lalu dibagi
+                        <b>total m³ veneer yang dihasilkan batch itu</b>. Itulah sebabnya semua palet dari batch yang sama memakai angka yang sama.
+                        <span class="text-gray-500 dark:text-gray-400">(m³ veneer satu palet = panjang × lebar × tebal × jumlah lembar ÷ 10.000.000.)</span>
+
+                        <div class="mt-2 space-y-2">
+                            <div>
+                                <span class="text-emerald-600 dark:text-emerald-400 font-black">K · Kayu</span>:
+                                harga kayu bulat yang masuk ke lahan itu pada batch tersebut (nota kayu berstatus "Sudah Diperiksa").
+                                Tiap baris turusan dihitung <span class="font-mono">harga per m³ × kubikasi batang</span>.
+                                Harga diambil otomatis dari master <b>Harga Kayu</b> menurut jenis kayu, grade, panjang, dan rentang diameter
+                                (kecuali harga baris itu diubah manual). Kubikasi batang = panjang × diameter² × 0,785 × jumlah batang.
+                                Koreksi stok opname lahan ikut menambah atau mengurangi total.
+                                Total nilai kayu ÷ m³ veneer = <b>K per m³</b>.
+                            </div>
+                            <div>
+                                <span class="text-blue-600 dark:text-blue-400 font-black">P · Pekerja</span>:
+                                jumlah pekerja rotary pada hari produksi itu × porsi lahan ini, lalu × upah per pekerja dari master <b>Harga Pegawai</b>.
+                                Porsi lahan = m³ veneer lahan ini ÷ seluruh m³ yang dihasilkan mesin itu di hari yang sama,
+                                jadi kalau sehari mesin mengerjakan beberapa lahan, upahnya dibagi sesuai porsi m³.
+                                Jumlah pekerja dibulatkan per kelompok (tanggal + mesin + ukuran), minimal 1 orang.
+                                Total upah ÷ m³ veneer = <b>P per m³</b>.
+                            </div>
+                            <div>
+                                <span class="text-purple-600 dark:text-purple-400 font-black">M · Mesin</span>:
+                                nilai penyusutan mesin per hari produksi (diisi di master <b>Mesin</b>, kolom Penyusutan) × porsi lahan ini
+                                (porsinya dihitung sama seperti pekerja). Total penyusutan ÷ m³ veneer = <b>M per m³</b>.
+                            </div>
+                            <div>
+                                <span class="text-orange-600 dark:text-orange-400 font-black">B · Bahan penolong</span>:
+                                bahan yang dicatat pada produksi rotary (misalnya reeling tape) × porsi lahan ini × harga satuan dari master
+                                <b>Bahan Penolong</b>. Total biaya bahan ÷ m³ veneer = <b>B per m³</b>.
+                                Kalau produksi tidak mencatat bahan penolong, B bernilai 0.
+                            </div>
+                        </div>
+
+                        <div class="mt-2 px-3 py-2 rounded-sm bg-gray-50 dark:bg-gray-900 text-[11px] leading-relaxed">
+                            <div class="font-black mb-1 text-gray-500">Contoh satu batch lahan menghasilkan 100 m³ veneer</div>
+                            Kayu Rp 150.000.000 ÷ 100 = <b class="text-emerald-600 dark:text-emerald-400">K 1.500.000</b><br>
+                            Upah pekerja Rp 4.500.000 ÷ 100 = <b class="text-blue-600 dark:text-blue-400">P 45.000</b><br>
+                            Penyusutan mesin Rp 870.000 ÷ 100 = <b class="text-purple-600 dark:text-purple-400">M 8.700</b><br>
+                            Bahan penolong Rp 300.000 ÷ 100 = <b class="text-orange-600 dark:text-orange-400">B 3.000</b><br>
+                            Angka tebal = 1.500.000 + 45.000 + 8.700 + 3.000 = <b>1.556.700</b> per m³.
+                        </div>
+                        <div class="mt-1.5 text-gray-500 dark:text-gray-400">
+                            Karena pembaginya m³ <b>veneer</b> (bukan m³ kayu bulat), semakin kecil rendemen
+                            (kayu bulat yang jadi veneer), semakin besar K per m³ veneer.
+                        </div>
                     </div>
 
                     <div>
@@ -149,6 +199,7 @@
                         <b class="text-emerald-600 dark:text-emerald-400">FINAL</b>: lahan asal kayu sudah selesai, biayanya sudah pasti.<br>
                         <b class="text-amber-600 dark:text-amber-400">ESTIMASI</b>: lahan masih berjalan, jadi biayanya sementara memakai biaya lahan yang sama sebelumnya.
                         Otomatis menjadi FINAL begitu lahan diselesaikan.
+                        Kalau lahan belum selesai dan belum pernah ada batch selesai sebelumnya, komponen belum bisa dihitung dan tampil "—".
                     </div>
 
                     <div>
