@@ -104,6 +104,7 @@ class BkBmService
 
             app(BkBmVeneerService::class)->validasi($bk);
             app(BkBmPlywoodPlatformService::class)->validasi($bk);
+            app(BkBmTriplekService::class)->validasi($bk);
             app(BkBmLogCoreService::class)->validasi($bk);
 
             $bk->update([
@@ -147,6 +148,7 @@ class BkBmService
 
             app(BkBmVeneerService::class)->validasi($bm);
             app(BkBmPlywoodPlatformService::class)->validasi($bm);
+            app(BkBmTriplekService::class)->validasi($bm);
             app(BkBmLogCoreService::class)->validasi($bm);
 
             $bm->update([

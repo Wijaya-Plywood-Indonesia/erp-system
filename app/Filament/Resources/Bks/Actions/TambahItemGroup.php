@@ -6,6 +6,7 @@ use App\Models\BarangUmum;
 use App\Models\Bk;
 use App\Models\JenisKayu;
 use App\Services\BkBm\BkBmPlywoodPlatformService;
+use App\Services\BkBm\BkBmTriplekService;
 use App\Services\BkBm\BkBmVeneerService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -36,8 +37,19 @@ class TambahItemGroup
 
         return ActionGroup::make([
             Action::make('tambah_plywood')->label('Plywood')->icon('heroicon-o-squares-2x2')
-                ->schema($F::plywood($keluar))
+                ->schema($F::plywoodTipe($keluar))
                 ->action(fn (array $data, $livewire) => self::jalankan(function () use ($data, $livewire, $keluar) {
+                    $tipe = $data['tipe_plywood'] ?? 'siap_jual';
+                    if ($tipe !== 'siap_jual') {
+                        app(BkBmTriplekService::class)->tambahItem($livewire->getOwnerRecord(), $tipe, [
+                            'id_ukuran' => $data['tp_id_ukuran'],
+                            'id_jenis' => $data['tp_id_jenis_kayu'],
+                            'kw_grade' => $data['tp_kw_grade'],
+                            'qty' => $data['tp_jumlah'],
+                            'keterangan' => $data['tp_keterangan'] ?? null,
+                        ]);
+                        return;
+                    }
                     $idUkuran = $keluar ? ItemBarangForms::resolveUkuran($data['ukuran_key'])->id : $data['id_ukuran'];
                     app(BkBmPlywoodPlatformService::class)->tambahItem($livewire->getOwnerRecord(), 'plywood', [
                         'id_ukuran' => $idUkuran,
