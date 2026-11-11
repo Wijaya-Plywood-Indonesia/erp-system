@@ -5,12 +5,13 @@
         }
 
         .tab-btn {
-            padding: 8px 16px;
+            padding: 8px 12px;
             font-weight: 600;
             font-size: 0.875rem;
             border-bottom: 2px solid transparent;
             cursor: pointer;
             transition: all 0.2s;
+            white-space: nowrap;
         }
 
         .tab-btn-active {
@@ -43,13 +44,15 @@
     </style>
 
     {{-- Header Tabs Navigation --}}
-    <div class="border-b border-gray-200 dark:border-gray-700 mb-6 flex items-center justify-between">
-        <div class="flex space-x-4">
+    <div
+        class="border-b border-gray-200 dark:border-gray-700 mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex space-x-2 sm:space-x-4 overflow-x-auto -mb-px">
             <button type="button" wire:click="setTab('dashboard')"
                 class="tab-btn {{ $activeTab === 'dashboard' ? 'tab-btn-active' : 'tab-btn-inactive' }}">
                 <span class="flex items-center gap-2">
-                    <x-heroicon-o-calendar-days class="w-5 h-5" />
-                    Tab 1: Dashboard Potongan Harian
+                    <x-heroicon-o-calendar-days class="w-5 h-5 shrink-0" />
+                    <span class="hidden sm:inline">Tab 1: Dashboard Potongan Harian</span>
+                    <span class="sm:hidden">Dashboard</span>
                 </span>
             </button>
 
@@ -57,17 +60,18 @@
                 <button type="button" wire:click="setTab('persetujuan')"
                     class="tab-btn {{ $activeTab === 'persetujuan' ? 'tab-btn-active' : 'tab-btn-inactive' }}">
                     <span class="flex items-center gap-2">
-                        <x-heroicon-o-check-badge class="w-5 h-5" />
-                        Tab 2: Persetujuan Pengajuan
+                        <x-heroicon-o-check-badge class="w-5 h-5 shrink-0" />
+                        <span class="hidden sm:inline">Tab 2: Persetujuan Pengajuan</span>
+                        <span class="sm:hidden">Persetujuan</span>
                     </span>
                 </button>
             @endif
         </div>
 
         @if ($activeTab === 'persetujuan' && $this->canManageApproval())
-            <div>
+            <div class="pb-2 sm:pb-0">
                 <x-filament::button size="sm" color="primary" icon="heroicon-o-plus"
-                    wire:click="bukaAdminCreateModal">
+                    wire:click="bukaAdminCreateModal" class="w-full sm:w-auto">
                     Buat Pengajuan Baru (Kantor)
                 </x-filament::button>
             </div>
@@ -80,10 +84,9 @@
     @if ($activeTab === 'dashboard')
         <div class="space-y-6">
             {{-- Filter Tanggal --}}
-            <div
-                class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-wrap items-center justify-between gap-4">
-                <div class="flex items-center gap-4">
-                    <div class="w-64">
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                    <div class="w-full sm:w-64">
                         {{ $this->form }}
                     </div>
                     <div class="text-sm text-gray-500 dark:text-gray-400">
@@ -95,20 +98,20 @@
                                 \Illuminate\Support\Carbon::parse($tanggal),
                             );
                         @endphp
-                        <span>Periode Mingguan: <strong>{{ \Carbon\Carbon::parse($mulaiMinggu)->format('d M') }} &ndash;
+                        <span>Periode Mingguan: <strong>{{ \Carbon\Carbon::parse($mulaiMinggu)->format('d M') }}
+                                &ndash;
                                 {{ \Carbon\Carbon::parse($akhirMinggu)->format('d M Y') }}</strong> (Jumat &ndash;
                             Kamis)</span>
                     </div>
                 </div>
             </div>
 
-            {{-- Tabel Daftar Karyawan --}}
             @php
                 $rows = $this->getDashboardRows();
             @endphp
 
             <x-filament::card>
-                <div class="flex items-center justify-between mb-4">
+                <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-4">
                     <h3 class="font-bold text-gray-900 dark:text-white text-base">
                         Daftar Potongan Karyawan &mdash;
                         {{ \Carbon\Carbon::parse($tanggal)->translatedFormat('l, d F Y') }}
@@ -122,7 +125,8 @@
                         <p>Tidak ada data absensi/karyawan untuk divisi Anda pada tanggal ini.</p>
                     </div>
                 @else
-                    <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                    {{-- ===== DESKTOP: TABEL ===== --}}
+                    <div class="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                         <table class="w-full text-sm text-left border-collapse">
                             <thead
                                 class="bg-gray-50 dark:bg-gray-800 text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">
@@ -133,6 +137,7 @@
                                     <th class="px-4 py-3 border-b text-right">Potongan Harian</th>
                                     <th class="px-4 py-3 border-b text-right bg-blue-50/50 dark:bg-blue-950/20">
                                         Akumulasi Mingguan</th>
+                                    <th class="px-4 py-3 border-b text-right">Usulan</th>
                                     <th class="px-4 py-3 border-b">Status Pengajuan</th>
                                     <th class="px-4 py-3 border-b text-center">Aksi</th>
                                 </tr>
@@ -146,7 +151,6 @@
                                         $safeNama = $row['nama_pegawai'] ?? '';
                                         $safeDivisi = $row['divisi'] ?? '';
                                         $safePotongan = (float) ($row['potongan_harian'] ?? 0);
-                                        // Key includes pengajuan state so Livewire re-renders when status/nominal changes
                                         $rowKey =
                                             'row-karyawan-' .
                                             $safeKode .
@@ -178,13 +182,21 @@
                                             class="px-4 py-3 text-right font-bold bg-blue-50/30 dark:bg-blue-950/10 {{ ($row['potongan_mingguan'] ?? 0) > 50000 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-300' }}">
                                             Rp {{ number_format($row['potongan_mingguan'] ?? 0, 0, ',', '.') }}
                                         </td>
+                                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                                            @if ($pengajuan)
+                                                <span class="font-semibold text-amber-600 dark:text-amber-400">
+                                                    Rp {{ number_format($pengajuan->nominal_usulan, 0, ',', '.') }}
+                                                </span>
+                                            @else
+                                                <span class="text-xs text-gray-400">-</span>
+                                            @endif
+                                        </td>
                                         <td class="px-4 py-3">
                                             @if ($pengajuan)
                                                 @if ($pengajuan->status === 'pending')
                                                     <span
                                                         class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
-                                                        Pending (Usul:
-                                                        Rp{{ number_format($pengajuan->nominal_usulan, 0, ',', '.') }})
+                                                        Pending
                                                         @if ($pengajuan->created_at->ne($pengajuan->updated_at))
                                                             &middot; direvisi
                                                         @endif
@@ -213,7 +225,7 @@
                                                     wire:click="bukaPengajuanModal({{ $safePegawaiId }}, '{{ addslashes($safeNama) }}', '{{ $safeKode }}', '{{ addslashes($safeDivisi) }}', {{ $safePotongan }})">
                                                     Edit Pengajuan
                                                 </x-filament::button>
-                                            @elseif(!$pengajuan || $pengajuan->status !== 'pending')
+                                            @else
                                                 <x-filament::button size="xs" color="gray"
                                                     icon="heroicon-o-pencil-square"
                                                     wire:click="bukaPengajuanModal({{ $safePegawaiId }}, '{{ addslashes($safeNama) }}', '{{ $safeKode }}', '{{ addslashes($safeDivisi) }}', {{ $safePotongan }})">
@@ -226,6 +238,120 @@
                             </tbody>
                         </table>
                     </div>
+
+                    {{-- ===== MOBILE: KARTU ===== --}}
+                    <div class="md:hidden space-y-3">
+                        @foreach ($rows as $row)
+                            @php
+                                $pengajuan = $row['pengajuan'];
+                                $safePegawaiId = (int) ($row['id_pegawai'] ?? 0);
+                                $safeKode = $row['kode_pegawai'] ?? '';
+                                $safeNama = $row['nama_pegawai'] ?? '';
+                                $safeDivisi = $row['divisi'] ?? '';
+                                $safePotongan = (float) ($row['potongan_harian'] ?? 0);
+                                $mingguan = $row['potongan_mingguan'] ?? 0;
+                                $isPending = $pengajuan && $pengajuan->status === 'pending';
+                                $cardKey =
+                                    'card-karyawan-' .
+                                    $safeKode .
+                                    '-' .
+                                    ($pengajuan
+                                        ? $pengajuan->status .
+                                            '-' .
+                                            $pengajuan->nominal_usulan .
+                                            '-' .
+                                            $pengajuan->updated_at?->timestamp
+                                        : 'none');
+                            @endphp
+                            <div wire:key="{{ $cardKey }}"
+                                class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 space-y-3">
+
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <div class="font-semibold text-gray-900 dark:text-gray-100 break-words">
+                                            {{ $safeNama }}</div>
+                                        <div class="text-xs font-mono text-gray-500">{{ $safeKode }}</div>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400 break-words">
+                                            {{ $safeDivisi }}</div>
+                                    </div>
+                                    <div class="shrink-0">
+                                        @if ($pengajuan)
+                                            @if ($pengajuan->status === 'pending')
+                                                <span
+                                                    class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">Pending</span>
+                                            @elseif ($pengajuan->status === 'approved')
+                                                <span
+                                                    class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">Approved</span>
+                                            @elseif ($pengajuan->status === 'rejected')
+                                                <span
+                                                    class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400">Rejected</span>
+                                            @endif
+                                        @endif
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-2 text-sm">
+                                    <div class="rounded-lg bg-gray-50 dark:bg-gray-900/40 p-2">
+                                        <div class="text-[11px] uppercase text-gray-400">Potongan Harian</div>
+                                        <div
+                                            class="font-semibold {{ $safePotongan > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400' }}">
+                                            Rp {{ number_format($safePotongan, 0, ',', '.') }}
+                                        </div>
+                                    </div>
+                                    <div class="rounded-lg bg-blue-50/50 dark:bg-blue-950/20 p-2">
+                                        <div class="text-[11px] uppercase text-gray-400">Akumulasi Mingguan</div>
+                                        <div
+                                            class="font-bold {{ $mingguan > 50000 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-300' }}">
+                                            Rp {{ number_format($mingguan, 0, ',', '.') }}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                @if ($pengajuan && $pengajuan->status === 'pending')
+                                    <div
+                                        class="flex items-center justify-between rounded-lg bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-sm">
+                                        <span class="text-amber-700 dark:text-amber-400">
+                                            Usulan
+                                            @if ($pengajuan->created_at->ne($pengajuan->updated_at))
+                                                <span class="text-xs text-gray-400">(direvisi)</span>
+                                            @endif
+                                        </span>
+                                        <span class="font-semibold text-amber-700 dark:text-amber-300">
+                                            Rp {{ number_format($pengajuan->nominal_usulan, 0, ',', '.') }}
+                                        </span>
+                                    </div>
+                                @elseif ($pengajuan && $pengajuan->status === 'approved')
+                                    <div class="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2 text-sm space-y-1">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Usulan</span>
+                                            <span class="font-medium text-amber-600 dark:text-amber-400">Rp
+                                                {{ number_format($pengajuan->nominal_usulan, 0, ',', '.') }}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Disetujui</span>
+                                            <span class="font-medium text-emerald-600 dark:text-emerald-400">Rp
+                                                {{ number_format($pengajuan->nominal_final, 0, ',', '.') }}</span>
+                                        </div>
+                                    </div>
+                                @elseif ($pengajuan && $pengajuan->status === 'rejected' && $pengajuan->alasan_penolakan)
+                                    <div class="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2 text-sm space-y-1">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Usulan</span>
+                                            <span class="font-medium text-amber-600 dark:text-amber-400">Rp
+                                                {{ number_format($pengajuan->nominal_usulan, 0, ',', '.') }}</span>
+                                        </div>
+                                        <div class="text-xs text-gray-500 break-words">Ditolak:
+                                            {{ $pengajuan->alasan_penolakan }}</div>
+                                    </div>
+                                @endif
+
+                                <x-filament::button size="sm" :color="$isPending ? 'warning' : 'gray'" :icon="$isPending ? 'heroicon-o-pencil' : 'heroicon-o-pencil-square'" class="w-full"
+                                    wire:click="bukaPengajuanModal({{ $safePegawaiId }}, '{{ addslashes($safeNama) }}', '{{ $safeKode }}', '{{ addslashes($safeDivisi) }}', {{ $safePotongan }})">
+                                    {{ $isPending ? 'Edit Pengajuan' : 'Ajukan Anulir / Ubah' }}
+                                </x-filament::button>
+                            </div>
+                        @endforeach
+                    </div>
                 @endif
             </x-filament::card>
         </div>
@@ -237,7 +363,7 @@
     @if ($activeTab === 'persetujuan' && $this->canManageApproval())
         <div class="space-y-6">
             {{-- Filter Status --}}
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
                 <span class="text-xs font-bold uppercase text-gray-500">Filter Status:</span>
                 <button type="button" wire:click="$set('filterStatusPersetujuan', 'all')"
                     class="px-3 py-1 text-xs rounded-full border {{ $filterStatusPersetujuan === 'all' ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-300' }}">
@@ -257,7 +383,6 @@
                 </button>
             </div>
 
-            {{-- Tabel Daftar Seluruh Pengajuan --}}
             @php
                 $persetujuanRows = $this->getPersetujuanRows();
             @endphp
@@ -273,7 +398,9 @@
                         <p>Tidak ada pengajuan potongan dengan filter ini.</p>
                     </div>
                 @else
-                    <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                    {{-- ===== DESKTOP: TABEL ===== --}}
+                    <div
+                        class="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                         <table class="w-full text-sm text-left border-collapse">
                             <thead
                                 class="bg-gray-50 dark:bg-gray-800 text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">
@@ -354,6 +481,69 @@
                             </tbody>
                         </table>
                     </div>
+
+                    {{-- ===== MOBILE: KARTU ===== --}}
+                    <div class="md:hidden space-y-3">
+                        @foreach ($persetujuanRows as $item)
+                            <div wire:key="card-persetujuan-{{ $item->id }}-{{ $item->updated_at?->timestamp }}"
+                                class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 space-y-2">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <div class="font-semibold text-gray-900 dark:text-gray-100 break-words">
+                                            {{ $item->pegawai?->nama_pegawai ?? '-' }}
+                                        </div>
+                                        <div class="text-xs font-mono text-gray-400">{{ $item->kode_pegawai }}</div>
+                                    </div>
+                                    @if ($item->status === 'pending')
+                                        <span
+                                            class="shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">Pending</span>
+                                    @elseif ($item->status === 'approved')
+                                        <span
+                                            class="shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">Approved</span>
+                                    @else
+                                        <span
+                                            class="shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400">Rejected</span>
+                                    @endif
+                                </div>
+
+                                <div class="text-xs text-gray-500">
+                                    Tgl potongan: <strong>{{ $item->tanggal->format('d/m/Y') }}</strong>
+                                    &middot; Diajukan {{ $item->created_at->format('d/m/Y H:i') }}
+                                    &middot; oleh {{ $item->pengaju?->name ?? 'System' }}
+                                </div>
+
+                                <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                                    <div class="rounded-lg bg-gray-50 dark:bg-gray-900/40 p-2">
+                                        <div class="text-gray-400">Awal</div>
+                                        <div class="font-medium text-gray-600 dark:text-gray-300">
+                                            {{ number_format($item->nominal_awal, 0, ',', '.') }}</div>
+                                    </div>
+                                    <div class="rounded-lg bg-amber-50 dark:bg-amber-900/10 p-2">
+                                        <div class="text-amber-600">Usulan</div>
+                                        <div class="font-semibold text-amber-600">
+                                            {{ number_format($item->nominal_usulan, 0, ',', '.') }}</div>
+                                    </div>
+                                    <div class="rounded-lg bg-emerald-50 dark:bg-emerald-900/10 p-2">
+                                        <div class="text-emerald-600">Final</div>
+                                        <div class="font-bold text-emerald-600">
+                                            {{ $item->nominal_final !== null ? number_format($item->nominal_final, 0, ',', '.') : '-' }}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                @if ($item->alasan_pengajuan)
+                                    <div class="text-xs text-gray-600 dark:text-gray-300 break-words">
+                                        {{ $item->alasan_pengajuan }}</div>
+                                @endif
+
+                                <x-filament::button size="sm" class="w-full"
+                                    color="{{ $item->status === 'pending' ? 'primary' : 'gray' }}"
+                                    wire:click="bukaReviewModal({{ $item->id }})">
+                                    {{ $item->status === 'pending' ? 'Periksa / Proses' : 'Detail & Histori' }}
+                                </x-filament::button>
+                            </div>
+                        @endforeach
+                    </div>
                 @endif
             </x-filament::card>
         </div>
@@ -369,10 +559,11 @@
 
         <div class="space-y-4 text-sm">
             <div
-                class="grid grid-cols-2 gap-3 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
+                class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
                 <div>
                     <span class="text-xs text-gray-400 block">Karyawan</span>
-                    <span class="font-semibold text-gray-800 dark:text-gray-200">{{ $modalPegawaiNama }}</span>
+                    <span
+                        class="font-semibold text-gray-800 dark:text-gray-200 break-words">{{ $modalPegawaiNama }}</span>
                     <span class="text-xs text-gray-400 font-mono block">({{ $modalPegawaiKode }})</span>
                 </div>
                 <div>
@@ -383,7 +574,7 @@
                 </div>
                 <div>
                     <span class="text-xs text-gray-400 block">Divisi</span>
-                    <span class="text-gray-700 dark:text-gray-300">{{ $modalDivisi }}</span>
+                    <span class="text-gray-700 dark:text-gray-300 break-words">{{ $modalDivisi }}</span>
                 </div>
                 <div>
                     <span class="text-xs text-gray-400 block">Potongan Tercatat (Awal)</span>
@@ -396,8 +587,9 @@
                 <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                     Nominal Potongan yang Diajukan (Rp) <span class="text-red-500">*</span>
                 </label>
-                <input type="number" step="500" min="0" wire:model="modalNominalUsulan"
-                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary-500 focus:border-primary-500"
+                <input type="number" step="500" min="0" inputmode="numeric"
+                    wire:model.live.debounce.500ms="modalNominalUsulan"
+                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm focus:ring-primary-500 focus:border-primary-500"
                     placeholder="Contoh: 0 untuk anulir penuh, atau nominal baru">
                 <span class="text-xs text-gray-400 mt-1 block">Isi 0 jika ingin menganulir potongan secara
                     penuh.</span>
@@ -411,7 +603,7 @@
                     Keterangan / Alasan Pengajuan <span class="text-red-500">*</span>
                 </label>
                 <textarea rows="3" wire:model.defer="modalAlasan"
-                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary-500 focus:border-primary-500"
+                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm focus:ring-primary-500 focus:border-primary-500"
                     placeholder="Jelaskan alasan mengapa potongan perlu dianulir atau diubah..."></textarea>
                 @error('modalAlasan')
                     <span class="text-xs text-red-600 mt-1 block">{{ $message }}</span>
@@ -420,13 +612,15 @@
         </div>
 
         <x-slot name="footer">
-            <x-filament::button color="gray"
-                x-on:click="$dispatch('close-modal', { id: 'modal-pengajuan-potongan' })">
-                Batal
-            </x-filament::button>
-            <x-filament::button color="primary" wire:click="simpanPengajuan">
-                Kirim Pengajuan
-            </x-filament::button>
+            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end w-full">
+                <x-filament::button color="gray" class="w-full sm:w-auto"
+                    x-on:click="$dispatch('close-modal', { id: 'modal-pengajuan-potongan' })">
+                    Batal
+                </x-filament::button>
+                <x-filament::button color="primary" class="w-full sm:w-auto" wire:click="simpanPengajuan">
+                    Kirim Pengajuan
+                </x-filament::button>
+            </div>
         </x-slot>
     </x-filament::modal>
 
@@ -447,7 +641,7 @@
             <div class="space-y-4">
                 {{-- Detail Perbandingan --}}
                 <div
-                    class="grid grid-cols-3 gap-3 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 text-center">
+                    class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 text-center">
                     <div class="p-2 bg-white dark:bg-gray-800 rounded-lg">
                         <span class="text-xs text-gray-400 block">Potongan Awal</span>
                         <span class="font-bold text-gray-700 dark:text-gray-300">Rp
@@ -469,22 +663,22 @@
                 </div>
 
                 {{-- Informasi Karyawan & Alasan --}}
-                <div class="space-y-2 text-sm bg-gray-50 dark:bg-gray-900/30 p-3 rounded-xl">
-                    <div class="flex justify-between">
+                <div class="space-y-3 sm:space-y-2 text-sm bg-gray-50 dark:bg-gray-900/30 p-3 rounded-xl">
+                    <div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
                         <span class="text-gray-500">Nama Karyawan:</span>
                         <span
-                            class="font-medium text-gray-800 dark:text-gray-200">{{ $selectedPengajuan->pegawai?->nama_pegawai }}
+                            class="font-medium text-gray-800 dark:text-gray-200 sm:text-right break-words">{{ $selectedPengajuan->pegawai?->nama_pegawai }}
                             ({{ $selectedPengajuan->kode_pegawai }})</span>
                     </div>
-                    <div class="flex justify-between">
+                    <div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
                         <span class="text-gray-500">Tanggal Potongan:</span>
                         <span
-                            class="font-medium text-gray-800 dark:text-gray-200">{{ $selectedPengajuan->tanggal->format('d F Y') }}</span>
+                            class="font-medium text-gray-800 dark:text-gray-200 sm:text-right">{{ $selectedPengajuan->tanggal->format('d F Y') }}</span>
                     </div>
-                    <div class="flex justify-between">
+                    <div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
                         <span class="text-gray-500">Alasan Pengajuan Pengawas:</span>
                         <span
-                            class="font-medium text-gray-800 dark:text-gray-200 max-w-sm text-right">{{ $selectedPengajuan->alasan_pengajuan }}</span>
+                            class="font-medium text-gray-800 dark:text-gray-200 sm:max-w-sm sm:text-right break-words">{{ $selectedPengajuan->alasan_pengajuan }}</span>
                     </div>
                 </div>
 
@@ -494,14 +688,14 @@
                     <div class="space-y-2 border-l-2 border-gray-200 dark:border-gray-700 pl-3 text-xs">
                         @forelse($selectedPengajuan->histories as $hist)
                             <div class="relative">
-                                <div class="font-medium text-gray-800 dark:text-gray-200">
+                                <div class="font-medium text-gray-800 dark:text-gray-200 break-words">
                                     <span
                                         class="capitalize px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 mr-1">{{ $hist->aksi }}</span>
                                     oleh {{ $hist->user?->name ?? 'System' }}
                                     <span
                                         class="text-gray-400 font-normal ml-1">{{ $hist->created_at->format('d/m/Y H:i') }}</span>
                                 </div>
-                                <div class="text-gray-500 mt-0.5">{{ $hist->catatan }}</div>
+                                <div class="text-gray-500 mt-0.5 break-words">{{ $hist->catatan }}</div>
                             </div>
                         @empty
                             <div class="text-gray-400">Belum ada catatan histori.</div>
@@ -516,9 +710,9 @@
                             <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                                 Nominal Final yang Disetujui (Dapat Direvisi oleh Admin/Absen) (Rp)
                             </label>
-                            <input type="number" step="500" min="0"
+                            <input type="number" step="500" min="0" inputmode="numeric"
                                 wire:model.defer="reviewNominalFinal"
-                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary-500">
+                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm focus:ring-primary-500">
                         </div>
 
                         <div>
@@ -526,7 +720,7 @@
                                 Catatan Persetujuan (Opsional jika ada perubahan nominal)
                             </label>
                             <input type="text" wire:model.defer="reviewCatatan"
-                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm"
+                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm"
                                 placeholder="Contoh: Disesuaikan menjadi Rp20.000 setelah cek target aktual">
                         </div>
 
@@ -535,7 +729,7 @@
                                 Alasan Penolakan (Hanya diisi jika ingin Menolak / Reject)
                             </label>
                             <input type="text" wire:model.defer="rejectAlasan"
-                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm"
+                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm"
                                 placeholder="Wajib diisi jika menolak pengajuan">
                         </div>
                     </div>
@@ -544,22 +738,25 @@
         @endif
 
         <x-slot name="footer">
-            <x-filament::button color="gray" x-on:click="$dispatch('close-modal', { id: 'modal-review-potongan' })">
-                Tutup
-            </x-filament::button>
+            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between w-full">
+                <x-filament::button color="gray" class="w-full sm:w-auto"
+                    x-on:click="$dispatch('close-modal', { id: 'modal-review-potongan' })">
+                    Tutup
+                </x-filament::button>
 
-            @if ($selectedPengajuan && $selectedPengajuan->status === 'pending')
-                <div class="flex gap-2">
-                    <x-filament::button color="danger" wire:click="rejectPengajuan"
-                        wire:confirm="Apakah Anda yakin ingin menolak pengajuan ini? Data potongan asli tetap berlaku.">
-                        Tolak (Reject)
-                    </x-filament::button>
-                    <x-filament::button color="success" wire:click="approvePengajuan"
-                        wire:confirm="Setujui nominal potongan ini? Perubahan akan langsung tercatat dan diterapkan pada laporan dan absensi.">
-                        Setujui (Approve)
-                    </x-filament::button>
-                </div>
-            @endif
+                @if ($selectedPengajuan && $selectedPengajuan->status === 'pending')
+                    <div class="flex flex-col gap-2 sm:flex-row">
+                        <x-filament::button color="danger" class="w-full sm:w-auto" wire:click="rejectPengajuan"
+                            wire:confirm="Apakah Anda yakin ingin menolak pengajuan ini? Data potongan asli tetap berlaku.">
+                            Tolak (Reject)
+                        </x-filament::button>
+                        <x-filament::button color="success" class="w-full sm:w-auto" wire:click="approvePengajuan"
+                            wire:confirm="Setujui nominal potongan ini? Perubahan akan langsung tercatat dan diterapkan pada laporan dan absensi.">
+                            Setujui (Approve)
+                        </x-filament::button>
+                    </div>
+                @endif
+            </div>
         </x-slot>
     </x-filament::modal>
 
@@ -578,21 +775,24 @@
                         Pilih Karyawan <span class="text-red-500">*</span>
                     </label>
                     <select wire:model.live="adminCreatePegawaiId"
-                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary-500">
+                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm focus:ring-primary-500">
                         <option value="">-- Pilih Karyawan --</option>
                         @foreach ($this->pegawaiOptions as $p)
                             <option value="{{ $p->id }}">{{ $p->nama_pegawai }} ({{ $p->kode_pegawai }})
                             </option>
                         @endforeach
                     </select>
+                    @error('adminCreatePegawaiId')
+                        <span class="text-xs text-red-600 mt-1 block">{{ $message }}</span>
+                    @enderror
                 </div>
 
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Tanggal
                             Potongan</label>
                         <input type="date" wire:model.live="adminCreateTanggal"
-                            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm">
+                            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Potongan
@@ -607,8 +807,12 @@
                     <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                         Nominal Potongan Usulan Baru (Rp) <span class="text-red-500">*</span>
                     </label>
-                    <input type="number" step="500" min="0" wire:model.defer="adminCreateNominalUsulan"
-                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary-500">
+                    <input type="number" step="500" min="0" inputmode="numeric"
+                        wire:model.defer="adminCreateNominalUsulan"
+                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm focus:ring-primary-500">
+                    @error('adminCreateNominalUsulan')
+                        <span class="text-xs text-red-600 mt-1 block">{{ $message }}</span>
+                    @enderror
                 </div>
 
                 <div>
@@ -616,19 +820,24 @@
                         Alasan / Keterangan Pengajuan <span class="text-red-500">*</span>
                     </label>
                     <textarea rows="3" wire:model.defer="adminCreateAlasan"
-                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm"
+                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm"
                         placeholder="Contoh: Temuan selisih target produksi saat rekap..."></textarea>
+                    @error('adminCreateAlasan')
+                        <span class="text-xs text-red-600 mt-1 block">{{ $message }}</span>
+                    @enderror
                 </div>
             </div>
 
             <x-slot name="footer">
-                <x-filament::button color="gray"
-                    x-on:click="$dispatch('close-modal', { id: 'modal-admin-create-potongan' })">
-                    Batal
-                </x-filament::button>
-                <x-filament::button color="primary" wire:click="simpanAdminPengajuan">
-                    Simpan Pengajuan
-                </x-filament::button>
+                <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end w-full">
+                    <x-filament::button color="gray" class="w-full sm:w-auto"
+                        x-on:click="$dispatch('close-modal', { id: 'modal-admin-create-potongan' })">
+                        Batal
+                    </x-filament::button>
+                    <x-filament::button color="primary" class="w-full sm:w-auto" wire:click="simpanAdminPengajuan">
+                        Simpan Pengajuan
+                    </x-filament::button>
+                </div>
             </x-slot>
         </x-filament::modal>
     @endif

@@ -191,6 +191,7 @@ class RekapPotonganGajiService
             'target' => $target,
             'hasil' => $hasil,
             'selisih' => $selisih,
+            'keterangan' => null,
         ];
     }
 
@@ -207,11 +208,15 @@ class RekapPotonganGajiService
 
             foreach ($approved as $row) {
                 $final = (int) round((float) $row->nominal_final);
+                $alasan = trim((string) $row->alasan_pengajuan);
                 $found = false;
 
                 foreach ($this->detailPotongan as &$item) {
                     if ($item['kodep'] == $row->kode_pegawai) {
                         $item['potongan'] = $final;
+                        if ($alasan !== '') {
+                            $item['keterangan'] = $alasan;
+                        }
                         $found = true;
                     }
                 }
@@ -227,6 +232,7 @@ class RekapPotonganGajiService
                         'target' => 0,
                         'hasil' => 0,
                         'selisih' => 0,
+                        'keterangan' => $alasan !== '' ? $alasan : null,
                     ];
                 }
             }
