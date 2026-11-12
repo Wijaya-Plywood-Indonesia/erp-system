@@ -40,6 +40,12 @@ class DetailTurunKayusTable
                 ])
             )
             ->columns([
+                TextColumn::make('kayuMasuk.seri')
+                    ->label('Seri')
+                    ->default('—')
+                    ->searchable()
+                    ->sortable(),
+                
                 TextColumn::make('kayuMasuk.penggunaanSupplier.nama_supplier')
                     ->label('Supplier')
                     ->default('—')
@@ -53,6 +59,7 @@ class DetailTurunKayusTable
 
                 TextColumn::make('jumlah_kayu')
                     ->label('Jumlah Kayu')
+                    ->suffix(' btg')
                     ->sortable(),
 
                 TextColumn::make('kayuMasuk.penggunaanKendaraanSupplier.nopol_kendaraan')
@@ -64,12 +71,6 @@ class DetailTurunKayusTable
                             ? "{$kendaraan->nopol_kendaraan} ({$kendaraan->jenis_kendaraan})"
                             : '—';
                     })
-                    ->searchable()
-                    ->sortable(),
-
-                TextColumn::make('kayuMasuk.seri')
-                    ->label('Seri')
-                    ->default('—')
                     ->searchable()
                     ->sortable(),
 

@@ -119,6 +119,16 @@
                             <span wire:loading wire:target="submit">Menyimpan...</span>
                         </button>
 
+                        <button 
+                            type="button"
+                            wire:click="hariIniLibur"
+                            wire:loading.attr="disabled"
+                            wire:target="hariIniLibur"
+                            class="w-full inline-flex justify-center items-center rounded-lg border border-gray-600 hover:bg-gray-800 disabled:opacity-60 text-gray-200 font-medium text-sm px-4 py-2.5 transition-all"
+                        >
+                            Saya Hari Ini Libur
+                        </button>
+
                         <button
                             type="button"
                             wire:click="logout"
