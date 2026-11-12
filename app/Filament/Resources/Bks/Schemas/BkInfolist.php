@@ -50,6 +50,12 @@ class BkInfolist
                     ->placeholder('Belum divalidasi'),
                 TextEntry::make('diubah')->label('Terakhir diubah')
                     ->getStateUsing(fn (Bk $r) => $r->updated_at?->format('d M Y H:i')),
+                TextEntry::make('selesai_manual')->label('Ditandai selesai manual')
+                    ->getStateUsing(fn (Bk $r) => $r->selesai_manual_at
+                        ? (\App\Models\User::find($r->selesai_manual_oleh)?->name ?? '-') . ' · ' . $r->selesai_manual_at->format('d M Y H:i') . ' · ' . $r->selesai_manual_alasan
+                        : null)
+                    ->visible(fn (Bk $r) => (bool) $r->selesai_manual_at)
+                    ->columnSpanFull(),
                 TextEntry::make('bm_tujuan')->label('BM di pabrik lain')
                     ->getStateUsing(fn (Bk $r) => self::bmDiPabrikLain($r))
                     ->color('primary')->weight('bold')

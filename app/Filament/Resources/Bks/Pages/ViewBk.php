@@ -36,6 +36,7 @@ class ViewBk extends ViewRecord
                 }),
 
             \App\Filament\Resources\Bks\Actions\BarangKembaliAction::make(),
+            \App\Filament\Resources\Bks\Actions\TandaiSelesaiAction::make(),
 
             Action::make('kirim_ulang')
                 ->label('Kirim ulang ke pabrik lain')

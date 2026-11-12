@@ -10,6 +10,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class BksTable
 {
@@ -26,11 +27,13 @@ class BksTable
             })
             ->columns([
                 TextColumn::make('tanggal')->date('d M Y')->sortable(),
-                TextColumn::make('no_nota')->label('No. Nota')->searchable()->weight('bold'),
+                TextColumn::make('no_nota')->label('No. Nota')->weight('bold')
+                    ->searchable(query: fn (Builder $query, string $search): Builder => self::cari($query, $search))
+                    ->copyable()->copyMessage('No. nota disalin')->copyMessageDuration(1500)->tooltip('Klik untuk menyalin')->disabledClick(),
                 TextColumn::make('kategori')->label('Kategori')->weight('bold')
                     ->formatStateUsing(fn ($state) => strtoupper((string) $state))
                     ->color(fn ($state) => match ($state) { 'bkl' => 'info', 'bkk' => 'warning', 'bkr' => 'primary', default => 'gray' }),
-                TextColumn::make('tujuan_nota')->label('Kepada')->searchable(),
+                TextColumn::make('tujuan_nota')->label('Kepada'),
                 TextColumn::make('status')->badge()
                     ->formatStateUsing(fn ($state, Bk $r) => $r->labelStatus())
                     ->color(fn ($state, Bk $r) => $r->warna()),
@@ -58,5 +61,24 @@ class BksTable
                     DeleteAction::make()->visible(fn (Bk $r) => ! $r->terkunci()),
                 ]),
             ]);
+    }
+
+    /** Pencarian fleksibel: nomor nota, kategori, tujuan, keterangan, pembuat/validator, isi barang, nomor BM terkait. */
+    private static function cari(Builder $query, string $search): Builder
+    {
+        $like = '%' . trim($search) . '%';
+
+        return $query->orWhere(function (Builder $q) use ($like) {
+            $q->where('no_nota', 'like', $like)
+                ->orWhere('kategori', 'like', $like)
+                ->orWhere('tujuan_nota', 'like', $like)
+                ->orWhere('keterangan', 'like', $like)
+                ->orWhere('ref_no_bkk', 'like', $like)
+                ->orWhere('status', 'like', $like)
+                ->orWhereHas('validator', fn ($r) => $r->where('name', 'like', $like))
+                ->orWhereHas('pembuat', fn ($r) => $r->where('name', 'like', $like))
+                ->orWhereHas('bmTerkait', fn ($r) => $r->where('no_nota', 'like', $like))
+                ->orWhereHas('detail', fn ($r) => $r->where('nama_barang', 'like', $like)->orWhere('keterangan', 'like', $like));
+        });
     }
 }

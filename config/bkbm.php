@@ -7,6 +7,11 @@
 return [
     'aktif' => env('BKBM_BARU_AKTIF', false),
 
+    // Tombol "Tandai Selesai" manual di BK (hanya super admin).
+    // Untuk MEMATIKAN: ganti true jadi false (atau beri // di depan baris 'tandai_selesai_aktif'), lalu deploy.
+    // Siapa yang boleh memakai diatur di app/Filament/Resources/Bks/Actions/TandaiSelesaiAction.php (daftar PERAN).
+    'tandai_selesai_aktif' => true,
+
     // Nomor mulai (urutan berikutnya = nilai ini + 1) bila belum ada nota sama sekali.
     // Penomoran BK/BM baru mulai dari 0001, terpisah dari nota lama.
     'nomor_awal' => ['bk' => 0, 'bkl' => 0, 'bkk' => 0, 'bm' => 0, 'bml' => 0, 'bmk' => 0, 'bkr' => 0, 'bmr' => 0],
