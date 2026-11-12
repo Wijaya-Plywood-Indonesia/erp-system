@@ -15,9 +15,10 @@ class Bk extends Model
         'keterangan', 'status', 'dibuat_oleh', 'divalidasi_oleh', 'divalidasi_at',
         'metode_pembayaran', 'id_rekening_perusahaan',
         'id_bmk_asal', 'ref_no_bkk',
+        'selesai_manual_oleh', 'selesai_manual_at', 'selesai_manual_alasan',
     ];
 
-    protected $casts = ['tanggal' => 'date', 'divalidasi_at' => 'datetime'];
+    protected $casts = ['tanggal' => 'date', 'divalidasi_at' => 'datetime', 'selesai_manual_at' => 'datetime'];
 
     public function detail(): HasMany { return $this->hasMany(BkDetail::class, 'id_bk'); }
     public function pembuat(): BelongsTo { return $this->belongsTo(User::class, 'dibuat_oleh'); }
