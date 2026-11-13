@@ -9,6 +9,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\DeleteAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -18,6 +19,15 @@ class BksTable
     {
         return $table
             ->defaultSort('id', 'desc')
+            ->groups([
+                Group::make('tanggal')
+                    ->label('Tanggal')
+                    ->date()
+                    ->orderQueryUsing(fn ($query) => $query->orderBy('tanggal', 'desc'))
+                    ->collapsible(),
+            ])
+            ->defaultGroup('tanggal')
+            ->groupingSettingsHidden()
             ->recordUrl(fn (Bk $r) => \App\Filament\Resources\Bks\BkResource::getUrl('view', ['record' => $r]))
             ->recordClasses(fn (Bk $r) => match ($r->warna()) {
                 'danger' => 'bg-red-50 dark:bg-red-950/30',

@@ -9,6 +9,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -18,6 +19,15 @@ class BmsTable
     {
         return $table
             ->defaultSort('id', 'desc')
+            ->groups([
+                Group::make('tanggal')
+                    ->label('Tanggal')
+                    ->date()
+                    ->orderQueryUsing(fn ($query) => $query->orderBy('tanggal', 'desc'))
+                    ->collapsible(),
+            ])
+            ->defaultGroup('tanggal')
+            ->groupingSettingsHidden()
             ->recordUrl(fn (Bm $r) => \App\Filament\Resources\Bms\BmResource::getUrl('view', ['record' => $r]))
             ->recordClasses(fn (Bm $r) => $r->status === 'divalidasi' ? 'bg-green-50 dark:bg-green-950/30' : null)
             ->columns([
