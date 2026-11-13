@@ -13,6 +13,8 @@ use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use App\Http\Controllers\ProduksiPressDryerController;
+use App\Http\Controllers\SandingApiController;
+use App\Models\HasilSanding;
 
 Route::get(
     '/produksi-dryer/{id}/preview',
@@ -286,10 +288,9 @@ Route::get('/external/rekap-stok-veneer', function (Request $request) {
                 'stok_lembar'   => (int) $b->stok_lembar,
             ];
         }
-
         // ── Kering ───────────────────────────────────────────────────────────
         $keringIds = DB::table('stok_veneer_kerings')
-            ->when($tgl, fn ($q) => $q->whereDate('tanggal_transaksi', '<=', $tgl))
+            ->when($tgl, fn($q) => $q->whereDate('tanggal_transaksi', '<=', $tgl))
             ->select(DB::raw('MAX(id) as max_id'))
             ->groupBy('id_ukuran', 'id_jenis_kayu', 'kw')
             ->pluck('max_id');

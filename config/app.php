@@ -127,4 +127,7 @@ return [
         'Excel' => Maatwebsite\Excel\Facades\Excel::class,
     ],
 
+    'esp32' => [
+        'key' => env('ESP_API_KEY'),
+    ],
 ];

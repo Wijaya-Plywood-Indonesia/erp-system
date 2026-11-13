@@ -165,6 +165,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Http::globalMiddleware(ResolveBarangCache::middleware());
         // ⬆⬆⬆  WAJIB: supaya MySQL ikut Asia/Jakarta
         HasilSanding::observe(HasilSandingObserver::class);
         ModalSanding::observe(ModalSandingObserver::class);
