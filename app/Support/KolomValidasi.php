@@ -50,7 +50,7 @@ class KolomValidasi
                     return 'disetujui';
                 }
 
-                return $terpenuhi > 0 ? 'sebagian' : null;
+                return $terpenuhi > 0 ? 'divalidasi' : null;
             }
 
             $status = $query->orderByDesc('id')->first()?->status;
