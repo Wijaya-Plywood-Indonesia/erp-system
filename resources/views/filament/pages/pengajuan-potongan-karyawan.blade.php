@@ -83,13 +83,42 @@
     {{-- ========================================================================= --}}
     @if ($activeTab === 'dashboard')
         <div class="space-y-6">
-            {{-- Filter Tanggal --}}
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-                    <div class="w-full sm:w-64">
-                        {{ $this->form }}
+            {{-- Filter Tanggal, Divisi & Opsi Potongan --}}
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-3">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+                        {{-- Filter Tanggal --}}
+                        <div class="w-full sm:w-64">
+                            {{ $this->form }}
+                        </div>
+
+                        {{-- Filter Divisi --}}
+                        <div class="w-full sm:w-56">
+                            <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                                Filter Divisi / Bagian
+                            </label>
+                            <select wire:model.live="filterDivisi"
+                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:ring-primary-500 focus:border-primary-500">
+                                <option value="">Semua Divisi</option>
+                                @foreach ($this->divisiOptions as $divKey => $divLabel)
+                                    <option value="{{ $divKey }}">{{ $divLabel }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        {{-- Filter Hanya Potongan --}}
+                        <div class="flex items-center pt-1 sm:pt-5">
+                            <label class="inline-flex items-center gap-2 cursor-pointer select-none">
+                                <input type="checkbox" wire:model.live="filterHanyaPotongan"
+                                    class="rounded border-gray-300 text-primary-600 shadow-sm focus:ring-primary-500">
+                                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Hanya yang ada potongan (> Rp 0)
+                                </span>
+                            </label>
+                        </div>
                     </div>
-                    <div class="text-sm text-gray-500 dark:text-gray-400">
+
+                    <div class="text-sm text-gray-500 dark:text-gray-400 pt-1 lg:pt-0">
                         @php
                             [
                                 $mulaiMinggu,
@@ -111,12 +140,32 @@
             @endphp
 
             <x-filament::card>
-                <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-4">
-                    <h3 class="font-bold text-gray-900 dark:text-white text-base">
-                        Daftar Potongan Karyawan &mdash;
-                        {{ \Carbon\Carbon::parse($tanggal)->translatedFormat('l, d F Y') }}
-                        <span class="text-sm font-normal text-gray-500">({{ $rows->count() }} orang)</span>
-                    </h3>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+                    <div>
+                        <h3 class="font-bold text-gray-900 dark:text-white text-base">
+                            Daftar Potongan Karyawan &mdash;
+                            {{ \Carbon\Carbon::parse($tanggal)->translatedFormat('l, d F Y') }}
+                            <span class="text-sm font-normal text-gray-500">({{ $rows->count() }} orang)</span>
+                        </h3>
+                    </div>
+
+                    @php
+                        $selectedCount = $this->selectedCount;
+                    @endphp
+
+                    @if ($rows->isNotEmpty())
+                        <div class="flex flex-wrap items-center gap-2">
+                            <x-filament::button size="sm" color="primary" icon="heroicon-o-queue-list"
+                                wire:click="bukaBulkPengajuanModal" :disabled="$selectedCount === 0">
+                                Ajukan Potongan Masal (Bulk)
+                                @if ($selectedCount > 0)
+                                    <span class="ml-1 px-1.5 py-0.5 rounded-full bg-white/20 text-xs font-bold">
+                                        {{ $selectedCount }}
+                                    </span>
+                                @endif
+                            </x-filament::button>
+                        </div>
+                    @endif
                 </div>
 
                 @if ($rows->isEmpty())
@@ -131,6 +180,7 @@
                             <thead
                                 class="bg-gray-50 dark:bg-gray-800 text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">
                                 <tr>
+                                    <th class="px-3 py-3 border-b text-center w-10">Pilih</th>
                                     <th class="px-4 py-3 border-b">Kode</th>
                                     <th class="px-4 py-3 border-b">Nama Karyawan</th>
                                     <th class="px-4 py-3 border-b">Divisi / Bagian</th>
@@ -163,8 +213,12 @@
                                                     $pengajuan->updated_at?->timestamp
                                                 : 'none');
                                     @endphp
-                                    <tr wire:key="{{ $rowKey }}"
-                                        class="hover:bg-gray-50/80 dark:hover:bg-gray-800/60 transition-colors">
+                                    <tr wire:key="row-karyawan-{{ $safeKode }}"
+                                        class="hover:bg-gray-50/80 dark:hover:bg-gray-800/60 transition-colors {{ in_array($safeKode, $selectedKodep) ? 'bg-primary-50/40 dark:bg-primary-950/20' : '' }}">
+                                        <td class="px-3 py-3 text-center">
+                                            <input type="checkbox" wire:model.live="selectedKodep" value="{{ $safeKode }}"
+                                                class="rounded border-gray-300 text-primary-600 shadow-sm focus:ring-primary-500">
+                                        </td>
                                         <td class="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-400">
                                             {{ $safeKode }}
                                         </td>
@@ -263,16 +317,22 @@
                                             $pengajuan->updated_at?->timestamp
                                         : 'none');
                             @endphp
-                            <div wire:key="{{ $cardKey }}"
-                                class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 space-y-3">
+                            <div wire:key="card-karyawan-{{ $safeKode }}"
+                                class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 space-y-3 {{ in_array($safeKode, $selectedKodep) ? 'ring-2 ring-primary-500 bg-primary-50/20' : '' }}">
 
                                 <div class="flex items-start justify-between gap-2">
-                                    <div class="min-w-0">
-                                        <div class="font-semibold text-gray-900 dark:text-gray-100 break-words">
-                                            {{ $safeNama }}</div>
-                                        <div class="text-xs font-mono text-gray-500">{{ $safeKode }}</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 break-words">
-                                            {{ $safeDivisi }}</div>
+                                    <div class="flex items-start gap-3 min-w-0">
+                                        <div class="pt-0.5">
+                                            <input type="checkbox" wire:model.live="selectedKodep" value="{{ $safeKode }}"
+                                                class="rounded border-gray-300 text-primary-600 shadow-sm focus:ring-primary-500">
+                                        </div>
+                                        <div class="min-w-0">
+                                            <div class="font-semibold text-gray-900 dark:text-gray-100 break-words">
+                                                {{ $safeNama }}</div>
+                                            <div class="text-xs font-mono text-gray-500">{{ $safeKode }}</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 break-words">
+                                                {{ $safeDivisi }}</div>
+                                        </div>
                                     </div>
                                     <div class="shrink-0">
                                         @if ($pengajuan)
@@ -588,7 +648,7 @@
                     Nominal Potongan yang Diajukan (Rp) <span class="text-red-500">*</span>
                 </label>
                 <input type="number" step="500" min="0" inputmode="numeric"
-                    wire:model.live.debounce.500ms="modalNominalUsulan"
+                    wire:model="modalNominalUsulan"
                     class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm focus:ring-primary-500 focus:border-primary-500"
                     placeholder="Contoh: 0 untuk anulir penuh, atau nominal baru">
                 <span class="text-xs text-gray-400 mt-1 block">Isi 0 jika ingin menganulir potongan secara
@@ -602,7 +662,7 @@
                 <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                     Keterangan / Alasan Pengajuan <span class="text-red-500">*</span>
                 </label>
-                <textarea rows="3" wire:model.defer="modalAlasan"
+                <textarea rows="3" wire:model="modalAlasan"
                     class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm focus:ring-primary-500 focus:border-primary-500"
                     placeholder="Jelaskan alasan mengapa potongan perlu dianulir atau diubah..."></textarea>
                 @error('modalAlasan')
@@ -619,6 +679,71 @@
                 </x-filament::button>
                 <x-filament::button color="primary" class="w-full sm:w-auto" wire:click="simpanPengajuan">
                     Kirim Pengajuan
+                </x-filament::button>
+            </div>
+        </x-slot>
+    </x-filament::modal>
+
+    {{-- ========================================================================= --}}
+    {{-- MODAL BULK PENGAJUAN (PENGAWAS) --}}
+    {{-- ========================================================================= --}}
+    <x-filament::modal id="modal-bulk-pengajuan-potongan" width="lg">
+        <x-slot name="heading">
+            Pengajuan Potongan Massal (Bulk Action)
+        </x-slot>
+        <x-slot name="description">
+            Ajukan nominal usulan dan alasan yang sama sekaligus untuk seluruh karyawan yang dipilih.
+        </x-slot>
+
+        <div class="space-y-4 text-sm">
+            <div class="bg-primary-50 dark:bg-primary-950/30 border border-primary-200 dark:border-primary-800 p-3 rounded-xl flex items-center gap-3">
+                <x-heroicon-o-users class="w-6 h-6 text-primary-600 dark:text-primary-400 shrink-0" />
+                <div>
+                    <span class="text-xs text-primary-700 dark:text-primary-300 block font-semibold">Total Karyawan Dipilih:</span>
+                    <span class="text-base font-bold text-primary-900 dark:text-primary-100">
+                        {{ $this->selectedCount }} Orang
+                    </span>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Nominal Potongan Usulan yang Diajukan (Rp) <span class="text-red-500">*</span>
+                </label>
+                <input type="number" step="500" min="0" inputmode="numeric"
+                    wire:model="bulkNominalUsulan"
+                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="Contoh: 0 untuk anulir penuh, atau nominal seragam">
+                <span class="text-xs text-gray-400 mt-1 block">
+                    Isi 0 jika ingin menganulir potongan secara penuh. Nominal ini akan diterapkan ke semua karyawan yang dicentang.
+                </span>
+                @error('bulkNominalUsulan')
+                    <span class="text-xs text-red-600 mt-1 block">{{ $message }}</span>
+                @enderror
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Keterangan / Alasan Pengajuan Seragam <span class="text-red-500">*</span>
+                </label>
+                <textarea rows="3" wire:model="bulkAlasan"
+                    class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="Jelaskan alasan yang berlaku sama untuk karyawan yang dipilih..."></textarea>
+                @error('bulkAlasan')
+                    <span class="text-xs text-red-600 mt-1 block">{{ $message }}</span>
+                @enderror
+            </div>
+        </div>
+
+        <x-slot name="footer">
+            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end w-full">
+                <x-filament::button color="gray" class="w-full sm:w-auto"
+                    x-on:click="$dispatch('close-modal', { id: 'modal-bulk-pengajuan-potongan' })">
+                    Batal
+                </x-filament::button>
+                <x-filament::button color="primary" class="w-full sm:w-auto" wire:click="simpanBulkPengajuan"
+                    wire:confirm="Yakin ingin mengirim pengajuan potongan untuk semua karyawan yang dipilih dengan nominal dan alasan ini?">
+                    Kirim Pengajuan Massal
                 </x-filament::button>
             </div>
         </x-slot>
@@ -711,7 +836,7 @@
                                 Nominal Final yang Disetujui (Dapat Direvisi oleh Admin/Absen) (Rp)
                             </label>
                             <input type="number" step="500" min="0" inputmode="numeric"
-                                wire:model.defer="reviewNominalFinal"
+                                wire:model="reviewNominalFinal"
                                 class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm focus:ring-primary-500">
                         </div>
 
@@ -719,7 +844,7 @@
                             <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                                 Catatan Persetujuan (Opsional jika ada perubahan nominal)
                             </label>
-                            <input type="text" wire:model.defer="reviewCatatan"
+                            <input type="text" wire:model="reviewCatatan"
                                 class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm"
                                 placeholder="Contoh: Disesuaikan menjadi Rp20.000 setelah cek target aktual">
                         </div>
@@ -728,7 +853,7 @@
                             <label class="block text-xs font-semibold text-red-600 dark:text-red-400 mb-1">
                                 Alasan Penolakan (Hanya diisi jika ingin Menolak / Reject)
                             </label>
-                            <input type="text" wire:model.defer="rejectAlasan"
+                            <input type="text" wire:model="rejectAlasan"
                                 class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm"
                                 placeholder="Wajib diisi jika menolak pengajuan">
                         </div>
@@ -774,6 +899,7 @@
                     <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                         Pilih Karyawan <span class="text-red-500">*</span>
                     </label>
+                    {{-- .live dipertahankan: perlu memuat "Potongan Tercatat" saat karyawan dipilih --}}
                     <select wire:model.live="adminCreatePegawaiId"
                         class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm focus:ring-primary-500">
                         <option value="">-- Pilih Karyawan --</option>
@@ -808,7 +934,7 @@
                         Nominal Potongan Usulan Baru (Rp) <span class="text-red-500">*</span>
                     </label>
                     <input type="number" step="500" min="0" inputmode="numeric"
-                        wire:model.defer="adminCreateNominalUsulan"
+                        wire:model="adminCreateNominalUsulan"
                         class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm focus:ring-primary-500">
                     @error('adminCreateNominalUsulan')
                         <span class="text-xs text-red-600 mt-1 block">{{ $message }}</span>
@@ -819,7 +945,7 @@
                     <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                         Alasan / Keterangan Pengajuan <span class="text-red-500">*</span>
                     </label>
-                    <textarea rows="3" wire:model.defer="adminCreateAlasan"
+                    <textarea rows="3" wire:model="adminCreateAlasan"
                         class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm"
                         placeholder="Contoh: Temuan selisih target produksi saat rekap..."></textarea>
                     @error('adminCreateAlasan')

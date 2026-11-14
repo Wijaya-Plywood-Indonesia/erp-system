@@ -4,7 +4,6 @@ namespace App\Filament\Pages;
 
 use App\Models\Pegawai;
 use App\Models\PengajuanPotongan;
-use App\Models\User;
 use App\Services\DashboardPengawas\DashboardPengawasService;
 use App\Services\Payroll\PeriodeJumatKamisResolver;
 use App\Services\PengajuanPotonganService;
@@ -46,6 +45,12 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
     public ?string $tanggal = null;
 
     #[Url(keep: true)]
+    public ?string $filterDivisi = '';
+
+    #[Url(keep: true)]
+    public bool $filterHanyaPotongan = true;
+
+    #[Url(keep: true)]
     public string $activeTab = 'dashboard'; // 'dashboard' or 'persetujuan'
 
     public ?string $filterStatusPersetujuan = 'all';
@@ -67,9 +72,15 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
 
     public ?float $modalNominalUsulan = null;
 
-    public ?float $modalEstimasiGaji = null;
-
     public string $modalAlasan = '';
+
+    // State untuk Bulk Action Pengajuan Pengawas
+    /** @var array<string> */
+    public array $selectedKodep = [];
+
+    public ?float $bulkNominalUsulan = 0;
+
+    public string $bulkAlasan = '';
 
     // State untuk Modal Revisi & Approve (Admin/Absen)
     public bool $showReviewModal = false;
@@ -79,8 +90,6 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
     public ?PengajuanPotongan $selectedPengajuan = null;
 
     public ?float $reviewNominalFinal = null;
-
-    public ?float $reviewEstimasiGaji = null;
 
     public string $reviewCatatan = '';
 
@@ -96,8 +105,6 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
     public float $adminCreateNominalAwal = 0;
 
     public ?float $adminCreateNominalUsulan = null;
-
-    public ?float $adminCreateEstimasiGaji = null;
 
     public string $adminCreateAlasan = '';
 
@@ -143,6 +150,21 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         if ($this->activeTab === 'persetujuan' && ! $this->canManageApproval()) {
             $this->activeTab = 'dashboard';
         }
+    }
+
+    public function updatedTanggal(): void
+    {
+        $this->selectedKodep = [];
+    }
+
+    public function updatedFilterDivisi(): void
+    {
+        $this->selectedKodep = [];
+    }
+
+    public function updatedFilterHanyaPotongan(): void
+    {
+        $this->selectedKodep = [];
     }
 
     public function form(Schema $schema): Schema
@@ -249,10 +271,8 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         $uniqueKodep = array_unique($allKodepList);
         $pegawaiMap = Pegawai::whereIn('kode_pegawai', $uniqueKodep)->get()->keyBy('kode_pegawai');
 
-        $estimasiGajiService = app(PengajuanPotonganService::class);
-
         // Hapus duplikasi jika pegawai terdaftar di multi-source tapi satukan divisi
-        return $rows->groupBy('kode_pegawai')->map(function ($group) use ($potonganService, $weeklyPotonganMaps, $pegawaiMap, $estimasiGajiService) {
+        $mappedRows = $rows->groupBy('kode_pegawai')->map(function ($group) use ($potonganService, $weeklyPotonganMaps, $pegawaiMap) {
             $first = $group->first();
             $kodePegawai = $first['kode_pegawai'];
             $allDivisi = $group->pluck('divisi')->unique()->implode(', ');
@@ -273,11 +293,47 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
             }
             $first['potongan_mingguan'] = $totalMingguan;
 
-            // Estimasi gaji bersih harian
-            $first['estimasi_gaji_diterima'] = $estimasiGajiService->hitungEstimasiGaji($pegawaiModel ?? $first['id_pegawai'], $first['potongan_harian']);
-
             return $first;
         })->values();
+
+        // Terapkan Filter Divisi
+        if (! empty($this->filterDivisi)) {
+            $mappedRows = $mappedRows->filter(function ($row) {
+                return str_contains(strtolower($row['divisi'] ?? ''), strtolower($this->filterDivisi));
+            });
+        }
+
+        // Terapkan Filter Hanya Potongan (> 0)
+        if ($this->filterHanyaPotongan) {
+            $mappedRows = $mappedRows->filter(function ($row) {
+                return (float) ($row['potongan_harian'] ?? 0) > 0;
+            });
+        }
+
+        return $mappedRows->values();
+    }
+
+    /**
+     * Ambil daftar opsi divisi unik untuk dropdown filter
+     * @return array<string, string>
+     */
+    public function getDivisiOptionsProperty(): array
+    {
+        $user = auth()->user();
+        $tanggal = $this->tanggal ?: now()->toDateString();
+
+        $service = app(DashboardPengawasService::class);
+        $dashboardSections = $service->getDataForUser($user, $tanggal);
+
+        $options = [];
+        foreach ($dashboardSections as $section) {
+            $label = $section['label'] ?? null;
+            if ($label) {
+                $options[$label] = $label;
+            }
+        }
+
+        return $options;
     }
 
     /**
@@ -316,21 +372,9 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
             $this->modalAlasan = '';
         }
 
-        $this->modalEstimasiGaji = app(PengajuanPotonganService::class)
-            ->hitungEstimasiGaji($this->modalPegawaiId, (float) $this->modalNominalUsulan);
-
         $this->resetValidation();
 
         $this->dispatch('open-modal', id: 'modal-pengajuan-potongan');
-    }
-
-    public function updatedModalNominalUsulan(): void
-    {
-        $nominal = (float) ($this->modalNominalUsulan ?? 0);
-        if ($this->modalPegawaiId) {
-            $this->modalEstimasiGaji = app(PengajuanPotonganService::class)
-                ->hitungEstimasiGaji($this->modalPegawaiId, $nominal);
-        }
     }
 
     public function simpanPengajuan(): void
@@ -370,12 +414,122 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
             $this->showPengajuanModal = false;
             $this->modalNominalUsulan = null;
             $this->modalAlasan = '';
-            $this->modalEstimasiGaji = null;
             // Action Livewire otomatis me-render ulang komponen, sehingga tabel ikut ter-refresh.
         } catch (\Throwable $e) {
             Notification::make()
                 ->title('Gagal Menyimpan Pengajuan')
                 ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function getSelectedCountProperty(): int
+    {
+        return count($this->selectedKodep);
+    }
+
+    public function bukaBulkPengajuanModal(): void
+    {
+        $selectedCodes = $this->selectedKodep;
+
+        if (empty($selectedCodes)) {
+            Notification::make()
+                ->title('Tidak Ada Karyawan Dipilih')
+                ->body('Pilih minimal satu karyawan untuk melakukan bulk action pengajuan potongan.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $this->bulkNominalUsulan = 0;
+        $this->bulkAlasan = '';
+        $this->resetValidation(['bulkNominalUsulan', 'bulkAlasan']);
+
+        $this->dispatch('open-modal', id: 'modal-bulk-pengajuan-potongan');
+    }
+
+    public function simpanBulkPengajuan(): void
+    {
+        $this->validate([
+            'bulkNominalUsulan' => ['required', 'numeric', 'min:0'],
+            'bulkAlasan' => 'required|string|min:3',
+        ], [
+            'bulkNominalUsulan.required' => 'Nominal usulan potongan wajib diisi.',
+            'bulkNominalUsulan.min' => 'Nominal potongan tidak boleh bernilai negatif.',
+            'bulkAlasan.required' => 'Keterangan alasan pengajuan wajib diisi.',
+            'bulkAlasan.min' => 'Alasan pengajuan minimal 3 karakter.',
+        ]);
+
+        $selectedCodes = $this->selectedKodep;
+
+        if (empty($selectedCodes)) {
+            Notification::make()
+                ->title('Tidak Ada Karyawan Dipilih')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $user = auth()->user();
+        $tanggal = $this->tanggal ?: now()->toDateString();
+        $rows = $this->getDashboardRows()->keyBy('kode_pegawai');
+        $pegawaiModels = Pegawai::whereIn('kode_pegawai', $selectedCodes)->get()->keyBy('kode_pegawai');
+
+        $service = app(PengajuanPotonganService::class);
+        $berhasilCount = 0;
+        $errors = [];
+
+        foreach ($selectedCodes as $kode) {
+            $row = $rows->get($kode);
+            $pegawai = $pegawaiModels->get($kode);
+
+            if (! $pegawai) {
+                $errors[] = "Karyawan ({$kode}) tidak ditemukan di master pegawai.";
+                continue;
+            }
+
+            $potonganAwal = (float) ($row['potongan_harian'] ?? 0);
+            $nominalUsulan = (float) $this->bulkNominalUsulan;
+
+            if ($nominalUsulan > $potonganAwal) {
+                $errors[] = "{$pegawai->nama_pegawai} ({$kode}): Usulan (Rp " . number_format($nominalUsulan, 0, ',', '.') . ") melebihi potongan awal (Rp " . number_format($potonganAwal, 0, ',', '.') . ").";
+                continue;
+            }
+
+            try {
+                $service->buatPengajuan(
+                    user: $user,
+                    pegawai: $pegawai,
+                    tanggal: $tanggal,
+                    nominalAwal: $potonganAwal,
+                    nominalUsulan: $nominalUsulan,
+                    alasan: $this->bulkAlasan,
+                    divisi: $row['divisi'] ?? null,
+                );
+                $berhasilCount++;
+            } catch (\Throwable $e) {
+                $errors[] = "{$pegawai->nama_pegawai}: " . $e->getMessage();
+            }
+        }
+
+        $this->dispatch('close-modal', id: 'modal-bulk-pengajuan-potongan');
+        $this->selectedKodep = [];
+        $this->bulkNominalUsulan = 0;
+        $this->bulkAlasan = '';
+
+        if ($berhasilCount > 0) {
+            Notification::make()
+                ->title("Pengajuan Berhasil ({$berhasilCount} Karyawan)")
+                ->body('Pengajuan potongan massal berhasil diteruskan untuk ditinjau.' . (! empty($errors) ? ' Beberapa karyawan dilewati karena validasi: ' . implode(', ', array_slice($errors, 0, 3)) : ''))
+                ->success()
+                ->send();
+        } else {
+            Notification::make()
+                ->title('Gagal Memproses Pengajuan')
+                ->body(! empty($errors) ? implode(', ', array_slice($errors, 0, 3)) : 'Tidak ada data yang berhasil diproses.')
                 ->danger()
                 ->send();
         }
@@ -415,20 +569,10 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         $this->selectedPengajuanId = $record->id;
         $this->selectedPengajuan = $record;
         $this->reviewNominalFinal = (float) $record->nominal_usulan;
-        $this->reviewEstimasiGaji = (float) $record->estimasi_gaji;
         $this->reviewCatatan = '';
         $this->rejectAlasan = '';
 
         $this->dispatch('open-modal', id: 'modal-review-potongan');
-    }
-
-    public function updatedReviewNominalFinal(): void
-    {
-        $nominal = (float) ($this->reviewNominalFinal ?? 0);
-        if ($this->selectedPengajuan) {
-            $this->reviewEstimasiGaji = app(PengajuanPotonganService::class)
-                ->hitungEstimasiGaji($this->selectedPengajuan->id_pegawai, $nominal);
-        }
     }
 
     /**
@@ -528,32 +672,43 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         $this->adminCreateTanggal = $this->tanggal ?: now()->toDateString();
         $this->adminCreateNominalAwal = 0;
         $this->adminCreateNominalUsulan = 0;
-        $this->adminCreateEstimasiGaji = 0;
         $this->adminCreateAlasan = '';
         $this->adminCreateDivisi = 'Kantor / Pemeriksaan';
 
         $this->dispatch('open-modal', id: 'modal-admin-create-potongan');
     }
 
-    public function updatedAdminCreatePegawaiId(): void
+    /**
+     * Hitung ulang potongan tercatat (awal) berdasarkan pegawai & tanggal terpilih.
+     */
+    protected function refreshAdminCreateNominalAwal(): void
     {
-        if ($this->adminCreatePegawaiId) {
-            $pegawai = Pegawai::find($this->adminCreatePegawaiId);
-            if ($pegawai) {
-                // Cari potongan awal sistem
-                $pMap = app(PotonganGajiService::class)->getPotonganMap($this->adminCreateTanggal);
-                $this->adminCreateNominalAwal = app(PotonganGajiService::class)->resolvePotongan($pMap, $pegawai->kode_pegawai);
-                $this->adminCreateEstimasiGaji = app(PengajuanPotonganService::class)->hitungEstimasiGaji($pegawai, (float) $this->adminCreateNominalUsulan);
-            }
+        if (! $this->adminCreatePegawaiId || ! $this->adminCreateTanggal) {
+            $this->adminCreateNominalAwal = 0;
+
+            return;
         }
+
+        $pegawai = Pegawai::find($this->adminCreatePegawaiId);
+        if (! $pegawai) {
+            $this->adminCreateNominalAwal = 0;
+
+            return;
+        }
+
+        $service = app(PotonganGajiService::class);
+        $pMap = $service->getPotonganMap($this->adminCreateTanggal);
+        $this->adminCreateNominalAwal = (float) $service->resolvePotongan($pMap, $pegawai->kode_pegawai);
     }
 
-    public function updatedAdminCreateNominalUsulan(): void
+    public function updatedAdminCreatePegawaiId(): void
     {
-        if ($this->adminCreatePegawaiId) {
-            $this->adminCreateEstimasiGaji = app(PengajuanPotonganService::class)
-                ->hitungEstimasiGaji($this->adminCreatePegawaiId, (float) ($this->adminCreateNominalUsulan ?? 0));
-        }
+        $this->refreshAdminCreateNominalAwal();
+    }
+
+    public function updatedAdminCreateTanggal(): void
+    {
+        $this->refreshAdminCreateNominalAwal();
     }
 
     public function simpanAdminPengajuan(): void
