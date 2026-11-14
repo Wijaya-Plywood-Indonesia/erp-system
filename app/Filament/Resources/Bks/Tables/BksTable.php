@@ -27,12 +27,14 @@ class BksTable
                     ->collapsible(),
             ])
             ->defaultGroup('tanggal')
+            // Warna baris: CSS kecil ini disisipkan di sini supaya tidak perlu build CSS. Ubah angka terakhir (0.28 = 28%) untuk kepekatan.
+            ->header(new \Illuminate\Support\HtmlString('<style>tr.bkbm-merah { background-color: rgba(220, 38, 38, 0.28) !important; } tr.bkbm-hijau { background-color: rgba(22, 163, 74, 0.28) !important; } tr.bkbm-kuning { background-color: rgba(234, 179, 8, 0.38) !important; }</style>'))
             ->groupingSettingsHidden()
             ->recordUrl(fn (Bk $r) => \App\Filament\Resources\Bks\BkResource::getUrl('view', ['record' => $r]))
             ->recordClasses(fn (Bk $r) => match ($r->warna()) {
-                'danger' => 'bg-red-50 dark:bg-red-950/30',
-                'success' => 'bg-green-50 dark:bg-green-950/30',
-                'warning' => 'bg-yellow-50 dark:bg-yellow-950/30',
+                'danger' => 'bkbm-merah',
+                'success' => 'bkbm-hijau',
+                'warning' => 'bkbm-kuning',
                 default => null,
             })
             ->columns([
@@ -55,6 +57,7 @@ class BksTable
                     ->sortable(query: function ($query, string $direction) {
                         return $query->orderBy('divalidasi_at', $direction === 'asc' ? 'desc' : 'asc');
                     }),
+                TextColumn::make('pembuat.name')->label('Pembuat')->placeholder('-'),
                 TextColumn::make('validator.name')->label('Divalidasi Oleh')
                     ->placeholder('Belum divalidasi')->color(fn ($state) => $state ? 'success' : 'gray'),
             ])
@@ -65,11 +68,9 @@ class BksTable
             ->recordActions([
                 \App\Filament\Resources\Bks\Actions\BarangKembaliAction::make(),
                 \App\Filament\Resources\Bks\Actions\CetakBkActions::make(),
-                ActionGroup::make([
-                    ViewAction::make(),
-                    EditAction::make()->visible(fn (Bk $r) => ! $r->terkunci()),
-                    DeleteAction::make()->visible(fn (Bk $r) => ! $r->terkunci()),
-                ]),
+                ViewAction::make(),
+                EditAction::make()->visible(fn (Bk $r) => ! $r->terkunci()),
+                DeleteAction::make()->visible(fn (Bk $r) => ! $r->terkunci()),
             ]);
     }
 
