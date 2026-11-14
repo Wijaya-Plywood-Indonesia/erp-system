@@ -84,6 +84,26 @@ Route::get('/nota-barang-keluar/{record}/nota-sales', [NotaBKController::class, 
 Route::get('/nota-barang-keluar/{record}/cetak-semua/{jenis}', [NotaBKController::class, 'cetakSemua'])
     ->name('nota-bk.cetak-semua');
 
+// Rute Cetak & Penanganan Menu Penjualan (Terpisah dari Nota Barang Keluar)
+Route::middleware(['auth'])->group(function () {
+    Route::get('/penjualan/{record}/preview/{jenis}', [\App\Http\Controllers\PenjualanCetakController::class, 'preview'])
+        ->name('penjualan.preview');
+    Route::post('/penjualan/{record}/update-items', [\App\Http\Controllers\PenjualanCetakController::class, 'updateItems'])
+        ->name('penjualan.update-items');
+    Route::post('/penjualan/{record}/reset-items', [\App\Http\Controllers\PenjualanCetakController::class, 'resetItems'])
+        ->name('penjualan.reset-items');
+    Route::post('/penjualan/{record}/save-payment', [\App\Http\Controllers\PenjualanCetakController::class, 'savePayment'])
+        ->name('penjualan.save-payment');
+    Route::get('/penjualan/{record}/nota-kantor', [\App\Http\Controllers\PenjualanCetakController::class, 'printNotaKantor'])
+        ->name('penjualan.nota-kantor');
+    Route::get('/penjualan/{record}/nota-sales', [\App\Http\Controllers\PenjualanCetakController::class, 'printNotaSales'])
+        ->name('penjualan.nota-sales');
+    Route::get('/penjualan/{record}/surat-jalan/{jenis?}', [\App\Http\Controllers\PenjualanCetakController::class, 'printSuratJalan'])
+        ->name('penjualan.surat-jalan');
+    Route::get('/penjualan/{record}/cetak-semua/{jenis}', [\App\Http\Controllers\PenjualanCetakController::class, 'cetakSemua'])
+        ->name('penjualan.cetak-semua');
+});
+
 Route::get('/nota-barang-keluar/rekap', [NotaBKController::class, 'rekap'])
     ->name('nota-bk.rekap');
 
