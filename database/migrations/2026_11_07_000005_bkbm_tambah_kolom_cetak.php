@@ -9,16 +9,17 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('bk', function (Blueprint $t) {
-            $t->string('metode_pembayaran', 50)->nullable();
-            $t->foreignId('id_rekening_perusahaan')->nullable()->constrained('rekening_perusahaan')->nullOnDelete();
-        });
+    if (!Schema::hasColumn('bk', 'metode_pembayaran')) {
+        $t->string('metode_pembayaran', 50)->nullable();
+    }
 
-        Schema::table('bk_detail', function (Blueprint $t) {
-            $t->decimal('harga', 15, 2)->nullable();
-            $t->decimal('potongan', 15, 2)->nullable();
-            $t->string('custom_nama')->nullable();
-            $t->decimal('custom_m3', 10, 4)->nullable();
-        });
+    if (!Schema::hasColumn('bk', 'id_rekening_perusahaan')) {
+        $t->foreignId('id_rekening_perusahaan')
+            ->nullable()
+            ->constrained('rekening_perusahaan')
+            ->nullOnDelete();
+    }
+});
     }
 
     public function down(): void

@@ -3,6 +3,8 @@
 namespace App\Listeners;
 
 use App\Events\ProductionUpdated;
+use App\Models\ValidasiKedi;
+use App\Models\ValidasiPressDryer;
 use App\Services\HppDryerService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
@@ -19,27 +21,41 @@ class HitungHppDryerListener implements ShouldQueue
     }
 
     public function handle(ProductionUpdated $event): void
-{
-    if ($event->type !== 'dryer') {
-        return;
+    {
+        // Press Dryer — hanya proses jika produksi sudah divalidasi
+        if ($event->type === 'dryer') {
+            $sudahValidasi = ValidasiPressDryer::where('id_produksi_dryer', $event->productionId)
+                ->where('status', 'divalidasi')
+                ->exists();
+
+            if (! $sudahValidasi) {
+                return;
+            }
+
+            $this->service->prosesProduksi($event->productionId);
+
+            return;
+        }
+
+        // Kedi — hanya proses jika bongkar sudah divalidasi
+        if ($event->type === 'kedi') {
+            $sudahBongkar = ValidasiKedi::where('id_produksi_kedi', $event->productionId)
+                ->where('tipe', 'bongkar')
+                ->where('status', 'divalidasi')
+                ->exists();
+
+            if (! $sudahBongkar) {
+                return;
+            }
+
+            $this->service->prosesBanyakKedi([(int) $event->productionId]);
+        }
     }
-
-    // ✅ Hanya proses jika produksi sudah divalidasi
-    $sudahValidasi = \App\Models\ValidasiPressDryer::where('id_produksi_dryer', $event->productionId)
-        ->where('status', 'divalidasi')
-        ->exists();
-
-    if (!$sudahValidasi) {
-        return;
-    }
-
-    $this->service->prosesProduksi($event->productionId);
-}
 
     public function failed(ProductionUpdated $event, \Throwable $exception): void
     {
         Log::error(
-            "Gagal hitung HPP dryer untuk produksi #{$event->productionId}: "
+            "Gagal hitung HPP {$event->type} untuk produksi #{$event->productionId}: "
             . $exception->getMessage()
         );
     }

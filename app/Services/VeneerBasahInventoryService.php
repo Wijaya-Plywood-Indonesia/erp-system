@@ -33,7 +33,7 @@ class VeneerBasahInventoryService
                     continue;
                 }
 
-                $kubikasiKeluar = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $detail->isi) / 1000000000;
+                $kubikasiKeluar = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $detail->isi) / 10000000;
                 $nilaiKeluar    = $kubikasiKeluar * $summary->hpp_average;
 
                 $stokTidakCukup = $summary->stok_lembar <= 0 || $summary->stok_lembar < $detail->isi;
@@ -103,7 +103,7 @@ class VeneerBasahInventoryService
                     continue;
                 }
 
-                $kubikasiKeluar = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $detail->jumlah) / 1_000_000_000;
+                $kubikasiKeluar = ($ukuran->panjang * $ukuran->lebar * $ukuran->tebal * $detail->jumlah) / 10_000_000;
                 $nilaiKeluar    = $kubikasiKeluar * $summary->hpp_average;
 
                 $stokTidakCukup = $summary->stok_lembar <= 0 || $summary->stok_lembar < $detail->jumlah;
