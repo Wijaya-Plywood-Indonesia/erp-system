@@ -51,14 +51,12 @@ use App\Services\FingerParsers\FingerParserManager;
 use App\Services\FingerParsers\KantorDatParser;
 use App\Services\FingerParsers\MesinZkParser;
 use App\Services\NewRekapAbsensiPegawaiService;
-use App\Services\ValidasiOtomatisProduksiService;
 use App\Services\Payroll\WeeklyRekapPotonganGajiService;
 use App\Services\RekapPotonganGajiService;
-use App\Support\ResolveBarangCache;
+use App\Services\ValidasiOtomatisProduksiService;
 use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Facades\Blade;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\ServiceProvider;
 
@@ -194,9 +192,11 @@ class AppServiceProvider extends ServiceProvider
                     /**
                      * ==========================================
                      * 1. LOGIC UNTUK DETAIL KAYU MASUK (LAMA)
+                     * Diganti nama agar tidak menimpa versi baru di
+                     * public/js/offline-detail-kayu.js
                      * ==========================================
                      */
-                    window.offlineDetailLogic = function(config) {
+                    window._legacyOfflineDetailLogic = function(config) { // ← DIUBAH
                         return {
                             online: navigator.onLine,
                             isSyncing: false,
