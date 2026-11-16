@@ -307,10 +307,43 @@
                 @endforeach
             </tbody>
             <tfoot>
-                <tr>
-                    <td colspan="{{ $hasM3 ? 8 : 7 }}" class="total-label">Total</td>
-                    <td class="total-value">{{ number_format($grandTotal, 0, ',', '.') }}</td>
-                </tr>
+                @php
+                    $ppnPersen = (float) ($record->ppn_persen ?? 0);
+                    $ppnNominal = (float) ($record->ppn_nominal ?? 0);
+                    if ($ppnPersen > 0 && $ppnNominal <= 0) {
+                        $ppnNominal = round(($grandTotal * $ppnPersen) / 100, 2);
+                    }
+                    $ongkir = (float) ($record->ongkir ?? 0);
+                    $totalAkhir = $grandTotal + $ppnNominal + $ongkir;
+                    $colsTotal = $hasM3 ? 8 : 7;
+                @endphp
+                @if ($ppnPersen > 0 || $ongkir > 0)
+                    <tr>
+                        <td colspan="{{ $colsTotal }}" class="total-label" style="padding-top: 6px; padding-bottom: 2px; font-size: 13px;">Subtotal</td>
+                        <td class="total-value" style="padding-top: 6px; padding-bottom: 2px; font-size: 13px;">{{ number_format($grandTotal, 0, ',', '.') }}</td>
+                    </tr>
+                    @if ($ppnPersen > 0)
+                    <tr>
+                        <td colspan="{{ $colsTotal }}" class="total-label" style="padding-top: 2px; padding-bottom: 2px; font-size: 13px;">PPN {{ $ppnPersen }}%</td>
+                        <td class="total-value" style="padding-top: 2px; padding-bottom: 2px; font-size: 13px;">{{ number_format($ppnNominal, 0, ',', '.') }}</td>
+                    </tr>
+                    @endif
+                    @if ($ongkir > 0)
+                    <tr>
+                        <td colspan="{{ $colsTotal }}" class="total-label" style="padding-top: 2px; padding-bottom: 2px; font-size: 13px;">Ongkir</td>
+                        <td class="total-value" style="padding-top: 2px; padding-bottom: 2px; font-size: 13px;">{{ number_format($ongkir, 0, ',', '.') }}</td>
+                    </tr>
+                    @endif
+                    <tr>
+                        <td colspan="{{ $colsTotal }}" class="total-label" style="border-top: 1px solid #000; font-size: 14px;">Total</td>
+                        <td class="total-value" style="border-top: 1px solid #000; font-size: 14px;">{{ number_format($totalAkhir, 0, ',', '.') }}</td>
+                    </tr>
+                @else
+                    <tr>
+                        <td colspan="{{ $colsTotal }}" class="total-label">Total</td>
+                        <td class="total-value">{{ number_format($grandTotal, 0, ',', '.') }}</td>
+                    </tr>
+                @endif
             </tfoot>
         </table>
 

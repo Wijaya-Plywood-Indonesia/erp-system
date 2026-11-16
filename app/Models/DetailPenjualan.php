@@ -22,6 +22,7 @@ class DetailPenjualan extends Model
         'custom_nama',
         'jumlah',
         'custom_m3',
+        'hit_kbk',
         'satuan',
         'harga',
         'potongan',

@@ -35,12 +35,16 @@ class PenjualanSyncService
             $potongan = (float) ($item->potongan ?? 0);
             $subtotal = (float) ($item->subtotal ?? ($qty * $harga));
 
+            $hitKbk = $item->hit_kbk ?? 'b';
+            $hitungDari = ($hitKbk === 'm' && $m3 !== null) ? 'm3' : 'qty';
+
             $itemsPayload[] = [
                 'nama_barang' => $item->nama_barang,
                 'satuan' => $item->satuan ?? 'pcs',
                 'qty' => $qty,
                 'm3' => $m3,
-                'hitung_dari' => $m3 !== null ? 'kubikasi' : 'qty',
+                'hit_kbk' => $hitKbk,
+                'hitung_dari' => $hitungDari,
                 'harga_awal' => $harga,
                 'harga_jual' => $harga,
                 'potongan' => $potongan,
@@ -50,6 +54,14 @@ class PenjualanSyncService
         }
 
         $metodePembayaran = $record->metode_pembayaran ?: 'Tunai';
+
+        $ppnPersen = (float) ($record->ppn_persen ?? 0);
+        $ppnNominal = (float) ($record->ppn_nominal ?? 0);
+        if ($ppnPersen > 0 && $ppnNominal <= 0) {
+            $ppnNominal = round(($grandTotal * $ppnPersen) / 100, 2);
+        }
+        $ongkir = (float) ($record->ongkir ?? 0);
+        $totalAkhir = (float) ($record->total > 0 ? $record->total : ($grandTotal + $ppnNominal + $ongkir));
 
         $payload = [
             'no_nota' => $record->no_nota,
@@ -61,10 +73,11 @@ class PenjualanSyncService
             'bank' => $rekening?->nama_bank,
             'no_rekening' => $rekening?->no_rekening,
             'sub_total' => $grandTotal,
-            'ppn_persen' => 0,
-            'ppn_nominal' => 0,
-            'total' => $grandTotal,
-            'bayar' => $grandTotal,
+            'ppn_persen' => $ppnPersen,
+            'ppn_nominal' => $ppnNominal,
+            'ongkir' => $ongkir,
+            'total' => $totalAkhir,
+            'bayar' => $totalAkhir,
             'kembalian' => 0,
             'items' => $itemsPayload,
         ];

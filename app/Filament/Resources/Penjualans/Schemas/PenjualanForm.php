@@ -9,6 +9,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Carbon;
@@ -56,6 +57,25 @@ class PenjualanForm
                     ->label('Alamat')
                     ->maxLength(255)
                     ->nullable(),
+
+                Toggle::make('pakai_ppn')
+                    ->label('Pakai PPN (11%)')
+                    ->default(true)
+                    ->live()
+                    ->afterStateUpdated(function ($state, Set $set) {
+                        $set('ppn_persen', $state ? 11 : 0);
+                    }),
+
+                Hidden::make('ppn_persen')
+                    ->default(11),
+
+                TextInput::make('ongkir')
+                    ->label('Biaya Ongkir (Rp)')
+                    ->numeric()
+                    ->prefix('Rp')
+                    ->default(0)
+                    ->minValue(0)
+                    ->live(onBlur: true),
 
                 Select::make('metode_pembayaran')
                     ->label('Metode Pembayaran')
