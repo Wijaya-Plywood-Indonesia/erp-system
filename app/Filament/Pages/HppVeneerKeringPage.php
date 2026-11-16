@@ -43,7 +43,9 @@ class HppVeneerKeringPage extends Page
     public string $filterLebar     = '';
     public string $filterTebal     = '';
     public string $filterKw        = '';
+    public string $filterKwPilih   = '';     // dropdown KW, kosong = semua KW
     public string $filterBulan     = '';     // format YYYY-MM, kosong = semua bulan
+    public string $filterProduksi  = '';     // '' = semua, 'dryer' = Press Dryer, 'kedi' = Kedi
     public string $filterTanggalMulai = '';
     public string $filterTanggalSelesai = '';
     public bool   $tampilNilaiStok = false;  // kolom Nilai Stok disembunyikan secara bawaan
@@ -68,6 +70,7 @@ class HppVeneerKeringPage extends Page
                     $q->where('hpp_veneer_basah_per_m3', '<=', 0)
                         ->orWhere('ongkos_dryer_per_m3', '<=', 0)
                         ->orWhere('hpp_kering_per_m3', '<=', 0)
+                        ->orWhereNull('sumber_hpp_basah')
                         ->orWhereRaw('ABS(m3 - (SELECT u.panjang * u.lebar * u.tebal FROM ukurans u WHERE u.id = stok_veneer_kerings.id_ukuran) * qty / ' . HppDryerService::PEMBAGI_M3 . ') > 0.0005');
                 })
                 ->limit(2000)
@@ -104,8 +107,18 @@ class HppVeneerKeringPage extends Page
                 app(HppDryerService::class)->prosesBanyakProduksi($idProduksi);
             }
 
-            // Sumber masuk lain (pilih veneer, opname, nota, repair, dll) yang komponennya masih kosong
-            app(HppDryerService::class)->sinkronSumberLain();
+            $svc = app(HppDryerService::class);
+
+            // Palet KEDI: hubungkan data lama ke detail bongkar kedi, lalu hitung HPP dari data kedi sendiri
+            $svc->isiRelasiKedi();
+            $idKedi = $svc->idProduksiKediPerluSinkron();
+            if ($idKedi) {
+                $svc->prosesBanyakKedi($idKedi);
+            }
+
+            // Sumber BUKAN produksi (pilih veneer, opname, nota, repair, dll) tidak diberi komponen:
+            // sisa komponen turunan lama dikembalikan, barisnya memakai HPP Average stok.
+            $svc->bersihkanTurunanLama();
         } catch (\Throwable $e) {
             Log::warning('HppVeneerKeringPage: sinkron HPP gagal — ' . $e->getMessage());
 
@@ -131,6 +144,13 @@ class HppVeneerKeringPage extends Page
             ->when($this->filterPanjang, fn ($q) => $q->whereHas('ukuran', fn ($u) => $u->where('panjang', $this->filterPanjang)))
             ->when($this->filterLebar,   fn ($q) => $q->whereHas('ukuran', fn ($u) => $u->where('lebar', $this->filterLebar)))
             ->when($this->filterTebal,   fn ($q) => $q->whereHas('ukuran', fn ($u) => $u->where('tebal', $this->filterTebal)))
+            ->when($this->filterKwPilih !== '', fn ($q) => $q->where('kw', $this->filterKwPilih))
+            ->when($this->filterProduksi === 'dryer', fn ($q) => $q->whereNotNull('id_detail_hasil_dryer'))
+            ->when($this->filterProduksi === 'kedi', fn ($q) => $q->whereNull('id_detail_hasil_dryer')
+                ->where(function ($w) {
+                    $w->whereNotNull('id_detail_bongkar_kedi')
+                        ->orWhere('keterangan', 'like', 'Dari Kedi (Palet %');
+                }))
             ->when(trim($this->filterKw) !== '', fn ($q) => $this->flexibleSearch($q, $this->filterKw, $this->logSearchConfig()));
     }
 
@@ -179,6 +199,8 @@ class HppVeneerKeringPage extends Page
     public function updatedFilterTebal(): void     { $this->resetPage(); }
     public function updatedFilterKw(): void        { $this->resetPage(); }
     public function updatedFilterBulan(): void     { $this->resetPage(); }
+    public function updatedFilterKwPilih(): void   { $this->resetPage(); }
+    public function updatedFilterProduksi(): void  { $this->resetPage(); }
 
     // ── Computed: daftar bulan yang punya log (untuk filter) ───
     public function getBulanListProperty()
@@ -188,6 +210,16 @@ class HppVeneerKeringPage extends Page
             ->distinct()
             ->orderByDesc('bln')
             ->pluck('bln');
+    }
+
+    // ── Computed: daftar KW yang ada (untuk dropdown filter KW) ──
+    public function getKwListProperty()
+    {
+        return StokVeneerKering::query()
+            ->whereNotNull('kw')->where('kw', '!=', '')
+            ->distinct()
+            ->orderBy('kw')
+            ->pluck('kw');
     }
 
     // ── Computed: ukuran unik untuk filter ────────────────────
@@ -211,6 +243,8 @@ class HppVeneerKeringPage extends Page
         $this->filterTebal     = '';
         $this->filterKw        = '';
         $this->filterBulan     = '';
+        $this->filterKwPilih   = '';
+        $this->filterProduksi  = '';
         $this->filterTanggalMulai = '';
         $this->filterTanggalSelesai = '';
         $this->resetPage();
@@ -258,8 +292,9 @@ class HppVeneerKeringPage extends Page
             ->with(['ukuran:id,panjang,lebar,tebal'])
             ->reorder()
             ->get(['id', 'id_ukuran', 'id_jenis_kayu', 'kw', 'tanggal_transaksi', 'keterangan', 'id_veneer_mutasi',
-                'id_detail_hasil_dryer', 'jenis_transaksi', 'm3',
-                'hpp_veneer_basah_per_m3', 'ongkos_dryer_per_m3', 'hpp_kering_per_m3']);
+                'id_detail_hasil_dryer', 'id_detail_bongkar_kedi', 'jenis_transaksi', 'm3',
+                'hpp_veneer_basah_per_m3', 'ongkos_pegawai_per_m3', 'ongkos_mesin_per_m3', 'ongkos_dryer_per_m3', 'hpp_kering_per_m3',
+                'sumber_hpp_basah', 'sumber_pegawai', 'sumber_mesin']);
 
         $komp = $this->komponenBaris($rows);
 

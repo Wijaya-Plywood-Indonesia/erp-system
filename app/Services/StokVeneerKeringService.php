@@ -129,6 +129,7 @@ class StokVeneerKeringService
             $stok = StokVeneerKering::create([
                 'id_produksi_dryer' => $sumber instanceof DetailHasil ? $sumber->id_produksi_dryer : null,
                 'id_detail_hasil_dryer' => $sumber instanceof DetailHasil ? $sumber->id : null,
+                'id_detail_bongkar_kedi' => $sumber instanceof \App\Models\DetailBongkarKedi ? $sumber->id : null,
                 'id_ukuran' => $idUkuran,
                 'id_jenis_kayu' => $idJenisKayu,
                 'kw' => $kw,
@@ -153,6 +154,12 @@ class StokVeneerKeringService
             ]);
 
             $this->updateLogHarian($idUkuran, $idJenisKayu, $kw, $qty, $m3, $stokLembarSesudah, $stokM3Sesudah, $hppKeringPerM3, $hppAverage, $nilaiStokSesudah);
+
+            // Veneer hasil KEDI: HPP kering dihitung dari data kedi sendiri (basah + pegawai + mesin kedi)
+            if ($sumber instanceof \App\Models\DetailBongkarKedi && $sumber->id_produksi_kedi) {
+                app(HppDryerService::class)->prosesBanyakKedi([(int) $sumber->id_produksi_kedi]);
+                $stok->refresh();
+            }
 
             return $stok;
         });

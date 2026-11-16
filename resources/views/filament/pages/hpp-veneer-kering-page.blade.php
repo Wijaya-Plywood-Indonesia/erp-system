@@ -49,12 +49,27 @@
             @endforeach
         </select>
 
+        <select wire:model.live="filterKwPilih"
+            class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
+            <option value="">Semua KW</option>
+            @foreach($this->kwList as $kwItem)
+                <option value="{{ $kwItem }}">{{ $kwItem }}</option>
+            @endforeach
+        </select>
+
         <select wire:model.live="filterBulan"
             class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
             <option value="">Semua Bulan</option>
             @foreach($this->bulanList as $bln)
                 <option value="{{ $bln }}">{{ \Carbon\Carbon::createFromFormat('Y-m', $bln)->locale('id')->translatedFormat('F Y') }}</option>
             @endforeach
+        </select>
+
+        <select wire:model.live="filterProduksi"
+            class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500">
+            <option value="">Semua Produksi</option>
+            <option value="dryer">Press Dryer</option>
+            <option value="kedi">Kedi</option>
         </select>
 
         {{-- Filter Rentang Tanggal --}}
@@ -74,7 +89,7 @@
             class="text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-sm px-3 py-1.5 outline-none focus:border-primary-500 w-36" />
 
         <div class="ml-auto flex items-center gap-3">
-            @if($filterJenisKayu !== '' || $filterPanjang !== '' || $filterLebar !== '' || $filterTebal !== '' || $filterBulan !== '' || $filterTanggalMulai !== '' || $filterTanggalSelesai !== '' || trim($filterKw) !== '')
+            @if($filterJenisKayu !== '' || $filterPanjang !== '' || $filterLebar !== '' || $filterTebal !== '' || $filterBulan !== '' || $filterKwPilih !== '' || $filterProduksi !== '' || $filterTanggalMulai !== '' || $filterTanggalSelesai !== '' || trim($filterKw) !== '')
                 <button type="button" wire:click="resetFilter"
                     class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-amber-400 hover:text-amber-600">
                     ✕ Reset
@@ -405,22 +420,19 @@
                             @if($isM && $k && $k['total'] > 0)
                                 <div class="flex items-center gap-1.5 text-xs tabular-nums">
                                     <span class="font-black text-gray-800 dark:text-gray-100">{{ number_format($k['total'], 0, ',', '.') }}</span>
+                                    <span class="px-1.5 py-0.5 rounded-sm bg-gray-100 dark:bg-gray-800 text-[9px] font-black uppercase text-gray-500 dark:text-gray-400">{{ $k['sumber'] }}</span>
                                     @if($k['final'])
-                                        <span title="{{ $k['turunan'] ? 'Sumber: '.$k['sumber'].'. Komponen dihitung dari palet Press Dryer yang sudah FINAL.' : 'Produksi dryer sudah divalidasi. Ongkos pegawai & mesin sudah pasti.' }}"
+                                        <span title="Produksi {{ $k['sumber'] }} sudah divalidasi. Ongkos pegawai dan mesin sudah pasti."
                                             class="px-1.5 py-0.5 rounded-sm bg-emerald-100 dark:bg-emerald-900/30 text-[9px] font-black uppercase text-emerald-600 dark:text-emerald-400">final</span>
                                     @else
-                                        <span title="{{ $k['turunan'] ? 'Sumber: '.$k['sumber'].'. Komponen dihitung dari palet Press Dryer yang masih estimasi.' : 'Produksi dryer belum divalidasi. Angka sementara dan menjadi FINAL saat produksi divalidasi.' }}"
+                                        <span title="Produksi {{ $k['sumber'] }} belum divalidasi atau data pegawai/mesin belum lengkap. Angka sementara."
                                             class="px-1.5 py-0.5 rounded-sm bg-amber-100 dark:bg-amber-900/30 text-[9px] font-black uppercase text-amber-600 dark:text-amber-400">estimasi</span>
                                     @endif
                                 </div>
                                 <div class="mt-0.5 text-[10px] tabular-nums text-gray-400">
                                     <span class="text-emerald-600 dark:text-emerald-400">Bsh {{ number_format($k['basah'], 0, ',', '.') }}</span> ·
-                                    <span @class(['text-blue-600 dark:text-blue-400' => $k['pegawai'] > 0, 'text-red-500 dark:text-red-400 font-black' => $k['pegawai'] <= 0])
-                                          @if($k['pegawai'] <= 0) title="Ongkos pegawai produksi dryer ini 0: data pegawai belum diisi atau harga pegawai belum ada." @endif>
-                                        Pgw {{ number_format($k['pegawai'], 0, ',', '.') }}</span> ·
-                                    <span @class(['text-purple-600 dark:text-purple-400' => $k['mesin'] > 0, 'text-red-500 dark:text-red-400 font-black' => $k['mesin'] <= 0])
-                                          @if($k['mesin'] <= 0) title="Ongkos mesin produksi dryer ini 0: data mesin belum diisi atau ongkos mesin di master Mesin masih 0." @endif>
-                                        Msin {{ number_format($k['mesin'], 0, ',', '.') }}</span>
+                                    <span @class(['text-blue-600 dark:text-blue-400' => $k['pegawai'] > 0, 'text-red-500 dark:text-red-400 font-black' => $k['pegawai'] <= 0])>Pgw {{ number_format($k['pegawai'], 0, ',', '.') }}</span> ·
+                                    <span @class(['text-purple-600 dark:text-purple-400' => $k['mesin'] > 0, 'text-red-500 dark:text-red-400 font-black' => $k['mesin'] <= 0])>Msin {{ number_format($k['mesin'], 0, ',', '.') }}</span>
                                 </div>
                             @else
                                 <div class="text-[10px] text-gray-400">—</div>
