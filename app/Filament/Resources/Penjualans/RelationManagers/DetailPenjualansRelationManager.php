@@ -250,6 +250,19 @@ class DetailPenjualansRelationManager extends RelationManager
                         self::recalculateSubtotal($set, $get);
                     }),
 
+                Select::make('hit_kbk')
+                    ->label('Hit KBK')
+                    ->options([
+                        'b' => 'Banyak (Qty × Harga)',
+                        'm' => 'Kubikasi (m³ × Harga)',
+                    ])
+                    ->default('b')
+                    ->required()
+                    ->live()
+                    ->afterStateUpdated(function (Set $set, Get $get) {
+                        self::recalculateSubtotal($set, $get);
+                    }),
+
                 TextInput::make('harga')
                     ->label('Harga Satuan (Orang Kantor)')
                     ->numeric()
@@ -313,9 +326,10 @@ class DetailPenjualansRelationManager extends RelationManager
         $qty = (float) ($get('jumlah') ?? 0);
         $harga = (float) ($get('harga') ?? 0);
         $potongan = (float) ($get('potongan') ?? 0);
+        $hitKbk = $get('hit_kbk') ?: 'b';
         $m3 = $get('custom_m3') !== null && $get('custom_m3') !== '' ? (float) $get('custom_m3') : null;
 
-        $base = $m3 !== null ? ($m3 * $harga) : ($qty * $harga);
+        $base = ($hitKbk === 'm' && $m3 !== null) ? ($m3 * $harga) : ($qty * $harga);
         $set('subtotal', max(0, $base - ($qty * $potongan)));
     }
 
@@ -415,6 +429,12 @@ class DetailPenjualansRelationManager extends RelationManager
                     ->label('m³')
                     ->alignRight()
                     ->placeholder('-'),
+                TextColumn::make('hit_kbk')
+                    ->label('Hit')
+                    ->badge()
+                    ->color(fn ($state) => $state === 'm' ? 'warning' : 'primary')
+                    ->formatStateUsing(fn ($state) => $state === 'm' ? 'm³' : 'Qty')
+                    ->alignCenter(),
                 TextColumn::make('harga')
                     ->label('Harga (Kantor)')
                     ->money('IDR')
@@ -440,9 +460,10 @@ class DetailPenjualansRelationManager extends RelationManager
                         $qty = (float) ($data['jumlah'] ?? 0);
                         $harga = (float) ($data['harga'] ?? 0);
                         $potongan = (float) ($data['potongan'] ?? 0);
+                        $hitKbk = $data['hit_kbk'] ?? 'b';
                         $m3 = isset($data['custom_m3']) && $data['custom_m3'] !== null ? (float) $data['custom_m3'] : null;
 
-                        $base = $m3 !== null ? ($m3 * $harga) : ($qty * $harga);
+                        $base = ($hitKbk === 'm' && $m3 !== null) ? ($m3 * $harga) : ($qty * $harga);
                         $data['subtotal'] = max(0, $base - ($qty * $potongan));
                         return $data;
                     }),
@@ -515,9 +536,10 @@ class DetailPenjualansRelationManager extends RelationManager
                         $qty = (float) ($data['jumlah'] ?? 0);
                         $harga = (float) ($data['harga'] ?? 0);
                         $potongan = (float) ($data['potongan'] ?? 0);
+                        $hitKbk = $data['hit_kbk'] ?? 'b';
                         $m3 = isset($data['custom_m3']) && $data['custom_m3'] !== null ? (float) $data['custom_m3'] : null;
 
-                        $base = $m3 !== null ? ($m3 * $harga) : ($qty * $harga);
+                        $base = ($hitKbk === 'm' && $m3 !== null) ? ($m3 * $harga) : ($qty * $harga);
                         $data['subtotal'] = max(0, $base - ($qty * $potongan));
                         return $data;
                     }),

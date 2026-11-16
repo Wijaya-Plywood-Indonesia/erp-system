@@ -98,6 +98,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('penjualan.nota-kantor');
     Route::get('/penjualan/{record}/nota-sales', [\App\Http\Controllers\PenjualanCetakController::class, 'printNotaSales'])
         ->name('penjualan.nota-sales');
+    Route::get('/penjualan/{record}/invoice-resmi', [\App\Http\Controllers\PenjualanCetakController::class, 'printInvoiceResmi'])
+        ->name('penjualan.invoice-resmi');
     Route::get('/penjualan/{record}/surat-jalan/{jenis?}', [\App\Http\Controllers\PenjualanCetakController::class, 'printSuratJalan'])
         ->name('penjualan.surat-jalan');
     Route::get('/penjualan/{record}/cetak-semua/{jenis}', [\App\Http\Controllers\PenjualanCetakController::class, 'cetakSemua'])
