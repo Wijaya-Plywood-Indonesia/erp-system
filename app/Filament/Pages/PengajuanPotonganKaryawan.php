@@ -44,6 +44,9 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
     /** TTL cache data dashboard (detik) */
     protected const CACHE_TTL = 60;
 
+    /** Jumlah baris per halaman di tab Persetujuan */
+    protected const PERSETUJUAN_PER_PAGE = 50;
+
     public function getMaxContentWidth(): Width|string|null
     {
         return Width::Full;
@@ -447,30 +450,55 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
     // ---------------------------------------------------------------------
 
     /**
-     * Buka Modal Pengajuan. Hanya menerima kode pegawai; sisanya diambil dari data server.
+     * Buka Modal Pengajuan oleh Pengawas (bisa untuk pengajuan baru atau edit yang sedang ditinjau).
      */
-    public function bukaPengajuanModal(string $kode): void
+    public function bukaPengajuanModal(int|string|null $idPegawai = null, ?string $nama = null, ?string $kode = null, ?string $divisi = null, int|float|null $potonganAwal = 0): void
     {
-        $row = $this->dashboardRows->firstWhere('kode_pegawai', $kode);
-
-        if (! $row) {
-            Notification::make()->title('Data karyawan tidak ditemukan')->danger()->send();
-
-            return;
+        $pegawaiModel = null;
+        if ($idPegawai) {
+            $pegawaiModel = Pegawai::find($idPegawai);
+        }
+        if (! $pegawaiModel && $kode) {
+            $pegawaiModel = Pegawai::where('kode_pegawai', $kode)->first();
         }
 
-        $this->modalPegawaiId = (int) ($row['id_pegawai'] ?? 0) ?: null;
-        $this->modalPegawaiNama = $row['nama_pegawai'] ?? '-';
-        $this->modalPegawaiKode = $kode;
-        $this->modalDivisi = $row['divisi'] ?? '-';
+        $this->modalPegawaiId = $pegawaiModel?->id ?? (int) $idPegawai;
+        $this->modalPegawaiNama = $nama ?? $pegawaiModel?->nama_pegawai ?? '-';
+        $this->modalPegawaiKode = $kode ?? $pegawaiModel?->kode_pegawai ?? '-';
+        $this->modalDivisi = $divisi ?? '-';
         $this->modalTanggal = $this->tanggal ?: now()->toDateString();
-        $this->modalPotonganAwal = (float) ($row['potongan_harian'] ?? 0);
+        $this->modalPotonganAwal = (float) ($potonganAwal ?? 0);
 
-        $existing = PengajuanPotongan::where('id_pegawai', $this->modalPegawaiId)
-            ->whereDate('tanggal', $this->modalTanggal)
-            ->where('status', 'pending')
-            ->latest('id')
-            ->first();
+        // Jika dipanggil hanya dengan 1 argumen berupa kode pegawai (fallback)
+        if (! $idPegawai && $kode === null && is_string($idPegawai)) {
+            $kode = $idPegawai;
+        }
+
+        // Jika informasi awal belum lengkap, ambil dari data dashboard
+        if (! $this->modalPegawaiId && $this->modalPegawaiKode && $this->modalPegawaiKode !== '-') {
+            $row = $this->getDashboardRows()->firstWhere('kode_pegawai', $this->modalPegawaiKode);
+            if ($row) {
+                $this->modalPegawaiId = (int) ($row['id_pegawai'] ?? 0) ?: null;
+                $this->modalPegawaiNama = $row['nama_pegawai'] ?? '-';
+                $this->modalDivisi = $row['divisi'] ?? '-';
+                $this->modalPotonganAwal = (float) ($row['potongan_harian'] ?? 0);
+            }
+        }
+
+        $existing = null;
+        if ($this->modalPegawaiId) {
+            $existing = PengajuanPotongan::where('id_pegawai', $this->modalPegawaiId)
+                ->whereDate('tanggal', $this->modalTanggal)
+                ->where('status', 'pending')
+                ->latest('id')
+                ->first();
+        } elseif ($this->modalPegawaiKode && $this->modalPegawaiKode !== '-') {
+            $existing = PengajuanPotongan::where('kode_pegawai', $this->modalPegawaiKode)
+                ->whereDate('tanggal', $this->modalTanggal)
+                ->where('status', 'pending')
+                ->latest('id')
+                ->first();
+        }
 
         if ($existing) {
             $this->modalNominalUsulan = (float) $existing->nominal_usulan;
@@ -488,6 +516,30 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
 
     public function simpanPengajuan(): void
     {
+        $this->modalTanggal = $this->tanggal ?: now()->toDateString();
+
+        // Validasi keberadaan data pegawai
+        if (! $this->modalPegawaiId && $this->modalPegawaiKode) {
+            $pegawaiModel = Pegawai::where('kode_pegawai', $this->modalPegawaiKode)->first();
+            $this->modalPegawaiId = $pegawaiModel?->id;
+        }
+
+        if (! $this->modalPegawaiId) {
+            Notification::make()->title('Data karyawan tidak ditemukan')->danger()->send();
+
+            return;
+        }
+
+        $pending = PengajuanPotongan::where('id_pegawai', $this->modalPegawaiId)
+            ->whereDate('tanggal', $this->modalTanggal)
+            ->where('status', 'pending')
+            ->latest('id')
+            ->first();
+
+        if ($pending) {
+            $this->modalPotonganAwal = (float) $pending->nominal_awal;
+        }
+
         $this->validate([
             'modalNominalUsulan' => ['required', 'numeric', 'min:0', 'max:'.$this->modalPotonganAwal],
             'modalAlasan' => 'required|string|min:3',
@@ -660,7 +712,7 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         $query = PengajuanPotongan::query();
 
         if (! $this->canManageApproval()) {
-            return $query->whereRaw('1 = 0')->paginate(15);
+            return $query->whereRaw('1 = 0')->paginate(self::PERSETUJUAN_PER_PAGE);
         }
 
         return $query
@@ -669,8 +721,11 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
                 $this->filterStatusPersetujuan && $this->filterStatusPersetujuan !== 'all',
                 fn ($q) => $q->where('status', $this->filterStatusPersetujuan)
             )
-            ->latest('id')
-            ->paginate(15);
+            // Urutan: pending (belum di-acc) > approved > rejected, lalu data terbaru di atas
+            ->orderByRaw("CASE status WHEN 'pending' THEN 1 WHEN 'approved' THEN 2 WHEN 'rejected' THEN 3 ELSE 4 END")
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate(self::PERSETUJUAN_PER_PAGE);
     }
 
     /**
