@@ -16,13 +16,18 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
+use Livewire\WithPagination;
 
 class PengajuanPotonganKaryawan extends Page implements HasForms
 {
     use InteractsWithForms;
+    use WithPagination;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
 
@@ -35,6 +40,12 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
     protected static string|\UnitEnum|null $navigationGroup = 'Absen dan Gaji';
 
     protected string $view = 'filament.pages.pengajuan-potongan-karyawan';
+
+    /** TTL cache data dashboard (detik) */
+    protected const CACHE_TTL = 60;
+
+    /** Jumlah baris per halaman di tab Persetujuan */
+    protected const PERSETUJUAN_PER_PAGE = 50;
 
     public function getMaxContentWidth(): Width|string|null
     {
@@ -54,6 +65,9 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
     public string $activeTab = 'dashboard'; // 'dashboard' or 'persetujuan'
 
     public ?string $filterStatusPersetujuan = 'all';
+
+    /** Data dashboard dimuat setelah halaman tampil (agar skeleton muncul lebih dulu) */
+    public bool $ready = false;
 
     // State untuk Modal Pengajuan
     public bool $showPengajuanModal = false;
@@ -110,14 +124,6 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
 
     public ?string $adminCreateDivisi = null;
 
-    /**
-     * Cache opsi dropdown pegawai agar tidak di-query berulang di blade
-     */
-    public function getPegawaiOptionsProperty(): Collection
-    {
-        return Pegawai::orderBy('nama_pegawai')->get(['id', 'nama_pegawai', 'kode_pegawai']);
-    }
-
     public static function canAccess(): bool
     {
         $user = auth()->user();
@@ -152,6 +158,14 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         }
     }
 
+    /**
+     * Dipanggil lewat wire:init setelah halaman tampil.
+     */
+    public function loadData(): void
+    {
+        $this->ready = true;
+    }
+
     public function updatedTanggal(): void
     {
         $this->selectedKodep = [];
@@ -165,6 +179,11 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
     public function updatedFilterHanyaPotongan(): void
     {
         $this->selectedKodep = [];
+    }
+
+    public function updatedFilterStatusPersetujuan(): void
+    {
+        $this->resetPage();
     }
 
     public function form(Schema $schema): Schema
@@ -194,33 +213,99 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
 
             return;
         }
+
         $this->activeTab = $tab;
+        $this->resetPage();
+    }
+
+    // ---------------------------------------------------------------------
+    // Computed (di-memoize per request, aman dipanggil berkali-kali di blade)
+    // ---------------------------------------------------------------------
+
+    /**
+     * Cache opsi dropdown pegawai agar tidak di-query berulang.
+     *
+     * @return array<int, array{id:int, nama_pegawai:string, kode_pegawai:string}>
+     */
+    #[Computed]
+    public function pegawaiOptions(): array
+    {
+        return Cache::remember('pengajuan-potongan:pegawai-options', 300, function () {
+            return Pegawai::orderBy('nama_pegawai')
+                ->get(['id', 'nama_pegawai', 'kode_pegawai'])
+                ->map(fn ($p) => [
+                    'id' => $p->id,
+                    'nama_pegawai' => $p->nama_pegawai,
+                    'kode_pegawai' => $p->kode_pegawai,
+                ])
+                ->all();
+        });
     }
 
     /**
-     * Data baris karyawan untuk Dashboard Harian, disaring sesuai hak akses pengawas/admin.
+     * Daftar opsi divisi unik untuk dropdown filter (dari data cache yang sama dengan tabel).
+     *
+     * @return array<string, string>
      */
-    public function getDashboardRows(): Collection
+    #[Computed]
+    public function divisiOptions(): array
+    {
+        if (! $this->ready) {
+            return [];
+        }
+
+        return $this->getBaseData($this->tanggal ?: now()->toDateString())['divisi'];
+    }
+
+    #[Computed]
+    public function dashboardRows(): Collection
+    {
+        if (! $this->ready) {
+            return collect();
+        }
+
+        return $this->getDashboardRows();
+    }
+
+    #[Computed]
+    public function selectedCount(): int
+    {
+        return count($this->selectedKodep);
+    }
+
+    // ---------------------------------------------------------------------
+    // Data dashboard
+    // ---------------------------------------------------------------------
+
+    /**
+     * Data dasar (bagian paling berat) di-cache pendek per user & tanggal.
+     * Hanya berisi array/skalar, tanpa model Eloquent.
+     *
+     * @return array{rows: array<int, array<string, mixed>>, divisi: array<string, string>}
+     */
+    protected function getBaseData(string $tanggal): array
     {
         $user = auth()->user();
-        $tanggal = $this->tanggal ?: now()->toDateString();
+        $version = Cache::get("potongan-ver:{$tanggal}", 1);
+        $key = "pengajuan-potongan:{$user->id}:{$tanggal}:v{$version}";
 
+        return Cache::remember($key, self::CACHE_TTL, fn () => $this->buildBaseData($user, $tanggal));
+    }
+
+    /**
+     * @return array{rows: array<int, array<string, mixed>>, divisi: array<string, string>}
+     */
+    protected function buildBaseData($user, string $tanggal): array
+    {
         $service = app(DashboardPengawasService::class);
         $dashboardSections = $service->getDataForUser($user, $tanggal);
-
-        // Ambil mapping pengajuan yang sudah ada untuk tanggal ini
-        $pengajuans = PengajuanPotongan::query()
-            ->with(['pengaju', 'pemroses'])
-            ->whereDate('tanggal', $tanggal)
-            ->get()
-            ->groupBy('kode_pegawai');
 
         // Periode mingguan Jumat - Kamis
         [$mulaiMinggu, $akhirMinggu] = PeriodeJumatKamisResolver::resolveDefault(Carbon::parse($tanggal));
 
         $potonganService = app(PotonganGajiService::class);
 
-        // Pre-load potongan mingguan SEKALI (loop 7 hari) bukan per pegawai!
+        // Pre-load potongan mingguan SEKALI (loop 7 hari), bukan per pegawai
         $weeklyPotonganMaps = [];
         $curr = Carbon::parse($mulaiMinggu);
         $end = Carbon::parse($akhirMinggu);
@@ -229,12 +314,16 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
             $curr->addDay();
         }
 
-        // Kumpulkan semua pegawai dari section yang boleh diakses user
         $rows = collect();
         $allKodepList = [];
+        $divisiOptions = [];
 
         foreach ($dashboardSections as $section) {
-            $divisiLabel = $section['label'];
+            $divisiLabel = $section['label'] ?? null;
+            if ($divisiLabel) {
+                $divisiOptions[$divisiLabel] = $divisiLabel;
+            }
+
             $absenList = $section['absen'] ?? collect();
 
             foreach ($absenList as $absen) {
@@ -245,21 +334,15 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
 
                 $allKodepList[] = $kodePegawai;
 
-                // Potongan harian saat ini (sudah memperhitungkan status approved via PotonganGajiService)
-                $potonganHarian = (int) ($absen['potongan'] ?? 0);
-
-                // Pengajuan yang ada untuk pegawai ini di tanggal ini
-                $existingPengajuan = $pengajuans->get($kodePegawai)?->last();
-
                 $rows->push([
                     'id_pegawai' => $absen['id_pegawai'] ?? null,
                     'kode_pegawai' => $kodePegawai,
                     'nama_pegawai' => $absen['nama_pegawai'] ?? '-',
-                    'divisi' => $divisiLabel,
+                    'divisi' => $divisiLabel ?? '-',
                     'tanggal' => $tanggal,
-                    'potongan_harian' => $potonganHarian,
-                    'keterangan_potongan' => $absen['keterangan'] ?? ($existingPengajuan?->alasan_pengajuan ?? '-'),
-                    'pengajuan' => $existingPengajuan,
+                    // Potongan harian saat ini (sudah memperhitungkan status approved via PotonganGajiService)
+                    'potongan_harian' => (int) ($absen['potongan'] ?? 0),
+                    'keterangan_potongan' => $absen['keterangan'] ?? '-',
                     'shift' => $absen['shift'] ?? '-',
                     'jam_masuk' => $absen['jam_masuk'] ?? '-',
                     'jam_pulang' => $absen['jam_pulang'] ?? '-',
@@ -267,16 +350,15 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
             }
         }
 
-        // Pre-fetch model pegawai SEKALI untuk semua kodep (hindari query N+1 di dalam loop)
-        $uniqueKodep = array_unique($allKodepList);
-        $pegawaiMap = Pegawai::whereIn('kode_pegawai', $uniqueKodep)->get()->keyBy('kode_pegawai');
+        // Pre-fetch model pegawai SEKALI (hindari N+1)
+        $pegawaiMap = Pegawai::whereIn('kode_pegawai', array_unique($allKodepList))
+            ->get(['id', 'kode_pegawai', 'nama_pegawai'])
+            ->keyBy('kode_pegawai');
 
-        // Hapus duplikasi jika pegawai terdaftar di multi-source tapi satukan divisi
-        $mappedRows = $rows->groupBy('kode_pegawai')->map(function ($group) use ($potonganService, $weeklyPotonganMaps, $pegawaiMap) {
+        $mapped = $rows->groupBy('kode_pegawai')->map(function ($group) use ($potonganService, $weeklyPotonganMaps, $pegawaiMap) {
             $first = $group->first();
             $kodePegawai = $first['kode_pegawai'];
-            $allDivisi = $group->pluck('divisi')->unique()->implode(', ');
-            $first['divisi'] = $allDivisi;
+            $first['divisi'] = $group->pluck('divisi')->unique()->implode(', ');
 
             $pegawaiModel = $pegawaiMap->get($kodePegawai);
             if ($pegawaiModel) {
@@ -286,7 +368,6 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
                 }
             }
 
-            // Hitung akumulasi potongan mingguan dari preloaded maps (O(1) memory lookup)
             $totalMingguan = 0;
             foreach ($weeklyPotonganMaps as $pMap) {
                 $totalMingguan += $potonganService->resolvePotongan($pMap, $kodePegawai);
@@ -296,50 +377,82 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
             return $first;
         })->values();
 
-        // Terapkan Filter Divisi
-        if (! empty($this->filterDivisi)) {
-            $mappedRows = $mappedRows->filter(function ($row) {
-                return str_contains(strtolower($row['divisi'] ?? ''), strtolower($this->filterDivisi));
-            });
-        }
-
-        // Terapkan Filter Hanya Potongan (> 0)
-        if ($this->filterHanyaPotongan) {
-            $mappedRows = $mappedRows->filter(function ($row) {
-                return (float) ($row['potongan_harian'] ?? 0) > 0;
-            });
-        }
-
-        return $mappedRows->values();
+        return [
+            'rows' => $mapped->all(),
+            'divisi' => $divisiOptions,
+        ];
     }
 
     /**
-     * Ambil daftar opsi divisi unik untuk dropdown filter
-     * @return array<string, string>
+     * Data baris karyawan untuk Dashboard Harian (disaring sesuai filter),
+     * ditempel data pengajuan yang selalu segar (tidak di-cache).
      */
-    public function getDivisiOptionsProperty(): array
+    public function getDashboardRows(): Collection
     {
-        $user = auth()->user();
         $tanggal = $this->tanggal ?: now()->toDateString();
 
-        $service = app(DashboardPengawasService::class);
-        $dashboardSections = $service->getDataForUser($user, $tanggal);
+        $rows = collect($this->getBaseData($tanggal)['rows']);
 
-        $options = [];
-        foreach ($dashboardSections as $section) {
-            $label = $section['label'] ?? null;
-            if ($label) {
-                $options[$label] = $label;
-            }
+        // Filter Divisi
+        if (! empty($this->filterDivisi)) {
+            $needle = strtolower($this->filterDivisi);
+            $rows = $rows->filter(fn ($row) => str_contains(strtolower($row['divisi'] ?? ''), $needle));
         }
 
-        return $options;
+        // Filter Hanya Potongan (> 0)
+        if ($this->filterHanyaPotongan) {
+            $rows = $rows->filter(fn ($row) => (float) ($row['potongan_harian'] ?? 0) > 0);
+        }
+
+        if ($rows->isEmpty()) {
+            return collect();
+        }
+
+        // Pengajuan segar (1 query ringan)
+        $pengajuans = PengajuanPotongan::query()
+            ->whereDate('tanggal', $tanggal)
+            ->whereIn('kode_pegawai', $rows->pluck('kode_pegawai')->all())
+            ->orderBy('id')
+            ->get()
+            ->groupBy('kode_pegawai');
+
+        return $rows->map(function ($row) use ($pengajuans) {
+            $row['pengajuan'] = $pengajuans->get($row['kode_pegawai'])?->last();
+
+            return $row;
+        })->values();
     }
+
+    /**
+     * Naikkan versi cache untuk seluruh periode mingguan (Jumat-Kamis) dari tanggal tertentu,
+     * karena akumulasi mingguan ikut berubah.
+     */
+    protected function bustCache(?string $tanggal = null): void
+    {
+        $tanggal ??= $this->tanggal ?: now()->toDateString();
+
+        [$mulai, $akhir] = PeriodeJumatKamisResolver::resolveDefault(Carbon::parse($tanggal));
+        $curr = Carbon::parse($mulai);
+        $end = Carbon::parse($akhir);
+
+        while ($curr->lte($end)) {
+            $key = 'potongan-ver:'.$curr->toDateString();
+            Cache::add($key, 1, now()->addDays(2));
+            Cache::increment($key);
+            $curr->addDay();
+        }
+
+        unset($this->dashboardRows, $this->divisiOptions);
+    }
+
+    // ---------------------------------------------------------------------
+    // Modal Pengajuan (Pengawas)
+    // ---------------------------------------------------------------------
 
     /**
      * Buka Modal Pengajuan oleh Pengawas (bisa untuk pengajuan baru atau edit yang sedang ditinjau).
      */
-    public function bukaPengajuanModal(int|string|null $idPegawai, ?string $nama = null, ?string $kode = null, ?string $divisi = null, int|float|null $potonganAwal = 0): void
+    public function bukaPengajuanModal(int|string|null $idPegawai = null, ?string $nama = null, ?string $kode = null, ?string $divisi = null, int|float|null $potonganAwal = 0): void
     {
         $pegawaiModel = null;
         if ($idPegawai) {
@@ -356,12 +469,36 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         $this->modalTanggal = $this->tanggal ?: now()->toDateString();
         $this->modalPotonganAwal = (float) ($potonganAwal ?? 0);
 
-        // Lookup konsisten pakai id_pegawai (sama seperti PengajuanPotonganService::buatPengajuan)
-        $existing = PengajuanPotongan::where('id_pegawai', $this->modalPegawaiId)
-            ->whereDate('tanggal', $this->modalTanggal)
-            ->where('status', 'pending')
-            ->latest('id')
-            ->first();
+        // Jika dipanggil hanya dengan 1 argumen berupa kode pegawai (fallback)
+        if (! $idPegawai && $kode === null && is_string($idPegawai)) {
+            $kode = $idPegawai;
+        }
+
+        // Jika informasi awal belum lengkap, ambil dari data dashboard
+        if (! $this->modalPegawaiId && $this->modalPegawaiKode && $this->modalPegawaiKode !== '-') {
+            $row = $this->getDashboardRows()->firstWhere('kode_pegawai', $this->modalPegawaiKode);
+            if ($row) {
+                $this->modalPegawaiId = (int) ($row['id_pegawai'] ?? 0) ?: null;
+                $this->modalPegawaiNama = $row['nama_pegawai'] ?? '-';
+                $this->modalDivisi = $row['divisi'] ?? '-';
+                $this->modalPotonganAwal = (float) ($row['potongan_harian'] ?? 0);
+            }
+        }
+
+        $existing = null;
+        if ($this->modalPegawaiId) {
+            $existing = PengajuanPotongan::where('id_pegawai', $this->modalPegawaiId)
+                ->whereDate('tanggal', $this->modalTanggal)
+                ->where('status', 'pending')
+                ->latest('id')
+                ->first();
+        } elseif ($this->modalPegawaiKode && $this->modalPegawaiKode !== '-') {
+            $existing = PengajuanPotongan::where('kode_pegawai', $this->modalPegawaiKode)
+                ->whereDate('tanggal', $this->modalTanggal)
+                ->where('status', 'pending')
+                ->latest('id')
+                ->first();
+        }
 
         if ($existing) {
             $this->modalNominalUsulan = (float) $existing->nominal_usulan;
@@ -379,6 +516,30 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
 
     public function simpanPengajuan(): void
     {
+        $this->modalTanggal = $this->tanggal ?: now()->toDateString();
+
+        // Validasi keberadaan data pegawai
+        if (! $this->modalPegawaiId && $this->modalPegawaiKode) {
+            $pegawaiModel = Pegawai::where('kode_pegawai', $this->modalPegawaiKode)->first();
+            $this->modalPegawaiId = $pegawaiModel?->id;
+        }
+
+        if (! $this->modalPegawaiId) {
+            Notification::make()->title('Data karyawan tidak ditemukan')->danger()->send();
+
+            return;
+        }
+
+        $pending = PengajuanPotongan::where('id_pegawai', $this->modalPegawaiId)
+            ->whereDate('tanggal', $this->modalTanggal)
+            ->where('status', 'pending')
+            ->latest('id')
+            ->first();
+
+        if ($pending) {
+            $this->modalPotonganAwal = (float) $pending->nominal_awal;
+        }
+
         $this->validate([
             'modalNominalUsulan' => ['required', 'numeric', 'min:0', 'max:'.$this->modalPotonganAwal],
             'modalAlasan' => 'required|string|min:3',
@@ -404,6 +565,8 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
                 divisi: $this->modalDivisi,
             );
 
+            $this->bustCache($this->modalTanggal);
+
             Notification::make()
                 ->title('Pengajuan Berhasil Disimpan')
                 ->body('Pengajuan perubahan potongan telah diteruskan ke Super Admin / Absen untuk ditinjau.')
@@ -414,7 +577,6 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
             $this->showPengajuanModal = false;
             $this->modalNominalUsulan = null;
             $this->modalAlasan = '';
-            // Action Livewire otomatis me-render ulang komponen, sehingga tabel ikut ter-refresh.
         } catch (\Throwable $e) {
             Notification::make()
                 ->title('Gagal Menyimpan Pengajuan')
@@ -424,16 +586,13 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         }
     }
 
-    public function getSelectedCountProperty(): int
-    {
-        return count($this->selectedKodep);
-    }
+    // ---------------------------------------------------------------------
+    // Bulk
+    // ---------------------------------------------------------------------
 
     public function bukaBulkPengajuanModal(): void
     {
-        $selectedCodes = $this->selectedKodep;
-
-        if (empty($selectedCodes)) {
+        if (empty($this->selectedKodep)) {
             Notification::make()
                 ->title('Tidak Ada Karyawan Dipilih')
                 ->body('Pilih minimal satu karyawan untuk melakukan bulk action pengajuan potongan.')
@@ -475,7 +634,7 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
 
         $user = auth()->user();
         $tanggal = $this->tanggal ?: now()->toDateString();
-        $rows = $this->getDashboardRows()->keyBy('kode_pegawai');
+        $rows = $this->dashboardRows->keyBy('kode_pegawai');
         $pegawaiModels = Pegawai::whereIn('kode_pegawai', $selectedCodes)->get()->keyBy('kode_pegawai');
 
         $service = app(PengajuanPotonganService::class);
@@ -488,6 +647,7 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
 
             if (! $pegawai) {
                 $errors[] = "Karyawan ({$kode}) tidak ditemukan di master pegawai.";
+
                 continue;
             }
 
@@ -495,7 +655,8 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
             $nominalUsulan = (float) $this->bulkNominalUsulan;
 
             if ($nominalUsulan > $potonganAwal) {
-                $errors[] = "{$pegawai->nama_pegawai} ({$kode}): Usulan (Rp " . number_format($nominalUsulan, 0, ',', '.') . ") melebihi potongan awal (Rp " . number_format($potonganAwal, 0, ',', '.') . ").";
+                $errors[] = "{$pegawai->nama_pegawai} ({$kode}): Usulan (Rp ".number_format($nominalUsulan, 0, ',', '.').') melebihi potongan awal (Rp '.number_format($potonganAwal, 0, ',', '.').').';
+
                 continue;
             }
 
@@ -511,8 +672,12 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
                 );
                 $berhasilCount++;
             } catch (\Throwable $e) {
-                $errors[] = "{$pegawai->nama_pegawai}: " . $e->getMessage();
+                $errors[] = "{$pegawai->nama_pegawai}: ".$e->getMessage();
             }
+        }
+
+        if ($berhasilCount > 0) {
+            $this->bustCache($tanggal);
         }
 
         $this->dispatch('close-modal', id: 'modal-bulk-pengajuan-potongan');
@@ -523,7 +688,7 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         if ($berhasilCount > 0) {
             Notification::make()
                 ->title("Pengajuan Berhasil ({$berhasilCount} Karyawan)")
-                ->body('Pengajuan potongan massal berhasil diteruskan untuk ditinjau.' . (! empty($errors) ? ' Beberapa karyawan dilewati karena validasi: ' . implode(', ', array_slice($errors, 0, 3)) : ''))
+                ->body('Pengajuan potongan massal berhasil diteruskan untuk ditinjau.'.(! empty($errors) ? ' Beberapa karyawan dilewati karena validasi: '.implode(', ', array_slice($errors, 0, 3)) : ''))
                 ->success()
                 ->send();
         } else {
@@ -535,24 +700,32 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         }
     }
 
+    // ---------------------------------------------------------------------
+    // Tab Persetujuan
+    // ---------------------------------------------------------------------
+
     /**
-     * Tab Persetujuan: Mengambil daftar pengajuan.
+     * Daftar pengajuan dengan paginasi. Histori TIDAK dimuat di sini (hanya di modal review).
      */
-    public function getPersetujuanRows(): Collection
+    public function getPersetujuanRows(): LengthAwarePaginator
     {
+        $query = PengajuanPotongan::query();
+
         if (! $this->canManageApproval()) {
-            return collect();
+            return $query->whereRaw('1 = 0')->paginate(self::PERSETUJUAN_PER_PAGE);
         }
 
-        $query = PengajuanPotongan::query()
-            ->with(['pegawai', 'pengaju', 'pemroses', 'histories.user'])
-            ->latest('id');
-
-        if ($this->filterStatusPersetujuan && $this->filterStatusPersetujuan !== 'all') {
-            $query->where('status', $this->filterStatusPersetujuan);
-        }
-
-        return $query->get();
+        return $query
+            ->with(['pegawai:id,nama_pegawai,kode_pegawai', 'pengaju:id,name'])
+            ->when(
+                $this->filterStatusPersetujuan && $this->filterStatusPersetujuan !== 'all',
+                fn ($q) => $q->where('status', $this->filterStatusPersetujuan)
+            )
+            // Urutan: pending (belum di-acc) > approved > rejected, lalu data terbaru di atas
+            ->orderByRaw("CASE status WHEN 'pending' THEN 1 WHEN 'approved' THEN 2 WHEN 'rejected' THEN 3 ELSE 4 END")
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate(self::PERSETUJUAN_PER_PAGE);
     }
 
     /**
@@ -575,9 +748,6 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         $this->dispatch('open-modal', id: 'modal-review-potongan');
     }
 
-    /**
-     * Proses Approve oleh Admin/Absen.
-     */
     public function approvePengajuan(): void
     {
         if (! $this->canManageApproval()) {
@@ -599,6 +769,8 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
                 catatan: $this->reviewCatatan ?: 'Disetujui oleh '.$user->name,
             );
 
+            $this->bustCache($pengajuan->tanggal->toDateString());
+
             Notification::make()
                 ->title('Pengajuan Disetujui')
                 ->body('Nominal potongan berhasil diperbarui dan diterapkan ke perhitungan absensi & gaji.')
@@ -616,9 +788,6 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         }
     }
 
-    /**
-     * Proses Reject oleh Admin/Absen.
-     */
     public function rejectPengajuan(): void
     {
         if (! $this->canManageApproval()) {
@@ -642,6 +811,8 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
                 alasanPenolakan: $this->rejectAlasan,
             );
 
+            $this->bustCache($pengajuan->tanggal->toDateString());
+
             Notification::make()
                 ->title('Pengajuan Ditolak')
                 ->body('Pengajuan ditolak. Data potongan asli tetap berlaku.')
@@ -659,9 +830,10 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         }
     }
 
-    /**
-     * Modal Pembuatan Pengajuan Baru oleh Super Admin / Absen.
-     */
+    // ---------------------------------------------------------------------
+    // Modal Buat Pengajuan Baru (Super Admin / Absen)
+    // ---------------------------------------------------------------------
+
     public function bukaAdminCreateModal(): void
     {
         if (! $this->canManageApproval()) {
@@ -740,6 +912,8 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
                 alasan: $this->adminCreateAlasan,
                 divisi: $this->adminCreateDivisi,
             );
+
+            $this->bustCache($this->adminCreateTanggal);
 
             Notification::make()
                 ->title('Pengajuan Berhasil Dibuat')

@@ -347,6 +347,18 @@ class BkCetakController extends Controller
                 : null,
         ]);
 
+        // Otomatis sinkronkan transaksi penjualan ke web Akuntansi
+        try {
+            [$resolvedItems, $grandTotal] = $this->resolveNotaItems($record, $validated['jenis']);
+            $syncService = app(\App\Services\Akuntansi\PenjualanSyncService::class);
+            $syncResult = $syncService->kirimPenjualan($record, $resolvedItems, $grandTotal);
+            if (!$syncResult['success']) {
+                \Illuminate\Support\Facades\Log::warning('Sinkronisasi Akuntansi BK gagal: ' . ($syncResult['message'] ?? 'Unknown error'));
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Sinkronisasi Akuntansi BK exception: ' . $e->getMessage());
+        }
+
         if ($validated['cetak_action'] === 'nota') {
             $targetRoute = $validated['jenis'] === 'sales' ? 'bkbm.nota-bk.nota-sales' : 'bkbm.nota-bk.nota-kantor';
             return redirect()->route($targetRoute, $record);

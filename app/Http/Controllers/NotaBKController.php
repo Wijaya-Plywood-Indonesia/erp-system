@@ -345,6 +345,18 @@ class NotaBKController extends Controller
                 : null,
         ]);
 
+        // Otomatis sinkronkan transaksi penjualan ke web Akuntansi
+        try {
+            [$resolvedItems, $grandTotal] = $this->resolveNotaItems($record, $validated['jenis']);
+            $syncService = app(\App\Services\Akuntansi\PenjualanSyncService::class);
+            $syncResult = $syncService->kirimPenjualan($record, $resolvedItems, $grandTotal);
+            if (!$syncResult['success']) {
+                \Illuminate\Support\Facades\Log::warning('Sinkronisasi Akuntansi gagal: ' . ($syncResult['message'] ?? 'Unknown error'));
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Sinkronisasi Akuntansi exception: ' . $e->getMessage());
+        }
+
         if ($validated['cetak_action'] === 'nota') {
             $targetRoute = $validated['jenis'] === 'sales' ? 'nota-bk.nota-sales' : 'nota-bk.nota-kantor';
             return redirect()->route($targetRoute, $record);
