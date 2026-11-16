@@ -421,6 +421,14 @@ class TempatKayusTable
 
         return $table
             ->paginated(false)
+            // Warna baris (sama seperti BK/BM):
+            //   hijau = lahan masih tersedia (belum diserahkan) -> BOLEH diisi kayu
+            //   merah = lahan penuh (sudah diserahkan / sudah diterima rotary) -> TIDAK BOLEH diisi
+            // Setelah rotary selesai memakai lahan, status di-reset ke 'belum serah' -> hijau lagi.
+            ->header(new \Illuminate\Support\HtmlString('<style>tr.tk-merah { background-color: rgba(239, 68, 68, 0.55) !important; } tr.tk-merah td *:not(.fi-badge):not(.fi-badge *) { color: #1a0000 !important; } tr.tk-hijau { background-color: rgba(22, 163, 74, 0.28) !important; }</style>'))
+            ->recordClasses(fn ($record) => in_array($record->status, ['sudah diserahkan', 'sudah diterima'], true)
+                ? 'tk-merah'
+                : 'tk-hijau')
             ->recordUrl(null)
             ->recordAction('cek_detail')
             ->modifyQueryUsing(function (Builder $query) use ($bisaSerah, $bisaTerima) {
@@ -481,6 +489,17 @@ class TempatKayusTable
                 return $query;
             })
             ->columns([
+                // Kolom status kapasitas lahan: Penuh (sudah diserahkan/diterima) atau Bisa Diisi.
+                TextColumn::make('status_lahan')
+                    ->label('Status Lahan')
+                    ->getStateUsing(fn ($record) => in_array($record->status, ['sudah diserahkan', 'sudah diterima'], true)
+                        ? 'Penuh'
+                        : 'Bisa Diisi')
+                    ->badge()
+                    ->icon(fn ($state) => $state === 'Penuh' ? 'heroicon-o-no-symbol' : 'heroicon-o-check-circle')
+                    ->color(fn ($state) => $state === 'Penuh' ? 'danger' : 'success')
+                    ->alignCenter(),
+
                 TextColumn::make('lahan.kode_lahan')
                     ->label('Lahan')
                     ->sortable(query: function (Builder $query, string $direction) {
@@ -526,7 +545,13 @@ class TempatKayusTable
 
                         return number_format((float) $total, 4, '.', ',');
                     })
-                    ->color('primary')
+                    // Baris merah (lahan penuh): pakai warna teks default (gelap) supaya terbaca di atas latar merah.
+                    ->color(fn ($record) => in_array($record->status, ['sudah diserahkan', 'sudah diterima'], true)
+                        ? null
+                        : 'primary')
+                    ->weight(fn ($record) => in_array($record->status, ['sudah diserahkan', 'sudah diterima'], true)
+                        ? 'bold'
+                        : null)
                     ->toggleable(),
 
                 TextColumn::make('diserahkan_oleh')
