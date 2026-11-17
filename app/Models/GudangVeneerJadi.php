@@ -26,15 +26,19 @@ class GudangVeneerJadi extends Model
         'keterangan',
         'diterima_by',
         'diterima_at',
+        'ditolak_oleh',
+        'alasan_tolak',
+        'ditolak_at',
     ];
 
     protected $casts = [
-        'stok_kubikasi'          => 'float',
-        'nilai_stok'             => 'float',
-        'hpp_average'            => 'float',
-        'hpp_pekerja_last'       => 'float',
+        'stok_kubikasi' => 'float',
+        'nilai_stok' => 'float',
+        'hpp_average' => 'float',
+        'hpp_pekerja_last' => 'float',
         'hpp_bahan_penolong_last' => 'float',
-        'diterima_at'             => 'datetime',
+        'diterima_at' => 'datetime',
+        'ditolak_at' => 'datetime',
     ];
 
     public function jenisKayu(): BelongsTo
@@ -46,8 +50,14 @@ class GudangVeneerJadi extends Model
     {
         return $this->belongsTo(HppVeneerJadiLog::class, 'id_last_log');
     }
+
     public function penerima(): BelongsTo
     {
         return $this->belongsTo(User::class, 'diterima_by');
+    }
+
+    public function isDitolak(): bool
+    {
+        return $this->ditolak_at !== null;
     }
 }
