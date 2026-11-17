@@ -60,14 +60,21 @@ class PenjualanForm
 
                 Toggle::make('pakai_ppn')
                     ->label('Pakai PPN (11%)')
-                    ->default(true)
+                    ->default(false)
                     ->live()
                     ->afterStateUpdated(function ($state, Set $set) {
                         $set('ppn_persen', $state ? 11 : 0);
                     }),
 
                 Hidden::make('ppn_persen')
-                    ->default(11),
+                    ->default(0),
+
+                TextInput::make('pembeli_bkp_npwp')
+                    ->label('NPWP Pembeli')
+                    ->placeholder('Contoh: 00.000.000.0-000.000')
+                    ->maxLength(100)
+                    ->visible(fn ($get) => (bool) $get('pakai_ppn'))
+                    ->nullable(),
 
                 TextInput::make('ongkir')
                     ->label('Biaya Ongkir (Rp)')
