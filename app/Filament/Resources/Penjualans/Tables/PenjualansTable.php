@@ -108,7 +108,16 @@ class PenjualansTable
                     ->url(fn (Penjualan $record) => route('penjualan.surat-jalan', ['record' => $record->id]))
                     ->openUrlInNewTab(),
 
-                // 4. SYNC MANUAL KE AKUNTANSI (Hanya muncul jika sudah divalidasi)
+                // 4. CETAK INVOICE RESMI (Jika pakai PPN)
+                Action::make('invoiceResmi')
+                    ->label('Invoice')
+                    ->icon('heroicon-o-document-text')
+                    ->color('primary')
+                    ->visible(fn (Penjualan $record) => (bool) $record->pakai_ppn)
+                    ->url(fn (Penjualan $record) => route('penjualan.invoice-resmi', ['record' => $record->id]))
+                    ->openUrlInNewTab(),
+
+                // 5. SYNC MANUAL KE AKUNTANSI (Hanya muncul jika sudah divalidasi)
                 Action::make('syncAkuntansi')
                     ->label('Kirim Ulang Akuntansi')
                     ->icon('heroicon-o-arrow-path')

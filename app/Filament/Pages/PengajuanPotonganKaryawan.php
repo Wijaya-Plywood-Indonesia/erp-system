@@ -206,6 +206,33 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         return $user->hasAnyRole(['super_admin', 'Super Admin', 'super admin -(role&user)', 'Absen', 'absen']);
     }
 
+    // ---------------------------------------------------------------------
+    // Ubah keputusan setelah Approve / Reject (UNLOCK)
+    // ---------------------------------------------------------------------
+
+    /**
+     * Super Admin / Absen boleh mengubah keputusan pengajuan yang sudah
+     * approved / rejected. (Nanti bisa dibungkus setting seperti PengaturanAbsensi:
+     * cukup ubah return di bawah menjadi cek setting.)
+     */
+    #[Computed]
+    public function izinUbahKeputusan(): bool
+    {
+        return $this->canManageApproval();
+    }
+
+    /**
+     * Apakah pengajuan ini boleh diproses (approve / reject) oleh user saat ini?
+     */
+    public function bisaDiproses(?PengajuanPotongan $pengajuan): bool
+    {
+        if (! $pengajuan || ! $this->canManageApproval()) {
+            return false;
+        }
+
+        return $pengajuan->status === 'pending' || $this->izinUbahKeputusan;
+    }
+
     public function setTab(string $tab): void
     {
         if ($tab === 'persetujuan' && ! $this->canManageApproval()) {
@@ -730,6 +757,8 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
 
     /**
      * Buka Modal Review / Approval untuk Super Admin & Absen.
+     * Pengajuan yang sudah approved/rejected tetap bisa dibuka (detail & histori),
+     * dan keputusannya bisa diubah oleh Super Admin / Absen.
      */
     public function bukaReviewModal(int $pengajuanId): void
     {
@@ -741,9 +770,11 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
 
         $this->selectedPengajuanId = $record->id;
         $this->selectedPengajuan = $record;
-        $this->reviewNominalFinal = (float) $record->nominal_usulan;
+        // Kalau sudah pernah disetujui, mulai dari nominal final yang berlaku; kalau belum, dari usulan pengawas.
+        $this->reviewNominalFinal = (float) ($record->nominal_final ?? $record->nominal_usulan);
         $this->reviewCatatan = '';
         $this->rejectAlasan = '';
+        $this->resetValidation();
 
         $this->dispatch('open-modal', id: 'modal-review-potongan');
     }
@@ -759,20 +790,35 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         ]);
 
         $pengajuan = PengajuanPotongan::findOrFail($this->selectedPengajuanId);
+
+        // Guard sisi server: request Livewire bisa dipanggil langsung, jadi jangan hanya mengandalkan blade.
+        if (! $this->bisaDiproses($pengajuan)) {
+            Notification::make()
+                ->title('Pengajuan sudah final')
+                ->body('Anda tidak berhak mengubah keputusan pengajuan ini.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
         $user = auth()->user();
+        $sebelumnya = $pengajuan->status;
 
         try {
             app(PengajuanPotonganService::class)->approve(
                 pengajuan: $pengajuan,
                 user: $user,
                 nominalFinal: (float) $this->reviewNominalFinal,
-                catatan: $this->reviewCatatan ?: 'Disetujui oleh '.$user->name,
+                catatan: $this->reviewCatatan ?: ($sebelumnya === 'pending'
+                    ? 'Disetujui oleh '.$user->name
+                    : 'Keputusan diubah menjadi disetujui oleh '.$user->name.' (sebelumnya: '.$sebelumnya.')'),
             );
 
             $this->bustCache($pengajuan->tanggal->toDateString());
 
             Notification::make()
-                ->title('Pengajuan Disetujui')
+                ->title($sebelumnya === 'pending' ? 'Pengajuan Disetujui' : 'Keputusan Diperbarui (Disetujui)')
                 ->body('Nominal potongan berhasil diperbarui dan diterapkan ke perhitungan absensi & gaji.')
                 ->success()
                 ->send();
@@ -802,7 +848,19 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         ]);
 
         $pengajuan = PengajuanPotongan::findOrFail($this->selectedPengajuanId);
+
+        if (! $this->bisaDiproses($pengajuan)) {
+            Notification::make()
+                ->title('Pengajuan sudah final')
+                ->body('Anda tidak berhak mengubah keputusan pengajuan ini.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
         $user = auth()->user();
+        $sebelumnya = $pengajuan->status;
 
         try {
             app(PengajuanPotonganService::class)->reject(
@@ -814,7 +872,7 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
             $this->bustCache($pengajuan->tanggal->toDateString());
 
             Notification::make()
-                ->title('Pengajuan Ditolak')
+                ->title($sebelumnya === 'pending' ? 'Pengajuan Ditolak' : 'Keputusan Diperbarui (Ditolak)')
                 ->body('Pengajuan ditolak. Data potongan asli tetap berlaku.')
                 ->warning()
                 ->send();

@@ -609,10 +609,10 @@
                                         </td>
                                         <td class="px-4 py-3 text-center whitespace-nowrap">
                                             <x-filament::button size="xs"
-                                                color="{{ $item->status === 'pending' ? 'primary' : 'gray' }}"
+                                                color="{{ $item->status === 'pending' ? 'primary' : 'warning' }}"
                                                 wire:click="bukaReviewModal({{ $item->id }})"
                                                 wire:target="bukaReviewModal({{ $item->id }})">
-                                                {{ $item->status === 'pending' ? 'Periksa / Proses' : 'Detail & Histori' }}
+                                                {{ $item->status === 'pending' ? 'Periksa / Proses' : 'Ubah Keputusan' }}
                                             </x-filament::button>
                                         </td>
                                     </tr>
@@ -682,10 +682,10 @@
                                 @endif
 
                                 <x-filament::button size="sm" class="w-full"
-                                    color="{{ $item->status === 'pending' ? 'primary' : 'gray' }}"
+                                    color="{{ $item->status === 'pending' ? 'primary' : 'warning' }}"
                                     wire:click="bukaReviewModal({{ $item->id }})"
                                     wire:target="bukaReviewModal({{ $item->id }})">
-                                    {{ $item->status === 'pending' ? 'Periksa / Proses' : 'Detail & Histori' }}
+                                    {{ $item->status === 'pending' ? 'Periksa / Proses' : 'Ubah Keputusan' }}
                                 </x-filament::button>
                             </div>
                         @endforeach
@@ -713,7 +713,8 @@
                 class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
                 <div>
                     <span class="text-xs text-gray-400 block">Karyawan</span>
-                    <span class="font-semibold text-gray-800 dark:text-gray-200 break-words">{{ $modalPegawaiNama }}</span>
+                    <span
+                        class="font-semibold text-gray-800 dark:text-gray-200 break-words">{{ $modalPegawaiNama }}</span>
                     <span class="text-xs text-gray-400 font-mono block">({{ $modalPegawaiKode }})</span>
                 </div>
                 <div>
@@ -849,6 +850,7 @@
 
     {{-- ========================================================================= --}}
     {{-- MODAL REVIEW / APPROVAL / REJECT (ADMIN & ABSEN) --}}
+    {{-- Bisa dipakai juga untuk MENGUBAH keputusan yang sudah approved / rejected --}}
     {{-- ========================================================================= --}}
     <x-filament::modal id="modal-review-potongan" width="2xl">
         <x-slot name="heading">
@@ -909,6 +911,13 @@
                         <span
                             class="font-medium text-gray-800 dark:text-gray-200 sm:max-w-sm sm:text-right break-words">{{ $selectedPengajuan->alasan_pengajuan }}</span>
                     </div>
+                    @if ($selectedPengajuan->status === 'rejected' && $selectedPengajuan->alasan_penolakan)
+                        <div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
+                            <span class="text-gray-500">Alasan Penolakan Saat Ini:</span>
+                            <span
+                                class="font-medium text-rose-600 dark:text-rose-400 sm:max-w-sm sm:text-right break-words">{{ $selectedPengajuan->alasan_penolakan }}</span>
+                        </div>
+                    @endif
                 </div>
 
                 {{-- Riwayat / History Perubahan --}}
@@ -919,7 +928,7 @@
                             <div class="relative">
                                 <div class="font-medium text-gray-800 dark:text-gray-200 break-words">
                                     <span
-                                        class="capitalize px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 mr-1">{{ $hist->aksi }}</span>
+                                        class="capitalize px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 mr-1">{{ str_replace('_', ' ', $hist->aksi) }}</span>
                                     oleh {{ $hist->user?->name ?? 'System' }}
                                     <span
                                         class="text-gray-400 font-normal ml-1">{{ $hist->created_at->format('d/m/Y H:i') }}</span>
@@ -932,9 +941,19 @@
                     </div>
                 </div>
 
-                {{-- Form Aksi (Hanya jika status Pending) --}}
-                @if ($selectedPengajuan->status === 'pending')
+                {{-- Form Aksi: pending ATAU (sudah approved/rejected tapi boleh diubah) --}}
+                @if ($this->bisaDiproses($selectedPengajuan))
                     <div class="border-t pt-3 space-y-3 dark:border-gray-700">
+                        @if ($selectedPengajuan->status !== 'pending')
+                            <div
+                                class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                                Pengajuan ini sudah
+                                <strong>{{ $selectedPengajuan->status === 'approved' ? 'DISETUJUI' : 'DITOLAK' }}</strong>.
+                                Mengubah keputusan akan langsung mengubah potongan pada absensi &amp; gaji, dan
+                                perubahannya tercatat di histori.
+                            </div>
+                        @endif
+
                         <div>
                             <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                                 Nominal Final yang Disetujui (Dapat Direvisi oleh Admin/Absen) (Rp)
@@ -942,6 +961,9 @@
                             <input type="number" step="500" min="0" inputmode="numeric"
                                 wire:model="reviewNominalFinal"
                                 class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm focus:ring-primary-500">
+                            @error('reviewNominalFinal')
+                                <span class="text-xs text-red-600 mt-1 block">{{ $message }}</span>
+                            @enderror
                         </div>
 
                         <div>
@@ -960,6 +982,9 @@
                             <input type="text" wire:model="rejectAlasan"
                                 class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm"
                                 placeholder="Wajib diisi jika menolak pengajuan">
+                            @error('rejectAlasan')
+                                <span class="text-xs text-red-600 mt-1 block">{{ $message }}</span>
+                            @enderror
                         </div>
                     </div>
                 @endif
@@ -973,18 +998,22 @@
                     Tutup
                 </x-filament::button>
 
-                @if ($selectedPengajuan && $selectedPengajuan->status === 'pending')
+                @if ($this->bisaDiproses($selectedPengajuan))
                     <div class="flex flex-col gap-2 sm:flex-row">
                         <x-filament::button color="danger" class="w-full sm:w-auto" wire:click="rejectPengajuan"
                             wire:target="rejectPengajuan" wire:loading.attr="disabled"
-                            wire:confirm="Apakah Anda yakin ingin menolak pengajuan ini? Data potongan asli tetap berlaku.">
-                            <span wire:loading.remove wire:target="rejectPengajuan">Tolak (Reject)</span>
+                            wire:confirm="{{ $selectedPengajuan?->status === 'pending' ? 'Apakah Anda yakin ingin menolak pengajuan ini? Data potongan asli tetap berlaku.' : 'Pengajuan ini sudah diputuskan sebelumnya. Yakin ingin mengubahnya menjadi DITOLAK? Potongan akan kembali ke nilai asli.' }}">
+                            <span wire:loading.remove wire:target="rejectPengajuan">
+                                {{ $selectedPengajuan?->status === 'rejected' ? 'Perbarui Alasan Tolak' : 'Tolak (Reject)' }}
+                            </span>
                             <span wire:loading wire:target="rejectPengajuan">Memproses...</span>
                         </x-filament::button>
                         <x-filament::button color="success" class="w-full sm:w-auto" wire:click="approvePengajuan"
                             wire:target="approvePengajuan" wire:loading.attr="disabled"
-                            wire:confirm="Setujui nominal potongan ini? Perubahan akan langsung tercatat dan diterapkan pada laporan dan absensi.">
-                            <span wire:loading.remove wire:target="approvePengajuan">Setujui (Approve)</span>
+                            wire:confirm="{{ $selectedPengajuan?->status === 'pending' ? 'Setujui nominal potongan ini? Perubahan akan langsung tercatat dan diterapkan pada laporan dan absensi.' : 'Pengajuan ini sudah diputuskan sebelumnya. Yakin ingin mengubah keputusan dengan nominal ini? Perubahan langsung diterapkan pada laporan dan absensi.' }}">
+                            <span wire:loading.remove wire:target="approvePengajuan">
+                                {{ $selectedPengajuan?->status === 'pending' ? 'Setujui (Approve)' : 'Simpan Perubahan (Approve)' }}
+                            </span>
                             <span wire:loading wire:target="approvePengajuan">Memproses...</span>
                         </x-filament::button>
                     </div>
@@ -1012,7 +1041,8 @@
                         class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-base sm:text-sm focus:ring-primary-500">
                         <option value="">-- Pilih Karyawan --</option>
                         @foreach ($this->pegawaiOptions as $p)
-                            <option value="{{ $p['id'] }}">{{ $p['nama_pegawai'] }} ({{ $p['kode_pegawai'] }})
+                            <option value="{{ $p['id'] }}">{{ $p['nama_pegawai'] }}
+                                ({{ $p['kode_pegawai'] }})
                             </option>
                         @endforeach
                     </select>

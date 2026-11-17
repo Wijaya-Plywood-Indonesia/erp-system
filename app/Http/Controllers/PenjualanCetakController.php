@@ -200,7 +200,7 @@ class PenjualanCetakController extends Controller
 
         // Update total di tabel penjualans
         [$items, $grandTotal] = $this->resolvePenjualanItems($record, 'kantor');
-        $pakaiPpn = $record->pakai_ppn ?? true;
+        $pakaiPpn = (bool) ($record->pakai_ppn ?? false);
         $ppnPersen = $pakaiPpn ? (float) ($record->ppn_persen ?: 11) : 0;
         $ppnNominal = round(($grandTotal * $ppnPersen) / 100, 2);
         $ongkir = (float) ($record->ongkir ?? 0);

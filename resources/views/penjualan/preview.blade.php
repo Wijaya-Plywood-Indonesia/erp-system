@@ -71,7 +71,7 @@
                         </label>
                         <div class="flex items-center mt-2">
                             <label class="inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="pakai_ppn" name="pakai_ppn" value="1" {{ ($record->pakai_ppn ?? true) ? 'checked' : '' }} class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-5 w-5">
+                                <input type="checkbox" id="pakai_ppn" name="pakai_ppn" value="1" {{ ($record->pakai_ppn ?? false) ? 'checked' : '' }} class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-5 w-5">
                                 <span class="ml-2 text-sm font-medium text-gray-800">Gunakan PPN (11%)</span>
                             </label>
                         </div>
@@ -91,7 +91,7 @@
                 </div>
 
                 <!-- Bagian Pengusaha Kena Pajak & Pembeli BKP (Tampil jika PPN aktif) -->
-                <div id="invoiceResmiFields" class="mt-4 p-4 bg-blue-50/50 rounded-lg border border-blue-200 {{ ($record->pakai_ppn ?? true) ? '' : 'hidden' }}">
+                <div id="invoiceResmiFields" class="mt-4 p-4 bg-blue-50/50 rounded-lg border border-blue-200 {{ ($record->pakai_ppn ?? false) ? '' : 'hidden' }}">
                     <div class="text-sm font-bold text-blue-900 mb-3 flex items-center justify-between">
                         <span>Data Faktur / Invoice Resmi</span>
                         <span class="text-xs font-normal text-blue-700">*Auto-fill default perusahaan, dapat disesuaikan</span>
@@ -144,7 +144,7 @@
                 </div>
 
                 <div class="mt-5 flex flex-wrap items-center justify-end gap-3">
-                    <button type="submit" id="btnInvoiceResmi" name="cetak_action" value="invoice_resmi" class="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-semibold rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition {{ ($record->pakai_ppn ?? true) ? '' : 'hidden' }}">
+                    <button type="submit" id="btnInvoiceResmi" name="cetak_action" value="invoice_resmi" class="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-semibold rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition {{ ($record->pakai_ppn ?? false) ? '' : 'hidden' }}">
                         Cetak Invoice Resmi
                     </button>
                     <button type="submit" name="cetak_action" value="nota" class="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-semibold rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition">

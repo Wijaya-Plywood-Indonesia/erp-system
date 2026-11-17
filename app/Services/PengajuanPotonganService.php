@@ -120,6 +120,7 @@ class PengajuanPotonganService
 
     /**
      * Revisi nominal oleh Super Admin / Absen sebelum atau sekaligus persetujuan.
+     * (Tetap hanya untuk pending; perubahan setelah final lewat approve()/reject().)
      */
     public function revisiNominal(
         PengajuanPotongan $pengajuan,
@@ -158,6 +159,10 @@ class PengajuanPotonganService
 
     /**
      * Setujui pengajuan potongan.
+     *
+     * Boleh dipanggil juga untuk pengajuan yang SUDAH approved (ubah nominal final)
+     * atau SUDAH rejected (balik jadi approved). Otorisasi (siapa yang boleh)
+     * dijaga di layer page: PengajuanPotonganKaryawan::bisaDiproses().
      */
     public function approve(
         PengajuanPotongan $pengajuan,
@@ -169,19 +174,34 @@ class PengajuanPotonganService
             // Lock row for update to prevent race conditions
             $record = PengajuanPotongan::where('id', $pengajuan->id)->lockForUpdate()->firstOrFail();
 
-            if ($record->status !== 'pending') {
-                throw new \DomainException('Pengajuan ini sudah pernah diproses sebelumnya.');
-            }
+            $statusLama = $record->status;
+            $sudahFinal = $statusLama !== 'pending';
 
             $final = $nominalFinal !== null ? $nominalFinal : (float) $record->nominal_usulan;
             if ($final < 0) {
                 throw new \InvalidArgumentException('Nominal final tidak boleh negatif.');
             }
 
-            $catatanPersetujuan = $catatan ?: 'Pengajuan potongan disetujui.';
+            // Nominal yang berlaku sebelum perubahan ini:
+            // - approved  -> nominal_final lama
+            // - rejected  -> potongan asli (nominal_awal), karena penolakan = potongan asli tetap berlaku
+            // - pending   -> usulan pengawas
+            $nominalSebelumnya = match ($statusLama) {
+                'approved' => (float) ($record->nominal_final ?? $record->nominal_usulan),
+                'rejected' => (float) $record->nominal_awal,
+                default => (float) $record->nominal_usulan,
+            };
 
-            // Catat jika ada perubahan nominal saat approval
-            if ($nominalFinal !== null && $nominalFinal != $record->nominal_usulan) {
+            $catatanPersetujuan = $catatan ?: ($sudahFinal
+                ? 'Keputusan diubah menjadi disetujui.'
+                : 'Pengajuan potongan disetujui.');
+
+            if ($sudahFinal) {
+                $catatanPersetujuan .= ' [Ubah keputusan, sebelumnya: '.$statusLama.']';
+            }
+
+            // Catat jika ada perubahan nominal saat approval (dibanding usulan pengawas)
+            if (! $sudahFinal && $nominalFinal !== null && $nominalFinal != $record->nominal_usulan) {
                 PengajuanPotonganHistory::create([
                     'pengajuan_potongan_id' => $record->id,
                     'user_id' => $user->id,
@@ -196,15 +216,17 @@ class PengajuanPotonganService
                 'nominal_final' => $final,
                 'estimasi_gaji' => $this->hitungEstimasiGaji($record->id_pegawai, $final),
                 'status' => 'approved',
+                'alasan_penolakan' => null, // bersihkan alasan tolak lama kalau sebelumnya rejected
                 'diproses_oleh' => $user->id,
                 'diproses_at' => now(),
             ]);
 
+            // aksi tetap 'approve' (kolom aksi mungkin enum/terbatas); pembeda ada di catatan.
             PengajuanPotonganHistory::create([
                 'pengajuan_potongan_id' => $record->id,
                 'user_id' => $user->id,
                 'aksi' => 'approve',
-                'nominal_sebelumnya' => $record->nominal_usulan,
+                'nominal_sebelumnya' => $nominalSebelumnya,
                 'nominal_baru' => $final,
                 'catatan' => $catatanPersetujuan,
             ]);
@@ -215,6 +237,9 @@ class PengajuanPotonganService
 
     /**
      * Tolak pengajuan potongan.
+     *
+     * Boleh dipanggil juga untuk pengajuan yang SUDAH approved (dibatalkan -> potongan
+     * kembali ke nilai asli) atau SUDAH rejected (perbarui alasan tolak).
      */
     public function reject(
         PengajuanPotongan $pengajuan,
@@ -228,12 +253,26 @@ class PengajuanPotonganService
         return DB::transaction(function () use ($pengajuan, $user, $alasanPenolakan) {
             $record = PengajuanPotongan::where('id', $pengajuan->id)->lockForUpdate()->firstOrFail();
 
-            if ($record->status !== 'pending') {
-                throw new \DomainException('Pengajuan ini sudah pernah diproses sebelumnya.');
+            $statusLama = $record->status;
+            $sudahFinal = $statusLama !== 'pending';
+
+            $nominalSebelumnya = match ($statusLama) {
+                'approved' => (float) ($record->nominal_final ?? $record->nominal_usulan),
+                'rejected' => (float) $record->nominal_awal,
+                default => (float) $record->nominal_usulan,
+            };
+
+            $catatan = 'Ditolak: '.$alasanPenolakan;
+            if ($sudahFinal) {
+                $catatan .= ' [Ubah keputusan, sebelumnya: '.$statusLama.']';
             }
 
             $record->update([
                 'status' => 'rejected',
+                // Kosongkan nominal_final: potongan asli kembali berlaku dan
+                // getApprovedPotonganMap() tidak lagi membaca nilai lama.
+                'nominal_final' => null,
+                'estimasi_gaji' => $this->hitungEstimasiGaji($record->id_pegawai, (float) $record->nominal_awal),
                 'diproses_oleh' => $user->id,
                 'diproses_at' => now(),
                 'alasan_penolakan' => $alasanPenolakan,
@@ -243,9 +282,9 @@ class PengajuanPotonganService
                 'pengajuan_potongan_id' => $record->id,
                 'user_id' => $user->id,
                 'aksi' => 'reject',
-                'nominal_sebelumnya' => $record->nominal_usulan,
+                'nominal_sebelumnya' => $nominalSebelumnya,
                 'nominal_baru' => $record->nominal_awal,
-                'catatan' => 'Ditolak: '.$alasanPenolakan,
+                'catatan' => $catatan,
             ]);
 
             return $record;
