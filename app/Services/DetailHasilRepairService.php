@@ -43,13 +43,17 @@ class DetailHasilRepairService
                 totalLembar: $totalHasil,
                 tanggalProduksi: $tanggalProduksi,
                 keteranganProduksi: "Serah Terima Hasil Repair ID #{$record->id}",
-                idProduksiRepair: $idProduksi
+                idProduksiRepair: $idProduksi,
+                idDetailHasilRepair: $record->id
             );
 
-            // 2. Update status diserahkan pada record hasil repair
+            // 2. Update status diserahkan. Bekas penolakan gudang dikosongkan.
             $record->update([
                 'diserahkan_at' => now(),
                 'diserahkan_by' => Auth::id(),
+                'ditolak_gudang_oleh' => null,
+                'alasan_tolak_gudang' => null,
+                'ditolak_gudang_at' => null,
             ]);
         });
     }
@@ -66,7 +70,8 @@ class DetailHasilRepairService
         $totalLembar,
         $tanggalProduksi,
         $keteranganProduksi = null,
-        $idProduksiRepair = null
+        $idProduksiRepair = null,
+        $idDetailHasilRepair = null
     ): GudangVeneerJadi {
         $volumePerLembar = ($panjang * $lebar * $tebal) / 10000000;
         $totalKubikasiMasuk = $totalLembar * $volumePerLembar;
@@ -77,24 +82,25 @@ class DetailHasilRepairService
         $nilaiStokMasuk = $totalLembar * $hppAverageMasuk;
 
         return GudangVeneerJadi::create([
-            'id_stok_veneer_jadi'     => null,
-            'id_jenis_kayu'           => $idJenisKayu,
-            'panjang'                 => $panjang,
-            'lebar'                   => $lebar,
-            'tebal'                   => $tebal,
-            'kw_grade'                => $kwGrade,
-            'stok_lembar'             => $totalLembar,
-            'stok_kubikasi'           => $totalKubikasiMasuk,
-            'nilai_stok'              => $nilaiStokMasuk,
-            'hpp_average'             => $hppAverageMasuk,
-            'hpp_pekerja_last'        => $hppPekerjaMasuk,
+            'id_stok_veneer_jadi' => null,
+            'id_jenis_kayu' => $idJenisKayu,
+            'panjang' => $panjang,
+            'lebar' => $lebar,
+            'tebal' => $tebal,
+            'kw_grade' => $kwGrade,
+            'stok_lembar' => $totalLembar,
+            'stok_kubikasi' => $totalKubikasiMasuk,
+            'nilai_stok' => $nilaiStokMasuk,
+            'hpp_average' => $hppAverageMasuk,
+            'hpp_pekerja_last' => $hppPekerjaMasuk,
             'hpp_bahan_penolong_last' => $hppBahanPenolongMasuk,
-            'id_last_log'             => null,
-            'tanggal_produksi'        => $tanggalProduksi,
-            'status_gudang'           => 'belum diterima',
-            'keterangan'              => $keteranganProduksi ?? "Dari Produksi Repair #{$idProduksiRepair}",
-            'diterima_by'             => null,
-            'diterima_at'             => null,
+            'id_last_log' => null,
+            'tanggal_produksi' => $tanggalProduksi,
+            'status_gudang' => 'belum diterima',
+            'keterangan' => $keteranganProduksi ?? "Dari Produksi Repair #{$idProduksiRepair}",
+            'id_detail_hasil_repair' => $idDetailHasilRepair,
+            'diterima_by' => null,
+            'diterima_at' => null,
         ]);
     }
 }

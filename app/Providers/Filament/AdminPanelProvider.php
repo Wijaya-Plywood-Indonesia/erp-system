@@ -3,10 +3,10 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\DashboardHppDryer;
+use App\Filament\Pages\LaporanJurnalKayuMasuk;
 use App\Filament\Pages\LaporanKayuKeluar;
 use App\Filament\Pages\OpnameStokKayu;
 use App\Filament\Pages\OpnameStokPage;
-use App\Filament\Pages\LaporanJurnalKayuMasuk;
 use App\Filament\Pages\PortalWahana;
 use App\Filament\Resources\ProduksiDempuls\Widgets\RekapProduksiDempul;
 use App\Filament\Resources\ProduksiGrajiTripleks\Widgets\RekapProduksiGraji;
@@ -26,42 +26,35 @@ use App\Filament\Resources\ProduksiSandingJoints\Widgets\RekapProduksiSandingJoi
 use App\Filament\Resources\ProduksiSandings\Widgets\RekapProduksiSanding;
 use App\Filament\Resources\ProduksiStiks\Widgets\RekapProduksiStik;
 use App\Filament\Resources\ProduksiTembelTripleks\Widgets\RekapProduksiTembelTriplek;
-use App\Http\Middleware\RunDailyScheduler;
 use App\Http\Middleware\RedirectToPortalForAdmins;
+use App\Http\Middleware\RunDailyScheduler;
 use App\Livewire\AbsenWajibModal;
 use App\Livewire\GradingWizard;
 use App\Support\Brand;
-use Filament\Http\Middleware\Authenticate;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
+use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-
 use Filament\Navigation\NavigationGroup;
-
-
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\Support\Assets\Js;
 use Filament\Support\Colors\Color;
 use Filament\View\PanelsRenderHook;
-
-
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
-use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Illuminate\Support\Facades\Blade;
-
 // Reverb and Vite Config
-use Filament\Support\Assets\Js;
 use Illuminate\Support\Facades\Vite;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
 {
-
     public function panel(Panel $panel): Panel
     {
         // ============================================================
@@ -72,17 +65,17 @@ class AdminPanelProvider extends PanelProvider
         $data = Brand::current();
 
         $brand = [
-            'name'               => $data['name'],
-            'logo'               => $data['logo'],
-            'background'         => $data['background'],
-            'logo_height'        => $data['login_logo_height'],
+            'name' => $data['name'],
+            'logo' => $data['logo'],
+            'background' => $data['background'],
+            'logo_height' => $data['login_logo_height'],
             'logo_height_mobile' => $data['login_logo_height_mobile'],
-            'overlay_start'      => $data['overlay_start'],
-            'overlay_end'        => $data['overlay_end'],
-            'card_bg'            => $data['card_bg'],
-            'card_bg_mobile'     => $data['card_bg_mobile'],
-            'card_blur'          => $data['card_blur'],
-            'card_saturate'      => $data['card_saturate'],
+            'overlay_start' => $data['overlay_start'],
+            'overlay_end' => $data['overlay_end'],
+            'card_bg' => $data['card_bg'],
+            'card_bg_mobile' => $data['card_bg_mobile'],
+            'card_blur' => $data['card_blur'],
+            'card_saturate' => $data['card_saturate'],
             'bg_position_mobile' => $data['bg_position_mobile'],
         ];
 
@@ -166,10 +159,24 @@ class AdminPanelProvider extends PanelProvider
                 AbsenWajibModal::class,
             ])
 
+            // ============================================================
+            // Mode Offline Input Kayu Masuk + Turusan
+            // Dimuat di <head> supaya fungsi offlineDetailLogic() sudah ada
+            // sebelum Alpine memproses modal. Hanya untuk user yang login.
+            // Naikkan angka ?v= setiap kali file JS diubah (cache busting).
+            // ============================================================
+            ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn (): string => auth()->check()
+                    ? '<script src="'.asset('js/offline-detail-kayu.js').'?v=6"></script>'
+                      .'<script src="'.asset('js/offline-detail-turusan.js').'?v=1"></script>'
+                    : ''
+            )
+
             // Modal wajib absen dirender di setiap halaman panel (setelah login).
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn(): string => auth()->check()
+                fn (): string => auth()->check()
                     ? Blade::render('@livewire(\'absen-wajib-modal\')')
                     : ''
             )
@@ -180,13 +187,13 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE,
                 fn (): string => '<div class="login-brand-logo">
-                    <img src="' . asset($brand['logo']) . '" alt="Logo ' . e($brand['name']) . '">
+                    <img src="'.asset($brand['logo']).'" alt="Logo '.e($brand['name']).'">
                 </div>'
             )
             ->renderHook(
                 PanelsRenderHook::AUTH_REGISTER_FORM_BEFORE,
                 fn (): string => '<div class="login-brand-logo">
-                    <img src="' . asset($brand['logo']) . '" alt="Logo ' . e($brand['name']) . '">
+                    <img src="'.asset($brand['logo']).'" alt="Logo '.e($brand['name']).'">
                 </div>'
             )
 
@@ -299,8 +306,8 @@ class AdminPanelProvider extends PanelProvider
                     .fi-simple-layout {
                         background-color: #0f172a !important;
                         background-image:
-                            linear-gradient(135deg, rgba(15,23,42,' . $brand['overlay_start'] . ') 0%, rgba(15,23,42,' . $brand['overlay_end'] . ') 100%),
-                            url("' . asset($brand['background']) . '") !important;
+                            linear-gradient(135deg, rgba(15,23,42,'.$brand['overlay_start'].') 0%, rgba(15,23,42,'.$brand['overlay_end'].') 100%),
+                            url("'.asset($brand['background']).'") !important;
                         background-size: cover !important;
                         background-position: center !important;
                         background-repeat: no-repeat !important;
@@ -310,9 +317,9 @@ class AdminPanelProvider extends PanelProvider
 
                     /* ===== CARD GLASS ===== */
                     .fi-simple-main {
-                        background: ' . $brand['card_bg'] . ' !important;
-                        -webkit-backdrop-filter: blur(' . $brand['card_blur'] . ') saturate(' . $brand['card_saturate'] . ');
-                        backdrop-filter: blur(' . $brand['card_blur'] . ') saturate(' . $brand['card_saturate'] . ');
+                        background: '.$brand['card_bg'].' !important;
+                        -webkit-backdrop-filter: blur('.$brand['card_blur'].') saturate('.$brand['card_saturate'].');
+                        backdrop-filter: blur('.$brand['card_blur'].') saturate('.$brand['card_saturate'].');
                         border: 1px solid rgba(255, 255, 255, 0.18) !important;
                         border-radius: 1.75rem !important;
                         box-shadow:
@@ -332,7 +339,7 @@ class AdminPanelProvider extends PanelProvider
                     }
                     .login-brand-logo img {
                         display: block;
-                        height: ' . $brand['logo_height'] . ';
+                        height: '.$brand['logo_height'].';
                         width: auto;
                         max-width: 85%;
                         object-fit: contain;
@@ -446,10 +453,10 @@ class AdminPanelProvider extends PanelProvider
                             min-height: 100dvh;
                             background-attachment: scroll !important;
                             /* bagian foto yang tampil di HP (diatur per brand) */
-                            background-position: ' . $brand['bg_position_mobile'] . ' !important;
+                            background-position: '.$brand['bg_position_mobile'].' !important;
                             background-image:
-                                linear-gradient(180deg, rgba(15,23,42,' . $brand['overlay_start'] . ') 0%, rgba(15,23,42,' . $brand['overlay_end'] . ') 100%),
-                                url("' . asset($brand['background']) . '") !important;
+                                linear-gradient(180deg, rgba(15,23,42,'.$brand['overlay_start'].') 0%, rgba(15,23,42,'.$brand['overlay_end'].') 100%),
+                                url("'.asset($brand['background']).'") !important;
                         }
 
                         /* Wadah card: beri ruang kiri-kanan */
@@ -466,14 +473,14 @@ class AdminPanelProvider extends PanelProvider
                             margin: 1.5rem auto !important;
                             padding: 2rem 1.5rem !important;
                             border-radius: 1.5rem !important;
-                            background: ' . $brand['card_bg_mobile'] . ' !important;
+                            background: '.$brand['card_bg_mobile'].' !important;
                         }
 
                         .login-brand-logo {
                             margin-bottom: 0.75rem;
                         }
                         .login-brand-logo img {
-                            height: ' . $brand['logo_height_mobile'] . ';
+                            height: '.$brand['logo_height_mobile'].';
                             max-width: 70%;
                         }
 
@@ -510,7 +517,7 @@ class AdminPanelProvider extends PanelProvider
                     ->icon('heroicon-o-clipboard-document-list')
                     ->collapsed(),
 
-                //Kategori Menu Produksi
+                // Kategori Menu Produksi
                 NavigationGroup::make('Gudang')
                     ->icon('heroicon-o-building-storefront')
                     ->collapsed(),
@@ -559,7 +566,6 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Lain Lain')
                     ->icon('heroicon-o-ellipsis-horizontal-circle')->collapsed(),
 
-
                 NavigationGroup::make('Laporan')
                     ->icon('heroicon-o-clipboard-document-list')
                     ->collapsed(),
@@ -585,7 +591,6 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Akses Pengguna')
                     ->icon('heroicon-o-lock-closed')->collapsed(),
 
-            ])
-        ;
+            ]);
     }
 }
