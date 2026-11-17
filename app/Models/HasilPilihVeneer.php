@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\ProductionUpdated;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
@@ -57,12 +58,11 @@ class HasilPilihVeneer extends Model
         );
     }
 
-
     protected static function booted()
     {
         static::saved(function ($model) {
             if ($model->id_produksi_pilih_veneer) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_pilih_veneer, 'veneer');
+                ProductionUpdated::dispatch($model->id_produksi_pilih_veneer, 'veneer');
             }
 
             if (
@@ -76,7 +76,7 @@ class HasilPilihVeneer extends Model
 
         static::deleted(function ($model) {
             if ($model->id_produksi_pilih_veneer) {
-                \App\Events\ProductionUpdated::dispatch($model->id_produksi_pilih_veneer, 'veneer');
+                ProductionUpdated::dispatch($model->id_produksi_pilih_veneer, 'veneer');
             }
         });
     }
@@ -85,13 +85,13 @@ class HasilPilihVeneer extends Model
     {
         DB::transaction(function () use ($model) {
             $modal = $model->modalPilihVeneer()->first();
-            if (!$modal) {
+            if (! $modal) {
                 throw new \RuntimeException('Modal pilih veneer tidak ditemukan.');
             }
 
             $jenisVeneerAsal = $modal->id_stok_veneer_jadi ? 'jadi' : 'kering';
             $jenisVeneerHasil = $model->jenis_veneer ?? 'jadi';
-            
+
             $jumlah = (float) $model->jumlah;
             $userName = auth()->user()?->name ?? 'System';
             $kwHasil = (string) $model->kw;
@@ -99,10 +99,10 @@ class HasilPilihVeneer extends Model
             // AMBIL DATA ASAL UNTUK MENDAPATKAN UKURAN DAN JENIS KAYU
             if ($jenisVeneerAsal === 'jadi') {
                 $stokAsalJadi = StokVeneerJadi::where('id', $modal->id_stok_veneer_jadi)->first();
-                if (!$stokAsalJadi) {
+                if (! $stokAsalJadi) {
                     throw new \RuntimeException('Stok Veneer Jadi asal tidak ditemukan.');
                 }
-                
+
                 $idJenisKayu = $stokAsalJadi->id_jenis_kayu;
                 $kwAsal = (string) $stokAsalJadi->kw_grade;
                 $panjang = $stokAsalJadi->panjang;
@@ -114,21 +114,21 @@ class HasilPilihVeneer extends Model
                 $idUkuran = $modal->id_ukuran;
                 $idJenisKayu = $modal->id_jenis_kayu;
                 $kwAsal = (string) $modal->kw;
-                
+
                 $ukuran = Ukuran::find($idUkuran);
-                if (!$ukuran) {
+                if (! $ukuran) {
                     throw new \RuntimeException('Ukuran Veneer Kering asal tidak ditemukan.');
                 }
                 $panjang = $ukuran->panjang;
                 $lebar = $ukuran->lebar;
                 $tebal = $ukuran->tebal;
-                
+
                 $snapshotAsal = StokVeneerKering::snapshotTerakhir($idUkuran, $idJenisKayu, $kwAsal);
                 $hppAsal = $snapshotAsal['hpp_average'];
             }
 
             $kubikasiPindah = ($panjang * $lebar * $tebal * $jumlah) / 10000000;
-            
+
             // HPP yang dibawa masuk ke gudang dari hasil pilih veneer menggunakan HPP rata-rata dari stok asal
             if ($jenisVeneerAsal === 'jadi') {
                 $nilaiPindah = $hppAsal * $jumlah; // hpp veneer jadi = per lembar
@@ -213,7 +213,7 @@ class HasilPilihVeneer extends Model
                 ]);
             } else {
                 $idUkuranHasil = $idUkuran;
-                if (!$idUkuranHasil) {
+                if (! $idUkuranHasil) {
                     $ukuranMatch = Ukuran::firstOrCreate([
                         'panjang' => $panjang,
                         'lebar' => $lebar,
@@ -226,13 +226,13 @@ class HasilPilihVeneer extends Model
                 $saldoLembarHasil = StokVeneerKering::saldoLembarTerakhir($idUkuranHasil, $idJenisKayu, $kwHasil);
                 $stokM3Hasil = $snapshot['stok_m3'];
                 $nilaiStokHasil = $snapshot['nilai_stok'];
-                
+
                 $stokLembarAfter = $saldoLembarHasil + $jumlah;
                 $stokM3After = $stokM3Hasil + $kubikasiPindah;
                 $nilaiStokAfter = $nilaiStokHasil + $nilaiPindah;
-                
+
                 $hppAverageBaru = $stokM3After > 0 ? ($nilaiStokAfter / $stokM3After) : 0;
-                
+
                 StokVeneerKering::create([
                     'id_ukuran' => $idUkuranHasil,
                     'id_jenis_kayu' => $idJenisKayu,

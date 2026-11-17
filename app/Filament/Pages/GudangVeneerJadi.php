@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\DetailHasilRepair;
 use App\Models\GudangVeneerJadi as GudangModel;
 use App\Models\HasilPilihVeneer;
 use App\Models\HppVeneerJadiLog;
@@ -81,7 +82,11 @@ class GudangVeneerJadi extends Page
 
     public array $editPaletQuantities = [0 => ''];
 
-    // ── Modal Tolak Serah Terima ──
+    // ── Modal Tolak ──
+    // tolakTipe:
+    //   'kering' => baris SerahTerimaVeneerKering (Dryer/Kedi/Joint)  [default, alur lama]
+    //   'gudang' => baris GudangVeneerJadi (antrean utama: Produksi/Repair)
+    //   'pilih'  => baris HasilPilihVeneer (antrean utama: Pilih Veneer)
     public bool $showTolakModal = false;
 
     public ?int $tolakId = null;
@@ -367,6 +372,10 @@ class GudangVeneerJadi extends Page
                     throw new \Exception('Barang ini sudah pernah diterima sebelumnya.');
                 }
 
+                if ($record->ditolak_at !== null) {
+                    throw new \Exception('Barang ini sudah ditolak sebelumnya, tidak bisa diterima.');
+                }
+
                 $user = Auth::user();
                 $userName = $user?->name ?? 'System';
 
@@ -514,7 +523,7 @@ class GudangVeneerJadi extends Page
             'core' => $allStok->filter(fn ($item) => $item->tebal >= 1.0),
         ];
     }
-    
+
     /**
      * Opsi stok untuk pop up "Catat Barang Keluar" (komponen x-gudang.pilih-stok).
      * Pencarian di pop up dilakukan di sisi client (Alpine) berdasarkan ukuran,
@@ -531,19 +540,19 @@ class GudangVeneerJadi extends Page
                 ['lebar', 'asc'],
             ])
             ->map(fn ($s) => [
-                'id'   => (string) $s->id,
+                'id' => (string) $s->id,
                 'kayu' => (string) $s->jenisKayu->nama_kayu,
-                'kw'   => (string) $s->kw_grade,
-                'p'    => (float) $s->panjang,
-                'l'    => (float) $s->lebar,
-                't'    => (float) $s->tebal,
+                'kw' => (string) $s->kw_grade,
+                'p' => (float) $s->panjang,
+                'l' => (float) $s->lebar,
+                't' => (float) $s->tebal,
                 'sisa' => (int) $s->stok_lembar,
             ])
             ->values()
             ->all();
     }
 
-      /**
+    /**
      * Antrean gabungan dari Gudang Veneer Jadi (Produksi/Repair)
      * dan Hasil Pilih Veneer.
      *
@@ -552,12 +561,14 @@ class GudangVeneerJadi extends Page
      * jika alur penerimaan dari Nota Barang Masuk diperlukan.
      *
      * Setiap baris hasil memiliki:
-     * - id     => composite id "{source}-{id_asli}"
-     * - source => 'gudang', 'mutasi', atau 'pilih_veneer'
-     *
-     * Sumber mutasi/BM sementara tidak ditampilkan dalam antrean.
+     * - id            => composite id "{source}-{id_asli}"
+     * - source        => 'gudang', 'mutasi', atau 'pilih_veneer'
+     * - raw_id        => id asli di tabel sumber (untuk tombol Tolak)
+     * - tolak_tipe    => 'gudang' / 'pilih' (kosong = tidak bisa ditolak)
+     * - status_gudang => 'belum diterima' / 'sudah diterima' / 'ditolak'
+     *                    ('ditolak' diturunkan dari kolom ditolak_at, kolom
+     *                    status_gudang di database TIDAK diubah)
      */
-  
     public function getAntreanFilteredProperty(): Collection
     {
         $dariGudang = $this->ambilAntreanDariGudang();
@@ -576,9 +587,43 @@ class GudangVeneerJadi extends Page
     }
 
     /**
+     * Petakan satu baris GudangVeneerJadi ke format antrean.
+     */
+    protected function petakanItemGudang($item): array
+    {
+        $ditolak = $item->ditolak_at !== null;
+
+        return [
+            'id' => 'gudang-'.$item->id,
+            'raw_id' => $item->id,
+            'tolak_tipe' => 'gudang',
+            'source' => 'gudang',
+            'jenis_kayu' => $item->jenis_kayu_nama,
+            'panjang' => $item->panjang,
+            'lebar' => $item->lebar,
+            'tebal' => $item->tebal,
+            'kw' => $item->kw_grade,
+            'jumlah' => $item->stok_lembar,
+            'stok_kubikasi' => $item->stok_kubikasi,
+            'created_at' => $item->created_at,
+            'created_at_ts' => $item->created_at?->timestamp ?? 0,
+            'status_gudang' => $ditolak ? 'ditolak' : ($item->status_gudang ?? 'belum diterima'),
+            'diterima_at' => $item->diterima_at,
+            'diterima_by' => $item->diterima_by,
+            'penerima_name' => $item->penerima?->name ?? 'N/A',
+            'ditolak_oleh' => $item->ditolak_oleh,
+            'alasan_tolak' => $item->alasan_tolak,
+            'ditolak_at' => $item->ditolak_at,
+            'keterangan' => $item->keterangan,
+            'sumber_label' => $item->id_produksi_repair ? 'Repair' : 'Produksi',
+        ];
+    }
+
+    /**
      * Sumber 1: tabel GudangVeneerJadi (Produksi/Repair).
-     * Dibatasi ke item 'belum diterima' ditambah riwayat terbatas (50) agar tidak
-     * memuat ribuan row dan menyebabkan DOM browser/HP lag atau crash.
+     * Dibatasi ke item 'belum diterima' ditambah riwayat terbatas (50 diterima
+     * + 50 ditolak) agar tidak memuat ribuan row dan membuat DOM browser/HP
+     * lag atau crash.
      */
     protected function ambilAntreanDariGudang(): Collection
     {
@@ -601,65 +646,35 @@ class GudangVeneerJadi extends Page
                     (gudang_veneer_jadis.tebal + 0)
                 )) LIKE ?', ["%{$q}%"]);
             });
+
+            $records = $query->limit(100)->get();
         } else {
-            // Ambil semua yang belum diterima, dan batasi yang sudah diterima ke 50 data terbaru
+            // Semua yang belum diterima & belum ditolak
             $belumDiterima = (clone $query)
                 ->where('gudang_veneer_jadis.status_gudang', 'belum diterima')
+                ->whereNull('gudang_veneer_jadis.ditolak_at')
                 ->get();
 
+            // 50 terakhir yang sudah diterima
             $sudahDiterima = (clone $query)
                 ->where('gudang_veneer_jadis.status_gudang', '!=', 'belum diterima')
+                ->whereNull('gudang_veneer_jadis.ditolak_at')
                 ->orderByDesc('gudang_veneer_jadis.updated_at')
                 ->limit(50)
                 ->get();
 
-            $records = $belumDiterima->concat($sudahDiterima);
+            // 50 terakhir yang ditolak
+            $ditolak = (clone $query)
+                ->whereNotNull('gudang_veneer_jadis.ditolak_at')
+                ->orderByDesc('gudang_veneer_jadis.ditolak_at')
+                ->limit(50)
+                ->get();
 
-            return $records->map(fn ($item) => [
-                'id' => 'gudang-'.$item->id,
-                'source' => 'gudang',
-                'jenis_kayu' => $item->jenis_kayu_nama,
-                'panjang' => $item->panjang,
-                'lebar' => $item->lebar,
-                'tebal' => $item->tebal,
-                'kw' => $item->kw_grade,
-                'jumlah' => $item->stok_lembar,
-                'stok_kubikasi' => $item->stok_kubikasi,
-                'created_at' => $item->created_at,
-                'created_at_ts' => $item->created_at?->timestamp ?? 0,
-                'status_gudang' => $item->status_gudang ?? 'belum diterima',
-                'diterima_at' => $item->diterima_at,
-                'diterima_by' => $item->diterima_by,
-                'penerima_name' => $item->penerima?->name ?? 'N/A',
-                'keterangan' => $item->keterangan,
-                'sumber_label' => $item->id_produksi_repair ? 'Repair' : 'Produksi',
-            ])
-                ->sortBy([
-                    fn ($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
-                    fn ($item) => -$item['created_at_ts'],
-                ])
-                ->values();
+            $records = $belumDiterima->concat($sudahDiterima)->concat($ditolak);
         }
 
-        return $query->limit(100)->get()->map(fn ($item) => [
-            'id' => 'gudang-'.$item->id,
-            'source' => 'gudang',
-            'jenis_kayu' => $item->jenis_kayu_nama,
-            'panjang' => $item->panjang,
-            'lebar' => $item->lebar,
-            'tebal' => $item->tebal,
-            'kw' => $item->kw_grade,
-            'jumlah' => $item->stok_lembar,
-            'stok_kubikasi' => $item->stok_kubikasi,
-            'created_at' => $item->created_at,
-            'created_at_ts' => $item->created_at?->timestamp ?? 0,
-            'status_gudang' => $item->status_gudang ?? 'belum diterima',
-            'diterima_at' => $item->diterima_at,
-            'diterima_by' => $item->diterima_by,
-            'penerima_name' => $item->penerima?->name ?? 'N/A',
-            'keterangan' => $item->keterangan,
-            'sumber_label' => $item->id_produksi_repair ? 'Repair' : 'Produksi',
-        ])
+        return $records
+            ->map(fn ($item) => $this->petakanItemGudang($item))
             ->sortBy([
                 fn ($item) => $item['status_gudang'] === 'belum diterima' ? 0 : 1,
                 fn ($item) => -$item['created_at_ts'],
@@ -987,6 +1002,10 @@ class GudangVeneerJadi extends Page
                     throw new \RuntimeException('Veneer ini sudah diterima sebelumnya.');
                 }
 
+                if ($fresh->ditolak_oleh) {
+                    throw new \RuntimeException('Veneer ini sudah ditolak sebelumnya.');
+                }
+
                 if (! in_array($fresh->tipe_sumber, ['dryer', 'kedi', 'joint', 'gudang'], true)) {
                     throw new \RuntimeException('Sumber veneer tidak valid untuk diterima di Gudang Veneer Jadi.');
                 }
@@ -1125,13 +1144,36 @@ class GudangVeneerJadi extends Page
         }
     }
 
+    // ─── TOLAK ─────────────────────────────────────────────────────────────
+
+    /**
+     * Buka modal tolak.
+     *
+     * @param  int  $id  id asli di tabel sumber
+     * @param  string  $tipe  'kering' (SerahTerimaVeneerKering, default / alur lama),
+     *                        'gudang' (GudangVeneerJadi), 'pilih' (HasilPilihVeneer)
+     */
     public function bukaModalTolak(int $id, string $tipe = 'kering'): void
     {
         $this->tolakId = $id;
         $this->tolakTipe = $tipe;
         $this->alasanTolak = '';
-        $this->tolakModalTitle = 'Tolak Veneer Jadi';
-        $this->tolakModalDescription = 'Veneer ini akan ditolak dan tidak akan menambah stok Gudang Veneer Jadi.';
+
+        [$this->tolakModalTitle, $this->tolakModalDescription] = match ($tipe) {
+            'gudang' => [
+                'Tolak Kiriman Veneer Jadi',
+                'Kiriman dari Produksi/Repair ini akan ditolak dan tidak akan menambah stok Gudang Veneer Jadi.',
+            ],
+            'pilih' => [
+                'Tolak Hasil Pilih Veneer',
+                'Hasil pilih veneer ini akan ditolak dan tidak akan menambah stok Gudang Veneer Jadi.',
+            ],
+            default => [
+                'Tolak Veneer Jadi',
+                'Veneer ini akan ditolak dan tidak akan menambah stok Gudang Veneer Jadi.',
+            ],
+        };
+
         $this->showTolakModal = true;
     }
 
@@ -1160,22 +1202,15 @@ class GudangVeneerJadi extends Page
 
         try {
             DB::transaction(function () {
-                $st = SerahTerimaVeneerKering::lockForUpdate()->findOrFail($this->tolakId);
-
-                if ($st->diterima_oleh !== '-' || $st->ditolak_oleh) {
-                    throw new \RuntimeException('Veneer ini sudah diproses (diterima/ditolak) sebelumnya.');
-                }
-
-                $st->update([
-                    'ditolak_oleh' => Auth::user()->name,
-                    'alasan_tolak' => $this->alasanTolak,
-                    'ditolak_at' => now(),
-                    'status' => 'Ditolak',
-                ]);
+                match ($this->tolakTipe) {
+                    'gudang' => $this->tolakDariGudang($this->tolakId),
+                    'pilih' => $this->tolakDariPilihVeneer($this->tolakId),
+                    default => $this->tolakDariSerahTerima($this->tolakId),
+                };
             });
 
             $this->batalTolak();
-            unset($this->serahTerima, $this->riwayatSerahTerima);
+            unset($this->serahTerima, $this->riwayatSerahTerima, $this->antreanFiltered);
 
             Notification::make()->warning()
                 ->title('Veneer Ditolak')
@@ -1187,6 +1222,76 @@ class GudangVeneerJadi extends Page
                 ->body($e->getMessage())
                 ->send();
         }
+    }
+
+    /**
+     * Tolak baris SerahTerimaVeneerKering (Dryer/Kedi/Joint/Gudang).
+     */
+    protected function tolakDariSerahTerima(int $id): void
+    {
+        $st = SerahTerimaVeneerKering::lockForUpdate()->findOrFail($id);
+
+        if ($st->diterima_oleh !== '-' || $st->ditolak_oleh) {
+            throw new \RuntimeException('Veneer ini sudah diproses (diterima/ditolak) sebelumnya.');
+        }
+
+        $st->update([
+            'ditolak_oleh' => Auth::user()->name,
+            'alasan_tolak' => $this->alasanTolak,
+            'ditolak_at' => now(),
+            'status' => 'Ditolak',
+        ]);
+    }
+
+    /**
+     * Tolak kiriman GudangVeneerJadi (Produksi/Repair).
+     * Stok tidak disentuh (stok baru bertambah saat diterima).
+     * Kolom status_gudang tidak diubah; penanda ditolak = ditolak_at.
+     */
+    protected function tolakDariGudang(int $id): void
+    {
+        $record = GudangModel::where('id', $id)->lockForUpdate()->first();
+
+        if (! $record) {
+            throw new \RuntimeException('Data tidak ditemukan.');
+        }
+
+        if ($record->status_gudang === 'sudah diterima' || $record->ditolak_at !== null) {
+            throw new \RuntimeException('Barang ini sudah diproses (diterima/ditolak) sebelumnya.');
+        }
+
+        // Langsung hapus baris gudang.
+        // Kalau berasal dari Hasil Repair (keterangan "Serah Terima Hasil Repair
+        // ID #N"), status serah di hasil repair di-reset supaya tombol "Serah"
+        // muncul lagi di sisi Repair.
+        if (preg_match('/Hasil Repair ID #(\d+)/', (string) $record->keterangan, $m)) {
+            DetailHasilRepair::where('id', (int) $m[1])->update([
+                'diserahkan_at' => null,
+                'diserahkan_by' => null,
+            ]);
+        }
+
+        $record->delete();
+    }
+
+    /**
+     * Tolak hasil pilih veneer.
+     * Hanya mengisi kolom ditolak_gudang_*. diterima_gudang_at TIDAK diisi,
+     * jadi event saved() di HasilPilihVeneer tidak memutasi stok.
+     */
+    protected function tolakDariPilihVeneer(int $id): void
+    {
+        $hasil = HasilPilihVeneer::lockForUpdate()->findOrFail($id);
+
+        if ($hasil->diterima_gudang_at !== null || $hasil->ditolak_gudang_at !== null) {
+            throw new \RuntimeException('Hasil pilih veneer ini sudah diproses (diterima/ditolak) sebelumnya.');
+        }
+
+        $hasil->update([
+            'ditolak_gudang_oleh' => Auth::user()?->name ?? 'System',
+            'alasan_tolak_gudang' => $this->alasanTolak,
+            'ditolak_gudang_at' => now(),
+        ]);
     }
 
     // 🔧 TODO: TERIMA DI SISI REPAIR (belum diimplementasikan, alur belum ditentukan)
@@ -1213,6 +1318,53 @@ class GudangVeneerJadi extends Page
     }
 
     /**
+     * Petakan satu baris HasilPilihVeneer ke format antrean.
+     */
+    protected function petakanItemPilihVeneer($hasil): array
+    {
+        $modal = $hasil->modalPilihVeneer;
+        $isKeringAsal = ! $modal?->id_stok_veneer_jadi;
+        $ditolak = $hasil->ditolak_gudang_at !== null;
+
+        $jenisKayuNama = $isKeringAsal
+            ? $modal?->jenisKayu?->nama_kayu
+            : $modal?->stokVeneerJadi?->jenisKayu?->nama_kayu;
+        $panjang = $isKeringAsal ? $modal?->ukuran?->panjang : $modal?->stokVeneerJadi?->panjang;
+        $lebar = $isKeringAsal ? $modal?->ukuran?->lebar : $modal?->stokVeneerJadi?->lebar;
+        $tebal = $isKeringAsal ? $modal?->ukuran?->tebal : $modal?->stokVeneerJadi?->tebal;
+
+        return [
+            'id' => 'pilih-'.$hasil->id,
+            'raw_id' => $hasil->id,
+            'tolak_tipe' => 'pilih',
+            'source' => 'pilih_veneer',
+            'sumber_label' => 'Pilih Veneer',
+            'jenis_kayu' => $jenisKayuNama,
+            'panjang' => $panjang,
+            'lebar' => $lebar,
+            'tebal' => $tebal,
+            'kw' => $hasil->kw, // KW HASIL, bukan KW modal
+            'jumlah' => $hasil->jumlah,
+            'stok_kubikasi' => $this->hitungKubikasi(
+                (float) ($panjang ?? 0),
+                (float) ($lebar ?? 0),
+                (float) ($tebal ?? 0),
+                (int) $hasil->jumlah
+            ),
+            'created_at' => $hasil->created_at,
+            'created_at_ts' => $hasil->created_at?->timestamp ?? 0,
+            'status_gudang' => $ditolak ? 'ditolak' : 'belum diterima',
+            'diterima_at' => null,
+            'diterima_by' => null,
+            'penerima_name' => 'N/A',
+            'ditolak_oleh' => $hasil->ditolak_gudang_oleh,
+            'alasan_tolak' => $hasil->alasan_tolak_gudang,
+            'ditolak_at' => $hasil->ditolak_gudang_at,
+            'keterangan' => 'Pilih Veneer tanggal '.$hasil->created_at?->translatedFormat('d F Y'),
+        ];
+    }
+
+    /**
      * Antrean serah terima hasil pilih veneer.
      *
      * ✅ FIX: kolom `jenis_veneer` TIDAK ada di tabel hasil_pilih_veneer,
@@ -1220,54 +1372,35 @@ class GudangVeneerJadi extends Page
      * belum diterima gudang masuk antrean (tujuannya selalu veneer jadi).
      * Asal modal (jadi/kering) ditentukan dari id_stok_veneer_jadi,
      * sama dengan logika di HasilPilihVeneer::mutasiStokSaatDiterima().
+     *
+     * Yang sudah ditolak (ditolak_gudang_at terisi) ditampilkan sebagai
+     * riwayat dengan status 'ditolak', dibatasi 50 terbaru.
      */
     protected function ambilAntreanDariPilihVeneer(): Collection
     {
-        $hasilRows = HasilPilihVeneer::with([
+        $relasi = [
             'modalPilihVeneer.stokVeneerJadi.jenisKayu',
             'modalPilihVeneer.jenisKayu',
             'modalPilihVeneer.ukuran',
-        ])
+        ];
+
+        $menunggu = HasilPilihVeneer::with($relasi)
             ->whereNotNull('diserahkan_at')
             ->whereNull('diterima_gudang_at')
+            ->whereNull('ditolak_gudang_at')
             ->get();
 
-        return $hasilRows->map(function ($hasil) {
-            $modal = $hasil->modalPilihVeneer;
-            $isKeringAsal = ! $modal?->id_stok_veneer_jadi;
+        $ditolak = HasilPilihVeneer::with($relasi)
+            ->whereNotNull('diserahkan_at')
+            ->whereNull('diterima_gudang_at')
+            ->whereNotNull('ditolak_gudang_at')
+            ->orderByDesc('ditolak_gudang_at')
+            ->limit(50)
+            ->get();
 
-            $jenisKayuNama = $isKeringAsal
-                ? $modal?->jenisKayu?->nama_kayu
-                : $modal?->stokVeneerJadi?->jenisKayu?->nama_kayu;
-            $panjang = $isKeringAsal ? $modal?->ukuran?->panjang : $modal?->stokVeneerJadi?->panjang;
-            $lebar = $isKeringAsal ? $modal?->ukuran?->lebar : $modal?->stokVeneerJadi?->lebar;
-            $tebal = $isKeringAsal ? $modal?->ukuran?->tebal : $modal?->stokVeneerJadi?->tebal;
-
-            return [
-                'id' => 'pilih-'.$hasil->id,
-                'source' => 'pilih_veneer',
-                'sumber_label' => 'Pilih Veneer',
-                'jenis_kayu' => $jenisKayuNama,
-                'panjang' => $panjang,
-                'lebar' => $lebar,
-                'tebal' => $tebal,
-                'kw' => $hasil->kw, // KW HASIL, bukan KW modal
-                'jumlah' => $hasil->jumlah,
-                'stok_kubikasi' => $this->hitungKubikasi(
-                    (float) ($panjang ?? 0),
-                    (float) ($lebar ?? 0),
-                    (float) ($tebal ?? 0),
-                    (int) $hasil->jumlah
-                ),
-                'created_at' => $hasil->created_at,
-                'created_at_ts' => $hasil->created_at?->timestamp ?? 0,
-                'status_gudang' => 'belum diterima',
-                'diterima_at' => null,
-                'diterima_by' => null,
-                'penerima_name' => 'N/A',
-                'keterangan' => 'Pilih Veneer tanggal '.$hasil->created_at?->translatedFormat('d F Y'),
-            ];
-        });
+        return $menunggu
+            ->concat($ditolak)
+            ->map(fn ($hasil) => $this->petakanItemPilihVeneer($hasil));
     }
 
     /**
@@ -1288,6 +1421,10 @@ class GudangVeneerJadi extends Page
 
                 if ($hasil->diterima_gudang_at !== null) {
                     throw new \Exception('Hasil pilih veneer ini sudah diterima sebelumnya.');
+                }
+
+                if ($hasil->ditolak_gudang_at !== null) {
+                    throw new \Exception('Hasil pilih veneer ini sudah ditolak sebelumnya, tidak bisa diterima.');
                 }
 
                 // Modal asal kering tidak punya stokVeneerJadi; hanya modal

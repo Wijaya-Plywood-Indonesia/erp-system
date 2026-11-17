@@ -11,6 +11,7 @@ class DetailKayuMasuk extends Model
     protected $table = 'detail_kayu_masuks';
 
     protected $fillable = [
+        'offline_uuid',   // ← tambahan
         'id_kayu_masuk',
         'id_jenis_kayu',
         'id_lahan',
@@ -113,8 +114,8 @@ class DetailKayuMasuk extends Model
         $records = self::where('id_kayu_masuk', $idKayuMasuk)->get();
 
         return [
-            'total_batang'   => $records->sum('jumlah_batang'),
-            'total_kubikasi' => $records->sum(fn($r) => $r->kubikasi), // ← accessor
+            'total_batang' => $records->sum('jumlah_batang'),
+            'total_kubikasi' => $records->sum(fn ($r) => $r->kubikasi), // ← accessor
         ];
     }
 
