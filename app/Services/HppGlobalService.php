@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\DetailHasilPaletRotary;
 use App\Models\HppVeneerBasahLog;
+use App\Models\HppVeneerJadiLog;
 use App\Models\StokVeneerKering;
 use Carbon\Carbon;
 
@@ -20,8 +21,8 @@ use Carbon\Carbon;
  *                dibobot m³ (stok lama tidak ikut).
  * Angka kecil  = HPP STOK GUDANG pada akhir bulan: Σ nilai stok ÷ Σ stok m³ (HPP Average gabungan).
  *
- * Menambah tahap baru (veneer jadi, triplek, dst.): buat method bulanan + stok seperti
- * veneerBasah()/veneerKering() lalu panggil susun() — bagian tampilan tidak perlu diubah.
+ * Menambah tahap baru (triplek, dst.): buat method bulanan + stok seperti
+ * basahBulanan()/keringBulanan()/jadiBulanan() lalu panggil susun() — bagian tampilan tidak perlu diubah.
  */
 class HppGlobalService
 {
@@ -62,7 +63,14 @@ class HppGlobalService
             ->distinct()
             ->pluck('b');
 
-        return $basah->merge($kering)->filter()->unique()->sortDesc()->values()->all();
+        $jadi = HppVeneerJadiLog::query()
+            ->where('tipe_transaksi', 'masuk')
+            ->whereNotNull('jalur')
+            ->selectRaw("DATE_FORMAT(tanggal, '%Y-%m') AS b")
+            ->distinct()
+            ->pluck('b');
+
+        return $basah->merge($kering)->merge($jadi)->filter()->unique()->sortDesc()->values()->all();
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -113,6 +121,23 @@ class HppGlobalService
                         'ongkos' => 'Ongkos dryer',
                     ],
                     false
+                ),
+            ],
+            'jadi' => [
+                'judul'     => 'Veneer Jadi',
+                'deskripsi' => 'Biaya 1 m³ veneer jadi (HPP veneer kering + pekerja + mesin + bahan penolong repair/joint).',
+                'kartu'     => $this->susun(
+                    $this->jadiBulanan($mulai->toDateString(), $akhir->toDateString()),
+                    $this->jadiStok($akhir->toDateString()),
+                    $daftarBulan,
+                    $bulan,
+                    [
+                        'kering'  => 'Veneer kering',
+                        'pekerja' => 'Pekerja',
+                        'mesin'   => 'Mesin',
+                        'bahan'   => 'Bahan penolong',
+                    ],
+                    true
                 ),
             ],
         ];
@@ -235,6 +260,83 @@ class HppGlobalService
                 ->whereIn('stok_veneer_kerings.id', $potong)
                 ->where('stok_veneer_kerings.stok_m3_sesudah', '>', 0)
                 ->selectRaw("$kat AS kat, SUM(stok_veneer_kerings.stok_m3_sesudah) AS m3, SUM(stok_veneer_kerings.nilai_stok_sesudah) AS nilai")
+                ->groupBy('kat')
+                ->get();
+
+            foreach ($rows as $r) {
+                $out[$r->kat]['m3']    = ($out[$r->kat]['m3'] ?? 0) + (float) $r->m3;
+                $out[$r->kat]['nilai'] = ($out[$r->kat]['nilai'] ?? 0) + (float) $r->nilai;
+            }
+        }
+
+        return $out;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Veneer JADI
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Rata-rata pemasukan veneer jadi dari PRODUKSI (jalur terisi: kering langsung, repair, joint),
+     * dibobot m³. Opname/nota/pengembalian tidak ikut (bukan biaya produksi).
+     *
+     *   kering  = total − (pekerja + mesin + bahan proses)   → HPP veneer kering yang dibawa masuk
+     *   pekerja / mesin / bahan = biaya proses repair/joint (dari JSON komposisi)
+     */
+    protected function jadiBulanan(string $mulai, string $akhir): array
+    {
+        $komp = '(COALESCE(hpp_kayu,0)+COALESCE(hpp_pekerja,0)+COALESCE(hpp_mesin,0)+COALESCE(hpp_bahan_penolong,0)+COALESCE(hpp_lainnya,0))';
+        $kat  = $this->kategoriSql('tebal');
+
+        $proses = fn (string $kunci) => "COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(komposisi, '\$.komponen.".$kunci."')) AS DECIMAL(20,4)), 0)";
+        $p = $proses('pekerja_proses');
+        $m = $proses('mesin_proses');
+        $b = $proses('bahan_proses');
+
+        $rows = HppVeneerJadiLog::query()
+            ->where('tipe_transaksi', 'masuk')
+            ->whereNotNull('jalur')
+            ->whereRaw("$komp > 0")
+            ->whereBetween('tanggal', [$mulai, $akhir])
+            ->selectRaw("
+                DATE_FORMAT(tanggal, '%Y-%m') AS bulan,
+                $kat AS kat,
+                COUNT(*) AS palet,
+                SUM(total_kubikasi) AS m3,
+                SUM(CASE WHEN keterangan LIKE '%[HPP SEMENTARA]%' THEN total_kubikasi ELSE 0 END) AS m3_sementara,
+                SUM(GREATEST($komp - $p - $m - $b, 0) * total_kubikasi) AS n_kering,
+                SUM($p * total_kubikasi)                                AS n_pekerja,
+                SUM($m * total_kubikasi)                                AS n_mesin,
+                SUM($b * total_kubikasi)                                AS n_bahan,
+                SUM($komp * total_kubikasi)                             AS n_total
+            ")
+            ->groupBy('bulan', 'kat')
+            ->get();
+
+        return $this->petakan($rows, ['kering', 'pekerja', 'mesin', 'bahan', 'total']);
+    }
+
+    /** Stok veneer jadi akhir bulan per kategori: [kat] => ['m3','nilai'] */
+    protected function jadiStok(string $sampaiTanggal): array
+    {
+        $ids = HppVeneerJadiLog::query()
+            ->where('tanggal', '<=', $sampaiTanggal)
+            ->selectRaw('MAX(id) AS id')
+            ->groupBy('id_jenis_kayu', 'panjang', 'lebar', 'tebal', 'kw_grade')
+            ->pluck('id');
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $kat = $this->kategoriSql('tebal');
+        $out = [];
+
+        foreach ($ids->chunk(2000) as $potong) {
+            $rows = HppVeneerJadiLog::query()
+                ->whereIn('id', $potong)
+                ->where('stok_kubikasi_after', '>', 0)
+                ->selectRaw("$kat AS kat, SUM(stok_kubikasi_after) AS m3, SUM(nilai_stok_after) AS nilai")
                 ->groupBy('kat')
                 ->get();
 
