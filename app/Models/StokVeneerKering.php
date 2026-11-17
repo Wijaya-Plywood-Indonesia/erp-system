@@ -15,6 +15,7 @@ class StokVeneerKering extends Model
         'id_ukuran',
         'id_jenis_kayu',
         'kw',
+        'tipe_mesin',
         'jenis_transaksi',
         'tanggal_transaksi',
         'qty',
@@ -38,6 +39,7 @@ class StokVeneerKering extends Model
         'keterangan',
         'id_veneer_mutasi',
         'id_veneer_mutasi_detail',
+        'komposisi',
     ];
 
     protected $casts = [
@@ -55,6 +57,7 @@ class StokVeneerKering extends Model
         'stok_m3_sesudah' => 'decimal:6',
         'nilai_stok_sesudah' => 'decimal:4',
         'hpp_average' => 'decimal:4',
+        'komposisi' => 'array',
     ];
 
     // ─── Relasi ──────────────────────────────────────────────────────────────
@@ -75,11 +78,9 @@ class StokVeneerKering extends Model
     }
 
     public function detailHasil()
-{
-    return $this->belongsTo(\App\Models\DetailHasil::class, 'id_detail_hasil_dryer');
-}
-
-    
+    {
+        return $this->belongsTo(\App\Models\DetailHasil::class, 'id_detail_hasil_dryer');
+    }
 
     // ─── Scope ───────────────────────────────────────────────────────────────
 
