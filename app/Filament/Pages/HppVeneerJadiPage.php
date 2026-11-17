@@ -178,6 +178,7 @@ class HppVeneerJadiPage extends Page
     {
         return $this->queryLogs($denganBulan)
             ->where('tipe_transaksi', 'masuk')
+            ->whereNotNull('jalur')
             ->whereRaw(self::KOMP.' > 0');
     }
 
@@ -194,26 +195,43 @@ class HppVeneerJadiPage extends Page
             SUM(COALESCE(hpp_mesin,0)          * total_kubikasi) AS n_mesin,
             SUM(COALESCE(hpp_bahan_penolong,0) * total_kubikasi) AS n_bahan,
             SUM(COALESCE(hpp_lainnya,0)        * total_kubikasi) AS n_lainnya,
+            SUM(".$this->prosesSql('pekerja_proses')." * total_kubikasi) AS n_pekerja_proses,
+            SUM(".$this->prosesSql('mesin_proses')."   * total_kubikasi) AS n_mesin_proses,
+            SUM(".$this->prosesSql('bahan_proses')."   * total_kubikasi) AS n_bahan_proses,
             SUM($komp * total_kubikasi)                          AS n_total,
             SUM(CASE WHEN keterangan LIKE '%".HppVeneerJadiService::TANDA_SEMENTARA."%' THEN 1 ELSE 0 END) AS sementara
         ";
     }
 
+    /** Komponen PROSES (repair/joint) dibaca dari JSON komposisi; null → 0. */
+    protected function prosesSql(string $kunci): string
+    {
+        return "COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(komposisi, '$.komponen.{$kunci}')) AS DECIMAL(20,4)), 0)";
+    }
+
+    /**
+     * Rumus veneer jadi: HPP veneer kering (yang dibawa masuk) + pekerja + mesin + bahan penolong
+     * proses repair/joint. "Kering" = total dikurangi biaya proses.
+     */
     protected function petaHpp($r): array
     {
         $m3  = (float) $r->m3;
         $per = fn ($n) => $m3 > 0 ? (float) $n / $m3 : 0.0;
 
+        $pekerja = $per($r->n_pekerja_proses);
+        $mesin   = $per($r->n_mesin_proses);
+        $bahan   = $per($r->n_bahan_proses);
+        $total   = $per($r->n_total);
+
         return [
             'bulan'     => $r->bulan,
             'transaksi' => (int) $r->transaksi,
             'm3'        => $m3,
-            'kayu'      => $per($r->n_kayu),
-            'pekerja'   => $per($r->n_pekerja),
-            'mesin'     => $per($r->n_mesin),
-            'bahan'     => $per($r->n_bahan),
-            'lainnya'   => $per($r->n_lainnya),
-            'total'     => $per($r->n_total),
+            'kering'    => max(0.0, $total - $pekerja - $mesin - $bahan),
+            'pekerja'   => $pekerja,
+            'mesin'     => $mesin,
+            'bahan'     => $bahan,
+            'total'     => $total,
             'sementara' => (int) $r->sementara,
         ];
     }
@@ -303,8 +321,9 @@ class HppVeneerJadiPage extends Page
     // ── Asal veneer per baris log (lahan & mesin) ──────────────
 
     /**
-     * Peta id log → ['lahan' => [['kode' => 'A', 'persen' => 62], ...], 'mesin' => [['nama' => 'Dryer', 'persen' => 67], ...]]
-     * untuk baris MASUK yang sedang tampil (1 query lahan untuk seluruh halaman).
+     * Teks rincian (untuk tooltip "ⓘ") HPP veneer kering yang dibawa tiap baris MASUK:
+     * kayu, pekerja, mesin, bahan tahap sebelumnya + asal mesin (Dryer/Kedi) + asal lahan.
+     * Hanya informasi tambahan; tidak mempengaruhi angka.
      */
     public function asalUntukLogs($logs): array
     {
@@ -319,26 +338,74 @@ class HppVeneerJadiPage extends Page
             ->get(['id', 'kode_lahan', 'nama_lahan'])
             ->mapWithKeys(fn ($l) => [(string) $l->id => $l->kode_lahan ?: $l->nama_lahan]);
 
-        $labelMesin = ['dryer' => 'Dryer', 'kedi' => 'Kedi', 'tidak_diketahui' => '?'];
+        $label = [
+            'kayu' => 'Kayu', 'pekerja_rotary' => 'Pekerja rotary', 'mesin_rotary' => 'Mesin rotary',
+            'bahan_rotary' => 'Bahan rotary', 'pekerja_kering' => 'Pekerja dryer/kedi',
+            'mesin_kering' => 'Mesin dryer/kedi', 'lainnya' => 'Tanpa rincian',
+        ];
+        $labelMesin = ['dryer' => 'Dryer', 'kedi' => 'Kedi'];
 
         $hasil = [];
         foreach ($masuk as $log) {
-            $lahan = [];
-            foreach ($log->komposisi['lahan'] ?? [] as $id => $porsi) {
-                $lahan[] = [
-                    'kode'   => is_numeric($id) ? ($kode[(string) $id] ?? "#{$id}") : '?',
-                    'persen' => (int) round($porsi * 100),
-                ];
+            $kk = $log->komposisi['komponen'] ?? [];
+
+            $bagian = [];
+            foreach ($label as $k => $nama) {
+                if (($kk[$k] ?? 0) > 0.5) {
+                    $bagian[] = $nama.' '.number_format($kk[$k], 0, ',', '.');
+                }
             }
-            usort($lahan, fn ($a, $b) => $b['persen'] <=> $a['persen']);
+
+            $teks = $bagian ? 'Rincian HPP veneer kering: '.implode(' · ', $bagian) : '';
 
             $mesin = [];
             foreach ($log->komposisi['mesin'] ?? [] as $id => $porsi) {
-                $mesin[] = ['nama' => $labelMesin[$id] ?? $id, 'persen' => (int) round($porsi * 100)];
+                if (isset($labelMesin[$id])) {
+                    $mesin[] = $labelMesin[$id].' '.(int) round($porsi * 100).'%';
+                }
             }
-            usort($mesin, fn ($a, $b) => $b['persen'] <=> $a['persen']);
+            if ($mesin) {
+                $teks .= ' | Asal mesin: '.implode(', ', $mesin);
+            }
 
-            $hasil[$log->id] = ['lahan' => $lahan, 'mesin' => $mesin];
+            $lahan = [];
+            foreach ($log->komposisi['lahan'] ?? [] as $id => $porsi) {
+                if (is_numeric($id)) {
+                    $lahan[] = ['k' => $kode[(string) $id] ?? "#{$id}", 'p' => (int) round($porsi * 100)];
+                }
+            }
+            usort($lahan, fn ($a, $b) => $b['p'] <=> $a['p']);
+            if ($lahan) {
+                $teks .= ' | Perkiraan asal lahan kayu: '.implode(', ', array_map(fn ($l) => $l['k'].' '.$l['p'].'%', array_slice($lahan, 0, 5)));
+            }
+
+            $hasil[$log->id] = ['tooltip' => trim($teks, ' |')];
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * Ringkas daftar chip: tampilkan 3 terbesar, sisanya digabung "+N lain". Yang tidak diketahui ("?")
+     * hanya ditampilkan bila ada yang diketahui juga dan porsinya minimal 5%.
+     *
+     * @param  array<int,array{kode: string, persen: int}>  $daftar
+     */
+    protected function ringkasChip(array $daftar, string $tanda): array
+    {
+        $tahu = array_values(array_filter($daftar, fn ($d) => $d['kode'] !== $tanda));
+        $tak  = array_values(array_filter($daftar, fn ($d) => $d['kode'] === $tanda));
+        usort($tahu, fn ($a, $b) => $b['persen'] <=> $a['persen']);
+
+        $hasil = array_slice($tahu, 0, 3);
+        $sisa  = array_slice($tahu, 3);
+
+        if ($sisa) {
+            $hasil[] = ['kode' => '+'.count($sisa).' lain', 'persen' => array_sum(array_column($sisa, 'persen'))];
+        }
+
+        if ($tahu && $tak && $tak[0]['persen'] >= 5) {
+            $hasil[] = $tak[0];
         }
 
         return $hasil;

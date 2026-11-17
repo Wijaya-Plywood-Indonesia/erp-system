@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\DetailHasilRepair;
 use App\Models\GudangVeneerJadi;
+use App\Support\Hpp\KomponenHpp;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -33,6 +34,10 @@ class DetailHasilRepairService
             $tanggalProduksi = $record->produksiRepair?->tanggal ?? now()->toDateString();
             $idProduksi = $record->id_produksi_repair;
 
+            // HPP: veneer yang dimasukkan ke repair + pekerja + bahan penolong repair
+            $hppService = app(HppVeneerJadiService::class);
+            $komponen = $hppService->komponenRepair($record);
+
             // 1. Eksekusi pencatatan ke gudang
             $this->prosesMasukGudangUtama(
                 idJenisKayu: $idJenisKayu,
@@ -44,22 +49,20 @@ class DetailHasilRepairService
                 tanggalProduksi: $tanggalProduksi,
                 keteranganProduksi: "Serah Terima Hasil Repair ID #{$record->id}",
                 idProduksiRepair: $idProduksi,
-                idDetailHasilRepair: $record->id
+                komponen: $komponen
             );
 
-            // 2. Update status diserahkan. Bekas penolakan gudang dikosongkan.
+            // 2. Update status diserahkan pada record hasil repair
             $record->update([
                 'diserahkan_at' => now(),
                 'diserahkan_by' => Auth::id(),
-                'ditolak_gudang_oleh' => null,
-                'alasan_tolak_gudang' => null,
-                'ditolak_gudang_at' => null,
             ]);
         });
     }
 
     /**
-     * Helper internal kalkulasi kubikasi dan HPP gudang
+     * Helper internal kalkulasi kubikasi dan HPP gudang.
+     * HPP disimpan per m³; nilai_stok = m³ × HPP per m³.
      */
     protected function prosesMasukGudangUtama(
         $idJenisKayu,
@@ -71,36 +74,38 @@ class DetailHasilRepairService
         $tanggalProduksi,
         $keteranganProduksi = null,
         $idProduksiRepair = null,
-        $idDetailHasilRepair = null
+        ?KomponenHpp $komponen = null
     ): GudangVeneerJadi {
         $volumePerLembar = ($panjang * $lebar * $tebal) / 10000000;
         $totalKubikasiMasuk = $totalLembar * $volumePerLembar;
 
-        $hppPekerjaMasuk = 0;
-        $hppBahanPenolongMasuk = 0;
-        $hppAverageMasuk = $hppPekerjaMasuk + $hppBahanPenolongMasuk;
-        $nilaiStokMasuk = $totalLembar * $hppAverageMasuk;
+        $komponen ??= KomponenHpp::kosong();
+        $g = $komponen->kelompok();
+        $hppPerM3 = $komponen->total();
 
         return GudangVeneerJadi::create([
-            'id_stok_veneer_jadi' => null,
-            'id_jenis_kayu' => $idJenisKayu,
-            'panjang' => $panjang,
-            'lebar' => $lebar,
-            'tebal' => $tebal,
-            'kw_grade' => $kwGrade,
-            'stok_lembar' => $totalLembar,
-            'stok_kubikasi' => $totalKubikasiMasuk,
-            'nilai_stok' => $nilaiStokMasuk,
-            'hpp_average' => $hppAverageMasuk,
-            'hpp_pekerja_last' => $hppPekerjaMasuk,
-            'hpp_bahan_penolong_last' => $hppBahanPenolongMasuk,
-            'id_last_log' => null,
-            'tanggal_produksi' => $tanggalProduksi,
-            'status_gudang' => 'belum diterima',
-            'keterangan' => $keteranganProduksi ?? "Dari Produksi Repair #{$idProduksiRepair}",
-            'id_detail_hasil_repair' => $idDetailHasilRepair,
-            'diterima_by' => null,
-            'diterima_at' => null,
+            'id_stok_veneer_jadi'     => null,
+            'id_jenis_kayu'           => $idJenisKayu,
+            'panjang'                 => $panjang,
+            'lebar'                   => $lebar,
+            'tebal'                   => $tebal,
+            'kw_grade'                => $kwGrade,
+            'stok_lembar'             => $totalLembar,
+            'stok_kubikasi'           => $totalKubikasiMasuk,
+            'nilai_stok'              => round($totalKubikasiMasuk * $hppPerM3, 2),
+            'hpp_average'             => round($hppPerM3, 2),
+            'hpp_kayu_last'           => round($g['kayu'], 2),
+            'hpp_pekerja_last'        => round($g['pekerja'], 2),
+            'hpp_mesin_last'          => round($g['mesin'], 2),
+            'hpp_bahan_penolong_last' => round($g['bahan'], 2),
+            'jalur'                   => 'repair',
+            'komposisi'               => $komponen->toArray(),
+            'id_last_log'             => null,
+            'tanggal_produksi'        => $tanggalProduksi,
+            'status_gudang'           => 'belum diterima',
+            'keterangan'              => $keteranganProduksi ?? "Dari Produksi Repair #{$idProduksiRepair}",
+            'diterima_by'             => null,
+            'diterima_at'             => null,
         ]);
     }
 }

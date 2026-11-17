@@ -3,13 +3,21 @@
 namespace App\Services;
 
 use App\Models\BahanPenolongProduksi;
+use App\Models\DetailBongkarKedi;
+use App\Models\DetailHasil;
 use App\Models\DetailHasilPaletRotary;
+use App\Models\GudangVeneerJadi;
 use App\Models\DetailHasilRepair;
 use App\Models\HargaPegawai;
 use App\Models\HppVeneerBasahLog;
 use App\Models\HppVeneerBasahSummary;
 use App\Models\HppVeneerJadiLog;
 use App\Models\Mesin;
+use App\Models\OngkosProduksiDryer;
+use App\Models\ProduksiKedi;
+use App\Models\ProduksiPressDryer;
+use App\Models\ValidasiKedi;
+use App\Models\ValidasiPressDryer;
 use App\Models\ProduksiJoint;
 use App\Models\ProduksiRepair;
 use App\Models\SerahTerimaVeneerKering;
@@ -112,9 +120,14 @@ class HppVeneerJadiService
 
         $tipe = $row->id_detail_bongkar_kedi ? 'kedi' : 'dryer';
 
+        $acuanLama          = $this->tanggalAcuan;
+        $this->tanggalAcuan = $row->tanggal_transaksi ? Carbon::parse($row->tanggal_transaksi)->toDateString() : $acuanLama;
+        $lahan              = $this->lahanBasah($idKayu);
+        $this->tanggalAcuan = $acuanLama;
+
         $k = (new KomponenHpp($komp))
             ->denganMesin($tipe)
-            ->denganLahan($this->lahanBasah($idKayu))
+            ->denganLahan($lahan)
             ->rekonsiliasi((float) $row->hpp_kering_per_m3);
 
         $row->forceFill(['komposisi' => $k->toArray(), 'tipe_mesin' => $tipe])->saveQuietly();
@@ -151,10 +164,18 @@ class HppVeneerJadiService
             if ($sisa <= 0.000001) {
                 break;
             }
-            $ambil    = min($sisa, (float) $row->m3);
-            $bagian[] = [$ambil, $row->komposisi
-                ? KomponenHpp::dari($row->komposisi)
-                : new KomponenHpp(['lainnya' => (float) $row->hpp_kering_per_m3])];
+            $ambil = min($sisa, (float) $row->m3);
+
+            if ($row->id_detail_hasil_dryer || $row->id_detail_bongkar_kedi) {
+                // hasil produksi dryer/kedi: rincian dihitung bila belum ada (tidak perlu menjalankan perintah isi-komposisi dulu)
+                $kompRow = $this->komposisiRow($row);
+            } else {
+                $kompRow = $row->komposisi
+                    ? KomponenHpp::dari($row->komposisi)
+                    : new KomponenHpp(['lainnya' => (float) $row->hpp_kering_per_m3]);
+            }
+
+            $bagian[] = [$ambil, $kompRow];
             $sisa -= $ambil;
         }
 
@@ -184,16 +205,22 @@ class HppVeneerJadiService
     {
         switch ($st->tipe_sumber) {
             case 'dryer':
+                if (! $st->id_detail_hasil) {
+                    return $this->inputYatim($st);
+                }
                 $row = StokVeneerKering::where('id_detail_hasil_dryer', $st->id_detail_hasil)
                     ->where('jenis_transaksi', 'masuk')->orderBy('id')->first();
 
-                return $row ? $this->komposisiRow($row) : $this->fallbackKering($st);
+                return $row ? $this->komposisiRow($row) : $this->komponenPaletLangsung($st);
 
             case 'kedi':
+                if (! $st->id_detail_bongkar_kedi) {
+                    return $this->inputYatim($st);
+                }
                 $row = StokVeneerKering::where('id_detail_bongkar_kedi', $st->id_detail_bongkar_kedi)
                     ->where('jenis_transaksi', 'masuk')->orderBy('id')->first();
 
-                return $row ? $this->komposisiRow($row) : $this->fallbackKering($st);
+                return $row ? $this->komposisiRow($row) : $this->komponenPaletLangsung($st);
 
             case 'gudang':
                 $palet = $st->mutasiKeluarPalet;
@@ -204,6 +231,9 @@ class HppVeneerJadiService
                 return $this->komposisiKeringAverage((int) $palet->id_ukuran, (int) $palet->id_jenis_kayu, (string) $palet->kw);
 
             case 'gudang_jadi':
+                if (isset($this->komposisiKeluar[$st->id])) {
+                    return $this->komposisiKeluar[$st->id];
+                }
                 $m = $st->mutasiKeluarPaletJadi?->mutasiKeluar;
                 if (! $m) {
                     break;
@@ -228,9 +258,136 @@ class HppVeneerJadiService
         return KomponenHpp::kosong();
     }
 
+    /**
+     * Serah terima yang palet sumbernya sudah terhapus (FK ON DELETE SET NULL). Tidak boleh
+     * dicari lewat where(kolom, null) — itu akan cocok ke baris stok mana pun yang kolomnya NULL.
+     */
+    private function inputYatim(SerahTerimaVeneerKering $st): KomponenHpp
+    {
+        $this->catatan[] = "Serah terima #{$st->id}: palet sumber ({$st->tipe_sumber}) sudah terhapus, HPP input tidak bisa dilacak: Rp 0, ditandai sementara.";
+
+        return KomponenHpp::kosong()->tandaiSementara();
+    }
+
     private function komposisiRow(StokVeneerKering $row): KomponenHpp
     {
-        return $row->komposisi ? KomponenHpp::dari($row->komposisi) : $this->isiKomposisiKering($row);
+        $k = $row->komposisi ? KomponenHpp::dari($row->komposisi) : null;
+
+        // komposisi basi (HPP kering baris itu berubah setelah disimpan) → hitung ulang
+        if (! $k || abs($k->total() - (float) $row->hpp_kering_per_m3) > 1) {
+            $k = $this->isiKomposisiKering($row);
+        }
+
+        if ($k->total() <= 0) {
+            $this->catatan[] = "Baris stok kering #{$row->id}: HPP kering belum dihitung (produksi dryer/kedi belum divalidasi). HPP input Rp 0, ditandai sementara.";
+
+            return $k->tandaiSementara();
+        }
+
+        return $k;
+    }
+
+    /** Tanggal transaksi yang sedang dihitung (YYYY-MM-DD). Dipakai agar asal lahan memakai pemasukan basah SEBELUM tanggal itu. */
+    private ?string $tanggalAcuan = null;
+
+    /** @var array<int,KomponenHpp> serah terima id → rincian stok jadi saat veneer itu KELUAR (diisi saat hitung ulang riwayat) */
+    private array $komposisiKeluar = [];
+
+    /** @var array<string,array{pegawai: float, mesin: float, final: bool}> cache ongkos per produksi */
+    private array $cacheOngkos = [];
+
+    /**
+     * Palet dryer/kedi yang diserahkan LANGSUNG ke veneer jadi tidak pernah punya baris di
+     * stok_veneer_kerings, jadi HPP kering-nya tidak pernah dihitung. Di sini dihitung dari data
+     * produksinya: HPP basah (modal) + pegawai/m³ + mesin/m³ — rumus yang sama dengan HppDryerService.
+     * Ditandai SEMENTARA bila produksinya belum divalidasi.
+     */
+    private function komponenPaletLangsung(SerahTerimaVeneerKering $st): KomponenHpp
+    {
+        $dryer = app(HppDryerService::class);
+
+        if ($st->tipe_sumber === 'dryer') {
+            $dh = DetailHasil::with('ukuran')->find($st->id_detail_hasil);
+            if (! $dh) {
+                return $this->fallbackKering($st);
+            }
+
+            $kunci = 'dryer:'.$dh->id_produksi_dryer;
+            if (! isset($this->cacheOngkos[$kunci])) {
+                $produksi = ProduksiPressDryer::with(['detailHasils.ukuran', 'detailMesins.mesin', 'detailPegawais'])->find($dh->id_produksi_dryer);
+                if (! $produksi) {
+                    return $this->fallbackKering($st);
+                }
+                $komp = $dryer->komponenProduksi($produksi);
+                $m3   = (float) $komp['m3_total'];
+                $o    = OngkosProduksiDryer::where('id_produksi_dryer', $produksi->id)->first();
+                $rpPegawai = $o && $o->is_final ? (float) $o->ongkos_pekerja : (float) $komp['pegawai'];
+                $rpMesin   = $o && $o->is_final ? (float) $o->ongkos_mesin : (float) $komp['mesin'];
+
+                $this->cacheOngkos[$kunci] = [
+                    'pegawai' => $m3 > 0 ? $rpPegawai / $m3 : 0.0,
+                    'mesin'   => $m3 > 0 ? $rpMesin / $m3 : 0.0,
+                    'final'   => ValidasiPressDryer::where('id_produksi_dryer', $produksi->id)->where('status', 'divalidasi')->exists(),
+                ];
+            }
+
+            $basah = $dryer->rincianBasahUntukPalet($dh);
+            $o     = $this->cacheOngkos[$kunci];
+
+            return $this->susunKomposisiLangsung((int) $dh->id_jenis_kayu, (float) $basah['hpp'], $o['pegawai'], $o['mesin'], 'dryer', ! $o['final']);
+        }
+
+        if ($st->tipe_sumber === 'kedi') {
+            $dbk = DetailBongkarKedi::with('ukuran')->find($st->id_detail_bongkar_kedi);
+            if (! $dbk) {
+                return $this->fallbackKering($st);
+            }
+
+            $kunci = 'kedi:'.$dbk->id_produksi_kedi;
+            if (! isset($this->cacheOngkos[$kunci])) {
+                $produksi = ProduksiKedi::with(['detailBongkarKedi.ukuran', 'detailPegawaiKedi', 'mesin'])->find($dbk->id_produksi_kedi);
+                if (! $produksi) {
+                    return $this->fallbackKering($st);
+                }
+                $komp = $dryer->komponenKedi($produksi);
+                $m3   = (float) $komp['m3_total'];
+
+                $this->cacheOngkos[$kunci] = [
+                    'pegawai' => $m3 > 0 ? (float) $komp['pegawai'] / $m3 : 0.0,
+                    'mesin'   => $m3 > 0 ? (float) $komp['mesin'] / $m3 : 0.0,
+                    'final'   => ValidasiKedi::where('id_produksi_kedi', $produksi->id)->where('tipe', 'bongkar')->where('status', 'divalidasi')->exists(),
+                ];
+            }
+
+            $basah = $dryer->rincianBasahUntukKedi($dbk);
+            $o     = $this->cacheOngkos[$kunci];
+
+            return $this->susunKomposisiLangsung((int) $dbk->id_jenis_kayu, (float) $basah['hpp'], $o['pegawai'], $o['mesin'], 'kedi', ! $o['final']);
+        }
+
+        return $this->fallbackKering($st);
+    }
+
+    private function susunKomposisiLangsung(int $idKayu, float $basah, float $pegawaiPerM3, float $mesinPerM3, string $tipe, bool $sementara): KomponenHpp
+    {
+        $p = $this->proporsiBasah($idKayu);
+
+        $k = (new KomponenHpp([
+            'kayu'           => $basah * $p['kayu'],
+            'pekerja_rotary' => $basah * $p['pekerja'],
+            'mesin_rotary'   => $basah * $p['mesin'],
+            'bahan_rotary'   => $basah * $p['bahan'],
+            'lainnya'        => $basah * $p['sisa'],
+            'pekerja_kering' => $pegawaiPerM3,
+            'mesin_kering'   => $mesinPerM3,
+        ]))->denganMesin($tipe)->denganLahan($this->lahanBasah($idKayu));
+
+        if ($k->total() <= 0) {
+            $this->catatan[] = "Palet {$tipe}: HPP veneer basah tidak ditemukan, HPP input Rp 0.";
+            $sementara = true;
+        }
+
+        return $k->tandaiSementara($sementara);
     }
 
     private function fallbackKering(SerahTerimaVeneerKering $st): KomponenHpp
@@ -250,41 +407,65 @@ class HppVeneerJadiService
     // =====================================================================
 
     /**
-     * HPP per m³ untuk SATU baris hasil repair.
+     * HPP per m³ untuk SATU baris hasil repair (detail_hasil_repairs).
      *
-     *   input   = HPP veneer yang dimasukkan di modal repair itu (sesuai sumbernya)
-     *   susut   = m³ modal ÷ m³ hasil modal itu (hanya bila modal sudah selesai; kalau belum = 1)
-     *   proses  = (ongkos pekerja hari itu + bahan penolong repair) ÷ total m³ hasil produksi
+     *   input   = HPP veneer yang dimasukkan di modal repair (sesuai sumbernya).
+     *             Bila hasil TIDAK terhubung ke modal (id_modal_repair NULL, data lama / meja tanpa
+     *             modal), semua modal produksi itu dirata-rata tertimbang m³.
+     *   susut   = m³ modal ÷ m³ hasil, hanya bila modal sudah selesai (ditutup / sisa 0); kalau belum = 1.
+     *   proses  = (ongkos pekerja hari itu + bahan penolong repair) ÷ total m³ hasil produksi.
      */
     public function komponenRepair(DetailHasilRepair $hasil): KomponenHpp
     {
-        $modal    = $hasil->modalRepair;
         $produksi = $hasil->produksiRepair;
 
-        if (! $modal || ! $produksi) {
-            $this->catatan[] = "Hasil repair #{$hasil->id}: modal/produksi tidak ditemukan.";
+        if (! $produksi) {
+            $this->catatan[] = "Hasil repair #{$hasil->id}: produksi repair tidak ditemukan.";
 
             return KomponenHpp::kosong();
         }
 
-        $input = $modal->serahTerimaVeneerKering
-            ? $this->komponenInput($modal->serahTerimaVeneerKering)
-            : KomponenHpp::kosong();
+        $modal  = $hasil->modalRepair;
+        $modals = $modal
+            ? collect([$modal])
+            : $produksi->modalRepairs()->with(['ukuran', 'serahTerimaVeneerKering'])->get();
 
-        if (! $modal->serahTerimaVeneerKering) {
-            $this->catatan[] = "Modal repair #{$modal->id} tanpa serah terima: HPP input Rp 0.";
+        if (! $modal) {
+            $this->catatan[] = "Hasil repair #{$hasil->id} tidak terhubung ke modal: HPP input dirata-rata dari semua modal produksi #{$produksi->id}.";
         }
 
+        $bagian = [];
+        $m3In   = 0.0;
+
+        foreach ($modals as $m) {
+            $m3 = $this->m3Ukuran($m->ukuran, (float) $m->jumlah);
+            if ($m3 <= 0) {
+                continue;
+            }
+
+            $st = $m->serahTerimaVeneerKering;
+            if (! $st) {
+                $this->catatan[] = "Modal repair #{$m->id} tanpa serah terima: HPP input Rp 0.";
+            }
+
+            $bagian[] = [$m3, $st ? $this->komponenInput($st) : KomponenHpp::kosong()];
+            $m3In    += $m3;
+        }
+
+        $input = KomponenHpp::gabung($bagian);
+
         // susut
-        $m3In       = $this->m3Ukuran($modal->ukuran, (float) $modal->jumlah);
-        $m3OutModal = $this->m3Hasil($modal->detailHasilRepairs()->with('ukuran')->get());
-        $selesai    = $modal->ditutup_manual_at !== null || (int) $modal->sisa_stok === 0;
+        $keluar  = $modal ? $modal->detailHasilRepairs()->with('ukuran')->get() : $produksi->detailHasilRepairs()->with('ukuran')->get();
+        $m3Out   = $this->m3Hasil($keluar);
+        $selesai = $modals->isNotEmpty() && $modals->every(
+            fn ($m) => $m->ditutup_manual_at !== null || (int) $m->sisa_stok === 0
+        );
 
         $faktor = 1.0;
-        if ($selesai && $m3In > 0 && $m3OutModal > 0) {
-            $faktor = $m3In / $m3OutModal;
+        if ($selesai && $m3In > 0 && $m3Out > 0) {
+            $faktor = $m3In / $m3Out;
         } elseif (! $selesai) {
-            $this->catatan[] = "Modal repair #{$modal->id} belum selesai: susut belum diperhitungkan (HPP sementara).";
+            $this->catatan[] = "Modal repair produksi #{$produksi->id} belum selesai: susut belum diperhitungkan (HPP sementara).";
         }
 
         // biaya proses dibagi seluruh m³ hasil produksi repair hari itu
@@ -312,7 +493,7 @@ class HppVeneerJadiService
                 continue;
             }
             $st = $modal->serahTerimaVeneerKering;
-            if ($st && $st->tipe_sumber === 'joint' && $st->hasilJoint?->id_produksi_joint === $produksi->id) {
+            if ($st && $st->tipe_sumber === 'joint' && (int) $st->hasilJoint?->id_produksi_joint === (int) $produksi->id) {
                 continue; // cegah rekursi tak berujung
             }
             $bagian[] = [$m3, $st ? $this->komponenInput($st) : KomponenHpp::kosong()];
@@ -635,6 +816,7 @@ class HppVeneerJadiService
         $logs = HppVeneerBasahLog::where('id_jenis_kayu', $idJenisKayu)
             ->where('tipe_transaksi', 'masuk')
             ->where('referensi_type', DetailHasilPaletRotary::class)
+            ->when($this->tanggalAcuan, fn ($q, $t) => $q->whereDate('tanggal', '<=', $t))
             ->orderByDesc('tanggal')->orderByDesc('id')
             ->limit(300)
             ->get(['referensi_id', 'total_kubikasi']);
@@ -651,7 +833,7 @@ class HppVeneerJadiService
         $lahan = [];
 
         foreach ($logs as $log) {
-            $idLahan = $palet[$log->referensi_id]?->penggunaanLahan?->id_lahan;
+            $idLahan = $palet->get($log->referensi_id)?->penggunaanLahan?->id_lahan;
             $m3      = (float) $log->total_kubikasi;
 
             $lahan[$idLahan ?: 'tidak_diketahui'] = ($lahan[$idLahan ?: 'tidak_diketahui'] ?? 0.0) + $m3;
@@ -666,5 +848,182 @@ class HppVeneerJadiService
         }
 
         return $lahan;
+    }
+
+    // =====================================================================
+    // E. HITUNG ULANG RIWAYAT LOG (mengisi HPP data lama)
+    // =====================================================================
+
+    /**
+     * Putar ulang SEMUA log veneer jadi berurutan menurut id (lintas produk), sehingga veneer jadi yang
+     * keluar lalu masuk lagi ke repair/joint membawa rinciannya saat itu.
+     *   MASUK  : HPP dari referensinya (serah terima dryer/kedi/joint/gudang, hasil repair).
+     *            Sumber tanpa HPP (opname, nota, pilih veneer, pengembalian hotpress) memakai
+     *            HPP Average stok saat itu — sama dengan aturan veneer kering.
+     *   KELUAR : HPP Average stok saat itu.
+     * Lembar dan m³ tidak diubah; hanya kolom HPP, nilai, jalur, dan komposisi.
+     *
+     * @return array{log: int, masuk_berhpp: int, nilai_akhir: float, produk: array<int,array>}
+     */
+    public function hitungUlangSemua(?int $idJenisKayu = null): array
+    {
+        $this->komposisiKeluar = [];
+        $state  = [];
+        $jumlah = 0;
+        $berHpp = 0;
+
+        $query = HppVeneerJadiLog::query()->when($idJenisKayu, fn ($q, $v) => $q->where('id_jenis_kayu', $v));
+
+        $query->orderBy('id')->chunkById(500, function ($logs) use (&$state, &$jumlah, &$berHpp) {
+            foreach ($logs as $log) {
+                $jumlah++;
+                $kunci = implode('|', [(int) $log->id_jenis_kayu, (float) $log->panjang, (float) $log->lebar, (float) $log->tebal, (string) $log->kw_grade]);
+                $s = $state[$kunci] ?? ['nilai' => 0.0, 'komp' => KomponenHpp::kosong(), 'm3' => 0.0, 'log' => 0, 'masuk' => 0, 'kw' => $log];
+                $s['log']++;
+
+                $this->tanggalAcuan = $log->tanggal ? Carbon::parse($log->tanggal)->toDateString() : null;
+
+                $masuk    = strtolower((string) $log->tipe_transaksi) === 'masuk';
+                $m3Tx     = (float) $log->total_kubikasi;
+                $m3Before = (float) $log->stok_kubikasi_before;
+                $m3After  = (float) $log->stok_kubikasi_after;
+
+                if ($m3Before <= 0.000001) {
+                    $s['nilai'] = 0.0;
+                    $s['komp']  = KomponenHpp::kosong();
+                }
+                $avgBefore = $m3Before > 0 ? $s['nilai'] / $m3Before : 0.0;
+                $kompStok  = $s['komp']->rekonsiliasi($avgBefore);
+
+                if ($masuk) {
+                    [$komponen, $jalur] = $this->komponenUntukLog($log, $kompStok);
+
+                    $nilaiTx    = $m3Tx * $komponen->total();
+                    $nilaiAfter = $s['nilai'] + $nilaiTx;
+                    $avgAfter   = $m3After > 0.000001 ? $nilaiAfter / $m3After : 0.0;
+                    $g          = $komponen->kelompok();
+
+                    $dasar = trim(str_replace(self::TANDA_SEMENTARA, '', (string) $log->keterangan));
+                    $ket   = $komponen->sementara ? rtrim(mb_substr($dasar, 0, 255 - mb_strlen(self::TANDA_SEMENTARA) - 1)).' '.self::TANDA_SEMENTARA : $dasar;
+
+                    $log->forceFill([
+                        'hpp_kayu'           => round($g['kayu'], 2),
+                        'hpp_pekerja'        => round($g['pekerja'], 2),
+                        'hpp_mesin'          => round($g['mesin'], 2),
+                        'hpp_bahan_penolong' => round($g['bahan'], 2),
+                        'hpp_lainnya'        => round($g['lainnya'], 2),
+                        'hpp_average'        => round($avgAfter, 2),
+                        'nilai_stok'         => round($nilaiTx, 2),
+                        'nilai_stok_before'  => round($s['nilai'], 2),
+                        'nilai_stok_after'   => round($nilaiAfter, 2),
+                        'jalur'              => $jalur,
+                        'komposisi'          => $komponen->toArray(),
+                        'keterangan'         => $ket,
+                    ])->saveQuietly();
+
+                    $s['komp']  = KomponenHpp::gabung([[$m3Before, $kompStok], [$m3Tx, $komponen]]);
+                    $s['nilai'] = $nilaiAfter;
+                    if ($komponen->total() > 0) {
+                        $berHpp++;
+                        $s['masuk']++;
+                    }
+                } else {
+                    $nilaiTx    = $m3Tx * $avgBefore;
+                    $nilaiAfter = $m3After > 0.000001 ? max(0.0, $s['nilai'] - $nilaiTx) : 0.0;
+
+                    $log->forceFill([
+                        'hpp_average'       => round($avgBefore, 2),
+                        'nilai_stok'        => round($nilaiTx, 2),
+                        'nilai_stok_before' => round($s['nilai'], 2),
+                        'nilai_stok_after'  => round($nilaiAfter, 2),
+                    ])->saveQuietly();
+
+                    // rincian stok saat veneer ini keluar → dipakai bila nanti masuk lagi ke repair/joint
+                    if (str_ends_with((string) $log->referensi_type, 'SerahTerimaVeneerKering') && $log->referensi_id) {
+                        $this->komposisiKeluar[(int) $log->referensi_id] = $kompStok;
+                    }
+
+                    $s['nilai'] = $nilaiAfter;
+                    $s['komp']  = $kompStok;
+                }
+
+                $s['m3']     = $m3After;
+                $s['kw']     = $log;
+                $state[$kunci] = $s;
+            }
+        });
+
+        $this->tanggalAcuan = null;
+
+        // simpan keadaan akhir ke stok_veneer_jadi
+        $nilaiTotal = 0.0;
+        $produk     = [];
+
+        foreach ($state as $s) {
+            $log      = $s['kw'];
+            $m3Akhir  = (float) $s['m3'];
+            $nilai    = $m3Akhir > 0.000001 ? (float) $s['nilai'] : 0.0;
+            $hppAkhir = $m3Akhir > 0.000001 ? $nilai / $m3Akhir : 0.0;
+            $komp     = $s['komp']->rekonsiliasi($hppAkhir);
+            $g        = $komp->kelompok();
+
+            $stok = StokVeneerJadi::where([
+                'id_jenis_kayu' => $log->id_jenis_kayu, 'panjang' => $log->panjang, 'lebar' => $log->lebar,
+                'tebal' => $log->tebal, 'kw_grade' => $log->kw_grade,
+            ])->first();
+
+            $stok?->forceFill([
+                'nilai_stok'              => round($nilai, 2),
+                'hpp_average'             => round($hppAkhir, 2),
+                'hpp_kayu_last'           => round($g['kayu'], 2),
+                'hpp_pekerja_last'        => round($g['pekerja'], 2),
+                'hpp_mesin_last'          => round($g['mesin'], 2),
+                'hpp_bahan_penolong_last' => round($g['bahan'], 2),
+                'komposisi'               => $komp->toArray(),
+            ])->saveQuietly();
+
+            $nilaiTotal += $nilai;
+            $produk[] = [
+                'kayu' => (int) $log->id_jenis_kayu, 'ukuran' => (float) $log->panjang.'×'.(float) $log->lebar.'×'.(float) $log->tebal,
+                'kw' => (string) $log->kw_grade, 'log' => $s['log'], 'masuk' => $s['masuk'], 'hpp' => round($hppAkhir, 0),
+            ];
+        }
+
+        return ['log' => $jumlah, 'masuk_berhpp' => $berHpp, 'nilai_akhir' => round($nilaiTotal, 2), 'produk' => $produk];
+    }
+
+    /**
+     * Komponen HPP untuk satu log MASUK lama + jalurnya.
+     *
+     * @return array{0: KomponenHpp, 1: ?string}
+     */
+    private function komponenUntukLog(HppVeneerJadiLog $log, KomponenHpp $kompStok): array
+    {
+        $tipe = (string) $log->referensi_type;
+
+        if (str_ends_with($tipe, 'SerahTerimaVeneerKering') && $log->referensi_id) {
+            $st = SerahTerimaVeneerKering::find($log->referensi_id);
+            if ($st) {
+                return [$this->komponenInput($st), $st->tipe_sumber === 'joint' ? 'joint' : 'kering_langsung'];
+            }
+        }
+
+        if (str_ends_with($tipe, 'GudangVeneerJadi') && $log->referensi_id) {
+            $g = GudangVeneerJadi::find($log->referensi_id);
+
+            if ($g && preg_match('/Hasil Repair ID #(\d+)/', (string) $g->keterangan, $m)) {
+                $d = DetailHasilRepair::find((int) $m[1]);
+                if ($d) {
+                    return [$this->komponenRepair($d), 'repair'];
+                }
+            }
+
+            if ($g && $g->komposisi) {
+                return [KomponenHpp::dari($g->komposisi), $g->jalur ?: 'repair'];
+            }
+        }
+
+        // opname, nota, pilih veneer, pengembalian hotpress: HPP Average stok saat itu
+        return [$kompStok->tandaiSementara(false), null];
     }
 }

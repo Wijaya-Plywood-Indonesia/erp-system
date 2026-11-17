@@ -121,47 +121,25 @@
 
                     <div>
                         <div class="font-black text-gray-900 dark:text-white">2. Komponen: biaya 1 m³ veneer jadi dari kejadian itu</div>
-                        Dipecah seperti veneer basah:
-                        <span class="text-emerald-600 dark:text-emerald-400 font-bold">K</span> kayu,
-                        <span class="text-blue-600 dark:text-blue-400 font-bold">P</span> pekerja,
-                        <span class="text-purple-600 dark:text-purple-400 font-bold">M</span> mesin,
-                        <span class="text-orange-600 dark:text-orange-400 font-bold">B</span> bahan penolong,
-                        dan <span class="text-gray-500 font-bold">L</span> (muncul bila ada bagian tanpa rincian, misalnya stok awal, opname, atau nota).
-                        Angka tebal adalah jumlah seluruhnya. Huruf kotak abu-abu adalah kode lahan asal kayu (dengan persentasenya bila lebih dari satu lahan),
-                        dan label <b>Dryer / Kedi</b> menunjukkan veneer kering itu berasal dari mesin yang mana.
-
-                        <div class="mt-2 font-bold text-gray-800 dark:text-gray-100">Dari mana angka K, P, M, B didapat?</div>
-                        Semua angka <b>dibawa dari tahap sebelumnya</b> (veneer basah → dryer/kedi), lalu ditambah biaya proses jalur yang dilewati:
-
-                        <div class="mt-2 space-y-2">
-                            <div>
-                                <span class="font-black">Kering langsung</span>: hanya HPP veneer kering dari batch itu sendiri
-                                (HPP Press Dryer dan Kedi <b>tidak</b> dirata-rata, tiap batch memakai angkanya masing-masing).
-                                Bila diambil dari gudang kering, memakai HPP Average veneer kering.
-                            </div>
-                            <div>
-                                <span class="font-black">Repair</span>: HPP veneer kering yang dimasukkan ke repair
-                                + <span class="text-blue-600 dark:text-blue-400 font-black">P</span> (upah pekerja repair hari itu ÷ m³ hasil)
-                                + <span class="text-orange-600 dark:text-orange-400 font-black">B</span> (bahan penolong repair × harga master ÷ m³ hasil).
-                                Repair tidak punya biaya mesin.
-                            </div>
-                            <div>
-                                <span class="font-black">Joint</span>: HPP veneer kering yang dimasukkan ke joint
-                                + <span class="text-blue-600 dark:text-blue-400 font-black">P</span> (upah pekerja joint ÷ m³ hasil)
-                                + <span class="text-purple-600 dark:text-purple-400 font-black">M</span> (penyusutan mesin kategori Joint dari master <b>Mesin</b>, dibebankan penuh satu kali per produksi ÷ m³ hasil)
-                                + <span class="text-orange-600 dark:text-orange-400 font-black">B</span> (tepung, lem pai, dll × harga master ÷ m³ hasil).
-                            </div>
+                        Rumusnya: <b>HPP veneer jadi = HPP veneer kering + pekerja + mesin + bahan penolong</b>.
+                        <ul class="mt-2 space-y-1 list-disc pl-4">
+                            <li><span class="text-emerald-600 dark:text-emerald-400 font-black">Kering</span>: HPP veneer kering yang dibawa masuk (sudah memuat kayu, pekerja, dan mesin rotary serta dryer/kedi). Arahkan kursor ke tanda <b>ⓘ</b> untuk melihat rinciannya dan perkiraan asal lahan.</li>
+                            <li><span class="text-blue-600 dark:text-blue-400 font-black">P</span>: upah pekerja repair/joint ÷ m³ hasil.</li>
+                            <li><span class="text-purple-600 dark:text-purple-400 font-black">M</span>: penyusutan mesin joint ÷ m³ hasil (repair tidak punya biaya mesin).</li>
+                            <li><span class="text-orange-600 dark:text-orange-400 font-black">B</span>: bahan penolong (tepung, lem pai, dll) × harga master ÷ m³ hasil.</li>
+                        </ul>
+                        <div class="mt-2">
+                            <b>Jalur</b>: <i>Kering langsung</i> = veneer kering diterima apa adanya (P, M, B = 0).
+                            <i>Repair</i> dan <i>Joint</i> = veneer kering ditambah biaya proses.
                         </div>
-
                         <div class="mt-2 px-3 py-2 rounded-sm bg-gray-50 dark:bg-gray-900 text-[11px] leading-relaxed">
                             <div class="font-black mb-1 text-gray-500">Contoh repair: 4 m³ veneer kering menjadi 3,6 m³ veneer jadi</div>
-                            Nilai veneer kering 4 × Rp 1.363.333 = Rp 5.453.333<br>
+                            Veneer kering 4 × Rp 1.363.333 = Rp 5.453.333<br>
                             Pekerja Rp 240.000 + bahan Rp 21.300 = Rp 261.300<br>
                             (5.453.333 + 261.300) ÷ 3,6 = <b>Rp 1.587.398</b> per m³ veneer jadi.
                         </div>
                         <div class="mt-1.5 text-gray-500 dark:text-gray-400">
-                            Karena pembaginya m³ <b>hasil</b>, susut (m³ hasil lebih kecil dari m³ yang dimasukkan) otomatis menaikkan HPP per m³
-                            di semua komponen, termasuk K.
+                            Karena pembaginya m³ <b>hasil</b>, susut otomatis menaikkan HPP per m³ (termasuk bagian Kering).
                         </div>
                     </div>
 
@@ -216,11 +194,10 @@
                     </div>
                     <div class="mt-1 text-xs text-gray-500 dark:text-gray-400 tabular-nums">
                         {{ number_format($d['transaksi']) }} transaksi · {{ number_format($d['m3'], 2, ',', '.') }} m³ masuk
-                        · Kayu {{ number_format($d['kayu'], 0, ',', '.') }}
+                        · Kering {{ number_format($d['kering'], 0, ',', '.') }}
                         · Pekerja {{ number_format($d['pekerja'], 0, ',', '.') }}
                         · Mesin {{ number_format($d['mesin'], 0, ',', '.') }}
                         · Bahan {{ number_format($d['bahan'], 0, ',', '.') }}
-                        @if($d['lainnya'] > 0) · Tanpa rincian {{ number_format($d['lainnya'], 0, ',', '.') }} @endif
                     </div>
                     @if($d['sementara'] > 0)
                         <div class="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
@@ -312,7 +289,7 @@
                         </th>
                         @endif
                         <th class="px-4 py-3 text-right border-l border-gray-100 dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/5 whitespace-nowrap">
-                            Komponen HPP/m³<div class="text-[10px] font-medium normal-case text-gray-500 tracking-normal">kayu · pekerja · mesin · bahan</div>
+                            Komponen HPP/m³<div class="text-[10px] font-medium normal-case text-gray-500 tracking-normal">kering · pekerja · mesin · bahan</div>
                         </th>
                         <th class="px-4 py-3 text-right border-l border-gray-100 dark:border-gray-700 bg-amber-50/50 dark:bg-amber-900/10 whitespace-nowrap">
                             HPP Average<div class="text-[10px] font-medium normal-case text-amber-500 tracking-normal">per m³</div>
@@ -416,29 +393,26 @@
                         </td>
                         @endif
 
-                        {{-- Komponen HPP: baris 1 = lahan · mesin · jalur · total · status, baris 2 = K/P/M/B(/L) --}}
+                        {{-- Komponen HPP: HPP veneer kering + pekerja + mesin + bahan penolong (rumus veneer jadi) --}}
                         @php
-                            $asal      = $asalLog[$log->id] ?? ['lahan' => [], 'mesin' => []];
+                            $asal      = $asalLog[$log->id] ?? ['tooltip' => ''];
                             $estimasi  = str_contains((string) $log->keterangan, $tandaSementara);
                             $totalKomp = $isM ? ($log->hpp_kayu + $log->hpp_pekerja + $log->hpp_mesin + $log->hpp_bahan_penolong + $log->hpp_lainnya) : 0;
+                            $kk        = $log->komposisi['komponen'] ?? [];
+                            $pPro      = (float) ($kk['pekerja_proses'] ?? 0);
+                            $mPro      = (float) ($kk['mesin_proses'] ?? 0);
+                            $bPro      = (float) ($kk['bahan_proses'] ?? 0);
+                            $kering    = max(0, $totalKomp - $pPro - $mPro - $bPro);
                         @endphp
                         <td class="px-4 py-2 border-l border-gray-50 dark:border-gray-800 bg-blue-50/10 dark:bg-blue-900/5 whitespace-nowrap">
                             @if($isM && $totalKomp > 0)
                                 <div class="flex items-center gap-1.5 text-xs tabular-nums">
-                                    @foreach($asal['lahan'] as $lh)
-                                        <span title="Asal lahan kayu: {{ $lh['kode'] }} ({{ $lh['persen'] }}% dari m³)"
-                                              class="px-1.5 py-0.5 rounded-sm bg-gray-100 dark:bg-gray-700 text-[10px] font-black uppercase text-gray-600 dark:text-gray-300">{{ $lh['kode'] }}{{ count($asal['lahan']) > 1 ? ' '.$lh['persen'].'%' : '' }}</span>
-                                    @endforeach
-                                    @foreach($asal['mesin'] as $ms)
-                                        <span title="Veneer kering dari mesin {{ $ms['nama'] }} ({{ $ms['persen'] }}% dari m³)"
-                                              class="px-1.5 py-0.5 rounded-sm bg-indigo-100 dark:bg-indigo-900/30 text-[9px] font-black uppercase text-indigo-600 dark:text-indigo-400">{{ $ms['nama'] }}{{ count($asal['mesin']) > 1 ? ' '.$ms['persen'].'%' : '' }}</span>
-                                    @endforeach
                                     @if($log->jalur)
                                         <span class="px-1.5 py-0.5 rounded-sm bg-sky-100 dark:bg-sky-900/30 text-[9px] font-black uppercase text-sky-600 dark:text-sky-400">{{ $jalurLabel[$log->jalur] ?? $log->jalur }}</span>
                                     @endif
                                     <span class="font-black text-gray-800 dark:text-gray-100">{{ number_format($totalKomp, 0, ',', '.') }}</span>
                                     @if($estimasi)
-                                        <span title="Produksi repair/joint belum selesai. Susut belum diperhitungkan; akan final setelah produksi selesai."
+                                        <span title="Produksi repair/joint atau produksi dryer belum selesai/divalidasi. Angka bisa berubah."
                                               class="px-1.5 py-0.5 rounded-sm bg-amber-100 dark:bg-amber-900/30 text-[9px] font-black uppercase text-amber-600 dark:text-amber-400">estimasi</span>
                                     @else
                                         <span title="Seluruh komponen sudah pasti."
@@ -446,12 +420,16 @@
                                     @endif
                                 </div>
                                 <div class="mt-0.5 text-[10px] tabular-nums text-gray-400">
-                                    <span class="text-emerald-600 dark:text-emerald-400">K {{ number_format($log->hpp_kayu, 0, ',', '.') }}</span> ·
-                                    <span class="text-blue-600 dark:text-blue-400">P {{ number_format($log->hpp_pekerja, 0, ',', '.') }}</span> ·
-                                    <span class="text-purple-600 dark:text-purple-400">M {{ number_format($log->hpp_mesin, 0, ',', '.') }}</span> ·
-                                    <span class="text-orange-600 dark:text-orange-400">B {{ number_format($log->hpp_bahan_penolong, 0, ',', '.') }}</span>
-                                    @if($log->hpp_lainnya > 0)
-                                        · <span class="text-gray-500" title="Bagian HPP tanpa rincian (stok awal / opname / nota)">L {{ number_format($log->hpp_lainnya, 0, ',', '.') }}</span>
+                                    @if($log->jalur)
+                                        <span class="text-emerald-600 dark:text-emerald-400">Kering {{ number_format($kering, 0, ',', '.') }}</span>
+                                        @if($asal['tooltip'])
+                                            <span title="{{ $asal['tooltip'] }}" class="cursor-help text-gray-400">ⓘ</span>
+                                        @endif
+                                        · <span class="text-blue-600 dark:text-blue-400">P {{ number_format($pPro, 0, ',', '.') }}</span>
+                                        · <span class="text-purple-600 dark:text-purple-400">M {{ number_format($mPro, 0, ',', '.') }}</span>
+                                        · <span class="text-orange-600 dark:text-orange-400">B {{ number_format($bPro, 0, ',', '.') }}</span>
+                                    @else
+                                        <span title="Baris ini memakai HPP Average stok saat itu (opname, nota, pilih veneer, atau pengembalian), tanpa rincian.">memakai HPP rata-rata stok</span>
                                     @endif
                                 </div>
                             @else
