@@ -86,11 +86,18 @@ class KirimJurnalAkuntansi extends Page
 
         $label = app(JurnalProduksiRegistry::class)->get($jenis)->label();
 
-        foreach (app(JurnalProduksiSender::class)->preview($jenis, $this->tanggal) as $j) {
+        // true = cari id_barang ke akuntansi (hanya di rincian; ringkasan tidak perlu)
+        foreach (app(JurnalProduksiSender::class)->preview($jenis, $this->tanggal, true) as $j) {
             if ($j['no_dokumen'] === $noDokumen) {
                 // Tambahkan id_barang per baris. Baris produk = baris yang punya "banyak".
                 $rows = collect($j['rows'])->map(function ($row) {
-                    $row['perlu_id_barang'] = filled($row['banyak'] ?? null);
+                    // Baris produk = punya "banyak", kecuali hutang gaji (banyak = jumlah
+                    // pekerja) dan selisih harga patok (bukan barang).
+                    $bukanBarang = in_array($row['no_akun'] ?? null, array_merge(
+                        app(\App\Services\CoaAliasService::class)->nomorAkunHutangGaji(),
+                        ['5069.2']
+                    ), true);
+                    $row['perlu_id_barang'] = filled($row['banyak'] ?? null) && ! $bukanBarang;
                     $row['id_barang'] = $row['perlu_id_barang'] ? $this->resolveIdBarang($row) : null;
 
                     return $row;
