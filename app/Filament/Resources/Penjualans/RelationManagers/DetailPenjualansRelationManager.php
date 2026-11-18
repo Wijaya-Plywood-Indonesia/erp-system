@@ -47,6 +47,12 @@ class DetailPenjualansRelationManager extends RelationManager
         return ((float) $p) . '|' . ((float) $l) . '|' . ((float) $t);
     }
 
+    /** Hanya edmeros / super_admin / Super Admin yang dianggap "orang kantor". */
+    protected static function isKantor(): bool
+    {
+        return (bool) auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin']);
+    }
+
     public function form(Schema $schema): Schema
     {
         return $schema
@@ -217,12 +223,14 @@ class DetailPenjualansRelationManager extends RelationManager
                 TextInput::make('nama_barang')
                     ->label('Nama Barang (Tampil di Nota/SJ)')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->visible(fn () => self::isKantor()),
 
                 TextInput::make('custom_nama')
                     ->label('Nama Khusus Nota Sales (Opsional)')
                     ->placeholder('Misal: 12 mm Merek Singa')
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->visible(fn () => self::isKantor()),
 
                 TextInput::make('jumlah')
                     ->label('Jumlah / Qty Keluar')
@@ -259,6 +267,7 @@ class DetailPenjualansRelationManager extends RelationManager
                     ->default('b')
                     ->required()
                     ->live()
+                    ->visible(fn () => self::isKantor())
                     ->afterStateUpdated(function (Set $set, Get $get) {
                         self::recalculateSubtotal($set, $get);
                     }),
@@ -269,6 +278,7 @@ class DetailPenjualansRelationManager extends RelationManager
                     ->prefix('Rp')
                     ->nullable()
                     ->live(onBlur: true)
+                    ->visible(fn () => self::isKantor())
                     ->afterStateUpdated(function (Set $set, Get $get) {
                         self::recalculateSubtotal($set, $get);
                     }),
@@ -279,6 +289,7 @@ class DetailPenjualansRelationManager extends RelationManager
                     ->prefix('Rp')
                     ->default(0)
                     ->live(onBlur: true)
+                    ->visible(fn () => self::isKantor())
                     ->afterStateUpdated(function (Set $set, Get $get) {
                         self::recalculateSubtotal($set, $get);
                     }),
@@ -288,7 +299,8 @@ class DetailPenjualansRelationManager extends RelationManager
                     ->numeric()
                     ->prefix('Rp')
                     ->disabled()
-                    ->dehydrated(),
+                    ->dehydrated()
+                    ->visible(fn () => self::isKantor()),
 
                 Textarea::make('keterangan')
                     ->label('Keterangan')
@@ -417,7 +429,8 @@ class DetailPenjualansRelationManager extends RelationManager
                     ->weight('bold'),
                 TextColumn::make('custom_nama')
                     ->label('Nama Sales')
-                    ->placeholder('-'),
+                    ->placeholder('-')
+                    ->visible(fn () => self::isKantor()),
                 TextColumn::make('jumlah')
                     ->label('Qty')
                     ->numeric()
@@ -434,20 +447,24 @@ class DetailPenjualansRelationManager extends RelationManager
                     ->badge()
                     ->color(fn ($state) => $state === 'm' ? 'warning' : 'primary')
                     ->formatStateUsing(fn ($state) => $state === 'm' ? 'm³' : 'Qty')
-                    ->alignCenter(),
+                    ->alignCenter()
+                    ->visible(fn () => self::isKantor()),
                 TextColumn::make('harga')
                     ->label('Harga (Kantor)')
                     ->money('IDR')
                     ->alignRight()
-                    ->placeholder('Belum diisi'),
+                    ->placeholder('Belum diisi')
+                    ->visible(fn () => self::isKantor()),
                 TextColumn::make('potongan')
                     ->label('Pot/pcs')
                     ->money('IDR')
-                    ->alignRight(),
+                    ->alignRight()
+                    ->visible(fn () => self::isKantor()),
                 TextColumn::make('subtotal')
                     ->label('Subtotal')
                     ->money('IDR')
-                    ->alignRight(),
+                    ->alignRight()
+                    ->visible(fn () => self::isKantor()),
                 TextColumn::make('keterangan')
                     ->label('Keterangan')
                     ->limit(30)
@@ -468,7 +485,7 @@ class DetailPenjualansRelationManager extends RelationManager
                         return $data;
                     }),
 
-                // Tombol Validasi Penjualan & Kurangi Stok
+                // Tombol Validasi Penjualan & Kurangi Stok (hanya orang kantor)
                 Action::make('validasi_dan_potong_stok')
                     ->label('Validasi & Potong Stok')
                     ->icon('heroicon-o-check-badge')
@@ -476,7 +493,7 @@ class DetailPenjualansRelationManager extends RelationManager
                     ->requiresConfirmation()
                     ->modalHeading('Validasi Penjualan & Potong Stok')
                     ->modalDescription('Apakah Anda yakin ingin memvalidasi penjualan ini? Stok barang akan otomatis berkurang sesuai rincian barang.')
-                    ->visible(fn (RelationManager $livewire) => empty($livewire->ownerRecord->divalidasi_oleh))
+                    ->visible(fn (RelationManager $livewire) => self::isKantor() && empty($livewire->ownerRecord->divalidasi_oleh))
                     ->action(function (RelationManager $livewire) {
                         $penjualan = $livewire->ownerRecord;
 

@@ -89,7 +89,8 @@ class PenjualansTable
                     ->color('success')
                     ->tooltip('Input harga nota kantor dan kirim ke Akuntansi')
                     ->url(fn (Penjualan $record) => route('penjualan.preview', ['record' => $record->id, 'jenis' => 'kantor']))
-                    ->openUrlInNewTab(),
+                    ->openUrlInNewTab()
+                    ->visible(fn () => (bool) auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin'])),
 
                 // 2. INPUT HARGA / NOTA SALES (ORANG KANTOR)
                 Action::make('notaSales')
@@ -98,7 +99,8 @@ class PenjualansTable
                     ->color('#8b5cf6')
                     ->tooltip('Input harga & potongan sales, kirim ke Akuntansi')
                     ->url(fn (Penjualan $record) => route('penjualan.preview', ['record' => $record->id, 'jenis' => 'sales']))
-                    ->openUrlInNewTab(),
+                    ->openUrlInNewTab()
+                    ->visible(fn () => (bool) auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin'])),
 
                 // 3. CETAK SURAT JALAN (SJ)
                 Action::make('suratJalan')
@@ -113,7 +115,7 @@ class PenjualansTable
                     ->label('Invoice')
                     ->icon('heroicon-o-document-text')
                     ->color('primary')
-                    ->visible(fn (Penjualan $record) => (bool) $record->pakai_ppn)
+                    ->visible(fn (Penjualan $record) => (bool) $record->pakai_ppn && (bool) auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin']))
                     ->url(fn (Penjualan $record) => route('penjualan.invoice-resmi', ['record' => $record->id]))
                     ->openUrlInNewTab(),
 
@@ -122,7 +124,7 @@ class PenjualansTable
                     ->label('Kirim Ulang Akuntansi')
                     ->icon('heroicon-o-arrow-path')
                     ->color('info')
-                    ->visible(fn (Penjualan $record) => filled($record->divalidasi_oleh))
+                    ->visible(fn (Penjualan $record) => filled($record->divalidasi_oleh) && (bool) auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin']))
                     ->requiresConfirmation()
                     ->action(function (Penjualan $record) {
                         try {
