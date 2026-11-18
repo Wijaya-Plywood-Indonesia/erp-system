@@ -621,10 +621,13 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
         }
 
         $exact = $c->filter(fn ($i) => $i->id_ukuran == $idUkuran);
-        if ($exact->isNotEmpty()) {
-            return $exact;
-        }
 
+        // Ukuran "kembaran" (panjang x lebar tertukar, tebal sama, mis. 244x122x12 vs 122x244x12)
+        // ikut dianggap cocok. Exact TIDAK lagi menutup kembaran: referensi lama masih memakai id
+        // ukuran kembaran (mis. "12s better MTH" -> 24) sementara referensi lain sudah memakai id
+        // baru (105). Kalau exact menang sendirian, referensi lama itu tidak pernah ketemu
+        // dan baris jadi UNKNOWN. Exact tetap diurutkan paling depan.
+        $mirror = collect();
         try {
             $ukuran = Ukuran::find($idUkuran);
             if ($ukuran) {
@@ -635,13 +638,15 @@ class LaporanProduksiHotPressJurnalSheetV2 implements FromArray, WithColumnWidth
                             ->orWhere(fn ($q2) => $q2->where('panjang', $ukuran->lebar)->where('lebar', $ukuran->panjang))
                     )->pluck('id');
 
-                $mirror = $c->filter(fn ($i) => $idMirror->contains($i->id_ukuran));
-                if ($mirror->isNotEmpty()) {
-                    return $mirror;
-                }
+                $mirror = $c->filter(fn ($i) => $i->id_ukuran != $idUkuran && $idMirror->contains($i->id_ukuran));
             }
         } catch (\Throwable $e) {
-            // Lanjut ke fallback
+            // Lanjut tanpa kembaran
+        }
+
+        $cocok = $exact->concat($mirror)->values();
+        if ($cocok->isNotEmpty()) {
+            return $cocok;
         }
 
         return $c->filter(fn ($i) => is_null($i->id_ukuran));
