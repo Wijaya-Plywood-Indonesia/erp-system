@@ -16,6 +16,11 @@ use Illuminate\Support\Carbon;
 
 class PenjualanForm
 {
+    protected static function isKantor(): bool
+    {
+        return (bool) auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin']);
+    }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -58,10 +63,13 @@ class PenjualanForm
                     ->maxLength(255)
                     ->nullable(),
 
+                // ===== Field berikut hanya untuk orang kantor =====
+
                 Toggle::make('pakai_ppn')
                     ->label('Pakai PPN (11%)')
                     ->default(false)
                     ->live()
+                    ->visible(fn () => self::isKantor())
                     ->afterStateUpdated(function ($state, Set $set) {
                         $set('ppn_persen', $state ? 11 : 0);
                     }),
@@ -73,7 +81,7 @@ class PenjualanForm
                     ->label('NPWP Pembeli')
                     ->placeholder('Contoh: 00.000.000.0-000.000')
                     ->maxLength(100)
-                    ->visible(fn ($get) => (bool) $get('pakai_ppn'))
+                    ->visible(fn ($get) => self::isKantor() && (bool) $get('pakai_ppn'))
                     ->nullable(),
 
                 TextInput::make('ongkir')
@@ -82,7 +90,8 @@ class PenjualanForm
                     ->prefix('Rp')
                     ->default(0)
                     ->minValue(0)
-                    ->live(onBlur: true),
+                    ->live(onBlur: true)
+                    ->visible(fn () => self::isKantor()),
 
                 Select::make('metode_pembayaran')
                     ->label('Metode Pembayaran')
@@ -92,28 +101,32 @@ class PenjualanForm
                         'Cek / Giro' => 'Cek / Giro',
                     ])
                     ->default('Tunai')
-                    ->live(),
+                    ->live()
+                    ->visible(fn () => self::isKantor()),
 
                 Select::make('id_rekening_perusahaan')
                     ->label('Rekening Perusahaan')
                     ->relationship('rekeningPerusahaan', 'nama_bank')
                     ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->nama_bank} - {$record->no_rekening} (a/n {$record->atas_nama})")
-                    ->visible(fn ($get) => $get('metode_pembayaran') === 'Transfer')
+                    ->visible(fn ($get) => self::isKantor() && $get('metode_pembayaran') === 'Transfer')
                     ->nullable(),
 
                 TextInput::make('kendaraan')
                     ->label('Kendaraan / Ekspedisi')
                     ->placeholder('Misal: Truk Colt Diesel / Pick up')
-                    ->maxLength(100),
+                    ->maxLength(100)
+                    ->visible(fn () => self::isKantor()),
 
                 TextInput::make('plat_kendaraan')
                     ->label('No. Plat Kendaraan')
                     ->placeholder('Misal: AG 1234 XY')
-                    ->maxLength(100),
+                    ->maxLength(100)
+                    ->visible(fn () => self::isKantor()),
 
                 TextInput::make('nama_sopir')
                     ->label('Nama Sopir')
-                    ->maxLength(100),
+                    ->maxLength(100)
+                    ->visible(fn () => self::isKantor()),
 
                 Hidden::make('dibuat_oleh')
                     ->default(fn () => auth()->id()),
