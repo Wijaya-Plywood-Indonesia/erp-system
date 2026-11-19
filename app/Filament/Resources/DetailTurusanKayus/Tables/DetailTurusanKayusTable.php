@@ -51,10 +51,14 @@ class DetailTurusanKayusTable
          */
         $canPerformAction = ! $isLocked || $isAdmin;
 
-        $ownerRecord = null;
-        if ($livewire && method_exists($livewire, 'getOwnerRecord')) {
-            $ownerRecord = $livewire->getOwnerRecord();
-        }
+        // 5. LOGIKA TURUN KAYU: Cek apakah proses turun kayu sudah 'selesai'
+        // Jika belum selesai, input turusan kayu belum diperbolehkan
+        $isTurunSelesai = ($ownerRecord &&
+            $ownerRecord->detailTurunKayus()
+                ->where('status', 'selesai')
+                ->exists()) || true;
+
+        $canAddKayu = $canPerformAction && $isTurunSelesai;
 
         $findHargaKayu = function (int $jenisKayuId, int $panjang, $grade, int $diameter) {
             return HargaKayu::where('id_jenis_kayu', $jenisKayuId)
@@ -91,7 +95,7 @@ class DetailTurusanKayusTable
                     ->searchable(query: function ($query, string $search) {
                         $query->where('panjang', 'like', "%{$search}%")
                             ->orWhere('grade', 'like', "%{$search}%")
-                            ->orWhereHas('jenisKayu', fn($q) => $q->where('nama_kayu', 'like', "%{$search}%"));
+                            ->orWhereHas('jenisKayu', fn ($q) => $q->where('nama_kayu', 'like', "%{$search}%"));
                     }),
 
                 TextColumn::make('diameter')
@@ -107,7 +111,7 @@ class DetailTurusanKayusTable
                     ->alignRight()
                     ->color('primary')
                     ->weight('bold')
-                    ->formatStateUsing(fn($state) => $state > 0 ? number_format($state, 0, ',', '.') : '-')
+                    ->formatStateUsing(fn ($state) => $state > 0 ? number_format($state, 0, ',', '.') : '-')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 // ✅ DIUBAH: tidak lagi hitung manual, mengikuti pola NotaKayuController
@@ -116,7 +120,7 @@ class DetailTurusanKayusTable
                 // dipakai/ditampilkan di Nota Kayu, karena sumbernya satu (model accessor).
                 TextColumn::make('kubikasi')
                     ->label('Kubikasi')
-                    ->state(fn($record) => $record->kubikasi)
+                    ->state(fn ($record) => $record->kubikasi)
                     ->numeric(decimalPlaces: 6)
                     ->suffix(' m³')
                     ->alignRight()
@@ -145,18 +149,18 @@ class DetailTurusanKayusTable
                         // bukan dihitung ulang manual, agar konsisten dengan Nota Kayu.
                         if ($records instanceof Collection && $records->isNotEmpty()) {
                             $totalBatang = $records->count();
-                            $totalKubikasi = $records->sum(fn($r) => $r->kubikasi);        // ← round() dihapus
+                            $totalKubikasi = $records->sum(fn ($r) => $r->kubikasi);        // ← round() dihapus
                         } else {
                             $parentId = $record->id_kayu_masuk ?? $record->kayu_masuk_id;
                             $query = DetailTurusanKayu::where('id_kayu_masuk', $parentId)
                                 ->where('lahan_id', $record->lahan_id)
                                 ->get();
                             $totalBatang = $query->count();
-                            $totalKubikasi = $query->sum(fn($r) => $r->kubikasi);          // ← round() dihapus
+                            $totalKubikasi = $query->sum(fn ($r) => $r->kubikasi);          // ← round() dihapus
                         }
 
-                        return "{$kode} {$nama} {$jenis_kayu} - {$totalBatang} batang (" .
-                            number_format($totalKubikasi, 4, ',', '.') . ' m³)';
+                        return "{$kode} {$nama} {$jenis_kayu} - {$totalBatang} batang (".
+                            number_format($totalKubikasi, 4, ',', '.').' m³)';
                     }),
             ])
             ->defaultGroup('lahan.kode_lahan')
@@ -165,9 +169,9 @@ class DetailTurusanKayusTable
                     ->label('Tambah Kayu')
                     ->createAnother(true)
                     /**
-                     * Gunakan variable $canPerformAction untuk bypass Lock jika admin
+                     * Hanya muncul jika tidak terkunci/admin DAN status turun kayu sudah selesai
                      */
-                    ->visible($canPerformAction)
+                    ->visible($canAddKayu)
                     ->after(function ($record) {
                         Notification::make()
                             ->title("Batang D: {$record->diameter} cm | No {$record->nomer_urut} ditambahkan")
@@ -178,13 +182,13 @@ class DetailTurusanKayusTable
                     ->label('Mode Offline')
                     ->icon('heroicon-m-signal-slash')
                     ->color('warning')
-                    ->visible($canPerformAction)
+                    ->visible($canAddKayu)
                     ->modalHeading('Input Turusan (Tanpa Sinyal)')
-                    ->modalWidth('2xl')
-                    ->modalContent(fn() => view('filament.components.offline-turusan-modal', [
+                    ->modalWidth('4xl')
+                    ->modalContent(fn () => view('filament.components.offline-turusan-modal-v2', [
                         'parentId' => $ownerRecord?->id,
-                        'optionsLahan' => Lahan::get()->mapWithKeys(fn($l) => [$l->id => "{$l->kode_lahan} - {$l->nama_lahan}"]),
-                        'optionsJenis' => JenisKayu::get()->mapWithKeys(fn($j) => [$j->id => "{$j->kode_kayu} - {$j->nama_kayu}"]),
+                        'optionsLahan' => Lahan::get()->mapWithKeys(fn ($l) => [$l->id => "{$l->kode_lahan} - {$l->nama_lahan}"]),
+                        'optionsJenis' => JenisKayu::get()->mapWithKeys(fn ($j) => [$j->id => "{$j->kode_kayu} - {$j->nama_kayu}"]),
                     ]))
                     ->modalSubmitAction(false)
                     ->modalCancelAction(false),
@@ -247,7 +251,7 @@ class DetailTurusanKayusTable
                                 ->title("Sinkronisasi Selesai: {$berhasil} batang diperbarui")
                                 ->body(
                                     $gagal > 0
-                                        ? "{$gagal} tidak ditemukan harganya: " . implode(', ', array_slice($tidakAda, 0, 5)) . ($gagal > 5 ? '...' : '')
+                                        ? "{$gagal} tidak ditemukan harganya: ".implode(', ', array_slice($tidakAda, 0, 5)).($gagal > 5 ? '...' : '')
                                         : 'Semua harga berhasil diperbarui dari master.'
                                 )
                                 ->success()
@@ -265,7 +269,7 @@ class DetailTurusanKayusTable
             ->recordActions([
                 EditAction::make()
                     ->visible($canPerformAction)
-                    ->form(fn($form) => $form->schema([
+                    ->form(fn ($form) => $form->schema([
                         Select::make('lahan_id')
                             ->relationship('lahan', 'kode_lahan')
                             ->required(),
@@ -305,7 +309,7 @@ class DetailTurusanKayusTable
                             ->prefix('Rp')
                             ->placeholder('Masukkan nominal...')
                             ->dehydrated(false)
-                            ->visible(fn($get) => $isAdmin && $get('operasi_harga') !== 'tetap'),
+                            ->visible(fn ($get) => $isAdmin && $get('operasi_harga') !== 'tetap'),
                     ]))
                     // GUNAKAN USING() UNTUK PENGOLAHAN DATA EDITACTION
                     ->using(function (DetailTurusanKayu $record, array $data) use ($isAdmin): DetailTurusanKayu {
@@ -338,7 +342,7 @@ class DetailTurusanKayusTable
                         ->schema([
                             Select::make('lahan_id')->options(Lahan::pluck('kode_lahan', 'id'))->required(),
                         ])
-                        ->action(fn(array $data, Collection $records) => $records->each->update(['lahan_id' => $data['lahan_id']]))
+                        ->action(fn (array $data, Collection $records) => $records->each->update(['lahan_id' => $data['lahan_id']]))
                         ->deselectRecordsAfterCompletion(),
 
                     BulkAction::make('update_panjang')
@@ -347,7 +351,7 @@ class DetailTurusanKayusTable
                         ->schema([
                             Select::make('panjang')->label('Panjang Baru')->options([130 => '130', 260 => '260'])->required(),
                         ])
-                        ->action(fn(array $data, Collection $records) => $records->each->update(['panjang' => $data['panjang']]))
+                        ->action(fn (array $data, Collection $records) => $records->each->update(['panjang' => $data['panjang']]))
                         ->deselectRecordsAfterCompletion(),
 
                     BulkAction::make('update_jenis_kayu')
@@ -403,7 +407,7 @@ class DetailTurusanKayusTable
 
                             Notification::make()
                                 ->title('Harga Berhasil Disesuaikan')
-                                ->body(count($records) . ' data kayu telah diperbarui harganya.')
+                                ->body(count($records).' data kayu telah diperbarui harganya.')
                                 ->success()
                                 ->send();
                         })

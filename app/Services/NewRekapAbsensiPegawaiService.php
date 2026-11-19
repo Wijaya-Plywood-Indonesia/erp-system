@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\NewDataFinger;
 use App\Models\Pegawai;
+use App\Models\PengajuanPotongan;
 use App\Models\PengaturanAbsensi;
 use App\Services\AbsensiSources\AbsensiSourceInterface;
 use Filament\Facades\Filament;
@@ -88,6 +89,7 @@ class NewRekapAbsensiPegawaiService
         $rekap = $this->gabungkanMultiSumber($rekap);
         $rekap = $this->lengkapiSemuaPegawai($rekap);
         $rekap = $this->enrichWithFinger($rekap, $tanggal);
+        $rekap = $this->applyApprovedPengajuanPotonganKeterangan($rekap, $tanggal);
 
         return $this->urutkanByGrupKode($rekap);
     }
@@ -1329,5 +1331,76 @@ class NewRekapAbsensiPegawaiService
         return Pegawai::query()
             ->whereIn('id', $idPegawaiShiftMalam)
             ->pluck('kode_pegawai');
+    }
+
+    /**
+     * Terapkan override keterangan dari PengajuanPotongan yang disetujui (Approved).
+     * Jika pengajuan potongan di-acc, alasan_pengajuan akan meng-override field keterangan pegawai.
+     */
+    protected function applyApprovedPengajuanPotonganKeterangan(Collection $rekap, string $tanggal): Collection
+    {
+        try {
+            $approved = PengajuanPotongan::query()
+                ->whereDate('tanggal', $tanggal)
+                ->where('status', 'approved')
+                ->whereNotNull('alasan_pengajuan')
+                ->get(['id_pegawai', 'kode_pegawai', 'alasan_pengajuan']);
+
+            if ($approved->isEmpty()) {
+                return $rekap;
+            }
+
+            $petaKeteranganByKode = [];
+            $petaKeteranganById = [];
+
+            foreach ($approved as $row) {
+                $alasan = trim((string) $row->alasan_pengajuan);
+                if ($alasan === '') {
+                    continue;
+                }
+
+                if (! empty($row->kode_pegawai)) {
+                    $kode = (string) $row->kode_pegawai;
+                    $petaKeteranganByKode[$kode] = $alasan;
+
+                    $trim = ltrim($kode, '0');
+                    if ($trim !== '' && ! isset($petaKeteranganByKode[$trim])) {
+                        $petaKeteranganByKode[$trim] = $alasan;
+                    }
+                }
+
+                if (! empty($row->id_pegawai)) {
+                    $petaKeteranganById[(int) $row->id_pegawai] = $alasan;
+                }
+            }
+
+            if (empty($petaKeteranganByKode) && empty($petaKeteranganById)) {
+                return $rekap;
+            }
+
+            return $rekap->map(function ($row) use ($petaKeteranganByKode, $petaKeteranganById) {
+                $kode = (string) ($row['kode_pegawai'] ?? '');
+                $idP = ! empty($row['id_pegawai']) ? (int) $row['id_pegawai'] : null;
+
+                $alasan = null;
+                if ($kode !== '' && $kode !== '-') {
+                    $alasan = $petaKeteranganByKode[$kode]
+                        ?? $petaKeteranganByKode[ltrim($kode, '0')]
+                        ?? null;
+                }
+
+                if ($alasan === null && $idP !== null && isset($petaKeteranganById[$idP])) {
+                    $alasan = $petaKeteranganById[$idP];
+                }
+
+                if ($alasan !== null) {
+                    $row['keterangan'] = $alasan;
+                }
+
+                return $row;
+            });
+        } catch (\Throwable $e) {
+            return $rekap;
+        }
     }
 }

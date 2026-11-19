@@ -15,6 +15,8 @@ use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Tables;
 
+use App\Support\KolomValidasi;
+
 class ProduksiTerimaGudangSatusTable
 {
     public static function configure(Table $table): Table
@@ -32,6 +34,8 @@ class ProduksiTerimaGudangSatusTable
                     ->limit(50)
                     ->tooltip(fn(string $state): string => $state)
                     ->toggleable(isToggledHiddenByDefault: true),
+
+                KolomValidasi::make(),
 
                 TextColumn::make('created_at')
                     ->label('Dibuat Pada')

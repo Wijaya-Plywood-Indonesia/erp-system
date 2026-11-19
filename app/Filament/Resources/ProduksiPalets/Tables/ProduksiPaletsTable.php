@@ -15,6 +15,8 @@ use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
+use App\Support\KolomValidasi;
+
 class ProduksiPaletsTable
 {
     public static function configure(Table $table): Table
@@ -39,6 +41,7 @@ class ProduksiPaletsTable
                     ->tooltip(fn($record): ?string => $record->keterangan)
                     ->placeholder('Tidak ada kendala')
                     ->wrap(),
+                KolomValidasi::make(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

@@ -199,6 +199,13 @@ class WeeklyRekapPotonganGajiService
             $kekurangan = (float) $rows->sum(fn ($r) => abs($r['selisih']));
             $pegawai = $pegawaiByKodep->get($kodep);
 
+            $keteranganList = $rows
+                ->pluck('keterangan')
+                ->filter(fn ($k) => ! empty($k) && trim((string) $k) !== '' && trim((string) $k) !== '-')
+                ->map(fn ($k) => trim((string) $k))
+                ->unique()
+                ->values();
+
             return [
                 'kodep' => $kodep,
                 'nama_pegawai' => $pegawai?->nama_pegawai ?? "Kode: {$kodep} (tidak ditemukan)",
@@ -212,6 +219,7 @@ class WeeklyRekapPotonganGajiService
                 'kekurangan' => $kekurangan,
                 'gaji' => $pegawai?->gaji !== null ? (float) $pegawai->gaji : null,
                 'potongan' => $potongan,
+                'keterangan' => $keteranganList->isNotEmpty() ? $keteranganList->implode(', ') : null,
                 'detail' => $rows
                     ->map(fn (array $r) => [
                         'tanggal' => $r['tanggal'],
@@ -220,6 +228,7 @@ class WeeklyRekapPotonganGajiService
                         'hasil' => $r['hasil'],
                         'kekurangan' => abs($r['selisih']),
                         'potongan' => $r['potongan'],
+                        'keterangan' => $r['keterangan'] ?? null,
                     ])
                     ->sortBy('tanggal')
                     ->values()

@@ -15,15 +15,19 @@
     </div>
 
     <div class="relative mt-6">
-        {{-- Animasi loading saat ganti tanggal atau saat mengirim --}}
-        <div wire:loading.flex wire:target="tanggal, kirim, kirimMeski"
-            class="absolute inset-0 z-10 items-start justify-center rounded-lg bg-white/70 dark:bg-zinc-900/70 pt-24">
+        {{-- Animasi loading: menempel di tengah layar (fixed) supaya selalu terlihat walau halaman
+             sedang di-scroll, dan berada di atas modal. Aktif saat ganti tanggal, buka rincian (Lihat),
+             dan mengirim. Klik lain tertahan selama proses berjalan. --}}
+        <div wire:loading.flex wire:target="tanggal, lihat, kirim, kirimMeski"
+            class="fixed inset-0 items-center justify-center bg-black/30"
+            style="z-index: 9999;">
             <div
-                class="flex items-center gap-3 rounded-lg bg-white dark:bg-zinc-800 px-5 py-3 shadow border border-zinc-200 dark:border-zinc-700">
-                <x-filament::loading-indicator class="h-6 w-6" />
+                class="flex items-center gap-3 rounded-lg bg-white dark:bg-zinc-800 px-6 py-4 shadow-xl border border-zinc-200 dark:border-zinc-700">
+                <x-filament::loading-indicator class="h-7 w-7" />
                 <span class="text-sm font-medium">
-                    <span wire:loading wire:target="tanggal">Memuat jurnal...</span>
-                    <span wire:loading wire:target="kirim, kirimMeski">Mengirim ke akuntansi...</span>
+                    <span wire:loading wire:target="tanggal">Memuat jurnal tanggal ini...</span>
+                    <span wire:loading wire:target="lihat">Memuat rincian jurnal &amp; ID barang...</span>
+                    <span wire:loading wire:target="kirim, kirimMeski">Mengirim ke akuntansi, mohon tunggu...</span>
                 </span>
             </div>
         </div>
@@ -198,7 +202,7 @@
     </x-filament::modal>
 
     {{-- Rincian jurnal (hanya melihat, tidak mengirim) --}}
-    <x-filament::modal id="detail-jurnal" width="5xl">
+    <x-filament::modal id="detail-jurnal" width="6xl">
         <x-slot name="heading">
             {{ $detail['label'] ?? 'Rincian jurnal' }}
         </x-slot>
@@ -231,6 +235,14 @@
                 </div>
             @endif
 
+            @if (($detail['jumlah_tanpa_id_barang'] ?? 0) > 0)
+                <div
+                    class="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700 dark:text-red-300">
+                    Ada {{ $detail['jumlah_tanpa_id_barang'] }} baris barang yang belum punya ID barang
+                    (lihat kolom ID Barang paling kanan).
+                </div>
+            @endif
+
             @unless ($detail['is_balance'])
                 <div
                     class="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700 dark:text-red-300">
@@ -252,6 +264,7 @@
                             <th class="px-3 py-2 text-right">Harga</th>
                             <th class="px-3 py-2 text-right">Debit</th>
                             <th class="px-3 py-2 text-right">Kredit</th>
+                            <th class="px-3 py-2">ID Barang</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -276,6 +289,14 @@
                                     {{ $r['map'] === 'd' ? number_format($r['total'], 0, ',', '.') : '' }}</td>
                                 <td class="px-3 py-2 text-right font-medium">
                                     {{ $r['map'] === 'k' ? number_format($r['total'], 0, ',', '.') : '' }}</td>
+                                <td class="px-3 py-2">
+                                    @if (filled($r['id_barang'] ?? null))
+                                        <span
+                                            class="font-mono text-xs text-success-600 dark:text-success-400">{{ $r['id_barang'] }}</span>
+                                    @elseif (! empty($r['perlu_id_barang']))
+                                        <x-filament::badge color="danger">Tidak ada</x-filament::badge>
+                                    @endif
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -287,6 +308,7 @@
                             </td>
                             <td class="px-3 py-2 text-right">{{ number_format($detail['total_kredit'], 0, ',', '.') }}
                             </td>
+                            <td class="px-3 py-2"></td>
                         </tr>
                     </tfoot>
                 </table>

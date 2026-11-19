@@ -17,6 +17,8 @@ use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
 
+use App\Support\KolomValidasi;
+
 class ProduksiSandingJointsTable
 {
     public static function configure(Table $table): Table
@@ -36,6 +38,8 @@ class ProduksiSandingJointsTable
                     ->placeholder('Tidak ada kendala')
                     ->tooltip(fn($record) => $record->kendala)
                     ->toggleable(isToggledHiddenByDefault: true),
+
+                KolomValidasi::make(),
 
                 TextColumn::make('created_at')
                     ->label('Dibuat Pada')

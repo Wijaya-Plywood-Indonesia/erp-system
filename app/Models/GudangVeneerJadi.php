@@ -19,8 +19,12 @@ class GudangVeneerJadi extends Model
         'stok_kubikasi',
         'nilai_stok',
         'hpp_average',
+        'hpp_kayu_last',
         'hpp_pekerja_last',
+        'hpp_mesin_last',
         'hpp_bahan_penolong_last',
+        'jalur',
+        'komposisi',
         'id_last_log',
         'status_gudang',
         'keterangan',
@@ -29,11 +33,14 @@ class GudangVeneerJadi extends Model
     ];
 
     protected $casts = [
-        'stok_kubikasi'          => 'float',
-        'nilai_stok'             => 'float',
-        'hpp_average'            => 'float',
-        'hpp_pekerja_last'       => 'float',
+        'stok_kubikasi'           => 'float',
+        'nilai_stok'              => 'float',
+        'hpp_average'             => 'float',
+        'hpp_kayu_last'           => 'float',
+        'hpp_pekerja_last'        => 'float',
+        'hpp_mesin_last'          => 'float',
         'hpp_bahan_penolong_last' => 'float',
+        'komposisi'               => 'array',
         'diterima_at'             => 'datetime',
     ];
 
@@ -46,6 +53,7 @@ class GudangVeneerJadi extends Model
     {
         return $this->belongsTo(HppVeneerJadiLog::class, 'id_last_log');
     }
+
     public function penerima(): BelongsTo
     {
         return $this->belongsTo(User::class, 'diterima_by');

@@ -19,17 +19,23 @@ class StokVeneerJadi extends Model
         'stok_kubikasi',
         'nilai_stok',
         'hpp_average',
+        'hpp_kayu_last',
         'hpp_pekerja_last',
+        'hpp_mesin_last',
         'hpp_bahan_penolong_last',
+        'komposisi',
         'id_last_log',
     ];
 
     protected $casts = [
-        'stok_kubikasi'          => 'float',
-        'nilai_stok'             => 'float',
-        'hpp_average'            => 'float',
-        'hpp_pekerja_last'       => 'float',
+        'stok_kubikasi'           => 'float',
+        'nilai_stok'              => 'float',
+        'hpp_average'             => 'float',
+        'hpp_kayu_last'           => 'float',
+        'hpp_pekerja_last'        => 'float',
+        'hpp_mesin_last'          => 'float',
         'hpp_bahan_penolong_last' => 'float',
+        'komposisi'               => 'array',
     ];
 
     public function jenisKayu(): BelongsTo

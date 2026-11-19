@@ -1,22 +1,33 @@
 <?php
 
-use App\Exports\ExportExcelPersentaseKayuService;
 use App\Filament\Pages\LeaderBoardSupplier;
-use App\Http\Controllers\PreviewPersentaseKayu;
-use App\Services\ProduksiInflowService;
-use App\Services\ProduksiOutflowService;
-use App\Http\Controllers\SuratJalanController;
 use App\Http\Controllers\KontrakController;
-use App\Models\KontrakKerja;
-// use App\Models\ProduksiRotary;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\NotaKayuController;
+use App\Http\Controllers\LaporanKayuMasukController;
 use App\Http\Controllers\NotaBKController;
 use App\Http\Controllers\NotaBMController;
-use App\Http\Controllers\LaporanKayuMasukController;
+// use App\Models\ProduksiRotary;
+use App\Http\Controllers\NotaKayuController;
 use App\Http\Controllers\NotaKayuTurusController;
+use App\Http\Controllers\OfflineDetailKayuController;
+use App\Http\Controllers\OfflineDetailTurusanController;
+use App\Http\Controllers\PenjualanCetakController;
+use App\Http\Controllers\PreviewPersentaseKayu;
+use App\Http\Controllers\ReferensiHargaProduksiController;
+use App\Http\Controllers\SuratJalanController;
+use App\Models\KontrakKerja;
 use App\Models\NotaKayu;
 use App\Models\SupplierKayu;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware(['web', 'auth'])->post(
+    '/offline/detail-turusan-kayu/sync',
+    [OfflineDetailTurusanController::class, 'sync']
+)->name('offline.detail-turusan.sync');
+
+Route::middleware(['web', 'auth'])->post(
+    '/offline/detail-kayu-masuk/sync',
+    [OfflineDetailKayuController::class, 'sync']
+)->name('offline.detail-kayu.sync');
 
 Route::middleware(['auth', 'verified'])->prefix('admin')->group(function () {
     // Route spesifik untuk preview excel
@@ -25,7 +36,7 @@ Route::middleware(['auth', 'verified'])->prefix('admin')->group(function () {
 
     Route::get('/persentase-kayu/export-excel', [PreviewPersentaseKayu::class, 'exportExcel'])->name('produksi.export-excel');
 
-    Route::resource('referensi-harga-produksi', \App\Http\Controllers\ReferensiHargaProduksiController::class);
+    Route::resource('referensi-harga-produksi', ReferensiHargaProduksiController::class);
 });
 
 Route::middleware(['auth'])->group(function () {
@@ -34,7 +45,6 @@ Route::middleware(['auth'])->group(function () {
         ->name('surat-jalan.bk');
 });
 
-
 Route::get('/kontrak/bulk-print', [KontrakController::class, 'bulkPrint'])
     ->name('kontrak.bulk.print');
 
@@ -42,14 +52,13 @@ Route::get('/kontrak/{record}/print', function (KontrakKerja $record) {
     return view('contracts.pkwt', compact('record'));
 })->name('kontrak.print');
 
-
 Route::get('/laporan-kayu-masuk', [LaporanKayuMasukController::class, 'index'])
     ->name('laporan.kayu-masuk');
 
 Route::get('/laporan-kayu-masuk/export', [LaporanKayuMasukController::class, 'export'])
     ->name('laporan.kayu-masuk.export');
 
-//Barang Masuk
+// Barang Masuk
 Route::get('/nota-barang-masuk/{record}/print', [NotaBMController::class, 'show'])
     ->name('nota-bm.print');
 
@@ -84,6 +93,28 @@ Route::get('/nota-barang-keluar/{record}/nota-sales', [NotaBKController::class, 
 Route::get('/nota-barang-keluar/{record}/cetak-semua/{jenis}', [NotaBKController::class, 'cetakSemua'])
     ->name('nota-bk.cetak-semua');
 
+// Rute Cetak & Penanganan Menu Penjualan (Terpisah dari Nota Barang Keluar)
+Route::middleware(['auth'])->group(function () {
+    Route::get('/penjualan/{record}/preview/{jenis}', [PenjualanCetakController::class, 'preview'])
+        ->name('penjualan.preview');
+    Route::post('/penjualan/{record}/update-items', [PenjualanCetakController::class, 'updateItems'])
+        ->name('penjualan.update-items');
+    Route::post('/penjualan/{record}/reset-items', [PenjualanCetakController::class, 'resetItems'])
+        ->name('penjualan.reset-items');
+    Route::post('/penjualan/{record}/save-payment', [PenjualanCetakController::class, 'savePayment'])
+        ->name('penjualan.save-payment');
+    Route::get('/penjualan/{record}/nota-kantor', [PenjualanCetakController::class, 'printNotaKantor'])
+        ->name('penjualan.nota-kantor');
+    Route::get('/penjualan/{record}/nota-sales', [PenjualanCetakController::class, 'printNotaSales'])
+        ->name('penjualan.nota-sales');
+    Route::get('/penjualan/{record}/invoice-resmi', [PenjualanCetakController::class, 'printInvoiceResmi'])
+        ->name('penjualan.invoice-resmi');
+    Route::get('/penjualan/{record}/surat-jalan/{jenis?}', [PenjualanCetakController::class, 'printSuratJalan'])
+        ->name('penjualan.surat-jalan');
+    Route::get('/penjualan/{record}/cetak-semua/{jenis}', [PenjualanCetakController::class, 'cetakSemua'])
+        ->name('penjualan.cetak-semua');
+});
+
 Route::get('/nota-barang-keluar/rekap', [NotaBKController::class, 'rekap'])
     ->name('nota-bk.rekap');
 
@@ -105,35 +136,38 @@ Route::get('/', function () {
 
 Route::get('/internal/supplier-detail/{id}', function ($id) {
     $supplier = SupplierKayu::find($id);
-    if (!$supplier) {
+    if (! $supplier) {
         return response()->json(['error' => 'Not found'], 404);
     }
 
     $notas = NotaKayu::query()
         ->with(['kayuMasuk.detailTurusanKayus'])
-        ->whereHas('kayuMasuk', fn($q) => $q->where('id_supplier_kayus', $id))
+        ->whereHas('kayuMasuk', fn ($q) => $q->where('id_supplier_kayus', $id))
         ->whereRaw("LOWER(TRIM(status_pelunasan)) LIKE 'lunas%'")
         ->get();
 
-    $page = new LeaderBoardSupplier();
+    $page = new LeaderBoardSupplier;
 
     $invoices = $notas->map(function ($nota) use ($page) {
         $calc = $page->calculateNotaTotals($nota);
+
         return [
-            'id'          => $nota->id,
-            'nomor_nota'  => $nota->no_nota,
-            'tanggal'     => $nota->kayuMasuk?->tgl_kayu_masuk,
+            'id' => $nota->id,
+            'nomor_nota' => $nota->no_nota,
+            'tanggal' => $nota->kayuMasuk?->tgl_kayu_masuk,
             'grand_total' => $calc['totalAkhir'],
-            'kubikasi'    => $calc['totalKubikasi'],
-            'status'      => 'lunas',
+            'kubikasi' => $calc['totalKubikasi'],
+            'status' => 'lunas',
         ];
     })->values();
 
     return response()->json([
-        'name'            => $supplier->nama_supplier ?? $supplier->nama ?? 'Supplier #' . $id,
+        'name' => $supplier->nama_supplier ?? $supplier->nama ?? 'Supplier #'.$id,
         'total_pembelian' => $invoices->sum('grand_total'),
-        'total_kubikasi'  => round($invoices->sum('kubikasi'), 4),
-        'nota_dicetak'    => $invoices->count(),
-        'invoices'        => $invoices,
+        'total_kubikasi' => round($invoices->sum('kubikasi'), 4),
+        'nota_dicetak' => $invoices->count(),
+        'invoices' => $invoices,
     ]);
 })->middleware(['web', 'auth'])->name('internal.supplier-detail');
+
+require __DIR__.'/bkbm_web.php';

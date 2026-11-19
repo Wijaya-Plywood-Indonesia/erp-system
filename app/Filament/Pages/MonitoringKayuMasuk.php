@@ -30,10 +30,8 @@ class MonitoringKayuMasuk extends Page
     public ?string $dariTanggal = null;
     public ?string $sampaiTanggal = null;
     public bool $showDokumenCol = false;
-    public ?int $expandedRow = null;
     public string $bulan = 'ALL';
     public string $tahun;
-    public array $detailsCache = [];
 
     private const CACHE_TTL_SUPPLIER = 21600; // 6 jam
 
@@ -105,23 +103,6 @@ class MonitoringKayuMasuk extends Page
     }
 
     // SESUDAH
-    public function toggleRow(int $id): void
-    {
-        if ($this->expandedRow === $id) {
-            unset($this->detailsCache[$id]);
-            $this->expandedRow = null;
-            return;
-        }
-        if ($this->expandedRow !== null) {
-            unset($this->detailsCache[$this->expandedRow]);
-        }
-
-        $this->expandedRow = $id;
-        if (! isset($this->detailsCache[$id])) {
-            $this->detailsCache[$id] = $this->getExpandedDetail($id);
-        }
-    }
-
     public function getSuppliersProperty(): Collection
     {
         return Cache::remember(
@@ -149,7 +130,16 @@ class MonitoringKayuMasuk extends Page
                 'notaKayu:id,id_kayu_masuk,no_nota,status,status_pelunasan,penanggung_jawab,penerima,satpam',
             ])
             ->withExists('detailTurusanKayus as has_turus')
-            ->withExists('detailTurunKayus as has_turun');
+            ->withExists('detailTurunKayus as has_turun')
+            // Total batang yang sudah diturunkan (jumlah_kayu = batang)
+            ->withSum('detailTurunKayus as total_turun_batang', 'jumlah_kayu')
+            // Preload detail supaya klik baris langsung terbuka (tanpa request ke server)
+            ->with([
+                'detailMasukanKayu:id,id_kayu_masuk,id_jenis_kayu,panjang,diameter,jumlah_batang',
+                'detailMasukanKayu.jenisKayu:id,nama_kayu',
+                'detailTurusanKayus:id,id_kayu_masuk,jenis_kayu_id,panjang,diameter,kuantitas',
+                'detailTurusanKayus.jenisKayu:id,nama_kayu',
+            ]);
 
         if (trim($this->search) !== '') {
             $searchLower = strtolower(trim($this->search));
@@ -198,28 +188,15 @@ class MonitoringKayuMasuk extends Page
         return $query->latest('updated_at')->paginate(50);
     }
 
-    public function getExpandedDetail(int $kayuMasukId): ?array
+    public function buildDetail($item): array
     {
-        $item = KayuMasuk::query()
-            ->with([
-                'detailMasukanKayu:id,id_kayu_masuk,id_jenis_kayu,panjang,diameter,jumlah_batang',
-                'detailMasukanKayu.jenisKayu:id,nama_kayu',
-                'detailTurusanKayus:id,id_kayu_masuk,jenis_kayu_id,panjang,diameter,kuantitas',
-                'detailTurusanKayus.jenisKayu:id,nama_kayu',
-            ])
-            ->find($kayuMasukId);
-
-        if (! $item) {
-            return null;
-        }
-
         $totalBatang = $item->detailTurusanKayus->sum('kuantitas');
         $totalVolume = $item->detailTurusanKayus->sum(
             fn($t) => $t->panjang * $t->diameter * $t->diameter * $t->kuantitas * 0.785 / 1000000
         );
 
         return [
-            'comparison' => $this->comparisonData($item),
+            'comparison'   => $this->comparisonData($item),
             'total_batang' => $totalBatang,
             'total_volume' => $totalVolume,
         ];

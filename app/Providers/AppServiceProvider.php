@@ -51,9 +51,9 @@ use App\Services\FingerParsers\FingerParserManager;
 use App\Services\FingerParsers\KantorDatParser;
 use App\Services\FingerParsers\MesinZkParser;
 use App\Services\NewRekapAbsensiPegawaiService;
-use App\Services\ValidasiOtomatisProduksiService;
 use App\Services\Payroll\WeeklyRekapPotonganGajiService;
 use App\Services\RekapPotonganGajiService;
+use App\Services\ValidasiOtomatisProduksiService;
 use App\Support\ResolveBarangCache;
 use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
@@ -165,7 +165,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Cache + mode lewati untuk pencarian id_barang ke web akuntansi (/api/barang/resolve-*).
+        // Tanpa ini, ringkasan Kirim Jurnal memanggil API akuntansi berkali-kali tiap ganti tanggal.
         Http::globalMiddleware(ResolveBarangCache::middleware());
+
         // ⬆⬆⬆  WAJIB: supaya MySQL ikut Asia/Jakarta
         HasilSanding::observe(HasilSandingObserver::class);
         ModalSanding::observe(ModalSandingObserver::class);
@@ -195,9 +198,11 @@ class AppServiceProvider extends ServiceProvider
                     /**
                      * ==========================================
                      * 1. LOGIC UNTUK DETAIL KAYU MASUK (LAMA)
+                     * Diganti nama agar tidak menimpa versi baru di
+                     * public/js/offline-detail-kayu.js
                      * ==========================================
                      */
-                    window.offlineDetailLogic = function(config) {
+                    window._legacyOfflineDetailLogic = function(config) { // ← DIUBAH
                         return {
                             online: navigator.onLine,
                             isSyncing: false,

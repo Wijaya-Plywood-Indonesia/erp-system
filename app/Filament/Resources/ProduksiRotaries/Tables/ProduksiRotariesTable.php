@@ -17,6 +17,8 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
 
+use App\Support\KolomValidasi;
+
 class ProduksiRotariesTable
 {
     public static function configure(Table $table): Table
@@ -39,6 +41,8 @@ class ProduksiRotariesTable
                     ->placeholder('Tidak ada kendala')
                     ->searchable()
                     ->limit(30),
+
+                KolomValidasi::make(),
 
                 TextColumn::make('created_at')
                     ->dateTime()

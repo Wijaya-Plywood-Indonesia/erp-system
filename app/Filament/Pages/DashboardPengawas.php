@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\PengajuanPotongan;
 use App\Services\DashboardPengawas\DashboardPengawasService;
 use App\Services\Payroll\PeriodeJumatKamisResolver;
 use App\Services\Payroll\WeeklyRekapPotonganGajiService;
@@ -127,10 +128,18 @@ class DashboardPengawas extends Page implements HasForms
             Carbon::parse($this->tanggal ?: now()->toDateString())
         );
 
+        // Versi data anulir: berubah setiap ada pengajuan yang di-approve/diubah
+        // pada periode ini, sehingga cache otomatis tidak dipakai lagi dan
+        // banner langsung mengikuti hasil anulir terbaru.
+        $versiAnulir = md5((string) PengajuanPotongan::query()
+            ->where('status', 'approved')
+            ->whereBetween('tanggal', [$mulai, $akhir])
+            ->max('updated_at'));
+
         // Hitungan berat (loop 7 hari x 11 lini) -> cache singkat supaya
         // ganti filter tanggal di dashboard tidak memicu hitung ulang.
         $rekap = Cache::remember(
-            "dashboard_pengawas:potongan:{$mulai}:{$akhir}:{$batas}",
+            "dashboard_pengawas:potongan:{$mulai}:{$akhir}:{$batas}:{$versiAnulir}",
             now()->addMinutes((int) ($cfg['cache_menit'] ?? 10)),
             fn () => app(WeeklyRekapPotonganGajiService::class)
                 ->getRekapPerOrang($mulai, $akhir, [], $batas)
@@ -195,13 +204,95 @@ class DashboardPengawas extends Page implements HasForms
         ];
     }
 
+    /**
+     * Timpa kolom potongan pada tabel absensi dengan nominal_final dari
+     * pengajuan yang sudah APPROVED (anulir), sama seperti di New Absensi.
+     * Pending dan Rejected tidak mempengaruhi.
+     *
+     * @param  iterable<int|string, array>  $sections
+     */
+    protected function terapkanAnulirPotongan(iterable $sections, string $tanggal): array
+    {
+        $approved = PengajuanPotongan::query()
+            ->whereDate('tanggal', $tanggal)
+            ->where('status', 'approved')
+            ->whereNotNull('nominal_final')
+            ->get(['kode_pegawai', 'nominal_final']);
+
+        $hasil = [];
+
+        if ($approved->isEmpty()) {
+            foreach ($sections as $key => $section) {
+                $hasil[$key] = $section;
+            }
+
+            return $hasil;
+        }
+
+        // Peta kode pegawai -> nominal final; sertakan varian tanpa nol di depan
+        // ("007" vs "7") seperti PotonganGajiService::resolvePotongan().
+        $peta = [];
+        foreach ($approved as $row) {
+            $kode = (string) $row->kode_pegawai;
+            $final = (int) round((float) $row->nominal_final);
+            $peta[$kode] = $final;
+
+            $trim = ltrim($kode, '0');
+            if ($trim !== '' && ! isset($peta[$trim])) {
+                $peta[$trim] = $final;
+            }
+        }
+
+        foreach ($sections as $key => $section) {
+            $absen = collect($section['absen'] ?? [])->map(function ($row) use ($peta) {
+                $kode = (string) ($row['kode_pegawai'] ?? '');
+                if ($kode === '' || $kode === '-') {
+                    return $row;
+                }
+
+                $final = $peta[$kode] ?? $peta[ltrim($kode, '0')] ?? null;
+                if ($final === null) {
+                    return $row;
+                }
+
+                $awal = (int) ($row['potongan'] ?? 0);
+                $label = $final > 0
+                    ? 'Dianulir: Rp'.number_format($final, 0, ',', '.')
+                    : 'Dianulir penuh';
+                if ($awal > 0 && $awal !== $final) {
+                    $label .= ' (awal Rp'.number_format($awal, 0, ',', '.').')';
+                }
+
+                $row['potongan'] = $final;
+                $row['potongan_awal'] = $awal;
+                $row['dianulir'] = true;
+
+                $ket = $row['keterangan'] ?? null;
+                $row['keterangan'] = (! empty($ket) && $ket !== '-')
+                    ? $label.' | '.$ket
+                    : $label;
+
+                return $row;
+            });
+
+            $section['absen'] = $absen;
+            $hasil[$key] = $section;
+        }
+
+        return $hasil;
+    }
+
     protected function getViewData(): array
     {
         $service = app(DashboardPengawasService::class);
         $user = auth()->user();
+        $tanggal = $this->tanggal ?: now()->toDateString();
 
         return [
-            'dashboardData' => $service->getDataForUser($user, $this->tanggal),
+            'dashboardData' => $this->terapkanAnulirPotongan(
+                $service->getDataForUser($user, $tanggal),
+                $tanggal
+            ),
         ];
     }
 }

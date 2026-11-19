@@ -16,6 +16,8 @@ use Filament\Support\Exceptions\Halt;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
+use App\Support\KolomValidasi;
+
 class ProduksiSandingsTable
 {
     public static function configure(Table $table): Table
@@ -69,6 +71,8 @@ class ProduksiSandingsTable
                         'MALAM' => 'Malam',
                         default => $state,
                     }),
+
+                    KolomValidasi::make(),
 
                 TextColumn::make('created_at')
                     ->dateTime('d/m/Y H:i')

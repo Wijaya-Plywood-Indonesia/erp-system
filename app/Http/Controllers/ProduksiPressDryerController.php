@@ -25,6 +25,12 @@ class ProduksiPressDryerController extends Controller
     // Kirim data ke webhook / web tujuan
     public function kirimKeWebLain(int $id)
     {
+        // DINONAKTIFKAN: jurnal ke akuntansi hanya lewat menu "Kirim Jurnal Akuntansi".
+        return response()->json([
+            'message' => 'Pengiriman langsung dinonaktifkan. Gunakan menu Kirim Jurnal Akuntansi.',
+        ], 410);
+
+        /*
         $result = $this->apiService->kirimData($id);
 
         if ($result['success']) {
@@ -38,5 +44,6 @@ class ProduksiPressDryerController extends Controller
             'message' => 'Gagal mengirim data.',
             'detail' => $result,
         ], 500);
+        */
     }
 }

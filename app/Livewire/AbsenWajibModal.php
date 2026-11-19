@@ -49,6 +49,11 @@ class AbsenWajibModal extends Component
             return false;
         }
 
+        //kalau hari ini sudah menekan "Saya Hari Ini Libur", pop up tidak wajib tampil
+        if (Cache::has($this->kunciLibur($user->id))) {
+            return false;
+        }
+
         $sudahAbsen = LainLain::where('id_pegawai', $user->id_pegawai)
             ->whereHas('detailLainLain', function ($query) {
                 $query->whereDate('tanggal', today());
@@ -159,6 +164,31 @@ class AbsenWajibModal extends Component
         $this->masuk = '08:00';
         $this->pulang = '16:00';
         $this->id_pegawai = auth()->user()?->id_pegawai;
+        $this->dispatch('absen-selesai');
+    }
+
+    private function kunciLibur(int $userId): string
+    {
+        return 'absen-libur:' . $userId . ':' . today()->toDateString();
+    }
+
+    public function hariIniLibur(): void
+    {
+        $user = auth()->user();
+        if (!$user) {
+            return;
+        }
+
+        //berlaku sampai akhir hari, besok otomatis hilang
+        Cache::put($this->kunciLibur($user->id), true, now()->endOfDay());
+
+        unset($this->wajibAbsen);
+
+        Notification::make()
+        ->title('Hari ini ditandai libur, absen tidak dicatat')
+        ->success()
+        ->send();
+
         $this->dispatch('absen-selesai');
     }
 

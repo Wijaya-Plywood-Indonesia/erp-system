@@ -315,6 +315,52 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
         return $this->idBarangCache[$cacheKey] = $idBarang;
     }
 
+    /**
+     * Resolve id_barang bahan penolong (tepung, lem, dll) dari API
+     * /api/barang/resolve-penolong. Produksi Join selalu milik WJY,
+     * jadi domain dikirim tetap 'wjy'. Mengembalikan null (bukan
+     * exception) kalau API gagal / barang tidak ketemu.
+     */
+    private function resolveIdBarangPenolong(string $namaBahan): ?int
+    {
+        $nama = strtolower(trim($namaBahan));
+        if ($nama === '') {
+            return null;
+        }
+
+        $cacheKey = 'penolong|'.$nama.'|wjy';
+        if (array_key_exists($cacheKey, $this->idBarangCache)) {
+            return $this->idBarangCache[$cacheKey];
+        }
+
+        $urlApi = rtrim(config('services.akuntansi.url', 'http://localhost:8080'), '/').'/api/barang/resolve-penolong';
+        $idBarang = null;
+
+        try {
+            $response = Http::withoutVerifying()->timeout(10)->get($urlApi, [
+                'nama' => $namaBahan,
+                'domain' => 'wjy',
+            ]);
+
+            $idBarang = $response->json('id_barang');
+
+            if (! $idBarang) {
+                Log::warning('[JurnalJoin] resolve-penolong tidak menemukan barang', [
+                    'bahan' => $namaBahan,
+                    'status' => $response->status(),
+                    'message' => $response->json('message'),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[JurnalJoin] resolve-penolong gagal dipanggil', [
+                'bahan' => $namaBahan,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $this->idBarangCache[$cacheKey] = $idBarang ? (int) $idBarang : null;
+    }
+
     private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $total, $hitKbk = 'm', $idBarang = null): array
     {
         return [
@@ -409,7 +455,9 @@ class JurnalSheetV2 implements FromArray, WithColumnFormatting, WithColumnWidths
                     // Nama akun persis sama dengan COA; nama bahan asli ditaruh di Keterangan
                     $keterangan = ucfirst(strtolower(trim($namaBahanRaw)));
 
-                    $jurnalBlock[] = $this->makeRow($namaAkun, $tglFormat, $akun, $keterangan, 'k', $jumlah, 0, $hargaH, $total, 'b');
+                    $idBarang = $this->resolveIdBarangPenolong($namaBahanRaw);
+
+                    $jurnalBlock[] = $this->makeRow($namaAkun, $tglFormat, $akun, $keterangan, 'k', $jumlah, 0, $hargaH, $total, 'b', $idBarang);
                     $totalKredit += $total;
                 }
             }

@@ -401,6 +401,44 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
         return $this->idBarangCache[$cacheKey] = $idBarang;
     }
 
+    /**
+     * Resolve id_barang untuk Bahan Penolong dari /api/barang/resolve-penolong
+     * URL dinamis dari config('services.akuntansi.url') -> .env (AKUNTANSI_URL)
+     */
+    private function resolveIdBarangPenolong(string $namaBahan): ?int
+    {
+        $domainStr = (request() && (request()->getHost() === 'wahana.wijayaplywoods.com' || str_contains(request()->getHost(), 'wahana')))
+            || env('APP_COMPANY') === 'WHN'
+            || str_contains(config('database.connections.mysql.database', ''), 'wahana')
+            ? 'whn'
+            : 'wjy';
+
+        $cacheKey = 'penolong|'.strtolower(trim($namaBahan)).'|'.$domainStr;
+
+        if (array_key_exists($cacheKey, $this->idBarangCache)) {
+            return $this->idBarangCache[$cacheKey];
+        }
+
+        $baseUrl = config('services.akuntansi.url', 'http://localhost:8080');
+        if (! str_starts_with($baseUrl, 'http://') && ! str_starts_with($baseUrl, 'https://')) {
+            $baseUrl = 'http://'.$baseUrl;
+        }
+        $urlApi = rtrim($baseUrl, '/').'/api/barang/resolve-penolong';
+
+        try {
+            $response = Http::withoutVerifying()->timeout(10)->get($urlApi, [
+                'nama' => $namaBahan,
+                'domain' => $domainStr,
+            ]);
+
+            $idBarang = $response->json('id_barang');
+        } catch (\Throwable $e) {
+            $idBarang = null;
+        }
+
+        return $this->idBarangCache[$cacheKey] = $idBarang ? (int) $idBarang : null;
+    }
+
     private function makeRow($namaAkun, $tgl, $noAkun, $keterangan, $map, $banyak, $m3, $harga, $hitKbk = 'm', $idBarang = null): array
     {
         return [
@@ -711,7 +749,10 @@ class JurnalRepairSheetV2 implements FromArray, WithColumnFormatting, WithColumn
                         ? "{$namaBahanRaw} [UNKNOWN]"
                         : ucfirst(strtolower(trim($namaBahanRaw)));
 
-                    $jurnalBlockKredit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keteranganBahan, 'k', $jumlah, '', $harga, 'b');
+                    // Resolve ID Barang untuk bahan penolong dari API akuntansi
+                    $idBarangPenolong = $this->resolveIdBarangPenolong($namaBahanRaw);
+
+                    $jurnalBlockKredit[] = $this->makeRow($namaAkun, $tglFormat, $noAkun, $keteranganBahan, 'k', $jumlah, '', $harga, 'b', $idBarangPenolong);
                     $totalKredit += ($jumlah * $harga);
                 }
             }

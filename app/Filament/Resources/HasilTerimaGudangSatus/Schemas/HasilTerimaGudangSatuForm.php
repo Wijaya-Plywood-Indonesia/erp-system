@@ -88,7 +88,10 @@ class HasilTerimaGudangSatuForm
             // cocokkan ke Grade.nama_grade supaya kita punya id_grade
             // relasional juga (dibutuhkan oleh BarangSetengahJadiHp).
             $grade = $m?->kw_grade
-                ? Grade::where('nama_grade', $m->kw_grade)->first()
+                ? (Grade::whereRaw('LOWER(nama_grade) = ?', [mb_strtolower(trim($m->kw_grade))])
+                    ->whereHas('kategoriBarang', fn ($q) => $q->whereRaw('UPPER(nama_kategori) = ?', ['PLYWOOD']))
+                    ->first()
+                    ?? Grade::whereRaw('LOWER(nama_grade) = ?', [mb_strtolower(trim($m->kw_grade))])->first())
                 : null;
             $idGrade = $grade?->id;
 

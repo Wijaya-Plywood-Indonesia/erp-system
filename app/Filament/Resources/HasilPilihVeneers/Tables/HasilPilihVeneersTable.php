@@ -2,16 +2,19 @@
 
 namespace App\Filament\Resources\HasilPilihVeneers\Tables;
 
+use App\Models\HasilPilihVeneer;
+use App\Services\HasilPilihVeneerService;
 use Filament\Actions\Action;
-use Filament\Tables\Table;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Grouping\Group;
-use Filament\Actions\CreateAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Notifications\Notification;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class HasilPilihVeneersTable
 {
@@ -19,8 +22,7 @@ class HasilPilihVeneersTable
     {
         return $table
             ->modifyQueryUsing(
-                fn($query) =>
-                $query->with([
+                fn ($query) => $query->with([
                     'modalPilihVeneer.stokVeneerJadi.jenisKayu',
                     'modalPilihVeneer.ukuran',
                     'modalPilihVeneer.jenisKayu',
@@ -34,24 +36,24 @@ class HasilPilihVeneersTable
                     ->label('Modal')
                     ->getTitleFromRecordUsing(function ($record) {
                         $modal = $record->modalPilihVeneer;
-                        if (!$modal) return 'Modal: -';
-
-                        // Jenis kayu & ukuran
-                        if ($modal->id_stok_veneer_jadi) {
-                            $stok     = $modal->stokVeneerJadi;
-                            $kayu     = $stok?->jenisKayu?->nama_kayu ?? '-';
-                            $ukuran   = $stok ? floatval($stok->panjang).' x '.floatval($stok->lebar).' x '.floatval($stok->tebal) : '-';
-                            $jenisLbl = 'Jadi';
-                            $kwAsal   = $stok?->kw_grade ?? '-';
-                        } else {
-                            $ukuranRec = $modal->ukuran;
-                            $kayu      = $modal->jenisKayu?->nama_kayu ?? '-';
-                            $ukuran    = $ukuranRec ? floatval($ukuranRec->panjang).' x '.floatval($ukuranRec->lebar).' x '.floatval($ukuranRec->tebal) : '-';
-                            $jenisLbl  = 'Kering';
-                            $kwAsal    = $modal->kw ?? '-';
+                        if (! $modal) {
+                            return 'Modal: -';
                         }
 
-                        // Pegawai
+                        if ($modal->id_stok_veneer_jadi) {
+                            $stok = $modal->stokVeneerJadi;
+                            $kayu = $stok?->jenisKayu?->nama_kayu ?? '-';
+                            $ukuran = $stok ? floatval($stok->panjang).' x '.floatval($stok->lebar).' x '.floatval($stok->tebal) : '-';
+                            $jenisLbl = 'Jadi';
+                            $kwAsal = $stok?->kw_grade ?? '-';
+                        } else {
+                            $ukuranRec = $modal->ukuran;
+                            $kayu = $modal->jenisKayu?->nama_kayu ?? '-';
+                            $ukuran = $ukuranRec ? floatval($ukuranRec->panjang).' x '.floatval($ukuranRec->lebar).' x '.floatval($ukuranRec->tebal) : '-';
+                            $jenisLbl = 'Kering';
+                            $kwAsal = $modal->kw ?? '-';
+                        }
+
                         $pegawai = $modal->pegawaiPilihVeneers->isNotEmpty()
                             ? $modal->pegawaiPilihVeneers->pluck('pegawai.nama_pegawai')->implode(' & ')
                             : '-';
@@ -71,28 +73,36 @@ class HasilPilihVeneersTable
                     ->label('Ukuran Modal')
                     ->getStateUsing(function ($record) {
                         $modal = $record->modalPilihVeneer;
-                        if (!$modal) return '-';
+                        if (! $modal) {
+                            return '-';
+                        }
 
                         if ($modal->id_stok_veneer_jadi) {
                             $stok = $modal->stokVeneerJadi;
-                            if (!$stok) return '-';
-                            return floatval($stok->panjang) . " x " . floatval($stok->lebar) . " x " . floatval($stok->tebal);
-                        } else {
-                            $ukuran = $modal->ukuran;
-                            if (!$ukuran) return '-';
-                            return floatval($ukuran->panjang) . " x " . floatval($ukuran->lebar) . " x " . floatval($ukuran->tebal);
+                            if (! $stok) {
+                                return '-';
+                            }
+
+                            return floatval($stok->panjang).' x '.floatval($stok->lebar).' x '.floatval($stok->tebal);
                         }
+
+                        $ukuran = $modal->ukuran;
+                        if (! $ukuran) {
+                            return '-';
+                        }
+
+                        return floatval($ukuran->panjang).' x '.floatval($ukuran->lebar).' x '.floatval($ukuran->tebal);
                     }),
 
                 TextColumn::make('jenis_veneer')
                     ->label('Jenis Hasil')
                     ->badge()
-                    ->formatStateUsing(fn(string $state): string => match ($state) {
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
                         'kering' => 'Veneer Kering',
                         'jadi' => 'Veneer Jadi',
                         default => ucfirst($state),
                     })
-                    ->color(fn(string $state): string => match ($state) {
+                    ->color(fn (string $state): string => match ($state) {
                         'kering' => 'warning',
                         'jadi' => 'success',
                         default => 'gray',
@@ -109,21 +119,39 @@ class HasilPilihVeneersTable
                     ->label('Status Serah')
                     ->badge()
                     ->state(function ($record) {
+                        $ditolak = $record->ditolak_gudang_at
+                            && (! $record->diserahkan_at || $record->ditolak_gudang_at->gte($record->diserahkan_at));
+
+                        if ($ditolak) {
+                            return 'Ditolak Gudang: '.($record->alasan_tolak_gudang ?? '-');
+                        }
+
                         if (! $record->diserahkan_at) {
                             return 'Belum Diserahkan';
                         }
-                        return 'Diserahkan ' . $record->diserahkan_at->translatedFormat('d M Y H:i') . ' oleh ' . ($record->diserahkanOleh?->name ?? '-');
+
+                        return 'Diserahkan '.$record->diserahkan_at->translatedFormat('d M Y H:i')
+                            .' oleh '.($record->diserahkanOleh?->name ?? '-');
                     })
-                    ->color(fn($record) => $record->diserahkan_at ? 'success' : 'warning'),
+                    ->color(function ($record) {
+                        $ditolak = $record->ditolak_gudang_at
+                            && (! $record->diserahkan_at || $record->ditolak_gudang_at->gte($record->diserahkan_at));
+
+                        return match (true) {
+                            $ditolak => 'danger',
+                            (bool) $record->diserahkan_at => 'success',
+                            default => 'warning',
+                        };
+                    }),
             ])
             ->headerActions([
-                                CreateAction::make()
-                    ->hidden(fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi')
-                    ->using(function (array $data, string $model, $livewire): \Illuminate\Database\Eloquent\Model {
+                CreateAction::make()
+                    ->hidden(fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi')
+                    ->using(function (array $data, string $model, $livewire): Model {
                         $idProduksi = $livewire->ownerRecord->id;
                         $idModal = $data['id_modal_pilih_veneer'];
                         $firstModel = null;
-                        
+
                         foreach ($data['hasil_list'] as $hasil) {
                             $record = $model::create([
                                 'id_produksi_pilih_veneer' => $idProduksi,
@@ -133,23 +161,46 @@ class HasilPilihVeneersTable
                                 'no_palet' => $hasil['no_palet'],
                                 'jumlah' => $hasil['jumlah'],
                             ]);
-                            if (!$firstModel) $firstModel = $record;
+                            if (! $firstModel) {
+                                $firstModel = $record;
+                            }
                         }
-                        
-                        return $firstModel ?? new $model();
+
+                        return $firstModel ?? new $model;
                     }),
             ])
             ->recordActions([
                 Action::make('kirimUlangKeGudang')
-                    ->label('Kirim ke Gudang')
+                    ->label(fn ($record) => $record->ditolak_gudang_at ? 'Kirim Ulang ke Gudang' : 'Kirim ke Gudang')
                     ->icon('heroicon-o-arrow-up-tray')
-                    ->visible(fn($record) => is_null($record->diserahkan_at))
+                    ->visible(function ($record) {
+                        // sudah diterima gudang: tidak bisa dikirim lagi
+                        if ($record->diterima_gudang_at) {
+                            return false;
+                        }
+
+                        // belum pernah diserahkan
+                        if (is_null($record->diserahkan_at)) {
+                            return true;
+                        }
+
+                        // sedang ditolak gudang: boleh kirim ulang
+                        return $record->ditolak_gudang_at
+                            && $record->ditolak_gudang_at->gte($record->diserahkan_at);
+                    })
                     ->requiresConfirmation()
                     ->action(function ($record) {
-                        $record->update([
-                            'diserahkan_at' => now(),
-                            'diserahkan_by' => auth()->id(),
-                        ]);
+                        try {
+                            app(HasilPilihVeneerService::class)->serahKeGudang($record);
+                        } catch (\Throwable $e) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Gagal Diserahkan')
+                                ->body($e->getMessage())
+                                ->send();
+
+                            return;
+                        }
 
                         Notification::make()
                             ->success()
@@ -159,11 +210,11 @@ class HasilPilihVeneersTable
                     }),
 
                 EditAction::make()
-                    ->hidden(fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi')
+                    ->hidden(fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi')
                     ->after(function ($record, array $data) {
-                        if (!empty($data['tambahan_hasil'])) {
+                        if (! empty($data['tambahan_hasil'])) {
                             foreach ($data['tambahan_hasil'] as $tambahan) {
-                                \App\Models\HasilPilihVeneer::create([
+                                HasilPilihVeneer::create([
                                     'id_produksi_pilih_veneer' => $record->id_produksi_pilih_veneer,
                                     'id_modal_pilih_veneer' => $data['id_modal_pilih_veneer'] ?? $record->id_modal_pilih_veneer,
                                     'jenis_veneer' => $tambahan['jenis_veneer'] ?? 'jadi',
@@ -174,13 +225,14 @@ class HasilPilihVeneersTable
                             }
                         }
                     }),
+
                 DeleteAction::make()
-                    ->hidden(fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'),
+                    ->hidden(fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->hidden(fn($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'),
+                        ->hidden(fn ($livewire) => $livewire->ownerRecord?->validasiTerakhir?->status === 'divalidasi'),
                 ]),
             ]);
     }

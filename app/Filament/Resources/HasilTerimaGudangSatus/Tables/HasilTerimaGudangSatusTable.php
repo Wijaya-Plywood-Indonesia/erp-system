@@ -21,13 +21,14 @@ use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
-use Filament\Schemas\Components\Placeholder;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+
+use Filament\Infolists\Components\TextEntry;
 
 class HasilTerimaGudangSatusTable
 {
@@ -582,31 +583,31 @@ class HasilTerimaGudangSatusTable
 
                         return [
 
-                            Placeholder::make('grade_detail')
+                            TextEntry::make('grade_detail')
                                 ->label('Grade')
-                                ->content(
+                                ->state(
                                     ($record->grade?->kategoriBarang?->nama_kategori ?? 'Tanpa Kategori')
                                     . ' | ' .
                                     ($record->grade?->nama_grade ?? '-')
                                 ),
 
-                            Placeholder::make('jenis_detail')
+                            TextEntry::make('jenis_detail')
                                 ->label('Jenis Barang')
-                                ->content(
+                                ->state(
                                     $record->jenisBarang?->nama_jenis_barang
                                     ?? '-'
                                 ),
 
-                            Placeholder::make('ukuran_detail')
+                            TextEntry::make('ukuran_detail')
                                 ->label('Ukuran')
-                                ->content(
+                                ->state(
                                     $record->ukuran?->dimensi
                                     ?? '-'
                                 ),
 
-                            Placeholder::make('jumlah_detail')
+                            TextEntry::make('jumlah_detail')
                                 ->label('Jumlah')
-                                ->content(
+                                ->state(
                                     (string) (
                                         $record->jumlah ?? 0
                                     )
@@ -625,9 +626,9 @@ class HasilTerimaGudangSatusTable
                                 ->required()
                                 ->live(),
 
-                            Placeholder::make('warning')
+                            TextEntry::make('warning')
                                 ->label('⚠️ Perhatian')
-                                ->content(
+                                ->state(
                                     'Tindakan ini akan langsung dianggap DITERIMA (auto-terima) dan TIDAK BISA dibatalkan. Jika ada perbedaan grade antara bahan asal dan hasil ini, stok Gudang Satu akan disesuaikan terlebih dahulu, lalu stok Gudang Satu pada grade hasil ini akan dikurangi dan stok Plywood Siap Jual akan bertambah.'
                                 )
                                 ->visible(

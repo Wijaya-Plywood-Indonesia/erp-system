@@ -138,10 +138,10 @@ class SerahTerimaGudangSatu extends Model
                 )->first();
 
                 $grade = $m->kw_grade
-                    ? Grade::where(
-                        'nama_grade',
-                        $m->kw_grade
-                    )->first()
+                    ? (Grade::whereRaw('LOWER(nama_grade) = ?', [mb_strtolower(trim($m->kw_grade))])
+                        ->whereHas('kategoriBarang', fn ($q) => $q->whereRaw('UPPER(nama_kategori) = ?', ['PLYWOOD']))
+                        ->first()
+                        ?? Grade::whereRaw('LOWER(nama_grade) = ?', [mb_strtolower(trim($m->kw_grade))])->first())
                     : null;
 
                 if ($jenisBarang && $ukuran) {

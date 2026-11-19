@@ -15,6 +15,8 @@ use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
 
+use App\Support\KolomValidasi;
+
 class ProduksiRepairsTable
 {
     public static function configure(Table $table): Table
@@ -34,6 +36,8 @@ class ProduksiRepairsTable
                     ->limit(40)
                     ->placeholder('Tidak ada kendala')
                     ->tooltip(fn($record) => $record->kendala),
+
+                KolomValidasi::make(),
             ])
 
             ->recordActions([

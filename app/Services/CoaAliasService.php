@@ -161,14 +161,38 @@ class CoaAliasService
         '1441' => self::AKUN_VENEER_KERING_FB,
         '1441.0' => self::AKUN_VENEER_KERING_FB,
         '1441.00' => self::AKUN_VENEER_KERING_FB,
+        '1441.01' => self::AKUN_VENEER_KERING_FB,
+        '1442.00' => self::AKUN_VENEER_KERING_FB,
+        '1442.01' => self::AKUN_VENEER_KERING_FB,
         '115-10' => self::AKUN_VENEER_KERING_CORE,
         '1436.00' => self::AKUN_VENEER_KERING_CORE,
         '1446' => self::AKUN_VENEER_KERING_CORE,
         '1446.0' => self::AKUN_VENEER_KERING_CORE,
         '1446.00' => self::AKUN_VENEER_KERING_CORE,
+        '1446.01' => self::AKUN_VENEER_KERING_CORE,
         '1447' => self::AKUN_VENEER_KERING_PPC, // core meranti -> Veneer Kering PPC (1402.17)
         '1447.00' => self::AKUN_VENEER_KERING_PPC, // Veneer Kering 130 core meranti WJY -> Veneer Kering PPC (1402.17)
         '1447.01' => self::AKUN_VENEER_KERING_PPC, // Veneer Kering 130 core meranti WHN -> Veneer Kering PPC (1402.17)
+        '1451.00' => self::AKUN_VENEER_KERING_PPC,
+        '1451.01' => self::AKUN_VENEER_KERING_PPC,
+        '1452.00' => self::AKUN_VENEER_KERING_PPC,
+        '1452.01' => self::AKUN_VENEER_KERING_PPC,
+
+        // veneer jadi
+        '1461.00' => self::AKUN_VENEER_JADI_FB,
+        '1461.01' => self::AKUN_VENEER_JADI_FB,
+        '1462.00' => self::AKUN_VENEER_JADI_FB,
+        '1462.01' => self::AKUN_VENEER_JADI_FB,
+        '1466' => self::AKUN_VENEER_KERING_CORE, // Sesuai permintaan user: 1466.00 (130 core sengon) dipetakan ke veneer kering
+        '1466.0' => self::AKUN_VENEER_KERING_CORE,
+        '1466.00' => self::AKUN_VENEER_KERING_CORE,
+        '1466.01' => self::AKUN_VENEER_KERING_CORE,
+        '1467.00' => self::AKUN_VENEER_JADI_CORE,
+        '1467.01' => self::AKUN_VENEER_JADI_CORE,
+        '1471.00' => self::AKUN_VENEER_JADI_PPC,
+        '1471.01' => self::AKUN_VENEER_JADI_PPC,
+        '1472.00' => self::AKUN_VENEER_JADI_PPC,
+        '1472.01' => self::AKUN_VENEER_JADI_PPC,
 
         // gaji
         '210-02' => self::AKUN_HUTANG_GAJI,
