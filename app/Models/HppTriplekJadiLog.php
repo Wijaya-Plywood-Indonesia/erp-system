@@ -1,10 +1,13 @@
 <?php
 
 namespace App\Models;
+
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class HppTriplekJadiLog extends Model
 {
@@ -39,12 +42,12 @@ class HppTriplekJadiLog extends Model
         'tanggal'              => 'date',
         'total_lembar'         => 'integer',
         'total_kubikasi'       => 'float',
-        'hpp_kayu'             => 'float',
         'hpp_pekerja'          => 'float',
-        'hpp_mesin'            => 'float',
         'hpp_bahan_penolong'   => 'float',
         'hpp_average'          => 'float',
         'nilai_stok'           => 'float',
+        'stok_lembar_before'   => 'integer',
+        'stok_lembar_after'    => 'integer',
         'stok_kubikasi_before' => 'float',
         'stok_kubikasi_after'  => 'float',
     ];
@@ -57,5 +60,21 @@ class HppTriplekJadiLog extends Model
     public function referensi(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    public const SUMMARY_CACHE_VERSION_KEY = 'hpp_triplek_jadi_log.summary.version';
+
+    protected static function booted(): void
+    {
+        static::saved(fn() => self::flushSummaryCache());
+        static::deleted(fn() => self::flushSummaryCache());
+    }
+
+    /** Naikkan versi cache. Dijalankan setelah commit agar tidak menyimpan data basi. */
+    public static function flushSummaryCache(): void
+    {
+        DB::afterCommit(
+            fn() => Cache::forever(self::SUMMARY_CACHE_VERSION_KEY, (string) hrtime(true))
+        );
     }
 }
