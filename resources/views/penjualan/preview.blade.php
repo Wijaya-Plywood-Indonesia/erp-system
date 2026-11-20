@@ -226,24 +226,30 @@
                                     </td>
                                     <td class="py-2.5 px-3 text-right text-gray-900">
                                         @if(isset($item->id_detail) && $item->id_detail)
-                                            <input type="text" name="items[{{ $item->id_detail }}][harga]" value="{{ number_format($item->harga, 0, ',', '.') }}" class="w-full text-right border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1">
+                                            <input type="text" name="items[{{ $item->id_detail }}][harga]" value="{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($item->harga) }}" class="w-full text-right border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1">
                                         @else
-                                            {{ number_format($item->harga, 0, ',', '.') }}
+                                            {{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($item->harga) }}
                                         @endif
                                     </td>
                                     @if($jenis === 'sales')
                                     <td class="py-2.5 px-3 text-right text-gray-500">
                                         @if(isset($item->id_detail) && $item->id_detail)
-                                            <input type="text" name="items[{{ $item->id_detail }}][potongan]" value="{{ number_format($item->potongan ?? 0, 0, ',', '.') }}" class="w-full text-right border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1">
+                                            <input type="text" name="items[{{ $item->id_detail }}][potongan]" value="{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($item->potongan ?? 0) }}" class="w-full text-right border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1">
                                         @else
-                                            {{ number_format($item->potongan ?? 0, 0, ',', '.') }}
+                                            {{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($item->potongan ?? 0) }}
                                         @endif
                                     </td>
                                     <td class="py-2.5 px-3 text-right text-gray-500">
-                                        {{ number_format(($item->total_pot ?? 0), 0, ',', '.') }}
+                                        {{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($item->total_pot ?? 0) }}
                                     </td>
                                     @endif
-                                    <td class="py-2.5 px-3 text-right font-semibold text-gray-900">{{ number_format($item->subtotal, 0, ',', '.') }}</td>
+                                    <td class="py-2.5 px-3 text-right font-semibold text-gray-900">
+                                        @if(isset($item->id_detail) && $item->id_detail)
+                                            <input type="text" name="items[{{ $item->id_detail }}][subtotal]" value="{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($item->subtotal) }}" class="w-full text-right border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 font-semibold" title="Subtotal dapat diedit langsung jika ada pembulatan desimal khusus">
+                                        @else
+                                            {{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($item->subtotal) }}
+                                        @endif
+                                    </td>
                                 </tr>
                             @empty
                                 <tr>
@@ -267,29 +273,29 @@
                             @endphp
                             <tr class="bg-gray-50 font-bold text-gray-700 border-t-2 border-gray-200">
                                 <td colspan="{{ $footColCount }}" class="py-2.5 px-3 text-right uppercase text-xs">Subtotal:</td>
-                                <td class="py-2.5 px-3 text-right text-gray-900">{{ number_format($grandTotal, 0, ',', '.') }}</td>
+                                <td class="py-2.5 px-3 text-right text-gray-900">{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($grandTotal) }}</td>
                             </tr>
                             @if($ppnPersenVal > 0)
                             <tr class="bg-gray-50 font-semibold text-gray-600 border-t border-gray-200">
                                 <td colspan="{{ $footColCount }}" class="py-2 px-3 text-right text-xs">PPN ({{ $ppnPersenVal }}%):</td>
-                                <td class="py-2 px-3 text-right text-emerald-700">+ {{ number_format($ppnNominalVal, 0, ',', '.') }}</td>
+                                <td class="py-2 px-3 text-right text-emerald-700">+ {{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($ppnNominalVal) }}</td>
                             </tr>
                             @endif
                             @if($ongkirVal > 0)
                             <tr class="bg-gray-50 font-semibold text-gray-600 border-t border-gray-200">
                                 <td colspan="{{ $footColCount }}" class="py-2 px-3 text-right text-xs">Ongkir:</td>
-                                <td class="py-2 px-3 text-right text-blue-700">+ {{ number_format($ongkirVal, 0, ',', '.') }}</td>
+                                <td class="py-2 px-3 text-right text-blue-700">+ {{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($ongkirVal) }}</td>
                             </tr>
                             @endif
                             @if($ppnPersenVal > 0 || $ongkirVal > 0)
                             <tr class="bg-indigo-50 font-extrabold text-gray-900 border-t-2 border-indigo-200">
                                 <td colspan="{{ $footColCount }}" class="py-3 px-3 text-right uppercase text-sm text-indigo-900">Total Akhir:</td>
-                                <td class="py-3 px-3 text-right text-indigo-700 text-base">{{ number_format($totalWithPpn, 0, ',', '.') }}</td>
+                                <td class="py-3 px-3 text-right text-indigo-700 text-base">{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($totalWithPpn) }}</td>
                             </tr>
                             @else
                             <tr class="bg-gray-50 font-bold text-gray-900 border-t-2 border-gray-200">
                                 <td colspan="{{ $footColCount }}" class="py-3 px-3 text-right uppercase">Total:</td>
-                                <td class="py-3 px-3 text-right text-indigo-700 text-base">{{ number_format($grandTotal, 0, ',', '.') }}</td>
+                                <td class="py-3 px-3 text-right text-indigo-700 text-base">{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($grandTotal) }}</td>
                             </tr>
                             @endif
                         </tfoot>

@@ -44,7 +44,7 @@ class PenjualansTable
 
                 TextColumn::make('total')
                     ->label('Total Penjualan')
-                    ->money('IDR')
+                    ->formatStateUsing(fn ($state) => $state !== null ? 'Rp ' . \App\Http\Controllers\PenjualanCetakController::formatRupiah($state) : null)
                     ->sortable()
                     ->alignRight(),
 

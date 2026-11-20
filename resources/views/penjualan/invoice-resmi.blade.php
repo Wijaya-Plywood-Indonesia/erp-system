@@ -283,8 +283,8 @@
                         <td class="text-center">{{ $idx + 1 }}.</td>
                         <td class="text-left">{{ $item->nama_barang }}</td>
                         <td class="text-center">{{ number_format($item->qty) }}</td>
-                        <td class="text-right">Rp. {{ number_format($item->harga, 0, ',', '.') }}</td>
-                        <td class="text-right">Rp. {{ number_format($item->subtotal, 0, ',', '.') }}</td>
+                        <td class="text-right">Rp. {{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($item->harga) }}</td>
+                        <td class="text-right">Rp. {{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($item->subtotal) }}</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -306,21 +306,21 @@
         <table class="summary-table">
             <tr>
                 <td style="width: 66%; text-align: right; font-weight: bold;">Harga Jual</td>
-                <td style="width: 34%; text-align: right; font-weight: bold;">Rp. {{ number_format($hargaJual, 0, ',', '.') }}</td>
+                <td style="width: 34%; text-align: right; font-weight: bold;">Rp. {{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($hargaJual) }}</td>
             </tr>
             <tr>
                 <td style="text-align: right; font-weight: bold;">PPN {{ $ppnPersen }}%</td>
-                <td style="text-align: right; font-weight: bold;">Rp. {{ number_format($ppnNominal, 0, ',', '.') }}</td>
+                <td style="text-align: right; font-weight: bold;">Rp. {{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($ppnNominal) }}</td>
             </tr>
             @if($ongkir > 0)
             <tr>
                 <td style="text-align: right; font-weight: bold;">Ongkos Kirim</td>
-                <td style="text-align: right; font-weight: bold;">Rp. {{ number_format($ongkir, 0, ',', '.') }}</td>
+                <td style="text-align: right; font-weight: bold;">Rp. {{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($ongkir) }}</td>
             </tr>
             @endif
             <tr style="background-color: #f9fafb;">
                 <td style="text-align: right; font-weight: bold; font-size: 11.5px;">Total</td>
-                <td style="text-align: right; font-weight: bold; font-size: 11.5px;">Rp. {{ number_format($totalInvoice, 0, ',', '.') }}</td>
+                <td style="text-align: right; font-weight: bold; font-size: 11.5px;">Rp. {{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($totalInvoice) }}</td>
             </tr>
         </table>
 
