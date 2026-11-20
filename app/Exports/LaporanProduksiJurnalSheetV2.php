@@ -80,6 +80,8 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
     // Cache agar tidak query DB berulang
     private array $kayuCache = [];
 
+    private array $idBarangCache = [];
+
     private array $kategoriCache = [];
 
     public function bindValue(Cell $cell, $value)
@@ -194,6 +196,44 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
         return in_array($noAkun, $this->coaAlias->nomorAkunKayu(), true);
     }
 
+    /**
+     * Resolve id_barang untuk Bahan Penolong (reeling tape, solasi, dll)
+     * dari /api/barang/resolve-penolong di akuntansi.
+     * Hasilnya di-cache per nama + domain supaya tidak hit API berulang.
+     */
+    private function resolveIdBarangPenolong(string $namaBahan): ?int
+    {
+        $domainStr = str_contains(config('database.connections.mysql.database', ''), 'wahana')
+            || env('APP_COMPANY') === 'WHN'
+            ? 'whn'
+            : 'wjy';
+
+        $cacheKey = 'penolong|' . strtolower(trim($namaBahan)) . '|' . $domainStr;
+
+        if (array_key_exists($cacheKey, $this->idBarangCache)) {
+            return $this->idBarangCache[$cacheKey];
+        }
+
+        $baseUrl = config('services.akuntansi.url', 'http://localhost:8080');
+        if (! str_starts_with($baseUrl, 'http://') && ! str_starts_with($baseUrl, 'https://')) {
+            $baseUrl = 'http://' . $baseUrl;
+        }
+        $urlApi = rtrim($baseUrl, '/') . '/api/barang/resolve-penolong';
+
+        try {
+            $response = Http::withoutVerifying()->timeout(5)->get($urlApi, [
+                'nama'   => $namaBahan,
+                'domain' => $domainStr,
+            ]);
+            $idBarang = $response->successful() ? $response->json('id_barang') : null;
+        } catch (Throwable $e) {
+            Log::warning('Gagal resolve id_barang penolong rotary: ' . $e->getMessage());
+            $idBarang = null;
+        }
+
+        return $this->idBarangCache[$cacheKey] = $idBarang ? (int) $idBarang : null;
+    }
+
     public function collection()
     {
         $rows = collect();
@@ -244,6 +284,11 @@ class LaporanProduksiJurnalSheetV2 extends DefaultValueBinder implements FromCol
                     // Harga & jumlah tidak di-override — diambil dari BahanPenolongProduksi
                     $bagian = $subItem['nama_pihak'] ?? '-';
                     $keteranganSpesifikasi = $subItem['nama_barang'] ?? '-';
+
+                    // Resolve id_barang dari API akuntansi jika belum ada
+                    if (empty($subItem['id_barang'])) {
+                        $subItem['id_barang'] = $this->resolveIdBarangPenolong($keteranganSpesifikasi);
+                    }
                 } elseif ($jenisPihak === 'karyawan') {
                     $parts = explode(' - ', $subItem['keterangan'] ?? '');
                     $bagian = count($parts) > 1 ? trim($parts[1]) : '-';

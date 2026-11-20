@@ -71,4 +71,9 @@ class Penjualan extends Model
     {
         return $this->belongsTo(RekeningPerusahaan::class, 'id_rekening_perusahaan');
     }
+
+    public function returPenjualans(): HasMany
+    {
+        return $this->hasMany(ReturPenjualan::class, 'penjualan_id');
+    }
 }

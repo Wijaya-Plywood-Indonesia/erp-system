@@ -19,15 +19,11 @@ use App\Models\NotaKayu;
 use App\Models\SupplierKayu;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['web', 'auth'])->post(
-    '/offline/detail-turusan-kayu/sync',
-    [OfflineDetailTurusanController::class, 'sync']
-)->name('offline.detail-turusan.sync');
+Route::match(['get', 'post'], '/offline/detail-turusan-kayu/sync', [OfflineDetailTurusanController::class, 'sync'])
+    ->name('offline.detail-turusan.sync');
 
-Route::middleware(['web', 'auth'])->post(
-    '/offline/detail-kayu-masuk/sync',
-    [OfflineDetailKayuController::class, 'sync']
-)->name('offline.detail-kayu.sync');
+Route::match(['get', 'post'], '/offline/detail-kayu-masuk/sync', [OfflineDetailKayuController::class, 'sync'])
+    ->name('offline.detail-kayu.sync');
 
 Route::middleware(['auth', 'verified'])->prefix('admin')->group(function () {
     // Route spesifik untuk preview excel

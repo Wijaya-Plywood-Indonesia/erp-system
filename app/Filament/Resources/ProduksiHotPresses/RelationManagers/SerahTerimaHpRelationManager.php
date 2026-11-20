@@ -591,9 +591,11 @@ class SerahTerimaHpRelationManager extends RelationManager
                                             ? 'Terima Platform'
                                             : ($fresh->id_triplek_mutasi_keluar
                                                 ? 'Terima dari Triplek Jadi'
-                                                : ($fresh->id_platform_mth_mutasi_keluar
-                                                    ? 'Terima dari Gudang Platform Mentah'
-                                                    : 'Terima dari Graji')),
+                                                : ($fresh->id_triplek_mth_mutasi_keluar
+                                                    ? 'Terima dari Gudang Triplek Mentah'
+                                                    : ($fresh->id_platform_mth_mutasi_keluar
+                                                        ? 'Terima dari Gudang Platform Mentah'
+                                                        : 'Terima dari Graji'))),
                                     ]);
 
                                     // Stok platform dari hotpress TIDAK lagi bertambah di sini —
@@ -606,6 +608,10 @@ class SerahTerimaHpRelationManager extends RelationManager
                                         // apa pun di sini (tambahStokGudangSatu: false).
                                         app(TerimaTriplekJadiService::class)
                                             ->konfirmasi($fresh, tambahStokGudangSatu: false);
+                                    }
+                                    // Dari GUDANG TRIPLEK MENTAH: potong stok saat Sanding menerima.
+                                    elseif ($fresh->id_triplek_mth_mutasi_keluar) {
+                                        $this->prosesKeluarTriplekMth($fresh, $stokTriplekService, 'Sanding');
                                     }
                                     // Dari GUDANG PLATFORM MENTAH: potong stok saat Sanding menerima.
                                     elseif ($fresh->id_platform_mth_mutasi_keluar) {
@@ -731,15 +737,11 @@ class SerahTerimaHpRelationManager extends RelationManager
     }
 
     /**
-     * 🚫 SEMENTARA TIDAK DIPANGGIL (lihat catatan di action 'terima' untuk tipe
-     * 'graji'). Method ini dibiarkan utuh supaya gampang diaktifkan kembali —
-     * cukup un-comment pemanggilannya di atas.
-     *
      * Barang berasal dari Gudang Triplek Mentah (mutasi keluar manual menuju
-     * Graji Triplek). Potong stok Triplek Mentah sesuai kuantitas yang
+     * Graji Triplek atau Sanding). Potong stok Triplek Mentah sesuai kuantitas yang
      * tercatat di mutasi keluar tersebut.
      */
-    protected function prosesKeluarTriplekMth(SerahTerimaHp $serahTerima, StokTriplekMthService $service): void {
+    protected function prosesKeluarTriplekMth(SerahTerimaHp $serahTerima, StokTriplekMthService $service, string $tujuan = 'Graji'): void {
         $mutasi = $serahTerima->triplekMthMutasiKeluar;
         if (! $mutasi) {
             return;
@@ -753,7 +755,7 @@ class SerahTerimaHpRelationManager extends RelationManager
             kwGrade: $mutasi->kw_grade,
             lembar: $mutasi->stok_lembar,
             kubikasi: $mutasi->stok_kubikasi,
-            keterangan: "Diterima oleh Graji (Dari Mutasi Keluar Gudang)",
+            keterangan: "Diterima oleh {$tujuan} (Dari Mutasi Keluar Gudang)",
             referensi: $mutasi
         );
     }
