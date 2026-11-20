@@ -16,8 +16,33 @@ class OfflineDetailTurusanController extends Controller
 
     public function sync(Request $request)
     {
-        $items = $request->input('items', []);
-        abort_unless(is_array($items) && count($items) <= 200, 422, 'Maksimal 200 data per upload.');
+        $items = $request->json('items') ?? $request->input('items', []);
+
+        if (empty($items)) {
+            $raw = $request->getContent();
+            if ($raw) {
+                $decoded = json_decode($raw, true);
+                if (is_array($decoded) && isset($decoded['items'])) {
+                    $items = $decoded['items'];
+                } elseif (is_array($decoded)) {
+                    $items = $decoded;
+                }
+            }
+        }
+
+        if (empty($items) && $request->has('data')) {
+            $decoded = json_decode($request->input('data'), true);
+            if (is_array($decoded)) {
+                $items = $decoded;
+            }
+        }
+
+        abort_unless(is_array($items), 422, 'Format data tidak valid.');
+        abort_unless(count($items) <= 2000, 422, 'Maksimal 2000 data per upload.');
+
+        if (empty($items)) {
+            return response()->json(['results' => [], 'message' => 'Tidak ada data yang dikirim.'], 400);
+        }
 
         $isAdmin = Auth::user()?->hasAnyRole(self::ROLE_ADMIN) ?? false;
         $results = [];

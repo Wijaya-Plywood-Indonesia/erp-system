@@ -165,6 +165,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if (config('app.env') === 'production' || env('FORCE_HTTPS', false) || request()->server('HTTP_X_FORWARDED_PROTO') === 'https') {
+            \Illuminate\Support\Facades\URL::forceScheme('https');
+        }
+
         // Cache + mode lewati untuk pencarian id_barang ke web akuntansi (/api/barang/resolve-*).
         // Tanpa ini, ringkasan Kirim Jurnal memanggil API akuntansi berkali-kali tiap ganti tanggal.
         Http::globalMiddleware(ResolveBarangCache::middleware());

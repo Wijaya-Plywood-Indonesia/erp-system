@@ -14,6 +14,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->trustProxies(at: '*');
+
+        $middleware->validateCsrfTokens(except: [
+            'offline/*',
+            'api/offline/*',
+        ]);
+
         $middleware->alias([
             'esp.api' => EspApiKey::class,
         ]);
