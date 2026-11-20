@@ -94,7 +94,7 @@ class HppVeneerKeringPage extends Page
                     ->orderBy('detail_hasils.id_produksi_dryer')
                     ->limit(60 - count($idProduksi))
                     ->pluck('detail_hasils.id_produksi_dryer')
-                    ->map(fn ($v) => (int) $v)
+                    ->map(fn($v) => (int) $v)
                     ->all();
 
                 if ($semua) {
@@ -302,15 +302,15 @@ class HppVeneerKeringPage extends Page
             $r->komp = $komp[$r->id] ?? null;
 
             return $r;
-        })->filter(fn ($r) => $r->komp !== null)->values();
+        })->filter(fn($r) => $r->komp !== null)->values();
     }
 
     /** Hitung rata-rata tertimbang m³ dari sekumpulan baris (hasil barisHppBulan). */
     protected function petaHpp(Collection $rows, ?string $bulan = null): array
     {
-        $m3 = (float) $rows->sum(fn ($r) => (float) $r->m3);
-        $per = fn (string $k) => $m3 > 0
-            ? (float) $rows->sum(fn ($r) => $r->komp[$k] * (float) $r->m3) / $m3
+        $m3 = (float) $rows->sum(fn($r) => (float) $r->m3);
+        $per = fn(string $k) => $m3 > 0
+            ? (float) $rows->sum(fn($r) => $r->komp[$k] * (float) $r->m3) / $m3
             : 0.0;
 
         return [
@@ -321,9 +321,9 @@ class HppVeneerKeringPage extends Page
             'pegawai'   => $per('pegawai'),
             'mesin'     => $per('mesin'),
             'total'     => $per('total'),
-            'sementara' => $rows->filter(fn ($r) => ! $r->komp['final'])->count(),
+            'sementara' => $rows->filter(fn($r) => ! $r->komp['final'])->count(),
             // palet yang ongkos pegawai atau mesinnya masih 0 (belum diinput) → angkanya belum lengkap
-            'kurang'    => $rows->filter(fn ($r) => $r->komp['pegawai'] <= 0 || $r->komp['mesin'] <= 0)->count(),
+            'kurang'    => $rows->filter(fn($r) => $r->komp['pegawai'] <= 0 || $r->komp['mesin'] <= 0)->count(),
         ];
     }
 
@@ -378,8 +378,8 @@ class HppVeneerKeringPage extends Page
         $nama = JenisKayu::pluck('nama_kayu', 'id');
 
         return $this->barisHppBulan($r['bulan'])
-            ->filter(fn ($row) => $row->ukuran)
-            ->groupBy(fn ($row) => $row->id_jenis_kayu . '|' . (float) $row->ukuran->panjang . '|' . (float) $row->ukuran->lebar . '|' . (float) $row->ukuran->tebal)
+            ->filter(fn($row) => $row->ukuran)
+            ->groupBy(fn($row) => $row->id_jenis_kayu . '|' . (float) $row->ukuran->panjang . '|' . (float) $row->ukuran->lebar . '|' . (float) $row->ukuran->tebal)
             ->map(function (Collection $g) use ($nama) {
                 $first = $g->first();
                 $p = $this->petaHpp($g);

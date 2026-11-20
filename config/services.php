@@ -66,4 +66,7 @@ return [
         'key' => env('INTER_API_KEY'),
     ],
 
+    'esp32' => [
+        'key' => env('ESP_API_KEY'),
+    ],
 ];

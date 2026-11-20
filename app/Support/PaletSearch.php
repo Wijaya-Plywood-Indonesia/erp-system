@@ -86,7 +86,7 @@ class PaletSearch
 
         return array_values(array_filter(
             $entries,
-            fn (array $e) => self::cocok($e, $tokens),
+            fn(array $e) => self::cocok($e, $tokens),
         ));
     }
 
@@ -108,8 +108,8 @@ class PaletSearch
         $tokens = preg_split('/\s+/', $q, -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
         return array_values(array_filter(
-            array_map(fn ($t) => trim($t, '.'), $tokens),
-            fn ($t) => $t !== '',
+            array_map(fn($t) => trim($t, '.'), $tokens),
+            fn($t) => $t !== '',
         ));
     }
 
@@ -127,13 +127,13 @@ class PaletSearch
 
         $teks = mb_strtolower(implode(' ', array_filter([
             $identitas,
-            $no !== '' ? 'p'.$no : null,
+            $no !== '' ? 'p' . $no : null,
             $e['kategori'] ?? null,
             $e['jenis'] ?? null,
             $e['grade'] ?? null,
             $e['asal'] ?? null,
             $e['extra'] ?? null,
-        ], fn ($v) => $v !== null && $v !== '' && $v !== '-')));
+        ], fn($v) => $v !== null && $v !== '' && $v !== '-')));
 
         $teksRapat = preg_replace('/[^a-z0-9.]/', '', $teks);
 
@@ -181,7 +181,7 @@ class PaletSearch
                     continue;
                 }
 
-                if (preg_match('/^[a-z]*'.preg_quote($t, '/').'/', $identitas)) {
+                if (preg_match('/^[a-z]*' . preg_quote($t, '/') . '/', $identitas)) {
                     continue;
                 }
 
@@ -217,7 +217,7 @@ class PaletSearch
     protected static function dimensi(mixed $ukuran): array
     {
         if (is_array($ukuran)) {
-            $angka = array_map(fn ($v) => (string) $v, $ukuran);
+            $angka = array_map(fn($v) => (string) $v, $ukuran);
         } else {
             preg_match_all('/\d+(?:\.\d+)?/', (string) $ukuran, $m);
             $angka = $m[0] ?? [];
@@ -228,7 +228,7 @@ class PaletSearch
         }
 
         return array_map(
-            fn ($v) => rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.'),
+            fn($v) => rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.'),
             array_slice($angka, 0, 3),
         );
     }

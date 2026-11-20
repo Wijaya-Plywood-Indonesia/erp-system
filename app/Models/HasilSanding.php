@@ -89,4 +89,25 @@ class HasilSanding extends Model
             default         => '-',
         };
     }
+
+    protected static function booted()
+    {
+        // Menggunakan static::saved mencakup Created dan Updated
+        static::saved(function ($model) {
+            if ($model->id_produksi_sanding) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_sanding, 'sanding');
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->id_produksi_sanding) {
+                \App\Events\ProductionUpdated::dispatch($model->id_produksi_sanding, 'sanding');
+            }
+        });
+    }
+
+    public function putaran()
+    {
+        return $this->hasMany(HasilSandingPutaran::class, 'hasil_sanding_id');
+    }
 }
